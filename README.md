@@ -31,6 +31,18 @@ dotnet run --project cli/PK.Cli -- workspace status -w D:\pk-workspace
 dotnet run --project cli/PK.Cli -- decompile -w D:\pk-workspace   # game code -> D:\pk-workspace\source
 ```
 
+Assets (Addressables bundles):
+
+```powershell
+dotnet run --project cli/PK.Cli -- assets index -w D:\pk-workspace                     # ~20 s, writes cache\asset-index.json
+dotnet run --project cli/PK.Cli -- assets list -w D:\pk-workspace --type Texture2D --filter stego
+dotnet run --project cli/PK.Cli -- assets dump <guid|path|bundle#pathId> -w D:\pk-workspace --type Texture2D
+dotnet run --project cli/PK.Cli -- assets export-textures -w D:\pk-workspace --filter stegosaurus
+```
+
+The GUIDs and container paths shown by `assets list` are what replacement mods target. DLC bundles are
+indexed like any other once Steam has downloaded them (Steam > Properties > DLC).
+
 Every command accepts `--game <folder>` (where relevant) to skip Steam detection.
 Exit codes: 0 ok, 1 usage error, 2 error (code printed, e.g. `GAME_NOT_FOUND`), 3 partial success.
 Open `source\Assembly-CSharp\*.csproj` in Visual Studio or Rider to browse the decompiled game code.
