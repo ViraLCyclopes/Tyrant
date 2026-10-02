@@ -11,4 +11,12 @@ public sealed record GameInstall(string RootDir, string? SteamAppId)
     public string StreamingAssetsDir => Path.Combine(DataDir, "StreamingAssets");
     public string BootConfigPath => Path.Combine(DataDir, "boot.config");
     public string AssemblyCSharpPath => Path.Combine(ManagedDir, "Assembly-CSharp.dll");
+
+    /// <summary>True for the game folder itself or any path inside it.</summary>
+    public bool ContainsPath(string path)
+    {
+        var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(RootDir)) + Path.DirectorySeparatorChar;
+        var candidate = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path)) + Path.DirectorySeparatorChar;
+        return candidate.StartsWith(root, StringComparison.OrdinalIgnoreCase);
+    }
 }

@@ -92,6 +92,15 @@ public class GameInstallLocatorTests
     }
 
     [Fact]
+    public void ContainsPath_matches_root_and_children_but_not_similar_siblings()
+    {
+        var install = new GameInstall(@"E:\Games\Prehistoric Kingdom", null);
+        Assert.True(install.ContainsPath(@"E:\Games\Prehistoric Kingdom"));
+        Assert.True(install.ContainsPath(@"e:\games\prehistoric kingdom\Prehistoric Kingdom_Data\x.json"));
+        Assert.False(install.ContainsPath(@"E:\Games\Prehistoric Kingdom Modding\x.json"));
+    }
+
+    [Fact]
     public void Locked_manifest_is_skipped()
     {
         using var game = new FakeGame();

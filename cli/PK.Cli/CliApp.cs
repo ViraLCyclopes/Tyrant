@@ -35,6 +35,17 @@ public static class CliApp
             });
             config.AddCommand<DecompileCommand>("decompile")
                 .WithDescription("Decompile game assemblies into <workspace>/source.");
+            config.AddBranch("assets", assets =>
+            {
+                assets.AddCommand<AssetsIndexCommand>("index")
+                    .WithDescription("Index every object in the game's Addressables bundles.");
+                assets.AddCommand<AssetsListCommand>("list")
+                    .WithDescription("Search the asset index.");
+                assets.AddCommand<AssetsDumpCommand>("dump")
+                    .WithDescription("Print one object's fields as JSON.");
+                assets.AddCommand<AssetsExportTexturesCommand>("export-textures")
+                    .WithDescription("Export matching textures to <workspace>/assets/textures as PNG.");
+            });
         });
 
         try

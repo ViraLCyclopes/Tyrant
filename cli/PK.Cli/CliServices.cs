@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using PK.Core.Assets;
 using PK.Core.Errors;
 using PK.Core.Install;
 using PK.Core.Jobs;
@@ -28,6 +29,14 @@ internal static class CliServices
             Console.WriteLine($"Workspace now points at: {install.RootDir}");
         }
         return (ws, install);
+    }
+
+    public static AssetIndex LoadIndex(CoreWorkspace ws, GameInstall install)
+    {
+        var index = AssetIndex.Load(AssetIndex.PathIn(ws));
+        if (index.Fingerprint != GameFingerprint.Compute(install))
+            Console.Error.WriteLine("warning: the asset index is from an older game build; run 'pk assets index' to refresh it.");
+        return index;
     }
 
     public static void PrintError(PkException ex)
