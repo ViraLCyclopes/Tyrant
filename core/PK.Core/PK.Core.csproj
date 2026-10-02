@@ -5,4 +5,7 @@
   <ItemGroup>
     <InternalsVisibleTo Include="PK.Core.Tests" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="ICSharpCode.Decompiler" Version="11.1.0.9782" />
+  </ItemGroup>
 </Project>
