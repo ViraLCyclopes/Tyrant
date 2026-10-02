@@ -9,6 +9,11 @@ public enum PkErrorCode
     WorkspaceInGameFolder,
     WorkspaceStale,
     DecompileFailed,
+    CatalogInvalid,
+    AssetIndexMissing,
+    AssetNotFound,
+    AssetAmbiguous,
+    OutputInGameFolder,
 }
 
 /// <summary>A suggested remedy the UI can render as a button.</summary>

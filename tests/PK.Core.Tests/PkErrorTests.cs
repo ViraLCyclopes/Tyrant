@@ -9,6 +9,8 @@ public class PkErrorTests
     [InlineData(PkErrorCode.WorkspaceInvalid, "WORKSPACE_INVALID")]
     [InlineData(PkErrorCode.WorkspaceInGameFolder, "WORKSPACE_IN_GAME_FOLDER")]
     [InlineData(PkErrorCode.DecompileFailed, "DECOMPILE_FAILED")]
+    [InlineData(PkErrorCode.AssetIndexMissing, "ASSET_INDEX_MISSING")]
+    [InlineData(PkErrorCode.OutputInGameFolder, "OUTPUT_IN_GAME_FOLDER")]
     public void Wire_code_is_screaming_snake_case(PkErrorCode code, string expected)
     {
         Assert.Equal(expected, code.ToWire());
