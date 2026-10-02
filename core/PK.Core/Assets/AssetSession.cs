@@ -1,0 +1,57 @@
+using AssetsTools.NET;
+using AssetsTools.NET.Extra;
+using PK.Core.Errors;
+using PK.Core.Install;
+
+namespace PK.Core.Assets;
+
+/// <summary>Opens objects from the game's Addressables bundles. Not thread-safe; Release() frees loaded bundles.</summary>
+public sealed class AssetSession : IDisposable
+{
+    private readonly AssetsManager _manager = new();
+    private readonly string _aaDir;
+
+    public AssetSession(GameInstall install)
+    {
+        _aaDir = Path.TrimEndingDirectorySeparator(Path.GetFullPath(AaDirOf(install)));
+        _manager.MonoTempGenerator = new MonoCecilTempGenerator(install.ManagedDir);
+    }
+
+    internal AssetsManager Manager => _manager;
+
+    public static string AaDirOf(GameInstall install) => Path.Combine(install.StreamingAssetsDir, "aa");
+
+    /// <summary>Full path of an indexed bundle; refuses anything outside StreamingAssets/aa.</summary>
+    public string BundlePath(string relativeBundle)
+    {
+        var full = Path.GetFullPath(Path.Combine(_aaDir, relativeBundle.Replace('/', Path.DirectorySeparatorChar)));
+        if (!full.StartsWith(_aaDir + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            throw new PkException(PkErrorCode.AssetNotFound,
+                $"Bundle path '{relativeBundle}' points outside the game's Addressables folder. Re-run 'pk assets index'.",
+                FixAction.RefreshWorkspace);
+        return full;
+    }
+
+    public (AssetsFileInstance File, AssetTypeValueField BaseField) Open(AssetRecord asset)
+    {
+        var path = BundlePath(asset.Bundle);
+        if (!File.Exists(path))
+            throw new PkException(PkErrorCode.AssetNotFound,
+                $"Bundle '{asset.Bundle}' no longer exists (game updated?). Re-run 'pk assets index'.", FixAction.RefreshWorkspace);
+
+        var bundle = _manager.LoadBundleFile(path, true);
+        for (var i = 0; i < bundle.file.BlockAndDirInfo.DirectoryInfos.Count; i++)
+        {
+            if (!bundle.file.IsAssetsFile(i)) continue;
+            var file = _manager.LoadAssetsFileFromBundle(bundle, i, false);
+            var info = file.file.AssetInfos.FirstOrDefault(a => a.PathId == asset.PathId);
+            if (info is not null) return (file, _manager.GetBaseField(file, info));
+        }
+        throw new PkException(PkErrorCode.AssetNotFound,
+            $"Object {asset.PathId} is not in '{asset.Bundle}' (game updated?). Re-run 'pk assets index'.", FixAction.RefreshWorkspace);
+    }
+
+    public void Release() => _manager.UnloadAll();
+
+    public void Dispose() => _manager.UnloadAll(true);
+}
