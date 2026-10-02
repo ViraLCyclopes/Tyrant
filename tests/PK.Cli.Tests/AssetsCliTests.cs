@@ -103,4 +103,36 @@ public class AssetsCliTests
         Assert.Equal(ExitCodes.PkError, code);
         Assert.Contains("ASSET_NOT_FOUND", err);
     }
+
+    [Fact]
+    public void Workspace_copied_into_game_folder_is_refused()
+    {
+        using var game = new FakeGame();
+        var dir = InitWorkspace(game);
+        var inside = Path.Combine(game.Root, "ws");
+        Directory.CreateDirectory(inside);
+        File.Copy(Path.Combine(dir, "pkws.json"), Path.Combine(inside, "pkws.json"));
+
+        var (code, _, err) = Run("assets", "index", "-w", inside);
+
+        Assert.Equal(ExitCodes.PkError, code);
+        Assert.Contains("WORKSPACE_IN_GAME_FOLDER", err);
+        Assert.False(Directory.Exists(Path.Combine(inside, "cache")));
+    }
+
+    [Fact]
+    public void Index_with_corrupt_catalog_warns_and_is_partial()
+    {
+        using var game = new FakeGame();
+        var aa = Path.Combine(game.Root, "Prehistoric Kingdom_Data", "StreamingAssets", "aa");
+        Directory.CreateDirectory(aa);
+        File.WriteAllText(Path.Combine(aa, "catalog.json"), "{ nope");
+        var dir = InitWorkspace(game);
+
+        var (code, output, _) = Run("assets", "index", "-w", dir);
+
+        Assert.Equal(ExitCodes.Partial, code);
+        Assert.Contains("WARNING", output);
+        Assert.True(File.Exists(Path.Combine(dir, "cache", "asset-index.json")));
+    }
 }

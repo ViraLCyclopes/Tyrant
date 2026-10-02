@@ -62,7 +62,9 @@ public static class FieldJsonWriter
     private static void WriteArray(Utf8JsonWriter writer, AssetTypeValueField array)
     {
         var elements = array.Children ?? [];
-        if (elements.Count > MaxInlinePrimitiveArray && elements.All(e => e.Children is null || e.Children.Count == 0))
+        // Only numbers/bools are summarized (vertex/index buffers); strings are always written so no data is lost.
+        if (elements.Count > MaxInlinePrimitiveArray
+            && elements.All(e => (e.Children is null || e.Children.Count == 0) && e.Value?.ValueType != AssetValueType.String))
         {
             writer.WriteStartObject();
             writer.WriteString("$array", elements[0].TypeName);

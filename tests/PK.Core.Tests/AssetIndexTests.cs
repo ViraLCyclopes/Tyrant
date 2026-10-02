@@ -109,4 +109,17 @@ public class AssetIndexTests
         Assert.Null(result[1].Guid);
         Assert.Equal("aaaabbbbccccddddeeeeffff00001111", result[2].Guid);
     }
+
+    [Theory]
+    [InlineData("""{"assets":[null]}""")]
+    [InlineData("""{"assets":[{"bundle":null,"pathId":1,"type":"Texture2D","name":"x"}]}""")]
+    public void Load_rejects_incomplete_records(string json)
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "pk-tests", System.Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var path = Path.Combine(dir, AssetIndex.FileName);
+        File.WriteAllText(path, json);
+
+        Assert.Equal(PkErrorCode.AssetIndexMissing, Assert.Throws<PkException>(() => AssetIndex.Load(path)).Code);
+    }
 }

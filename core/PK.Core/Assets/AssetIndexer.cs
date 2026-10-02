@@ -1,6 +1,7 @@
 using AssetsTools.NET;
 using AssetsTools.NET.Extra;
 using PK.Core.Catalog;
+using PK.Core.Errors;
 using PK.Core.Install;
 using PK.Core.Jobs;
 using PK.Core.Workspaces;
@@ -14,10 +15,26 @@ public sealed class AssetIndexer
     {
         var aaDir = AssetSession.AaDirOf(install);
         var catalogPath = Path.Combine(aaDir, "catalog.json");
-        var catalog = File.Exists(catalogPath) ? AddressablesCatalog.Load(catalogPath) : null;
         var bundles = Directory.Exists(aaDir)
             ? Directory.GetFiles(aaDir, "*.bundle", SearchOption.AllDirectories).Order(StringComparer.OrdinalIgnoreCase).ToList()
             : [];
+        var warnings = new List<string>();
+        AddressablesCatalog? catalog = null;
+        if (File.Exists(catalogPath))
+        {
+            try
+            {
+                catalog = AddressablesCatalog.Load(catalogPath);
+            }
+            catch (PkException ex) when (ex.Code == PkErrorCode.CatalogInvalid)
+            {
+                warnings.Add($"The Addressables catalog could not be read, so GUIDs and missing-bundle detection are unavailable: {ex.Message}");
+            }
+        }
+        else if (bundles.Count > 0)
+        {
+            warnings.Add("No catalog.json next to the bundles (new Addressables format?), so GUIDs and missing-bundle detection are unavailable.");
+        }
 
         var records = new List<AssetRecord>();
         var failures = new List<IndexFailure>();
@@ -49,6 +66,7 @@ public sealed class AssetIndexer
             Assets = catalog is null ? records : AssetIndex.AttachCatalogKeys(records, catalog),
             Failures = failures,
             MissingBundles = catalog is null ? [] : MissingBundles(catalog, aaDir),
+            Warnings = warnings,
         };
     }
 

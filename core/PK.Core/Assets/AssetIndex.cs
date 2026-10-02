@@ -36,6 +36,9 @@ public sealed class AssetIndex
     /// <summary>Bundles the catalog lists that are not on disk (e.g. DLC that is not downloaded).</summary>
     public List<string> MissingBundles { get; set; } = [];
 
+    /// <summary>Problems that degraded the index without stopping it (e.g. an unreadable catalog, so no GUIDs).</summary>
+    public List<string> Warnings { get; set; } = [];
+
     public static string PathIn(Workspace ws) => Path.Combine(ws.CacheDir, FileName);
 
     public void Save(string path)
@@ -57,6 +60,12 @@ public sealed class AssetIndex
             index.Assets ??= [];
             index.Failures ??= [];
             index.MissingBundles ??= [];
+            index.Warnings ??= [];
+            if (index.Assets.Any(a => a is null || a.Bundle is null || a.Type is null || a.Name is null))
+                throw Missing("The asset index is corrupt (incomplete records). Run 'pk assets index' again.");
+            index.Failures.RemoveAll(f => f is null);
+            index.MissingBundles.RemoveAll(b => b is null);
+            index.Warnings.RemoveAll(w => w is null);
             return index;
         }
         catch (JsonException ex)

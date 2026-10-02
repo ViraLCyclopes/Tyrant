@@ -20,10 +20,12 @@ internal static class CliServices
     public static (CoreWorkspace Workspace, GameInstall Install) OpenWorkspace(WorkspaceSettings settings)
     {
         var ws = CoreWorkspace.Open(settings.Workspace);
-        if (settings.GamePath is null) return (ws, ResolveInstall(ws.Data.GameRoot));
-
-        var install = ResolveInstall(settings.GamePath);
-        if (!string.Equals(ws.Data.GameRoot, install.RootDir, StringComparison.OrdinalIgnoreCase))
+        var install = ResolveInstall(settings.GamePath ?? ws.Data.GameRoot);
+        if (install.ContainsPath(ws.Dir))
+            throw new PkException(PkErrorCode.WorkspaceInGameFolder,
+                $"The workspace '{ws.Dir}' is inside the game folder. Mods and tools never write game files; move it elsewhere.",
+                FixAction.PickWorkspaceFolder);
+        if (settings.GamePath is not null && !string.Equals(ws.Data.GameRoot, install.RootDir, StringComparison.OrdinalIgnoreCase))
         {
             ws.SetGameRoot(install.RootDir);
             Console.WriteLine($"Workspace now points at: {install.RootDir}");

@@ -88,4 +88,15 @@ public class FieldJsonWriterTests
         Assert.Equal("NaN", json.GetProperty("v").GetString());
         Assert.Equal("Infinity", json.GetProperty("w").GetString());
     }
+
+    [Fact]
+    public void Long_string_arrays_are_written_in_full()
+    {
+        var elements = Enumerable.Range(0, 300).Select(i => Prim("data", "string", AssetValueType.String, $"term{i}")).ToArray();
+        var json = Parse(Obj("Base", "X", Obj("terms", "vector", Arr("Array", elements))));
+
+        var terms = json.GetProperty("terms");
+        Assert.Equal(JsonValueKind.Array, terms.ValueKind);
+        Assert.Equal("term299", terms[299].GetString());
+    }
 }

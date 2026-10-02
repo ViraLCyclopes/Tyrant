@@ -90,4 +90,47 @@ public class AssetIndexerTests
         Assert.ThrowsAny<OperationCanceledException>(() =>
             new AssetIndexer().Build(new GameInstall(game.Root, null), null, cts.Token));
     }
+
+    [Fact]
+    public void Session_reports_unreadable_bundle_as_pk_error()
+    {
+        using var game = new FakeGame();
+        var platform = Path.Combine(AaDir(game), "StandaloneWindows64");
+        Directory.CreateDirectory(platform);
+        File.WriteAllBytes(Path.Combine(platform, "junk.bundle"), [1, 2, 3, 4, 5, 6, 7, 8]);
+        using var session = new AssetSession(new GameInstall(game.Root, null));
+
+        var ex = Assert.Throws<PkException>(() => session.Open(new AssetRecord("StandaloneWindows64/junk.bundle", 1, "Texture2D", "T", null, null, null)));
+
+        Assert.Equal(PkErrorCode.AssetUnreadable, ex.Code);
+        Assert.Contains("pk assets index", ex.Message);
+    }
+
+    [Fact]
+    public void Corrupt_catalog_still_indexes_bundles_with_a_warning()
+    {
+        using var game = new FakeGame();
+        var platform = Path.Combine(AaDir(game), "StandaloneWindows64");
+        Directory.CreateDirectory(platform);
+        File.WriteAllBytes(Path.Combine(platform, "broken.bundle"), [1, 2, 3]);
+        File.WriteAllText(Path.Combine(AaDir(game), "catalog.json"), "{ not a catalog");
+
+        var index = new AssetIndexer().Build(new GameInstall(game.Root, null), null, CancellationToken.None);
+
+        Assert.Single(index.Failures);
+        Assert.Contains(index.Warnings, w => w.Contains("catalog", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Bundles_without_a_catalog_produce_a_warning()
+    {
+        using var game = new FakeGame();
+        var platform = Path.Combine(AaDir(game), "StandaloneWindows64");
+        Directory.CreateDirectory(platform);
+        File.WriteAllBytes(Path.Combine(platform, "broken.bundle"), [1, 2, 3]);
+
+        var index = new AssetIndexer().Build(new GameInstall(game.Root, null), null, CancellationToken.None);
+
+        Assert.Contains(index.Warnings, w => w.Contains("catalog", StringComparison.OrdinalIgnoreCase));
+    }
 }

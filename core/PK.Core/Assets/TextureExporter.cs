@@ -13,7 +13,10 @@ public sealed class TextureExporter
 {
     public const string OutputName = "assets/textures";
 
-    /// <summary>Mirrors the container path (minus "Assets/") under assets/textures; never escapes that folder.</summary>
+    /// <summary>
+    /// Mirrors the container path (minus "Assets/") under assets/textures; never escapes that folder.
+    /// Non-PNG sources keep their extension ("T_x.tga" → "T_x.tga.png") so names never depend on what else is exported.
+    /// </summary>
     public static string OutputPathFor(AssetRecord texture, string assetsDir)
     {
         var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(Path.Combine(assetsDir, "textures")));
@@ -23,7 +26,8 @@ public sealed class TextureExporter
 
         var segments = relative.Split('/', '\\').Where(s => s is not ("" or "." or "..")).Select(Sanitize).ToList();
         if (segments.Count == 0) segments.Add($"texture_{texture.PathId}");
-        var full = Path.ChangeExtension(Path.GetFullPath(Path.Combine([root, .. segments])), ".png");
+        if (!segments[^1].EndsWith(".png", StringComparison.OrdinalIgnoreCase)) segments[^1] += ".png";
+        var full = Path.GetFullPath(Path.Combine([root, .. segments]));
         return full.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
             ? full
             : Path.Combine(root, $"texture_{texture.PathId}.png");
@@ -79,8 +83,9 @@ public sealed class TextureExporter
             var path = OutputPathFor(textures[i], ws.AssetsDir);
             if (!used.Add(path))
             {
-                path = Path.ChangeExtension(path, null) + $"_{textures[i].PathId}.png";
-                used.Add(path);
+                var stem = path[..^".png".Length] + $"_{textures[i].PathId}";
+                path = stem + ".png";
+                for (var n = 2; !used.Add(path); n++) path = $"{stem}_{n}.png";
             }
             results.Add(Export(session, textures[i], path));
         }

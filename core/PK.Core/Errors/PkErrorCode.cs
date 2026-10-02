@@ -14,6 +14,7 @@ public enum PkErrorCode
     AssetNotFound,
     AssetAmbiguous,
     OutputInGameFolder,
+    AssetUnreadable,
 }
 
 /// <summary>A suggested remedy the UI can render as a button.</summary>

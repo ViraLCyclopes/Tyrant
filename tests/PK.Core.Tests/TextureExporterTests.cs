@@ -17,7 +17,7 @@ public class TextureExporterTests
     {
         Assert.Equal(Path.Combine(TexturesDir, "Art", "Animals", "T_Stego_D.png"),
             TextureExporter.OutputPathFor(Tex("Assets/Art/Animals/T_Stego_D.png"), AssetsDir));
-        Assert.Equal(Path.Combine(TexturesDir, "Art", "T_Stego_D.png"),
+        Assert.Equal(Path.Combine(TexturesDir, "Art", "T_Stego_D.tga.png"),
             TextureExporter.OutputPathFor(Tex("Assets/Art/T_Stego_D.tga"), AssetsDir));
     }
 
@@ -70,5 +70,27 @@ public class TextureExporterTests
 
         Assert.Equal(2, results.Select(r => r.OutputPath).Distinct(StringComparer.OrdinalIgnoreCase).Count());
         Assert.EndsWith("T_2.png", results[1].OutputPath);
+    }
+
+    [Fact]
+    public void Sources_differing_only_by_extension_get_distinct_files()
+    {
+        var png = TextureExporter.OutputPathFor(Tex("Assets/Art/T_archaeopteryx_female_D.png"), AssetsDir);
+        var tga = TextureExporter.OutputPathFor(Tex("Assets/Art/T_archaeopteryx_female_D.tga"), AssetsDir);
+        var jpg = TextureExporter.OutputPathFor(Tex("Assets/Art/T_archaeopteryx_female_D.jpg"), AssetsDir);
+        Assert.Equal(3, new[] { png, tga, jpg }.Distinct(StringComparer.OrdinalIgnoreCase).Count());
+    }
+
+    [Fact]
+    public void ExportMany_keeps_suffixed_names_unique()
+    {
+        using var game = new FakeGame();
+        var install = new GameInstall(game.Root, null);
+        var ws = Workspace.Create(Path.Combine(Path.GetTempPath(), "pk-tests", Guid.NewGuid().ToString("N")), install);
+
+        var results = new TextureExporter().ExportMany(install, ws,
+            [Tex("Assets/Art/T_2.png", pathId: 9), Tex("Assets/Art/T.png", pathId: 1), Tex("Assets/Art/T.png", pathId: 2)], null, CancellationToken.None);
+
+        Assert.Equal(3, results.Select(r => r.OutputPath).Distinct(StringComparer.OrdinalIgnoreCase).Count());
     }
 }

@@ -39,13 +39,23 @@ public sealed class AssetSession : IDisposable
             throw new PkException(PkErrorCode.AssetNotFound,
                 $"Bundle '{asset.Bundle}' no longer exists (game updated?). Re-run 'pk assets index'.", FixAction.RefreshWorkspace);
 
-        var bundle = _manager.LoadBundleFile(path, true);
-        for (var i = 0; i < bundle.file.BlockAndDirInfo.DirectoryInfos.Count; i++)
+        try
         {
-            if (!bundle.file.IsAssetsFile(i)) continue;
-            var file = _manager.LoadAssetsFileFromBundle(bundle, i, false);
-            var info = file.file.AssetInfos.FirstOrDefault(a => a.PathId == asset.PathId);
-            if (info is not null) return (file, _manager.GetBaseField(file, info));
+            var bundle = _manager.LoadBundleFile(path, true);
+            for (var i = 0; i < bundle.file.BlockAndDirInfo.DirectoryInfos.Count; i++)
+            {
+                if (!bundle.file.IsAssetsFile(i)) continue;
+                var file = _manager.LoadAssetsFileFromBundle(bundle, i, false);
+                var info = file.file.AssetInfos.FirstOrDefault(a => a.PathId == asset.PathId);
+                if (info is not null) return (file, _manager.GetBaseField(file, info));
+            }
+        }
+        catch (Exception ex) when (ex is not PkException and not OperationCanceledException)
+        {
+            // AssetsTools.NET throws plain Exceptions for data it cannot parse (e.g. a bundle changed by a game update).
+            throw new PkException(PkErrorCode.AssetUnreadable,
+                $"Bundle '{asset.Bundle}' could not be read ({ex.Message}). If the game was updated, re-run 'pk assets index'.",
+                FixAction.RefreshWorkspace, ex);
         }
         throw new PkException(PkErrorCode.AssetNotFound,
             $"Object {asset.PathId} is not in '{asset.Bundle}' (game updated?). Re-run 'pk assets index'.", FixAction.RefreshWorkspace);

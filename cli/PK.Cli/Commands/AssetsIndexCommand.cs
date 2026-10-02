@@ -15,10 +15,12 @@ public sealed class AssetsIndexCommand : Command<WorkspaceSettings>
         if (index.MissingBundles.Count > 0)
             Console.WriteLine($"  {index.MissingBundles.Count} bundles listed in the catalog are not downloaded "
                               + "(DLC: if you own it, enable it in Steam > Properties > DLC, then re-run this).");
+        foreach (var warning in index.Warnings)
+            Console.WriteLine($"  WARNING  {warning}");
         foreach (var failure in index.Failures.Take(10))
             Console.WriteLine($"  FAIL  {failure.Bundle}: {failure.Error}");
         if (index.Failures.Count > 10)
             Console.WriteLine($"  ... and {index.Failures.Count - 10} more unreadable bundles");
-        return index.Failures.Count == 0 ? ExitCodes.Ok : ExitCodes.Partial;
+        return index.Failures.Count == 0 && index.Warnings.Count == 0 ? ExitCodes.Ok : ExitCodes.Partial;
     }
 }
