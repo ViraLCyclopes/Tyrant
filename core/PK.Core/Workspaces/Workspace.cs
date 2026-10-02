@@ -39,8 +39,15 @@ public sealed class Workspace
             GameRoot = install.RootDir,
             Fingerprint = GameFingerprint.Compute(install),
         });
-        foreach (var sub in new[] { ws.SourceDir, ws.DataDir, ws.AssetsDir, ws.CacheDir, ws.LogsDir })
-            Directory.CreateDirectory(sub);
+        try
+        {
+            foreach (var sub in new[] { ws.SourceDir, ws.DataDir, ws.AssetsDir, ws.CacheDir, ws.LogsDir })
+                Directory.CreateDirectory(sub);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            throw Invalid($"Cannot create a workspace at '{full}': {ex.Message}", ex);
+        }
         ws.Save();
         return ws;
     }
@@ -51,26 +58,41 @@ public sealed class Workspace
         var file = Path.Combine(full, FileName);
         if (!File.Exists(file))
             throw Invalid($"'{full}' is not a workspace (no {FileName}). Run 'pk workspace init' first.");
+        WorkspaceFile? data;
         try
         {
-            var data = JsonSerializer.Deserialize<WorkspaceFile>(File.ReadAllText(file), Json)
-                ?? throw Invalid($"{file} is empty.");
-            return new Workspace(full, data);
+            data = JsonSerializer.Deserialize<WorkspaceFile>(File.ReadAllText(file), Json);
         }
         catch (JsonException ex)
         {
             throw Invalid($"{file} is corrupt: {ex.Message}", ex);
         }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            throw Invalid($"Cannot read {file}: {ex.Message}", ex);
+        }
+        if (data is null) throw Invalid($"{file} is empty.");
+        if (string.IsNullOrWhiteSpace(data.GameRoot)) throw Invalid($"{file} is corrupt: it does not name the game folder (gameRoot).");
+        data.Outputs ??= [];
+        data.InstalledFiles ??= [];
+        return new Workspace(full, data);
     }
 
     /// <summary>Writes pkws.json via a temp file so a crash never leaves it half-written.</summary>
     public void Save()
     {
-        Directory.CreateDirectory(Dir);
         var file = Path.Combine(Dir, FileName);
-        var tmp = file + ".tmp";
-        File.WriteAllText(tmp, JsonSerializer.Serialize(Data, Json));
-        File.Move(tmp, file, overwrite: true);
+        try
+        {
+            Directory.CreateDirectory(Dir);
+            var tmp = file + ".tmp";
+            File.WriteAllText(tmp, JsonSerializer.Serialize(Data, Json));
+            File.Move(tmp, file, overwrite: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            throw Invalid($"Cannot write {file}: {ex.Message}", ex);
+        }
     }
 
     public void StampOutput(string name, GameFingerprint fingerprint)
@@ -79,11 +101,23 @@ public sealed class Workspace
         Save();
     }
 
+    public void RemoveOutput(string name)
+    {
+        if (Data.Outputs.Remove(name)) Save();
+    }
+
+    /// <summary>Points the workspace at a (moved) game install.</summary>
+    public void SetGameRoot(string gameRoot)
+    {
+        Data.GameRoot = gameRoot;
+        Save();
+    }
+
     public IReadOnlyList<string> StaleOutputs(GameFingerprint current) =>
         Data.Outputs.Where(kv => kv.Value.Fingerprint != current).Select(kv => kv.Key).Order().ToList();
 
-    public bool IsStale(GameFingerprint current) =>
-        Data.Fingerprint != current || StaleOutputs(current).Count > 0;
+    /// <summary>True when any generated output came from a different game build than <paramref name="current"/>.</summary>
+    public bool IsStale(GameFingerprint current) => StaleOutputs(current).Count > 0;
 
     internal static void EnsureOutsideGame(string fullDir, string gameRoot)
     {

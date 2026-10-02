@@ -51,5 +51,11 @@ public static class CliApp
             Console.Error.WriteLine($"error: {ex.Message}");
             return ExitCodes.Usage;
         }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            // File-system and bad-path problems are user-facing; anything else is a bug and keeps its stack trace.
+            Console.Error.WriteLine($"error: {ex.Message}");
+            return ExitCodes.PkError;
+        }
     }
 }

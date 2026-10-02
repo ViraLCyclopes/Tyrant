@@ -90,4 +90,23 @@ public class GameInstallLocatorTests
         Assert.Equal(@"E:\Games\Prehistoric Kingdom\Prehistoric Kingdom_Data\Managed\Assembly-CSharp.dll", install.AssemblyCSharpPath);
         Assert.Equal(@"E:\Games\Prehistoric Kingdom\Prehistoric Kingdom_Data\boot.config", install.BootConfigPath);
     }
+
+    [Fact]
+    public void Locked_manifest_is_skipped()
+    {
+        using var game = new FakeGame();
+        var locked = Path.Combine(game.SteamApps, "appmanifest_1.acf");
+        File.WriteAllText(locked, "x");
+        game.WriteAppManifest("777");
+
+        using (new FileStream(locked, FileMode.Open, FileAccess.Read, FileShare.None))
+            Assert.Equal("777", GameInstallLocator.FindAppIdFor(game.Root));
+    }
+
+    [Fact]
+    public void Library_with_invalid_path_is_ignored()
+    {
+        var steamRoot = MakeSteamRoot("bad\0path");
+        Assert.Equal(new[] { Path.GetFullPath(steamRoot) }, GameInstallLocator.GetLibraryPaths(steamRoot));
+    }
 }

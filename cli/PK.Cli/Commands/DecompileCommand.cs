@@ -15,7 +15,7 @@ public sealed class DecompileCommand : Command<DecompileCommand.Settings>
 
     public override int Execute(CommandContext context, Settings settings)
     {
-        var (ws, install) = CliServices.OpenWorkspace(settings.Workspace);
+        var (ws, install) = CliServices.OpenWorkspace(settings);
         var names = settings.Assemblies?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
         using var cts = new CancellationTokenSource();

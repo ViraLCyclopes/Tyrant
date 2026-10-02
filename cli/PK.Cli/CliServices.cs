@@ -15,10 +15,19 @@ internal static class CliServices
         return gamePath is null ? locator.Detect() : locator.FromPath(gamePath);
     }
 
-    public static (CoreWorkspace Workspace, GameInstall Install) OpenWorkspace(string dir)
+    /// <summary>Opens a workspace; a --game override re-points it at a moved install and is saved.</summary>
+    public static (CoreWorkspace Workspace, GameInstall Install) OpenWorkspace(WorkspaceSettings settings)
     {
-        var ws = CoreWorkspace.Open(dir);
-        return (ws, ResolveInstall(ws.Data.GameRoot));
+        var ws = CoreWorkspace.Open(settings.Workspace);
+        if (settings.GamePath is null) return (ws, ResolveInstall(ws.Data.GameRoot));
+
+        var install = ResolveInstall(settings.GamePath);
+        if (!string.Equals(ws.Data.GameRoot, install.RootDir, StringComparison.OrdinalIgnoreCase))
+        {
+            ws.SetGameRoot(install.RootDir);
+            Console.WriteLine($"Workspace now points at: {install.RootDir}");
+        }
+        return (ws, install);
     }
 
     public static void PrintError(PkException ex)
@@ -41,7 +50,7 @@ public class GameSettings : CommandSettings
     public string? GamePath { get; set; }
 }
 
-public class WorkspaceSettings : CommandSettings
+public class WorkspaceSettings : GameSettings
 {
     [CommandOption("-w|--workspace <DIR>")]
     [Description("Workspace folder (default: current folder).")]

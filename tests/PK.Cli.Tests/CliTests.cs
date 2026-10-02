@@ -97,4 +97,51 @@ public class CliTests
     {
         Assert.Equal(ExitCodes.Usage, Run("frobnicate").Code);
     }
+
+    [Fact]
+    public void Workspace_init_on_a_file_path_is_a_pk_error_not_a_crash()
+    {
+        using var game = new FakeGame();
+        var file = TempDir();
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        File.WriteAllText(file, "x");
+
+        var (code, _, err) = Run("workspace", "init", file, "--game", game.Root);
+
+        Assert.Equal(ExitCodes.PkError, code);
+        Assert.Contains("WORKSPACE_INVALID", err);
+        Assert.DoesNotContain("   at ", err);
+    }
+
+    [Fact]
+    public void Status_warning_clears_after_refresh()
+    {
+        using var game = new FakeGame(buildGuid: "build-1");
+        var dir = TempDir();
+        Run("workspace", "init", dir, "--game", game.Root);
+        Run("decompile", "-w", dir, "--assemblies", "Assembly-CSharp");
+        File.WriteAllText(Path.Combine(game.Root, "Prehistoric Kingdom_Data", "boot.config"), "build-guid=build-2\n");
+        Assert.Contains("WARNING", Run("workspace", "status", "-w", dir).Out);
+
+        Run("decompile", "-w", dir, "--assemblies", "Assembly-CSharp");
+        var (_, output, _) = Run("workspace", "status", "-w", dir);
+
+        Assert.DoesNotContain("WARNING", output);
+        Assert.DoesNotContain("(stale)", output);
+    }
+
+    [Fact]
+    public void Workspace_commands_accept_game_override_for_moved_install()
+    {
+        using var oldGame = new FakeGame();
+        using var newGame = new FakeGame();
+        var dir = TempDir();
+        Run("workspace", "init", dir, "--game", oldGame.Root);
+
+        var (code, output, _) = Run("workspace", "status", "-w", dir, "--game", newGame.Root);
+
+        Assert.Equal(ExitCodes.Ok, code);
+        Assert.Contains(newGame.Root, output);
+        Assert.Contains(newGame.Root.Replace(@"\", @"\\"), File.ReadAllText(Path.Combine(dir, "pkws.json")));
+    }
 }

@@ -50,15 +50,24 @@ public sealed class GameInstallLocator(ISteamRootProvider steam)
                 foreach (var lib in libraries?.Children ?? [])
                     if (lib["path"]?.Value is { Length: > 0 } p) paths.Add(p);
             }
-            catch (FormatException)
+            catch (Exception ex) when (ex is FormatException or IOException or UnauthorizedAccessException)
             {
                 // fall back to the Steam root only
             }
         }
-        return paths
-            .Select(p => Path.TrimEndingDirectorySeparator(Path.GetFullPath(p)))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        var full = new List<string>();
+        foreach (var p in paths)
+        {
+            try
+            {
+                full.Add(Path.TrimEndingDirectorySeparator(Path.GetFullPath(p)));
+            }
+            catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+            {
+                // skip library entries that are not valid paths
+            }
+        }
+        return full.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
     }
 
     /// <summary>Reads steamapps/appmanifest_*.acf next to the install to find its Steam app id.</summary>
@@ -68,7 +77,16 @@ public sealed class GameInstallLocator(ISteamRootProvider steam)
         var steamapps = common is null ? null : Path.GetDirectoryName(common);
         if (steamapps is null || !Directory.Exists(steamapps)) return null;
         var folder = Path.GetFileName(rootDir);
-        foreach (var acf in Directory.EnumerateFiles(steamapps, "appmanifest_*.acf"))
+        IEnumerable<string> manifests;
+        try
+        {
+            manifests = Directory.GetFiles(steamapps, "appmanifest_*.acf");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+        foreach (var acf in manifests)
         {
             try
             {
@@ -76,9 +94,9 @@ public sealed class GameInstallLocator(ISteamRootProvider steam)
                 if (string.Equals(state?["installdir"]?.Value, folder, StringComparison.OrdinalIgnoreCase))
                     return state?["appid"]?.Value;
             }
-            catch (FormatException)
+            catch (Exception ex) when (ex is FormatException or IOException or UnauthorizedAccessException)
             {
-                // ignore unreadable manifests
+                // ignore unreadable manifests (Steam rewrites them while updating)
             }
         }
         return null;

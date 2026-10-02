@@ -90,4 +90,54 @@ public class WorkspaceTests
         Assert.Equal(new[] { "source" }, reopened.StaleOutputs(newBuild));
         Assert.True(reopened.IsStale(newBuild));
     }
+
+    [Fact]
+    public void Restamping_with_current_build_clears_staleness()
+    {
+        using var game = new FakeGame(buildGuid: "old-build");
+        var ws = Workspace.Create(TempDir(), new GameInstall(game.Root, null));
+        var newBuild = new GameFingerprint("new-build", "zzz");
+
+        ws.StampOutput("source/Assembly-CSharp", newBuild);
+
+        Assert.False(ws.IsStale(newBuild));
+    }
+
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("{\"gameRoot\":\"\"}")]
+    public void Open_rejects_workspace_without_game_root(string json)
+    {
+        var dir = TempDir();
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, Workspace.FileName), json);
+        Assert.Equal(PkErrorCode.WorkspaceInvalid, Assert.Throws<PkException>(() => Workspace.Open(dir)).Code);
+    }
+
+    [Fact]
+    public void Open_normalizes_null_collections()
+    {
+        var dir = TempDir();
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, Workspace.FileName),
+            """{"gameRoot":"C:\\Games\\PK","outputs":null,"installedFiles":null}""");
+
+        var ws = Workspace.Open(dir);
+
+        Assert.Empty(ws.Data.Outputs);
+        Assert.Empty(ws.Data.InstalledFiles);
+    }
+
+    [Fact]
+    public void Create_where_path_is_a_file_throws_workspace_invalid()
+    {
+        using var game = new FakeGame();
+        var file = TempDir();
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        File.WriteAllText(file, "not a folder");
+
+        var ex = Assert.Throws<PkException>(() => Workspace.Create(file, new GameInstall(game.Root, null)));
+
+        Assert.Equal(PkErrorCode.WorkspaceInvalid, ex.Code);
+    }
 }

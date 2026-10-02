@@ -51,18 +51,45 @@ public sealed class DecompileService
         IProgress<JobProgress>? progress, CancellationToken ct)
     {
         var names = (assemblies ?? DefaultAssemblies).ToList();
+        var fingerprint = GameFingerprint.Compute(install);
         var results = new List<AssemblyDecompileResult>();
         for (var i = 0; i < names.Count; i++)
         {
             ct.ThrowIfCancellationRequested();
-            progress?.Report(new JobProgress((double)i / names.Count, $"Decompiling {names[i]}"));
-            var path = Path.Combine(install.ManagedDir, names[i] + ".dll");
-            results.Add(File.Exists(path)
-                ? DecompileAssembly(path, [install.ManagedDir], Path.Combine(ws.SourceDir, names[i]), ct)
-                : new AssemblyDecompileResult(names[i], false, null, $"Assembly '{names[i]}.dll' not found in {install.ManagedDir}."));
+            var name = StripDllExtension(names[i]);
+            progress?.Report(new JobProgress((double)i / names.Count, $"Decompiling {name}"));
+            if (!IsPlainAssemblyName(name))
+            {
+                // Names become paths under Managed/ and source/; anything else could escape them (and the
+                // output folder is deleted before writing), so reject before touching the filesystem.
+                results.Add(new AssemblyDecompileResult(names[i], false, null,
+                    $"'{names[i]}' is not a plain assembly name; use a name like 'Assembly-CSharp' (no folders or paths)."));
+                continue;
+            }
+            var path = Path.Combine(install.ManagedDir, name + ".dll");
+            if (!File.Exists(path))
+            {
+                results.Add(new AssemblyDecompileResult(name, false, null, $"Assembly '{name}.dll' not found in {install.ManagedDir}."));
+                continue;
+            }
+            var result = DecompileAssembly(path, [install.ManagedDir], Path.Combine(ws.SourceDir, name), ct);
+            results.Add(result);
+            if (result.Success) ws.StampOutput(SourceOutputName(name), fingerprint);
+            else ws.RemoveOutput(SourceOutputName(name)); // its previous output was deleted
         }
         progress?.Report(new JobProgress(1.0, "Done"));
-        if (results.Any(r => r.Success)) ws.StampOutput("source", GameFingerprint.Compute(install));
         return new DecompileResult(results);
     }
+
+    /// <summary>Workspace output name for one decompiled assembly, e.g. "source/Assembly-CSharp".</summary>
+    public static string SourceOutputName(string assemblyName) => $"source/{assemblyName}";
+
+    private static string StripDllExtension(string name) =>
+        name.EndsWith(".dll", StringComparison.OrdinalIgnoreCase) ? name[..^4] : name;
+
+    private static bool IsPlainAssemblyName(string name) =>
+        !string.IsNullOrWhiteSpace(name)
+        && name is not ("." or "..")
+        && Path.GetFileName(name) == name
+        && name.IndexOfAny(Path.GetInvalidFileNameChars()) < 0;
 }
