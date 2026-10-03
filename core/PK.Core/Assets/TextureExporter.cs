@@ -94,7 +94,7 @@ public sealed class TextureExporter
         return results;
     }
 
-    private static string Sanitize(string segment)
+    internal static string Sanitize(string segment)
     {
         var invalid = Path.GetInvalidFileNameChars();
         var cleaned = new string(segment.Select(c => invalid.Contains(c) ? '_' : c).ToArray()).TrimEnd('.', ' ');
