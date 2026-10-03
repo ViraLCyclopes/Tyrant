@@ -37,7 +37,10 @@ namespace Tyrant.Framework
             foreach (var mod in CodeMods) Safe(mod, m => m.OnGameLoaded(), nameof(TyrantMod.OnGameLoaded));
         }
 
-        public override void OnUpdate() => SkinsModule.Tick(); // adds skins once the animal database exists, before a park loads
+        public override void OnUpdate()
+        {
+            SkinsModule.Tick(); // adds skins once the animal database exists, before a park loads
+        }
 
         internal static void Safe(TyrantMod mod, Action<TyrantMod> call, string what)
         {

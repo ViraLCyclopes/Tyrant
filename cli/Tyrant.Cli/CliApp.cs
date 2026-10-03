@@ -69,6 +69,7 @@ public static class CliApp
                 mod.AddCommand<ModNewCommand>("new").WithDescription("Create a mod in the workspace (mods/<id>).");
                 mod.AddCommand<ModReplaceCommand>("replace").WithDescription("Replace a game texture with your PNG in a mod.");
                 mod.AddCommand<ModCheckCommand>("check").WithDescription("Check a mod's files and targets before installing it.");
+                mod.AddCommand<ModRestoreCutoutsCommand>("restore-cutouts").WithDescription("Copy the see-through parts (feathers, hair) of the vanilla textures back into colour PNGs that lost them.");
                 mod.AddCommand<ModInstallCommand>("install").WithDescription("Install a mod into the game (and Tyrant's framework, if needed).");
                 mod.AddCommand<ModRemoveCommand>("remove").WithDescription("Remove a mod from the game.");
                 mod.AddCommand<ModEnableCommand>("enable").WithDescription("Turn an installed mod on.");

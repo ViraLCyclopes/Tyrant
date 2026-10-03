@@ -48,7 +48,19 @@ public sealed class ModsMethods(StudioSession session, JobManager jobs)
     {
         var (ws, install) = session.Current();
         var result = ModChecker.ForGame(install).Check(ModProject.Open(ws, p.Id), TryIndex(ws), TrySpecies(ws));
-        return new ModCheckReport(result.Errors, result.Warnings);
+        return new ModCheckReport(result.Errors, result.Warnings, result.MissingCutouts);
+    }
+
+    /// <summary>Copies the vanilla transparency back into the mod's colour PNGs that lost it (the workspace copy; install again after).</summary>
+    [RpcMethod("mods.restoreCutouts")]
+    public ModRestoreCutoutsResult RestoreCutouts(ModIdParams p)
+    {
+        var (ws, install) = session.Current();
+        var index = TryIndex(ws);
+        if (index is null) return new ModRestoreCutoutsResult([]);
+        var restored = new CutoutRestorer(Cutouts.GamePixels(install, Options.AssetReader)).Restore(ModProject.Open(ws, p.Id), index, TrySpecies(ws));
+        if (restored.Count > 0) session.Log($"'{p.Id}': restored the see-through parts of {string.Join(", ", restored)}.");
+        return new ModRestoreCutoutsResult(restored);
     }
 
     [RpcMethod("mods.install", JobResult = typeof(ModInstallResult))]

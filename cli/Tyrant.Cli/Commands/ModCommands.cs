@@ -112,6 +112,21 @@ public sealed class ModCheckCommand : Command<ModSettings>
     }
 }
 
+public sealed class ModRestoreCutoutsCommand : Command<ModSettings>
+{
+    public override int Execute(CommandContext context, ModSettings settings)
+    {
+        var (ws, install) = CliServices.OpenWorkspace(settings);
+        var mod = ModProject.Open(ws, settings.Id);
+        var index = ModCli.TryIndex(ws);
+        var restored = index is null ? [] : new CutoutRestorer(Cutouts.GamePixels(install, new BundleAssetReader())).Restore(mod, index, ModCli.TrySpecies(ws));
+        if (restored.Count == 0) Console.WriteLine("No colour PNGs need their see-through parts restored.");
+        foreach (var file in restored) Console.WriteLine($"  restored  {Path.Combine(mod.Dir, file)}");
+        if (restored.Count > 0) Console.WriteLine($"Install again to update the game: 'tyrant mod install {mod.Id}'.");
+        return ExitCodes.Ok;
+    }
+}
+
 public sealed class ModInstallCommand : Command<ModInstallCommand.Settings>
 {
     public sealed class Settings : ModSettings

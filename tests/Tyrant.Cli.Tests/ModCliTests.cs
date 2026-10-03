@@ -92,4 +92,17 @@ public class ModCliTests
         Assert.Contains("Forgot 1", forgot.Out);
         Assert.Contains("No skin numbers to clean up", after.Out);
     }
+
+    [Fact]
+    public void Restore_cutouts_says_when_nothing_needs_it()
+    {
+        using var game = new FakeGame();
+        var ws = InitWorkspace(game);
+        Run("mod", "new", "red-spot", "-w", ws);
+
+        var (code, output, _) = Run("mod", "restore-cutouts", "red-spot", "-w", ws);
+
+        Assert.Equal(ExitCodes.Ok, code);
+        Assert.Contains("No colour PNGs need their see-through parts restored", output);
+    }
 }

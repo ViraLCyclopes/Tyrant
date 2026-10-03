@@ -94,6 +94,13 @@ namespace Tyrant.Framework
             }
         }
 
+        /// <summary>The display name of the mod that added this skin, or null for a vanilla skin.</summary>
+        public static string? ModNameOf(object? skin)
+        {
+            if (skin == null || !AddedSkins.TryGetValue(skin, out var added)) return null;
+            return _mods.FirstOrDefault(m => m.Manifest.Id == added.ModId)?.Manifest.Name ?? added.ModId;
+        }
+
         public static bool IsAdded(object? skin) => skin != null && AddedSkins.ContainsKey(skin);
 
         public static bool IsStandIn(object? skin) => skin != null && StandIns.Contains(skin);

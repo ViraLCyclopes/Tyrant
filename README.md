@@ -83,6 +83,7 @@ dotnet run --project cli/Tyrant.Cli -- mod new red-spot-carcharo --name "Red-spo
 dotnet run --project cli/Tyrant.Cli -- mod replace red-spot-carcharo T_carcharodontosaurus_alt1_male_D [your.png] -w D:\tyrant-workspace
 dotnet run --project cli/Tyrant.Cli -- mod add-skin red-spot-carcharo Carcharodontosaurus --name "Red spot" --base "Alt 1" -w D:\tyrant-workspace   # a new skin from a vanilla template (needs a data dump)
 dotnet run --project cli/Tyrant.Cli -- mod check red-spot-carcharo -w D:\tyrant-workspace
+dotnet run --project cli/Tyrant.Cli -- mod restore-cutouts red-spot-carcharo -w D:\tyrant-workspace   # put back see-through feathers/hair an editor flattened
 dotnet run --project cli/Tyrant.Cli -- mod install red-spot-carcharo -w D:\tyrant-workspace   # adds MelonLoader + Tyrant's framework if needed
 dotnet run --project cli/Tyrant.Cli -- mod disable red-spot-carcharo -w D:\tyrant-workspace   # also: enable, remove
 dotnet run --project cli/Tyrant.Cli -- mod list -w D:\tyrant-workspace

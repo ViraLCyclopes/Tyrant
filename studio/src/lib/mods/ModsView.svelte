@@ -38,6 +38,15 @@
     if (r) checks = { ...checks, [row.id]: r };
   }
 
+  async function restoreCutouts(row: ModRow) {
+    const r = await session.safely(() => session.rpc.call('mods.restoreCutouts', { id: row.id }));
+    if (!r) return;
+    session.notice = r.restored.length
+      ? `Restored the see-through parts of ${r.restored.length} PNG${r.restored.length === 1 ? '' : 's'} in '${row.id}'. Install it again to update the game.`
+      : `Nothing to restore in '${row.id}'.`;
+    await check(row);
+  }
+
   async function install(row: ModRow) {
     const message = list?.frameworkInstalled
       ? `Copy '${row.name}' into the game (UserData\\Tyrant\\Mods\\${row.id})? No game file is replaced; Remove from game undoes it.`
@@ -119,6 +128,9 @@
               {#each checks[row.id].errors as error (error)}<div class="warn">{error}</div>{/each}
               {#each checks[row.id].warnings as warning (warning)}<div class="hint">{warning}</div>{/each}
               {#if !checks[row.id].errors.length && !checks[row.id].warnings.length}<div class="hint">No problems found.</div>{/if}
+              {#if checks[row.id].missingCutouts?.length}
+                <button aria-label="Restore cutouts for {row.name}" onclick={() => restoreCutouts(row)} disabled={session.busy}>Restore cutouts</button>
+              {/if}
             </td>
           </tr>
         {/if}
