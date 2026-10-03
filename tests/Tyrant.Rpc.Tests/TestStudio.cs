@@ -26,11 +26,11 @@ public static class TestStudio
         public void Launch(GameInstall install) { }
     }
 
-    public static StudioOptions Options(IGameLauncher? launcher = null, (string Path, string Sha)? loaderZip = null, IAssetReader? reader = null) => new()
+    public static StudioOptions Options(IGameLauncher? launcher = null, (string Path, string Sha)? loaderZip = null, IAssetReader? reader = null, string? dumperDir = null) => new()
     {
         Locator = new GameInstallLocator(new NoSteam()),
         Launcher = launcher ?? new NeverLauncher(),
-        DumperDir = FakeDumperDir(),
+        DumperDir = dumperDir ?? FakeDumperDir(),
         LoaderZip = (_, _) => loaderZip?.Path ?? throw new InvalidOperationException("This test has no MelonLoader archive."),
         Installer = () => new ModLoaderInstaller(loaderZip?.Sha ?? ModLoaderInstaller.Sha256, _ => false),
         AssetReader = reader ?? new FakeAssetReader(),
@@ -62,9 +62,17 @@ public static class TestStudio
         File.WriteAllText(Path.Combine(dir, "Tyrant.Dumper.Serialization.dll"), "library");
         return dir;
     }
+
+    /// <summary>The CLI's dumper/ folder as Task 3 builds it: dumper plus framework.</summary>
+    public static string FakeGameModsDir()
+    {
+        var dir = FakeDumperDir();
+        File.WriteAllText(Path.Combine(dir, "Tyrant.Framework.dll"), "framework");
+        File.WriteAllText(Path.Combine(dir, "Tyrant.Framework.Core.dll"), "framework library");
+        return dir;
+    }
 }
 
-/// <summary>Plays the in-game mod: reads the request and writes a dump with the given number of AnimalData objects.</summary>
 public class FakeDumpLauncher(int objects) : IGameLauncher
 {
     public bool IsRunning(GameInstall install) => false;

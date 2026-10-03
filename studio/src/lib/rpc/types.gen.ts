@@ -326,6 +326,54 @@ export interface LocalizationRow {
   values: string[];
 }
 
+export interface ModCheckReport {
+  errors: string[];
+  warnings: string[];
+}
+
+export interface ModCreateParams {
+  id: string;
+  name?: string | null;
+  author?: string | null;
+}
+
+export interface ModEnableParams {
+  id: string;
+  enabled: boolean;
+}
+
+export interface ModIdParams {
+  id: string;
+}
+
+export interface ModInstallResult {
+  message: string;
+  warnings: string[];
+}
+
+export interface ModReplaceParams {
+  id: string;
+  texture: string;
+  png?: string | null;
+}
+
+export interface ModRow {
+  id: string;
+  name: string;
+  version: string;
+  author: string | null;
+  replacements: number;
+  state: string;
+  enabled: boolean | null;
+  dir: string | null;
+  error: string | null;
+}
+
+export interface ModsListResult {
+  mods: ModRow[];
+  frameworkInstalled: boolean;
+}
+
 export interface OutputStatus {
   name: string;
   createdUtc: string;
@@ -440,6 +488,13 @@ export interface RpcMethods {
   "dump.uninstall": { params: void; result: DumperUninstallResult };
   "install.detect": { params: InstallDetectParams; result: InstallInfo };
   "job.cancel": { params: JobCancelParams; result: JobCancelResult };
+  "mods.check": { params: ModIdParams; result: ModCheckReport };
+  "mods.create": { params: ModCreateParams; result: ModsListResult };
+  "mods.enable": { params: ModEnableParams; result: ModsListResult };
+  "mods.install": { params: ModIdParams; result: JobStarted };
+  "mods.list": { params: void; result: ModsListResult };
+  "mods.remove": { params: ModIdParams; result: ModsListResult };
+  "mods.replace": { params: ModReplaceParams; result: ModsListResult };
   "species.list": { params: void; result: SpeciesListResult };
   "species.pack": { params: SpeciesPackParams; result: JobStarted };
   "workspace.create": { params: WorkspaceOpenParams; result: WorkspaceStatus };
@@ -455,6 +510,7 @@ export interface RpcJobs {
   "decompile.run": DecompileRunResult;
   "dump.install": DumperInstallResult;
   "dump.run": DumpRunResult;
+  "mods.install": ModInstallResult;
   "species.pack": SpeciesPackRunResult;
   "workspace.refreshAll": RefreshAllResult;
 }

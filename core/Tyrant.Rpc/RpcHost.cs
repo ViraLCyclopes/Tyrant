@@ -2,6 +2,7 @@ using Tyrant.Rpc.Assets;
 using System.Text;
 using Tyrant.Rpc.Data;
 using Tyrant.Rpc.Jobs;
+using Tyrant.Rpc.Mods;
 using Tyrant.Rpc.Protocol;
 using Tyrant.Rpc.Studio;
 
@@ -21,6 +22,7 @@ public static class RpcHost
         server.Register(new StudioMethods(session, jobs));
         server.Register(new DataMethods(session));
         server.Register(new AssetsMethods(session, jobs));
+        server.Register(new ModsMethods(session, jobs));
         return (server, jobs);
     }
 
