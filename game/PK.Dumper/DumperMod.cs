@@ -59,6 +59,7 @@ namespace PK.Dumper
                     var failed = new DumpResult();
                     failed.Errors.Add("PKPersistentData never appeared within " + request.timeoutSeconds + " s.");
                     Finish(request, requestPath, failed, new List<LanguageTable>());
+                    if (request.quitWhenDone) yield return QuitGame();
                     yield break;
                 }
                 yield return new WaitForSecondsRealtime(1f);
@@ -82,6 +83,17 @@ namespace PK.Dumper
                 languages = new List<LanguageTable>();
             }
             Finish(request, requestPath, result, languages);
+            if (request.quitWhenDone) yield return QuitGame();
+        }
+
+        /// <summary>Quits through the game's own confirmation flag; forces the exit if the game is still running after 20 s.</summary>
+        private IEnumerator QuitGame()
+        {
+            if (!GameReflection.ConfirmQuit()) LoggerInstance.Warning("Could not pre-confirm the game's quit dialog.");
+            Application.Quit();
+            yield return new WaitForSecondsRealtime(20f);
+            LoggerInstance.Warning("The game did not quit; forcing exit (the dump was taken at the main menu, nothing to save).");
+            Environment.Exit(0);
         }
 
         private void Finish(DumpRequest request, string requestPath, DumpResult result, List<LanguageTable> languages)
@@ -106,7 +118,6 @@ namespace PK.Dumper
             {
                 try { File.Delete(requestPath); } catch (Exception ex) { LoggerInstance.Warning("Could not delete the request: " + ex.Message); }
             }
-            if (request.quitWhenDone) Application.Quit();
         }
     }
 

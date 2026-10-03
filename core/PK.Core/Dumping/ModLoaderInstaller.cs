@@ -142,7 +142,7 @@ public sealed class ModLoaderInstaller(string expectedSha256 = ModLoaderInstalle
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
         {
-            throw new PkException(PkErrorCode.DumperInstallFailed, $"Installing into the game folder failed: {ex.Message}", FixAction.None, ex);
+            throw new PkException(PkErrorCode.DumperInstallFailed, $"Installing into the game folder failed (is the game running?): {ex.Message}", FixAction.None, ex);
         }
 
         var record = new InstallRecord(installedLoader, files, createdDirs);

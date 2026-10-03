@@ -9,12 +9,22 @@ namespace PK.Core.Dumping;
 
 public interface IGameLauncher
 {
+    /// <summary>True when the game is already running (Steam would not start a second copy, so no dump could arrive).</summary>
+    bool IsRunning(GameInstall install);
+
     void Launch(GameInstall install);
 }
 
 /// <summary>Starts the game through Steam (so Steam DRM and overlays behave normally).</summary>
 public sealed class SteamLauncher : IGameLauncher
 {
+    public bool IsRunning(GameInstall install)
+    {
+        var processes = Process.GetProcessesByName(Path.GetFileNameWithoutExtension(GameInstall.ExeName));
+        foreach (var p in processes) p.Dispose();
+        return processes.Length > 0;
+    }
+
     public void Launch(GameInstall install)
     {
         if (install.SteamAppId is null)
@@ -37,6 +47,9 @@ public sealed class DumpRunner(IGameLauncher launcher)
     {
         if (ModLoaderInstaller.GetState(install) != InstallState.Installed)
             throw new PkException(PkErrorCode.DumperNotInstalled, "The dumper mod is not installed in the game folder. Run 'pk dump install' first.");
+
+        if (launcher.IsRunning(install))
+            throw new PkException(PkErrorCode.DumpFailed, "Prehistoric Kingdom is already running; close it first, then run 'pk dump run' again.");
 
         var requestId = Guid.NewGuid().ToString("N");
         var tmp = Path.Combine(ws.Dir, $"data.tmp-{requestId}");

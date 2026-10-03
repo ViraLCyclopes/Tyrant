@@ -37,6 +37,8 @@ public class DumpRunnerTests
     {
         public int Launches { get; private set; }
 
+        public bool IsRunning(GameInstall install) => false;
+
         public void Launch(GameInstall install)
         {
             Launches++;
@@ -52,7 +54,31 @@ public class DumpRunnerTests
 
     private sealed class SilentLauncher : IGameLauncher
     {
+        public bool IsRunning(GameInstall install) => false;
         public void Launch(GameInstall install) { }
+    }
+
+    private sealed class AlreadyRunningLauncher : IGameLauncher
+    {
+        public bool Launched { get; private set; }
+        public bool IsRunning(GameInstall install) => true;
+        public void Launch(GameInstall install) => Launched = true;
+    }
+
+    [Fact]
+    public void Game_already_running_is_refused_before_writing_a_request()
+    {
+        using var game = new FakeGame();
+        var install = Installed(game);
+        var ws = Workspace.Create(TempDir(), install);
+        var launcher = new AlreadyRunningLauncher();
+
+        var ex = Assert.Throws<PkException>(() => new DumpRunner(launcher).Run(install, ws, TimeSpan.FromSeconds(1), null, CancellationToken.None));
+
+        Assert.Equal(PkErrorCode.DumpFailed, ex.Code);
+        Assert.Contains("already running", ex.Message);
+        Assert.False(launcher.Launched);
+        Assert.False(File.Exists(DumpRunner.RequestPath(install)));
     }
 
     [Fact]
@@ -123,6 +149,8 @@ public class DumpRunnerTests
 
     private sealed class StaleOnlyLauncher : IGameLauncher
     {
+        public bool IsRunning(GameInstall install) => false;
+
         public void Launch(GameInstall install)
         {
             var output = JsonDocument.Parse(File.ReadAllText(DumpRunner.RequestPath(install))).RootElement.GetProperty("outputDir").GetString()!;

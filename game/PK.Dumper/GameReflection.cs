@@ -87,6 +87,25 @@ namespace PK.Dumper
             return tables.Values.OrderBy(t => t.Code, StringComparer.Ordinal).ToList();
         }
 
+        /// <summary>
+        /// The game cancels Application.Quit with a "Quit to desktop?" dialog unless InterfaceManager.quitConfirmed is set;
+        /// setting it is what the dialog's own confirm button does. Returns false if the flag could not be set.
+        /// </summary>
+        public static bool ConfirmQuit()
+        {
+            try
+            {
+                var field = FindType("PrehistoricKingdom.InterfaceManager")?.GetField("quitConfirmed", BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public);
+                if (field == null || field.FieldType != typeof(bool)) return false;
+                field.SetValue(null, true);
+                return true;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
         private static object? Field(object target, string name) =>
             target.GetType().GetField(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)?.GetValue(target);
 
