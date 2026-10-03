@@ -267,7 +267,7 @@ public sealed class ModAddSkinCommand : Command<ModAddSkinCommand.Settings>
         Console.WriteLine($"Added skin '{entry.Name}' ({entry.Key(mod.Id)}) based on '{entry.Base}':");
         foreach (var (sex, files) in new[] { ("male", entry.Male), ("female", entry.Female) })
             if (files is not null)
-                foreach (var (slot, file) in files) Console.WriteLine($"  {sex,-6} {slot,-8} {Path.Combine(mod.Dir, file)}");
+                foreach (var (slot, file) in files) Console.WriteLine($"  {sex,-6} {slot,-8} {Path.Combine(mod.Dir, file.Replace('/', Path.DirectorySeparatorChar))}");
         Console.WriteLine($"Edit those PNGs, then 'tyrant mod check {mod.Id}' and 'tyrant mod install {mod.Id}'.");
         return ExitCodes.Ok;
     }

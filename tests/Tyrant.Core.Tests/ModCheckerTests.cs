@@ -230,4 +230,17 @@ public class ModCheckerTests
             Assert.Contains(result.Errors, e => e.Contains("d.png") && e.Contains("could not be read"));
         }
     }
+
+    [Fact]
+    public void A_species_written_in_the_wrong_case_is_an_error_that_names_the_right_spelling()
+    {
+        var (game, _, mod) = Setup();
+        using var _ = game;
+        SkinPng(mod, "skins/red-spot/m.png");
+        Skin(mod, "carcharodontosaurus", "Alt 1", "skins/red-spot/m.png");
+
+        var result = Checker.Check(mod, SkinDumps.Index(), Species());
+
+        Assert.Contains(result.Errors, e => e.Contains("\"Carcharodontosaurus\""));
+    }
 }

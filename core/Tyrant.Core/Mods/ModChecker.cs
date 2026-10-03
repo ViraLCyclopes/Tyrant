@@ -75,6 +75,8 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
             {
                 var target = species.FirstOrDefault(s => string.Equals(s.SpeciesId, skin.Species, StringComparison.OrdinalIgnoreCase));
                 if (target is null) errors.Add($"{key}: species \"{skin.Species}\" is not in the game data.");
+                else if (!string.Equals(target.SpeciesId, skin.Species, StringComparison.Ordinal))
+                    errors.Add($"{key}: species \"{skin.Species}\" must be written \"{target.SpeciesId}\" (the game matches the exact spelling).");
                 else
                 {
                     based = int.TryParse(skin.Base, out var number) ? target.Skins.FirstOrDefault(s => s.Index == number)

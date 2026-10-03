@@ -115,4 +115,36 @@ public class SkinTemplateTests
         Assert.Equal(TyrantErrorCode.ModInvalid, Assert.Throws<TyrantException>(() =>
             mod.AddSkin(ws, install, Index, new FakeAssetReader(), species, "Carcharodontosaurus", "X", null, new SkinTemplateOptions(false, false, false))).Code);
     }
+
+    [Fact]
+    public void A_base_skin_whose_name_repeats_is_written_by_its_number()
+    {
+        var (game, ws, install) = Setup();
+        using var _ = game;
+        var mod = ModProject.Create(ws, "red-spot-carcharo", null, null);
+        var twins = new[] { new SpeciesSkins("Carcharodontosaurus", false,
+        [
+            new VanillaSkin(0, "Alt", new Dictionary<string, string> { ["diffuse"] = MaleDiffuse }, new Dictionary<string, string>()),
+            new VanillaSkin(1, "Alt", new Dictionary<string, string> { ["diffuse"] = MaleDiffuse }, new Dictionary<string, string>()),
+        ]) };
+
+        var entry = mod.AddSkin(ws, install, Index, new FakeAssetReader(), twins, "Carcharodontosaurus", "Red", "1", new SkinTemplateOptions(true, false, false));
+
+        Assert.Equal("1", entry.Base); // "Alt" would be ambiguous in game
+    }
+
+    [Fact]
+    public void A_template_that_fails_halfway_leaves_no_files_behind()
+    {
+        var (game, ws, install) = Setup();
+        using var _ = game;
+        var mod = ModProject.Create(ws, "red-spot-carcharo", null, null);
+        var maleOnly = new[] { new SpeciesSkins("Carcharodontosaurus", false,
+            [new VanillaSkin(0, "Base", new Dictionary<string, string> { ["diffuse"] = MaleDiffuse }, new Dictionary<string, string>())]) }; // no female diffuse
+
+        Assert.Throws<TyrantException>(() => mod.AddSkin(ws, install, Index, new FakeAssetReader(), maleOnly, "Carcharodontosaurus", "Red", null, new SkinTemplateOptions(true, true, false)));
+
+        Assert.False(Directory.Exists(Path.Combine(mod.Dir, "skins", "red")));
+        Assert.Empty(ModProject.Open(ws, "red-spot-carcharo").Manifest.Skins);
+    }
 }
