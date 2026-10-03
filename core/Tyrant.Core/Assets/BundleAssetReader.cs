@@ -78,6 +78,9 @@ public sealed class BundleAssetReader : IAssetReader
         File.WriteAllText(jsonPath, FieldJsonWriter.ToJson(baseField));
     }
 
+    public IReadOnlyList<string> WriteEnvironment(GameInstall install, AssetIndex index, EnvironmentPreset preset, string dir) =>
+        new EnvironmentTextureWriter().Write(install, index, preset, dir);
+
     public SpeciesPackResult WriteSpeciesPack(GameInstall install, Workspace ws, AssetIndex index, SpeciesEntry species,
         IProgress<JobProgress>? progress, CancellationToken ct) =>
         new SpeciesPackExporter().Export(install, ws, index, species, progress, ct);

@@ -25,6 +25,31 @@ public sealed class RealGameIndex
 [Trait("Category", "Integration")]
 public class AssetIntegrationTests(RealGameIndex real) : IClassFixture<RealGameIndex>
 {
+    private static double Mean(StbImageSharp.ImageResult image, int channel, int? row = null)
+    {
+        var rows = row is { } r ? new[] { r } : Enumerable.Range(0, image.Height).ToArray();
+        return rows.SelectMany(y => Enumerable.Range(0, image.Width).Select(x => (double)image.Data[(y * image.Width + x) * 4 + channel])).Average();
+    }
+
+    [SkippableFact]
+    public void Ground_and_sky_come_from_the_games_loose_files_the_right_way_up()
+    {
+        Skip.If(RealGameIndex.GameDir is null, "TYRANT_GAME_DIR not set");
+        var dir = Path.Combine(Path.GetTempPath(), "tyrant-tests", Guid.NewGuid().ToString("N"));
+        var writer = new EnvironmentTextureWriter();
+        StbImageSharp.ImageResult Load(string path) => StbImageSharp.ImageResult.FromMemory(File.ReadAllBytes(path), StbImageSharp.ColorComponents.RedGreenBlueAlpha);
+
+        var ground = writer.Write(real.Install, real.Index, EnvironmentPresets.Find("lush-grass"), Path.Combine(dir, "ground"));
+        var sky = writer.Write(real.Install, real.Index, EnvironmentPresets.Find("noon"), Path.Combine(dir, "sky"));
+
+        Assert.Equal(2048, Load(Assert.Single(ground)).Width);
+        Assert.Equal(6, sky.Count);
+        var up = Load(sky[2]); // +Y
+        Assert.True(Mean(up, 2) > Mean(up, 0), "the +Y face is sky: more blue than red");
+        var front = Load(sky[4]); // +Z: sky above the horizon
+        Assert.True(Mean(front, 2, row: 0) > Mean(front, 2, row: front.Height - 1), "a side face has the sky at the top");
+    }
+
     [SkippableFact]
     public void Bundle_reader_writes_a_real_prefab_with_its_textures()
     {

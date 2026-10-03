@@ -235,6 +235,26 @@ export interface DumperUninstallResult {
   message: string;
 }
 
+export interface EnvironmentList {
+  grounds: EnvironmentOption[];
+  skies: EnvironmentOption[];
+}
+
+export interface EnvironmentOption {
+  id: string;
+  label: string;
+}
+
+export interface EnvironmentParams {
+  id: string;
+}
+
+export interface EnvironmentTexture {
+  id: string;
+  kind: string;
+  files: string[];
+}
+
 export interface InstallDetectParams {
   gamePath?: string | null;
 }
@@ -396,6 +416,8 @@ export interface RpcMethods {
   "app.diagnostics": { params: void; result: DiagnosticsResult };
   "app.info": { params: void; result: AppInfo };
   "assets.bundles": { params: AssetBundlesParams; result: AssetBundlesResult };
+  "assets.environment": { params: EnvironmentParams; result: EnvironmentTexture };
+  "assets.environments": { params: void; result: EnvironmentList };
   "assets.export": { params: AssetExportParams; result: JobStarted };
   "assets.get": { params: AssetRefParams; result: AssetDetails };
   "assets.index": { params: void; result: JobStarted };

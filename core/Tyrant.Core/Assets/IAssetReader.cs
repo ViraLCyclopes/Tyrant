@@ -44,6 +44,9 @@ public interface IAssetReader
     /// <summary>Writes any object's fields as JSON.</summary>
     void WriteJson(GameInstall install, AssetRecord asset, string jsonPath);
 
+    /// <summary>Writes a ground or sky texture from the game's loose files into <paramref name="dir"/>; see <see cref="EnvironmentTextureWriter"/>.</summary>
+    IReadOnlyList<string> WriteEnvironment(GameInstall install, AssetIndex index, EnvironmentPreset preset, string dir);
+
     SpeciesPackResult WriteSpeciesPack(GameInstall install, Workspace ws, AssetIndex index, SpeciesEntry species,
         IProgress<JobProgress>? progress, CancellationToken ct);
 }

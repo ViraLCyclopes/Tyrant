@@ -63,3 +63,12 @@ public sealed record AssetExportRunResult(int Exported, int Failed, string Repor
 public sealed record SpeciesPackParams(string Key);
 
 public sealed record SpeciesPackRunResult(string Directory, int Models, int Textures, int Failed, string TargetsPath);
+
+public sealed record EnvironmentOption(string Id, string Label);
+
+public sealed record EnvironmentList(IReadOnlyList<EnvironmentOption> Grounds, IReadOnlyList<EnvironmentOption> Skies);
+
+public sealed record EnvironmentParams(string Id);
+
+/// <summary>A ground ("ground": one PNG) or sky ("sky": six faces, Unity order +X, -X, +Y, -Y, +Z, -Z) in the preview cache.</summary>
+public sealed record EnvironmentTexture(string Id, string Kind, IReadOnlyList<string> Files) : IPreviewFiles;

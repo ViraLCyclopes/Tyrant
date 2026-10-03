@@ -11,7 +11,7 @@ namespace Tyrant.Core.Tests;
 /// <summary>An IAssetReader that writes tiny placeholder files instead of decoding bundles (no game content).</summary>
 public sealed class FakeAssetReader : IAssetReader
 {
-    private int _textures, _models, _json, _inspections;
+    private int _textures, _models, _json, _inspections, _environments;
 
     public HashSet<string> FailFor { get; } = new(StringComparer.Ordinal);
 
@@ -30,6 +30,7 @@ public sealed class FakeAssetReader : IAssetReader
     public int Models => _models;
     public int Json => _json;
     public int Inspections => _inspections;
+    public int Environments => _environments;
 
     public AssetInspection Inspect(GameInstall install, AssetRecord asset)
     {
@@ -70,6 +71,16 @@ public sealed class FakeAssetReader : IAssetReader
         Fail(species.Prefab);
         progress?.Report(new JobProgress(1, "Done"));
         return SpeciesPack ?? new SpeciesPackResult(Path.Combine(ws.AssetsDir, "species", species.Key), [], [], Path.Combine(ws.AssetsDir, "species", species.Key, "targets.json"));
+    }
+
+    public IReadOnlyList<string> WriteEnvironment(GameInstall install, AssetIndex index, EnvironmentPreset preset, string dir)
+    {
+        Interlocked.Increment(ref _environments);
+        List<string> files = preset.Kind == EnvironmentKind.Sky
+            ? Enumerable.Range(0, 6).Select(f => Path.Combine(dir, $"sky_{f}.png")).ToList()
+            : [Path.Combine(dir, "ground.png")];
+        foreach (var file in files) Write(file, "png");
+        return files;
     }
 
     private void Fail(AssetRecord asset)
