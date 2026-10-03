@@ -137,4 +137,83 @@ public class GltfModelWriterTests
         Assert.Equal(Quaternion.Identity, node.LocalTransform.Rotation);
         Assert.Equal(new Vector3(2, 2, 2), node.LocalTransform.Scale);
     }
+
+    /// <summary>The JSON chunk of a .glb (header 12 bytes, then chunk length, type, data).</summary>
+    private static System.Text.Json.Nodes.JsonNode GlbJson(string path)
+    {
+        var bytes = File.ReadAllBytes(path);
+        return System.Text.Json.Nodes.JsonNode.Parse(bytes.AsSpan(20, BitConverter.ToInt32(bytes, 12)))!;
+    }
+
+    private static string Png(string dir, string name)
+    {
+        Directory.CreateDirectory(dir);
+        var path = Path.Combine(dir, name);
+        using var stream = File.Create(path);
+        // Distinct pixels per file: SharpGLTF merges images with identical bytes.
+        var pixels = Enumerable.Repeat((byte)name[^5], 2 * 2 * 4).ToArray();
+        new StbImageWriteSharp.ImageWriter().WritePng(pixels, 2, 2, StbImageWriteSharp.ColorComponents.RedGreenBlueAlpha, stream);
+        return path;
+    }
+
+    private static MeshData TwoSubMeshes()
+    {
+        var tri = ModelFixture.Triangle(skinned: false, withShape: false);
+        return new MeshData
+        {
+            Name = "Body", Positions = tri.Positions, Normals = tri.Normals, Uv0 = tri.Uv0, Colors = [], Skin = [],
+            Indices = [0, 1, 2, 0, 2, 1], SubMeshes = [new SubMesh(0, 3, 0), new SubMesh(3, 3, 0)], BindPoses = [], BlendShapes = [],
+        };
+    }
+
+    private static string[] Names(System.Text.Json.Nodes.JsonNode json, string array) =>
+        json[array]!.AsArray().Select(m => m!["name"]!.GetValue<string>()).Order(StringComparer.Ordinal).ToArray();
+
+    [Fact]
+    public void Materials_are_not_metal_so_animals_do_not_render_dark()
+    {
+        var prefab = ModelFixture.Prefab(ModelFixture.Triangle(skinned: false, withShape: false), skinned: false);
+        var path = TempGlb();
+
+        GltfModelWriter.WriteGlb(prefab, prefab.Renderers[0], path);
+
+        var pbr = GlbJson(path)["materials"]![0]!["pbrMetallicRoughness"]!;
+        Assert.Equal(0, pbr["metallicFactor"]!.GetValue<double>());
+        Assert.InRange(pbr["roughnessFactor"]!.GetValue<double>(), 0.5, 1);
+    }
+
+    [Fact]
+    public void Each_sub_mesh_gets_its_material_with_textures_linked_beside_the_file()
+    {
+        var path = TempGlb();
+        var textures = Path.Combine(Path.GetDirectoryName(path)!, GltfModelWriter.TexturesFolder);
+        var prefab = ModelFixture.Prefab(TwoSubMeshes(), skinned: false);
+        GltfMaterial[] materials = [new("Skin", Png(textures, "T_Skin_D.png"), Png(textures, "T_Skin_N.png")), new("Eyes")];
+
+        GltfModelWriter.WriteGlb(prefab, prefab.Renderers[0], path, materials);
+
+        var json = GlbJson(path);
+        Assert.Equal(new[] { "Eyes", "Skin" }, Names(json, "materials"));
+        Assert.Equal(2, json["meshes"]![0]!["primitives"]!.AsArray().Count);
+        Assert.Equal(new[] { "textures/T_Skin_D.png", "textures/T_Skin_N.png" },
+            json["images"]!.AsArray().Select(i => i!["uri"]!.GetValue<string>()).Order(StringComparer.Ordinal).ToArray());
+        Assert.All(json["images"]!.AsArray(), i => Assert.Null(i!["bufferView"])); // linked, not embedded
+        var skin = json["materials"]!.AsArray().Single(m => m!["name"]!.GetValue<string>() == "Skin")!;
+        Assert.NotNull(skin["normalTexture"]);
+        Assert.NotNull(skin["pbrMetallicRoughness"]!["baseColorTexture"]);
+        Assert.True(File.Exists(Path.Combine(textures, "T_Skin_D.png")));
+    }
+
+    [Fact]
+    public void Sub_meshes_without_a_material_are_kept_plain()
+    {
+        var path = TempGlb();
+        var prefab = ModelFixture.Prefab(TwoSubMeshes(), skinned: false);
+
+        GltfModelWriter.WriteGlb(prefab, prefab.Renderers[0], path, [new GltfMaterial("Skin")]);
+
+        var json = GlbJson(path);
+        Assert.Equal(2, json["meshes"]![0]!["primitives"]!.AsArray().Count);
+        Assert.Equal(new[] { "Body", "Skin" }, Names(json, "materials")); // the second sub-mesh falls back to the mesh's name
+    }
 }
