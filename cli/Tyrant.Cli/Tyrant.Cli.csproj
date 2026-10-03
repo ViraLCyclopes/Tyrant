@@ -12,19 +12,22 @@
     <PackageReference Include="Spectre.Console.Cli" Version="0.49.1" />
   </ItemGroup>
   <ItemGroup>
-    <!-- Build the MelonLoader mod (net472) and ship it in <tyrant.exe folder>/dumper for 'tyrant dump install'. -->
+    <!-- Build the MelonLoader mods (net472) and ship them in <tyrant.exe folder>/dumper for the game installer. -->
     <ProjectReference Include="..\..\game\Tyrant.Dumper\Tyrant.Dumper.csproj" ReferenceOutputAssembly="false" PrivateAssets="all"
+                      SkipGetTargetFrameworkProperties="true" GlobalPropertiesToRemove="RuntimeIdentifier;SelfContained" />
+    <ProjectReference Include="..\..\game\Tyrant.Framework\Tyrant.Framework.csproj" ReferenceOutputAssembly="false" PrivateAssets="all"
                       SkipGetTargetFrameworkProperties="true" GlobalPropertiesToRemove="RuntimeIdentifier;SelfContained" />
   </ItemGroup>
   <Target Name="CopyDumperPlugin" AfterTargets="Build">
     <ItemGroup>
       <DumperFiles Include="$(MSBuildThisFileDirectory)..\..\game\Tyrant.Dumper\bin\$(Configuration)\net472\Tyrant.Dumper*.dll" />
+      <DumperFiles Include="$(MSBuildThisFileDirectory)..\..\game\Tyrant.Framework\bin\$(Configuration)\net472\Tyrant.Framework*.dll" />
     </ItemGroup>
     <Copy SourceFiles="@(DumperFiles)" DestinationFolder="$(OutDir)dumper" SkipUnchangedFiles="true" />
   </Target>
   <Target Name="PublishDumperPlugin" AfterTargets="Publish">
     <ItemGroup>
-      <PublishedDumperFiles Include="$(OutDir)dumper\Tyrant.Dumper*.dll" />
+      <PublishedDumperFiles Include="$(OutDir)dumper\Tyrant.*.dll" />
     </ItemGroup>
     <Copy SourceFiles="@(PublishedDumperFiles)" DestinationFolder="$(PublishDir)dumper" SkipUnchangedFiles="true" />
   </Target>
