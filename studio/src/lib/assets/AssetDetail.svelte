@@ -3,6 +3,7 @@
   import { formatBytes } from '$lib/format';
   import type { AssetDetails } from '$lib/rpc/types.gen';
   import { getSession } from '$lib/stores/session.svelte';
+  import AssetPreviewPanel from './AssetPreviewPanel.svelte';
 
   let { ref, onOpen }: { ref: string; onOpen: (ref: string) => void } = $props();
 
@@ -55,6 +56,8 @@
       <button onclick={() => copy('Reference', asset.ref)}>Copy reference</button>
     </div>
   </section>
+
+  <AssetPreviewPanel {asset} />
 
   {#if details.references.length}
     <section aria-label="References">

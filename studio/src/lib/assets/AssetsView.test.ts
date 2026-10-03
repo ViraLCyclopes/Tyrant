@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/svelte';
+import { fireEvent, screen } from '@testing-library/svelte';
 import { describe, expect, it } from 'vitest';
 import { memoryStore } from '$lib/storage';
 import { FakePlatform } from '$lib/test/fakePlatform';
@@ -26,5 +26,19 @@ describe('AssetsView', () => {
     renderWith(AssetsView, session);
 
     expect(screen.getByRole('searchbox', { name: 'Search assets' })).toBeInTheDocument();
+  });
+
+  it('switches between browsing and species', async () => {
+    const rpc = new FakeRpc();
+    rpc.on('assets.summary', () => ({ assets: 0, bundles: 0, groups: [], types: [], warnings: [], failures: 0, missingBundles: 0, stale: false }));
+    rpc.on('assets.list', () => ({ rows: [], total: 0, page: 0, pageSize: 200 }));
+    rpc.on('species.list', () => ({ species: [] }));
+    const session = new Session(rpc, new FakePlatform(), memoryStore());
+    session.workspace = workspaceStatus({ hasAssetIndex: true });
+    renderWith(AssetsView, session);
+
+    await fireEvent.click(screen.getByRole('tab', { name: 'Species' }));
+
+    expect(screen.getByRole('searchbox', { name: 'Find a species' })).toBeInTheDocument();
   });
 });
