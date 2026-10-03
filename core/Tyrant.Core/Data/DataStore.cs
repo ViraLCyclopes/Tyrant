@@ -8,10 +8,13 @@ namespace Tyrant.Core.Data;
 
 public sealed record DataType(string FullName, string ShortName, int Count);
 
+public sealed record LanguageInfo(string Code, string Name, int TermCount);
+
+public sealed record LocalizationTable(string Code, string Name, IReadOnlyDictionary<string, string> Terms);
+
 /// <summary>Read-only access to a dump in &lt;workspace&gt;/data.</summary>
 public sealed class DataStore
 {
-    private const int MaxFlattenDepth = 4;
     private readonly string _dir;
 
     private DataStore(string dir, DumpManifestFile manifest)
@@ -71,7 +74,6 @@ public sealed class DataStore
         Directory.GetFiles(TypeDir(type), "*.json").Order(StringComparer.OrdinalIgnoreCase)
             .Select(f => (Path.GetFileNameWithoutExtension(f), Parse(f)));
 
-    /// <summary>One row per object; nested objects become dotted columns, arrays compact JSON, references the target name.</summary>
     /// <summary>Indented JSON that keeps non-ASCII text (é, 日本) and markup readable instead of escape sequences; for files and display only.</summary>
     public static readonly JsonSerializerOptions ReadableJson = new()
     {
@@ -79,65 +81,44 @@ public sealed class DataStore
         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
-    private static readonly JsonSerializerOptions CompactReadableJson = new() { Encoder = ReadableJson.Encoder };
-
     /// <summary>UTF-8 with a byte-order mark, so Excel opens exported CSV files with the right characters.</summary>
     public static readonly System.Text.Encoding CsvEncoding = new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: true);
 
-    public static string ToCsv(IEnumerable<(string Name, JsonElement Root)> objects)
-    {
-        var columns = new List<string> { "$name" };
-        var rows = new List<Dictionary<string, string>>();
-        foreach (var (name, root) in objects)
-        {
-            var row = new Dictionary<string, string>(StringComparer.Ordinal) { ["$name"] = name };
-            if (root.ValueKind == JsonValueKind.Object)
-                foreach (var property in root.EnumerateObject())
-                    if (property.Name is not ("$type" or "$name" or "$id"))
-                        Flatten(property.Name, property.Value, row, 1);
-            foreach (var key in row.Keys)
-                if (!columns.Contains(key)) columns.Add(key);
-            rows.Add(row);
-        }
+    public static string ToCsv(IEnumerable<(string Name, JsonElement Root)> objects) => DataTable.From(objects).ToCsv();
 
-        var sb = new StringBuilder();
-        sb.Append(string.Join(",", columns.Select(Escape))).Append("\r\n");
-        foreach (var row in rows)
-            sb.Append(string.Join(",", columns.Select(c => Escape(row.TryGetValue(c, out var v) ? v : "")))).Append("\r\n");
-        return sb.ToString();
+    /// <summary>Every dumped language (data/localization/&lt;code&gt;.json), ordered by code.</summary>
+    public IReadOnlyList<LocalizationTable> LoadLocalization()
+    {
+        var dir = Path.Combine(_dir, "localization");
+        if (!Directory.Exists(dir)) return [];
+        return Directory.GetFiles(dir, "*.json").Order(StringComparer.OrdinalIgnoreCase).Select(ReadLanguage).ToList();
     }
 
-    private static void Flatten(string prefix, JsonElement value, Dictionary<string, string> row, int depth)
+    /// <summary>Writes every object of a type as CSV (UTF-8 with BOM, for Excel) or JSON; returns the object count.</summary>
+    public int Export(DataType type, string format, string path)
     {
-        switch (value.ValueKind)
-        {
-            case JsonValueKind.Object when value.TryGetProperty("$ref", out var reference):
-                row[prefix] = reference.TryGetProperty("name", out var refName) ? refName.GetString() ?? "" : "";
-                break;
-            case JsonValueKind.Object when depth < MaxFlattenDepth:
-                foreach (var property in value.EnumerateObject())
-                    if (property.Name is not ("$type" or "$id"))
-                        Flatten($"{prefix}.{property.Name}", property.Value, row, depth + 1);
-                break;
-            case JsonValueKind.Object:
-            case JsonValueKind.Array:
-                row[prefix] = JsonSerializer.Serialize(value, CompactReadableJson);
-                break;
-            case JsonValueKind.String:
-                row[prefix] = value.GetString() ?? "";
-                break;
-            case JsonValueKind.Null:
-            case JsonValueKind.Undefined:
-                row[prefix] = "";
-                break;
-            default:
-                row[prefix] = value.GetRawText();
-                break;
-        }
+        if (format is not ("csv" or "json"))
+            throw new ArgumentException($"Unknown export format '{format}'; use csv or json.", nameof(format));
+        var objects = LoadAll(type).ToList();
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
+        if (format == "csv")
+            File.WriteAllText(path, ToCsv(objects), CsvEncoding);
+        else
+            File.WriteAllText(path, JsonSerializer.Serialize(objects.Select(o => o.Root), ReadableJson));
+        return objects.Count;
     }
 
-    private static string Escape(string text) =>
-        text.IndexOfAny([',', '"', '\n', '\r']) >= 0 ? "\"" + text.Replace("\"", "\"\"") + "\"" : text;
+    private static LocalizationTable ReadLanguage(string file)
+    {
+        var root = Parse(file);
+        var terms = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (root.TryGetProperty("terms", out var list) && list.ValueKind == JsonValueKind.Object)
+            foreach (var term in list.EnumerateObject())
+                terms[term.Name] = term.Value.ValueKind == JsonValueKind.String ? term.Value.GetString() ?? "" : term.Value.GetRawText();
+        var code = root.TryGetProperty("code", out var c) && c.ValueKind == JsonValueKind.String ? c.GetString()! : Path.GetFileNameWithoutExtension(file);
+        var name = root.TryGetProperty("name", out var n) && n.ValueKind == JsonValueKind.String ? n.GetString()! : code;
+        return new LocalizationTable(code, name, terms);
+    }
 
     private string TypeDir(DataType type) => Path.Combine(_dir, "objects", type.FullName);
 

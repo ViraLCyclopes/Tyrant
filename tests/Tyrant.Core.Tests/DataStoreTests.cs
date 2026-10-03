@@ -94,4 +94,53 @@ public class DataStoreTests
         Assert.Contains("日本", csv);
         Assert.Contains("<b>", csv);
     }
+
+    [Fact]
+    public void Table_puts_name_first_and_flattens_like_the_csv()
+    {
+        var table = DataTable.From([
+            ("Stego", JsonDocument.Parse("""{"$type":"T","$name":"Stego","$id":1,"cost":10,"stats":{"hp":5}}""").RootElement),
+            ("Rex", JsonDocument.Parse("""{"$type":"T","$name":"Rex","$id":2,"cost":20,"diet":"Carnivore"}""").RootElement),
+        ]);
+
+        Assert.Equal(["$name", "cost", "stats.hp", "diet"], table.Columns);
+        Assert.Equal("Rex", table.Rows[1].Get("$name"));
+        Assert.Equal("", table.Rows[0].Get("diet"));
+        Assert.StartsWith("$name,cost,stats.hp,diet\r\nStego,10,5,\r\n", table.ToCsv());
+    }
+
+    [Fact]
+    public void Localization_tables_are_read_from_the_dump()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "tyrant-tests", Guid.NewGuid().ToString("N"), "data");
+        DumpWriter.Write(dir, new DumpResult(),
+            [new LanguageTable("fr", "Français", new Dictionary<string, string> { ["Animals/Stego"] = "Stégosaure" })],
+            new DumpManifest { RequestId = "r" });
+
+        var table = Assert.Single(DataStore.OpenDirectory(dir).LoadLocalization());
+
+        Assert.Equal("fr", table.Code);
+        Assert.Equal("Français", table.Name);
+        Assert.Equal("Stégosaure", table.Terms["Animals/Stego"]);
+    }
+
+    [Fact]
+    public void Export_writes_csv_with_a_bom_or_json_and_rejects_other_formats()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "tyrant-tests", Guid.NewGuid().ToString("N"), "data");
+        var result = new DumpResult();
+        result.Objects.Add(new DumpObject(typeof(object), new EngineObjectInfo("T.Animal", "Tri", 1), """{"$type":"T.Animal","$name":"Tri","$id":1,"name":"Tricératops"}"""));
+        DumpWriter.Write(dir, result, [], new DumpManifest { RequestId = "r" });
+        var store = DataStore.OpenDirectory(dir);
+        var type = store.FindType("Animal");
+        var csv = Path.Combine(dir, "..", "out", "a.csv");
+        var json = Path.Combine(dir, "..", "out", "a.json");
+
+        Assert.Equal(1, store.Export(type, "csv", csv));
+        Assert.Equal(1, store.Export(type, "json", json));
+
+        Assert.Equal(new byte[] { 0xEF, 0xBB, 0xBF }, File.ReadAllBytes(csv).Take(3).ToArray());
+        Assert.Contains("Tricératops", File.ReadAllText(json));
+        Assert.Throws<ArgumentException>(() => store.Export(type, "xml", Path.Combine(dir, "..", "out", "a.xml")));
+    }
 }

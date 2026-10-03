@@ -1,3 +1,4 @@
+using Tyrant.Rpc.Data;
 using Tyrant.Rpc.Jobs;
 using Tyrant.Rpc.Protocol;
 using Tyrant.Rpc.Studio;
@@ -14,6 +15,7 @@ public static class RpcHost
         var jobs = new JobManager(server.Notify, session.Log);
         server.Register(new JobMethods(jobs));
         server.Register(new StudioMethods(session, jobs));
+        server.Register(new DataMethods(session));
         return (server, jobs);
     }
 }

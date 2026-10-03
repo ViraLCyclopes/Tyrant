@@ -1,5 +1,4 @@
 using System.ComponentModel;
-using System.Text.Json;
 using Tyrant.Core.Data;
 using Tyrant.Core.Errors;
 using Spectre.Console.Cli;
@@ -35,13 +34,8 @@ public sealed class DataExportCommand : Command<DataExportCommand.Settings>
         var store = DataStore.Open(ws);
         var type = store.FindType(settings.Type);
         var output = Path.GetFullPath(settings.Out ?? Path.Combine(ws.Dir, "exports", $"{type.ShortName}.{settings.Format}"));
-        Directory.CreateDirectory(Path.GetDirectoryName(output)!);
-        var objects = store.LoadAll(type).ToList();
-        if (settings.Format == "csv")
-            File.WriteAllText(output, DataStore.ToCsv(objects), DataStore.CsvEncoding);
-        else
-            File.WriteAllText(output, JsonSerializer.Serialize(objects.Select(o => o.Root), DataStore.ReadableJson));
-        Console.WriteLine($"Exported {objects.Count} {type.ShortName} objects -> {output}");
+        var count = store.Export(type, settings.Format, output);
+        Console.WriteLine($"Exported {count} {type.ShortName} objects -> {output}");
         return ExitCodes.Ok;
     }
 }
