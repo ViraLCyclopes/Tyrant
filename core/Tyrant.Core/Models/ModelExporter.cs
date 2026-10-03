@@ -56,7 +56,8 @@ public sealed class ModelExporter
 
     /// <summary>Writes &lt;workspace&gt;/assets/models/&lt;prefab&gt;/*.glb, replacing a previous export of the same prefab.</summary>
     /// <param name="index">Finds the materials' textures; without it the models are written plain.</param>
-    public IReadOnlyList<ModelExportResult> Export(GameInstall install, Workspace ws, AssetRecord prefab, AssetIndex? index = null)
+    /// <param name="notes">Receives notes about the textures (see ModelTextures.Notes).</param>
+    public IReadOnlyList<ModelExportResult> Export(GameInstall install, Workspace ws, AssetRecord prefab, AssetIndex? index = null, List<string>? notes = null)
     {
         using var session = new AssetSession(install);
         var model = ReadPrefab(session, prefab);
@@ -65,6 +66,7 @@ public sealed class ModelExporter
         if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
         var textures = index is null ? null : ModelTextures.Write(session, index, prefab.Bundle, model, dir);
         var results = WriteModels(model, dir, textures);
+        if (textures is not null) notes?.AddRange(textures.Notes);
         if (results.Any(r => r.Success)) ws.StampOutput(OutputName, GameFingerprint.Compute(install));
         return results;
     }

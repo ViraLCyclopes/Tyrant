@@ -95,4 +95,20 @@ describe('AssetBrowser', () => {
 
     expect(await screen.findByRole('heading', { name: 'T_Stego_D' })).toBeInTheDocument();
   });
+
+  it('passes export notes on in the notice', async () => {
+    const { rpc, session } = setup();
+    rpc.on('assets.export', () => ({
+      exported: 1, failed: 0, reportPath: 'D:\ws\exports\asset-export-1.json', failures: [],
+      notes: ['Textures kept in other bundles need a newer asset index: click Index assets on the Home tab.'],
+    }));
+    rpc.on('workspace.status', () => workspaceStatus({ hasAssetIndex: true }));
+    renderWith(AssetBrowser, session);
+    await screen.findByRole('button', { name: 'T_Stego_D' });
+
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Select T_Stego_D' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Export selected (1)' }));
+
+    await waitFor(() => expect(session.notice).toContain('click Index assets'));
+  });
 });

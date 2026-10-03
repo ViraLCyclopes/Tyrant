@@ -250,4 +250,32 @@ public class AssetPreviewTests
         Assert.Contains("1 texture(s) could not be decoded", preview.GetProperty("message").GetString());
         Assert.Contains("BC7", preview.GetProperty("message").GetString());
     }
+
+    [Fact]
+    public async Task Export_job_passes_texture_notes_on()
+    {
+        using var game = new FakeGame();
+        var (h, _, reader) = await Opened(game);
+        reader.ModelNotes = ["Textures kept in other bundles need a newer asset index: click Index assets on the Home tab."];
+
+        var result = await h.RunJob("assets.export", new { refs = new[] { StegoPrefab.Ref } });
+
+        Assert.Contains("Index assets", result.GetProperty("notes")[0].GetString());
+    }
+
+    [Fact]
+    public async Task Species_pack_job_passes_texture_notes_on()
+    {
+        using var game = new FakeGame();
+        var (h, ws, reader) = await Opened(game);
+        var dir = Path.Combine(ws, "assets", "species", "stegosaurus");
+        reader.SpeciesPack = new Tyrant.Core.Species.SpeciesPackResult(dir, [], [], Path.Combine(dir, "targets.json"))
+        {
+            Notes = ["Texture T_Stego_D could not be decoded, so its material is plain: BC7"],
+        };
+
+        var result = await h.RunJob("species.pack", new { key = "stegosaurus" });
+
+        Assert.Contains("BC7", result.GetProperty("notes")[0].GetString());
+    }
 }

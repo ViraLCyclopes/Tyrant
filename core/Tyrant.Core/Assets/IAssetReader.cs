@@ -25,6 +25,9 @@ public sealed record ModelFacts(IReadOnlyList<ModelPart> Parts, IReadOnlyList<st
 
     /// <summary>Textures that were found but could not be decoded; their materials are plain.</summary>
     public IReadOnlyList<string> TextureFailures { get; init; } = [];
+
+    /// <summary>Notes for exports: an index too old to follow textures, and textures that failed (see ModelTextures.Notes).</summary>
+    public IReadOnlyList<string> Notes { get; init; } = [];
 }
 
 /// <summary>Everything that reads game bundles. Production code uses <see cref="BundleAssetReader"/>; tests use a fake.</summary>

@@ -19,7 +19,8 @@
     if (!r) return;
     lastPack = r.directory;
     const failed = r.failed ? ` (${r.failed} failed)` : '';
-    session.notice = `Exported ${r.models} models and ${r.textures} textures to ${r.directory}${failed}.`;
+    const notes = r.notes?.length ? ` ${r.notes.join(' ')}` : '';
+    session.notice = `Exported ${r.models} models and ${r.textures} textures to ${r.directory}${failed}.${notes}`;
   }
 </script>
 

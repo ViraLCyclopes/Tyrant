@@ -32,12 +32,24 @@ public sealed class ModelTextures
     /// <summary>"&lt;texture&gt;: &lt;why&gt;" for every texture that was found but could not be decoded.</summary>
     public IReadOnlyList<string> Failures => _failures;
 
+    /// <summary>What a person exporting the model should know: an index too old to follow textures, and textures that failed.</summary>
+    public IReadOnlyList<string> Notes { get; private set; } = [];
+
+    /// <summary>The note for textures kept in other bundles when the index predates archive maps (Plans 3–6).</summary>
+    public const string NewerIndexNote =
+        "Textures kept in other bundles need a newer asset index: click Index assets on the Home tab (or run 'tyrant assets index') and export again.";
+
     /// <param name="bundle">The bundle the prefab was read from; its materials' own-file textures live there.</param>
     public static ModelTextures Write(AssetSession session, AssetIndex index, string bundle, PrefabModel model, string outputDir)
     {
         var textures = new ModelTextures(session, index, bundle, Path.Combine(outputDir, GltfModelWriter.TexturesFolder));
         foreach (var renderer in model.Renderers)
             textures._byRenderer[renderer] = renderer.Materials.Select(m => textures.Prepare(renderer, m)).ToList();
+        var outside = model.Renderers.SelectMany(r => r.Materials).SelectMany(m => m.Textures).Any(t => t.Archive is not null);
+        textures.Notes = [
+            .. index.Archives.Count == 0 && outside ? [NewerIndexNote] : Array.Empty<string>(),
+            .. textures._failures.Select(f => $"Texture {f} (its material is plain)"),
+        ];
         return textures;
     }
 

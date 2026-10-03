@@ -58,11 +58,13 @@ public sealed record AssetExportParams(IReadOnlyList<string> Refs);
 
 public sealed record AssetExportFailure(string Name, string Type, string Error);
 
-public sealed record AssetExportRunResult(int Exported, int Failed, string ReportPath, IReadOnlyList<AssetExportFailure> Failures);
+/// <summary>Notes: things to know about exported models (an index too old to follow textures, textures that failed); at most 10.</summary>
+public sealed record AssetExportRunResult(int Exported, int Failed, string ReportPath, IReadOnlyList<AssetExportFailure> Failures,
+    IReadOnlyList<string>? Notes = null);
 
 public sealed record SpeciesPackParams(string Key);
 
-public sealed record SpeciesPackRunResult(string Directory, int Models, int Textures, int Failed, string TargetsPath);
+public sealed record SpeciesPackRunResult(string Directory, int Models, int Textures, int Failed, string TargetsPath, IReadOnlyList<string>? Notes = null);
 
 public sealed record EnvironmentOption(string Id, string Label);
 

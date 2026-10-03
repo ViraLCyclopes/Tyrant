@@ -28,6 +28,7 @@ public class ModelTexturesTests
 
         Assert.Equal(new GltfMaterial("Acro"), Assert.Single(textures.For(prefab.Renderers[0])!));
         Assert.StartsWith("T_Acro_D: ", Assert.Single(textures.Failures));
+        Assert.Contains(textures.Notes, n => n.Contains("T_Acro_D"));
         Assert.Equal("T_Acro_D", Assert.Single(textures.Materials).BaseColor?.Name);
     }
 
@@ -43,5 +44,27 @@ public class ModelTexturesTests
         Assert.Equal(new[] { new GltfMaterial("Tri"), new GltfMaterial("Eyes") }, textures.For(prefab.Renderers[0]));
         Assert.Equal("Eyes", Assert.Single(textures.Materials).Name);
         Assert.Empty(textures.Failures);
+    }
+
+    [Fact]
+    public void An_index_without_archives_notes_that_textures_need_a_new_index()
+    {
+        using var game = new FakeGame();
+        using var session = new AssetSession(new GameInstall(game.Root, null));
+        var prefab = WithMaterials(new MaterialModel("Acro", [new TextureSlot("_AdultDiffuse", "archive:/CAB-tex/CAB-tex", 17)]));
+
+        var textures = ModelTextures.Write(session, new AssetIndex(), Prefabs, prefab, TempDir());
+
+        Assert.Contains(textures.Notes, n => n.Contains("Index assets"));
+    }
+
+    [Fact]
+    public void A_model_whose_textures_all_resolve_has_no_notes()
+    {
+        using var game = new FakeGame();
+        using var session = new AssetSession(new GameInstall(game.Root, null));
+        var prefab = WithMaterials(new MaterialModel("Eyes", []));
+
+        Assert.Empty(ModelTextures.Write(session, new AssetIndex(), Prefabs, prefab, TempDir()).Notes);
     }
 }

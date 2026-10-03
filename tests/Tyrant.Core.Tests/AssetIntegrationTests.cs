@@ -25,6 +25,20 @@ public sealed class RealGameIndex
 [Trait("Category", "Integration")]
 public class AssetIntegrationTests(RealGameIndex real) : IClassFixture<RealGameIndex>
 {
+    [SkippableFact]
+    public void Static_prefab_renderers_get_their_materials_from_the_mesh_renderer()
+    {
+        Skip.If(RealGameIndex.GameDir is null, "TYRANT_GAME_DIR not set");
+        var prefab = real.Index.Assets.First(a => a.Type == "GameObject" && a.ContainerPath?.EndsWith("/Blood Pumpkin.prefab") == true);
+        using var session = new AssetSession(real.Install);
+
+        var model = new ModelExporter().ReadPrefab(session, prefab);
+
+        var statics = model.Renderers.Where(r => !r.IsSkinned).ToList();
+        Assert.NotEmpty(statics);
+        Assert.All(statics, r => Assert.Contains(r.Materials, m => m.Textures.Count > 0));
+    }
+
     private static double Mean(StbImageSharp.ImageResult image, int channel, int? row = null)
     {
         var rows = row is { } r ? new[] { r } : Enumerable.Range(0, image.Height).ToArray();

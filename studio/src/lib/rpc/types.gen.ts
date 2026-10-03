@@ -42,6 +42,7 @@ export interface AssetExportRunResult {
   failed: number;
   reportPath: string;
   failures: AssetExportFailure[];
+  notes?: string[] | null;
 }
 
 export interface AssetIndexRunResult {
@@ -383,6 +384,7 @@ export interface SpeciesPackRunResult {
   textures: number;
   failed: number;
   targetsPath: string;
+  notes?: string[] | null;
 }
 
 export interface SpeciesRow {

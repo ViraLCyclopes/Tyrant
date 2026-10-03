@@ -29,6 +29,7 @@ public sealed class SpeciesPackCommand : Command<SpeciesPackCommand.Settings>
         Console.WriteLine($"  targets:  {result.TargetsPath}");
         foreach (var m in modelFailures) Console.WriteLine($"  FAIL  model {m.Name}: {m.Error}");
         foreach (var t in textureFailures.Take(10)) Console.WriteLine($"  FAIL  texture {t.Asset.Ref}: {t.Error}");
+        foreach (var note in result.Notes) Console.WriteLine($"  NOTE  {note}");
         return modelFailures.Count == 0 && textureFailures.Count == 0 ? ExitCodes.Ok : ExitCodes.Partial;
     }
 }

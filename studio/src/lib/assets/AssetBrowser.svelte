@@ -70,7 +70,8 @@
     const r = await session.runJob('assets.export', { refs: checked }, 'Export assets');
     if (!r) return;
     const failures = r.failed === 0 ? '' : `, ${r.failed} failed (first: ${r.failures[0]?.name}: ${r.failures[0]?.error})`;
-    session.notice = `Exported ${r.exported} assets${failures}. Report: ${r.reportPath}`;
+    const notes = r.notes?.length ? ` ${r.notes.join(' ')}` : '';
+    session.notice = `Exported ${r.exported} assets${failures}. Report: ${r.reportPath}${notes}`;
   }
 </script>
 

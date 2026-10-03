@@ -22,8 +22,15 @@ internal static class PrefabReader
         var failures = new List<string>();
         foreach (var info in file.file.GetAssetsOfType(AssetClassID.SkinnedMeshRenderer))
             AddRenderer(manager, file, manager.GetBaseField(file, info), skinned: true, transformByGameObject, nodes, renderers, failures, externals);
+        // A static mesh is a MeshFilter (the mesh) plus a MeshRenderer on the same GameObject (the materials).
+        var meshRenderers = new Dictionary<long, AssetTypeValueField>();
+        foreach (var info in file.file.GetAssetsOfType(AssetClassID.MeshRenderer))
+        {
+            var meshRenderer = manager.GetBaseField(file, info);
+            meshRenderers.TryAdd(meshRenderer["m_GameObject.m_PathID"].AsLong, meshRenderer);
+        }
         foreach (var info in file.file.GetAssetsOfType(AssetClassID.MeshFilter))
-            AddRenderer(manager, file, manager.GetBaseField(file, info), skinned: false, transformByGameObject, nodes, renderers, failures, externals);
+            AddRenderer(manager, file, manager.GetBaseField(file, info), skinned: false, transformByGameObject, nodes, renderers, failures, externals, meshRenderers);
 
         return new PrefabModel(root.Name, root, renderers, failures);
     }
@@ -51,7 +58,7 @@ internal static class PrefabReader
 
     private static void AddRenderer(AssetsManager manager, AssetsFileInstance file, AssetTypeValueField renderer, bool skinned,
         Dictionary<long, long> transformByGameObject, Dictionary<long, SkeletonNode> nodes, List<RendererModel> renderers, List<string> failures,
-        IReadOnlyList<string> externals)
+        IReadOnlyList<string> externals, Dictionary<long, AssetTypeValueField>? meshRenderers = null)
     {
         if (!transformByGameObject.TryGetValue(renderer["m_GameObject.m_PathID"].AsLong, out var transformId)
             || !nodes.TryGetValue(transformId, out var owner))
@@ -67,7 +74,10 @@ internal static class PrefabReader
                     .Select(b => nodes.TryGetValue(b["m_PathID"].AsLong, out var bone) ? bone : throw new InvalidDataException("one of its bones is outside the prefab"))
                     .ToList()
                 : [];
-            renderers.Add(new RendererModel(owner.Name, mesh, bones, owner) { Materials = ReadMaterials(manager, file, renderer, externals) });
+            // Skinned renderers carry their own materials; a MeshFilter's are on its GameObject's MeshRenderer.
+            var materialSource = skinned ? renderer : meshRenderers?.GetValueOrDefault(renderer["m_GameObject.m_PathID"].AsLong);
+            var materials = materialSource is null ? [] : ReadMaterials(manager, file, materialSource, externals);
+            renderers.Add(new RendererModel(owner.Name, mesh, bones, owner) { Materials = materials });
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

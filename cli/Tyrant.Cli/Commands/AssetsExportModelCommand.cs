@@ -22,10 +22,12 @@ public sealed class AssetsExportModelCommand : Command<AssetsExportModelCommand.
         var (ws, install) = CliServices.OpenWorkspace(settings);
         var index = CliServices.LoadIndex(ws, install);
         var prefab = index.Resolve(settings.Key, settings.Type);
-        var results = new ModelExporter().Export(install, ws, prefab, index);
+        var notes = new List<string>();
+        var results = new ModelExporter().Export(install, ws, prefab, index, notes);
         foreach (var r in results)
             Console.WriteLine(r.Success ? $"  ok    {r.Name} -> {r.OutputPath}" : $"  FAIL  {r.Name}: {r.Error}");
         if (results.Count == 0) Console.WriteLine("  (the prefab has no meshes)");
+        foreach (var note in notes) Console.WriteLine($"  NOTE  {note}");
         return results.All(r => r.Success) ? ExitCodes.Ok : ExitCodes.Partial;
     }
 }

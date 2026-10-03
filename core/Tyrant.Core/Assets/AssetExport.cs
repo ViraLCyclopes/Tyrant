@@ -8,7 +8,7 @@ using Tyrant.Core.Workspaces;
 namespace Tyrant.Core.Assets;
 
 public sealed record AssetExportItem(string Ref, string Type, string Name, string? ContainerPath, string? Guid, bool Success,
-    IReadOnlyList<string> Outputs, string? Error);
+    IReadOnlyList<string> Outputs, string? Error, IReadOnlyList<string>? Notes = null);
 
 public sealed record AssetExportReport(DateTimeOffset CreatedUtc, string BuildGuid, IReadOnlyList<AssetExportItem> Items);
 
@@ -44,6 +44,7 @@ public sealed class AssetExport(IAssetReader reader, AssetIndex? index = null)
         try
         {
             IReadOnlyList<string> outputs;
+            IReadOnlyList<string>? notes = null;
             switch (asset.Type)
             {
                 case "Texture2D":
@@ -54,7 +55,9 @@ public sealed class AssetExport(IAssetReader reader, AssetIndex? index = null)
                 case "Mesh":
                 case "GameObject":
                     var dir = Unique(Path.Combine(ws.AssetsDir, "models", SafeName(asset)), asset, used);
-                    outputs = reader.WriteModel(install, asset, dir, index).Files;
+                    var model = reader.WriteModel(install, asset, dir, index);
+                    outputs = model.Files;
+                    notes = model.Notes.Count == 0 ? null : model.Notes;
                     break;
                 default:
                     var json = Unique(Path.Combine(ws.AssetsDir, "json", TextureExporter.Sanitize(asset.Type), $"{SafeName(asset)}_{asset.PathId}.json"), asset, used);
@@ -62,7 +65,7 @@ public sealed class AssetExport(IAssetReader reader, AssetIndex? index = null)
                     outputs = [json];
                     break;
             }
-            return Item(asset, true, outputs, null);
+            return Item(asset, true, outputs, null, notes);
         }
         catch (Exception ex) when (ex is not OperationCanceledException) // spec §5: one item never stops the batch
         {
@@ -70,8 +73,8 @@ public sealed class AssetExport(IAssetReader reader, AssetIndex? index = null)
         }
     }
 
-    private static AssetExportItem Item(AssetRecord a, bool success, IReadOnlyList<string> outputs, string? error) =>
-        new(a.Ref, a.Type, a.Name, a.ContainerPath, a.Guid, success, outputs, error);
+    private static AssetExportItem Item(AssetRecord a, bool success, IReadOnlyList<string> outputs, string? error, IReadOnlyList<string>? notes = null) =>
+        new(a.Ref, a.Type, a.Name, a.ContainerPath, a.Guid, success, outputs, error, notes);
 
     /// <summary>A file or folder name from the asset name; never empty, never a path.</summary>
     private static string SafeName(AssetRecord asset)

@@ -67,6 +67,7 @@ public sealed class BundleAssetReader : IAssetReader
         {
             Materials = textures?.Materials ?? [],
             TextureFailures = textures?.Failures ?? [],
+            Notes = textures?.Notes ?? [],
         };
     }
 

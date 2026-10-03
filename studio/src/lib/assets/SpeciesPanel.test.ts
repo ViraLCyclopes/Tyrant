@@ -48,4 +48,17 @@ describe('SpeciesPanel', () => {
     await fireEvent.click(await screen.findByRole('button', { name: 'Show in Explorer' }));
     expect(platform.revealed).toEqual(['D:\\ws\\assets\\species\\carcharodontosaurus']);
   });
+
+  it('passes species pack notes on in the notice', async () => {
+    const { rpc, session } = setup();
+    rpc.on('species.pack', (p) => ({
+      directory: `D:\ws\assets\species\${p.key}`, models: 3, textures: 14, failed: 0, targetsPath: 'x',
+      notes: ['Texture T_Carcharo_D could not be decoded, so its material is plain: BC7'],
+    }));
+    renderWith(SpeciesPanel, session);
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Export Carcharodontosaurus pack' }));
+
+    await waitFor(() => expect(session.notice).toContain('could not be decoded'));
+  });
 });

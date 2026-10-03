@@ -68,7 +68,8 @@ public sealed partial class AssetsMethods
             var (report, reportPath) = new AssetExport(Reader, index).Run(install, ws, assets, progress, ct);
             var failed = report.Items.Where(i => !i.Success).ToList();
             return new AssetExportRunResult(report.Items.Count - failed.Count, failed.Count, reportPath,
-                failed.Take(20).Select(i => new AssetExportFailure(i.Name, i.Type, i.Error ?? "")).ToList());
+                failed.Take(20).Select(i => new AssetExportFailure(i.Name, i.Type, i.Error ?? "")).ToList(),
+                report.Items.SelectMany(i => i.Notes ?? []).Distinct().Take(10).ToList());
         });
     }
 
@@ -81,7 +82,7 @@ public sealed partial class AssetsMethods
         {
             var result = Reader.WriteSpeciesPack(install, ws, index, species, progress, ct);
             return new SpeciesPackRunResult(result.Directory, result.Models.Count(m => m.Success), result.Textures.Count(t => t.Success),
-                result.Models.Count(m => !m.Success) + result.Textures.Count(t => !t.Success), result.TargetsPath);
+                result.Models.Count(m => !m.Success) + result.Textures.Count(t => !t.Success), result.TargetsPath, result.Notes);
         });
     }
 }

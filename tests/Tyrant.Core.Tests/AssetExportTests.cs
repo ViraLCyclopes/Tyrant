@@ -145,4 +145,17 @@ public class AssetExportTests
 
         Assert.Same(index, reader.LastModelIndex);
     }
+
+    [Fact]
+    public void Texture_notes_reach_the_report()
+    {
+        var (game, install, ws) = Setup();
+        using var _ = game;
+        var reader = new FakeAssetReader { ModelNotes = ["Texture T_Stego_D could not be decoded, so its material is plain: BC7"] };
+
+        var (report, _) = new AssetExport(reader, new AssetIndex()).Run(install, ws, [Asset("GameObject", "Stegosaurus", 2)], null, CancellationToken.None);
+
+        Assert.True(report.Items[0].Success);
+        Assert.Contains("BC7", Assert.Single(report.Items[0].Notes!));
+    }
 }

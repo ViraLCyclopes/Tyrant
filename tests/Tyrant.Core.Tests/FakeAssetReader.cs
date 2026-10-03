@@ -25,6 +25,7 @@ public sealed class FakeAssetReader : IAssetReader
     /// <summary>What WriteModel reports as the model's materials when it is given an index.</summary>
     public IReadOnlyList<ResolvedMaterial> ModelMaterials { get; set; } = [];
     public IReadOnlyList<string> ModelTextureFailures { get; set; } = [];
+    public IReadOnlyList<string> ModelNotes { get; set; } = [];
     public AssetIndex? LastModelIndex { get; private set; }
     public int Textures => _textures;
     public int Models => _models;
@@ -55,7 +56,7 @@ public sealed class FakeAssetReader : IAssetReader
         if (Directory.Exists(outputDir)) Directory.Delete(outputDir, recursive: true);
         var parts = ModelParts.Select(name => new ModelPart(Path.Combine(outputDir, name + ".glb"), name, 150, 50, asset.Type == "GameObject")).ToList();
         foreach (var part in parts) Write(part.File, "glb");
-        return new ModelFacts(parts, []) { Materials = index is null ? [] : ModelMaterials, TextureFailures = ModelTextureFailures };
+        return new ModelFacts(parts, []) { Materials = index is null ? [] : ModelMaterials, TextureFailures = ModelTextureFailures, Notes = ModelNotes };
     }
 
     public void WriteJson(GameInstall install, AssetRecord asset, string jsonPath)

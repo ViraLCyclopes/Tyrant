@@ -6,7 +6,11 @@ using Tyrant.Core.Workspaces;
 
 namespace Tyrant.Core.Species;
 
-public sealed record SpeciesPackResult(string Directory, IReadOnlyList<ModelExportResult> Models, IReadOnlyList<TextureExportResult> Textures, string TargetsPath);
+public sealed record SpeciesPackResult(string Directory, IReadOnlyList<ModelExportResult> Models, IReadOnlyList<TextureExportResult> Textures, string TargetsPath)
+{
+    /// <summary>Notes about the models' textures (see ModelTextures.Notes).</summary>
+    public IReadOnlyList<string> Notes { get; init; } = [];
+}
 
 /// <summary>Everything one species uses, in &lt;workspace&gt;/assets/species/&lt;key&gt;: models, textures, targets.json.</summary>
 public sealed class SpeciesPackExporter
@@ -28,7 +32,8 @@ public sealed class SpeciesPackExporter
         if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
         Directory.CreateDirectory(dir);
         var modelsDir = Path.Combine(dir, "models");
-        var modelResults = models.WriteModels(prefab, modelsDir, ModelTextures.Write(session, index, species.Prefab.Bundle, prefab, modelsDir));
+        var modelTextures = ModelTextures.Write(session, index, species.Prefab.Bundle, prefab, modelsDir);
+        var modelResults = models.WriteModels(prefab, modelsDir, modelTextures);
 
         var list = SpeciesCatalog.TexturesFor(index, species);
         var textureResults = new List<TextureExportResult>();
@@ -44,6 +49,6 @@ public sealed class SpeciesPackExporter
         progress?.Report(new JobProgress(1.0, "Done"));
 
         if (modelResults.Any(r => r.Success)) ws.StampOutput($"assets/species/{species.Key}", GameFingerprint.Compute(install));
-        return new SpeciesPackResult(dir, modelResults, textureResults, targetsPath);
+        return new SpeciesPackResult(dir, modelResults, textureResults, targetsPath) { Notes = modelTextures.Notes };
     }
 }
