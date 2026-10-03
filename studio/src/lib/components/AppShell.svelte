@@ -9,6 +9,7 @@
   const session = getSession();
   const tabs = [
     { href: '/', label: 'Home' },
+    { href: '/assets', label: 'Assets' },
     { href: '/data', label: 'Data' },
   ];
 </script>

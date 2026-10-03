@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dumperLabel, outputLabel, summarizeDecompile, summarizeDump, summarizeRefresh } from './format';
+import { dumperLabel, formatBytes, outputLabel, summarizeDecompile, summarizeDump, summarizeRefresh } from './format';
 
 describe('format', () => {
   it('names workspace outputs for people', () => {
@@ -21,5 +21,11 @@ describe('format', () => {
       .toBe('Decompiled 1 of 2 assemblies. B.dll not found.');
     expect(summarizeRefresh({ steps: [{ name: 'Decompile', status: 'ok', message: '6 done.' }, { name: 'Data dump', status: 'skipped', message: 'Not installed.' }] }))
       .toBe('Decompile: done · Data dump: skipped — Not installed.');
+  });
+
+  it('formats byte sizes', () => {
+    expect(formatBytes(512)).toBe('512 B');
+    expect(formatBytes(4096)).toBe('4.0 KB');
+    expect(formatBytes(5 * 1024 * 1024)).toBe('5.0 MB');
   });
 });

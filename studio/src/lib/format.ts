@@ -45,3 +45,9 @@ export function summarizeIndex(r: AssetIndexRunResult): string {
 export function summarizeRefresh(r: RefreshAllResult): string {
   return r.steps.map((s) => (s.status === 'ok' ? `${s.name}: done` : `${s.name}: ${s.status} — ${s.message}`)).join(' · ');
 }
+
+export function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
