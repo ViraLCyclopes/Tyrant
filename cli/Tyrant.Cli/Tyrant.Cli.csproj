@@ -6,6 +6,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\core\Tyrant.Core\Tyrant.Core.csproj" />
+    <ProjectReference Include="..\..\core\Tyrant.Rpc\Tyrant.Rpc.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Spectre.Console.Cli" Version="0.49.1" />
