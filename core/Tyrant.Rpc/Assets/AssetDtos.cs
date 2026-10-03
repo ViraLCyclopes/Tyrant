@@ -8,7 +8,7 @@ public sealed record AssetRow(string Ref, string Bundle, long PathId, string Typ
 public sealed record AssetCount(string Name, int Count);
 
 public sealed record AssetsSummary(int Assets, int Bundles, IReadOnlyList<AssetCount> Groups, IReadOnlyList<AssetCount> Types,
-    IReadOnlyList<string> Warnings, int Failures, int MissingBundles, bool Stale);
+    IReadOnlyList<string> Warnings, int Failures, int MissingBundles, bool Stale, int NewBundles = 0);
 
 public sealed record AssetBundlesParams(string Group);
 

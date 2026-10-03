@@ -114,6 +114,7 @@ export interface AssetsSummary {
   failures: number;
   missingBundles: number;
   stale: boolean;
+  newBundles?: number;
 }
 
 export interface DataCompareParams {

@@ -135,4 +135,21 @@ public class AssetsCliTests
         Assert.Contains("WARNING", output);
         Assert.True(File.Exists(Path.Combine(dir, "cache", "asset-index.json")));
     }
+
+    [Fact]
+    public void Status_says_when_bundles_were_downloaded_since_the_index()
+    {
+        using var game = new FakeGame();
+        var dir = InitWorkspace(game);
+        var install = new Tyrant.Core.Install.GameInstall(game.Root, null);
+        new Tyrant.Core.Assets.AssetIndex { MissingBundles = ["StandaloneWindows64/dlc.bundle"], Fingerprint = Tyrant.Core.Install.GameFingerprint.Compute(install) }
+            .Save(Path.Combine(dir, "cache", Tyrant.Core.Assets.AssetIndex.FileName));
+        var aa = Tyrant.Core.Assets.AssetSession.AaDirOf(install);
+        Directory.CreateDirectory(Path.Combine(aa, "StandaloneWindows64"));
+        File.WriteAllText(Path.Combine(aa, "StandaloneWindows64", "dlc.bundle"), "x");
+
+        var (_, output, _) = Run("workspace", "status", "-w", dir);
+
+        Assert.Contains("downloaded since", output);
+    }
 }

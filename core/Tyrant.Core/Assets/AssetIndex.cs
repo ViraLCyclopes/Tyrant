@@ -36,6 +36,13 @@ public sealed class AssetIndex
     /// <summary>Bundles the catalog lists that are not on disk (e.g. DLC that is not downloaded).</summary>
     public List<string> MissingBundles { get; set; } = [];
 
+    /// <summary>Bundles that were missing when this index was made and are on disk now (DLC downloaded since): re-index to include them.</summary>
+    public List<string> NowDownloaded(GameInstall install)
+    {
+        var aa = AssetSession.AaDirOf(install);
+        return MissingBundles.Where(rel => File.Exists(Path.Combine(aa, rel.Replace('/', Path.DirectorySeparatorChar)))).ToList();
+    }
+
     /// <summary>Problems that degraded the index without stopping it (e.g. an unreadable catalog, so no GUIDs).</summary>
     public List<string> Warnings { get; set; } = [];
 

@@ -160,4 +160,17 @@ public class AssetIndexTests
         Assert.Equal("Sprite", index.Find(Bundle.ToUpperInvariant(), 11)?.Type);
         Assert.Null(index.Find(Bundle, 99));
     }
+
+    [Fact]
+    public void Bundles_missing_at_index_time_and_on_disk_now_are_reported()
+    {
+        using var game = new FakeGame();
+        var install = new Tyrant.Core.Install.GameInstall(game.Root, null);
+        var aa = AssetSession.AaDirOf(install);
+        Directory.CreateDirectory(Path.Combine(aa, "StandaloneWindows64"));
+        File.WriteAllText(Path.Combine(aa, "StandaloneWindows64", "dlc_now.bundle"), "x");
+        var index = new AssetIndex { MissingBundles = ["StandaloneWindows64/dlc_now.bundle", "StandaloneWindows64/still_missing.bundle"] };
+
+        Assert.Equal(["StandaloneWindows64/dlc_now.bundle"], index.NowDownloaded(install));
+    }
 }
