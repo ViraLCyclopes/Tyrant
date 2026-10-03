@@ -74,6 +74,7 @@ namespace Tyrant.Framework
         {
             try
             {
+                UiDump.Once(__instance); // temporary: see UiDump
                 NurseryScroll.Ensure(__instance, rebuild);
             }
             catch (Exception ex)
