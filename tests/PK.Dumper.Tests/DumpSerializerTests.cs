@@ -143,6 +143,16 @@ public class DumpSerializerTests
         Assert.Contains(result.Errors, e => e.Contains("Stopped after 4"));
     }
 
+    [Fact]
+    public void A_collection_that_cannot_be_enumerated_fails_only_that_field()
+    {
+        var json = Serialize(new PartlyBroken { name = "GlobalAnimalParameters", id = 5 });
+
+        Assert.Equal(1, json.GetProperty("before").GetInt32());
+        Assert.StartsWith("$error: NotImplementedException", json.GetProperty("broken").GetString());
+        Assert.Equal(2, json.GetProperty("after").GetProperty("ok").GetInt32());
+    }
+
     public sealed class Wrapper(Node node) : FakeAsset
     {
         public Node node = node;

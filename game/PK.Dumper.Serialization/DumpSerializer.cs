@@ -157,8 +157,14 @@ namespace PK.Dumper.Serialization
             {
                 if (value is IDictionary dictionary)
                 {
+                    // Read entries first: a collection that throws mid-enumeration must not leave half-written JSON.
+                    if (!TryRead(() => Entries(dictionary), out var entries, out var error))
+                    {
+                        writer.String(error);
+                        return;
+                    }
                     writer.StartObject();
-                    foreach (DictionaryEntry entry in dictionary)
+                    foreach (var entry in entries)
                     {
                         writer.Name(KeyText(entry.Key));
                         WriteValue(writer, entry.Value, path, depth + 1);
@@ -167,8 +173,13 @@ namespace PK.Dumper.Serialization
                 }
                 else if (value is IEnumerable sequence)
                 {
+                    if (!TryRead(() => sequence.Cast<object?>().ToList(), out var items, out var error))
+                    {
+                        writer.String(error);
+                        return;
+                    }
                     writer.StartArray();
-                    foreach (var item in sequence) WriteValue(writer, item, path, depth + 1);
+                    foreach (var item in items) WriteValue(writer, item, path, depth + 1);
                     writer.EndArray();
                 }
                 else
@@ -181,6 +192,31 @@ namespace PK.Dumper.Serialization
             finally
             {
                 if (isReference) path.Remove(value);
+            }
+        }
+
+        /// <summary>IDictionary's own enumerator yields DictionaryEntry (generic dictionaries' IEnumerable yields KeyValuePair).</summary>
+        private static List<DictionaryEntry> Entries(IDictionary dictionary)
+        {
+            var entries = new List<DictionaryEntry>();
+            var enumerator = dictionary.GetEnumerator();
+            while (enumerator.MoveNext()) entries.Add(enumerator.Entry);
+            return entries;
+        }
+
+        private static bool TryRead<T>(Func<List<T>> read, out List<T> items, out string error)
+        {
+            try
+            {
+                items = read();
+                error = "";
+                return true;
+            }
+            catch (Exception ex)
+            {
+                items = new List<T>();
+                error = "$error: " + ex.GetType().Name;
+                return false;
             }
         }
 

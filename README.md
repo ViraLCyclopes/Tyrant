@@ -65,6 +65,21 @@ node tools/verify/validate-gltf.js (Get-ChildItem D:\pk-workspace\assets\species
 & "C:\Program Files (x86)\Steam\steamapps\common\Blender\blender.exe" -b --factory-startup -P tools/verify/blender_inspect.py -- <model.glb> <render.png>
 ```
 
+Game data (species stats, buildings, economy, localization):
+
+```powershell
+dotnet run --project cli/PK.Cli -- dump install -w D:\pk-workspace     # installs MelonLoader 0.7.3 (checksum-verified) or reuses yours, + adds the dumper mod
+dotnet run --project cli/PK.Cli -- dump run -w D:\pk-workspace         # starts the game via Steam; it quits by itself after dumping
+dotnet run --project cli/PK.Cli -- data types -w D:\pk-workspace
+dotnet run --project cli/PK.Cli -- data show AnimalData Stegosaurus -w D:\pk-workspace
+dotnet run --project cli/PK.Cli -- data export AnimalData -w D:\pk-workspace   # -> exports\AnimalData.csv
+dotnet run --project cli/PK.Cli -- dump uninstall -w D:\pk-workspace   # removes exactly what install added
+```
+
+`dump install` is the only command that adds files to the game folder; the dumper mod stays idle during normal play.
+PK Mod Studio uses MelonLoader, the loader the Prehistoric Kingdom modding community already uses; if you have
+MelonLoader installed, only the mod is added (and only the mod is removed on uninstall).
+
 Every command accepts `--game <folder>` (where relevant) to skip Steam detection.
 Exit codes: 0 ok, 1 usage error, 2 error (code printed, e.g. `GAME_NOT_FOUND`), 3 partial success.
 Open `source\Assembly-CSharp\*.csproj` in Visual Studio or Rider to browse the decompiled game code.

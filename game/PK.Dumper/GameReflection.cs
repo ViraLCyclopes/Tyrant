@@ -44,7 +44,14 @@ namespace PK.Dumper
             try
             {
                 var manager = FindType("I2.Loc.LocalizationManager");
-                var sources = manager?.GetField("Sources", BindingFlags.Static | BindingFlags.Public)?.GetValue(null) as IEnumerable;
+                var sourcesField = manager?.GetField("Sources", BindingFlags.Static | BindingFlags.Public);
+                var sources = sourcesField?.GetValue(null) as IList;
+                if (sources != null && sources.Count == 0)
+                {
+                    // I2 loads its sources lazily (on first translation); ask it to load them now.
+                    manager!.GetMethod("UpdateSources", BindingFlags.Static | BindingFlags.Public, null, Type.EmptyTypes, null)?.Invoke(null, null);
+                    sources = sourcesField!.GetValue(null) as IList;
+                }
                 if (sources == null)
                 {
                     error = "I2 Localization sources were not found.";
@@ -75,6 +82,8 @@ namespace PK.Dumper
             {
                 error = "Reading I2 Localization failed: " + ex.Message;
             }
+            if (error == null && tables.Count == 0)
+                error = "I2 Localization had no loaded languages; game text is still dumped inside each PKLocalizationAsset.";
             return tables.Values.OrderBy(t => t.Code, StringComparer.Ordinal).ToList();
         }
 

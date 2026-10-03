@@ -103,3 +103,16 @@ public sealed class FakeAdapter : IDumpAdapter
         return true;
     }
 }
+
+/// <summary>Like the game's GlobalAnimalParameters: one collection field cannot be enumerated.</summary>
+public sealed class BrokenCollection : System.Collections.IEnumerable
+{
+    public System.Collections.IEnumerator GetEnumerator() => throw new NotImplementedException();
+}
+
+public sealed class PartlyBroken : FakeAsset
+{
+    public int before = 1;
+    public BrokenCollection broken = new();
+    public Dictionary<string, int> after = new() { ["ok"] = 2 };
+}
