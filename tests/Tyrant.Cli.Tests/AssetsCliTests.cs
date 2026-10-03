@@ -50,6 +50,7 @@ public class AssetsCliTests
 
         Assert.Equal(ExitCodes.Partial, code);
         Assert.Contains("FAIL  StandaloneWindows64/broken.bundle", output);
+        Assert.True(File.Exists(Path.Combine(dir, "cache", Tyrant.Core.Assets.AssetIndex.FileName))); // a partial index is still saved
     }
 
     [Fact]
@@ -151,5 +152,46 @@ public class AssetsCliTests
         var (_, output, _) = Run("workspace", "status", "-w", dir);
 
         Assert.Contains("downloaded since", output);
+    }
+
+    [Fact]
+    public void Index_names_the_bundles_that_are_not_on_disk()
+    {
+        using var game = new FakeGame();
+        var aa = Path.Combine(game.Root, "Prehistoric Kingdom_Data", "StreamingAssets", "aa");
+        Directory.CreateDirectory(aa);
+        File.WriteAllText(Path.Combine(aa, "catalog.json"), CatalogFixture.Build(CatalogFixture.Bundle("StandaloneWindows64/DLC/Deluxe/giraffa.bundle")));
+        var dir = InitWorkspace(game);
+
+        var (_, output, _) = Run("assets", "index", "-w", dir);
+
+        Assert.Contains("not on disk", output);
+        Assert.Contains("StandaloneWindows64/DLC/Deluxe/giraffa.bundle", output);
+    }
+
+    [Fact]
+    public void Dump_of_an_ambiguous_key_lists_the_refs_and_type_picks_one()
+    {
+        using var game = new FakeGame();
+        var dir = InitWorkspace(game);
+        const string guid = "0123456789abcdef0123456789abcdef";
+        new Tyrant.Core.Assets.AssetIndex
+        {
+            Fingerprint = Tyrant.Core.Install.GameFingerprint.Compute(new Tyrant.Core.Install.GameInstall(game.Root, null)),
+            Assets =
+            [
+                new("gone.bundle", 10, "Texture2D", "T_Rex_D", "Assets/T_Rex_D.png", guid, null),
+                new("gone.bundle", 11, "Sprite", "T_Rex_D", "Assets/T_Rex_D.png", guid, null),
+            ],
+        }.Save(Path.Combine(dir, "cache", Tyrant.Core.Assets.AssetIndex.FileName));
+
+        var ambiguous = Run("assets", "dump", guid, "-w", dir);
+        var typed = Run("assets", "dump", guid, "--type", "Texture2D", "-w", dir);
+
+        Assert.Contains("ASSET_AMBIGUOUS", ambiguous.Err);
+        Assert.Contains("gone.bundle#10", ambiguous.Err);
+        Assert.Contains("gone.bundle#11", ambiguous.Err);
+        Assert.Contains("ASSET_NOT_FOUND", typed.Err); // --type picked the texture; its bundle is gone
+        Assert.Contains("gone.bundle", typed.Err);
     }
 }

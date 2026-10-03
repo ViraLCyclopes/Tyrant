@@ -11,6 +11,7 @@
     <ProjectReference Include="..\..\game\Tyrant.Dumper.Serialization\Tyrant.Dumper.Serialization.csproj" />
     <Compile Include="..\Tyrant.Core.Tests\FakeGame.cs" Link="FakeGame.cs" />
     <Compile Include="..\Tyrant.Core.Tests\TestTemp.cs" Link="TestTemp.cs" />
+    <Compile Include="..\Tyrant.Core.Tests\CatalogFixture.cs" Link="CatalogFixture.cs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
