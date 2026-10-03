@@ -24,6 +24,23 @@ public sealed class RealGameIndex
 [Trait("Category", "Integration")]
 public class AssetIntegrationTests(RealGameIndex real) : IClassFixture<RealGameIndex>
 {
+    [SkippableTheory]
+    [InlineData("Detail_Skin", true)] // a normal map whose name does not say so
+    [InlineData("T_acrocanthosaurus_D", false)]
+    [InlineData("T_wounds_D", false)]
+    public void Packed_normal_maps_are_found_by_their_pixels(string name, bool rebuilt)
+    {
+        Skip.If(RealGameIndex.GameDir is null, "TYRANT_GAME_DIR not set");
+        var texture = real.Index.Assets.First(a => a.Type == "Texture2D" && a.Name == name);
+        var path = Path.Combine(Path.GetTempPath(), "tyrant-tests", Guid.NewGuid().ToString("N"), name + ".png");
+        using var session = new AssetSession(real.Install);
+
+        var result = new TextureExporter().Export(session, texture, path);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal(rebuilt, result.RebuiltNormal);
+    }
+
     [SkippableFact]
     public void Packed_normal_maps_export_as_standard_normal_maps()
     {

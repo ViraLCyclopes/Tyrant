@@ -13,20 +13,30 @@ public static partial class NormalMap
 
     public static bool IsCandidate(string name) => NormalSuffix().IsMatch(name.Trim());
 
-    /// <summary>True when the red channel is saturated, the tell of the packed form (checked on up to ~4096 pixels).</summary>
+    /// <summary>
+    /// True for Unity's packed form, judged from up to ~4096 pixels: red filled, green and blue equal (both Y), and
+    /// alpha varying around the middle (X). A red skin or wound texture fails this: its alpha is solid or its green and
+    /// blue differ. Names are no guide — the detail normal map is called "Detail_Skin".
+    /// </summary>
     public static bool LooksPacked(ReadOnlySpan<byte> rgba)
     {
         var pixels = rgba.Length / 4;
         if (pixels == 0) return false;
         var step = Math.Max(1, pixels / 4096);
-        long red = 0;
+        double red = 0, greenBlueGap = 0, alpha = 0, alphaSquares = 0;
         var samples = 0;
         for (var p = 0; p < pixels; p += step)
         {
-            red += rgba[p * 4];
+            var i = p * 4;
+            red += rgba[i];
+            greenBlueGap += Math.Abs(rgba[i + 1] - rgba[i + 2]);
+            alpha += rgba[i + 3];
+            alphaSquares += rgba[i + 3] * (double)rgba[i + 3];
             samples++;
         }
-        return (double)red / samples >= 240;
+        var alphaMean = alpha / samples;
+        var alphaSpread = Math.Sqrt(Math.Max(0, alphaSquares / samples - alphaMean * alphaMean));
+        return red / samples >= 240 && greenBlueGap / samples <= 12 && alphaMean is >= 64 and <= 192 && alphaSpread >= 8;
     }
 
     /// <summary>Rebuilds a standard normal map in place: R = X (from alpha), G = Y, B = Z = sqrt(1 - x² - y²), opaque.</summary>

@@ -184,5 +184,6 @@ public class AssetPreviewTests
 
         var buildFolder = Path.GetFileName(Path.GetDirectoryName(Path.GetDirectoryName(file)))!;
         Assert.EndsWith($"-p{Tyrant.Rpc.Assets.PreviewCache.FormatVersion}", buildFolder);
+        Assert.True(Tyrant.Rpc.Assets.PreviewCache.FormatVersion >= 3, "normal maps found by their pixels (format 3) must not reuse format-2 previews");
     }
 }

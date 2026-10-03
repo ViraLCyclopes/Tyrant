@@ -18,13 +18,18 @@ public class NormalMapTests
     }
 
     [Fact]
-    public void A_saturated_red_channel_marks_unitys_packed_format()
+    public void The_packed_format_is_recognised_from_its_pixels()
     {
+        // Red filled, green = blue (Y), alpha varying around the middle (X): Unity's packed normal map.
         byte[] packed = [255, 120, 120, 200, 254, 90, 90, 40, 255, 200, 200, 128];
-        byte[] ordinary = [128, 128, 255, 255, 120, 140, 250, 255, 135, 120, 255, 255];
+        byte[] standardNormal = [128, 128, 255, 255, 120, 140, 250, 255, 135, 120, 255, 255];
+        byte[] redOpaqueSkin = [250, 30, 30, 255, 255, 12, 12, 255, 245, 40, 40, 255];
+        byte[] redSkinWithMask = [252, 30, 90, 200, 255, 12, 70, 40, 248, 40, 110, 128];
 
         Assert.True(NormalMap.LooksPacked(packed));
-        Assert.False(NormalMap.LooksPacked(ordinary));
+        Assert.False(NormalMap.LooksPacked(standardNormal));
+        Assert.False(NormalMap.LooksPacked(redOpaqueSkin)); // solid alpha holds no X
+        Assert.False(NormalMap.LooksPacked(redSkinWithMask)); // green and blue differ
     }
 
     [Fact]

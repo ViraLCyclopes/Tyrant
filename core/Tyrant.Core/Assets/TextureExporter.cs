@@ -49,7 +49,7 @@ public sealed class TextureExporter
                 return new TextureExportResult(texture, false, outputPath, "The texture has no image data.");
 
             Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
-            var rebuilt = NormalMap.IsCandidate(texture.Name) && TryWriteRebuiltNormal(tex, raw, tmp);
+            var rebuilt = TryWriteRebuiltNormal(tex, raw, tmp); // judged from the pixels: names miss maps like Detail_Skin
             if (!rebuilt)
             {
                 bool decoded;
