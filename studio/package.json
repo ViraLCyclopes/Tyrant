@@ -10,7 +10,9 @@
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --fail-on-warnings",
     "test": "vitest run",
     "tauri": "tauri",
-    "gen:types": "dotnet run --project ../cli/Tyrant.Cli/Tyrant.Cli.csproj -- rpc --emit-ts src/lib/rpc/types.gen.ts"
+    "gen:types": "dotnet run --project ../cli/Tyrant.Cli/Tyrant.Cli.csproj -- rpc --emit-ts src/lib/rpc/types.gen.ts",
+    "sidecar": "dotnet publish ../cli/Tyrant.Cli/Tyrant.Cli.csproj -c Release -r win-x64 --self-contained true -o src-tauri/sidecar",
+    "build:app": "npm run sidecar && tauri build --config src-tauri/tauri.bundle.conf.json"
   },
   "dependencies": {
     "@tauri-apps/api": "2.12.1",

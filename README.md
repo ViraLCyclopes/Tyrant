@@ -83,3 +83,22 @@ MelonLoader installed, only the mod is added (and only the mod is removed on uni
 Every command accepts `--game <folder>` (where relevant) to skip Steam detection.
 Exit codes: 0 ok, 1 usage error, 2 error (code printed, e.g. `GAME_NOT_FOUND`), 3 partial success.
 Open `source\Assembly-CSharp\*.csproj` in Visual Studio or Rider to browse the decompiled game code.
+
+## The Tyrant app
+
+The desktop app (Tauri 2 + SvelteKit) lives in `studio/` and runs `tyrant rpc` in the background.
+
+Prerequisites: .NET 10 SDK, Node 24, Rust (stable, MSVC), Visual Studio Build Tools with the C++ workload, WebView2
+(part of Windows 11).
+
+    dotnet build Tyrant.slnx          # builds tyrant.exe, which the app uses in development
+    cd studio
+    npm install
+    npm run tauri dev                 # run the app
+    npm test                          # UI tests (vitest)
+    npm run check                     # type and accessibility checks
+    npm run gen:types                 # after changing RPC DTOs in core/Tyrant.Rpc
+    npm run build:app                 # installer: src-tauri/target/release/bundle/nsis/
+
+See [docs/app-guide.md](docs/app-guide.md) for how to use it and [docs/app-smoke-test.md](docs/app-smoke-test.md)
+for the release checklist.

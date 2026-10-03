@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: studio/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: .NET build and tests (includes the generated-TypeScript contract test)
+        run: dotnet test Tyrant.slnx
+
+      - name: Studio dependencies
+        working-directory: studio
+        run: npm ci
+
+      - name: Studio checks, tests and build
+        working-directory: studio
+        run: |
+          npm run check
+          npm test
+          npm run build
+
+      - name: Tauri shell tests
+        run: cargo test --manifest-path studio/src-tauri/Cargo.toml

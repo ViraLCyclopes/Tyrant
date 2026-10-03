@@ -14,12 +14,18 @@
   <ItemGroup>
     <!-- Build the MelonLoader mod (net472) and ship it in <tyrant.exe folder>/dumper for 'tyrant dump install'. -->
     <ProjectReference Include="..\..\game\Tyrant.Dumper\Tyrant.Dumper.csproj" ReferenceOutputAssembly="false" PrivateAssets="all"
-                      SkipGetTargetFrameworkProperties="true" />
+                      SkipGetTargetFrameworkProperties="true" GlobalPropertiesToRemove="RuntimeIdentifier;SelfContained" />
   </ItemGroup>
   <Target Name="CopyDumperPlugin" AfterTargets="Build">
     <ItemGroup>
       <DumperFiles Include="$(MSBuildThisFileDirectory)..\..\game\Tyrant.Dumper\bin\$(Configuration)\net472\Tyrant.Dumper*.dll" />
     </ItemGroup>
     <Copy SourceFiles="@(DumperFiles)" DestinationFolder="$(OutDir)dumper" SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="PublishDumperPlugin" AfterTargets="Publish">
+    <ItemGroup>
+      <PublishedDumperFiles Include="$(OutDir)dumper\Tyrant.Dumper*.dll" />
+    </ItemGroup>
+    <Copy SourceFiles="@(PublishedDumperFiles)" DestinationFolder="$(PublishDir)dumper" SkipUnchangedFiles="true" />
   </Target>
 </Project>
