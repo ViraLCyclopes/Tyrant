@@ -67,8 +67,15 @@ Release build: `npm run build:app`, install `studio/src-tauri/target/release/bun
     Save, then reinstall: Red spot is back (the stand-in kept its number).
 34. **(game)** With 6+ skins for one species (add more skins), the Nursery skin row scrolls sideways.
 35. Mods → **Clean up skin numbers…** after removing a skin mod: it is listed; **Forget selected** (confirm) clears it.
-36. **Copy diagnostics** and paste: versions, build, workspace and log tails appear.
-37. **(game)** **Uninstall from game**: the notice says the game folder is back to vanilla; `version.dll`,
+36. Edit `mods\blue-green-stripes\mod.json` by hand (no editor before the GUI overhaul): add to the skin
+    `"colors": { "tint": { "hue": 0, "saturation": 0, "value": 0 } }`, then **Check** and **Install to game**.
+37. **(game)** Nursery → Carcharodontosaurus → Blue-green stripes: generate several animals; the stripes keep their exact colours (no dull ones).
+38. In `mods\test-skins\mod.json`, give Purple spots `"colors": { "pattern": { "a": "#ffe000", "b": "#ff6000", "strength": 0.8 } }`;
+     Check, Install. **(game)** Normal animals of Purple spots show yellow to orange pattern colours where the pattern map is red.
+39. **(game)** Place one, save, quit, load: same colours. `Latest.log` has `Skin pattern colours were kept for a loaded or bred animal.`
+40. **(game)** Close the game, remove `test-skins`, start and load: the park loads; that animal looks like the first vanilla skin.
+41. **Copy diagnostics** and paste: versions, build, workspace and log tails appear.
+42. **(game)** **Uninstall from game**: the notice says the game folder is back to vanilla; `version.dll`,
     `MelonLoader\`, `Mods\`, `UserData\` and `UserLibs\` are gone from the game folder (if Tyrant installed them).
-38. Release build only: the installed app starts, finds the core next to itself (step 1 works) and installs the
+43. Release build only: the installed app starts, finds the core next to itself (step 1 works) and installs the
     dumper from its own `sidecar\dumper` folder.

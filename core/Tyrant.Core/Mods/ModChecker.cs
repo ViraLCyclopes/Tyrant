@@ -15,7 +15,7 @@ public sealed record ModCheckResult(IReadOnlyList<string> Errors, IReadOnlyList<
 }
 
 /// <summary>Finds what would go wrong in the game before a mod is installed.</summary>
-public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeOf, Func<AssetRecord, ImageResult?>? pixelsOf = null)
+public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeOf, Func<AssetRecord, ImageResult?>? pixelsOf = null, Func<AssetRecord, ImageResult?>? fullPixelsOf = null)
 {
     /// <summary>Reads original texture sizes from the game's bundles; a texture that cannot be read just skips the size check.</summary>
     public static ModChecker ForGame(GameInstall install) => new(texture =>
@@ -30,7 +30,7 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
         {
             return null;
         }
-    }, Cutouts.GamePixels(install, new BundleAssetReader()));
+    }, Cutouts.GamePixels(install, new BundleAssetReader()), Cutouts.GamePixels(install, new BundleAssetReader(), onlyIfAlpha: false));
 
     public ModCheckResult Check(ModProject mod, AssetIndex? index, IReadOnlyList<SpeciesSkins>? species = null)
     {
@@ -99,6 +99,7 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
                 }
             }
         }
+        ColourWarnings(mod, index, species, warnings);
         var missing = index is null || pixelsOf is null ? [] : MissingCutouts(mod, index, species, warnings);
         return new ModCheckResult(errors, warnings) { MissingCutouts = missing };
     }
@@ -151,6 +152,76 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
             errors.Add($"{label}: {file} is not a readable PNG.");
             return null;
         }
+    }
+
+    /// <summary>Pattern colours that could never show (no red in the pattern map); extra maps that the game would colour as eyes (red above 0.9).</summary>
+    private void ColourWarnings(ModProject mod, AssetIndex? index, IReadOnlyList<SpeciesSkins>? species, List<string> warnings)
+    {
+        foreach (var skin in mod.Manifest.Skins)
+        {
+            var key = skin.Key(mod.Id);
+            var based = species is null ? null : BaseSkin(species, skin);
+            foreach (var (sex, files, textures) in new[] { ("male", skin.Male, based?.Male), ("female", skin.Female, based?.Female) })
+            {
+                if (files is null) continue;
+                if (skin.Colors?.Pattern is not null)
+                {
+                    var pattern = files.TryGetValue("pattern", out var patternFile) ? Decode(mod, patternFile) : Vanilla(index, textures, "pattern");
+                    if (pattern is not null && Share(pattern, p => p.R > 10) < 0.001)
+                        warnings.Add($"{key} {sex}: colors.pattern is set, but the pattern map has no red anywhere, so the pattern colours would never show. Paint red where they should go.");
+                }
+                if (files.TryGetValue("extra", out var extraFile) && Decode(mod, extraFile) is { } extra && Vanilla(index, textures, "extra") is { } original)
+                {
+                    var wrong = 0;
+                    for (var y = 0; y < extra.Height; y++)
+                    for (var x = 0; x < extra.Width; x++)
+                    {
+                        var o = original.Data[((y * original.Height / extra.Height) * original.Width + x * original.Width / extra.Width) * 4];
+                        if (extra.Data[(y * extra.Width + x) * 4] > 230 && o <= 230) wrong++;
+                    }
+                    var share = (double)wrong / (extra.Width * extra.Height);
+                    if (share > 0.005)
+                        warnings.Add($"{key} {sex}: {extraFile} is brighter than 90% red outside the base skin's eyes ({share:P1} of it): the game colours those parts as eyes. Keep skin below 230 in the red channel.");
+                }
+            }
+        }
+    }
+
+    private static VanillaSkin? BaseSkin(IReadOnlyList<SpeciesSkins> species, SkinEntry skin)
+    {
+        var target = species.FirstOrDefault(s => string.Equals(s.SpeciesId, skin.Species, StringComparison.OrdinalIgnoreCase));
+        if (target is null) return null;
+        return int.TryParse(skin.Base, out var number) ? target.Skins.FirstOrDefault(s => s.Index == number)
+            : target.Skins.FirstOrDefault(s => string.Equals(s.Name, skin.Base, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private ImageResult? Vanilla(AssetIndex? index, IReadOnlyDictionary<string, string>? textures, string slot) =>
+        index is null || fullPixelsOf is null || textures is null || !textures.TryGetValue(slot, out var guid)
+            || index.Assets.FirstOrDefault(a => string.Equals(a.Guid, guid, StringComparison.OrdinalIgnoreCase)) is not { } asset
+            ? null
+            : fullPixelsOf(asset);
+
+    private static ImageResult? Decode(ModProject mod, string file)
+    {
+        var path = Path.GetFullPath(Path.Combine(mod.Dir, file));
+        if (!ModPaths.IsInside(path, mod.Dir) || !File.Exists(path)) return null;
+        try
+        {
+            using var stream = File.OpenRead(path);
+            return ImageResult.FromStream(stream, ColorComponents.RedGreenBlueAlpha);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or IOException or ArgumentException)
+        {
+            return null; // reported as unreadable elsewhere
+        }
+    }
+
+    private static double Share(ImageResult image, Func<(byte R, byte G, byte B), bool> test)
+    {
+        var hits = 0;
+        for (var i = 0; i < image.Data.Length; i += 4)
+            if (test((image.Data[i], image.Data[i + 1], image.Data[i + 2]))) hits++;
+        return (double)hits / (image.Width * image.Height);
     }
 
     private static readonly byte[] PngSignature = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];

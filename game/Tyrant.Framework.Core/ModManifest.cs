@@ -8,7 +8,7 @@ namespace Tyrant.Framework.Core
     public static class FrameworkInfo
     {
         /// <summary>The framework version mods compare their "requires": { "tyrant": ... } against.</summary>
-        public const string Version = "0.2.0";
+        public const string Version = "0.3.0";
     }
 
     public static class ModId
@@ -88,6 +88,9 @@ namespace Tyrant.Framework.Core
         public Dictionary<string, string>? Male { get; set; }
 
         public Dictionary<string, string>? Female { get; set; }
+
+        /// <summary>The skin's own colours (mod.json "colors"); null keeps the base skin's.</summary>
+        public SkinColors? Colors { get; set; }
 
         /// <summary>The skin's permanent key in skin-slots.json.</summary>
         public string Key(string modId) => modId + "/" + Id;
@@ -186,6 +189,7 @@ namespace Tyrant.Framework.Core
                     Thumbnail = Text(entry, "thumbnail"),
                     Male = Slots(entry, "male", skinId),
                     Female = Slots(entry, "female", skinId),
+                    Colors = entry.TryGetValue("colors", out var colors) && colors != null ? SkinColors.Parse(colors, skinId) : null,
                 };
                 if ((skin.Male?.Count ?? 0) == 0 && (skin.Female?.Count ?? 0) == 0)
                     throw new ManifestException($"Skin \"{skinId}\" needs \"male\" or \"female\" textures.");
@@ -217,6 +221,7 @@ namespace Tyrant.Framework.Core
                     if (s.Thumbnail != null) entry["thumbnail"] = s.Thumbnail;
                     if (s.Male != null) entry["male"] = Ordered(s.Male);
                     if (s.Female != null) entry["female"] = Ordered(s.Female);
+                    if (s.Colors != null) entry["colors"] = s.Colors.ToJson();
                     return (object?)entry;
                 }).ToList();
             return Json.Write(map) + "\n";

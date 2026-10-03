@@ -66,14 +66,16 @@ public static class Cutouts
         }
     }
 
-    /// <summary>Decodes a vanilla texture from the game's bundles (through a temporary PNG); null when it cannot be read.</summary>
-    public static Func<AssetRecord, ImageResult?> GamePixels(GameInstall install, IAssetReader reader) => texture =>
+    /// <summary>Decodes a vanilla texture from the game's bundles (through a temporary PNG); null when it cannot be read, or when
+    /// onlyIfAlpha and its format stores no alpha.</summary>
+    public static Func<AssetRecord, ImageResult?> GamePixels(GameInstall install, IAssetReader reader, bool onlyIfAlpha = true) => texture =>
     {
         var temp = Path.Combine(Path.GetTempPath(), "tyrant-cutouts", Guid.NewGuid().ToString("N") + ".png");
         try
         {
-            using (var session = new AssetSession(install))
-                if (!MayHaveAlpha(TextureFacts.Read(session.Open(texture).BaseField).Format)) return null; // opaque by format: no decode
+            if (onlyIfAlpha)
+                using (var session = new AssetSession(install))
+                    if (!MayHaveAlpha(TextureFacts.Read(session.Open(texture).BaseField).Format)) return null; // opaque by format: no decode
             Directory.CreateDirectory(Path.GetDirectoryName(temp)!);
             reader.WriteTexture(install, texture, temp);
             using var stream = File.OpenRead(temp);

@@ -84,6 +84,37 @@ A mod can add new skins next to the vanilla ones; nothing vanilla changes. Make 
 - When a skin's mod is removed, its animals look like their species' first skin until the mod comes back.
 - **Clean up skin numbers…** (Mods tab) frees numbers of mods you won't use again.
 
+## Skin colours
+
+A skin can set its own colours in a `colors` section. Every part is optional; anything left out comes from the base skin.
+(Tyrant's app will edit this for you after its GUI overhaul; until then this is for advanced users.)
+
+```json
+"colors": {
+  "tint":    { "hue": [-0.05, 0.05], "saturation": 0, "value": 0 },
+  "pattern": { "a": ["#3060ff", "#2040c0"], "b": "#20c040", "strength": [0.6, 0.8], "softness": [0.1, 0.35],
+               "secondary": "#ffcc00", "eye": "#ff2000" },
+  "albino":  { "a": "#ffffff", "eye": "#ff4060" }
+}
+```
+
+| Key | Meaning |
+|---|---|
+| `tint` | The random hue, saturation and value shift (each -1 to 1) of normal animals. `0` means exact colours. It only shows where the pattern map's red is above 0. |
+| `pattern` | Pattern colours for **normal** animals (vanilla only colours mutations). `a`, `b`: colours where the pattern map's red is low or high. `secondary`: where its green is set. `eye`: the eyes. `strength` (0–1): how much the colour replaces the texture. `softness` (> 0): how soft the edge between `a` and `b` is. |
+| `albino`, `melanistic`, `leucistic` | The same keys, used for that mutation, plus its own `tint`. |
+
+- **Colours:** `#rrggbb`, or a list of up to 8 for a gradient; each animal gets a random point on it.
+- **Ranges:** `[min, max]`, or one number for a fixed value.
+
+**Painting the maps:**
+- **Pattern red:** 0 keeps the texture, so leave mouth, claws and eyes black. Dark grey takes colour `a`, light grey takes colour `b`.
+- **Pattern green:** marks the secondary-colour areas.
+- **Extra red:** smoothness. Above about 90% (230) is treated as **eyes**, so keep skin below that. Check warns otherwise.
+- **Extra green:** ambient occlusion.
+- **Blue and alpha** of both maps are unused.
+- **Diffuse alpha:** below 50% is cut away (feathers and hair).
+
 ## In the game
 
 - **Where installed mods live:** `<game>/UserData/Tyrant/Mods/<id>/`.
