@@ -1,0 +1,226 @@
+import { getContext, setContext } from 'svelte';
+import { RpcError, asRpcError, type JobMethod, type ParamsOf, type Rpc } from '$lib/rpc/client';
+import type { DumpRunResult, InstallInfo, RefreshAllResult, RpcJobs, WorkspaceStatus } from '$lib/rpc/types.gen';
+import type { Platform } from '$lib/platform';
+import type { KeyValueStore } from '$lib/storage';
+
+export const SESSION_KEY = Symbol('tyrant-session');
+const LAST_WORKSPACE = 'tyrant.lastWorkspace';
+const RECENT_WORKSPACES = 'tyrant.recentWorkspaces';
+const MAX_RECENT = 5;
+
+export const START_GAME_WARNING =
+  'This starts Prehistoric Kingdom through Steam, reads its game data at the main menu and closes it again (about a minute). Continue?';
+
+export interface ActiveJob {
+  id: string | null;
+  title: string;
+  fraction: number;
+  message: string;
+  cancel: (() => Promise<void>) | null;
+}
+
+/** App state shared by every view: the game, the open workspace, the running job and what to tell the user. */
+export class Session {
+  install = $state<InstallInfo | null>(null);
+  workspace = $state<WorkspaceStatus | null>(null);
+  error = $state<RpcError | null>(null);
+  notice = $state<string | null>(null);
+  job = $state<ActiveJob | null>(null);
+  recent = $state<string[]>([]);
+  ready = $state(false);
+  private lastTriedWorkspace: string | null = null;
+
+  constructor(
+    readonly rpc: Rpc,
+    readonly platform: Platform,
+    readonly store: KeyValueStore,
+  ) {
+    this.recent = readList(store.get(RECENT_WORKSPACES));
+    rpc.onCoreExit((info) => {
+      this.job = null;
+      const message =
+        info.error ??
+        (info.restarting
+          ? 'The Tyrant core stopped unexpectedly and was restarted; the running task was stopped.'
+          : 'The Tyrant core stopped and could not be restarted. Restart Tyrant.');
+      this.error = new RpcError(message, 'SIDECAR_EXITED');
+    });
+    rpc.onCoreStarted(() => {
+      const dir = this.workspace?.dir;
+      if (dir) void this.reopen(dir);
+    });
+  }
+
+  get busy(): boolean {
+    return this.job !== null;
+  }
+
+  /** Runs a user action: clears the previous error, shows a new one, returns null on failure. */
+  async safely<T>(work: () => Promise<T>): Promise<T | null> {
+    this.error = null;
+    try {
+      return await work();
+    } catch (e) {
+      this.error = asRpcError(e);
+      return null;
+    }
+  }
+
+  /** First run: reopen the last workspace; otherwise find the game so a workspace can be created. */
+  async start(): Promise<void> {
+    const last = this.store.get(LAST_WORKSPACE);
+    if (last && (await this.openWorkspace(last))) {
+      this.ready = true;
+      return;
+    }
+    if (last) this.store.remove(LAST_WORKSPACE);
+    try {
+      this.install = await this.rpc.call('install.detect', {});
+    } catch (e) {
+      this.error ??= asRpcError(e); // keep the more useful "could not open the last workspace" error
+    }
+    this.ready = true;
+  }
+
+  async detectGame(gamePath?: string): Promise<boolean> {
+    const info = await this.safely(() => this.rpc.call('install.detect', { gamePath: gamePath ?? null }));
+    if (info) this.install = info;
+    return info !== null;
+  }
+
+  async openWorkspace(dir: string, gamePath?: string): Promise<boolean> {
+    this.lastTriedWorkspace = dir;
+    const status = await this.safely(() => this.rpc.call('workspace.open', { dir, gamePath: gamePath ?? null }));
+    if (status) this.useWorkspace(status);
+    return status !== null;
+  }
+
+  async createWorkspace(dir: string): Promise<boolean> {
+    const status = await this.safely(() => this.rpc.call('workspace.create', { dir, gamePath: this.install?.rootDir ?? null }));
+    if (status) this.useWorkspace(status);
+    return status !== null;
+  }
+
+  async refreshStatus(): Promise<void> {
+    if (!this.workspace) return;
+    try {
+      this.workspace = await this.rpc.call('workspace.status');
+    } catch {
+      // keep whatever error the action that just finished reported
+    }
+  }
+
+  /** Runs a job with progress in the top bar; returns its result, or null if it failed (error shown) or was cancelled. */
+  async runJob<M extends JobMethod>(method: M, params: ParamsOf<M>, title: string): Promise<RpcJobs[M] | null> {
+    if (this.job) return null;
+    this.error = null;
+    this.job = { id: null, title, fraction: 0, message: 'Starting…', cancel: null };
+    try {
+      const handle = await this.rpc.job(method, params, (fraction, message) => {
+        if (!this.job) return;
+        this.job.fraction = fraction;
+        this.job.message = message;
+      });
+      if (this.job) {
+        this.job.id = handle.id;
+        this.job.cancel = () => handle.cancel();
+      }
+      return await handle.done;
+    } catch (e) {
+      const error = asRpcError(e);
+      if (error.code === 'CANCELLED') this.notice = `${title} was cancelled.`;
+      else if (error.code !== 'SIDECAR_EXITED') this.error = error; // a core exit was already explained
+      return null;
+    } finally {
+      this.job = null;
+      await this.refreshStatus();
+    }
+  }
+
+  async cancelJob(): Promise<void> {
+    await this.job?.cancel?.();
+  }
+
+  async refreshAll(): Promise<RefreshAllResult | null> {
+    if (this.workspace?.dumper === 'installed' && !(await this.platform.confirm(START_GAME_WARNING, 'Refresh all'))) return null;
+    return this.runJob('workspace.refreshAll', undefined, 'Refresh all');
+  }
+
+  async runDump(): Promise<DumpRunResult | null> {
+    if (!(await this.platform.confirm(START_GAME_WARNING, 'Run data dump'))) return null;
+    return this.runJob('dump.run', { timeoutSeconds: 300 }, 'Data dump');
+  }
+
+  async uninstallDumper(): Promise<void> {
+    const result = await this.safely(() => this.rpc.call('dump.uninstall'));
+    if (result) this.notice = result.message;
+    await this.refreshStatus();
+  }
+
+  async copyDiagnostics(): Promise<void> {
+    const result = await this.safely(() => this.rpc.call('app.diagnostics'));
+    if (!result) return;
+    await this.platform.copy(result.text);
+    this.notice = 'Diagnostics copied to the clipboard; paste them into your bug report.';
+  }
+
+  /** Handles the fix button of an error. */
+  async applyFix(fix: string): Promise<void> {
+    switch (fix) {
+      case 'PICK_GAME_FOLDER': {
+        const dir = await this.platform.pickFolder('Select the Prehistoric Kingdom folder');
+        if (!dir) return;
+        const workspace = this.workspace?.dir ?? this.lastTriedWorkspace;
+        if (workspace) await this.openWorkspace(workspace, dir);
+        else await this.detectGame(dir);
+        return;
+      }
+      case 'PICK_WORKSPACE_FOLDER': {
+        const dir = await this.platform.pickFolder('Open a workspace folder');
+        if (dir) await this.openWorkspace(dir);
+        return;
+      }
+      case 'REFRESH_WORKSPACE':
+        await this.refreshAll();
+        return;
+      case 'INSTALL_DUMPER':
+        await this.runJob('dump.install', undefined, 'Install dumper');
+        return;
+    }
+  }
+
+  private useWorkspace(status: WorkspaceStatus): void {
+    this.workspace = status;
+    this.install = { rootDir: status.gameRoot, steamAppId: status.steamAppId, buildGuid: status.buildGuid };
+    this.store.set(LAST_WORKSPACE, status.dir);
+    this.recent = [status.dir, ...this.recent.filter((d) => d.toLowerCase() !== status.dir.toLowerCase())].slice(0, MAX_RECENT);
+    this.store.set(RECENT_WORKSPACES, JSON.stringify(this.recent));
+  }
+
+  /** After a core restart the new process has no workspace open; reopen it without hiding the restart message. */
+  private async reopen(dir: string): Promise<void> {
+    try {
+      this.workspace = await this.rpc.call('workspace.open', { dir });
+    } catch (e) {
+      this.error = asRpcError(e);
+    }
+  }
+}
+
+function readList(raw: string | null): string[] {
+  try {
+    const value: unknown = JSON.parse(raw ?? '[]');
+    return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+export function setSession(session: Session): void {
+  setContext(SESSION_KEY, session);
+}
+
+export function getSession(): Session {
+  return getContext<Session>(SESSION_KEY);
+}

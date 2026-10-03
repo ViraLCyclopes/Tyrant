@@ -1,1 +1,5 @@
-<h1>Tyrant</h1>
+<script lang="ts">
+  import HomeView from '$lib/home/HomeView.svelte';
+</script>
+
+<HomeView />
