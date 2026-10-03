@@ -10,13 +10,18 @@ glb, png = sys.argv[sys.argv.index("--") + 1:][:2]
 bpy.ops.wm.read_factory_settings(use_empty=True)
 bpy.ops.import_scene.gltf(filepath=glb)
 
-meshes = [o for o in bpy.context.scene.objects if o.type == "MESH" and o.data.vertices and o.vertex_groups]
+# Every mesh counts (static props have no vertex groups); skinning is reported per mesh.
+meshes = [o for o in bpy.context.scene.objects if o.type == "MESH" and o.data.vertices]
 armatures = [o for o in bpy.context.scene.objects if o.type == "ARMATURE"]
 print("CHECK armatures", [(a.name, len(a.data.bones)) for a in armatures])
 for m in meshes:
     keys = [k.name for k in m.data.shape_keys.key_blocks] if m.data.shape_keys else []
     print("CHECK mesh", m.name, "verts", len(m.data.vertices), "faces", len(m.data.polygons),
-          "modifiers", [md.type for md in m.modifiers], "vertex_groups", len(m.vertex_groups), "shape_keys", keys)
+          "modifiers", [md.type for md in m.modifiers], "vertex_groups", len(m.vertex_groups),
+          "skinned", any(md.type == "ARMATURE" for md in m.modifiers), "shape_keys", keys)
+if not meshes:
+    print("CHECK no meshes with vertices in", glb)
+    sys.exit(1)
 
 points = [m.matrix_world @ Vector(c) for m in meshes for c in m.bound_box]
 low = Vector((min(p.x for p in points), min(p.y for p in points), min(p.z for p in points)))
