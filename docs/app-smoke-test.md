@@ -34,8 +34,20 @@ Release build: `npm run build:app`, install `studio/src-tauri/target/release/bun
    `assets\textures` holds the PNGs and `assets\models\<prefab>` the .glb files.
 18. Species → find Carcharodontosaurus → **Export pack** → **Show in Explorer** opens `assets\species\carcharodontosaurus`
    with `models\`, the textures and `targets.json`.
-19. **Copy diagnostics** and paste: versions, build, workspace and log tails appear.
-20. **(game)** **Uninstall dumper**: the notice says the game folder is back to vanilla; `version.dll`,
+19. Assets → filter `Acrocanthosaurus`, select the prefab (GameObject), **Load 3D preview**. The animal is textured
+    (not dark/metallic), stands on grass with a shadow under its feet, and a blue sky with the horizon below is behind it.
+    If the preview asks for a newer asset index, click **Index assets** on Home and load it again.
+20. Middle-drag orbits, Shift+middle-drag pans, the wheel zooms without scrolling the panel. Click the view, then press
+    numpad 1: the head faces you. Numpad 3: the animal's right side. Numpad 7: from above, head towards the bottom.
+    Numpad 5: orthographic. Numpad . (or Home): the animal is centred again.
+21. **Skin** lists the species' `_D` textures with the worn one selected; choosing another changes the body, choosing
+    the first again puts it back. Untick **Textures**: plain shading; tick it: textures return.
+22. **Ground** → Desert, **Sky** → Evening: both change. Close and reopen the app, preview a prefab: Desert and
+    Evening are still chosen. Set them to None: the plain dark-green background, no floor.
+23. Tick the prefab, **Export selected**, open the `.glb` in Blender 5.2 (File → Import → glTF): the model is textured,
+    and `assets/models/<name>/textures/` holds the PNGs.
+24. **Copy diagnostics** and paste: versions, build, workspace and log tails appear.
+25. **(game)** **Uninstall dumper**: the notice says the game folder is back to vanilla; `version.dll`,
     `MelonLoader\`, `Mods\`, `UserData\` and `UserLibs\` are gone from the game folder (if Tyrant installed them).
-21. Release build only: the installed app starts, finds the core next to itself (step 1 works) and installs the
+26. Release build only: the installed app starts, finds the core next to itself (step 1 works) and installs the
     dumper from its own `sidecar\dumper` folder.

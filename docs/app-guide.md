@@ -32,12 +32,20 @@ Needs an asset index (Home → **Index assets**, about 20 seconds; again after a
   narrows to one kind (Texture2D, Mesh, GameObject = prefab, MonoBehaviour = game data, …).
 - Click an asset to see its **keys** (Addressables path, GUID and reference, each with a copy button — replacement mods
   point at these), its size, what it **references** (click to follow) and all of its **fields**.
-- **Preview**: textures show at once, with **R/G/B/Alpha** views for packed maps; meshes and prefabs show in 3D after
-  **Load 3D preview** (drag to orbit, scroll to zoom; **Show skeleton** for animated models). Previews are cached in
-  `<workspace>\cache\previews` per game build.
+- **Preview**: textures show at once, with **R/G/B/Alpha** views for packed maps. Meshes and prefabs show in 3D after
+  **Load 3D preview**, textured like the game (turn **Textures** off for plain shading).
+  - **Skin** switches between the species' diffuse textures. In game, genetics tint them; the preview shows them untinted.
+  - **Ground** and **Sky** use the game's own grass, dirt and sand textures and sky cubemaps. The choice is remembered.
+  - Navigate as in Blender: middle-drag (or left-drag) orbits, Shift-drag pans, the wheel or Ctrl-drag zooms. Numpad
+    1/3/7 view the front, right side and top (Ctrl: the opposite side), 5 toggles orthographic, and . or Home (or
+    **Frame**) centres the model. Click the view first so it gets the keys.
+  - **Show skeleton** draws the bones of animated models.
+  - If the preview says textures need a newer asset index, click **Index assets** on Home once.
+  - Previews are cached in `<workspace>\cache\previews` per game build and made again after a tool update.
 - Tick assets and click **Export selected**: textures become PNG (`assets\textures`), meshes and prefabs .glb
   (`assets\models`), anything else JSON (`assets\json`). A report in `exports\` lists every asset, its keys and any
-  failure; one failure never stops the rest.
+  failure; one failure never stops the rest. Models are written with their materials; their textures go to a
+  `textures` folder next to the `.glb` files, which Blender picks up on import.
 - **Species**: export one animal's pack — its models, every texture of its group and `targets.json` with each asset's
   key — into `assets\species\<name>`.
 
