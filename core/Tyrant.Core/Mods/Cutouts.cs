@@ -18,6 +18,16 @@ public static class Cutouts
     /// <summary>A mod PNG with less than this share of see-through pixels has lost them.</summary>
     public const double Lost = 0.001;
 
+    private static readonly HashSet<string> NoAlpha = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "DXT1", "DXT1Crunched", "RGB24", "RGB565", "RGB48", "R8", "R16", "RG16", "RG32", "RFloat", "RGFloat", "RHalf", "RGHalf",
+        "BC4", "BC5", "BC6H", "ETC_RGB4", "ETC_RGB4Crunched", "ETC2_RGB", "EAC_R", "EAC_R_SIGNED", "EAC_RG", "EAC_RG_SIGNED",
+        "PVRTC_RGB2", "PVRTC_RGB4", "ATC_RGB4", "YUY2",
+    };
+
+    /// <summary>False for texture formats that store no alpha (DXT1, RGB24, …): such a texture cannot cut anything out.</summary>
+    public static bool MayHaveAlpha(string format) => !NoAlpha.Contains(format);
+
     public static double SeeThrough(byte[] rgba)
     {
         var pixels = rgba.Length / 4;
@@ -62,6 +72,8 @@ public static class Cutouts
         var temp = Path.Combine(Path.GetTempPath(), "tyrant-cutouts", Guid.NewGuid().ToString("N") + ".png");
         try
         {
+            using (var session = new AssetSession(install))
+                if (!MayHaveAlpha(TextureFacts.Read(session.Open(texture).BaseField).Format)) return null; // opaque by format: no decode
             Directory.CreateDirectory(Path.GetDirectoryName(temp)!);
             reader.WriteTexture(install, texture, temp);
             using var stream = File.OpenRead(temp);

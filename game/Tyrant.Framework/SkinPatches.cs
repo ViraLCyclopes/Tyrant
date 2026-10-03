@@ -19,6 +19,7 @@ namespace Tyrant.Framework
             Patch(harmony, "PrehistoricKingdom.NurseryMenuV2", "GenerateNewAnimal", nameof(AfterGenerate), postfix: true);
             // AnimalGenetics is a struct, so its Load cannot be prefixed with an object __instance; every path that gives an animal
             // its skin number (save load via AnimalGenetics.Load, SetAnimalVisuals, eggs) sets CurrentSkinIDX, so the clamp sits there.
+            SkinBrowser.PatchEscape(harmony);
             PatchSetter(harmony, "PrehistoricKingdom.Animal");
             PatchSetter(harmony, "PrehistoricKingdom.VivariumAnimal");
         }

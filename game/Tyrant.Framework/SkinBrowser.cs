@@ -59,7 +59,8 @@ namespace Tyrant.Framework
         private static Sprite? _gridIcon;
         private static string _query = "";
 
-        private static bool IsOpen => _window != null && _window.activeSelf;
+        private static bool IsOpen => _window != null && _window.activeInHierarchy;
+        private static bool _escapePatched;
 
         /// <summary>After the game (re)builds the Design panel: place or hide the button; refresh an open window.</summary>
         public static void Refresh(object menu, bool rebuild)
@@ -74,17 +75,46 @@ namespace Tyrant.Framework
             else Highlight(menu);
         }
 
-        /// <summary>Esc closes the window (legacy input may be unavailable; then only the X closes it).</summary>
-        public static void Tick()
+        /// <summary>
+        /// Esc (Cancel on a controller) closes the window instead of the Nursery: a prefix on the game's InterfaceManager.EarlyUpdate,
+        /// which otherwise closes the management menu, handles it with the game's own input check and skips the game's handling.
+        /// </summary>
+        public static void PatchEscape(HarmonyLib.Harmony harmony)
         {
-            if (!IsOpen) return;
             try
             {
-                if (Input.GetKeyDown(KeyCode.Escape)) Close();
+                var type = AccessTools.TypeByName("PrehistoricKingdom.InterfaceManager");
+                var method = type == null ? null : AccessTools.Method(type, "EarlyUpdate", Type.EmptyTypes);
+                if (method == null)
+                {
+                    FrameworkMod.Log.Warning("InterfaceManager.EarlyUpdate was not found (game updated?); Esc does not close the All skins window (use its X).");
+                    return;
+                }
+                harmony.Patch(method, prefix: new HarmonyMethod(typeof(SkinBrowser), nameof(BeforeInterfaceUpdate)));
+                _escapePatched = true;
+            }
+            catch (Exception ex)
+            {
+                FrameworkMod.Log.Warning("Esc could not be hooked for the All skins window (use its X): " + ex.GetBaseException().Message);
+            }
+        }
+
+        private static readonly Type? Input = AccessTools.TypeByName("PrehistoricKingdom.PKInputSystem");
+
+        private static bool BeforeInterfaceUpdate()
+        {
+            if (!_escapePatched || !IsOpen || Input == null) return true;
+            try
+            {
+                var keyboard = AccessTools.Property(Input, "IsCurrentControllerStyleMouseKeyboard")?.GetValue(null, null) is true;
+                var pressed = AccessTools.Method(Input, "GetInputDown", new[] { typeof(string) })?.Invoke(null, new object[] { keyboard ? "Escape" : "Cancel" }) is true;
+                if (!pressed) return true;
+                Close();
+                return false; // the game's Esc handling would close the Nursery
             }
             catch (Exception)
             {
-                // the game uses the new input system only
+                return true;
             }
         }
 
@@ -199,6 +229,7 @@ namespace Tyrant.Framework
                     if (property != null && property.CanWrite) property.SetValue(_search, Activator.CreateInstance(property.PropertyType), null);
                 }
                 input.Property("text").SetValue("");
+                _query = "";
                 SetText((input.Property("placeholder").GetValue() as Component)?.transform, "Search skins or mods…");
                 if (input.Property("onValueChanged").GetValue() is UnityEvent<string> changed) changed.AddListener(q => { _query = q ?? ""; Filter(); });
                 field.gameObject.SetActive(true);
@@ -326,8 +357,9 @@ namespace Tyrant.Framework
             if (menu == null) return;
             try
             {
-                if (Traverse.Create(menu).Field("skinToggles").GetValue() is IList row && index < row.Count && row[index] is Component swatch)
-                    AccessTools.Method(ToggleUtil!, "ToggleOn")?.Invoke(swatch.GetComponent(ToggleUtil!), new object[] { false });
+                if (!(Traverse.Create(menu).Field("skinToggles").GetValue() is IList row) || index >= row.Count || !(row[index] is Component swatch)) return;
+                if (!Traverse.Create(swatch).Property("interactable").GetValue<bool>()) return; // skin choice is off (game setting) or a preview is loading
+                AccessTools.Method(ToggleUtil!, "ToggleOn")?.Invoke(swatch.GetComponent(ToggleUtil!), new object[] { false });
                 AccessTools.Method(menu.GetType(), "SelectSkin", new[] { typeof(int) })?.Invoke(menu, new object[] { index });
                 AccessTools.Method(menu.GetType(), "SetCreationRect", new[] { typeof(bool) })?.Invoke(menu, new object[] { false });
                 NurseryScroll.Ensure(menu, rebuild: true); // scrolls the row to the chosen skin

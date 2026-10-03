@@ -122,4 +122,22 @@ public class CutoutTests
         Assert.Equal(new byte[] { 200, 100, 50 }, after.Data[4..7]); // colours untouched
         Assert.Empty(new ModChecker(_ => (4, 4), _ => Image(8, HalfCut)).Check(mod, Index(), species).MissingCutouts);
     }
+
+    [Theory]
+    [InlineData("DXT1", false)]
+    [InlineData("DXT1Crunched", false)]
+    [InlineData("RGB24", false)]
+    [InlineData("RGB565", false)]
+    [InlineData("BC4", false)]
+    [InlineData("BC5", false)]
+    [InlineData("BC6H", false)]
+    [InlineData("R8", false)]
+    [InlineData("DXT5", true)]
+    [InlineData("RGBA32", true)]
+    [InlineData("BC7", true)]
+    [InlineData("SomethingNew", true)] // unknown formats are decoded to be safe
+    public void Textures_stored_without_alpha_are_not_decoded(string format, bool mayHaveAlpha)
+    {
+        Assert.Equal(mayHaveAlpha, Cutouts.MayHaveAlpha(format));
+    }
 }
