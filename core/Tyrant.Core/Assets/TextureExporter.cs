@@ -1,4 +1,5 @@
 using AssetsTools.NET.Texture;
+using StbImageWriteSharp;
 using Tyrant.Core.Install;
 using Tyrant.Core.Jobs;
 using Tyrant.Core.Workspaces;
@@ -6,7 +7,7 @@ using Tyrant.Core.Workspaces;
 namespace Tyrant.Core.Assets;
 
 /// <summary>Result of one texture export; OutputPath is the intended file even when the export failed.</summary>
-public sealed record TextureExportResult(AssetRecord Asset, bool Success, string OutputPath, string? Error);
+public sealed record TextureExportResult(AssetRecord Asset, bool Success, string OutputPath, string? Error, bool RebuiltNormal = false);
 
 /// <summary>Exports Texture2D objects to PNG under &lt;workspace&gt;/assets/textures.</summary>
 public sealed class TextureExporter
@@ -48,16 +49,20 @@ public sealed class TextureExporter
                 return new TextureExportResult(texture, false, outputPath, "The texture has no image data.");
 
             Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
-            bool decoded;
-            using (var stream = File.Create(tmp))
-                decoded = tex.DecodeTextureImage(raw, stream, ImageExportType.Png, 100);
-            if (!decoded)
+            var rebuilt = NormalMap.IsCandidate(texture.Name) && TryWriteRebuiltNormal(tex, raw, tmp);
+            if (!rebuilt)
             {
-                File.Delete(tmp);
-                return new TextureExportResult(texture, false, outputPath, $"Texture format {(TextureFormat)tex.m_TextureFormat} is not supported.");
+                bool decoded;
+                using (var stream = File.Create(tmp))
+                    decoded = tex.DecodeTextureImage(raw, stream, ImageExportType.Png, 100);
+                if (!decoded)
+                {
+                    File.Delete(tmp);
+                    return new TextureExportResult(texture, false, outputPath, $"Texture format {(TextureFormat)tex.m_TextureFormat} is not supported.");
+                }
             }
             File.Move(tmp, outputPath, overwrite: true);
-            return new TextureExportResult(texture, true, outputPath, null);
+            return new TextureExportResult(texture, true, outputPath, null, rebuilt);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -92,6 +97,30 @@ public sealed class TextureExporter
         progress?.Report(new JobProgress(1.0, "Done"));
         if (results.Any(r => r.Success)) ws.StampOutput(OutputName, GameFingerprint.Compute(install));
         return results;
+    }
+
+    /// <summary>Writes a packed (DXT5nm) normal map as a standard one; false when the texture is not in that form.</summary>
+    private static bool TryWriteRebuiltNormal(TextureFile tex, byte[] raw, string path)
+    {
+        var pixels = tex.DecodeTextureRaw(raw, false);
+        if (pixels is null || pixels.Length != tex.m_Width * tex.m_Height * 4 || !NormalMap.LooksPacked(pixels)) return false;
+        NormalMap.Unpack(pixels);
+        FlipRows(pixels, tex.m_Width, tex.m_Height); // Unity stores the bottom row first; PNG wants the top row first
+        using var stream = File.Create(path);
+        new ImageWriter().WritePng(pixels, tex.m_Width, tex.m_Height, ColorComponents.RedGreenBlueAlpha, stream);
+        return true;
+    }
+
+    private static void FlipRows(byte[] rgba, int width, int height)
+    {
+        var row = width * 4;
+        var buffer = new byte[row];
+        for (int top = 0, bottom = height - 1; top < bottom; top++, bottom--)
+        {
+            Array.Copy(rgba, top * row, buffer, 0, row);
+            Array.Copy(rgba, bottom * row, rgba, top * row, row);
+            Array.Copy(buffer, 0, rgba, bottom * row, row);
+        }
     }
 
     internal static string Sanitize(string segment)

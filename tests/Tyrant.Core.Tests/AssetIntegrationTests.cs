@@ -25,6 +25,38 @@ public sealed class RealGameIndex
 public class AssetIntegrationTests(RealGameIndex real) : IClassFixture<RealGameIndex>
 {
     [SkippableFact]
+    public void Packed_normal_maps_export_as_standard_normal_maps()
+    {
+        Skip.If(RealGameIndex.GameDir is null, "TYRANT_GAME_DIR not set");
+        var texture = real.Index.Assets.First(a => a.Type == "Texture2D" && a.Name == "T_Acrocanthosaurus_N");
+        var dir = Path.Combine(Path.GetTempPath(), "tyrant-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var rawPath = Path.Combine(dir, "raw.png");
+        var rebuiltPath = Path.Combine(dir, "rebuilt.png");
+        using var session = new AssetSession(real.Install);
+        var (file, field) = session.Open(texture);
+        var decoder = AssetsTools.NET.Texture.TextureFile.ReadTextureFile(field);
+        using (var stream = File.Create(rawPath))
+            decoder.DecodeTextureImage(decoder.FillPictureData(file), stream, AssetsTools.NET.Texture.ImageExportType.Png, 100);
+
+        var result = new TextureExporter().Export(session, texture, rebuiltPath);
+
+        Assert.True(result.Success, result.Error);
+        Assert.True(result.RebuiltNormal);
+        var raw = StbImageSharp.ImageResult.FromMemory(File.ReadAllBytes(rawPath), StbImageSharp.ColorComponents.RedGreenBlueAlpha);
+        var rebuilt = StbImageSharp.ImageResult.FromMemory(File.ReadAllBytes(rebuiltPath), StbImageSharp.ColorComponents.RedGreenBlueAlpha);
+        Assert.Equal((raw.Width, raw.Height), (rebuilt.Width, rebuilt.Height));
+        // Same orientation as the regular export: the rebuilt red is the packed alpha (X), green is unchanged (Y).
+        for (var p = 0; p < raw.Width * raw.Height; p += 7919)
+        {
+            Assert.InRange(Math.Abs(rebuilt.Data[p * 4] - raw.Data[p * 4 + 3]), 0, 1);
+            Assert.InRange(Math.Abs(rebuilt.Data[p * 4 + 1] - raw.Data[p * 4 + 1]), 0, 1);
+        }
+        var blue = Enumerable.Range(0, rebuilt.Width * rebuilt.Height).Average(p => (double)rebuilt.Data[p * 4 + 2]);
+        Assert.True(blue > 200, $"a tangent-space normal map is mostly blue (mean blue {blue:0})");
+    }
+
+    [SkippableFact]
     public void A_mesh_streamed_from_a_resS_file_is_reported_as_unreadable()
     {
         Skip.If(RealGameIndex.GameDir is null, "TYRANT_GAME_DIR not set");

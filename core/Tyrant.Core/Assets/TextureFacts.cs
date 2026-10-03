@@ -3,7 +3,7 @@ using AssetsTools.NET.Texture;
 
 namespace Tyrant.Core.Assets;
 
-public sealed record TextureFacts(int Width, int Height, string Format, int MipCount)
+public sealed record TextureFacts(int Width, int Height, string Format, int MipCount, bool RebuiltNormal = false)
 {
     /// <summary>Reads size, pixel format and mip count from a Texture2D's fields (no pixel data is decoded).</summary>
     public static TextureFacts Read(AssetTypeValueField texture)

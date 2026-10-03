@@ -24,7 +24,8 @@ public sealed partial class AssetsMethods
             {
                 var png = Path.Combine(dir, "texture.png");
                 var facts = Reader.WriteTexture(install, asset, png);
-                return new AssetPreview(PreviewKind.Texture, [png], facts.Width, facts.Height, facts.Format, facts.MipCount);
+                return new AssetPreview(PreviewKind.Texture, [png], facts.Width, facts.Height, facts.Format, facts.MipCount,
+                    Message: facts.RebuiltNormal ? "Normal map rebuilt from Unity's packed format (X was in alpha, Y in green); exports are rebuilt the same way." : null);
             }
             var model = Reader.WriteModel(install, asset, Path.Combine(dir, "model"));
             var shown = PreviewParts.Pick(model.Parts);

@@ -66,4 +66,16 @@ public class AssetReaderTests
         Assert.Equal("Body", model.Name);
         Assert.False(model.Renderers[0].IsSkinned);
     }
+
+    [Fact]
+    public void Streamed_pixel_data_counts_towards_the_size()
+    {
+        var texture = Obj("Base", I32("m_Width", 2048),
+            Obj("m_StreamData", U32("offset", 0), U32("size", 5592432), Str("path", "archive:/CAB-1/CAB-1.resS")));
+        var sound = Obj("Base", Obj("m_Resource", Str("m_Source", "x.resource"), Prim("m_Offset", AssetValueType.UInt64, 0UL), Prim("m_Size", AssetValueType.UInt64, 1234UL)));
+
+        Assert.Equal(5592432, AssetSizes.StreamedBytes(texture));
+        Assert.Equal(1234, AssetSizes.StreamedBytes(sound));
+        Assert.Equal(0, AssetSizes.StreamedBytes(Obj("Base", Str("m_Name", "inline"))));
+    }
 }

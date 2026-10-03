@@ -19,7 +19,7 @@ public sealed class BundleAssetReader : IAssetReader
         var info = file.file.GetAssetInfo(asset.PathId);
         var externals = file.file.Metadata.Externals.Select(e => e.PathName).ToList();
         // Capped for display: some meshes carry tens of megabytes of blend-shape structs. Exports write the full tree.
-        return new AssetInspection(info?.ByteSize ?? 0, FieldJsonWriter.ToJson(baseField, maxArrayElements: MaxDisplayedArrayElements),
+        return new AssetInspection((info?.ByteSize ?? 0) + AssetSizes.StreamedBytes(baseField), FieldJsonWriter.ToJson(baseField, maxArrayElements: MaxDisplayedArrayElements),
             AssetReferences.Collect(baseField), externals);
     }
 
@@ -31,7 +31,7 @@ public sealed class BundleAssetReader : IAssetReader
         var result = new TextureExporter().Export(session, texture, pngPath);
         if (!result.Success)
             throw new TyrantException(TyrantErrorCode.AssetUnreadable, $"'{texture.Name}' could not be decoded: {result.Error}");
-        return facts;
+        return facts with { RebuiltNormal = result.RebuiltNormal };
     }
 
     public ModelFacts WriteModel(GameInstall install, AssetRecord asset, string outputDir)

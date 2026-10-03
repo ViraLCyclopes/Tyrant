@@ -38,7 +38,7 @@ public sealed class FakeAssetReader : IAssetReader
         Interlocked.Increment(ref _textures);
         Fail(texture);
         Write(pngPath, "png");
-        return new TextureFacts(64, 32, "DXT5", 7);
+        return new TextureFacts(64, 32, "DXT5", 7, NormalMap.IsCandidate(texture.Name));
     }
 
     public ModelFacts WriteModel(GameInstall install, AssetRecord asset, string outputDir)

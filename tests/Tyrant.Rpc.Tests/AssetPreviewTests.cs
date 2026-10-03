@@ -161,4 +161,16 @@ public class AssetPreviewTests
         Assert.Equal(50, preview.GetProperty("triangles").GetInt32());
         Assert.Contains("1 of 3 parts", preview.GetProperty("message").GetString());
     }
+
+    [Fact]
+    public async Task A_rebuilt_normal_map_preview_says_so()
+    {
+        using var game = new FakeGame();
+        var normal = new Tyrant.Core.Assets.AssetRecord("animals/stego_assets_assets/textures.bundle", 9, "Texture2D", "T_Stego_N", null, null, null);
+        var (h, _, _) = await Opened(game, [.. All, normal]);
+
+        var preview = await h.Call("assets.preview", new { @ref = normal.Ref });
+
+        Assert.Contains("Normal map rebuilt", preview.GetProperty("message").GetString());
+    }
 }
