@@ -1,4 +1,6 @@
+using Tyrant.Core.Assets;
 using Tyrant.Core.Install;
+using Tyrant.Core.Models;
 using Tyrant.Core.Tests;
 using static Tyrant.Rpc.Tests.AssetFixtures;
 
@@ -184,6 +186,68 @@ public class AssetPreviewTests
 
         var buildFolder = Path.GetFileName(Path.GetDirectoryName(Path.GetDirectoryName(file)))!;
         Assert.EndsWith($"-p{Tyrant.Rpc.Assets.PreviewCache.FormatVersion}", buildFolder);
-        Assert.True(Tyrant.Rpc.Assets.PreviewCache.FormatVersion >= 3, "normal maps found by their pixels (format 3) must not reuse format-2 previews");
+        Assert.True(Tyrant.Rpc.Assets.PreviewCache.FormatVersion >= 4, "models with materials (format 4) must not reuse format-3 previews");
+    }
+
+    private static readonly AssetRecord StegoAlt = new("animals/stego_assets_assets/textures.bundle", 7, "Texture2D", "T_Stego_alt1_D", null, null, null);
+    private static readonly AssetRecord StegoPortrait = new("animals/stego_assets_assets/textures.bundle", 8, "Texture2D", "port_Stego_D", null, null, null);
+
+    [Fact]
+    public async Task A_prefab_preview_lists_its_materials_and_the_species_skins()
+    {
+        using var game = new FakeGame();
+        var (h, _, reader) = await Opened(game, [.. All, StegoAlt, StegoPortrait]);
+        reader.ModelMaterials = [new ResolvedMaterial("Stego", StegoD, "_AdultDiffuse", StegoN, []), new ResolvedMaterial("Eyes", null, null, null, [])];
+
+        var preview = await h.Call("assets.preview", new { @ref = StegoPrefab.Ref });
+
+        var materials = preview.GetProperty("materials").EnumerateArray()
+            .Select(m => (m.GetProperty("name").GetString(), m.GetProperty("baseColor").GetString(), m.GetProperty("normal").GetString(),
+                m.GetProperty("skinnable").GetBoolean()))
+            .ToList();
+        Assert.Equal(new (string?, string?, string?, bool)[] { ("Stego", "T_Stego_D", "T_Stego_N", true), ("Eyes", null, null, false) }, materials);
+        var skins = preview.GetProperty("skins").EnumerateArray().Select(s => (s.GetProperty("name").GetString(), s.GetProperty("current").GetBoolean())).ToList();
+        Assert.Equal(new (string?, bool)[] { ("T_Stego_alt1_D", false), ("T_Stego_D", true) }, skins); // Rex's skin and the portrait are left out
+    }
+
+    [Fact]
+    public async Task A_bare_mesh_preview_offers_no_skins()
+    {
+        using var game = new FakeGame();
+        var mesh = new AssetRecord("animals/stego_assets_assets/prefabs.bundle", 9, "Mesh", "Stego_Body", null, null, null);
+        var (h, _, reader) = await Opened(game, [.. All, mesh]);
+        reader.ModelMaterials = [new ResolvedMaterial("Stego", StegoD, "_AdultDiffuse", null, [])];
+
+        var preview = await h.Call("assets.preview", new { @ref = mesh.Ref });
+
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, preview.GetProperty("skins").ValueKind);
+    }
+
+    [Fact]
+    public async Task A_prefab_preview_from_an_index_without_archives_asks_for_a_new_index_and_is_made_again_after_one()
+    {
+        using var game = new FakeGame();
+        var (h, ws, reader) = await Opened(game, archives: false);
+
+        var first = await h.Call("assets.preview", new { @ref = StegoPrefab.Ref });
+        WriteIndex(ws, All, GameFingerprint.Compute(new GameInstall(game.Root, null)));
+        var second = await h.Call("assets.preview", new { @ref = StegoPrefab.Ref });
+
+        Assert.Contains("Index assets", first.GetProperty("message").GetString());
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, second.GetProperty("message").ValueKind);
+        Assert.Equal(2, reader.Models);
+    }
+
+    [Fact]
+    public async Task Texture_failures_are_noted_in_the_preview()
+    {
+        using var game = new FakeGame();
+        var (h, _, reader) = await Opened(game);
+        reader.ModelTextureFailures = ["T_Stego_D: Texture format BC7 is not supported."];
+
+        var preview = await h.Call("assets.preview", new { @ref = StegoPrefab.Ref });
+
+        Assert.Contains("1 texture(s) could not be decoded", preview.GetProperty("message").GetString());
+        Assert.Contains("BC7", preview.GetProperty("message").GetString());
     }
 }

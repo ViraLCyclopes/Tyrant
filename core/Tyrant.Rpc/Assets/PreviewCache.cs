@@ -18,24 +18,26 @@ internal sealed class PreviewCache
     private const string MetaFile = "preview.json";
 
     /// <summary>
-    /// Bumped whenever previews are made differently (2: packed normal maps rebuilt; 3: found by their pixels), so a tool update never shows
+    /// Bumped whenever previews are made differently (2: packed normal maps rebuilt; 3: found by their pixels; 4: models carry their materials), so a tool update never shows
     /// previews made the old way. Part of the build folder name; older folders are removed like old builds.
     /// </summary>
-    internal const int FormatVersion = 3;
+    internal const int FormatVersion = 4;
     private readonly ConcurrentDictionary<string, object> _locks = new(StringComparer.OrdinalIgnoreCase);
 
     public static string Root(Workspace ws) => Path.Combine(ws.CacheDir, "previews");
 
-    public AssetPreview GetOrCreate(Workspace ws, GameFingerprint build, AssetRecord asset, Func<string, AssetPreview> create)
+    /// <param name="key">What the preview shows, within one build (an asset ref, plus anything else that changes the result).</param>
+    /// <param name="name">A readable part of the folder name.</param>
+    public T GetOrCreate<T>(Workspace ws, GameFingerprint build, string key, string name, Func<string, T> create) where T : class, IPreviewFiles
     {
         // The build id alone is "unknown" when boot.config has none; the assembly hash still tells builds apart.
         var buildFolder = Path.Combine(Root(ws), Safe($"{build.BuildGuid}-{build.AssemblySha256[..Math.Min(8, build.AssemblySha256.Length)]}-p{FormatVersion}"));
         if (!Directory.Exists(buildFolder)) RemoveOtherBuilds(Root(ws), buildFolder);
-        var dir = Path.Combine(buildFolder, FolderFor(asset));
-        lock (_locks.GetOrAdd(dir, _ => new object())) // two requests for one asset must not write the same files at once
+        var dir = Path.Combine(buildFolder, FolderFor(key, name));
+        lock (_locks.GetOrAdd(dir, _ => new object())) // two requests for one preview must not write the same files at once
         {
             var meta = Path.Combine(dir, MetaFile);
-            if (TryRead(meta) is { } cached) return cached;
+            if (TryRead<T>(meta) is { } cached) return cached;
             if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true); // a previous attempt failed half-way
             Directory.CreateDirectory(dir);
             var preview = create(dir);
@@ -62,12 +64,12 @@ internal sealed class PreviewCache
         }
     }
 
-    private static AssetPreview? TryRead(string meta)
+    private static T? TryRead<T>(string meta) where T : class, IPreviewFiles
     {
         try
         {
             if (!File.Exists(meta)) return null;
-            var preview = JsonSerializer.Deserialize<AssetPreview>(File.ReadAllText(meta), RpcJson.Options);
+            var preview = JsonSerializer.Deserialize<T>(File.ReadAllText(meta), RpcJson.Options);
             return preview is not null && preview.Files.All(File.Exists) ? preview : null;
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
@@ -76,12 +78,12 @@ internal sealed class PreviewCache
         }
     }
 
-    /// <summary>A short, unique, file-system-safe folder name: a hash of the ref plus a readable name.</summary>
-    private static string FolderFor(AssetRecord asset)
+    /// <summary>A short, unique, file-system-safe folder name: a hash of the key plus a readable name.</summary>
+    private static string FolderFor(string key, string name)
     {
-        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(asset.Ref)))[..12].ToLowerInvariant();
-        var name = Safe(asset.Name);
-        return $"{hash}_{(name.Length > 40 ? name[..40] : name)}";
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(key)))[..12].ToLowerInvariant();
+        var safe = Safe(name);
+        return $"{hash}_{(safe.Length > 40 ? safe[..40] : safe)}";
     }
 
     private static string Safe(string text)

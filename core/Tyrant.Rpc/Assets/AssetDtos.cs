@@ -37,9 +37,22 @@ public enum PreviewKind
     None,
 }
 
+/// <summary>A material in a 3D preview: the names of its picture and normal map; Skinnable when its picture is one of the species' skins.</summary>
+public sealed record PreviewMaterial(string Name, string? BaseColor, string? Normal, bool Skinnable);
+
+/// <summary>A diffuse texture of the prefab's species that the viewer can show on the skinnable materials; Current: the one it wears.</summary>
+public sealed record PreviewSkin(string Ref, string Name, bool Current);
+
+/// <summary>A cached preview's files; the cache reuses an entry only while they all exist.</summary>
+internal interface IPreviewFiles
+{
+    IReadOnlyList<string> Files { get; }
+}
+
 /// <summary>Preview files (PNG or .glb) in the workspace cache, loaded by the UI through the asset protocol.</summary>
 public sealed record AssetPreview(PreviewKind Kind, IReadOnlyList<string> Files, int? Width = null, int? Height = null, string? Format = null,
-    int? MipCount = null, int? Vertices = null, int? Triangles = null, bool? Skinned = null, string? Message = null);
+    int? MipCount = null, int? Vertices = null, int? Triangles = null, bool? Skinned = null, string? Message = null,
+    IReadOnlyList<PreviewMaterial>? Materials = null, IReadOnlyList<PreviewSkin>? Skins = null) : IPreviewFiles;
 
 public sealed record AssetExportParams(IReadOnlyList<string> Refs);
 

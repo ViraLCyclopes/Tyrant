@@ -19,16 +19,21 @@ public static class AssetFixtures
     public static readonly AssetRecord[] All = [StegoD, StegoN, StegoPrefab, RexD, Menu];
 
     public static async Task<(RpcHarness Harness, string Workspace, FakeAssetReader Reader)> Opened(FakeGame game,
-        IEnumerable<AssetRecord>? assets = null, GameFingerprint? fingerprint = null)
+        IEnumerable<AssetRecord>? assets = null, GameFingerprint? fingerprint = null, bool archives = true)
     {
         var reader = new FakeAssetReader();
         var harness = new RpcHarness(TestStudio.Options(reader: reader));
         var ws = TestStudio.TempDir();
         await harness.Call("workspace.create", new { dir = ws, gamePath = game.Root });
-        WriteIndex(ws, assets ?? All, fingerprint ?? GameFingerprint.Compute(new GameInstall(game.Root, null)));
+        WriteIndex(ws, assets ?? All, fingerprint ?? GameFingerprint.Compute(new GameInstall(game.Root, null)), archives);
         return (harness, ws, reader);
     }
 
-    public static void WriteIndex(string ws, IEnumerable<AssetRecord> assets, GameFingerprint? fingerprint) =>
-        new AssetIndex { Assets = assets.ToList(), Fingerprint = fingerprint }.Save(Path.Combine(ws, "cache", AssetIndex.FileName));
+    /// <param name="archives">False writes an index as Plans 3–6 made them, without the archive map.</param>
+    public static void WriteIndex(string ws, IEnumerable<AssetRecord> assets, GameFingerprint? fingerprint, bool archives = true)
+    {
+        var index = new AssetIndex { Assets = assets.ToList(), Fingerprint = fingerprint };
+        if (archives) index.Archives["CAB-stego"] = StegoD.Bundle;
+        index.Save(Path.Combine(ws, "cache", AssetIndex.FileName));
+    }
 }

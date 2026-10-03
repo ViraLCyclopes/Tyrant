@@ -77,6 +77,8 @@ export interface AssetPreview {
   triangles?: number | null;
   skinned?: boolean | null;
   message?: string | null;
+  materials?: PreviewMaterial[] | null;
+  skins?: PreviewSkin[] | null;
 }
 
 export interface AssetRefParams {
@@ -310,6 +312,19 @@ export interface OutputStatus {
 }
 
 export type PreviewKind = "texture" | "model" | "none";
+
+export interface PreviewMaterial {
+  name: string;
+  baseColor: string | null;
+  normal: string | null;
+  skinnable: boolean;
+}
+
+export interface PreviewSkin {
+  ref: string;
+  name: string;
+  current: boolean;
+}
 
 export interface RefreshAllResult {
   steps: RefreshStep[];
