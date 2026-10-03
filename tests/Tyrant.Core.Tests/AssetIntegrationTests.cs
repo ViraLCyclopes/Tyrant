@@ -24,6 +24,17 @@ public sealed class RealGameIndex
 [Trait("Category", "Integration")]
 public class AssetIntegrationTests(RealGameIndex real) : IClassFixture<RealGameIndex>
 {
+    [SkippableFact]
+    public void Index_knows_which_bundle_holds_each_serialized_file()
+    {
+        Skip.If(RealGameIndex.GameDir is null, "TYRANT_GAME_DIR not set");
+        var texture = real.Index.Assets.First(a => a.Type == "Texture2D" && a.Name == "T_Acrocanthosaurus_N");
+        using var session = new AssetSession(real.Install);
+        var (file, _) = session.Open(texture);
+
+        Assert.Equal(texture.Bundle, real.Index.BundleOfArchive(file.name));
+    }
+
     [SkippableTheory]
     [InlineData("Detail_Skin", true)] // a normal map whose name does not say so
     [InlineData("T_acrocanthosaurus_D", false)]

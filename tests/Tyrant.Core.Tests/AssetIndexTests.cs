@@ -122,4 +122,42 @@ public class AssetIndexTests
 
         Assert.Equal(TyrantErrorCode.AssetIndexMissing, Assert.Throws<TyrantException>(() => AssetIndex.Load(path)).Code);
     }
+
+    private static string TempIndexPath() => Path.Combine(Path.GetTempPath(), "tyrant-tests", System.Guid.NewGuid().ToString("N"), AssetIndex.FileName);
+
+    [Fact]
+    public void Archive_names_lead_to_their_bundle_in_any_form_a_reference_uses()
+    {
+        var path = TempIndexPath();
+        new AssetIndex { Archives = { ["CAB-abc"] = Bundle } }.Save(path);
+
+        var index = AssetIndex.Load(path);
+
+        Assert.Equal(2, index.SchemaVersion);
+        Assert.Equal(Bundle, index.BundleOfArchive("archive:/CAB-abc/CAB-abc"));
+        Assert.Equal(Bundle, index.BundleOfArchive("cab-ABC"));
+        Assert.Null(index.BundleOfArchive("archive:/CAB-other/CAB-other"));
+    }
+
+    [Fact]
+    public void An_index_made_before_archives_were_recorded_loads_without_them()
+    {
+        var path = TempIndexPath();
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, """{"schemaVersion":1,"assets":[],"failures":[],"missingBundles":[],"warnings":[]}""");
+
+        var index = AssetIndex.Load(path);
+
+        Assert.Empty(index.Archives);
+        Assert.Null(index.BundleOfArchive("CAB-abc"));
+    }
+
+    [Fact]
+    public void Find_returns_the_object_with_that_bundle_and_path_id()
+    {
+        var index = Sample();
+
+        Assert.Equal("Sprite", index.Find(Bundle.ToUpperInvariant(), 11)?.Type);
+        Assert.Null(index.Find(Bundle, 99));
+    }
 }

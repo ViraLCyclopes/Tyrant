@@ -28,7 +28,7 @@ public sealed class AssetIndex
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     private static readonly Regex GuidPattern = new("^[0-9a-f]{32}$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-    public int SchemaVersion { get; set; } = 1;
+    public int SchemaVersion { get; set; } = 2;
     public GameFingerprint? Fingerprint { get; set; }
     public List<AssetRecord> Assets { get; set; } = [];
     public List<IndexFailure> Failures { get; set; } = [];
@@ -38,6 +38,22 @@ public sealed class AssetIndex
 
     /// <summary>Problems that degraded the index without stopping it (e.g. an unreadable catalog, so no GUIDs).</summary>
     public List<string> Warnings { get; set; } = [];
+
+    /// <summary>
+    /// Which bundle holds each serialized file ("CAB-…" → bundle), so references into other bundles — a material's
+    /// textures — can be followed. Empty in indexes made before schema 2.
+    /// </summary>
+    public Dictionary<string, string> Archives { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>The bundle holding a file as a reference names it ("archive:/CAB-x/CAB-x" or "CAB-x"); null when unknown.</summary>
+    public string? BundleOfArchive(string externalPath)
+    {
+        var name = externalPath.Replace('\\', '/');
+        return Archives.GetValueOrDefault(name[(name.LastIndexOf('/') + 1)..]);
+    }
+
+    public AssetRecord? Find(string bundle, long pathId) =>
+        Assets.FirstOrDefault(a => a.PathId == pathId && string.Equals(a.Bundle, bundle, StringComparison.OrdinalIgnoreCase));
 
     public static string PathIn(Workspace ws) => Path.Combine(ws.CacheDir, FileName);
 
@@ -61,6 +77,9 @@ public sealed class AssetIndex
             index.Failures ??= [];
             index.MissingBundles ??= [];
             index.Warnings ??= [];
+            var archives = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (name, bundle) in index.Archives ?? []) if (bundle is not null) archives.TryAdd(name, bundle);
+            index.Archives = archives;
             if (index.Assets.Any(a => a is null || a.Bundle is null || a.Type is null || a.Name is null))
                 throw Missing("The asset index is corrupt (incomplete records). Run 'tyrant assets index' again.");
             index.Failures.RemoveAll(f => f is null);

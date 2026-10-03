@@ -37,6 +37,7 @@ public sealed class AssetIndexer
         }
 
         var records = new List<AssetRecord>();
+        var archives = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var failures = new List<IndexFailure>();
         using var session = new AssetSession(install);
         for (var i = 0; i < bundles.Count; i++)
@@ -46,7 +47,7 @@ public sealed class AssetIndexer
             if (i % 100 == 0) progress?.Report(new JobProgress((double)i / bundles.Count, $"Indexing {relative}"));
             try
             {
-                records.AddRange(ScanBundle(session.Manager, bundles[i], relative));
+                records.AddRange(ScanBundle(session.Manager, bundles[i], relative, archives));
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -67,6 +68,7 @@ public sealed class AssetIndexer
             Failures = failures,
             MissingBundles = catalog is null ? [] : MissingBundles(catalog, aaDir),
             Warnings = warnings,
+            Archives = archives,
         };
     }
 
@@ -88,13 +90,14 @@ public sealed class AssetIndexer
             .Order(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-    private static List<AssetRecord> ScanBundle(AssetsManager manager, string path, string relative)
+    private static List<AssetRecord> ScanBundle(AssetsManager manager, string path, string relative, Dictionary<string, string> archives)
     {
         var bundle = manager.LoadBundleFile(path, true);
         var result = new List<AssetRecord>();
         for (var i = 0; i < bundle.file.BlockAndDirInfo.DirectoryInfos.Count; i++)
         {
             if (!bundle.file.IsAssetsFile(i)) continue;
+            archives.TryAdd(bundle.file.BlockAndDirInfo.DirectoryInfos[i].Name, relative); // "CAB-…", as other bundles reference it
             var file = manager.LoadAssetsFileFromBundle(bundle, i, false);
             var containers = ReadContainers(manager, file);
             foreach (var info in file.file.AssetInfos)
