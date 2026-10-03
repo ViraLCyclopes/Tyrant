@@ -8,7 +8,8 @@
   const session = getSession();
   const registry = new Registry();
   registerTools(registry);
-  const shell = new ShellState(registry, session.log, session.store);
+  // A job whose tab was closed can still fail: its error then shows above every tab.
+  const shell = new ShellState(registry, session.log, session.store, (error) => (session.error = error));
   shell.start();
 </script>
 

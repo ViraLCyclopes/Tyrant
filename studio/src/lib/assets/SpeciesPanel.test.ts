@@ -62,6 +62,18 @@ describe('SpeciesPanel', () => {
     await waitFor(() => expect(messages(session, 'tab-test').join('\n')).toContain('could not be decoded'));
   });
 
+  it('a species pack with failures is a warning, so the tab gets a marker', async () => {
+    const { rpc, session } = setup();
+    rpc.on('species.pack', (p) => ({
+      directory: `D:\\ws\\assets\\species\\${p.key}`, models: 3, textures: 12, failed: 2, targetsPath: 'x',
+    }));
+    renderWith(SpeciesPanel, session);
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Export Carcharodontosaurus pack' }));
+
+    await waitFor(() => expect(session.log.records.some((r) => r.level === 'warn' && r.message.includes('2'))).toBe(true));
+  });
+
   it('opens Add a skin for a species', async () => {
     const { rpc, session } = setup();
     rpc.on('mods.species', () => ({ hasDump: false, species: [] })).on('mods.list', () => ({ mods: [], frameworkInstalled: false }));

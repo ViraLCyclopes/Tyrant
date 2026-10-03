@@ -71,9 +71,10 @@
   async function exportChecked() {
     const r = await session.runJob('assets.export', { refs: checked }, 'Export assets', tab);
     if (!r) return;
-    const failures = r.failed === 0 ? '' : `, ${r.failed} failed (first: ${r.failures[0]?.name}: ${r.failures[0]?.error})`;
     const notes = r.notes?.length ? ` ${r.notes.join(' ')}` : '';
-    tab.info(`Exported ${r.exported} assets${failures}. Report: ${r.reportPath}${notes}`);
+    tab.info(`Exported ${r.exported} assets. Report: ${r.reportPath}${notes}`);
+    const first = r.failures[0];
+    if (r.failed > 0) tab.warn(`${r.failed} asset(s) could not be exported${first ? ` (first: ${first.name}: ${first.error})` : ''}; the report lists them.`);
   }
 </script>
 

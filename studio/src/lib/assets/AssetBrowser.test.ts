@@ -87,6 +87,19 @@ describe('AssetBrowser', () => {
     await waitFor(() => expect(messages(session, 'tab-test').join('\n')).toContain('Exported 1 assets'));
   });
 
+  it('an export with failures is a warning, so the tab gets a marker', async () => {
+    const { rpc, session } = setup();
+    rpc.on('assets.export', () => ({ exported: 0, failed: 1, reportPath: 'D:\\ws\\report.json', failures: [{ ref: stegoD.ref, name: 'T_Stego_D', error: 'unreadable' }] }));
+    rpc.on('workspace.status', () => workspaceStatus({ hasAssetIndex: true }));
+    renderWith(AssetBrowser, session);
+    await screen.findByRole('button', { name: 'T_Stego_D' });
+
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Select T_Stego_D' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Export selected (1)' }));
+
+    await waitFor(() => expect(session.log.records.some((r) => r.level === 'warn' && r.message.includes('T_Stego_D'))).toBe(true));
+  });
+
   it('clicking a name shows its details', async () => {
     const { session } = setup();
     renderWith(AssetBrowser, session);

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import type { LogRecord } from './log';
+  import { panelSize, type LogRecord } from './log';
 
   let {
     records,
@@ -42,11 +42,8 @@
     e.preventDefault();
     const start = position === 'bottom' ? e.clientY : e.clientX;
     const from = size;
-    const max = (position === 'bottom' ? window.innerHeight : window.innerWidth) * 0.6;
-    const move = (m: PointerEvent) => {
-      const delta = start - (position === 'bottom' ? m.clientY : m.clientX);
-      onResize(Math.round(Math.min(max, Math.max(80, from + delta))));
-    };
+    const viewport = position === 'bottom' ? window.innerHeight : window.innerWidth;
+    const move = (m: PointerEvent) => onResize(panelSize({ from, start, now: position === 'bottom' ? m.clientY : m.clientX, position, viewport }));
     const up = () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);

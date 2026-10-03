@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { attentionFor, toLevel, visibleRecords, type LogRecord } from './log';
+import { attentionFor, panelSize, toLevel, visibleRecords, type LogRecord } from './log';
 import { LogStore } from './logStore.svelte';
 
 const rec = (tab: string | null, level: LogRecord['level'] = 'info', seq = 1): LogRecord => ({ seq, time: 0, level, message: 'm', tab });
@@ -64,5 +64,20 @@ describe('LogStore', () => {
     stop();
     store.add({ level: 'info', message: 'y', tab: 'a' });
     expect(seen).toEqual(['x']);
+  });
+});
+
+describe('panelSize', () => {
+  it('follows the pointer at the bottom', () => {
+    expect(panelSize({ from: 180, start: 700, now: 650, position: 'bottom', viewport: 1000 })).toBe(230);
+  });
+
+  it('follows the pointer at the side, where the panel is twice as wide as its size', () => {
+    expect(panelSize({ from: 180, start: 1000, now: 900, position: 'side', viewport: 1600 })).toBe(230); // 100 px wider = 50 more
+  });
+
+  it('never covers more than 60 % of the window, and never shrinks below 80', () => {
+    expect(panelSize({ from: 180, start: 1000, now: 0, position: 'side', viewport: 1600 })).toBe(480); // 960 px = 60 %
+    expect(panelSize({ from: 180, start: 700, now: 1000, position: 'bottom', viewport: 1000 })).toBe(80);
   });
 });

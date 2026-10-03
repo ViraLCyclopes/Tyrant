@@ -1,7 +1,8 @@
 import { getContext } from 'svelte';
 import { SvelteMap } from 'svelte/reactivity';
 import type { KeyValueStore } from '$lib/storage';
-import { attentionFor } from './log';
+import type { RpcError } from '$lib/rpc/client';
+import { attentionFor, type LogRecord } from './log';
 import type { LogStore } from './logStore.svelte';
 import type { Registry } from './registry';
 import { Tab, type OpenOptions, type TabHost } from './tab.svelte';
@@ -45,6 +46,8 @@ export class ShellState implements TabHost {
     readonly registry: Registry,
     private readonly log: LogStore,
     private readonly storage: KeyValueStore,
+    /** Errors reported by a tab after it was closed (its job failed later): shown above every tab. */
+    private readonly onOrphanError?: (error: RpcError) => void,
   ) {
     this.store.subscribe(() => {
       this.syncTabs();
@@ -53,7 +56,7 @@ export class ShellState implements TabHost {
     log.onAdd((record) => {
       if (record.tab === null || record.tab !== this.store.activeId()) return;
       this.seen.set(record.tab, record.seq);
-      if (record.level === 'error') this.setPanel(record.tab, { open: true }); // never hide an error behind a folded panel
+      if (record.level !== 'info') this.setPanel(record.tab, { open: true }); // never hide a problem behind a folded panel
     });
   }
 
@@ -119,8 +122,19 @@ export class ShellState implements TabHost {
   /** ⚠ / ✕ for a tab that logged a warning or error since it was last shown; never for the shown tab. */
   marker(id: string): 'warn' | 'error' | null {
     if (id === this.activeId) return null;
+    return this.unseenProblem(id);
+  }
+
+  /** The loudest warning or error the tab logged since it was last shown. */
+  private unseenProblem(id: string): 'warn' | 'error' | null {
     const after = this.seen.get(id) ?? 0;
     return attentionFor(this.log.records.filter((r) => r.tab === id && r.seq > after)).get(id) ?? null;
+  }
+
+  /** The shown tab's latest own message, for the status line. */
+  status(id: string): LogRecord | null {
+    for (let i = this.log.records.length - 1; i >= 0; i--) if (this.log.records[i].tab === id) return this.log.records[i];
+    return null;
   }
 
   panel(id: string): PanelState {
@@ -171,10 +185,12 @@ export class ShellState implements TabHost {
   private syncTabs(): void {
     const active = this.store.activeId();
     for (const record of this.store.list()) {
-      if (!this.tabObjects.has(record.id)) this.tabObjects.set(record.id, new Tab(record.id, this.log, this));
+      if (!this.tabObjects.has(record.id)) this.tabObjects.set(record.id, new Tab(record.id, this.log, this, this.onOrphanError));
     }
     for (const [id, tab] of this.tabObjects) tab.active = id === active;
-    if (active) this.seen.set(active, this.log.lastSeq());
+    if (!active) return;
+    if (this.unseenProblem(active) !== null) this.setPanel(active, { open: true }); // show what the ⚠ / ✕ was about
+    this.seen.set(active, this.log.lastSeq());
   }
 }
 

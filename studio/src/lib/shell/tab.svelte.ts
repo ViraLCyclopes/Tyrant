@@ -30,6 +30,8 @@ export class Tab {
     readonly id: string,
     private readonly log: LogStore,
     private readonly host: TabHost,
+    /** Where an error goes once this tab is closed (no banner to show it in): the session's banner. */
+    private readonly onOrphanError?: (error: RpcError) => void,
   ) {}
 
   private get owner(): string | null {
@@ -47,7 +49,8 @@ export class Tab {
   /** Every error is logged; one with a fix action also becomes this tab's banner. */
   fail(error: RpcError): void {
     this.log.add({ level: 'error', message: error.message, detail: error.code, tab: this.owner });
-    if (error.fix && this.attached) this.error = error;
+    if (!this.attached) this.onOrphanError?.(error);
+    else if (error.fix) this.error = error;
   }
 
   /** The tab closed: anything its still-running work reports goes to every tab. */

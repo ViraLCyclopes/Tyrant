@@ -40,6 +40,7 @@ export class Session {
     readonly rpc: Rpc,
     readonly platform: Platform,
     readonly store: KeyValueStore,
+    private readonly now: () => number = () => Date.now(),
   ) {
     this.recent = readList(store.get(RECENT_WORKSPACES));
     rpc.onLog((n) => this.log.add({ level: toLevel(n.level), message: n.message, tab: null }));
@@ -159,13 +160,10 @@ export class Session {
     else this.error = null;
     this.job = { id: null, title, fraction: 0, message: 'Starting…', cancel: null };
     this.tell(`${title} started.`, tab);
-    let lastMessage = '';
+    const progress = this.progressLog(tab);
     try {
       const handle = await this.rpc.job(method, params, (fraction, message) => {
-        if (message && message !== lastMessage) {
-          lastMessage = message;
-          this.tell(message, tab);
-        }
+        progress.add(message);
         if (!this.job) return;
         this.job.fraction = fraction;
         this.job.message = message;
@@ -174,8 +172,11 @@ export class Session {
         this.job.id = handle.id;
         this.job.cancel = () => handle.cancel();
       }
-      return await handle.done;
+      const result = await handle.done;
+      progress.flush();
+      return result;
     } catch (e) {
+      progress.flush();
       const error = asRpcError(e);
       if (error.code === 'CANCELLED') this.tell(`${title} was cancelled.`, tab);
       else if (error.code !== 'SIDECAR_EXITED') this.report(error, tab); // a core exit was already explained
@@ -184,6 +185,34 @@ export class Session {
       this.job = null;
       await this.refreshStatus();
     }
+  }
+
+  /**
+   * Job progress for the log, without flooding it: a message that only differs in its numbers ("Waiting for the game
+   * (12 s)") is logged once, and a burst ("Exporting T_A", "Exporting T_B", …) is thinned to about one a second, keeping
+   * the last one (flushed when the job ends). The status line still shows every message.
+   */
+  private progressLog(tab?: Tab): { add(message: string): void; flush(): void } {
+    const shape = (message: string) => message.replace(/\d+/g, '#');
+    let lastShape = '';
+    let lastAt = -Infinity;
+    let pending: string | null = null;
+    const log = (message: string) => {
+      this.tell(message, tab);
+      lastShape = shape(message);
+      lastAt = this.now();
+      pending = null;
+    };
+    return {
+      add: (message) => {
+        if (!message || shape(message) === lastShape) return;
+        if (this.now() - lastAt >= 1000) log(message);
+        else pending = message;
+      },
+      flush: () => {
+        if (pending !== null && shape(pending) !== lastShape) log(pending);
+      },
+    };
   }
 
   /** After a window reload the core may still be running a job: show it again (progress, Cancel) until it ends. */

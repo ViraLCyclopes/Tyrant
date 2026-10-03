@@ -22,9 +22,9 @@
     const r = await session.runJob('species.pack', { key: row.key }, `Species pack: ${row.displayName}`, tab);
     if (!r) return;
     lastPack = r.directory;
-    const failed = r.failed ? ` (${r.failed} failed)` : '';
     const notes = r.notes?.length ? ` ${r.notes.join(' ')}` : '';
-    tab.info(`Exported ${r.models} models and ${r.textures} textures to ${r.directory}${failed}.${notes}`);
+    tab.info(`Exported ${r.models} models and ${r.textures} textures to ${r.directory}.${notes}`);
+    if (r.failed) tab.warn(`${r.failed} file(s) of the ${row.displayName} pack could not be exported; see its report in that folder.`);
   }
 </script>
 

@@ -336,4 +336,58 @@ describe('Session', () => {
     expect(session.error?.code).toBe('SIDECAR_EXITED');
     expect(session.log.records.map((r) => r.message)).toEqual(['before']);
   });
+
+  it('a counting progress message is logged once, not every second', async () => {
+    const { rpc, platform, store } = setup();
+    const session = new Session(rpc, platform, store, () => 0);
+    session.workspace = workspaceStatus();
+    rpc.on('dump.run', (_p, onProgress) => {
+      for (let s = 1; s <= 5; s++) onProgress?.(s / 10, `Waiting for the game (${s} s)`);
+      return { objects: 1, types: 1, languages: 1, errors: [] } as never;
+    });
+    rpc.on('workspace.status', () => workspaceStatus());
+    const tab = testTab(session);
+
+    await session.runJob('dump.run', { timeoutSeconds: 60 }, 'Data dump', tab);
+
+    expect(messages(session, tab)).toEqual(['Data dump started.', 'Waiting for the game (1 s)']);
+  });
+
+  it('a burst of progress messages is thinned to about one a second, keeping the last', async () => {
+    const { rpc, platform, store } = setup();
+    let now = 0;
+    const session = new Session(rpc, platform, store, () => now);
+    session.workspace = workspaceStatus();
+    rpc.on('assets.export', (_p, onProgress) => {
+      onProgress?.(0.1, 'Exporting T_A');
+      onProgress?.(0.2, 'Exporting T_B'); // same moment: held back
+      onProgress?.(0.3, 'Exporting T_C'); // replaces T_B
+      now = 1500;
+      onProgress?.(0.9, 'Exporting T_D'); // a second later: logged
+      return { exported: 4, failed: 0, reportPath: 'r', failures: [] } as never;
+    });
+    rpc.on('workspace.status', () => workspaceStatus());
+    const tab = testTab(session);
+
+    await session.runJob('assets.export', { refs: [] }, 'Export assets', tab);
+
+    expect(messages(session, tab)).toEqual(['Export assets started.', 'Exporting T_A', 'Exporting T_D']);
+  });
+
+  it('the last held-back progress message is logged when the job ends', async () => {
+    const { rpc, platform, store } = setup();
+    const session = new Session(rpc, platform, store, () => 0);
+    session.workspace = workspaceStatus();
+    rpc.on('assets.export', (_p, onProgress) => {
+      onProgress?.(0.1, 'Exporting T_A');
+      onProgress?.(0.9, 'Writing the report');
+      return { exported: 1, failed: 0, reportPath: 'r', failures: [] } as never;
+    });
+    rpc.on('workspace.status', () => workspaceStatus());
+    const tab = testTab(session);
+
+    await session.runJob('assets.export', { refs: [] }, 'Export assets', tab);
+
+    expect(messages(session, tab)).toEqual(['Export assets started.', 'Exporting T_A', 'Writing the report']);
+  });
 });

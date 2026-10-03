@@ -126,7 +126,11 @@
       />
     {/if}
   </div>
-  <StatusLine onStale={() => shell.openTool('workspace')} />
+  <StatusLine
+    status={activeTab ? shell.status(activeTab.id) : null}
+    onStatus={() => activeTab && shell.setPanel(activeTab.id, { open: true })}
+    onStale={() => shell.openTool('workspace')}
+  />
 </div>
 
 {#if showPrefs}

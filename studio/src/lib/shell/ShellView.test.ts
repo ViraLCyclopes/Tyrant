@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { describe, expect, it } from 'vitest';
 import { RpcError } from '$lib/rpc/client';
 import { memoryStore } from '$lib/storage';
@@ -76,8 +76,9 @@ describe('Shell', () => {
     shell.tab(id).info('Exported 3 textures.');
     session.log.add({ level: 'info', message: 'Created mod.', tab: null });
     shell.setPanel(id, { open: true });
-    expect(await screen.findByText('Exported 3 textures.')).toBeInTheDocument();
-    expect(screen.getByText('Created mod.')).toBeInTheDocument();
+    const log = within(await screen.findByRole('region', { name: 'Log' }));
+    expect(log.getByText('Exported 3 textures.')).toBeInTheDocument();
+    expect(log.getByText('Created mod.')).toBeInTheDocument();
   });
 
   it('marks a background tab that logged a warning', async () => {
@@ -99,5 +100,15 @@ describe('Shell', () => {
     const id = shell.openTool('assets')!;
     shell.tab(id).fail(new RpcError('No asset index.', 'ASSET_INDEX_MISSING', 'REFRESH_WORKSPACE'));
     expect(await screen.findByRole('alert')).toHaveTextContent('No asset index.');
+  });
+
+  it("the status line shows the shown tab's latest message; clicking it opens the log", async () => {
+    const { shell } = setup();
+    const id = shell.openTool('assets')!;
+    shell.tab(id).info("Installed 'red-spot'.");
+    const status = await screen.findByRole('button', { name: "Installed 'red-spot'." });
+    expect(shell.panel(id).open).toBe(false);
+    await fireEvent.click(status);
+    expect(shell.panel(id).open).toBe(true);
   });
 });
