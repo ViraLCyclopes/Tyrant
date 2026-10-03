@@ -227,4 +227,31 @@ public class CutoutTests
 
         Assert.Empty(result.MissingCutouts);
     }
+
+    [Fact]
+    public void An_opaque_game_texture_is_not_reported_as_unreadable()
+    {
+        var (game, mod, species) = Setup();
+        using var _ = game;
+        SkinWithMaleDiffuse(mod, Png(4, _ => 255));
+        var pixels = Cutouts.Pixels(_ => "DXT1", _ => throw new InvalidOperationException("must not decode an opaque format"));
+
+        var result = new CutoutRestorer(pixels).Restore(mod, Index(), species);
+
+        Assert.Empty(result.Restored);
+        Assert.Empty(result.Problems); // DXT1 has no alpha: nothing to cut out, nothing went wrong
+    }
+
+    [Fact]
+    public void A_game_texture_that_fails_to_decode_is_reported()
+    {
+        var (game, mod, species) = Setup();
+        using var _ = game;
+        SkinWithMaleDiffuse(mod, Png(4, _ => 255));
+        var pixels = Cutouts.Pixels(_ => "DXT5", _ => throw new IOException("bundle locked"));
+
+        var result = new CutoutRestorer(pixels).Restore(mod, Index(), species);
+
+        Assert.Contains(result.Problems, p => p.Contains("could not be read"));
+    }
 }

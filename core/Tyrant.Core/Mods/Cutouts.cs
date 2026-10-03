@@ -79,28 +79,47 @@ public static class Cutouts
         }
     }
 
-    /// <summary>Decodes a vanilla texture from the game's bundles (through a temporary PNG); null when it cannot be read, or when
-    /// onlyIfAlpha and its format stores no alpha.</summary>
-    public static Func<AssetRecord, ImageResult?> GamePixels(GameInstall install, IAssetReader reader, bool onlyIfAlpha = true) => texture =>
+    /// <summary>One opaque pixel: stands for a texture whose format cannot cut anything out.</summary>
+    private static ImageResult Opaque() => new() { Width = 1, Height = 1, Comp = StbImageSharp.ColorComponents.RedGreenBlueAlpha, SourceComp = StbImageSharp.ColorComponents.RedGreenBlueAlpha, Data = [255, 255, 255, 255] };
+
+    /// <summary>Decodes a vanilla texture from the game's bundles (through a temporary PNG); see <see cref="Pixels"/>.</summary>
+    public static Func<AssetRecord, ImageResult?> GamePixels(GameInstall install, IAssetReader reader, bool onlyIfAlpha = true) => Pixels(
+        texture =>
+        {
+            using var session = new AssetSession(install);
+            return TextureFacts.Read(session.Open(texture).BaseField).Format;
+        },
+        texture =>
+        {
+            var temp = Path.Combine(Path.GetTempPath(), "tyrant-cutouts", Guid.NewGuid().ToString("N") + ".png");
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(temp)!);
+                reader.WriteTexture(install, texture, temp);
+                using var stream = File.OpenRead(temp);
+                return ImageResult.FromStream(stream, StbImageSharp.ColorComponents.RedGreenBlueAlpha);
+            }
+            finally
+            {
+                try { File.Delete(temp); } catch (IOException) { }
+            }
+        },
+        onlyIfAlpha);
+
+    /// <summary>
+    /// A texture's pixels; null only when it cannot be read. With onlyIfAlpha, a format that stores no alpha is not decoded and
+    /// gives <see cref="Opaque"/> (no cutouts, and nothing went wrong).
+    /// </summary>
+    public static Func<AssetRecord, ImageResult?> Pixels(Func<AssetRecord, string> formatOf, Func<AssetRecord, ImageResult> decode, bool onlyIfAlpha = true) => texture =>
     {
-        var temp = Path.Combine(Path.GetTempPath(), "tyrant-cutouts", Guid.NewGuid().ToString("N") + ".png");
         try
         {
-            if (onlyIfAlpha)
-                using (var session = new AssetSession(install))
-                    if (!MayHaveAlpha(TextureFacts.Read(session.Open(texture).BaseField).Format)) return null; // opaque by format: no decode
-            Directory.CreateDirectory(Path.GetDirectoryName(temp)!);
-            reader.WriteTexture(install, texture, temp);
-            using var stream = File.OpenRead(temp);
-            return ImageResult.FromStream(stream, StbImageSharp.ColorComponents.RedGreenBlueAlpha);
+            if (onlyIfAlpha && !MayHaveAlpha(formatOf(texture))) return Opaque(); // opaque by format: no decode
+            return decode(texture);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             return null;
-        }
-        finally
-        {
-            try { File.Delete(temp); } catch (IOException) { }
         }
     };
 }
