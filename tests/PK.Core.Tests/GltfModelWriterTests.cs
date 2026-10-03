@@ -46,6 +46,24 @@ public class GltfModelWriterTests
     }
 
     [Fact]
+    public void Duplicate_node_names_are_kept_as_in_the_game()
+    {
+        // Titanoboa's prefab has several transforms named "Titanoboa"; glTF allows duplicate names.
+        var prefab = ModelFixture.Prefab(ModelFixture.Triangle());
+        var root = new SkeletonNode("Titanoboa", Vector3.Zero, Quaternion.Identity, Vector3.One);
+        var hip = new SkeletonNode("Titanoboa", Vector3.UnitY, Quaternion.Identity, Vector3.One, root);
+        root.Children.Add(hip);
+        var tail = new SkeletonNode("Titanoboa", Vector3.UnitZ, Quaternion.Identity, Vector3.One, hip);
+        hip.Children.Add(tail);
+        var duplicate = new PrefabModel("Titanoboa", root, [new RendererModel("Body", prefab.Renderers[0].Mesh, [hip, tail], root)], []);
+        var path = TempGlb();
+
+        GltfModelWriter.WriteGlb(duplicate, duplicate.Renderers[0], path);
+
+        Assert.Equal(3, ModelRoot.Load(path).LogicalNodes.Count(n => n.Name == "Titanoboa"));
+    }
+
+    [Fact]
     public void Static_mesh_has_no_skin()
     {
         var prefab = ModelFixture.Prefab(ModelFixture.Triangle(skinned: false), skinned: false);

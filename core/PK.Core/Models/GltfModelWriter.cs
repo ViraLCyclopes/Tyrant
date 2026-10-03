@@ -49,7 +49,10 @@ public static class GltfModelWriter
         }
 
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
-        scene.ToGltf2().SaveGLB(path);
+        // Some prefabs (e.g. Titanoboa) reuse a transform name; glTF allows it and renaming would break bone targets.
+        var settings = SceneBuilderSchema2Settings.Default;
+        settings.AllowArmatureDuplicatedNames = true;
+        scene.ToGltf2(settings).SaveGLB(path);
     }
 
     private static NodeBuilder BuildNodes(SkeletonNode node, NodeBuilder? parent, Dictionary<SkeletonNode, NodeBuilder> map)
