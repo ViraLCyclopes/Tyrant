@@ -15,6 +15,18 @@ public class StudioMethodsTests
     }
 
     [Fact]
+    public async Task Session_log_lines_reach_the_app_as_log_notifications()
+    {
+        using var game = new FakeGame();
+        var (harness, _) = await Opened(game);
+
+        Assert.Contains(harness.Notifications, n =>
+            n.GetProperty("method").GetString() == "log"
+            && n.GetProperty("params").GetProperty("level").GetString() == "info"
+            && n.GetProperty("params").GetProperty("message").GetString()!.StartsWith("Created the workspace for"));
+    }
+
+    [Fact]
     public async Task App_info_reports_the_version_and_protocol()
     {
         var info = await new RpcHarness(TestStudio.Options()).Call("app.info");

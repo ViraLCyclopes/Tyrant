@@ -340,6 +340,11 @@ export interface LocalizationRow {
   values: string[];
 }
 
+export interface LogNotification {
+  level: string;
+  message: string;
+}
+
 export interface ModAddSkinParams {
   id: string;
   species: string;
@@ -589,4 +594,5 @@ export interface RpcNotifications {
   "job.progress": JobProgressNotification;
   "job.done": JobDoneNotification;
   "job.failed": JobFailedNotification;
+  "log": LogNotification;
 }
