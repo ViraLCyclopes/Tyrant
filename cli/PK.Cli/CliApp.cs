@@ -45,6 +45,15 @@ public static class CliApp
                     .WithDescription("Print one object's fields as JSON.");
                 assets.AddCommand<AssetsExportTexturesCommand>("export-textures")
                     .WithDescription("Export matching textures to <workspace>/assets/textures as PNG.");
+                assets.AddCommand<AssetsExportModelCommand>("export-model")
+                    .WithDescription("Export a prefab's meshes (with skeleton and blend shapes) to <workspace>/assets/models as .glb.");
+            });
+            config.AddBranch("species", species =>
+            {
+                species.AddCommand<SpeciesListCommand>("list")
+                    .WithDescription("List the animals the game ships (park and vivarium).");
+                species.AddCommand<SpeciesPackCommand>("pack")
+                    .WithDescription("Export one species' models, textures and targets.json to <workspace>/assets/species/<key>.");
             });
         });
 
