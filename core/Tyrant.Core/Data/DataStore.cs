@@ -30,7 +30,7 @@ public sealed class DataStore
     public static DataStore OpenDirectory(string dataDir)
     {
         var manifest = DumpManifestFile.TryRead(Path.Combine(dataDir, "manifest.json"))
-            ?? throw new TyrantException(TyrantErrorCode.DataMissing, "No game data yet. Run 'tyrant dump install' once, then 'tyrant dump run'.", FixAction.RefreshWorkspace);
+            ?? throw new TyrantException(TyrantErrorCode.DataMissing, "No game data yet. On the Home tab, click Install Tyrant in game once, then Run data dump (or 'tyrant dump install', then 'tyrant dump run').", FixAction.RefreshWorkspace);
         return new DataStore(dataDir, manifest);
     }
 
@@ -54,7 +54,7 @@ public sealed class DataStore
         return byShort.Count switch
         {
             1 => byShort[0],
-            0 => throw new TyrantException(TyrantErrorCode.AssetNotFound, $"No data type '{query}'. Use 'tyrant data types' to list them."),
+            0 => throw new TyrantException(TyrantErrorCode.AssetNotFound, $"No data type '{query}'. The Data tab lists them (or 'tyrant data types')."),
             _ => throw new TyrantException(TyrantErrorCode.AssetAmbiguous, $"'{query}' matches several types: {string.Join(", ", byShort.Select(t => t.FullName))}."),
         };
     }
@@ -66,7 +66,7 @@ public sealed class DataStore
     {
         var file = Directory.GetFiles(TypeDir(type), "*.json")
             .FirstOrDefault(f => string.Equals(Path.GetFileNameWithoutExtension(f), name, StringComparison.OrdinalIgnoreCase))
-            ?? throw new TyrantException(TyrantErrorCode.AssetNotFound, $"No {type.ShortName} named '{name}'. Use 'tyrant data show {type.ShortName}' to list them.");
+            ?? throw new TyrantException(TyrantErrorCode.AssetNotFound, $"No {type.ShortName} named '{name}'. The Data tab lists them (or 'tyrant data show {type.ShortName}').");
         return Parse(file);
     }
 

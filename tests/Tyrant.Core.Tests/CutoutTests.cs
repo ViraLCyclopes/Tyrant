@@ -115,7 +115,7 @@ public class CutoutTests
 
         var restored = new CutoutRestorer(_ => Image(8, i => (byte)(i % 8 < 4 ? 0 : 255))).Restore(mod, Index(), species); // left half see-through, at twice the size
 
-        Assert.Equal([File], restored);
+        Assert.Equal([File], restored.Restored);
         var after = ImageResult.FromMemory(System.IO.File.ReadAllBytes(Path.Combine(mod.Dir, File)), StbImageSharp.ColorComponents.RedGreenBlueAlpha);
         Assert.Equal((4, 4), (after.Width, after.Height));
         Assert.Equal(new byte[] { 0, 0, 255, 255 }, Enumerable.Range(0, 4).Select(x => after.Data[x * 4 + 3]).ToArray()); // first row: resampled
@@ -139,5 +139,119 @@ public class CutoutTests
     public void Textures_stored_without_alpha_are_not_decoded(string format, bool mayHaveAlpha)
     {
         Assert.Equal(mayHaveAlpha, Cutouts.MayHaveAlpha(format));
+    }
+
+    private static void WriteFile(ModProject mod, string relative, byte[] bytes)
+    {
+        var path = Path.Combine(mod.Dir, relative);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        System.IO.File.WriteAllBytes(path, bytes);
+    }
+
+    private static byte[] Png(int width, int height, Func<int, byte> alpha)
+    {
+        var rgba = Enumerable.Range(0, width * height).SelectMany(i => new byte[] { 200, 100, 50, alpha(i) }).ToArray();
+        using var stream = new MemoryStream();
+        new ImageWriter().WritePng(rgba, width, height, ColorComponents.RedGreenBlueAlpha, stream);
+        return stream.ToArray();
+    }
+
+    [Fact]
+    public void Restore_reports_files_it_cannot_read_or_that_are_not_pngs_and_fixes_the_rest()
+    {
+        var (game, mod, species) = Setup();
+        using var _ = game;
+        WriteFile(mod, "skins/red-spot/m.png", Png(4, 4, _ => 255)); // will be locked
+        WriteFile(mod, "skins/red-spot/f.png", Png(4, 4, _ => 255));
+        WriteFile(mod, "skins/red-spot/j.png", [0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3]); // a JPEG named .png
+        mod.Manifest.Skins.Add(new SkinEntry { Id = "red-spot", Species = "Carcharodontosaurus", Name = "Red spot", Base = "Alt 1",
+            Male = new() { ["diffuse"] = "skins/red-spot/m.png" }, Female = new() { ["diffuse"] = "skins/red-spot/f.png" } });
+        mod.Manifest.Replace.Add(new TextureReplacement { Texture = "T_carch_alt1_male_D", File = "skins/red-spot/j.png" });
+        mod.Save();
+        var jpeg = System.IO.File.ReadAllBytes(Path.Combine(mod.Dir, "skins/red-spot/j.png"));
+
+        CutoutRestore result;
+        using (new FileStream(Path.Combine(mod.Dir, "skins/red-spot/m.png"), FileMode.Open, FileAccess.Read, FileShare.None))
+            result = new CutoutRestorer(_ => Image(4, HalfCut)).Restore(mod, Index(), species);
+
+        Assert.Equal(["skins/red-spot/f.png"], result.Restored);
+        Assert.Contains(result.Problems, p => p.Contains("m.png") && p.Contains("could not be read"));
+        Assert.Contains(result.Problems, p => p.Contains("j.png") && p.Contains("not a PNG"));
+        Assert.Equal(jpeg, System.IO.File.ReadAllBytes(Path.Combine(mod.Dir, "skins/red-spot/j.png"))); // left alone
+    }
+
+    [Fact]
+    public void Restore_resamples_to_odd_sizes()
+    {
+        var (game, mod, species) = Setup();
+        using var _ = game;
+        SkinWithMaleDiffuse(mod, Png(5, 3, _ => 255));
+
+        var result = new CutoutRestorer(_ => Image(8, i => (byte)(i % 8 < 4 ? 0 : 255))).Restore(mod, Index(), species);
+
+        var after = ImageResult.FromMemory(System.IO.File.ReadAllBytes(Path.Combine(mod.Dir, File)), StbImageSharp.ColorComponents.RedGreenBlueAlpha);
+        Assert.Equal((5, 3), (after.Width, after.Height));
+        Assert.Equal(new byte[] { 0, 0, 0, 255, 255 }, Enumerable.Range(0, 5).Select(x => after.Data[x * 4 + 3]).ToArray());
+        Assert.Single(result.Restored);
+    }
+
+    [Fact]
+    public void A_png_shared_by_several_targets_is_judged_by_the_one_with_cutouts()
+    {
+        var (game, mod, species) = Setup();
+        using var _ = game;
+        WriteFile(mod, File, Png(4, 4, _ => 255));
+        mod.Manifest.Skins.Add(new SkinEntry { Id = "red-spot", Species = "Carcharodontosaurus", Name = "Red spot", Base = "Alt 1",
+            Male = new() { ["diffuse"] = File }, Female = new() { ["diffuse"] = File.Replace('/', '\\') } }); // one file, two spellings
+        mod.Save();
+        Func<AssetRecord, ImageResult?> pixels = a => a.Guid == FemaleDiffuse ? Image(4, HalfCut) : Image(4, Opaque); // only the female base has cutouts
+
+        var check = new ModChecker(_ => (4, 4), pixels).Check(mod, Index(), species);
+        var restored = new CutoutRestorer(pixels).Restore(mod, Index(), species);
+
+        Assert.Single(check.MissingCutouts);
+        Assert.Single(check.Warnings, w => w.Contains("see-through"));
+        Assert.Single(restored.Restored);
+    }
+
+    [Fact]
+    public void Masks_are_not_checked_for_cutouts_only_colour_textures_are()
+    {
+        var (game, mod, _) = Setup();
+        using var _ = game;
+        WriteFile(mod, "textures/x.png", Png(4, 4, _ => 255));
+        mod.Manifest.Replace.Add(new TextureReplacement { Texture = "T_carch_extra", File = "textures/x.png" }); // an extra map: its alpha is data
+        mod.Save();
+
+        var result = new ModChecker(_ => (4, 4), _ => Image(4, HalfCut)).Check(mod, Index());
+
+        Assert.Empty(result.MissingCutouts);
+    }
+
+    [Fact]
+    public void An_opaque_game_texture_is_not_reported_as_unreadable()
+    {
+        var (game, mod, species) = Setup();
+        using var _ = game;
+        SkinWithMaleDiffuse(mod, Png(4, _ => 255));
+        var pixels = Cutouts.Pixels(_ => "DXT1", _ => throw new InvalidOperationException("must not decode an opaque format"));
+
+        var result = new CutoutRestorer(pixels).Restore(mod, Index(), species);
+
+        Assert.Empty(result.Restored);
+        Assert.Empty(result.Problems); // DXT1 has no alpha: nothing to cut out, nothing went wrong
+    }
+
+    [Fact]
+    public void A_game_texture_that_fails_to_decode_is_reported()
+    {
+        var (game, mod, species) = Setup();
+        using var _ = game;
+        SkinWithMaleDiffuse(mod, Png(4, _ => 255));
+        var pixels = Cutouts.Pixels(_ => "DXT5", _ => throw new IOException("bundle locked"));
+
+        var result = new CutoutRestorer(pixels).Restore(mod, Index(), species);
+
+        Assert.Contains(result.Problems, p => p.Contains("could not be read"));
     }
 }

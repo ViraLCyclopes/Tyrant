@@ -122,7 +122,7 @@ public sealed class DataMethods
         return new DataExportResult(path, store.Export(type, format, path));
     }
 
-    private static (int Page, int PageSize) Paging(int page, int pageSize) => (Math.Max(0, page), Math.Clamp(pageSize, 1, MaxPageSize));
+    private static (int Page, int PageSize) Paging(int page, int pageSize) => (Math.Clamp(page, 0, int.MaxValue / MaxPageSize), Math.Clamp(pageSize, 1, MaxPageSize)); // page * pageSize never overflows
 
     /// <summary>Opens the dump; the returned key identifies it, so results built from an older dump are never cached.</summary>
     private (DataStore Store, Workspace Workspace, GameInstall Install, string Key) Open()

@@ -68,6 +68,8 @@ namespace Tyrant.Framework.Core
             foreach (var dir in System.IO.Directory.GetDirectories(modsDir).OrderBy(d => d, StringComparer.Ordinal))
             {
                 var folder = Path.GetFileName(dir);
+                if (folder.EndsWith(".installing", StringComparison.Ordinal) || folder.EndsWith(".previous", StringComparison.Ordinal))
+                    continue; // Tyrant's own working copies while it installs a mod, never mods themselves
                 var path = Path.Combine(dir, ModManifest.FileName);
                 try
                 {
@@ -110,7 +112,9 @@ namespace Tyrant.Framework.Core
                 }
                 try
                 {
-                    var manifest = ModManifest.Parse(source.ManifestJson);
+                    var skippedSkins = new List<string>();
+                    var manifest = ModManifest.Parse(source.ManifestJson, skippedSkins); // one bad skin does not cost the whole mod
+                    foreach (var skipped in skippedSkins) plan.Warnings.Add($"{source.Folder}: {skipped}");
                     if (manifest.Id != source.Folder)
                         plan.Skipped.Add(new SkippedMod(source.Folder, $"its id \"{manifest.Id}\" does not match its folder \"{source.Folder}\"."));
                     else

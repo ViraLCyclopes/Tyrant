@@ -29,6 +29,12 @@ public sealed class StudioSession(StudioOptions options)
         }
     }
 
+    /// <summary>The open workspace, or null when none is.</summary>
+    public (Workspace Workspace, GameInstall Install)? TryCurrent()
+    {
+        lock (_lock) return _workspace is null || _install is null ? null : (_workspace, _install);
+    }
+
     public void Set(Workspace workspace, GameInstall install)
     {
         lock (_lock) (_workspace, _install) = (workspace, install);

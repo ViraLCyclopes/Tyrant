@@ -178,6 +178,9 @@ namespace Tyrant.Framework
             if (creation == null || nameText == null || closeSource == null) return;
 
             var window = new GameObject("TyrantSkinBrowser", typeof(RectTransform)) { layer = creation.layer };
+            window.SetActive(false); // shown by Open once it is complete
+            try
+            {
             var rect = (RectTransform)window.transform;
             rect.SetParent(creation.transform.parent, false);
             rect.anchorMin = new Vector2(0f, 0f);
@@ -274,13 +277,25 @@ namespace Tyrant.Framework
             Center(_empty);
 
             _window = window;
+            }
+            catch
+            {
+                UnityEngine.Object.Destroy(window); // never leave a half-built window on screen
+                _content = null;
+                throw;
+            }
         }
 
         /// <summary>One cell per visible skin of the current species: its row swatch, cloned bigger, with its name underneath.</summary>
         private static void Fill(object menu)
         {
             if (_content == null) return;
-            foreach (var cell in Cells) if (cell.Root != null) UnityEngine.Object.Destroy(cell.Root);
+            foreach (var cell in Cells)
+                if (cell.Root != null)
+                {
+                    cell.Root.SetActive(false);
+                    UnityEngine.Object.Destroy(cell.Root);
+                }
             Cells.Clear();
             var template = Traverse.Create(menu).Field("templateSkinToggle").GetValue() as Component;
             var nameText = Traverse.Create(menu).Field("skinNameText").GetValue() as Component;
@@ -306,6 +321,10 @@ namespace Tyrant.Framework
                 var util = toggle.GetComponent(ToggleUtil!);
                 var toggleComponent = Traverse.Create(util).Field("ownT").GetValue() as Component ?? toggle.GetComponent(AccessTools.Field(ToggleUtil!, "ownT").FieldType);
                 AccessTools.Field(ToggleUtil!, "toggleGroup").SetValue(util, group);
+                foreach (var eventName in new[] { "OnStateChange", "OnValueOn", "OnValueOff", "OnClickBlind" })
+                    AccessTools.Field(ToggleUtil!, eventName)?.SetValue(util, new UnityEvent()); // the template's events would act on the row
+                if (toggleComponent != null && AccessTools.Property(toggleComponent.GetType(), "onValueChanged") is { CanWrite: true } changed)
+                    changed.SetValue(toggleComponent, Activator.CreateInstance(changed.PropertyType), null);
                 var click = new UnityEvent();
                 var chosen = index;
                 click.AddListener(() => Select(chosen));
@@ -347,7 +366,9 @@ namespace Tyrant.Framework
             var animal = Traverse.Create(menu).Property("CurrentPreviewVirtualAnimal").GetValue();
             var current = animal == null ? -1 : Traverse.Create(animal).Field("skinIdx").GetValue<int>();
             var cell = Cells.FirstOrDefault(c => c.Index == current);
-            if (cell != null) AccessTools.Method(ToggleUtil!, "ToggleOn")?.Invoke(cell.Toggle, new object[] { false });
+            if (cell == null) return;
+            var on = Traverse.Create(Traverse.Create(cell.Toggle).Field("ownT").GetValue()).Property("isOn").GetValue<bool>();
+            if (!on) AccessTools.Method(ToggleUtil!, "ToggleOn")?.Invoke(cell.Toggle, new object[] { false }); // not on every slider tick
         }
 
         /// <summary>Selects a skin as a click on its row swatch would.</summary>
@@ -361,7 +382,6 @@ namespace Tyrant.Framework
                 if (!Traverse.Create(swatch).Property("interactable").GetValue<bool>()) return; // skin choice is off (game setting) or a preview is loading
                 AccessTools.Method(ToggleUtil!, "ToggleOn")?.Invoke(swatch.GetComponent(ToggleUtil!), new object[] { false });
                 AccessTools.Method(menu.GetType(), "SelectSkin", new[] { typeof(int) })?.Invoke(menu, new object[] { index });
-                AccessTools.Method(menu.GetType(), "SetCreationRect", new[] { typeof(bool) })?.Invoke(menu, new object[] { false });
                 NurseryScroll.Ensure(menu, rebuild: true); // scrolls the row to the chosen skin
             }
             catch (Exception ex)

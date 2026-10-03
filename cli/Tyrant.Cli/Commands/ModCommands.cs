@@ -108,7 +108,7 @@ public sealed class ModCheckCommand : Command<ModSettings>
     {
         var (ws, install) = CliServices.OpenWorkspace(settings);
         var mod = ModProject.Open(ws, settings.Id);
-        return ModCli.Print(ModChecker.ForGame(install).Check(mod, ModCli.TryIndex(ws), ModCli.TrySpecies(ws))) ? ExitCodes.Ok : ExitCodes.Error;
+        return ModCli.Print(ModChecker.ForGame(install).Check(mod, ModCli.TryIndex(ws), mod.Manifest.Skins.Count > 0 ? ModCli.TrySpecies(ws) : null)) ? ExitCodes.Ok : ExitCodes.Error;
     }
 }
 
@@ -118,12 +118,13 @@ public sealed class ModRestoreCutoutsCommand : Command<ModSettings>
     {
         var (ws, install) = CliServices.OpenWorkspace(settings);
         var mod = ModProject.Open(ws, settings.Id);
-        var index = ModCli.TryIndex(ws);
-        var restored = index is null ? [] : new CutoutRestorer(Cutouts.GamePixels(install, new BundleAssetReader())).Restore(mod, index, ModCli.TrySpecies(ws));
-        if (restored.Count == 0) Console.WriteLine("No colour PNGs need their see-through parts restored.");
-        foreach (var file in restored) Console.WriteLine($"  restored  {Path.Combine(mod.Dir, file)}");
-        if (restored.Count > 0) Console.WriteLine($"Install again to update the game: 'tyrant mod install {mod.Id}'.");
-        return ExitCodes.Ok;
+        var index = CliServices.LoadIndex(ws, install); // errors when there is no index: the game textures would be unknown
+        var result = new CutoutRestorer(Cutouts.GamePixels(install, new BundleAssetReader())).Restore(mod, index, ModCli.TrySpecies(ws));
+        foreach (var file in result.Restored) Console.WriteLine($"  restored  {Path.Combine(mod.Dir, file.Replace('/', Path.DirectorySeparatorChar))}");
+        foreach (var problem in result.Problems) Console.WriteLine($"  WARN      {problem}");
+        if (result.Restored.Count == 0 && result.Problems.Count == 0) Console.WriteLine("No colour PNGs need their see-through parts restored.");
+        if (result.Restored.Count > 0) Console.WriteLine($"Install again to update the game: 'tyrant mod install {mod.Id}'.");
+        return result.Problems.Count == 0 ? ExitCodes.Ok : ExitCodes.Partial;
     }
 }
 
@@ -140,12 +141,12 @@ public sealed class ModInstallCommand : Command<ModInstallCommand.Settings>
     {
         var (ws, install) = CliServices.OpenWorkspace(settings);
         var mod = ModProject.Open(ws, settings.Id);
-        if (!ModCli.Print(ModChecker.ForGame(install).Check(mod, ModCli.TryIndex(ws), ModCli.TrySpecies(ws))))
+        if (!ModCli.Print(ModChecker.ForGame(install).Check(mod, ModCli.TryIndex(ws), mod.Manifest.Skins.Count > 0 ? ModCli.TrySpecies(ws) : null)))
         {
             Console.WriteLine("Fix the errors above, then install again.");
             return ExitCodes.Error;
         }
-        var launcher = new SteamLauncher();
+        var launcher = CliServices.Launcher;
         var componentDir = Path.Combine(AppContext.BaseDirectory, "dumper");
         if (ModLoaderInstaller.FrameworkStatus(install, componentDir) != FrameworkState.Current)
         {
@@ -170,7 +171,7 @@ public sealed class ModRemoveCommand : Command<ModSettings>
     public override int Execute(CommandContext context, ModSettings settings)
     {
         var (_, install) = CliServices.OpenWorkspace(settings);
-        new GameMods(new SteamLauncher().IsRunning).Remove(install, settings.Id);
+        new GameMods(CliServices.Launcher.IsRunning).Remove(install, settings.Id);
         Console.WriteLine($"Removed '{settings.Id}' from the game.");
         return ExitCodes.Ok;
     }
@@ -266,7 +267,7 @@ public sealed class ModAddSkinCommand : Command<ModAddSkinCommand.Settings>
         Console.WriteLine($"Added skin '{entry.Name}' ({entry.Key(mod.Id)}) based on '{entry.Base}':");
         foreach (var (sex, files) in new[] { ("male", entry.Male), ("female", entry.Female) })
             if (files is not null)
-                foreach (var (slot, file) in files) Console.WriteLine($"  {sex,-6} {slot,-8} {Path.Combine(mod.Dir, file)}");
+                foreach (var (slot, file) in files) Console.WriteLine($"  {sex,-6} {slot,-8} {Path.Combine(mod.Dir, file.Replace('/', Path.DirectorySeparatorChar))}");
         Console.WriteLine($"Edit those PNGs, then 'tyrant mod check {mod.Id}' and 'tyrant mod install {mod.Id}'.");
         return ExitCodes.Ok;
     }
@@ -284,7 +285,7 @@ public sealed class ModCleanSkinsCommand : Command<ModCleanSkinsCommand.Settings
     public override int Execute(CommandContext context, Settings settings)
     {
         var (_, install) = CliServices.OpenWorkspace(settings);
-        var slots = new SkinSlots(new SteamLauncher().IsRunning);
+        var slots = new SkinSlots(CliServices.Launcher.IsRunning);
         if (settings.Forget.Length > 0)
         {
             Console.WriteLine($"Forgot {slots.Forget(install, settings.Forget)} skin number(s). Saved animals that wore them show their species' skin 0 until a new skin takes the number.");

@@ -195,4 +195,28 @@ public class JobManagerTests
         Assert.Equal(RpcErrorCodes.InternalError, failed.Error.Code);
         Assert.Contains(logged, l => l.Contains("cannot serialize the result"));
     }
+
+    [Fact]
+    public void Current_reports_the_running_job_and_its_latest_progress_until_it_ends()
+    {
+        var jobs = new JobManager((_, _) => { }) { ProgressInterval = TimeSpan.Zero };
+        using var reported = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+
+        var started = jobs.Start("Decompile code", (progress, _) =>
+        {
+            progress.Report(new JobProgress(0.4, "Decompiling Assembly-CSharp"));
+            reported.Set();
+            release.Wait(TimeSpan.FromSeconds(10));
+            return 1;
+        });
+        Assert.True(reported.Wait(TimeSpan.FromSeconds(10)));
+
+        var current = jobs.Current();
+
+        Assert.Equal((started.JobId, "Decompile code", 0.4, "Decompiling Assembly-CSharp"), (current!.JobId, current.Title, current.Fraction, current.Message));
+        release.Set();
+        Idle(jobs);
+        Assert.Null(jobs.Current());
+    }
 }

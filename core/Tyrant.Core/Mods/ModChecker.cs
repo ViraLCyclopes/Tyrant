@@ -75,6 +75,8 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
             {
                 var target = species.FirstOrDefault(s => string.Equals(s.SpeciesId, skin.Species, StringComparison.OrdinalIgnoreCase));
                 if (target is null) errors.Add($"{key}: species \"{skin.Species}\" is not in the game data.");
+                else if (!string.Equals(target.SpeciesId, skin.Species, StringComparison.Ordinal))
+                    errors.Add($"{key}: species \"{skin.Species}\" must be written \"{target.SpeciesId}\" (the game matches the exact spelling).");
                 else
                 {
                     based = int.TryParse(skin.Base, out var number) ? target.Skins.FirstOrDefault(s => s.Index == number)
@@ -109,7 +111,7 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
     {
         var missing = new List<string>();
         var vanillaShare = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
-        foreach (var (file, vanilla) in Cutouts.Targets(mod, index, species).DistinctBy(t => t.File, StringComparer.OrdinalIgnoreCase))
+        foreach (var (file, vanillas) in Cutouts.ByFile(mod, index, species))
         {
             var path = Path.GetFullPath(Path.Combine(mod.Dir, file));
             if (!ModPaths.IsInside(path, mod.Dir) || !File.Exists(path)) continue;
@@ -124,10 +126,16 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
                 continue; // already reported as unreadable
             }
             if (share >= Cutouts.Lost) continue;
-            var key = vanilla.Guid ?? $"{vanilla.Bundle}#{vanilla.PathId}";
-            if (!vanillaShare.TryGetValue(key, out var original))
-                vanillaShare[key] = original = pixelsOf!(vanilla) is { } pixels ? Cutouts.SeeThrough(pixels.Data) : 0;
-            if (original < Cutouts.UsesCutouts) continue;
+            AssetRecord? vanilla = null;
+            var original = 0.0;
+            foreach (var candidate in vanillas) // the one with the most cutouts decides
+            {
+                var key = candidate.Guid ?? $"{candidate.Bundle}#{candidate.PathId}";
+                if (!vanillaShare.TryGetValue(key, out var candidateShare))
+                    vanillaShare[key] = candidateShare = pixelsOf!(candidate) is { } pixels ? Cutouts.SeeThrough(pixels.Data) : 0;
+                if (candidateShare > original) (vanilla, original) = (candidate, candidateShare);
+            }
+            if (vanilla is null || original < Cutouts.UsesCutouts) continue;
             missing.Add(file);
             warnings.Add($"{file} has no see-through pixels, but {vanilla.Name} cuts feathers or hair out with them ({original:P0} of it is see-through): " +
                          "in game those parts would show as solid shapes. Keep the alpha channel when saving, or use Restore cutouts.");
@@ -141,13 +149,18 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
         var path = Path.GetFullPath(Path.Combine(mod.Dir, file));
         if (!ModPaths.IsInside(path, mod.Dir)) { errors.Add($"{label}: \"{file}\" points outside the mod folder."); return null; }
         if (!File.Exists(path)) { errors.Add($"{label}: {file} is missing."); return null; }
-        if (!HasPngSignature(path)) { errors.Add($"{label}: {file} is not a PNG (other image formats are not supported in game)."); return null; }
         try
         {
+            if (!HasPngSignature(path)) { errors.Add($"{label}: {file} is not a PNG (other image formats are not supported in game)."); return null; }
             using var stream = File.OpenRead(path);
             return ImageResult.FromStream(stream, ColorComponents.RedGreenBlueAlpha);
         }
-        catch (Exception ex) when (ex is InvalidOperationException or IOException or ArgumentException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            errors.Add($"{label}: {file} could not be read ({ex.Message}); is it open in another program?");
+            return null;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
         {
             errors.Add($"{label}: {file} is not a readable PNG.");
             return null;
@@ -161,27 +174,31 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
         {
             var key = skin.Key(mod.Id);
             var based = species is null ? null : BaseSkin(species, skin);
-            foreach (var (sex, files, textures) in new[] { ("male", skin.Male, based?.Male), ("female", skin.Female, based?.Female) })
+            foreach (var (sex, ownFiles, textures) in new[] { ("male", skin.Male, based?.Male), ("female", skin.Female, based?.Female) })
             {
-                if (files is null) continue;
-                if (skin.Colors?.Pattern is not null)
+                // A sex without its own files still wears the skin (the base skin's textures) and gets its pattern colours.
+                var files = ownFiles ?? new Dictionary<string, string>();
+                foreach (var (patternSlot, extraSlot) in new[] { ("pattern", "extra"), ("infantPattern", "infantExtra") })
                 {
-                    var pattern = files.TryGetValue("pattern", out var patternFile) ? Decode(mod, patternFile) : Vanilla(index, textures, "pattern");
-                    if (pattern is not null && Share(pattern, p => p.R > 10) < 0.001)
-                        warnings.Add($"{key} {sex}: colors.pattern is set, but the pattern map has no red anywhere, so the pattern colours would never show. Paint red where they should go.");
-                }
-                if (files.TryGetValue("extra", out var extraFile) && Decode(mod, extraFile) is { } extra && Vanilla(index, textures, "extra") is { } original)
-                {
-                    var wrong = 0;
-                    for (var y = 0; y < extra.Height; y++)
-                    for (var x = 0; x < extra.Width; x++)
+                    if (skin.Colors?.Pattern is not null)
                     {
-                        var o = original.Data[((y * original.Height / extra.Height) * original.Width + x * original.Width / extra.Width) * 4];
-                        if (extra.Data[(y * extra.Width + x) * 4] > 230 && o <= 230) wrong++;
+                        var pattern = files.TryGetValue(patternSlot, out var patternFile) ? Decode(mod, patternFile) : Vanilla(index, textures, patternSlot);
+                        if (pattern is not null && Share(pattern, p => p.R > 10) < 0.001)
+                            warnings.Add($"{key} {sex}: colors.pattern is set, but the {patternSlot} map has no red anywhere, so the pattern colours would never show there. Paint red where they should go.");
                     }
-                    var share = (double)wrong / (extra.Width * extra.Height);
-                    if (share > 0.005)
-                        warnings.Add($"{key} {sex}: {extraFile} is brighter than 90% red outside the base skin's eyes ({share:P1} of it): the game colours those parts as eyes. Keep skin below 230 in the red channel.");
+                    if (files.TryGetValue(extraSlot, out var extraFile) && Decode(mod, extraFile) is { } extra && Vanilla(index, textures, extraSlot) is { } original)
+                    {
+                        var wrong = 0;
+                        for (var y = 0; y < extra.Height; y++)
+                        for (var x = 0; x < extra.Width; x++)
+                        {
+                            var o = original.Data[((y * original.Height / extra.Height) * original.Width + x * original.Width / extra.Width) * 4];
+                            if (extra.Data[(y * extra.Width + x) * 4] > 230 && o <= 230) wrong++;
+                        }
+                        var share = (double)wrong / (extra.Width * extra.Height);
+                        if (share > 0.005)
+                            warnings.Add($"{key} {sex}: {extraFile} is brighter than 90% red outside the base skin's eyes ({share:P1} of it): the game colours those parts as eyes. Keep skin below 230 in the red channel.");
+                    }
                 }
             }
         }

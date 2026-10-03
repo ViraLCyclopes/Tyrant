@@ -13,8 +13,12 @@ public sealed class AssetsIndexCommand : Command<WorkspaceSettings>
         var bundles = index.Assets.Select(a => a.Bundle).Distinct().Count();
         Console.WriteLine($"Indexed {index.Assets.Count} assets in {bundles} bundles -> {AssetIndex.PathIn(ws)}");
         if (index.MissingBundles.Count > 0)
-            Console.WriteLine($"  {index.MissingBundles.Count} bundles listed in the catalog are not downloaded "
-                              + "(DLC: if you own it, enable it in Steam > Properties > DLC, then re-run this).");
+        {
+            Console.WriteLine($"  {index.MissingBundles.Count} bundle(s) listed in the game's catalog are not on disk. Usually that is DLC that is not "
+                              + "downloaded (enable it in Steam > Properties > DLC, then re-run this); otherwise verify the game files in Steam.");
+            foreach (var bundle in index.MissingBundles.Take(5)) Console.WriteLine($"    {bundle}");
+            if (index.MissingBundles.Count > 5) Console.WriteLine($"    ... and {index.MissingBundles.Count - 5} more");
+        }
         foreach (var warning in index.Warnings)
             Console.WriteLine($"  WARNING  {warning}");
         foreach (var failure in index.Failures.Take(10))

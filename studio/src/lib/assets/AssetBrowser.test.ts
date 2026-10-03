@@ -111,4 +111,12 @@ describe('AssetBrowser', () => {
 
     await waitFor(() => expect(session.notice).toContain('click Index assets'));
   });
+
+  it('says when bundles were downloaded since the last index', async () => {
+    const { rpc, session } = setup();
+    rpc.on('assets.summary', () => ({ assets: 5, bundles: 4, groups: [], types: [], warnings: [], failures: 0, missingBundles: 2, newBundles: 2, stale: false }));
+    renderWith(AssetBrowser, session);
+
+    expect(await screen.findByText(/2 bundles were downloaded since the last index/)).toBeInTheDocument();
+  });
 });

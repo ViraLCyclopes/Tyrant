@@ -81,6 +81,10 @@ public class DataMethodsTests
 
         Assert.Empty(Names(result));
         Assert.Equal(3, result.GetProperty("total").GetInt32());
+        var absurd = await h.Call("data.query", new { type = "AnimalData", page = int.MaxValue, pageSize = 500 }); // page * pageSize must not overflow
+        Assert.Empty(Names(absurd));
+        var localization = await h.Call("data.localization", new { page = int.MaxValue, pageSize = 500 });
+        Assert.Equal(0, localization.GetProperty("rows").GetArrayLength());
     }
 
     [Fact]

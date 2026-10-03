@@ -5,11 +5,15 @@
 
   const session = getSession();
   let orphans = $state<OrphanSkinRow[] | null>(null);
+  let unreadable = $state<string | null>(null);
   let chosen = $state<string[]>([]);
 
   onMount(async () => {
-    const r = await session.quietly(() => session.rpc.call('mods.skinSlots'));
-    orphans = r?.orphans ?? [];
+    try {
+      orphans = (await session.rpc.call('mods.skinSlots')).orphans;
+    } catch (e) {
+      unreadable = e instanceof Error ? e.message : String(e); // not "nothing to clean up": the file could not be read
+    }
   });
 
   function toggle(key: string, on: boolean) {
@@ -29,12 +33,14 @@
 
 <section aria-label="Clean up skin numbers">
   <h3>Clean up skin numbers</h3>
-  {#if orphans && orphans.length === 0}
+  {#if unreadable}
+    <p class="warn">The skin numbers could not be read: {unreadable}</p>
+  {:else if orphans && orphans.length === 0}
     <p class="hint">No skin numbers to clean up: every added skin's mod is installed.</p>
   {:else if orphans}
     <p class="hint">These skins' mods are no longer installed. Forget them to let new skins reuse their numbers.</p>
     <ul class="orphans">
-      {#each orphans as orphan (orphan.key)}
+      {#each orphans as orphan (orphan.species + '|' + orphan.key)}
         <li>
           <label>
             <input type="checkbox" aria-label="Forget {orphan.key}" checked={chosen.includes(orphan.key)} onchange={(e) => toggle(orphan.key, e.currentTarget.checked)} />

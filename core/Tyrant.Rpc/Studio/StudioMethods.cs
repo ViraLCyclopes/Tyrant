@@ -44,6 +44,10 @@ public sealed class StudioMethods(StudioSession session, JobManager jobs)
     [RpcMethod("workspace.open")]
     public WorkspaceStatus Open(WorkspaceOpenParams p)
     {
+        // The app reloaded while a job runs on this folder: keep the copy the job stamps, or its results would be lost.
+        if (jobs.Current() is not null && session.TryCurrent() is { } open
+            && string.Equals(PathGuard.Normalize(open.Workspace.Dir), PathGuard.Normalize(p.Dir), StringComparison.OrdinalIgnoreCase))
+            return StatusOf(open.Workspace, open.Install, Options.DumperDir);
         var (ws, install, repointed) = WorkspaceOpener.Open(p.Dir, p.GamePath, Options.Locator);
         session.Set(ws, install);
         if (repointed) session.Log($"The workspace now points at {install.RootDir}.");
@@ -157,9 +161,15 @@ public sealed class StudioMethods(StudioSession session, JobManager jobs)
             text.AppendLine($"Build: {fingerprint.BuildGuid}, Assembly-CSharp SHA-256 {fingerprint.AssemblySha256}");
             text.AppendLine($"Workspace: {ws.Dir}");
             var stale = ws.StaleOutputs(fingerprint);
-            foreach (var (name, stamp) in ws.Data.Outputs.OrderBy(kv => kv.Key, StringComparer.Ordinal))
+            foreach (var (name, stamp) in ws.Outputs().OrderBy(kv => kv.Key, StringComparer.Ordinal))
                 text.AppendLine($"  {name}: {stamp.CreatedUtc:yyyy-MM-dd HH:mm} UTC{(stale.Contains(name) ? " (stale)" : "")}");
             text.AppendLine($"Dumper: {ModLoaderInstaller.GetState(install)}");
+            if (DumpManifestFile.TryRead(Path.Combine(ws.DataDir, "manifest.json")) is { } dump)
+            {
+                text.AppendLine($"Data dump: {dump.CreatedUtc}, build {dump.BuildGuid}, dumper {dump.DumperVersion}, {dump.Counts.Values.Sum()} objects, {dump.Errors.Count} error(s)");
+                foreach (var error in dump.Errors.Take(30)) text.AppendLine($"  {error}");
+                if (dump.Errors.Count > 30) text.AppendLine($"  ... and {dump.Errors.Count - 30} more (data/manifest.json)");
+            }
             AppendTail(text, "Studio log", Path.Combine(ws.LogsDir, StudioSession.LogFileName));
             AppendTail(text, "MelonLoader log", ModLoaderInstaller.LogPath(install));
         }
@@ -174,7 +184,7 @@ public sealed class StudioMethods(StudioSession session, JobManager jobs)
     {
         var current = GameFingerprint.Compute(install);
         var stale = ws.StaleOutputs(current);
-        var outputs = ws.Data.Outputs.OrderBy(kv => kv.Key, StringComparer.Ordinal)
+        var outputs = ws.Outputs().OrderBy(kv => kv.Key, StringComparer.Ordinal)
             .Select(kv => new OutputStatus(kv.Key, kv.Value.CreatedUtc, stale.Contains(kv.Key)))
             .ToList();
         return new WorkspaceStatus(ws.Dir, install.RootDir, install.SteamAppId, current.BuildGuid, stale.Count > 0, outputs,

@@ -28,13 +28,27 @@ public sealed class AssetIndex
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     private static readonly Regex GuidPattern = new("^[0-9a-f]{32}$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-    public int SchemaVersion { get; set; } = 2;
+    /// <summary>The index format this Tyrant writes (2: materials' archive map).</summary>
+    public const int CurrentSchemaVersion = 2;
+
+    public int SchemaVersion { get; set; } = CurrentSchemaVersion;
+
+    /// <summary>Made by an older Tyrant: it works, but newer features (e.g. textured previews) need a fresh index.</summary>
+    [JsonIgnore]
+    public bool IsOutdatedFormat => SchemaVersion < CurrentSchemaVersion;
     public GameFingerprint? Fingerprint { get; set; }
     public List<AssetRecord> Assets { get; set; } = [];
     public List<IndexFailure> Failures { get; set; } = [];
 
     /// <summary>Bundles the catalog lists that are not on disk (e.g. DLC that is not downloaded).</summary>
     public List<string> MissingBundles { get; set; } = [];
+
+    /// <summary>Bundles that were missing when this index was made and are on disk now (DLC downloaded since): re-index to include them.</summary>
+    public List<string> NowDownloaded(GameInstall install)
+    {
+        var aa = AssetSession.AaDirOf(install);
+        return MissingBundles.Where(rel => File.Exists(Path.Combine(aa, rel.Replace('/', Path.DirectorySeparatorChar)))).ToList();
+    }
 
     /// <summary>Problems that degraded the index without stopping it (e.g. an unreadable catalog, so no GUIDs).</summary>
     public List<string> Warnings { get; set; } = [];
@@ -68,11 +82,13 @@ public sealed class AssetIndex
 
     public static AssetIndex Load(string path)
     {
-        if (!File.Exists(path)) throw Missing("No asset index yet. Run 'tyrant assets index' first.");
+        if (!File.Exists(path)) throw Missing("No asset index yet. Index the assets first (Home → Index assets, or 'tyrant assets index').");
         try
         {
             using var stream = File.OpenRead(path);
-            var index = JsonSerializer.Deserialize<AssetIndex>(stream, Json) ?? throw Missing("The asset index is empty. Run 'tyrant assets index' again.");
+            var index = JsonSerializer.Deserialize<AssetIndex>(stream, Json) ?? throw Missing("The asset index is empty. Index the assets again (Home → Index assets, or 'tyrant assets index').");
+            if (index.SchemaVersion > CurrentSchemaVersion)
+                throw Missing($"The asset index was made by a newer Tyrant (format {index.SchemaVersion}). Update Tyrant, or index the assets again (Home → Index assets, or 'tyrant assets index').");
             index.Assets ??= [];
             index.Failures ??= [];
             index.MissingBundles ??= [];
@@ -81,7 +97,7 @@ public sealed class AssetIndex
             foreach (var (name, bundle) in index.Archives ?? []) if (bundle is not null) archives.TryAdd(name, bundle);
             index.Archives = archives;
             if (index.Assets.Any(a => a is null || a.Bundle is null || a.Type is null || a.Name is null))
-                throw Missing("The asset index is corrupt (incomplete records). Run 'tyrant assets index' again.");
+                throw Missing("The asset index is corrupt (incomplete records). Index the assets again (Home → Index assets, or 'tyrant assets index').");
             index.Failures.RemoveAll(f => f is null);
             index.MissingBundles.RemoveAll(b => b is null);
             index.Warnings.RemoveAll(w => w is null);
@@ -89,7 +105,7 @@ public sealed class AssetIndex
         }
         catch (JsonException ex)
         {
-            throw Missing($"The asset index is corrupt ({ex.Message}). Run 'tyrant assets index' again.", ex);
+            throw Missing($"The asset index is corrupt ({ex.Message}). Index the assets again (Home → Index assets, or 'tyrant assets index').", ex);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -124,10 +140,10 @@ public sealed class AssetIndex
         return matches.Count switch
         {
             0 => throw new TyrantException(TyrantErrorCode.AssetNotFound,
-                $"No asset matches '{key}'{(type is null ? "" : $" with type {type}")}. Use 'tyrant assets list --filter <text>' to search."),
+                $"No asset matches '{key}'{(type is null ? "" : $" with type {type}")}. Search for it in the Assets tab (or 'tyrant assets list --filter <text>')."),
             1 => matches[0],
             _ => throw new TyrantException(TyrantErrorCode.AssetAmbiguous,
-                $"'{key}' matches several assets; pass --type or use one of these refs:{Environment.NewLine}"
+                $"'{key}' matches {matches.Count} assets; pass --type or use one of these refs{(matches.Count > 10 ? " (first 10)" : "")}:{Environment.NewLine}"
                 + string.Join(Environment.NewLine, matches.Take(10).Select(a => $"  {a.Type,-16} {a.Ref}"))),
         };
     }

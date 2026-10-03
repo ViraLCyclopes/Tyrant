@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using Tyrant.Core.Decompile;
+using Tyrant.Core.Errors;
 using Spectre.Console.Cli;
 
 namespace Tyrant.Cli.Commands;
@@ -26,6 +27,8 @@ public sealed class DecompileCommand : Command<DecompileCommand.Settings>
             var result = new DecompileService().DecompileGame(install, ws, names, new ConsoleProgress(), cts.Token);
             foreach (var r in result.Assemblies)
                 Console.WriteLine(r.Success ? $"  ok    {r.AssemblyName} -> {r.OutputDir}" : $"  FAIL  {r.AssemblyName}: {r.Error}");
+            if (result.Assemblies.Count > 0 && result.Assemblies.All(r => !r.Success))
+                throw new TyrantException(TyrantErrorCode.DecompileFailed, "No assembly could be decompiled; see the FAIL lines above.");
             return result.AllSucceeded ? ExitCodes.Ok : ExitCodes.Partial;
         }
         catch (OperationCanceledException)

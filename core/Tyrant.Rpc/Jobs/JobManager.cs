@@ -16,6 +16,11 @@ public sealed record JobDoneNotification(string JobId, object? Result);
 
 public sealed record JobFailedNotification(string JobId, RpcErrorObject Error);
 
+/// <summary>The running job, for a UI that reloaded and lost track of it.</summary>
+public sealed record JobInfo(string JobId, string Title, double Fraction, string Message);
+
+public sealed record JobCurrentResult(JobInfo? Job);
+
 /// <summary>
 /// Runs one long operation at a time in the background. The caller gets a job id at once; progress and the result
 /// or error follow as job.progress / job.done / job.failed notifications.
@@ -32,6 +37,8 @@ public sealed class JobManager(Action<string, object> notify, Action<string>? lo
         public string Title { get; } = title;
         public CancellationTokenSource Cancellation { get; } = new();
         public Task Task { get; set; } = Task.CompletedTask;
+        public double Fraction { get; set; }
+        public string Message { get; set; } = "Starting…";
     }
 
     private readonly Action<string, object> _notify = notify;
@@ -45,6 +52,12 @@ public sealed class JobManager(Action<string, object> notify, Action<string>? lo
     public string? RunningJobId
     {
         get { lock (_lock) return _running?.Id; }
+    }
+
+    /// <summary>The running job with its latest progress, or null.</summary>
+    public JobInfo? Current()
+    {
+        lock (_lock) return _running is { } job ? new JobInfo(job.Id, job.Title, job.Fraction, job.Message) : null;
     }
 
     public JobStarted Start<T>(string title, Func<IProgress<JobProgress>, CancellationToken, T> work)
@@ -93,7 +106,7 @@ public sealed class JobManager(Action<string, object> notify, Action<string>? lo
         object notification;
         try
         {
-            var result = work(new ThrottledProgress(this, job.Id), job.Cancellation.Token);
+            var result = work(new ThrottledProgress(this, job), job.Cancellation.Token);
             (method, notification) = (DoneMethod, new JobDoneNotification(job.Id, result));
             log?.Invoke($"Job '{job.Title}' ({job.Id}) finished.");
         }
@@ -122,12 +135,14 @@ public sealed class JobManager(Action<string, object> notify, Action<string>? lo
         }
     }
 
-    private sealed class ThrottledProgress(JobManager owner, string jobId) : IProgress<JobProgress>
+    private sealed class ThrottledProgress(JobManager owner, RunningJob job) : IProgress<JobProgress>
     {
         private long _lastTicks = long.MinValue;
 
         public void Report(JobProgress value)
         {
+            lock (owner._lock) (job.Fraction, job.Message) = (Math.Clamp(value.Fraction, 0, 1), value.Message); // for Current(), even when throttled
+            var jobId = job.Id;
             var now = Environment.TickCount64;
             var due = _lastTicks == long.MinValue || now - _lastTicks >= (long)owner.ProgressInterval.TotalMilliseconds;
             if (value.Fraction < 1 && !due) return;

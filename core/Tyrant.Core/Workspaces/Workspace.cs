@@ -12,7 +12,7 @@ public sealed class Workspace
     /// <summary>Workspace file name before the toolkit was renamed to Tyrant; renamed on open.</summary>
     public const string LegacyFileName = "pkws.json";
 
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { WriteIndented = true };
+    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { WriteIndented = true, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
     private Workspace(string dir, WorkspaceFile data)
     {
@@ -34,7 +34,7 @@ public sealed class Workspace
         EnsureOutsideGame(full, install.RootDir);
         if (File.Exists(Path.Combine(full, FileName)))
             throw new TyrantException(TyrantErrorCode.WorkspaceInvalid,
-                $"'{full}' is already a workspace. Use 'tyrant workspace status' or choose an empty folder.",
+                $"'{full}' is already a workspace. Open it instead (Home → Open workspace…, or 'tyrant workspace status'), or choose an empty folder.",
                 FixAction.PickWorkspaceFolder);
 
         var ws = new Workspace(full, new WorkspaceFile
@@ -72,7 +72,7 @@ public sealed class Workspace
             }
         }
         if (!File.Exists(file))
-            throw Invalid($"'{full}' is not a workspace (no {FileName}). Run 'tyrant workspace init' first.");
+            throw Invalid($"'{full}' is not a workspace (no {FileName}). Create one first (Home → New workspace…, or 'tyrant workspace init').");
         WorkspaceFile? data;
         try
         {
@@ -110,15 +110,27 @@ public sealed class Workspace
         }
     }
 
+    private readonly object _outputsLock = new();
+
+    /// <summary>A copy of the output stamps: safe to read while a job is stamping outputs on another thread.</summary>
+    public IReadOnlyDictionary<string, OutputStamp> Outputs()
+    {
+        lock (_outputsLock) return new Dictionary<string, OutputStamp>(Data.Outputs);
+    }
+
     public void StampOutput(string name, GameFingerprint fingerprint)
     {
-        Data.Outputs[name] = new OutputStamp(fingerprint, DateTimeOffset.UtcNow);
-        Save();
+        lock (_outputsLock)
+        {
+            Data.Outputs[name] = new OutputStamp(fingerprint, DateTimeOffset.UtcNow);
+            Save();
+        }
     }
 
     public void RemoveOutput(string name)
     {
-        if (Data.Outputs.Remove(name)) Save();
+        lock (_outputsLock)
+            if (Data.Outputs.Remove(name)) Save();
     }
 
     /// <summary>Points the workspace at a (moved) game install.</summary>
@@ -129,16 +141,14 @@ public sealed class Workspace
     }
 
     public IReadOnlyList<string> StaleOutputs(GameFingerprint current) =>
-        Data.Outputs.Where(kv => kv.Value.Fingerprint != current).Select(kv => kv.Key).Order().ToList();
+        Outputs().Where(kv => kv.Value.Fingerprint != current).Select(kv => kv.Key).Order().ToList();
 
     /// <summary>True when any generated output came from a different game build than <paramref name="current"/>.</summary>
     public bool IsStale(GameFingerprint current) => StaleOutputs(current).Count > 0;
 
     internal static void EnsureOutsideGame(string fullDir, string gameRoot)
     {
-        var game = Path.TrimEndingDirectorySeparator(Path.GetFullPath(gameRoot)) + Path.DirectorySeparatorChar;
-        var candidate = fullDir + Path.DirectorySeparatorChar;
-        if (candidate.StartsWith(game, StringComparison.OrdinalIgnoreCase))
+        if (PathGuard.IsInside(fullDir, gameRoot))
             throw new TyrantException(TyrantErrorCode.WorkspaceInGameFolder,
                 $"The workspace must not be inside the game folder ('{gameRoot}'). Mods and tools never write game files.",
                 FixAction.PickWorkspaceFolder);

@@ -18,7 +18,7 @@ public static class FieldJsonWriter
     public static string ToJson(AssetTypeValueField field, int? maxArrayElements = null)
     {
         using var stream = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true }))
+        using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }))
             Write(writer, field, maxArrayElements);
         return Encoding.UTF8.GetString(stream.ToArray());
     }

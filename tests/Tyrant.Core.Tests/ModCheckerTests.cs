@@ -214,4 +214,33 @@ public class ModCheckerTests
         Assert.True(noDump.Ok);
         Assert.Contains(noDump.Warnings, w => w.Contains("Run data dump"));
     }
+
+    [Fact]
+    public void A_png_locked_by_another_program_is_an_error_not_a_crash()
+    {
+        var (game, _, mod) = Setup();
+        using var _ = game;
+        Png(mod, "d.png", 4, _ => (1, 2, 3, 255));
+        Entry(mod, "T_Carch_D", "textures/d.png");
+
+        using (new FileStream(Path.Combine(mod.Dir, "textures", "d.png"), FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            var result = Checker.Check(mod, Index);
+
+            Assert.Contains(result.Errors, e => e.Contains("d.png") && e.Contains("could not be read"));
+        }
+    }
+
+    [Fact]
+    public void A_species_written_in_the_wrong_case_is_an_error_that_names_the_right_spelling()
+    {
+        var (game, _, mod) = Setup();
+        using var _ = game;
+        SkinPng(mod, "skins/red-spot/m.png");
+        Skin(mod, "carcharodontosaurus", "Alt 1", "skins/red-spot/m.png");
+
+        var result = Checker.Check(mod, SkinDumps.Index(), Species());
+
+        Assert.Contains(result.Errors, e => e.Contains("\"Carcharodontosaurus\""));
+    }
 }

@@ -245,4 +245,39 @@ public class DumpRunnerTests
         Assert.False(File.Exists(old));
         Assert.Empty(LeftoverDumpFolders(ws));
     }
+
+    /// <summary>Like FakePluginLauncher, but keeps a file of the new dump open so it cannot be moved into place.</summary>
+    private sealed class LockingPluginLauncher : IGameLauncher, IDisposable
+    {
+        private FileStream? _lock;
+
+        public bool IsRunning(GameInstall install) => false;
+
+        public void Launch(GameInstall install)
+        {
+            new FakePluginLauncher(1).Launch(install);
+            var output = JsonDocument.Parse(File.ReadAllText(DumpRunner.RequestPath(install))).RootElement.GetProperty("outputDir").GetString()!;
+            _lock = new FileStream(Path.Combine(output, "manifest.json"), FileMode.Open, FileAccess.Read, FileShare.Read);
+        }
+
+        public void Dispose() => _lock?.Dispose();
+    }
+
+    [Fact]
+    public void A_dump_that_cannot_be_moved_into_place_keeps_the_previous_data()
+    {
+        using var game = new FakeGame();
+        var install = Installed(game);
+        var ws = Workspace.Create(TempDir(), install);
+        Directory.CreateDirectory(ws.DataDir);
+        File.WriteAllText(Path.Combine(ws.DataDir, "previous.txt"), "old dump");
+        using var launcher = new LockingPluginLauncher();
+
+        var ex = Assert.Throws<TyrantException>(() => new DumpRunner(launcher, moveAttempts: 2).Run(install, ws, TimeSpan.FromSeconds(30), null, CancellationToken.None));
+
+        Assert.Equal(TyrantErrorCode.DumpFailed, ex.Code);
+        Assert.Contains("previous", ex.Message);
+        Assert.True(File.Exists(Path.Combine(ws.DataDir, "previous.txt")));
+        Assert.DoesNotContain(LeftoverDumpFolders(ws), n => n.StartsWith("data.old-", StringComparison.OrdinalIgnoreCase));
+    }
 }

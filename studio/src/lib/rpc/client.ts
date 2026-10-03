@@ -47,10 +47,18 @@ export interface JobHandle<M extends JobMethod> {
   cancel(): Promise<void>;
 }
 
+/** A job the UI did not start itself (it was running before a reload). */
+export interface AttachedJob {
+  readonly id: string;
+  readonly done: Promise<unknown>;
+  cancel(): Promise<void>;
+}
+
 /** What the UI uses: RpcClient in the app, a fake in component tests. */
 export interface Rpc {
   call<M extends MethodName>(method: M, ...args: CallArgs<M>): Promise<ResultOf<M>>;
   job<M extends JobMethod>(method: M, params: ParamsOf<M>, onProgress?: ProgressHandler): Promise<JobHandle<M>>;
+  attachJob(jobId: string, onProgress?: ProgressHandler): AttachedJob;
   onCoreExit(handler: (info: ExitInfo) => void): void;
   onCoreStarted(handler: () => void): void;
 }
@@ -112,9 +120,14 @@ export class RpcClient implements Rpc {
 
   async job<M extends JobMethod>(method: M, params: ParamsOf<M>, onProgress?: ProgressHandler): Promise<JobHandle<M>> {
     const { jobId } = (await this.request(method, params)) as { jobId: string };
+    const watched = this.attachJob(jobId, onProgress);
+    return { id: jobId, done: watched.done as Promise<JobResultOf<M>>, cancel: watched.cancel };
+  }
+
+  attachJob(jobId: string, onProgress?: ProgressHandler): AttachedJob {
     let waiter!: JobWaiter;
-    const done = new Promise<JobResultOf<M>>((resolve, reject) => {
-      waiter = { resolve: resolve as (value: unknown) => void, reject, onProgress };
+    const done = new Promise<unknown>((resolve, reject) => {
+      waiter = { resolve, reject, onProgress };
     });
     this.jobs.set(jobId, waiter);
     const early = this.early.get(jobId) ?? [];

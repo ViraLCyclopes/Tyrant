@@ -74,7 +74,11 @@ public sealed class DecompileService
             }
             var result = DecompileAssembly(path, [install.ManagedDir], Path.Combine(ws.SourceDir, name), ct);
             results.Add(result);
-            if (result.Success) ws.StampOutput(SourceOutputName(name), fingerprint);
+            if (result.Success)
+            {
+                ws.StampOutput(SourceOutputName(name), fingerprint);
+                WriteOutputStamp(result.OutputDir!, SourceOutputName(name), fingerprint);
+            }
             else ws.RemoveOutput(SourceOutputName(name)); // its previous output was deleted
         }
         progress?.Report(new JobProgress(1.0, "Done"));
@@ -83,6 +87,13 @@ public sealed class DecompileService
 
     /// <summary>Workspace output name for one decompiled assembly, e.g. "source/Assembly-CSharp".</summary>
     public static string SourceOutputName(string assemblyName) => $"source/{assemblyName}";
+
+    /// <summary>Which game build an output came from, kept next to it (spec 2.3), so it stays known without the workspace file.</summary>
+    private static void WriteOutputStamp(string dir, string output, GameFingerprint fingerprint)
+    {
+        var stamp = new { output, buildGuid = fingerprint.BuildGuid, createdUtc = DateTime.UtcNow.ToString("o") };
+        File.WriteAllText(Path.Combine(dir, "tyrant-output.json"), System.Text.Json.JsonSerializer.Serialize(stamp, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+    }
 
     private static string StripDllExtension(string name) =>
         name.EndsWith(".dll", StringComparison.OrdinalIgnoreCase) ? name[..^4] : name;

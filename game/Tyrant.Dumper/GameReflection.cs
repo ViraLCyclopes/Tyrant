@@ -64,6 +64,7 @@ namespace Tyrant.Dumper
                     for (var i = 0; i < languages.Count; i++)
                     {
                         var code = Field(languages[i], "Code") as string;
+                        if (!LanguageFilter.IsLanguage(code, Field(languages[i], "Name") as string)) continue; // e.g. I2's "Description" column
                         var name = Field(languages[i], "Name") as string ?? code ?? "language" + i;
                         if (string.IsNullOrEmpty(code)) code = name;
                         if (!tables.TryGetValue(code!, out var table))

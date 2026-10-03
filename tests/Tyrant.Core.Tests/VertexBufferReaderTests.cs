@@ -47,4 +47,31 @@ public class VertexBufferReaderTests
     {
         Assert.Throws<NotSupportedException>(() => new VertexBufferReader(new byte[64], 1, [new(0, 0, 42, 3)]));
     }
+
+    [Fact]
+    public void Reads_float_weights_and_uint32_bone_indices()
+    {
+        // one stream: Float32×4 weights at 0, UInt32×4 bone indices at 16 (stride 32), 2 vertices
+        var data = new byte[64];
+        var w = new BinaryWriter(new MemoryStream(data));
+        foreach (var (weights, bones) in new[] { (new[] { 0.5f, 0.25f, 0.25f, 0f }, new uint[] { 1, 70000, 3, 0 }), (new[] { 1f, 0f, 0f, 0f }, new uint[] { 9, 0, 0, 0 }) })
+        {
+            foreach (var x in weights) w.Write(x);
+            foreach (var b in bones) w.Write(b);
+        }
+        var reader = new VertexBufferReader(data, 2, [new(0, 0, 0, 4), new(0, 16, 10, 4)]);
+
+        var skin = BoneWeight4.From(reader.Read(1, 0), reader.Read(0, 0));
+
+        Assert.Equal(new BoneWeight4(1, 70000, 3, 0, 0.5f, 0.25f, 0.25f, 0f), skin); // a bone index above 65535 survives
+        Assert.Equal(new BoneWeight4(9, 0, 0, 0, 1f, 0f, 0f, 0f), BoneWeight4.From(reader.Read(1, 1), reader.Read(0, 1)));
+    }
+
+    [Fact]
+    public void Without_a_weight_channel_each_vertex_follows_its_first_bone_fully()
+    {
+        var skin = BoneWeight4.From([5f, 2f, 0f, 0f], [1f]); // what MeshDecoder passes when channel 12 is absent
+
+        Assert.Equal(new BoneWeight4(5, 2, 0, 0, 1f, 0f, 0f, 0f), skin);
+    }
 }

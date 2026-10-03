@@ -85,4 +85,23 @@ public class SkinsManifestTests
     {
         Assert.Equal("0.3.0", FrameworkInfo.Version);
     }
+
+    private const string OneBadSkin = """
+        { "format": 1, "id": "mod-id", "skins": [
+          { "id": "good", "species": "S", "male": { "diffuse": "a.png" } },
+          { "id": "bad", "species": "S", "male": { "colour": "b.png" } },
+          { "id": "also-good", "species": "S", "female": { "diffuse": "c.png" } } ] }
+        """;
+
+    [Fact]
+    public void In_game_a_bad_skin_is_skipped_and_the_rest_of_the_mod_loads()
+    {
+        var skipped = new List<string>();
+
+        var m = ModManifest.Parse(OneBadSkin, skipped);
+
+        Assert.Equal(["good", "also-good"], m.Skins.Select(s => s.Id));
+        Assert.Contains("colour", Assert.Single(skipped));
+        Assert.Throws<ManifestException>(() => ModManifest.Parse(OneBadSkin)); // Tyrant's Check stays strict
+    }
 }

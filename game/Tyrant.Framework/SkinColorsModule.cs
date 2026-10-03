@@ -20,23 +20,38 @@ namespace Tyrant.Framework
             var colors = entry.Colors;
             if (colors == null) return;
             var made = new Dictionary<object, ScriptableObject>(ReferenceComparer.Instance); // male and female can share one asset: copy it once
-            foreach (var field in new[] { "maleVariationData", "femaleVariationData" })
+            var assign = new List<(Traverse Slot, ScriptableObject Copy)>();
+            try
             {
-                var slot = Traverse.Create(skin).Field(field);
-                if (!(slot.GetValue() is ScriptableObject original) || original == null) continue;
-                if (!made.TryGetValue(original, out var copy))
+                foreach (var field in new[] { "maleVariationData", "femaleVariationData" })
                 {
-                    copy = UnityEngine.Object.Instantiate(original);
-                    copy.name = original.name + " (" + key + ")";
-                    var asset = Traverse.Create(copy);
-                    ApplyTint(asset.Field("defaultVariationData").GetValue(), colors.Tint);
-                    ApplySet(asset.Field("albinoVariationData").GetValue(), colors.Albino);
-                    ApplySet(asset.Field("melanisticVariationData").GetValue(), colors.Melanistic);
-                    ApplySet(asset.Field("leucisticVariationData").GetValue(), colors.Leucistic);
-                    Copies[copy] = colors;
-                    made[original] = copy;
+                    var slot = Traverse.Create(skin).Field(field);
+                    if (!(slot.GetValue() is ScriptableObject original) || original == null) continue;
+                    if (!made.TryGetValue(original, out var copy))
+                    {
+                        copy = UnityEngine.Object.Instantiate(original);
+                        copy.name = original.name + " (" + key + ")";
+                        copy.hideFlags = HideFlags.DontUnloadUnusedAsset; // only this module holds it; Unity must not unload it
+                        var asset = Traverse.Create(copy);
+                        ApplyTint(asset.Field("defaultVariationData").GetValue(), colors.Tint);
+                        ApplySet(asset.Field("albinoVariationData").GetValue(), colors.Albino);
+                        ApplySet(asset.Field("melanisticVariationData").GetValue(), colors.Melanistic);
+                        ApplySet(asset.Field("leucisticVariationData").GetValue(), colors.Leucistic);
+                        made[original] = copy;
+                    }
+                    assign.Add((slot, copy));
                 }
+            }
+            catch (Exception ex)
+            {
+                foreach (var copy in made.Values) UnityEngine.Object.Destroy(copy);
+                FrameworkMod.Log.Warning($"{key}: its colours could not be set up ({ex.GetBaseException().Message}); it keeps the base skin's colours.");
+                return;
+            }
+            foreach (var (slot, copy) in assign)
+            {
                 slot.SetValue(copy);
+                Copies[copy] = colors;
             }
         }
 

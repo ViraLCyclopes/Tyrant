@@ -69,4 +69,17 @@ describe('AddSkin', () => {
     await fireEvent.input(screen.getByRole('textbox', { name: 'Skin name' }), { target: { value: 'Red spot' } });
     expect(screen.getByRole('button', { name: 'Add skin' })).toBeDisabled();
   });
+
+  it('turns off a sex the chosen base skin does not have', async () => {
+    const rpc = new FakeRpc()
+      .on('mods.species', () => ({ hasDump: true, species: [{ ...carch, skins: [{ index: 0, name: 'Base', male: true, female: false }] }] }))
+      .on('mods.list', () => ({ mods: [modRow], frameworkInstalled: false }));
+    const session = new Session(rpc, new FakePlatform(), memoryStore());
+    renderWith(AddSkin, session, { speciesKey: 'carcharodontosaurus' });
+
+    const female = (await screen.findByRole('checkbox', { name: 'Female' })) as HTMLInputElement;
+
+    await waitFor(() => expect(female.disabled).toBe(true)); // once the base skin is chosen
+    expect(female.checked).toBe(false);
+  });
 });

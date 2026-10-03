@@ -260,7 +260,10 @@ namespace Tyrant.Framework
             else
                 for (var i = 0; i < vanilla; i++)
                     if (string.Equals(Traverse.Create(list[i]).Field("skinName").GetValue() as string, entry.Base, StringComparison.OrdinalIgnoreCase))
-                        baseSkin = list[i];
+                    {
+                        baseSkin = list[i]; // the first match, as Tyrant picks it
+                        break;
+                    }
             if (baseSkin == null)
             {
                 FrameworkMod.Log.Warning($"{key}: base skin \"{entry.Base}\" is not one of {entry.Species}'s skins; the skin is skipped.");

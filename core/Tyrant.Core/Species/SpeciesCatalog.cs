@@ -45,7 +45,7 @@ public static class SpeciesCatalog
         return partial.Count switch
         {
             1 => partial[0],
-            0 => throw new TyrantException(TyrantErrorCode.AssetNotFound, $"No species matches '{query}'. Use 'tyrant species list' to see them all."),
+            0 => throw new TyrantException(TyrantErrorCode.AssetNotFound, $"No species matches '{query}'. The Species tab lists them all (or 'tyrant species list')."),
             _ => throw new TyrantException(TyrantErrorCode.AssetAmbiguous,
                 $"'{query}' matches several species: {string.Join(", ", partial.Select(e => e.Key))}."),
         };

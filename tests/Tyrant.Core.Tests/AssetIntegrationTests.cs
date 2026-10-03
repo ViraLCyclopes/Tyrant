@@ -1,6 +1,7 @@
 using Tyrant.Core.Species;
 using System.Text.Json;
 using Tyrant.Core.Assets;
+using Tyrant.Core.Errors;
 using Tyrant.Core.Catalog;
 using Tyrant.Core.Install;
 using Tyrant.Core.Models;
@@ -254,5 +255,18 @@ public class AssetIntegrationTests(RealGameIndex real) : IClassFixture<RealGameI
 
         Assert.Equal("T_Acrocanthosaurus_alt1_D", json.GetProperty("m_Name").GetString());
         Assert.True(json.GetProperty("m_Width").GetInt32() > 0);
+    }
+
+    [SkippableFact]
+    public void Opening_an_object_whose_type_changed_says_to_re_index()
+    {
+        Skip.If(RealGameIndex.GameDir is null, "TYRANT_GAME_DIR not set");
+        var texture = real.Index.Assets.First(a => a.Type == "Texture2D");
+        using var session = new AssetSession(real.Install);
+
+        var ex = Assert.Throws<TyrantException>(() => session.Open(texture with { Type = "Mesh" }));
+
+        Assert.Equal(TyrantErrorCode.AssetNotFound, ex.Code);
+        Assert.Contains("Index the assets again", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 }

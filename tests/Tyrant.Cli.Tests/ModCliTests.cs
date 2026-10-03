@@ -94,15 +94,15 @@ public class ModCliTests
     }
 
     [Fact]
-    public void Restore_cutouts_says_when_nothing_needs_it()
+    public void Restore_cutouts_without_an_asset_index_says_to_index_first()
     {
         using var game = new FakeGame();
         var ws = InitWorkspace(game);
         Run("mod", "new", "red-spot", "-w", ws);
 
-        var (code, output, _) = Run("mod", "restore-cutouts", "red-spot", "-w", ws);
+        var (code, _, err) = Run("mod", "restore-cutouts", "red-spot", "-w", ws);
 
-        Assert.Equal(ExitCodes.Ok, code);
-        Assert.Contains("No colour PNGs need their see-through parts restored", output);
+        Assert.Equal(ExitCodes.Error, code); // without an asset index the game textures are unknown
+        Assert.Contains("ASSET_INDEX_MISSING", err);
     }
 }

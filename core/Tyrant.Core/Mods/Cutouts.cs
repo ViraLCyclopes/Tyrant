@@ -28,6 +28,19 @@ public static class Cutouts
     /// <summary>False for texture formats that store no alpha (DXT1, RGB24, …): such a texture cannot cut anything out.</summary>
     public static bool MayHaveAlpha(string format) => !NoAlpha.Contains(format);
 
+    /// <summary>A colour (diffuse) texture by the game's naming: T_…_D, …_infant_D, …Diffuse.</summary>
+    public static bool IsColour(string textureName) =>
+        textureName.EndsWith("_D", StringComparison.OrdinalIgnoreCase) || textureName.EndsWith("Diffuse", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Targets grouped by file (one PNG can serve several, e.g. male and female; spellings like a/b.png and a\b.png are one
+    /// file), so the decision uses every vanilla texture the file stands for.
+    /// </summary>
+    public static IEnumerable<(string File, IReadOnlyList<AssetRecord> Vanilla)> ByFile(ModProject mod, AssetIndex index, IReadOnlyList<SpeciesSkins>? species) =>
+        Targets(mod, index, species)
+            .GroupBy(t => t.File.Replace('\\', '/'), StringComparer.OrdinalIgnoreCase)
+            .Select(g => (g.First().File, (IReadOnlyList<AssetRecord>)g.Select(t => t.Vanilla).DistinctBy(v => v.Guid ?? $"{v.Bundle}#{v.PathId}").ToList()));
+
     public static double SeeThrough(byte[] rgba)
     {
         var pixels = rgba.Length / 4;
@@ -43,7 +56,7 @@ public static class Cutouts
     {
         foreach (var entry in mod.Manifest.Replace)
         {
-            if (NormalMap.IsCandidate(entry.Texture)) continue;
+            if (!IsColour(entry.Texture)) continue; // normal maps and masks (extra, pattern, fur) keep data in alpha
             var target = index.Assets.FirstOrDefault(a => a.Type == "Texture2D" && string.Equals(a.Name, entry.Texture, StringComparison.OrdinalIgnoreCase));
             if (target is not null) yield return (entry.File, target);
         }
@@ -66,48 +79,99 @@ public static class Cutouts
         }
     }
 
-    /// <summary>Decodes a vanilla texture from the game's bundles (through a temporary PNG); null when it cannot be read, or when
-    /// onlyIfAlpha and its format stores no alpha.</summary>
-    public static Func<AssetRecord, ImageResult?> GamePixels(GameInstall install, IAssetReader reader, bool onlyIfAlpha = true) => texture =>
+    /// <summary>One opaque pixel: stands for a texture whose format cannot cut anything out.</summary>
+    private static ImageResult Opaque() => new() { Width = 1, Height = 1, Comp = StbImageSharp.ColorComponents.RedGreenBlueAlpha, SourceComp = StbImageSharp.ColorComponents.RedGreenBlueAlpha, Data = [255, 255, 255, 255] };
+
+    /// <summary>Decodes a vanilla texture from the game's bundles (through a temporary PNG); see <see cref="Pixels"/>.</summary>
+    public static Func<AssetRecord, ImageResult?> GamePixels(GameInstall install, IAssetReader reader, bool onlyIfAlpha = true) => Pixels(
+        texture =>
+        {
+            using var session = new AssetSession(install);
+            return TextureFacts.Read(session.Open(texture).BaseField).Format;
+        },
+        texture =>
+        {
+            var temp = Path.Combine(Path.GetTempPath(), "tyrant-cutouts", Guid.NewGuid().ToString("N") + ".png");
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(temp)!);
+                reader.WriteTexture(install, texture, temp);
+                using var stream = File.OpenRead(temp);
+                return ImageResult.FromStream(stream, StbImageSharp.ColorComponents.RedGreenBlueAlpha);
+            }
+            finally
+            {
+                try { File.Delete(temp); } catch (IOException) { }
+            }
+        },
+        onlyIfAlpha);
+
+    /// <summary>
+    /// A texture's pixels; null only when it cannot be read. With onlyIfAlpha, a format that stores no alpha is not decoded and
+    /// gives <see cref="Opaque"/> (no cutouts, and nothing went wrong).
+    /// </summary>
+    public static Func<AssetRecord, ImageResult?> Pixels(Func<AssetRecord, string> formatOf, Func<AssetRecord, ImageResult> decode, bool onlyIfAlpha = true) => texture =>
     {
-        var temp = Path.Combine(Path.GetTempPath(), "tyrant-cutouts", Guid.NewGuid().ToString("N") + ".png");
         try
         {
-            if (onlyIfAlpha)
-                using (var session = new AssetSession(install))
-                    if (!MayHaveAlpha(TextureFacts.Read(session.Open(texture).BaseField).Format)) return null; // opaque by format: no decode
-            Directory.CreateDirectory(Path.GetDirectoryName(temp)!);
-            reader.WriteTexture(install, texture, temp);
-            using var stream = File.OpenRead(temp);
-            return ImageResult.FromStream(stream, StbImageSharp.ColorComponents.RedGreenBlueAlpha);
+            if (onlyIfAlpha && !MayHaveAlpha(formatOf(texture))) return Opaque(); // opaque by format: no decode
+            return decode(texture);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             return null;
         }
-        finally
-        {
-            try { File.Delete(temp); } catch (IOException) { }
-        }
     };
 }
+
+/// <summary>What Restore cutouts did: the files fixed, and the ones it had to leave (with why).</summary>
+public sealed record CutoutRestore(IReadOnlyList<string> Restored, IReadOnlyList<string> Problems);
 
 /// <summary>Copies the vanilla transparency into the mod's colour PNGs that lost it (colours are kept; sizes may differ).</summary>
 public sealed class CutoutRestorer(Func<AssetRecord, ImageResult?> pixelsOf)
 {
-    /// <returns>The mod-relative files that were fixed.</returns>
-    public IReadOnlyList<string> Restore(ModProject mod, AssetIndex index, IReadOnlyList<SpeciesSkins>? species)
+    public CutoutRestore Restore(ModProject mod, AssetIndex index, IReadOnlyList<SpeciesSkins>? species)
     {
-        var fixedFiles = new List<string>();
-        foreach (var (file, vanilla) in Cutouts.Targets(mod, index, species).DistinctBy(t => t.File, StringComparer.OrdinalIgnoreCase))
+        var restored = new List<string>();
+        var problems = new List<string>();
+        foreach (var (file, vanillas) in Cutouts.ByFile(mod, index, species))
         {
             var path = Path.GetFullPath(Path.Combine(mod.Dir, file));
             if (!ModPaths.IsInside(path, mod.Dir) || !File.Exists(path)) continue;
             ImageResult image;
-            using (var stream = File.OpenRead(path)) image = ImageResult.FromStream(stream, StbImageSharp.ColorComponents.RedGreenBlueAlpha);
+            try
+            {
+                if (!ModChecker.HasPngSignature(path))
+                {
+                    problems.Add($"{file} is not a PNG, so it was left alone.");
+                    continue;
+                }
+                using var stream = File.OpenRead(path);
+                image = ImageResult.FromStream(stream, StbImageSharp.ColorComponents.RedGreenBlueAlpha);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or ArgumentException)
+            {
+                problems.Add($"{file} could not be read ({ex.Message}); is it open in another program?");
+                continue;
+            }
             if (Cutouts.SeeThrough(image.Data) >= Cutouts.Lost) continue;
-            var source = pixelsOf(vanilla);
-            if (source is null || Cutouts.SeeThrough(source.Data) < Cutouts.UsesCutouts) continue;
+
+            ImageResult? source = null;
+            var best = 0.0;
+            var unreadable = new List<string>();
+            foreach (var vanilla in vanillas)
+            {
+                var pixels = pixelsOf(vanilla);
+                if (pixels is null) { unreadable.Add(vanilla.Name); continue; }
+                var share = Cutouts.SeeThrough(pixels.Data);
+                if (share > best) (best, source) = (share, pixels);
+            }
+            if (source is null || best < Cutouts.UsesCutouts)
+            {
+                if (unreadable.Count > 0) problems.Add($"{file}: the game texture {string.Join(", ", unreadable)} could not be read, so its cutouts are unknown.");
+                continue;
+            }
+
             for (var y = 0; y < image.Height; y++)
             for (var x = 0; x < image.Width; x++)
             {
@@ -115,10 +179,20 @@ public sealed class CutoutRestorer(Func<AssetRecord, ImageResult?> pixelsOf)
                 var sy = y * source.Height / image.Height;
                 image.Data[(y * image.Width + x) * 4 + 3] = source.Data[(sy * source.Width + sx) * 4 + 3];
             }
-            using (var stream = File.Create(path))
-                new ImageWriter().WritePng(image.Data, image.Width, image.Height, StbImageWriteSharp.ColorComponents.RedGreenBlueAlpha, stream);
-            fixedFiles.Add(file);
+            var temp = path + ".tyrant-tmp";
+            try
+            {
+                using (var stream = File.Create(temp))
+                    new ImageWriter().WritePng(image.Data, image.Width, image.Height, StbImageWriteSharp.ColorComponents.RedGreenBlueAlpha, stream);
+                File.Move(temp, path, overwrite: true); // a failure before this line leaves the PNG as it was
+                restored.Add(file);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                try { File.Delete(temp); } catch (IOException) { }
+                problems.Add($"{file} could not be written ({ex.Message}); it was left as it was.");
+            }
         }
-        return fixedFiles;
+        return new CutoutRestore(restored, problems);
     }
 }

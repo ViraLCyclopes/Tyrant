@@ -203,4 +203,27 @@ public class WorkspaceTests
         Assert.Equal(TyrantErrorCode.WorkspaceInGameFolder, ex.Code);
         Assert.Equal(FixAction.PickWorkspaceFolder, ex.Fix);
     }
+
+    [Fact]
+    public async Task Reading_outputs_while_a_job_stamps_them_never_throws()
+    {
+        using var game = new FakeGame();
+        var install = new GameInstall(game.Root, null);
+        var ws = Workspace.Create(Path.Combine(Path.GetTempPath(), "tyrant-tests", Guid.NewGuid().ToString("N"), "ws"), install);
+        var fingerprint = GameFingerprint.Compute(install);
+        using var stop = new CancellationTokenSource();
+
+        var writer = Task.Run(() =>
+        {
+            for (var i = 0; i < 300 && !stop.IsCancellationRequested; i++) ws.StampOutput($"source/A{i}", fingerprint);
+        });
+        while (!writer.IsCompleted)
+        {
+            _ = ws.Outputs().Count; // what diagnostics and status read during a decompile
+            _ = ws.StaleOutputs(fingerprint);
+        }
+        await writer;
+
+        Assert.Equal(300, ws.Outputs().Count);
+    }
 }

@@ -121,7 +121,13 @@ namespace Tyrant.Framework.Core
 
         public List<SkinEntry> Skins { get; } = new List<SkinEntry>();
 
-        public static ModManifest Parse(string json)
+        public static ModManifest Parse(string json) => Parse(json, null);
+
+        /// <summary>
+        /// With <paramref name="skippedSkins"/> (the game), a bad "skins" entry is dropped with a message there and the rest of the
+        /// mod still loads; without it (Tyrant's Check), any problem is an error.
+        /// </summary>
+        public static ModManifest Parse(string json, List<string>? skippedSkins)
         {
             object? root;
             try
@@ -173,6 +179,21 @@ namespace Tyrant.Framework.Core
             foreach (var item in Array(map, "skins"))
             {
                 n++;
+                try
+                {
+                    ParseSkin(item, n, manifest);
+                }
+                catch (ManifestException ex) when (skippedSkins != null)
+                {
+                    skippedSkins.Add($"\"skins\" entry {n} was skipped: {ex.Message}");
+                }
+            }
+            return manifest;
+        }
+
+        private static void ParseSkin(object? item, int n, ModManifest manifest)
+        {
+            {
                 if (!(item is Dictionary<string, object?> entry)) throw new ManifestException($"\"skins\" entry {n} must be an object.");
                 var skinId = Text(entry, "id") ?? "";
                 if (!ModId.IsValid(skinId))
@@ -195,7 +216,6 @@ namespace Tyrant.Framework.Core
                     throw new ManifestException($"Skin \"{skinId}\" needs \"male\" or \"female\" textures.");
                 manifest.Skins.Add(skin);
             }
-            return manifest;
         }
 
         public string ToJson()

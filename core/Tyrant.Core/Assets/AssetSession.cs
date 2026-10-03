@@ -27,7 +27,7 @@ public sealed class AssetSession : IDisposable
         var full = Path.GetFullPath(Path.Combine(_aaDir, relativeBundle.Replace('/', Path.DirectorySeparatorChar)));
         if (!full.StartsWith(_aaDir + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
             throw new TyrantException(TyrantErrorCode.AssetNotFound,
-                $"Bundle path '{relativeBundle}' points outside the game's Addressables folder. Re-run 'tyrant assets index'.",
+                $"Bundle path '{relativeBundle}' points outside the game's Addressables folder. Index the assets again (Home → Index assets, or 'tyrant assets index').",
                 FixAction.RefreshWorkspace);
         return full;
     }
@@ -37,7 +37,7 @@ public sealed class AssetSession : IDisposable
         var path = BundlePath(asset.Bundle);
         if (!File.Exists(path))
             throw new TyrantException(TyrantErrorCode.AssetNotFound,
-                $"Bundle '{asset.Bundle}' no longer exists (game updated?). Re-run 'tyrant assets index'.", FixAction.RefreshWorkspace);
+                $"Bundle '{asset.Bundle}' no longer exists (game updated?). Index the assets again (Home → Index assets, or 'tyrant assets index').", FixAction.RefreshWorkspace);
 
         try
         {
@@ -47,18 +47,23 @@ public sealed class AssetSession : IDisposable
                 if (!bundle.file.IsAssetsFile(i)) continue;
                 var file = _manager.LoadAssetsFileFromBundle(bundle, i, false);
                 var info = file.file.AssetInfos.FirstOrDefault(a => a.PathId == asset.PathId);
-                if (info is not null) return (file, _manager.GetBaseField(file, info));
+                if (info is null) continue;
+                // A game update can reuse an object number for another kind of object: never hand back the wrong one.
+                if (Enum.TryParse<AssetClassID>(asset.Type, out var expected) && info.TypeId != (int)expected)
+                    throw new TyrantException(TyrantErrorCode.AssetNotFound,
+                        $"Object {asset.PathId} in '{asset.Bundle}' is no longer a {asset.Type} (game updated?). Index the assets again (Home → Index assets, or 'tyrant assets index').", FixAction.RefreshWorkspace);
+                return (file, _manager.GetBaseField(file, info));
             }
         }
         catch (Exception ex) when (ex is not TyrantException and not OperationCanceledException)
         {
             // AssetsTools.NET throws plain Exceptions for data it cannot parse (e.g. a bundle changed by a game update).
             throw new TyrantException(TyrantErrorCode.AssetUnreadable,
-                $"Bundle '{asset.Bundle}' could not be read ({ex.Message}). If the game was updated, re-run 'tyrant assets index'.",
+                $"Bundle '{asset.Bundle}' could not be read ({ex.Message}). If the game was updated, index the assets again (Home → Index assets, or 'tyrant assets index').",
                 FixAction.RefreshWorkspace, ex);
         }
         throw new TyrantException(TyrantErrorCode.AssetNotFound,
-            $"Object {asset.PathId} is not in '{asset.Bundle}' (game updated?). Re-run 'tyrant assets index'.", FixAction.RefreshWorkspace);
+            $"Object {asset.PathId} is not in '{asset.Bundle}' (game updated?). Index the assets again (Home → Index assets, or 'tyrant assets index').", FixAction.RefreshWorkspace);
     }
 
     public void Release() => _manager.UnloadAll();

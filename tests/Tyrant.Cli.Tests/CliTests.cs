@@ -77,6 +77,8 @@ public class CliTests
         Assert.Equal(ExitCodes.Ok, code);
         Assert.Contains("ok", output);
         Assert.NotEmpty(Directory.EnumerateFiles(Path.Combine(dir, "source", "Assembly-CSharp"), "*.csproj"));
+        var stamp = File.ReadAllText(Path.Combine(dir, "source", "Assembly-CSharp", "tyrant-output.json"));
+        Assert.Contains("abc123def456", stamp); // the game build it was made from, next to the output (spec 2.3)
     }
 
     [Fact]
@@ -143,5 +145,60 @@ public class CliTests
         Assert.Equal(ExitCodes.Ok, code);
         Assert.Contains(newGame.Root, output);
         Assert.Contains(newGame.Root.Replace(@"\", @"\\"), File.ReadAllText(Path.Combine(dir, "tyrant-workspace.json")));
+    }
+
+    [Fact]
+    public void A_decompile_where_every_assembly_fails_is_an_error()
+    {
+        using var game = new FakeGame();
+        var dir = TempDir();
+        Run("workspace", "init", dir, "--game", game.Root);
+
+        var (code, _, err) = Run("decompile", "-w", dir, "--assemblies", "NoSuchAssembly");
+
+        Assert.Equal(ExitCodes.Error, code);
+        Assert.Contains("DECOMPILE_FAILED", err);
+    }
+
+    [Fact]
+    public void Fix_hints_are_plain_language()
+    {
+        using var game = new FakeGame();
+
+        var (_, _, err) = Run("workspace", "init", Path.Combine(game.Root, "ws"), "--game", game.Root);
+
+        Assert.Contains("WORKSPACE_IN_GAME_FOLDER", err);
+        Assert.DoesNotContain("PickWorkspaceFolder", err);
+        Assert.Contains("outside the game folder", err);
+    }
+
+    [Fact]
+    public void Every_command_group_has_a_description_in_the_help()
+    {
+        var (_, output, _) = Run("--help");
+
+        var lines = System.Text.RegularExpressions.Regex.Replace(output, @"\x1b\[[0-9;]*m", "").Split('\n').Select(l => l.Trim()).ToList();
+
+        foreach (var group in new[] { "install", "workspace", "assets", "species", "dump", "mod", "data" })
+        {
+            var line = lines.FirstOrDefault(l => l == group || l.StartsWith(group + " "));
+            Assert.True(line is not null, $"'{group}' is not in --help:\n{string.Join("\n", lines)}");
+            Assert.True(line.Length > group.Length, $"the '{group}' group has no description in --help");
+        }
+    }
+
+    [Theory]
+    [InlineData("list")]
+    [InlineData("export-textures")]
+    public void A_limit_below_one_is_a_usage_error(string command)
+    {
+        using var game = new FakeGame();
+        var dir = TempDir();
+        Run("workspace", "init", dir, "--game", game.Root);
+
+        var (code, output, err) = Run("assets", command, "--limit", "0", "-w", dir);
+
+        Assert.Equal(ExitCodes.Usage, code);
+        Assert.Contains("--limit", output + err);
     }
 }
