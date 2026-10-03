@@ -55,7 +55,7 @@ public class ModCheckerTests
         var (game, _, mod) = Setup();
         using var _ = game;
         Directory.CreateDirectory(Path.Combine(mod.Dir, "textures"));
-        File.WriteAllText(Path.Combine(mod.Dir, "textures", "bad.png"), "not an image");
+        File.WriteAllBytes(Path.Combine(mod.Dir, "textures", "bad.png"), [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 1, 2, 3]); // a PNG signature, then garbage
         Entry(mod, "T_Carch_D", "textures/missing.png");
         Entry(mod, "T_Carch_N", "textures/bad.png");
 
@@ -127,5 +127,21 @@ public class ModCheckerTests
         Assert.Contains("does nothing", Assert.Single(empty.Warnings));
         Assert.Contains(noIndex.Warnings, w => w.Contains("asset index"));
         Assert.True(noIndex.Ok);
+    }
+
+    [Fact]
+    public void An_image_that_is_not_a_png_is_an_error()
+    {
+        var (game, _, mod) = Setup();
+        using var _ = game;
+        Directory.CreateDirectory(Path.Combine(mod.Dir, "textures"));
+        var bmp = new byte[4 * 4 * 3];
+        using (var stream = File.Create(Path.Combine(mod.Dir, "textures", "d.png")))
+            new StbImageWriteSharp.ImageWriter().WriteBmp(bmp, 4, 4, StbImageWriteSharp.ColorComponents.RedGreenBlue, stream); // a BMP named .png
+        Entry(mod, "T_Carch_D", "textures/d.png");
+
+        var result = Checker.Check(mod, Index);
+
+        Assert.Contains(result.Errors, e => e.Contains("not a PNG"));
     }
 }

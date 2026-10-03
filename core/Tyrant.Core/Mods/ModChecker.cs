@@ -54,6 +54,11 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
                 errors.Add($"{entry.Texture}: {entry.File} is missing.");
                 continue;
             }
+            if (!HasPngSignature(path))
+            {
+                errors.Add($"{entry.Texture}: {entry.File} is not a PNG (other image formats are not supported in game).");
+                continue;
+            }
 
             ImageResult? image;
             try
@@ -87,5 +92,14 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
                 warnings.Add($"{entry.Texture}: {entry.File} does not look like a normal map (neither the blue-purple standard form nor Unity's packed form).");
         }
         return new ModCheckResult(errors, warnings);
+    }
+
+    private static readonly byte[] PngSignature = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+
+    internal static bool HasPngSignature(string path)
+    {
+        using var stream = File.OpenRead(path);
+        var head = new byte[PngSignature.Length];
+        return stream.Read(head, 0, head.Length) == head.Length && head.AsSpan().SequenceEqual(PngSignature);
     }
 }

@@ -256,6 +256,8 @@ export interface EnvironmentTexture {
   files: string[];
 }
 
+export type FrameworkState = "missing" | "current" | "outdated";
+
 export interface InstallDetectParams {
   gamePath?: string | null;
 }
@@ -460,6 +462,7 @@ export interface WorkspaceStatus {
   hasData: boolean;
   hasAssetIndex: boolean;
   hasSource: boolean;
+  framework?: FrameworkState;
 }
 
 export interface RpcMethods {

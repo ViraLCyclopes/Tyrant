@@ -167,4 +167,19 @@ public class GameModsTests
         Assert.Equal(TyrantErrorCode.ModIdInvalid, ex.Code);
         Assert.True(Directory.Exists(mod.Dir));
     }
+
+    [Fact]
+    public void An_unreadable_installed_mod_is_listed_with_its_problem_instead_of_failing_the_list()
+    {
+        var (game, install, ws) = Setup();
+        using var _ = game;
+        new GameMods().Install(install, Mod(ws, "red-spot"));
+        var path = Path.Combine(ModLoaderInstaller.ModsDir(install), "red-spot", "mod.json");
+
+        IReadOnlyList<InstalledMod> listed;
+        using (File.Open(path, FileMode.Open, FileAccess.Read, FileShare.None))
+            listed = new GameMods().List(install);
+
+        Assert.NotNull(Assert.Single(listed).Error);
+    }
 }

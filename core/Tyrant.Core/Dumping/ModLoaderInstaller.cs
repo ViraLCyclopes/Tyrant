@@ -6,6 +6,15 @@ using Tyrant.Core.Install;
 
 namespace Tyrant.Core.Dumping;
 
+public enum FrameworkState
+{
+    Missing,
+    Current,
+
+    /// <summary>The game's Tyrant.Framework*.dll differ from the ones this Tyrant ships (Tyrant was updated).</summary>
+    Outdated,
+}
+
 public enum InstallState
 {
     /// <summary>No mod loader and no proxy DLL.</summary>
@@ -64,6 +73,20 @@ public sealed class ModLoaderInstaller(string expectedSha256 = ModLoaderInstalle
 
     public static bool HasFramework(GameInstall install) =>
         File.Exists(Path.Combine(install.RootDir, "Mods", FrameworkFile)) && File.Exists(Path.Combine(RecordDir(install), RecordFile));
+
+    /// <summary>Compares the framework DLLs Tyrant ships (componentDir) with the game's, by SHA-256.</summary>
+    public static FrameworkState FrameworkStatus(GameInstall install, string componentDir)
+    {
+        if (!HasFramework(install)) return FrameworkState.Missing;
+        var shipped = Directory.Exists(componentDir) ? Directory.GetFiles(componentDir, "Tyrant.Framework*.dll") : [];
+        foreach (var file in shipped)
+        {
+            var name = Path.GetFileName(file);
+            var installed = Path.Combine(install.RootDir, MelonModFiles.Contains(name) ? "Mods" : "UserLibs", name);
+            if (!File.Exists(installed) || HashOf(installed) != HashOf(file)) return FrameworkState.Outdated;
+        }
+        return FrameworkState.Current;
+    }
 
     public static string RequestPath(GameInstall install) => Path.Combine(install.RootDir, "UserData", RequestFile);
 
@@ -130,6 +153,8 @@ public sealed class ModLoaderInstaller(string expectedSha256 = ModLoaderInstalle
             : [];
         if (!dumperFiles.Any(f => string.Equals(Path.GetFileName(f), ModFile, StringComparison.OrdinalIgnoreCase)))
             throw new TyrantException(TyrantErrorCode.DumperInstallFailed, $"The dumper mod files are missing from '{dumperDir}'. Rebuild Tyrant.");
+        if (!dumperFiles.Any(f => string.Equals(Path.GetFileName(f), FrameworkFile, StringComparison.OrdinalIgnoreCase)))
+            throw new TyrantException(TyrantErrorCode.DumperInstallFailed, $"{FrameworkFile} is missing from '{dumperDir}'. Rebuild Tyrant.");
 
         var previous = ReadRecord(install);
         var files = new List<string>(previous?.Files ?? []);

@@ -119,7 +119,8 @@ public sealed class ModInstallCommand : Command<ModInstallCommand.Settings>
             return ExitCodes.Error;
         }
         var launcher = new SteamLauncher();
-        if (!ModLoaderInstaller.HasFramework(install))
+        var componentDir = Path.Combine(AppContext.BaseDirectory, "dumper");
+        if (ModLoaderInstaller.FrameworkStatus(install, componentDir) != FrameworkState.Current)
         {
             var zip = settings.LoaderZip;
             if (zip is null && ModLoaderInstaller.GetState(install) == InstallState.NotInstalled)
@@ -128,8 +129,8 @@ public sealed class ModInstallCommand : Command<ModInstallCommand.Settings>
                 using var http = new HttpClient();
                 zip = ModLoaderInstaller.DownloadAsync(http, Path.Combine(ws.CacheDir, "downloads"), CancellationToken.None).GetAwaiter().GetResult();
             }
-            new ModLoaderInstaller(isGameRunning: launcher.IsRunning).Install(install, zip, Path.Combine(AppContext.BaseDirectory, "dumper"));
-            Console.WriteLine("Installed Tyrant's framework into the game.");
+            new ModLoaderInstaller(isGameRunning: launcher.IsRunning).Install(install, zip, componentDir);
+            Console.WriteLine("Installed or updated Tyrant's framework in the game.");
         }
         new GameMods(launcher.IsRunning).Install(install, mod);
         Console.WriteLine($"Installed '{mod.Id}' into {Path.Combine(ModLoaderInstaller.ModsDir(install), mod.Id)}. Start the game to see it; undo with 'tyrant mod remove {mod.Id}'.");

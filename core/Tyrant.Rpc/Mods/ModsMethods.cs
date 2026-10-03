@@ -62,7 +62,7 @@ public sealed class ModsMethods(StudioSession session, JobManager jobs)
             var check = ModChecker.ForGame(install).Check(mod, TryIndex(ws));
             if (!check.Ok)
                 throw new TyrantException(TyrantErrorCode.ModInvalid, $"'{p.Id}' has problems, so it was not installed: {string.Join(" ", check.Errors)}");
-            if (!ModLoaderInstaller.HasFramework(install))
+            if (ModLoaderInstaller.FrameworkStatus(install, Options.DumperDir) != FrameworkState.Current)
             {
                 string? zip = null;
                 if (ModLoaderInstaller.GetState(install) == InstallState.NotInstalled)
@@ -70,7 +70,7 @@ public sealed class ModsMethods(StudioSession session, JobManager jobs)
                     progress.Report(new JobProgress(0.2, $"Downloading {ModLoaderInstaller.LoaderName} {ModLoaderInstaller.Version}"));
                     zip = Options.LoaderZip(ws, ct);
                 }
-                progress.Report(new JobProgress(0.5, "Installing Tyrant's framework into the game"));
+                progress.Report(new JobProgress(0.5, "Installing or updating Tyrant's framework in the game"));
                 Options.Installer().Install(install, zip, Options.DumperDir);
             }
             progress.Report(new JobProgress(0.8, $"Installing {p.Id}"));

@@ -106,4 +106,26 @@ public class ModsMethodsTests
         Assert.False(Row(off, "red-spot").GetProperty("enabled").GetBoolean());
         Assert.Equal("notInstalled", Row(removed, "red-spot").GetProperty("state").GetString());
     }
+
+    [Fact]
+    public async Task Installing_a_mod_updates_an_outdated_framework()
+    {
+        using var game = new FakeGame();
+        var gameMods = TestStudio.FakeGameModsDir();
+        var options = TestStudio.Options(loaderZip: TestStudio.FakeMelonLoaderZip(), dumperDir: gameMods);
+        var h = new RpcHarness(options);
+        var ws = TestStudio.TempDir();
+        await h.Call("workspace.create", new { dir = ws, gamePath = game.Root });
+        AssetFixtures.WriteIndex(ws, [Texture], GameFingerprint.Compute(new GameInstall(game.Root, null)));
+        await h.Call("mods.create", new { id = "red-spot" });
+        await h.Call("mods.replace", new { id = "red-spot", texture = Texture.Name, png = Png(ws) });
+        await h.RunJob("mods.install", new { id = "red-spot" });
+        File.WriteAllText(Path.Combine(gameMods, "Tyrant.Framework.dll"), "framework v2");
+        Assert.Equal("outdated", (await h.Call("workspace.status")).GetProperty("framework").GetString());
+
+        await h.RunJob("mods.install", new { id = "red-spot" });
+
+        Assert.Equal("framework v2", File.ReadAllText(Path.Combine(game.Root, "Mods", "Tyrant.Framework.dll")));
+        Assert.Equal("current", (await h.Call("workspace.status")).GetProperty("framework").GetString());
+    }
 }

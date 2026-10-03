@@ -15,7 +15,8 @@ public sealed record WorkspaceOpenParams(string Dir, string? GamePath = null);
 public sealed record OutputStatus(string Name, DateTimeOffset CreatedUtc, bool Stale);
 
 public sealed record WorkspaceStatus(string Dir, string GameRoot, string? SteamAppId, string BuildGuid, bool Stale,
-    IReadOnlyList<OutputStatus> Outputs, InstallState Dumper, bool HasData, bool HasAssetIndex, bool HasSource);
+    IReadOnlyList<OutputStatus> Outputs, InstallState Dumper, bool HasData, bool HasAssetIndex, bool HasSource,
+    FrameworkState Framework = FrameworkState.Missing);
 
 public sealed record DumperInstallResult(bool InstalledLoader, string Message);
 
