@@ -47,7 +47,8 @@ public sealed class ModsMethods(StudioSession session, JobManager jobs)
     public ModCheckReport Check(ModIdParams p)
     {
         var (ws, install) = session.Current();
-        var result = ModChecker.ForGame(install).Check(ModProject.Open(ws, p.Id), TryIndex(ws), TrySpecies(ws));
+        var checkedMod = ModProject.Open(ws, p.Id);
+        var result = ModChecker.ForGame(install).Check(checkedMod, TryIndex(ws), checkedMod.Manifest.Skins.Count > 0 ? TrySpecies(ws) : null);
         return new ModCheckReport(result.Errors, result.Warnings, result.MissingCutouts);
     }
 
@@ -70,7 +71,7 @@ public sealed class ModsMethods(StudioSession session, JobManager jobs)
         return jobs.Start($"Install {p.Id}", (progress, ct) =>
         {
             progress.Report(new JobProgress(0.05, $"Checking {p.Id}"));
-            var check = ModChecker.ForGame(install).Check(mod, TryIndex(ws), TrySpecies(ws));
+            var check = ModChecker.ForGame(install).Check(mod, TryIndex(ws), mod.Manifest.Skins.Count > 0 ? TrySpecies(ws) : null);
             if (!check.Ok)
                 throw new TyrantException(TyrantErrorCode.ModInvalid, $"'{p.Id}' has problems, so it was not installed: {string.Join(" ", check.Errors)}");
             if (ModLoaderInstaller.FrameworkStatus(install, Options.DumperDir) != FrameworkState.Current)
@@ -128,7 +129,7 @@ public sealed class ModsMethods(StudioSession session, JobManager jobs)
             }
             installed.Remove(id);
         }
-        rows.AddRange(installed.Values.Select(m => new ModRow(m.Id, m.Name, m.Version, null, m.Replacements, 0, "gameOnly", m.Enabled, m.Dir, m.Error)));
+        rows.AddRange(installed.Values.Select(m => new ModRow(m.Id, m.Name, m.Version, null, m.Replacements, m.Skins, "gameOnly", m.Enabled, m.Dir, m.Error)));
         return new ModsListResult(rows, ModLoaderInstaller.HasFramework(install));
     }
 

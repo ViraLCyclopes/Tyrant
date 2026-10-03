@@ -108,7 +108,7 @@ public sealed class ModCheckCommand : Command<ModSettings>
     {
         var (ws, install) = CliServices.OpenWorkspace(settings);
         var mod = ModProject.Open(ws, settings.Id);
-        return ModCli.Print(ModChecker.ForGame(install).Check(mod, ModCli.TryIndex(ws), ModCli.TrySpecies(ws))) ? ExitCodes.Ok : ExitCodes.Error;
+        return ModCli.Print(ModChecker.ForGame(install).Check(mod, ModCli.TryIndex(ws), mod.Manifest.Skins.Count > 0 ? ModCli.TrySpecies(ws) : null)) ? ExitCodes.Ok : ExitCodes.Error;
     }
 }
 
@@ -141,7 +141,7 @@ public sealed class ModInstallCommand : Command<ModInstallCommand.Settings>
     {
         var (ws, install) = CliServices.OpenWorkspace(settings);
         var mod = ModProject.Open(ws, settings.Id);
-        if (!ModCli.Print(ModChecker.ForGame(install).Check(mod, ModCli.TryIndex(ws), ModCli.TrySpecies(ws))))
+        if (!ModCli.Print(ModChecker.ForGame(install).Check(mod, ModCli.TryIndex(ws), mod.Manifest.Skins.Count > 0 ? ModCli.TrySpecies(ws) : null)))
         {
             Console.WriteLine("Fix the errors above, then install again.");
             return ExitCodes.Error;

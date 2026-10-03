@@ -182,4 +182,38 @@ public class GameModsTests
 
         Assert.NotNull(Assert.Single(listed).Error);
     }
+
+    [Fact]
+    public void Install_state_reuses_file_hashes_until_a_file_changes()
+    {
+        var (game, install, ws) = Setup();
+        using var _ = game;
+        var red = Mod(ws, "red-spot", "T_A_D.png", "T_B_D.png");
+        var mods = new GameMods();
+        mods.Install(install, red);
+        mods.StateOf(install, red);
+        var edited = Path.Combine(red.Dir, "textures", "T_A_D.png");
+        var untouched = Path.Combine(red.Dir, "textures", "T_B_D.png");
+        var (editedBefore, untouchedBefore) = (GameMods.TimesHashed(edited), GameMods.TimesHashed(untouched));
+
+        Assert.Equal(ModInstallState.Installed, mods.StateOf(install, red)); // nothing changed: no file is read again
+        Assert.Equal((editedBefore, untouchedBefore), (GameMods.TimesHashed(edited), GameMods.TimesHashed(untouched)));
+
+        File.WriteAllText(edited, "edited, and longer than before");
+        Assert.Equal(ModInstallState.Changed, mods.StateOf(install, red));
+        Assert.Equal((editedBefore + 1, untouchedBefore), (GameMods.TimesHashed(edited), GameMods.TimesHashed(untouched))); // only the edited file
+    }
+
+    [Fact]
+    public void An_installed_mod_reports_how_many_skins_it_adds()
+    {
+        var (game, install, ws) = Setup();
+        using var _ = game;
+        var mod = Mod(ws, "red-spot", "T_A_D.png");
+        mod.Manifest.Skins.Add(new Tyrant.Framework.Core.SkinEntry { Id = "red", Species = "S", Name = "Red", Male = new() { ["diffuse"] = "textures/T_A_D.png" } });
+        mod.Save();
+        new GameMods().Install(install, mod);
+
+        Assert.Equal(1, Assert.Single(new GameMods().List(install)).Skins);
+    }
 }

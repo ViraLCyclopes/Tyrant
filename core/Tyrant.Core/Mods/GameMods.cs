@@ -17,7 +17,7 @@ public enum ModInstallState
 }
 
 /// <summary>An installed mod as found in &lt;game&gt;/UserData/Tyrant/Mods; Error is set when its mod.json cannot be read.</summary>
-public sealed record InstalledMod(string Id, string Name, string Version, int Replacements, bool Enabled, string Dir, string? Error);
+public sealed record InstalledMod(string Id, string Name, string Version, int Replacements, int Skins, bool Enabled, string Dir, string? Error);
 
 /// <summary>
 /// Installs mods into UserData/Tyrant/Mods (owned by Tyrant: the game uninstall removes it whole) and keeps
@@ -98,11 +98,11 @@ public sealed class GameMods(Func<GameInstall, bool>? isGameRunning = null)
                 var path = Path.Combine(dir, ModManifest.FileName);
                 if (!File.Exists(path)) throw new ManifestException("mod.json is missing.");
                 var manifest = ModManifest.Parse(File.ReadAllText(path));
-                result.Add(new InstalledMod(folder, manifest.Name, manifest.Version, manifest.Replace.Count, enabled, dir, null));
+                result.Add(new InstalledMod(folder, manifest.Name, manifest.Version, manifest.Replace.Count, manifest.Skins.Count, enabled, dir, null));
             }
             catch (Exception ex) when (ex is ManifestException or IOException or UnauthorizedAccessException)
             {
-                result.Add(new InstalledMod(folder, folder, "", 0, enabled, dir, ex.Message));
+                result.Add(new InstalledMod(folder, folder, "", 0, 0, enabled, dir, ex.Message));
             }
         }
         return result;
@@ -130,6 +130,14 @@ public sealed class GameMods(Func<GameInstall, bool>? isGameRunning = null)
         return target;
     }
 
+    /// <summary>File hashes by path, size and write time: listing mods re-reads only files that changed since the last call.</summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (long Length, DateTime Written, byte[] Hash)> FileHashCache = new(StringComparer.OrdinalIgnoreCase);
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> HashReads = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>How many times a file was actually read for hashing (tests check the cache).</summary>
+    internal static int TimesHashed(string path) => HashReads.TryGetValue(Path.GetFullPath(path), out var n) ? n : 0;
+
     private static string ContentHash(string dir)
     {
         using var sha = SHA256.Create();
@@ -139,11 +147,21 @@ public sealed class GameMods(Func<GameInstall, bool>? isGameRunning = null)
         {
             var name = Encoding.UTF8.GetBytes(file.Relative + "\n");
             sha.TransformBlock(name, 0, name.Length, null, 0);
-            var content = File.ReadAllBytes(file.Path);
+            var content = FileHash(file.Path);
             sha.TransformBlock(content, 0, content.Length, null, 0);
         }
         sha.TransformFinalBlock([], 0, 0);
         return Convert.ToHexString(sha.Hash!);
+    }
+
+    private static byte[] FileHash(string path)
+    {
+        var info = new FileInfo(path);
+        if (FileHashCache.TryGetValue(path, out var cached) && cached.Length == info.Length && cached.Written == info.LastWriteTimeUtc) return cached.Hash;
+        var hash = SHA256.HashData(File.ReadAllBytes(path));
+        HashReads.AddOrUpdate(Path.GetFullPath(path), 1, (_, n) => n + 1);
+        FileHashCache[path] = (info.Length, info.LastWriteTimeUtc, hash);
+        return hash;
     }
 
     private static void CopyDirectory(string from, string to)
