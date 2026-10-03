@@ -38,19 +38,20 @@ namespace Tyrant.Framework
         public static void Load(LoadedMod mod, List<TyrantMod> into)
         {
             var id = mod.Manifest.Id;
-            var path = Path.Combine(mod.Directory, mod.Manifest.Assembly!);
-            if (!ModPaths.IsInside(path, mod.Directory))
-            {
-                FrameworkMod.Log.Warning($"{id}: its assembly \"{mod.Manifest.Assembly}\" points outside the mod folder; its code is not loaded.");
-                return;
-            }
-            if (!File.Exists(path))
-            {
-                FrameworkMod.Log.Warning($"{id}: its assembly \"{mod.Manifest.Assembly}\" is missing — reinstall the mod from Tyrant.");
-                return;
-            }
             try
             {
+                // Inside the try: a path with characters Mono rejects ("bin|Mod.dll") must only skip this mod's code.
+                var path = Path.Combine(mod.Directory, mod.Manifest.Assembly!);
+                if (!ModPaths.IsInside(path, mod.Directory))
+                {
+                    FrameworkMod.Log.Warning($"{id}: its assembly \"{mod.Manifest.Assembly}\" points outside the mod folder; its code is not loaded.");
+                    return;
+                }
+                if (!File.Exists(path))
+                {
+                    FrameworkMod.Log.Warning($"{id}: its assembly \"{mod.Manifest.Assembly}\" is missing — reinstall the mod from Tyrant.");
+                    return;
+                }
                 var types = Assembly.LoadFrom(path).GetTypes().Where(t => typeof(TyrantMod).IsAssignableFrom(t) && !t.IsAbstract).ToList();
                 if (types.Count == 0) FrameworkMod.Log.Warning($"{id}: {mod.Manifest.Assembly} has no TyrantMod class; nothing to run.");
                 foreach (var type in types)

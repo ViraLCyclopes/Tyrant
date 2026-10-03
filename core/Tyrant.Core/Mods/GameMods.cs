@@ -62,8 +62,8 @@ public sealed class GameMods(Func<GameInstall, bool>? isGameRunning = null)
 
     public void Remove(GameInstall install, string id)
     {
+        var target = InstalledFolder(install, id);
         RefuseWhileRunning(install, "removing a mod");
-        var target = Path.Combine(ModLoaderInstaller.ModsDir(install), id);
         var entries = ReadList(install);
         var listed = entries.RemoveAll(e => e.Id == id) > 0;
         if (!Directory.Exists(target) && !listed)
@@ -74,7 +74,7 @@ public sealed class GameMods(Func<GameInstall, bool>? isGameRunning = null)
 
     public void SetEnabled(GameInstall install, string id, bool enabled)
     {
-        if (!Directory.Exists(Path.Combine(ModLoaderInstaller.ModsDir(install), id)))
+        if (!Directory.Exists(InstalledFolder(install, id)))
             throw new TyrantException(TyrantErrorCode.ModNotFound, $"'{id}' is not installed in the game.");
         var entries = ReadList(install);
         var at = entries.FindIndex(e => e.Id == id);
@@ -113,6 +113,21 @@ public sealed class GameMods(Func<GameInstall, bool>? isGameRunning = null)
         var target = Path.Combine(ModLoaderInstaller.ModsDir(install), mod.Id);
         if (!Directory.Exists(target)) return ModInstallState.NotInstalled;
         return ContentHash(target) == ContentHash(mod.Dir) ? ModInstallState.Installed : ModInstallState.Changed;
+    }
+
+    /// <summary>
+    /// UserData/Tyrant/Mods/&lt;id&gt; for an id that is one plain folder name; anything else ("..", ".", a path) is refused
+    /// before a single file is touched, so remove can never delete outside the mods folder.
+    /// </summary>
+    private static string InstalledFolder(GameInstall install, string id)
+    {
+        var root = Path.GetFullPath(ModLoaderInstaller.ModsDir(install));
+        var plain = !string.IsNullOrWhiteSpace(id) && id is not ("." or "..") && !Path.IsPathRooted(id)
+                    && Path.GetFileName(id) == id && id.IndexOfAny(Path.GetInvalidFileNameChars()) < 0;
+        var target = plain ? Path.GetFullPath(Path.Combine(root, id)) : null;
+        if (target is null || !string.Equals(Path.GetDirectoryName(target), root, StringComparison.OrdinalIgnoreCase))
+            throw new TyrantException(TyrantErrorCode.ModIdInvalid, $"'{id}' is not a mod id: use the name of an installed mod (its folder under UserData/Tyrant/Mods).");
+        return target;
     }
 
     private static string ContentHash(string dir)

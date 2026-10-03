@@ -103,4 +103,30 @@ public class ModCatalogTests
     {
         Assert.Equal(sign, Math.Sign(VersionText.Compare(a, b)));
     }
+
+    [Fact]
+    public void Discover_turns_an_unreadable_mod_into_a_skipped_mod_and_finds_the_rest()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "tyrant-tests", Guid.NewGuid().ToString("N"), "Mods");
+        Directory.CreateDirectory(Path.Combine(root, "fine"));
+        File.WriteAllText(Path.Combine(root, "fine", "mod.json"), """{ "format": 1, "id": "fine" }""");
+        Directory.CreateDirectory(Path.Combine(root, "locked"));
+        var lockedPath = Path.Combine(root, "locked", "mod.json");
+        File.WriteAllText(lockedPath, """{ "format": 1, "id": "locked" }""");
+
+        List<ModSource> sources;
+        using (File.Open(lockedPath, FileMode.Open, FileAccess.Read, FileShare.None)) // held open elsewhere: reading it fails
+            sources = ModCatalog.Discover(root);
+        var plan = ModCatalog.Plan(sources, null, "0.1.0");
+
+        Assert.Equal(new[] { "fine" }, Ids(plan));
+        Assert.Contains(plan.Skipped, s => s.Id == "locked" && s.Reason.Contains("could not be read"));
+        Assert.Empty(ModCatalog.Discover(Path.Combine(root, "nowhere")));
+    }
+
+    [Fact]
+    public void A_path_that_cannot_be_resolved_is_never_inside_a_mod()
+    {
+        Assert.False(ModPaths.IsInside(@"C:\m\bad" + "\0" + "name.dll", @"C:\m")); // a NUL makes the path unresolvable
+    }
 }

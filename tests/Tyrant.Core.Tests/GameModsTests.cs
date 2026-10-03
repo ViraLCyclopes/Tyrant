@@ -136,4 +136,35 @@ public class GameModsTests
         Assert.Equal("hand-made", listed.Id);
         Assert.Contains("not valid JSON", listed.Error);
     }
+
+    [Theory]
+    [InlineData("..")]
+    [InlineData(".")]
+    [InlineData("a/b")]
+    [InlineData(@"..\..")]
+    public void Remove_and_enable_refuse_ids_that_are_not_a_plain_folder_name(string id)
+    {
+        var (game, install, ws) = Setup();
+        using var _ = game;
+        var mods = new GameMods();
+        mods.Install(install, Mod(ws, "red-spot"));
+
+        Assert.Equal(TyrantErrorCode.ModIdInvalid, Assert.Throws<TyrantException>(() => mods.Remove(install, id)).Code);
+        Assert.Equal(TyrantErrorCode.ModIdInvalid, Assert.Throws<TyrantException>(() => mods.SetEnabled(install, id, false)).Code);
+        Assert.True(File.Exists(Path.Combine(ModLoaderInstaller.RecordDir(install), "install.json"))); // nothing outside the mod was touched
+        Assert.True(Directory.Exists(Path.Combine(ModLoaderInstaller.ModsDir(install), "red-spot")));
+    }
+
+    [Fact]
+    public void Remove_refuses_an_absolute_path()
+    {
+        var (game, install, ws) = Setup();
+        using var _ = game;
+        var mod = Mod(ws, "red-spot");
+
+        var ex = Assert.Throws<TyrantException>(() => new GameMods().Remove(install, mod.Dir)); // e.g. a folder dragged into the terminal
+
+        Assert.Equal(TyrantErrorCode.ModIdInvalid, ex.Code);
+        Assert.True(Directory.Exists(mod.Dir));
+    }
 }

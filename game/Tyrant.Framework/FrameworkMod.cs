@@ -52,12 +52,8 @@ namespace Tyrant.Framework
         private void Load()
         {
             var root = Path.Combine(MelonEnvironment.UserDataDirectory, "Tyrant");
-            var modsDir = Path.Combine(root, "Mods");
-            var sources = Directory.Exists(modsDir)
-                ? Directory.GetDirectories(modsDir).Select(SourceOf).ToList()
-                : new List<ModSource>();
-            var listPath = Path.Combine(root, ModList.FileName);
-            var plan = ModCatalog.Plan(sources, File.Exists(listPath) ? File.ReadAllText(listPath) : null, FrameworkInfo.Version);
+            var sources = ModCatalog.Discover(Path.Combine(root, "Mods")); // an unreadable mod is skipped, not fatal
+            var plan = ModCatalog.Plan(sources, ReadList(Path.Combine(root, ModList.FileName)), FrameworkInfo.Version);
 
             foreach (var warning in plan.Warnings) Log.Warning(warning);
             foreach (var skipped in plan.Skipped) Log.Warning($"{skipped.Id}: skipped — {skipped.Reason}");
@@ -66,16 +62,24 @@ namespace Tyrant.Framework
             foreach (var mod in plan.Mods)
             {
                 Log.Msg($"{mod.Manifest.Id} {mod.Manifest.Version}: {mod.Manifest.Replace.Count} texture replacement(s){(mod.Manifest.Assembly == null ? "" : ", code")}");
-                if (mod.Manifest.Assembly != null) CodeModLoader.Load(mod, CodeMods);
+                if (mod.Manifest.Assembly != null) CodeModLoader.Load(mod, CodeMods); // logs and skips a broken code mod
             }
             if (Replacements.Count > 0 || CodeMods.Count > 0) AnimalTexturePatch.Apply(HarmonyInstance);
             Log.Msg($"Tyrant framework {FrameworkInfo.Version}: {plan.Mods.Count} mod(s) loaded, {plan.Skipped.Count} skipped.");
         }
 
-        private static ModSource SourceOf(string directory)
+        /// <summary>mods.json text, or null when it is missing or unreadable (then every mod loads, sorted by id).</summary>
+        private static string? ReadList(string path)
         {
-            var manifest = Path.Combine(directory, ModManifest.FileName);
-            return new ModSource(Path.GetFileName(directory), directory, File.Exists(manifest) ? File.ReadAllText(manifest) : null);
+            try
+            {
+                return File.Exists(path) ? File.ReadAllText(path) : null;
+            }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+            {
+                Log.Warning($"UserData/Tyrant/{ModList.FileName} could not be read ({ex.Message}); every installed mod is loaded, sorted by id.");
+                return null;
+            }
         }
     }
 }

@@ -72,14 +72,16 @@ public sealed class ModLoaderInstaller(string expectedSha256 = ModLoaderInstalle
     /// <summary>One-line result of an install, shared by the CLI and the app.</summary>
     public static string InstallSummary(InstallState before, InstallRecord record) => before switch
     {
-        InstallState.Installed => "Updated the dumper mod; it was already installed.",
-        InstallState.NotInstalled => $"Installed {LoaderName} {Version} and the dumper mod ({record.Files.Count} files added to the game folder).",
-        _ => $"Added the dumper mod to your existing {LoaderName}.",
+        InstallState.Installed => "Updated Tyrant's dumper and framework; they were already installed.",
+        InstallState.NotInstalled => $"Installed {LoaderName} {Version} and Tyrant's dumper and framework ({record.Files.Count} files added to the game folder).",
+        _ => $"Added Tyrant's dumper and framework to your existing {LoaderName}.",
     };
 
     /// <summary>One-line result of an uninstall, shared by the CLI and the app.</summary>
     public static string UninstallSummary(UninstallResult result) =>
-        (result.RemovedLoader ? "Removed MelonLoader and the dumper mod; the game folder is back to vanilla." : "Removed the dumper mod.")
+        (result.RemovedLoader
+            ? "Removed MelonLoader, Tyrant's dumper and framework, and the installed mods; the game folder is back to vanilla."
+            : "Removed Tyrant's dumper, framework and installed mods.")
         + (result.Note is null ? "" : " " + result.Note);
 
     public static InstallState GetState(GameInstall install)

@@ -339,8 +339,10 @@ public class ModLoaderInstallerTests
         Assert.Contains("2 files", ModLoaderInstaller.InstallSummary(InstallState.NotInstalled, record));
         Assert.Contains("existing MelonLoader", ModLoaderInstaller.InstallSummary(InstallState.LoaderOnly, record));
         Assert.Contains("already installed", ModLoaderInstaller.InstallSummary(InstallState.Installed, record));
+        Assert.Contains("dumper and framework", ModLoaderInstaller.InstallSummary(InstallState.NotInstalled, record));
         Assert.Contains("back to vanilla", ModLoaderInstaller.UninstallSummary(new UninstallResult(true, null)));
-        Assert.Equal("Removed the dumper mod. MelonLoader was kept because other mods have files in Mods.",
+        Assert.Contains("installed mods", ModLoaderInstaller.UninstallSummary(new UninstallResult(true, null)));
+        Assert.Equal("Removed Tyrant's dumper, framework and installed mods. MelonLoader was kept because other mods have files in Mods.",
             ModLoaderInstaller.UninstallSummary(new UninstallResult(false, "MelonLoader was kept because other mods have files in Mods.")));
     }
 

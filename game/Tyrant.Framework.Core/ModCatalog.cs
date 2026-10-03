@@ -1,23 +1,29 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 
 namespace Tyrant.Framework.Core
 {
-    /// <summary>One folder in UserData/Tyrant/Mods: its name, full path and mod.json text (null when there is none).</summary>
+    /// <summary>
+    /// One folder in UserData/Tyrant/Mods: its name, full path and mod.json text (null when there is none, or when it
+    /// could not be read — then ReadError says why).
+    /// </summary>
     public sealed class ModSource
     {
-        public ModSource(string folder, string directory, string? manifestJson)
+        public ModSource(string folder, string directory, string? manifestJson, string? readError = null)
         {
             Folder = folder;
             Directory = directory;
             ManifestJson = manifestJson;
+            ReadError = readError;
         }
 
         public string Folder { get; }
         public string Directory { get; }
         public string? ManifestJson { get; }
+        public string? ReadError { get; }
     }
 
     public sealed class LoadedMod
@@ -54,6 +60,27 @@ namespace Tyrant.Framework.Core
     /// <summary>Decides which mods load and in what order; a broken or unmet mod is skipped with a reason, never fatal.</summary>
     public static class ModCatalog
     {
+        /// <summary>Every mod folder under modsDir with its mod.json; a file that cannot be read becomes a ReadError, never an exception.</summary>
+        public static List<ModSource> Discover(string modsDir)
+        {
+            var sources = new List<ModSource>();
+            if (!System.IO.Directory.Exists(modsDir)) return sources;
+            foreach (var dir in System.IO.Directory.GetDirectories(modsDir).OrderBy(d => d, StringComparer.Ordinal))
+            {
+                var folder = Path.GetFileName(dir);
+                var path = Path.Combine(dir, ModManifest.FileName);
+                try
+                {
+                    sources.Add(new ModSource(folder, dir, File.Exists(path) ? File.ReadAllText(path) : null));
+                }
+                catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+                {
+                    sources.Add(new ModSource(folder, dir, null, ex.Message));
+                }
+            }
+            return sources;
+        }
+
         public static LoadPlan Plan(IEnumerable<ModSource> sources, string? modsJson, string frameworkVersion)
         {
             var plan = new LoadPlan();
@@ -71,6 +98,11 @@ namespace Tyrant.Framework.Core
             var parsed = new Dictionary<string, LoadedMod>(StringComparer.Ordinal);
             foreach (var source in sources)
             {
+                if (source.ReadError != null)
+                {
+                    plan.Skipped.Add(new SkippedMod(source.Folder, "mod.json could not be read: " + source.ReadError));
+                    continue;
+                }
                 if (source.ManifestJson == null)
                 {
                     plan.Skipped.Add(new SkippedMod(source.Folder, "mod.json is missing."));

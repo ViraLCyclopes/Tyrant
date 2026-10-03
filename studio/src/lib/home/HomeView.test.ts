@@ -89,4 +89,33 @@ describe('HomeView', () => {
 
     expect(platform.revealed).toEqual(['D:\\ws']);
   });
+
+  it('uninstall asks first, naming installed mods, and does nothing when declined', async () => {
+    const { rpc, platform, session } = setup();
+    const mod = (id: string, state: string) => ({ id, name: id, version: '1.0.0', author: null, replacements: 1, state, enabled: true, dir: null, error: null });
+    rpc.on('mods.list', () => ({ mods: [mod('red-spot', 'installed'), mod('hand-made', 'gameOnly'), mod('draft', 'notInstalled')], frameworkInstalled: true }));
+    session.workspace = workspaceStatus({ dumper: 'installed' });
+    platform.confirmAnswer = false;
+    renderWith(HomeView, session);
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Uninstall from game' }));
+
+    await waitFor(() => expect(platform.confirms).toHaveLength(1));
+    expect(platform.confirms[0]).toContain('2 installed mod');
+    expect(platform.confirms[0]).toContain('not in this workspace');
+    expect(rpc.callsTo('dump.uninstall')).toHaveLength(0);
+  });
+
+  it('uninstall goes ahead once confirmed', async () => {
+    const { rpc, session } = setup();
+    rpc.on('mods.list', () => ({ mods: [], frameworkInstalled: true }));
+    rpc.on('dump.uninstall', () => ({ removedLoader: true, message: 'Removed MelonLoader, Tyrant and its installed mods; the game folder is back to vanilla.' }));
+    rpc.on('workspace.status', () => workspaceStatus({ dumper: 'notInstalled' }));
+    session.workspace = workspaceStatus({ dumper: 'installed' });
+    renderWith(HomeView, session);
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Uninstall from game' }));
+
+    await waitFor(() => expect(session.notice).toContain('back to vanilla'));
+  });
 });

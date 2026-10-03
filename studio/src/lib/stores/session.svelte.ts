@@ -165,7 +165,23 @@ export class Session {
     return this.runJob('dump.run', { timeoutSeconds: 300 }, 'Data dump');
   }
 
+  /** Removes Tyrant from the game after asking: this also deletes every installed mod, some of which may exist nowhere else. */
   async uninstallDumper(): Promise<void> {
+    let installed: { state: string }[] = [];
+    try {
+      installed = (await this.rpc.call('mods.list')).mods.filter((m) => m.state !== 'notInstalled');
+    } catch {
+      // no workspace mods to describe; the question below still covers what is removed
+    }
+    const gameOnly = installed.filter((m) => m.state === 'gameOnly').length;
+    const message = [
+      "Remove Tyrant from the game? This removes Tyrant's dumper and framework, and MelonLoader if Tyrant installed it and no other mods use it.",
+      installed.length
+        ? `It also removes ${installed.length} installed mod(s)${gameOnly ? `; ${gameOnly} of them ${gameOnly === 1 ? 'is' : 'are'} not in this workspace, so Tyrant cannot reinstall ${gameOnly === 1 ? 'it' : 'them'}` : ''}.`
+        : '',
+      'Mods in your workspace stay; you can install them again.',
+    ].filter(Boolean).join(' ');
+    if (!(await this.platform.confirm(message, 'Uninstall from game'))) return;
     const result = await this.safely(() => this.rpc.call('dump.uninstall'));
     if (result) this.notice = result.message;
     await this.refreshStatus();

@@ -6,11 +6,18 @@ namespace Tyrant.Framework.Core
 {
     public static class ModPaths
     {
-        /// <summary>True when path, once resolved, lies inside directory: mods may only use their own files.</summary>
+        /// <summary>True when path, once resolved, lies inside directory: mods may only use their own files. A path that cannot be resolved is not inside.</summary>
         public static bool IsInside(string path, string directory)
         {
-            var root = Path.GetFullPath(directory).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
-            return Path.GetFullPath(path).StartsWith(root, StringComparison.OrdinalIgnoreCase);
+            try
+            {
+                var root = Path.GetFullPath(directory).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+                return Path.GetFullPath(path).StartsWith(root, StringComparison.OrdinalIgnoreCase);
+            }
+            catch (Exception ex) when (ex is ArgumentException || ex is NotSupportedException || ex is PathTooLongException)
+            {
+                return false;
+            }
         }
     }
 
