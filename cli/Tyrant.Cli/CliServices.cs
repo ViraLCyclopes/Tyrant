@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using Tyrant.Core.Assets;
+using Tyrant.Core.Dumping;
 using Tyrant.Core.Errors;
 using Tyrant.Core.Install;
 using Tyrant.Core.Jobs;
@@ -34,6 +35,9 @@ internal static class CliServices
             Console.Error.WriteLine("warning: the asset index was made by an older Tyrant; run 'tyrant assets index' to refresh it (textured previews need it).");
         return index;
     }
+
+    /// <summary>Starts the game and tells whether it runs; the CLI's tests replace it so they never depend on the real game.</summary>
+    public static IGameLauncher Launcher { get; set; } = new SteamLauncher();
 
     public static void PrintError(TyrantException ex)
     {

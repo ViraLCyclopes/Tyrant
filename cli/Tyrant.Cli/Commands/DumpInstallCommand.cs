@@ -18,7 +18,7 @@ public sealed class DumpInstallCommand : Command<DumpInstallCommand.Settings>
         var (ws, install) = CliServices.OpenWorkspace(settings);
         var zip = settings.LoaderZip;
         var before = ModLoaderInstaller.GetState(install);
-        var installer = new ModLoaderInstaller(isGameRunning: new SteamLauncher().IsRunning);
+        var installer = new ModLoaderInstaller(isGameRunning: CliServices.Launcher.IsRunning);
         // Only a fresh install needs the MelonLoader archive; an existing MelonLoader just gets the mod.
         if (zip is null && before == InstallState.NotInstalled)
         {

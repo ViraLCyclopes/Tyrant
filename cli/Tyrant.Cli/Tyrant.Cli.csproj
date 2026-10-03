@@ -31,4 +31,7 @@
     </ItemGroup>
     <Copy SourceFiles="@(PublishedDumperFiles)" DestinationFolder="$(PublishDir)dumper" SkipUnchangedFiles="true" />
   </Target>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Tyrant.Cli.Tests" />
+  </ItemGroup>
 </Project>

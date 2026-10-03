@@ -24,7 +24,7 @@ public sealed class DumpRunCommand : Command<DumpRunCommand.Settings>
         DumpManifestFile manifest;
         try
         {
-            manifest = new DumpRunner(new SteamLauncher())
+            manifest = new DumpRunner(CliServices.Launcher)
                 .Run(install, ws, TimeSpan.FromSeconds(Math.Max(settings.TimeoutSeconds, 1)), new ConsoleProgress(), cts.Token);
         }
         catch (OperationCanceledException)

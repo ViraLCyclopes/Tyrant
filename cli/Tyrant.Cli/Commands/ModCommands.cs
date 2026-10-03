@@ -146,7 +146,7 @@ public sealed class ModInstallCommand : Command<ModInstallCommand.Settings>
             Console.WriteLine("Fix the errors above, then install again.");
             return ExitCodes.Error;
         }
-        var launcher = new SteamLauncher();
+        var launcher = CliServices.Launcher;
         var componentDir = Path.Combine(AppContext.BaseDirectory, "dumper");
         if (ModLoaderInstaller.FrameworkStatus(install, componentDir) != FrameworkState.Current)
         {
@@ -171,7 +171,7 @@ public sealed class ModRemoveCommand : Command<ModSettings>
     public override int Execute(CommandContext context, ModSettings settings)
     {
         var (_, install) = CliServices.OpenWorkspace(settings);
-        new GameMods(new SteamLauncher().IsRunning).Remove(install, settings.Id);
+        new GameMods(CliServices.Launcher.IsRunning).Remove(install, settings.Id);
         Console.WriteLine($"Removed '{settings.Id}' from the game.");
         return ExitCodes.Ok;
     }
@@ -285,7 +285,7 @@ public sealed class ModCleanSkinsCommand : Command<ModCleanSkinsCommand.Settings
     public override int Execute(CommandContext context, Settings settings)
     {
         var (_, install) = CliServices.OpenWorkspace(settings);
-        var slots = new SkinSlots(new SteamLauncher().IsRunning);
+        var slots = new SkinSlots(CliServices.Launcher.IsRunning);
         if (settings.Forget.Length > 0)
         {
             Console.WriteLine($"Forgot {slots.Forget(install, settings.Forget)} skin number(s). Saved animals that wore them show their species' skin 0 until a new skin takes the number.");
