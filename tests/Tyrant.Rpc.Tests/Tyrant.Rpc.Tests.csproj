@@ -10,6 +10,7 @@
     <ProjectReference Include="..\..\core\Tyrant.Rpc\Tyrant.Rpc.csproj" />
     <ProjectReference Include="..\..\game\Tyrant.Dumper.Serialization\Tyrant.Dumper.Serialization.csproj" />
     <Compile Include="..\Tyrant.Core.Tests\FakeGame.cs" Link="FakeGame.cs" />
+    <Compile Include="..\Tyrant.Core.Tests\FakeAssetReader.cs" Link="FakeAssetReader.cs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />

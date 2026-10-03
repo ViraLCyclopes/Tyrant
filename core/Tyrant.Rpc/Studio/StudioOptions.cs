@@ -1,3 +1,4 @@
+using Tyrant.Core.Assets;
 using Tyrant.Core.Dumping;
 using Tyrant.Core.Install;
 using Tyrant.Core.Workspaces;
@@ -17,4 +18,7 @@ public sealed class StudioOptions
     public required Func<Workspace, CancellationToken, string> LoaderZip { get; init; }
 
     public required Func<ModLoaderInstaller> Installer { get; init; }
+
+    /// <summary>Reads the game's bundles (previews, exports, species packs); tests use a fake.</summary>
+    public IAssetReader AssetReader { get; init; } = new BundleAssetReader();
 }

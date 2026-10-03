@@ -1,3 +1,4 @@
+using Tyrant.Rpc.Assets;
 using System.Text;
 using Tyrant.Rpc.Data;
 using Tyrant.Rpc.Jobs;
@@ -19,6 +20,7 @@ public static class RpcHost
         server.Register(new JobMethods(jobs));
         server.Register(new StudioMethods(session, jobs));
         server.Register(new DataMethods(session));
+        server.Register(new AssetsMethods(session, jobs));
         return (server, jobs);
     }
 

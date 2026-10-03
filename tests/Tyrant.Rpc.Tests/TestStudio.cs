@@ -1,3 +1,5 @@
+using Tyrant.Core.Tests;
+using Tyrant.Core.Assets;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -24,13 +26,14 @@ public static class TestStudio
         public void Launch(GameInstall install) { }
     }
 
-    public static StudioOptions Options(IGameLauncher? launcher = null, (string Path, string Sha)? loaderZip = null) => new()
+    public static StudioOptions Options(IGameLauncher? launcher = null, (string Path, string Sha)? loaderZip = null, IAssetReader? reader = null) => new()
     {
         Locator = new GameInstallLocator(new NoSteam()),
         Launcher = launcher ?? new NeverLauncher(),
         DumperDir = FakeDumperDir(),
         LoaderZip = (_, _) => loaderZip?.Path ?? throw new InvalidOperationException("This test has no MelonLoader archive."),
         Installer = () => new ModLoaderInstaller(loaderZip?.Sha ?? ModLoaderInstaller.Sha256, _ => false),
+        AssetReader = reader ?? new FakeAssetReader(),
     };
 
     /// <summary>A zip shaped like the MelonLoader release; returns (path, sha256).</summary>
