@@ -74,8 +74,8 @@ namespace Tyrant.Framework
         {
             try
             {
-                UiDump.Once(__instance); // temporary: see UiDump
                 NurseryScroll.Ensure(__instance, rebuild);
+                SkinBrowser.Refresh(__instance, rebuild);
             }
             catch (Exception ex)
             {
@@ -124,7 +124,7 @@ namespace Tyrant.Framework
 
     /// <summary>
     /// Makes the Nursery's skin row scroll sideways when it holds more than 5 visible skins (uGUI by reflection). The row moves into
-    /// a new viewport that takes the row's exact old place, so the panel around it is unchanged. Inside it, swatches stay square at
+    /// a new viewport that takes the row's exact old place, so the panel around it is unchanged. Inside it, swatches keep the width they have with 5 skins at
     /// the row's height and the row grows to fit them. With 5 or fewer, the row fills the viewport exactly as the game lays it out.
     /// </summary>
     internal static class NurseryScroll
@@ -205,13 +205,14 @@ namespace Tyrant.Framework
 
         private static void Scroll(RectTransform content, RectTransform viewport, List<Component> toggles, Component template, bool rebuild)
         {
-            var size = viewport.rect.height > 1f ? viewport.rect.height : ((RectTransform)template.transform).rect.height;
+            var spacing = LayoutGroup != null && content.GetComponent(LayoutGroup) is Component group ? Traverse.Create(group).Property("spacing").GetValue<float>() : 0f;
+            var size = viewport.rect.width > 1f ? (viewport.rect.width - (Shown - 1) * spacing) / Shown : ((RectTransform)template.transform).rect.width; // as wide as the game's own with 5 skins
             if (size > 1f)
                 foreach (var toggle in toggles)
                 {
                     var element = Traverse.Create(toggle.GetComponent(LayoutElement!) ?? toggle.gameObject.AddComponent(LayoutElement!));
                     element.Property("minWidth").SetValue(size);
-                    element.Property("preferredWidth").SetValue(size); // square swatches, as with 5 or fewer
+                    element.Property("preferredWidth").SetValue(size);
                     element.Property("flexibleWidth").SetValue(0f);
                 }
             content.anchorMin = new Vector2(0f, 0f);
@@ -225,7 +226,6 @@ namespace Tyrant.Framework
 
             // A new species or a fresh row: show the selected swatch (the first 5 when it is among them).
             var selected = toggles.FindIndex(t => Traverse.Create(t).Property("isOn").GetValue<bool>());
-            var spacing = LayoutGroup != null && content.GetComponent(LayoutGroup) is Component group ? Traverse.Create(group).Property("spacing").GetValue<float>() : 0f;
             content.anchoredPosition = new Vector2(-Math.Max(0, selected - (Shown - 1)) * (Math.Max(size, 1f) + spacing), 0f);
             if (scroll != null) AccessTools.Method(scroll.GetType(), "StopMovement")?.Invoke(scroll, null);
         }
