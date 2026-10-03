@@ -77,11 +77,18 @@ namespace Tyrant.Framework
             try
             {
                 NurseryScroll.Ensure(__instance, rebuild);
-                SkinBrowser.Refresh(__instance, rebuild);
             }
             catch (Exception ex)
             {
                 FrameworkMod.Log.Warning("The Nursery skin row could not be made scrollable: " + ex.Message);
+            }
+            try
+            {
+                SkinBrowser.Refresh(__instance, rebuild);
+            }
+            catch (Exception ex)
+            {
+                FrameworkMod.Log.Warning("The All skins button could not be updated: " + ex.Message);
             }
         }
 
