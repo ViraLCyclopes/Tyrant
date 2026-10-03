@@ -1,41 +1,23 @@
+/* Tyrant's theme: green is the dominant colour (the app icon's green), with cream text and buttons. Always dark. */
 :root {
-  color-scheme: light dark;
-  --bg: #f6f4ee;
-  --panel: #ffffff;
-  --panel-2: #efece3;
-  --text: #1f2421;
-  --muted: #5d665f;
-  --border: #d9d4c7;
-  --accent: #2f6b4f;
-  --accent-text: #ffffff;
-  --warn-bg: #fff3d6;
-  --warn-text: #7a5300;
-  --error-bg: #fde7e4;
-  --error-text: #8a1f11;
-  --ok-bg: #e2f2e8;
-  --ok-text: #1d5c38;
+  color-scheme: dark;
+  --bg: #12261c;
+  --panel: #1b3a2b;
+  --panel-2: #24493a;
+  --text: #f2efe4;
+  --muted: #a9c2b3;
+  --border: #2f5a46;
+  --accent: #f3ead2;
+  --accent-text: #173326;
+  --warn-bg: #4a3a12;
+  --warn-text: #f3cf7a;
+  --error-bg: #4d1f1a;
+  --error-text: #ffb4a8;
+  --ok-bg: #2a5a40;
+  --ok-text: #c8f0d6;
   --radius: 8px;
   --font: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
   --mono: 'Cascadia Mono', Consolas, monospace;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #161a17;
-    --panel: #1f2420;
-    --panel-2: #272d28;
-    --text: #e7e9e4;
-    --muted: #a2aba3;
-    --border: #343b35;
-    --accent: #5fae84;
-    --accent-text: #0e1a13;
-    --warn-bg: #3a2f12;
-    --warn-text: #f3cf7a;
-    --error-bg: #3d1d18;
-    --error-text: #f4a99c;
-    --ok-bg: #1b3326;
-    --ok-text: #8fd6ab;
-  }
 }
 
 * { box-sizing: border-box; }
