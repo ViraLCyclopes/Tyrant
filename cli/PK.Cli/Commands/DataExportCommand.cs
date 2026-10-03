@@ -1,0 +1,46 @@
+using System.ComponentModel;
+using System.Text.Json;
+using PK.Core.Data;
+using PK.Core.Errors;
+using Spectre.Console.Cli;
+
+namespace PK.Cli.Commands;
+
+public sealed class DataExportCommand : Command<DataExportCommand.Settings>
+{
+    public sealed class Settings : WorkspaceSettings
+    {
+        [CommandArgument(0, "<TYPE>")]
+        [Description("Data type, full or short name (see 'pk data types').")]
+        public string Type { get; set; } = "";
+
+        [CommandOption("--format <FORMAT>")]
+        [Description("csv (default) or json.")]
+        public string Format { get; set; } = "csv";
+
+        [CommandOption("--out <FILE>")]
+        [Description("Output file (default <workspace>/exports/<Type>.<format>).")]
+        public string? Out { get; set; }
+
+        public override Spectre.Console.ValidationResult Validate() =>
+            Format is "csv" or "json" ? Spectre.Console.ValidationResult.Success() : Spectre.Console.ValidationResult.Error("--format must be csv or json");
+    }
+
+    public override int Execute(CommandContext context, Settings settings)
+    {
+        var (ws, install) = CliServices.OpenWorkspace(settings);
+        if (settings.Out is not null && install.ContainsPath(settings.Out))
+            throw new PkException(PkErrorCode.OutputInGameFolder, $"Refusing to write '{settings.Out}' inside the game folder.");
+
+        var store = DataStore.Open(ws);
+        var type = store.FindType(settings.Type);
+        var output = Path.GetFullPath(settings.Out ?? Path.Combine(ws.Dir, "exports", $"{type.ShortName}.{settings.Format}"));
+        Directory.CreateDirectory(Path.GetDirectoryName(output)!);
+        var objects = store.LoadAll(type).ToList();
+        File.WriteAllText(output, settings.Format == "csv"
+            ? DataStore.ToCsv(objects)
+            : JsonSerializer.Serialize(objects.Select(o => o.Root), new JsonSerializerOptions { WriteIndented = true }));
+        Console.WriteLine($"Exported {objects.Count} {type.ShortName} objects -> {output}");
+        return ExitCodes.Ok;
+    }
+}

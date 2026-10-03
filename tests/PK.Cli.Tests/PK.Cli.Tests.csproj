@@ -8,6 +8,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\cli\PK.Cli\PK.Cli.csproj" />
+    <ProjectReference Include="..\..\game\PK.Dumper.Serialization\PK.Dumper.Serialization.csproj" />
     <Compile Include="..\PK.Core.Tests\FakeGame.cs" Link="FakeGame.cs" />
   </ItemGroup>
   <ItemGroup>

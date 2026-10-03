@@ -55,6 +55,21 @@ public static class CliApp
                 species.AddCommand<SpeciesPackCommand>("pack")
                     .WithDescription("Export one species' models, textures and targets.json to <workspace>/assets/species/<key>.");
             });
+            config.AddBranch("dump", dump =>
+            {
+                dump.AddCommand<DumpInstallCommand>("install")
+                    .WithDescription("Install BepInEx 5 and the dumper plugin into the game folder (reversible).");
+                dump.AddCommand<DumpRunCommand>("run")
+                    .WithDescription("Start the game once and dump every game database into <workspace>/data.");
+                dump.AddCommand<DumpUninstallCommand>("uninstall")
+                    .WithDescription("Remove exactly what 'pk dump install' added.");
+            });
+            config.AddBranch("data", data =>
+            {
+                data.AddCommand<DataTypesCommand>("types").WithDescription("List dumped data types and object counts.");
+                data.AddCommand<DataShowCommand>("show").WithDescription("List objects of a type, or print one object's JSON.");
+                data.AddCommand<DataExportCommand>("export").WithDescription("Export all objects of a type as CSV or JSON.");
+            });
         });
 
         try
