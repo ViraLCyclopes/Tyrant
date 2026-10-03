@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- Loaded inside the game (Unity Mono) from UserLibs/, and referenced by Tyrant itself: no dependencies. -->
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <RootNamespace>Tyrant.Framework.Core</RootNamespace>
+  </PropertyGroup>
+</Project>

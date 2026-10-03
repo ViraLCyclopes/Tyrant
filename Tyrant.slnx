@@ -9,11 +9,13 @@
   <Folder Name="/game/">
     <Project Path="game/Tyrant.Dumper.Serialization/Tyrant.Dumper.Serialization.csproj" />
     <Project Path="game/Tyrant.Dumper/Tyrant.Dumper.csproj" />
+    <Project Path="game/Tyrant.Framework.Core/Tyrant.Framework.Core.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Tyrant.Cli.Tests/Tyrant.Cli.Tests.csproj" />
     <Project Path="tests/Tyrant.Core.Tests/Tyrant.Core.Tests.csproj" />
     <Project Path="tests/Tyrant.Dumper.Tests/Tyrant.Dumper.Tests.csproj" />
+    <Project Path="tests/Tyrant.Framework.Tests/Tyrant.Framework.Tests.csproj" />
     <Project Path="tests/Tyrant.Rpc.Tests/Tyrant.Rpc.Tests.csproj" />
   </Folder>
 </Solution>
