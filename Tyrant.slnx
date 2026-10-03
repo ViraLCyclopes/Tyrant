@@ -1,0 +1,17 @@
+<Solution>
+  <Folder Name="/cli/">
+    <Project Path="cli/Tyrant.Cli/Tyrant.Cli.csproj" />
+  </Folder>
+  <Folder Name="/core/">
+    <Project Path="core/Tyrant.Core/Tyrant.Core.csproj" />
+  </Folder>
+  <Folder Name="/game/">
+    <Project Path="game/Tyrant.Dumper.Serialization/Tyrant.Dumper.Serialization.csproj" />
+    <Project Path="game/Tyrant.Dumper/Tyrant.Dumper.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Tyrant.Cli.Tests/Tyrant.Cli.Tests.csproj" />
+    <Project Path="tests/Tyrant.Core.Tests/Tyrant.Core.Tests.csproj" />
+    <Project Path="tests/Tyrant.Dumper.Tests/Tyrant.Dumper.Tests.csproj" />
+  </Folder>
+</Solution>

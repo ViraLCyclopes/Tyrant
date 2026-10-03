@@ -1,7 +1,7 @@
 {
-  "name": "pk-verify",
+  "name": "tyrant-verify",
   "private": true,
-  "description": "Verification helpers for PK Mod Studio output (not shipped).",
+  "description": "Verification helpers for Tyrant output (not shipped).",
   "dependencies": {
     "gltf-validator": "2.0.0-dev.3.10"
   }

@@ -7,4 +7,4 @@ TestResults/
 node_modules/
 target/
 # local workspaces created while testing
-pk-workspace*/
+tyrant-workspace*/
