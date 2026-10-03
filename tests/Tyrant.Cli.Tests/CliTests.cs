@@ -77,6 +77,8 @@ public class CliTests
         Assert.Equal(ExitCodes.Ok, code);
         Assert.Contains("ok", output);
         Assert.NotEmpty(Directory.EnumerateFiles(Path.Combine(dir, "source", "Assembly-CSharp"), "*.csproj"));
+        var stamp = File.ReadAllText(Path.Combine(dir, "source", "Assembly-CSharp", "tyrant-output.json"));
+        Assert.Contains("abc123def456", stamp); // the game build it was made from, next to the output (spec 2.3)
     }
 
     [Fact]
