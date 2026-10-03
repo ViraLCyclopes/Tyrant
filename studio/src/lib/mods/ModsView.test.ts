@@ -98,4 +98,11 @@ describe('ModsView', () => {
 
     await waitFor(() => expect(box.checked).toBe(true));
   });
+
+  it('says what each mod does', async () => {
+    const { session } = setup([row({ replacements: 1, skins: 2 })]);
+    renderWith(ModsView, session);
+
+    expect(await screen.findByText('Replaces 1 texture · Adds 2 skins')).toBeInTheDocument();
+  });
 });
