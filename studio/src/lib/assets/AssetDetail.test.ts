@@ -5,7 +5,7 @@ import type { AssetRow } from '$lib/rpc/types.gen';
 import { memoryStore } from '$lib/storage';
 import { FakePlatform } from '$lib/test/fakePlatform';
 import { FakeRpc } from '$lib/test/fakeRpc';
-import { renderWith } from '$lib/test/fixtures';
+import { renderWith, messages } from '$lib/test/fixtures';
 import { Session } from '$lib/stores/session.svelte';
 import AssetDetail from './AssetDetail.svelte';
 
@@ -40,7 +40,7 @@ describe('AssetDetail', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Copy GUID' }));
 
     expect(platform.copied).toEqual([row.containerPath, row.guid]);
-    await waitFor(() => expect(session.notice).toBe('GUID copied.'));
+    await waitFor(() => expect(messages(session, 'tab-test').join('\n')).toContain('GUID copied.'));
   });
 
   it('follows a reference to the asset it points at', async () => {

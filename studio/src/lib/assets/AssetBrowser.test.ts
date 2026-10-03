@@ -4,7 +4,7 @@ import type { AssetListParams, AssetRow } from '$lib/rpc/types.gen';
 import { memoryStore } from '$lib/storage';
 import { FakePlatform } from '$lib/test/fakePlatform';
 import { FakeRpc } from '$lib/test/fakeRpc';
-import { renderWith, workspaceStatus } from '$lib/test/fixtures';
+import { renderWith, workspaceStatus, messages } from '$lib/test/fixtures';
 import { Session } from '$lib/stores/session.svelte';
 import AssetBrowser from './AssetBrowser.svelte';
 
@@ -84,7 +84,20 @@ describe('AssetBrowser', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Export selected (1)' }));
 
     await waitFor(() => expect(rpc.callsTo('assets.export')[0]?.params).toEqual({ refs: [stegoD.ref] }));
-    await waitFor(() => expect(session.notice).toContain('Exported 1 assets'));
+    await waitFor(() => expect(messages(session, 'tab-test').join('\n')).toContain('Exported 1 assets'));
+  });
+
+  it('an export with failures is a warning, so the tab gets a marker', async () => {
+    const { rpc, session } = setup();
+    rpc.on('assets.export', () => ({ exported: 0, failed: 1, reportPath: 'D:\\ws\\report.json', failures: [{ ref: stegoD.ref, name: 'T_Stego_D', error: 'unreadable' }] }));
+    rpc.on('workspace.status', () => workspaceStatus({ hasAssetIndex: true }));
+    renderWith(AssetBrowser, session);
+    await screen.findByRole('button', { name: 'T_Stego_D' });
+
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Select T_Stego_D' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Export selected (1)' }));
+
+    await waitFor(() => expect(session.log.records.some((r) => r.level === 'warn' && r.message.includes('T_Stego_D'))).toBe(true));
   });
 
   it('clicking a name shows its details', async () => {
@@ -100,7 +113,7 @@ describe('AssetBrowser', () => {
     const { rpc, session } = setup();
     rpc.on('assets.export', () => ({
       exported: 1, failed: 0, reportPath: 'D:\ws\exports\asset-export-1.json', failures: [],
-      notes: ['Textures kept in other bundles need a newer asset index: click Index assets on the Home tab.'],
+      notes: ['Textures kept in other bundles need a newer asset index: click Index assets on the Workspace tab.'],
     }));
     rpc.on('workspace.status', () => workspaceStatus({ hasAssetIndex: true }));
     renderWith(AssetBrowser, session);
@@ -109,7 +122,7 @@ describe('AssetBrowser', () => {
     await fireEvent.click(screen.getByRole('checkbox', { name: 'Select T_Stego_D' }));
     await fireEvent.click(screen.getByRole('button', { name: 'Export selected (1)' }));
 
-    await waitFor(() => expect(session.notice).toContain('click Index assets'));
+    await waitFor(() => expect(messages(session, 'tab-test').join('\n')).toContain('click Index assets'));
   });
 
   it('says when bundles were downloaded since the last index', async () => {

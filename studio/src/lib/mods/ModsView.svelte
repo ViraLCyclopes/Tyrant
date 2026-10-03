@@ -1,10 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import type { ModCheckReport, ModRow, ModsListResult } from '$lib/rpc/types.gen';
+  import { getTab } from '$lib/shell/tab.svelte';
   import { getSession } from '$lib/stores/session.svelte';
   import CleanSkins from './CleanSkins.svelte';
 
   const session = getSession();
+  const tab = getTab();
   let list = $state<ModsListResult | null>(null);
   let cleaning = $state(false);
   let checks = $state<Record<string, ModCheckReport>>({});
@@ -21,12 +23,12 @@
   onMount(() => void refresh());
 
   async function refresh() {
-    const r = await session.quietly(() => session.rpc.call('mods.list'));
+    const r = await tab.quietly(() => session.rpc.call('mods.list'));
     if (r) list = r;
   }
 
   async function create() {
-    const r = await session.safely(() => session.rpc.call('mods.create', { id: newId.trim(), name: newName.trim() || null, author: null }));
+    const r = await tab.safely(() => session.rpc.call('mods.create', { id: newId.trim(), name: newName.trim() || null, author: null }));
     if (!r) return;
     list = r;
     newId = '';
@@ -34,33 +36,36 @@
   }
 
   async function check(row: ModRow) {
-    const r = await session.safely(() => session.rpc.call('mods.check', { id: row.id }));
+    const r = await tab.safely(() => session.rpc.call('mods.check', { id: row.id }));
     if (r) checks = { ...checks, [row.id]: r };
   }
 
   async function restoreCutouts(row: ModRow) {
-    const r = await session.safely(() => session.rpc.call('mods.restoreCutouts', { id: row.id }));
+    const r = await tab.safely(() => session.rpc.call('mods.restoreCutouts', { id: row.id }));
     if (!r) return;
     const done = r.restored.length
       ? `Restored the see-through parts of ${r.restored.length} PNG${r.restored.length === 1 ? '' : 's'} in '${row.id}'. Install it again to update the game.`
       : `Nothing to restore in '${row.id}'.`;
-    session.notice = r.problems.length ? `${done} Not done: ${r.problems.join(' ')}` : done;
+    tab.info(done);
+    for (const problem of r.problems) tab.warn(problem);
     await check(row);
   }
 
   async function install(row: ModRow) {
     const message = list?.frameworkInstalled
       ? `Copy '${row.name}' into the game (UserData\\Tyrant\\Mods\\${row.id})? No game file is replaced; Remove from game undoes it.`
-      : `Install '${row.name}' into the game? This also installs MelonLoader (if needed) and Tyrant's framework. No game file is replaced; Uninstall from game on the Home tab undoes everything.`;
+      : `Install '${row.name}' into the game? This also installs MelonLoader (if needed) and Tyrant's framework. No game file is replaced; Uninstall from game on the Workspace tab undoes everything.`;
     if (!(await session.platform.confirm(message, 'Install to game'))) return;
-    const r = await session.runJob('mods.install', { id: row.id }, `Install ${row.id}`);
-    if (r) session.notice = r.warnings.length ? `${r.message} Warnings: ${r.warnings.join(' ')}` : r.message;
+    const r = await session.runJob('mods.install', { id: row.id }, `Install ${row.id}`, tab);
+    if (!r) return;
+    tab.info(r.message);
+    for (const warning of r.warnings) tab.warn(warning);
     await refresh();
   }
 
   async function remove(row: ModRow) {
     if (!(await session.platform.confirm(`Remove '${row.name}' from the game?`, 'Remove from game'))) return;
-    const r = await session.safely(() => session.rpc.call('mods.remove', { id: row.id }));
+    const r = await tab.safely(() => session.rpc.call('mods.remove', { id: row.id }));
     if (r) list = r;
   }
 
@@ -72,7 +77,7 @@
   }
 
   async function setEnabled(row: ModRow, enabled: boolean, box: HTMLInputElement) {
-    const r = await session.safely(() => session.rpc.call('mods.enable', { id: row.id, enabled }));
+    const r = await tab.safely(() => session.rpc.call('mods.enable', { id: row.id, enabled }));
     if (r) list = r;
     else box.checked = !enabled; // the change did not happen
   }

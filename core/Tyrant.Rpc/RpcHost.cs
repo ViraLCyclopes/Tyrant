@@ -17,7 +17,8 @@ public static class RpcHost
     {
         var server = new RpcServer(send, log);
         var session = new StudioSession(options);
-        var jobs = new JobManager(server.Notify, session.Log);
+        session.Logged += (level, message) => server.Notify(StudioSession.LogMethod, new LogNotification(level, message));
+        var jobs = new JobManager(server.Notify, message => session.Log(message));
         server.Register(new JobMethods(jobs));
         server.Register(new StudioMethods(session, jobs));
         server.Register(new DataMethods(session));

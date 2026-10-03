@@ -2,9 +2,11 @@
   import { onMount } from 'svelte';
   import type { SpeciesRow } from '$lib/rpc/types.gen';
   import AddSkin from '$lib/mods/AddSkin.svelte';
+  import { getTab } from '$lib/shell/tab.svelte';
   import { getSession } from '$lib/stores/session.svelte';
 
   const session = getSession();
+  const tab = getTab();
   let species = $state<SpeciesRow[]>([]);
   let filter = $state('');
   let lastPack = $state<string | null>(null);
@@ -12,17 +14,17 @@
   const shown = $derived(species.filter((s) => s.displayName.toLowerCase().includes(filter.trim().toLowerCase())));
 
   onMount(async () => {
-    const r = await session.quietly(() => session.rpc.call('species.list'));
+    const r = await tab.quietly(() => session.rpc.call('species.list'));
     if (r) species = r.species;
   });
 
   async function exportPack(row: SpeciesRow) {
-    const r = await session.runJob('species.pack', { key: row.key }, `Species pack: ${row.displayName}`);
+    const r = await session.runJob('species.pack', { key: row.key }, `Species pack: ${row.displayName}`, tab);
     if (!r) return;
     lastPack = r.directory;
-    const failed = r.failed ? ` (${r.failed} failed)` : '';
     const notes = r.notes?.length ? ` ${r.notes.join(' ')}` : '';
-    session.notice = `Exported ${r.models} models and ${r.textures} textures to ${r.directory}${failed}.${notes}`;
+    tab.info(`Exported ${r.models} models and ${r.textures} textures to ${r.directory}.${notes}`);
+    if (r.failed) tab.warn(`${r.failed} file(s) of the ${row.displayName} pack could not be exported; see its report in that folder.`);
   }
 </script>
 

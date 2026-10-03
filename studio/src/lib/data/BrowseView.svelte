@@ -2,10 +2,12 @@
   import { onMount } from 'svelte';
   import { debounce } from '$lib/debounce';
   import type { DataTypeInfo } from '$lib/rpc/types.gen';
+  import { getTab } from '$lib/shell/tab.svelte';
   import { getSession } from '$lib/stores/session.svelte';
   import JsonTree from './JsonTree.svelte';
 
   const session = getSession();
+  const tab = getTab();
   let types = $state<DataTypeInfo[]>([]);
   let type = $state<string | null>(null);
   let filter = $state('');
@@ -16,7 +18,7 @@
   let objectSequence = 0;
 
   onMount(async () => {
-    const r = await session.quietly(() => session.rpc.call('data.types'));
+    const r = await tab.quietly(() => session.rpc.call('data.types'));
     if (r) types = r.types;
   });
 
@@ -32,7 +34,7 @@
     const current = type;
     if (!current) return;
     const mine = ++namesSequence;
-    const r = await session.quietly(() => session.rpc.call('data.objects', { type: current, filter: filter || null }));
+    const r = await tab.quietly(() => session.rpc.call('data.objects', { type: current, filter: filter || null }));
     if (mine === namesSequence && r) names = r.names; // ignore answers to superseded lookups
   }
 
@@ -43,13 +45,13 @@
     if (!current) return;
     name = objectName;
     const mine = ++objectSequence;
-    const r = await session.quietly(() => session.rpc.call('data.object', { type: current, name: objectName }));
+    const r = await tab.quietly(() => session.rpc.call('data.object', { type: current, name: objectName }));
     if (mine === objectSequence) json = r?.json ?? null; // a later click wins
   }
 
   async function copyJson() {
     await session.platform.copy(JSON.stringify(json, null, 2));
-    session.notice = 'JSON copied to the clipboard.';
+    tab.info('JSON copied to the clipboard.');
   }
 </script>
 

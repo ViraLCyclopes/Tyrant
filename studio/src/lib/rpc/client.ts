@@ -2,6 +2,7 @@ import type {
   JobDoneNotification,
   JobFailedNotification,
   JobProgressNotification,
+  LogNotification,
   RpcErrorObject,
   RpcJobs,
   RpcMethods,
@@ -61,6 +62,8 @@ export interface Rpc {
   attachJob(jobId: string, onProgress?: ProgressHandler): AttachedJob;
   onCoreExit(handler: (info: ExitInfo) => void): void;
   onCoreStarted(handler: () => void): void;
+  /** Core log lines (studio.log), shown in every tab's log. */
+  onLog(handler: (notification: LogNotification) => void): void;
 }
 
 type JobNotification =
@@ -107,6 +110,7 @@ export class RpcClient implements Rpc {
   private readonly early = new Map<string, JobNotification[]>();
   private readonly exitHandlers: ((info: ExitInfo) => void)[] = [];
   private readonly startedHandlers: (() => void)[] = [];
+  private readonly logHandlers: ((notification: LogNotification) => void)[] = [];
 
   constructor(private readonly transport: Transport) {
     transport.onLine((line) => this.receive(line));
@@ -150,6 +154,10 @@ export class RpcClient implements Rpc {
     this.startedHandlers.push(handler);
   }
 
+  onLog(handler: (notification: LogNotification) => void): void {
+    this.logHandlers.push(handler);
+  }
+
   private request(method: string, params: unknown): Promise<unknown> {
     const id = this.nextId++;
     const message = params === undefined ? { jsonrpc: '2.0', id, method } : { jsonrpc: '2.0', id, method, params };
@@ -176,6 +184,11 @@ export class RpcClient implements Rpc {
       this.pending.delete(message.id);
       if (message.error) pending.reject(toRpcError(message.error));
       else pending.resolve(message.result);
+      return;
+    }
+    if (message.method === 'log') {
+      const params = message.params as LogNotification;
+      this.logHandlers.forEach((h) => h(params));
       return;
     }
     if (!isJobNotification(message)) return;

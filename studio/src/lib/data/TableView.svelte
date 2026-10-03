@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { debounce } from '$lib/debounce';
   import type { DataQueryResult, DataTypeInfo } from '$lib/rpc/types.gen';
+  import { getTab } from '$lib/shell/tab.svelte';
   import { getSession } from '$lib/stores/session.svelte';
   import ColumnPicker from './ColumnPicker.svelte';
   import CompareView from './CompareView.svelte';
@@ -9,6 +10,7 @@
 
   const PAGE_SIZE = 100;
   const session = getSession();
+  const tab = getTab();
 
   let types = $state<DataTypeInfo[]>([]);
   let type = $state('');
@@ -25,7 +27,7 @@
   const pages = $derived(result ? Math.max(1, Math.ceil(result.total / result.pageSize)) : 1);
 
   onMount(async () => {
-    const r = await session.quietly(() => session.rpc.call('data.types'));
+    const r = await tab.quietly(() => session.rpc.call('data.types'));
     if (!r) return;
     types = r.types;
     const preferred = r.types.find((t) => t.shortName === 'AnimalData') ?? r.types[0];
@@ -46,7 +48,7 @@
   async function query() {
     if (!type) return;
     const mine = ++sequence;
-    const r = await session.quietly(() =>
+    const r = await tab.quietly(() =>
       session.rpc.call('data.query', { type, filter: filter || null, sort, descending, page, pageSize: PAGE_SIZE, columns }),
     );
     if (mine === sequence && r) result = r; // ignore answers to queries that were superseded
@@ -86,8 +88,8 @@
     const shortName = types.find((t) => t.fullName === type)?.shortName ?? 'export';
     const path = await session.platform.saveFile(`Export ${shortName}`, `${shortName}.${format}`, format);
     if (!path) return;
-    const r = await session.safely(() => session.rpc.call('data.export', { type, format, path }));
-    if (r) session.notice = `Exported ${r.count.toLocaleString('en-US')} objects to ${r.path}.`;
+    const r = await tab.safely(() => session.rpc.call('data.export', { type, format, path }));
+    if (r) tab.info(`Exported ${r.count.toLocaleString('en-US')} objects to ${r.path}.`);
   }
 </script>
 

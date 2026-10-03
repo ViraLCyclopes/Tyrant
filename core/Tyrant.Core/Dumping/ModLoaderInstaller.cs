@@ -276,7 +276,7 @@ public sealed class ModLoaderInstaller(string expectedSha256 = ModLoaderInstalle
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             throw new TyrantException(TyrantErrorCode.DumperInstallFailed,
-                $"Uninstalling failed (is the game running?); uninstall again once it is closed (Home → Uninstall from game, or 'tyrant dump uninstall'): {ex.Message}", FixAction.None, ex);
+                $"Uninstalling failed (is the game running?); uninstall again once it is closed (Workspace → Uninstall from game, or 'tyrant dump uninstall'): {ex.Message}", FixAction.None, ex);
         }
     }
 

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { memoryStore } from '$lib/storage';
 import { FakePlatform } from '$lib/test/fakePlatform';
 import { FakeRpc } from '$lib/test/fakeRpc';
-import { renderWith, workspaceStatus } from '$lib/test/fixtures';
+import { renderWith, workspaceStatus, messages } from '$lib/test/fixtures';
 import { Session } from '$lib/stores/session.svelte';
 import SpeciesPanel from './SpeciesPanel.svelte';
 
@@ -44,7 +44,7 @@ describe('SpeciesPanel', () => {
     await fireEvent.click(await screen.findByRole('button', { name: 'Export Carcharodontosaurus pack' }));
 
     await waitFor(() => expect(rpc.callsTo('species.pack')[0]?.params).toEqual({ key: 'carcharodontosaurus' }));
-    await waitFor(() => expect(session.notice).toBe('Exported 3 models and 14 textures to D:\\ws\\assets\\species\\carcharodontosaurus.'));
+    await waitFor(() => expect(messages(session, 'tab-test').join('\n')).toContain('Exported 3 models and 14 textures to D:\\ws\\assets\\species\\carcharodontosaurus.'));
     await fireEvent.click(await screen.findByRole('button', { name: 'Show in Explorer' }));
     expect(platform.revealed).toEqual(['D:\\ws\\assets\\species\\carcharodontosaurus']);
   });
@@ -59,7 +59,19 @@ describe('SpeciesPanel', () => {
 
     await fireEvent.click(await screen.findByRole('button', { name: 'Export Carcharodontosaurus pack' }));
 
-    await waitFor(() => expect(session.notice).toContain('could not be decoded'));
+    await waitFor(() => expect(messages(session, 'tab-test').join('\n')).toContain('could not be decoded'));
+  });
+
+  it('a species pack with failures is a warning, so the tab gets a marker', async () => {
+    const { rpc, session } = setup();
+    rpc.on('species.pack', (p) => ({
+      directory: `D:\\ws\\assets\\species\\${p.key}`, models: 3, textures: 12, failed: 2, targetsPath: 'x',
+    }));
+    renderWith(SpeciesPanel, session);
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Export Carcharodontosaurus pack' }));
+
+    await waitFor(() => expect(session.log.records.some((r) => r.level === 'warn' && r.message.includes('2'))).toBe(true));
   });
 
   it('opens Add a skin for a species', async () => {

@@ -56,11 +56,11 @@ public sealed class DumpRunner(IGameLauncher launcher, int moveAttempts = 50)
     public DumpManifestFile Run(GameInstall install, Workspace ws, TimeSpan timeout, IProgress<JobProgress>? progress, CancellationToken ct)
     {
         if (ModLoaderInstaller.GetState(install) != InstallState.Installed)
-            throw new TyrantException(TyrantErrorCode.DumperNotInstalled, "The dumper mod is not installed in the game folder. Install it first (Home → Install Tyrant in game, or 'tyrant dump install').",
+            throw new TyrantException(TyrantErrorCode.DumperNotInstalled, "The dumper mod is not installed in the game folder. Install it first (Workspace → Install Tyrant in game, or 'tyrant dump install').",
                 FixAction.InstallDumper);
 
         if (launcher.IsRunning(install))
-            throw new TyrantException(TyrantErrorCode.DumpFailed, "Prehistoric Kingdom is already running; close it first, then run the data dump again (Home → Run data dump, or 'tyrant dump run').");
+            throw new TyrantException(TyrantErrorCode.DumpFailed, "Prehistoric Kingdom is already running; close it first, then run the data dump again (Workspace → Run data dump, or 'tyrant dump run').");
 
         var requestId = Guid.NewGuid().ToString("N");
         var tmp = Path.Combine(ws.Dir, $"data.tmp-{requestId}");

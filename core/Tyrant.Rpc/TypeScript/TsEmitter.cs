@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Tyrant.Rpc.Jobs;
 using Tyrant.Rpc.Protocol;
+using Tyrant.Rpc.Studio;
 
 namespace Tyrant.Rpc.TypeScript;
 
@@ -11,7 +12,7 @@ namespace Tyrant.Rpc.TypeScript;
 public static class TsEmitter
 {
     private static readonly Type[] NotificationTypes =
-        [typeof(JobProgressNotification), typeof(JobDoneNotification), typeof(JobFailedNotification)];
+        [typeof(JobProgressNotification), typeof(JobDoneNotification), typeof(JobFailedNotification), typeof(LogNotification)];
 
     public static string Emit(IReadOnlyList<RpcMethodInfo> methods)
     {
@@ -44,6 +45,7 @@ public static class TsEmitter
         ts.Append($"  \"{JobManager.ProgressMethod}\": JobProgressNotification;\n");
         ts.Append($"  \"{JobManager.DoneMethod}\": JobDoneNotification;\n");
         ts.Append($"  \"{JobManager.FailedMethod}\": JobFailedNotification;\n");
+        ts.Append($"  \"{StudioSession.LogMethod}\": LogNotification;\n");
         ts.Append("}\n");
         return ts.ToString();
     }

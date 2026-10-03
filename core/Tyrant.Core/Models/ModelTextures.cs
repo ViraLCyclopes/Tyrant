@@ -37,7 +37,7 @@ public sealed class ModelTextures
 
     /// <summary>The note for textures kept in other bundles when the index predates archive maps (Plans 3–6).</summary>
     public const string NewerIndexNote =
-        "Textures kept in other bundles need a newer asset index: click Index assets on the Home tab (or run 'tyrant assets index') and export again.";
+        "Textures kept in other bundles need a newer asset index: click Index assets on the Workspace tab (or run 'tyrant assets index') and export again.";
 
     /// <param name="bundle">The bundle the prefab was read from; its materials' own-file textures live there.</param>
     public static ModelTextures Write(AssetSession session, AssetIndex index, string bundle, PrefabModel model, string outputDir)

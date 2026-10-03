@@ -35,7 +35,7 @@ public sealed class GameMods(Func<GameInstall, bool>? isGameRunning = null)
         RefuseWhileRunning(install, "installing a mod");
         if (!ModLoaderInstaller.HasFramework(install))
             throw new TyrantException(TyrantErrorCode.FrameworkMissing,
-                "Tyrant's framework is not in the game yet. Install Tyrant into the game first (Home tab), or install the mod from the Mods tab, which does it for you.",
+                "Tyrant's framework is not in the game yet. Install Tyrant into the game first (Workspace tab), or install the mod from the Mods tab, which does it for you.",
                 FixAction.InstallDumper);
 
         var target = Path.Combine(ModLoaderInstaller.ModsDir(install), mod.Id);

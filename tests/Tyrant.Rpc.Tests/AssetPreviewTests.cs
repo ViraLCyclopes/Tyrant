@@ -256,7 +256,7 @@ public class AssetPreviewTests
     {
         using var game = new FakeGame();
         var (h, _, reader) = await Opened(game);
-        reader.ModelNotes = ["Textures kept in other bundles need a newer asset index: click Index assets on the Home tab."];
+        reader.ModelNotes = ["Textures kept in other bundles need a newer asset index: click Index assets on the Workspace tab."];
 
         var result = await h.RunJob("assets.export", new { refs = new[] { StegoPrefab.Ref } });
 

@@ -3,12 +3,14 @@
   import JsonTree from '$lib/data/JsonTree.svelte';
   import { formatBytes } from '$lib/format';
   import type { AssetDetails } from '$lib/rpc/types.gen';
+  import { getTab } from '$lib/shell/tab.svelte';
   import { getSession } from '$lib/stores/session.svelte';
   import AssetPreviewPanel from './AssetPreviewPanel.svelte';
 
   let { ref, onOpen }: { ref: string; onOpen: (ref: string) => void } = $props();
 
   const session = getSession();
+  const tab = getTab();
   let details = $state<AssetDetails | null>(null);
   let failed = $state(false);
   let sequence = 0;
@@ -21,7 +23,7 @@
     const mine = ++sequence;
     details = null;
     failed = false;
-    const r = await session.quietly(() => session.rpc.call('assets.get', { ref: target }));
+    const r = await tab.quietly(() => session.rpc.call('assets.get', { ref: target }));
     if (mine !== sequence) return; // a later pick wins
     details = r;
     failed = r === null;
@@ -29,7 +31,7 @@
 
   async function copy(label: string, text: string) {
     await session.platform.copy(text);
-    session.notice = `${label} copied.`;
+    tab.info(`${label} copied.`);
   }
 </script>
 

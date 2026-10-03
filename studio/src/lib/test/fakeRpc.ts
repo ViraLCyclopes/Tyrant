@@ -1,5 +1,5 @@
 import type { AttachedJob, CallArgs, ExitInfo, JobHandle, JobMethod, MethodName, ParamsOf, ProgressHandler, ResultOf, Rpc } from '$lib/rpc/client';
-import type { RpcJobs } from '$lib/rpc/types.gen';
+import type { LogNotification, RpcJobs } from '$lib/rpc/types.gen';
 
 type Handler = (params: never, onProgress?: ProgressHandler) => unknown;
 
@@ -57,6 +57,16 @@ export class FakeRpc implements Rpc {
 
   emitExit(info: ExitInfo): void {
     this.exitHandlers.forEach((h) => h(info));
+  }
+
+  private readonly logHandlers: ((n: LogNotification) => void)[] = [];
+
+  onLog(handler: (n: LogNotification) => void): void {
+    this.logHandlers.push(handler);
+  }
+
+  emitLog(n: LogNotification): void {
+    this.logHandlers.forEach((h) => h(n));
   }
 
   emitStarted(): void {

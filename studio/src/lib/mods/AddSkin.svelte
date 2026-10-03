@@ -1,12 +1,14 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import type { ModRow, ModSpeciesResult } from '$lib/rpc/types.gen';
+  import { getTab } from '$lib/shell/tab.svelte';
   import { getSession } from '$lib/stores/session.svelte';
 
   let { speciesKey = '' }: { speciesKey?: string } = $props();
 
   const NEW = '__new__';
   const session = getSession();
+  const tab = getTab();
   let data = $state<ModSpeciesResult | null>(null);
   let mods = $state<ModRow[]>([]);
   let species = $state('');
@@ -28,8 +30,8 @@
   const keyOf = (id: string) => id.toLowerCase().replace(/[^a-z0-9]/g, '');
 
   onMount(async () => {
-    data = await session.quietly(() => session.rpc.call('mods.species'));
-    const list = await session.quietly(() => session.rpc.call('mods.list'));
+    data = await tab.quietly(() => session.rpc.call('mods.species'));
+    const list = await tab.quietly(() => session.rpc.call('mods.list'));
     mods = (list?.mods ?? []).filter((m) => m.state !== 'gameOnly');
     target = mods[0]?.id ?? NEW;
     // Never guess: a Species tab name that matches no species id leaves the choice to the user.
@@ -49,16 +51,16 @@
     let id = target;
     if (id === NEW) {
       id = newId.trim();
-      const created = await session.safely(() => session.rpc.call('mods.create', { id, name: null, author: null }));
+      const created = await tab.safely(() => session.rpc.call('mods.create', { id, name: null, author: null }));
       if (!created) return;
       mods = created.mods.filter((m) => m.state !== 'gameOnly');
       target = id;
     }
-    const r = await session.safely(() =>
+    const r = await tab.safely(() =>
       session.rpc.call('mods.addSkin', { id, species, name: name.trim(), base, male, female, maps }),
     );
     if (!r) return;
-    session.notice = `Added skin '${name.trim()}' to '${id}'. Edit its PNGs in the mod's skins folder, then Check and Install to game in the Mods tab.`;
+    tab.info(`Added skin '${name.trim()}' to '${id}'. Edit its PNGs in the mod's skins folder, then Check and Install to game in the Mods tab.`);
   }
 </script>
 
@@ -66,7 +68,7 @@
   <h3>Add a skin</h3>
   {#if data && !data.hasDump}
     <p class="hint">
-      Adding a skin needs the game's data (species and their skins). On the Home tab, click <strong>Run data dump</strong>, then come back.
+      Adding a skin needs the game's data (species and their skins). On the Workspace tab, click <strong>Run data dump</strong>, then come back.
     </p>
   {:else if data}
     {#if unmatched && !species}<p class="warn">Tyrant could not match this species to the game data's species list; pick it below.</p>{/if}

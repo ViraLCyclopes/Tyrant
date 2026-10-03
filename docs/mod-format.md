@@ -123,4 +123,4 @@ A skin can set its own colours in a `colors` section. Every part is optional; an
   - each mod it loaded;
   - each one it skipped, and why;
   - the first time each replacement is applied.
-- **Removing:** **Uninstall from game** on Tyrant's Home tab removes MelonLoader, Tyrant's mods and every installed mod, which restores vanilla.
+- **Removing:** **Uninstall from game** on Tyrant's Workspace tab removes MelonLoader, Tyrant's mods and every installed mod, which restores vanilla.

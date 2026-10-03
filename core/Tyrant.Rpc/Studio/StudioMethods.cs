@@ -138,7 +138,7 @@ public sealed class StudioMethods(StudioSession session, JobManager jobs)
             steps.Add(Step("Data dump", () =>
             {
                 if (ModLoaderInstaller.GetState(install) != InstallState.Installed)
-                    return (RefreshStepStatus.Skipped, "The dumper is not installed; install it on the Home tab to include game data.");
+                    return (RefreshStepStatus.Skipped, "The dumper is not installed; install it on the Workspace tab to include game data.");
                 var result = RunDump(ws, install, TimeSpan.FromMinutes(5), new ScaledProgress(progress, 0.6, 1.0), ct);
                 return (RefreshStepStatus.Ok, $"{result.Objects:N0} objects of {result.Types} types dumped.");
             }));

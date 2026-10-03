@@ -4,7 +4,7 @@ import type { ModRow } from '$lib/rpc/types.gen';
 import { memoryStore } from '$lib/storage';
 import { FakePlatform } from '$lib/test/fakePlatform';
 import { FakeRpc } from '$lib/test/fakeRpc';
-import { renderWith, workspaceStatus } from '$lib/test/fixtures';
+import { renderWith, workspaceStatus, messages } from '$lib/test/fixtures';
 import { Session } from '$lib/stores/session.svelte';
 import ModsView from './ModsView.svelte';
 
@@ -50,7 +50,7 @@ describe('ModsView', () => {
 
     await fireEvent.click(await screen.findByRole('button', { name: 'Install Red spot to the game' }));
 
-    await waitFor(() => expect(session.notice).toContain("Installed 'red-spot'"));
+    await waitFor(() => expect(messages(session, 'tab-test').join('\n')).toContain("Installed 'red-spot'"));
     expect(platform.confirms[0]).toContain('framework');
     expect(rpc.callsTo('mods.install')[0]?.params).toEqual({ id: 'red-spot' });
   });
@@ -120,7 +120,7 @@ describe('ModsView', () => {
 
     await fireEvent.click(await screen.findByRole('button', { name: 'Restore cutouts for Red spot' }));
 
-    await waitFor(() => expect(session.notice).toContain('1 PNG'));
+    await waitFor(() => expect(messages(session, 'tab-test').join('\n')).toContain('1 PNG'));
     expect(rpc.callsTo('mods.restoreCutouts')[0]?.params).toEqual({ id: 'red-spot' });
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Restore cutouts for Red spot' })).toBeNull());
   });

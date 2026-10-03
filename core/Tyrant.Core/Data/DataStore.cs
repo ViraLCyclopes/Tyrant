@@ -30,7 +30,7 @@ public sealed class DataStore
     public static DataStore OpenDirectory(string dataDir)
     {
         var manifest = DumpManifestFile.TryRead(Path.Combine(dataDir, "manifest.json"))
-            ?? throw new TyrantException(TyrantErrorCode.DataMissing, "No game data yet. On the Home tab, click Install Tyrant in game once, then Run data dump (or 'tyrant dump install', then 'tyrant dump run').", FixAction.RefreshWorkspace);
+            ?? throw new TyrantException(TyrantErrorCode.DataMissing, "No game data yet. On the Workspace tab, click Install Tyrant in game once, then Run data dump (or 'tyrant dump install', then 'tyrant dump run').", FixAction.RefreshWorkspace);
         return new DataStore(dataDir, manifest);
     }
 

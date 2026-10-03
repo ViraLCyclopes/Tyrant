@@ -1,11 +1,13 @@
 <script lang="ts">
   import type { AssetRow, ModsListResult } from '$lib/rpc/types.gen';
+  import { getTab } from '$lib/shell/tab.svelte';
   import { getSession } from '$lib/stores/session.svelte';
 
   let { asset }: { asset: AssetRow } = $props();
 
   const NEW = '__new__';
   const session = getSession();
+  const tab = getTab();
   let open = $state(false);
   let mods = $state<ModsListResult | null>(null);
   let target = $state(NEW);
@@ -15,7 +17,7 @@
 
   async function start() {
     open = true;
-    mods = await session.quietly(() => session.rpc.call('mods.list'));
+    mods = await tab.quietly(() => session.rpc.call('mods.list'));
     target = workspaceMods[0]?.id ?? NEW;
   }
 
@@ -28,14 +30,14 @@
     let id = target;
     if (id === NEW) {
       id = newId.trim();
-      const created = await session.safely(() => session.rpc.call('mods.create', { id, name: null, author: null }));
+      const created = await tab.safely(() => session.rpc.call('mods.create', { id, name: null, author: null }));
       if (!created) return;
       mods = created; // the new mod is real now, even if adding the texture fails below
       target = id;
     }
-    const r = await session.safely(() => session.rpc.call('mods.replace', { id, texture: asset.ref, png: png.trim() || null }));
+    const r = await tab.safely(() => session.rpc.call('mods.replace', { id, texture: asset.ref, png: png.trim() || null }));
     if (!r) return;
-    session.notice = `Added ${asset.name} to '${id}'. Install it from the Mods tab.`;
+    tab.info(`Added ${asset.name} to '${id}'. Install it from the Mods tab.`);
     open = false;
   }
 </script>

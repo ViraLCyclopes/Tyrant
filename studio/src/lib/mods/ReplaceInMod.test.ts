@@ -4,7 +4,7 @@ import type { AssetRow } from '$lib/rpc/types.gen';
 import { memoryStore } from '$lib/storage';
 import { FakePlatform } from '$lib/test/fakePlatform';
 import { FakeRpc } from '$lib/test/fakeRpc';
-import { renderWith } from '$lib/test/fixtures';
+import { renderWith, messages } from '$lib/test/fixtures';
 import { Session } from '$lib/stores/session.svelte';
 import ReplaceInMod from './ReplaceInMod.svelte';
 
@@ -31,7 +31,7 @@ describe('ReplaceInMod', () => {
     await fireEvent.click(await screen.findByRole('button', { name: 'Add to mod' }));
 
     await waitFor(() => expect(rpc.callsTo('mods.replace')[0]?.params).toEqual({ id: 'red-spot', texture: 'carch.bundle#7', png: null }));
-    expect(session.notice).toContain('Install it from the Mods tab');
+    expect(messages(session, 'tab-test').join('\n')).toContain('Install it from the Mods tab');
   });
 
   it('creates a new mod first when there is none', async () => {

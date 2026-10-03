@@ -35,7 +35,7 @@ public static class SpeciesSkinsReader
         catch (TyrantException ex) when (ex.Code == TyrantErrorCode.DataMissing)
         {
             throw new TyrantException(TyrantErrorCode.DataMissing,
-                "Adding a skin needs the game's data (species and their skins): on the Home tab click Run data dump (or run 'tyrant dump run'), then try again.",
+                "Adding a skin needs the game's data (species and their skins): on the Workspace tab click Run data dump (or run 'tyrant dump run'), then try again.",
                 FixAction.RefreshWorkspace, ex);
         }
         return Read(store);
