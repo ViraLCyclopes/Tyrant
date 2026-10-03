@@ -268,6 +268,7 @@ namespace Tyrant.Framework
             }
             var skin = Clone(baseSkin);
             Traverse.Create(skin).Field("skinName").SetValue(entry.Name);
+            SkinColorsModule.Apply(skin, entry, entry.Key(mod.Manifest.Id)); // its own variation assets when it has "colors"
             var thumbnail = Thumbnail(mod, entry);
             if (thumbnail != null) Traverse.Create(skin).Field("skinThumbnail").SetValue(thumbnail);
             return skin;
