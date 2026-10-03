@@ -5,8 +5,12 @@
   <Folder Name="/core/">
     <Project Path="core/PK.Core/PK.Core.csproj" />
   </Folder>
+  <Folder Name="/game/">
+    <Project Path="game/PK.Dumper.Serialization/PK.Dumper.Serialization.csproj" />
+  </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/PK.Cli.Tests/PK.Cli.Tests.csproj" />
     <Project Path="tests/PK.Core.Tests/PK.Core.Tests.csproj" />
+    <Project Path="tests/PK.Dumper.Tests/PK.Dumper.Tests.csproj" />
   </Folder>
 </Solution>
