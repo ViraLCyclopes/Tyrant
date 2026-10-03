@@ -136,9 +136,7 @@ public sealed class Workspace
 
     internal static void EnsureOutsideGame(string fullDir, string gameRoot)
     {
-        var game = Path.TrimEndingDirectorySeparator(Path.GetFullPath(gameRoot)) + Path.DirectorySeparatorChar;
-        var candidate = fullDir + Path.DirectorySeparatorChar;
-        if (candidate.StartsWith(game, StringComparison.OrdinalIgnoreCase))
+        if (PathGuard.IsInside(fullDir, gameRoot))
             throw new TyrantException(TyrantErrorCode.WorkspaceInGameFolder,
                 $"The workspace must not be inside the game folder ('{gameRoot}'). Mods and tools never write game files.",
                 FixAction.PickWorkspaceFolder);

@@ -14,9 +14,5 @@ public sealed record GameInstall(string RootDir, string? SteamAppId)
 
     /// <summary>True for the game folder itself or any path inside it.</summary>
     public bool ContainsPath(string path)
-    {
-        var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(RootDir)) + Path.DirectorySeparatorChar;
-        var candidate = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path)) + Path.DirectorySeparatorChar;
-        return candidate.StartsWith(root, StringComparison.OrdinalIgnoreCase);
-    }
+        => PathGuard.IsInside(path, RootDir);
 }
