@@ -9,9 +9,9 @@ use tauri::{Manager, RunEvent, State};
 
 struct CoreState(Arc<sidecar::Sidecar>);
 
-/// Sends one JSON-RPC request line to the Tyrant core.
+/// Sends one JSON-RPC request line to the Tyrant core. Async, so a busy core (full pipe) never blocks the UI thread.
 #[tauri::command]
-fn core_send(state: State<'_, CoreState>, line: String) -> Result<(), String> {
+async fn core_send(state: State<'_, CoreState>, line: String) -> Result<(), String> {
     state.0.send(&line)
 }
 

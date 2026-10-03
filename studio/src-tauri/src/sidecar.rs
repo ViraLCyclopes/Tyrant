@@ -51,6 +51,9 @@ impl Sidecar {
     }
 
     fn spawn(self: &Arc<Self>, app: AppHandle) {
+        if self.shutting_down.load(Ordering::SeqCst) {
+            return; // the app is exiting: never start a new core
+        }
         let mut command = Command::new(&self.cli);
         command.arg("rpc").stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
         #[cfg(windows)]
@@ -119,7 +122,9 @@ impl Sidecar {
         let _ = app.emit(EXIT_EVENT, ExitPayload { code, restarting, error });
         if restarting {
             std::thread::sleep(Duration::from_millis(500));
-            self.spawn(app);
+            if !self.shutting_down.load(Ordering::SeqCst) {
+                self.spawn(app); // the app may have started exiting during the pause
+            }
         }
     }
 
