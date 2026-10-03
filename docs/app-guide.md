@@ -23,6 +23,24 @@ which you install and remove explicitly).
 - **Copy diagnostics** puts versions, the game build and recent log lines (never game files) on the clipboard for
   bug reports.
 
+## Assets
+
+Needs an asset index (Home → **Index assets**, about 20 seconds; again after a game update).
+
+- **Browse**: the left column groups bundles the way the game does (one group per animal, plus shared and UI groups);
+  ▸ opens a group's bundles. Search matches names, Addressables paths, GUIDs, script names and bundles; **Type**
+  narrows to one kind (Texture2D, Mesh, GameObject = prefab, MonoBehaviour = game data, …).
+- Click an asset to see its **keys** (Addressables path, GUID and reference, each with a copy button — replacement mods
+  point at these), its size, what it **references** (click to follow) and all of its **fields**.
+- **Preview**: textures show at once, with **R/G/B/Alpha** views for packed maps; meshes and prefabs show in 3D after
+  **Load 3D preview** (drag to orbit, scroll to zoom; **Show skeleton** for animated models). Previews are cached in
+  `<workspace>\cache\previews` per game build.
+- Tick assets and click **Export selected**: textures become PNG (`assets\textures`), meshes and prefabs .glb
+  (`assets\models`), anything else JSON (`assets\json`). A report in `exports\` lists every asset, its keys and any
+  failure; one failure never stops the rest.
+- **Species**: export one animal's pack — its models, every texture of its group and `targets.json` with each asset's
+  key — into `assets\species\<name>`.
+
 ## Data
 
 - **Tables**: every dumped type as a table (species are `AnimalData`). Click a column header to sort, type in the

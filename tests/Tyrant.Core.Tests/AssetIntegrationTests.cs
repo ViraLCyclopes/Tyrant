@@ -45,7 +45,7 @@ public class AssetIntegrationTests(RealGameIndex real) : IClassFixture<RealGameI
     public void Bundle_reader_converts_a_real_species_prefab()
     {
         Skip.If(RealGameIndex.GameDir is null, "TYRANT_GAME_DIR not set");
-        var species = SpeciesCatalog.Find(SpeciesCatalog.FromIndex(real.Index), "stegosaurus");
+        var species = SpeciesCatalog.Find(SpeciesCatalog.FromIndex(real.Index), "Stegosaurus Stenops");
         var dir = Path.Combine(Path.GetTempPath(), "tyrant-tests", Guid.NewGuid().ToString("N"), "model");
 
         var facts = new BundleAssetReader().WriteModel(real.Install, species.Prefab, dir);

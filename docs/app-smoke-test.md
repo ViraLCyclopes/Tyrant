@@ -24,8 +24,18 @@ Release build: `npm run build:app`, install `studio/src-tauri/target/release/bun
     Home still shows its status.
 13. Start **Run data dump** and close the app while the game is starting: `tyrant.exe` exits within a few seconds
     and `<game>\UserData\tyrant.dumper.request.json` does not exist.
-14. **Copy diagnostics** and paste: versions, build, workspace and log tails appear.
-15. **(game)** **Uninstall dumper**: the notice says the game folder is back to vanilla; `version.dll`,
+14. Assets: with the asset index built, the Assets tab lists groups and assets; searching `carcharo` finds the
+   Carcharodontosaurus textures and prefab.
+15. Click a skin texture (`..._D`): the PNG preview appears; R/G/B/Alpha change the view; **Copy Addressables path**
+   puts the path on the clipboard.
+16. Click the Carcharodontosaurus prefab and **Load 3D preview**: the animal appears, can be orbited, and
+   **Show skeleton** draws its bones.
+17. Tick two textures and the prefab, **Export selected**: the notice reports 3 exported and the report path;
+   `assets\textures` holds the PNGs and `assets\models\<prefab>` the .glb files.
+18. Species → find Carcharodontosaurus → **Export pack** → **Show in Explorer** opens `assets\species\carcharodontosaurus`
+   with `models\`, the textures and `targets.json`.
+19. **Copy diagnostics** and paste: versions, build, workspace and log tails appear.
+20. **(game)** **Uninstall dumper**: the notice says the game folder is back to vanilla; `version.dll`,
     `MelonLoader\`, `Mods\`, `UserData\` and `UserLibs\` are gone from the game folder (if Tyrant installed them).
-16. Release build only: the installed app starts, finds the core next to itself (step 1 works) and installs the
+21. Release build only: the installed app starts, finds the core next to itself (step 1 works) and installs the
     dumper from its own `sidecar\dumper` folder.
