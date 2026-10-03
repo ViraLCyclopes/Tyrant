@@ -343,4 +343,62 @@ public class ModLoaderInstallerTests
         Assert.Equal("Removed the dumper mod. MelonLoader was kept because other mods have files in Mods.",
             ModLoaderInstaller.UninstallSummary(new UninstallResult(false, "MelonLoader was kept because other mods have files in Mods.")));
     }
+
+    private static string FakeGameModsDir()
+    {
+        var dir = FakeDumperDir();
+        File.WriteAllText(Path.Combine(dir, "Tyrant.Framework.dll"), "framework");
+        File.WriteAllText(Path.Combine(dir, "Tyrant.Framework.Core.dll"), "framework library");
+        return dir;
+    }
+
+    [Fact]
+    public void Install_copies_the_framework_next_to_the_dumper()
+    {
+        using var game = new FakeGame();
+        var (zip, sha) = FakeMelonLoaderZip();
+        var install = new GameInstall(game.Root, null);
+
+        var record = new ModLoaderInstaller(sha).Install(install, zip, FakeGameModsDir());
+
+        Assert.True(File.Exists(Path.Combine(game.Root, "Mods", "Tyrant.Framework.dll")));
+        Assert.True(File.Exists(Path.Combine(game.Root, "UserLibs", "Tyrant.Framework.Core.dll")));
+        Assert.Contains("Mods/Tyrant.Framework.dll", record.Files);
+        Assert.True(ModLoaderInstaller.HasFramework(install));
+    }
+
+    [Fact]
+    public void Installing_again_adds_the_framework_to_an_existing_install()
+    {
+        using var game = new FakeGame();
+        var (zip, sha) = FakeMelonLoaderZip();
+        var install = new GameInstall(game.Root, null);
+        new ModLoaderInstaller(sha).Install(install, zip, FakeDumperDir()); // what the user has today: dumper only
+        Assert.False(ModLoaderInstaller.HasFramework(install));
+
+        var record = new ModLoaderInstaller(sha).Install(install, null, FakeGameModsDir());
+
+        Assert.True(ModLoaderInstaller.HasFramework(install));
+        Assert.Contains("Mods/Tyrant.Dumper.dll", record.Files);
+        Assert.Contains("UserLibs/Tyrant.Framework.Core.dll", record.Files);
+    }
+
+    [Fact]
+    public void Uninstall_removes_the_framework_and_installed_mods()
+    {
+        using var game = new FakeGame();
+        var (zip, sha) = FakeMelonLoaderZip();
+        var install = new GameInstall(game.Root, null);
+        new ModLoaderInstaller(sha).Install(install, zip, FakeGameModsDir());
+        var mod = Path.Combine(ModLoaderInstaller.ModsDir(install), "red-spot");
+        Directory.CreateDirectory(mod);
+        File.WriteAllText(Path.Combine(mod, "mod.json"), "{}");
+
+        var result = new ModLoaderInstaller(sha).Uninstall(install);
+
+        Assert.True(result.RemovedLoader); // our framework and mods are not "other mods' files"
+        Assert.False(Directory.Exists(Path.Combine(game.Root, "Mods")));
+        Assert.False(Directory.Exists(Path.Combine(game.Root, "UserData")));
+        Assert.False(ModLoaderInstaller.HasFramework(install));
+    }
 }

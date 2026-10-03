@@ -27,7 +27,7 @@ public sealed record InstallRecord(bool InstalledLoader, List<string> Files, Lis
 public sealed record UninstallResult(bool RemovedLoader, string? Note);
 
 /// <summary>
-/// Installs MelonLoader (pinned, checksum-verified official release) and the dumper mod, reversibly. Installs roll back on
+/// Installs MelonLoader (pinned, checksum-verified official release) and Tyrant's game mods (the dumper and the modding framework), reversibly. Installs roll back on
 /// failure; uninstall deletes its record last so a failed uninstall can be retried.
 /// </summary>
 public sealed class ModLoaderInstaller(string expectedSha256 = ModLoaderInstaller.Sha256, Func<GameInstall, bool>? isGameRunning = null)
@@ -39,6 +39,10 @@ public sealed class ModLoaderInstaller(string expectedSha256 = ModLoaderInstalle
     public const string Sha256 = "5b2b2f3d1cd42b59ec886c5bdc2663edae87a0097a4f4a8f58c0965a99dda416";
 
     private const string ModFile = "Tyrant.Dumper.dll";
+    public const string FrameworkFile = "Tyrant.Framework.dll";
+
+    /// <summary>The DLLs that go into Mods/ (MelonLoader loads them); every other Tyrant.*.dll is a library for UserLibs/.</summary>
+    private static readonly HashSet<string> MelonModFiles = new(StringComparer.OrdinalIgnoreCase) { ModFile, FrameworkFile };
     private const string RecordFile = "install.json";
     private const string RequestFile = "tyrant.dumper.request.json";
 
@@ -54,6 +58,12 @@ public sealed class ModLoaderInstaller(string expectedSha256 = ModLoaderInstalle
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { WriteIndented = true };
 
     public static string RecordDir(GameInstall install) => Path.Combine(install.RootDir, "UserData", "Tyrant");
+
+    /// <summary>Where installed Tyrant mods live: &lt;game&gt;/UserData/Tyrant/Mods/&lt;id&gt;.</summary>
+    public static string ModsDir(GameInstall install) => Path.Combine(RecordDir(install), "Mods");
+
+    public static bool HasFramework(GameInstall install) =>
+        File.Exists(Path.Combine(install.RootDir, "Mods", FrameworkFile)) && File.Exists(Path.Combine(RecordDir(install), RecordFile));
 
     public static string RequestPath(GameInstall install) => Path.Combine(install.RootDir, "UserData", RequestFile);
 
@@ -113,7 +123,9 @@ public sealed class ModLoaderInstaller(string expectedSha256 = ModLoaderInstalle
             VerifyChecksum(loaderZip);
         }
 
-        var dumperFiles = Directory.Exists(dumperDir) ? Directory.GetFiles(dumperDir, "Tyrant.Dumper*.dll") : [];
+        var dumperFiles = Directory.Exists(dumperDir)
+            ? Directory.GetFiles(dumperDir, "Tyrant.Dumper*.dll").Concat(Directory.GetFiles(dumperDir, "Tyrant.Framework*.dll")).ToArray()
+            : [];
         if (!dumperFiles.Any(f => string.Equals(Path.GetFileName(f), ModFile, StringComparison.OrdinalIgnoreCase)))
             throw new TyrantException(TyrantErrorCode.DumperInstallFailed, $"The dumper mod files are missing from '{dumperDir}'. Rebuild Tyrant.");
 
@@ -165,7 +177,7 @@ public sealed class ModLoaderInstaller(string expectedSha256 = ModLoaderInstalle
             foreach (var file in dumperFiles)
             {
                 var name = Path.GetFileName(file);
-                var relative = string.Equals(name, ModFile, StringComparison.OrdinalIgnoreCase) ? $"Mods/{name}" : $"UserLibs/{name}";
+                var relative = MelonModFiles.Contains(name) ? $"Mods/{name}" : $"UserLibs/{name}";
                 var destination = Path.Combine(root, relative);
                 var existed = File.Exists(destination);
                 File.Copy(file, destination, overwrite: true); // our own files
@@ -268,7 +280,7 @@ public sealed class ModLoaderInstaller(string expectedSha256 = ModLoaderInstalle
         foreach (var dir in new[] { "Mods", "Plugins", "UserLibs" })
         {
             var path = Path.Combine(root, dir);
-            if (Directory.Exists(path) && Directory.EnumerateFileSystemEntries(path).Any(e => !Path.GetFileName(e).StartsWith("Tyrant.Dumper", StringComparison.OrdinalIgnoreCase)))
+            if (Directory.Exists(path) && Directory.EnumerateFileSystemEntries(path).Any(e => !Path.GetFileName(e).StartsWith("Tyrant.", StringComparison.OrdinalIgnoreCase)))
                 return $"other mods have files in {dir}";
         }
         var userData = Path.Combine(root, "UserData");
@@ -308,7 +320,7 @@ public sealed class ModLoaderInstaller(string expectedSha256 = ModLoaderInstalle
     }
 
     private static bool IsOurModFile(string relative) =>
-        relative.StartsWith("Mods/Tyrant.Dumper", StringComparison.OrdinalIgnoreCase) || relative.StartsWith("UserLibs/Tyrant.Dumper", StringComparison.OrdinalIgnoreCase);
+        relative.StartsWith("Mods/Tyrant.", StringComparison.OrdinalIgnoreCase) || relative.StartsWith("UserLibs/Tyrant.", StringComparison.OrdinalIgnoreCase);
 
     private static void DeleteFile(string path)
     {
