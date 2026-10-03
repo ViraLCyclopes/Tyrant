@@ -174,27 +174,31 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
         {
             var key = skin.Key(mod.Id);
             var based = species is null ? null : BaseSkin(species, skin);
-            foreach (var (sex, files, textures) in new[] { ("male", skin.Male, based?.Male), ("female", skin.Female, based?.Female) })
+            foreach (var (sex, ownFiles, textures) in new[] { ("male", skin.Male, based?.Male), ("female", skin.Female, based?.Female) })
             {
-                if (files is null) continue;
-                if (skin.Colors?.Pattern is not null)
+                // A sex without its own files still wears the skin (the base skin's textures) and gets its pattern colours.
+                var files = ownFiles ?? new Dictionary<string, string>();
+                foreach (var (patternSlot, extraSlot) in new[] { ("pattern", "extra"), ("infantPattern", "infantExtra") })
                 {
-                    var pattern = files.TryGetValue("pattern", out var patternFile) ? Decode(mod, patternFile) : Vanilla(index, textures, "pattern");
-                    if (pattern is not null && Share(pattern, p => p.R > 10) < 0.001)
-                        warnings.Add($"{key} {sex}: colors.pattern is set, but the pattern map has no red anywhere, so the pattern colours would never show. Paint red where they should go.");
-                }
-                if (files.TryGetValue("extra", out var extraFile) && Decode(mod, extraFile) is { } extra && Vanilla(index, textures, "extra") is { } original)
-                {
-                    var wrong = 0;
-                    for (var y = 0; y < extra.Height; y++)
-                    for (var x = 0; x < extra.Width; x++)
+                    if (skin.Colors?.Pattern is not null)
                     {
-                        var o = original.Data[((y * original.Height / extra.Height) * original.Width + x * original.Width / extra.Width) * 4];
-                        if (extra.Data[(y * extra.Width + x) * 4] > 230 && o <= 230) wrong++;
+                        var pattern = files.TryGetValue(patternSlot, out var patternFile) ? Decode(mod, patternFile) : Vanilla(index, textures, patternSlot);
+                        if (pattern is not null && Share(pattern, p => p.R > 10) < 0.001)
+                            warnings.Add($"{key} {sex}: colors.pattern is set, but the {patternSlot} map has no red anywhere, so the pattern colours would never show there. Paint red where they should go.");
                     }
-                    var share = (double)wrong / (extra.Width * extra.Height);
-                    if (share > 0.005)
-                        warnings.Add($"{key} {sex}: {extraFile} is brighter than 90% red outside the base skin's eyes ({share:P1} of it): the game colours those parts as eyes. Keep skin below 230 in the red channel.");
+                    if (files.TryGetValue(extraSlot, out var extraFile) && Decode(mod, extraFile) is { } extra && Vanilla(index, textures, extraSlot) is { } original)
+                    {
+                        var wrong = 0;
+                        for (var y = 0; y < extra.Height; y++)
+                        for (var x = 0; x < extra.Width; x++)
+                        {
+                            var o = original.Data[((y * original.Height / extra.Height) * original.Width + x * original.Width / extra.Width) * 4];
+                            if (extra.Data[(y * extra.Width + x) * 4] > 230 && o <= 230) wrong++;
+                        }
+                        var share = (double)wrong / (extra.Width * extra.Height);
+                        if (share > 0.005)
+                            warnings.Add($"{key} {sex}: {extraFile} is brighter than 90% red outside the base skin's eyes ({share:P1} of it): the game colours those parts as eyes. Keep skin below 230 in the red channel.");
+                    }
                 }
             }
         }

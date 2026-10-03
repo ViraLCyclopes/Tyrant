@@ -100,4 +100,37 @@ public class ColorCheckTests
 
         Assert.DoesNotContain(result.Warnings, w => w.Contains("eyes"));
     }
+
+    [Fact]
+    public void A_sex_that_uses_the_base_textures_is_checked_against_the_base_pattern_map()
+    {
+        var (game, mod, species) = Setup();
+        using var _ = game;
+        File(mod, "skins/red-spot/f.png", Png(4, _ => (200, 100, 50)));
+        mod.Manifest.Skins.Add(new SkinEntry { Id = "red-spot", Species = "Carcharodontosaurus", Name = "Red spot", Base = "Alt 1",
+            Female = new() { ["diffuse"] = "skins/red-spot/f.png" }, Colors = PatternColours() }); // males use the base textures, and the pattern colours too
+        mod.Save();
+
+        var result = new ModChecker(_ => (4, 4), null, _ => Image(4, _ => (0, 0, 255))).Check(mod, Index(), species);
+
+        Assert.Contains(result.Warnings, w => w.Contains("male") && w.Contains("no red"));
+    }
+
+    [Fact]
+    public void Infant_pattern_maps_are_checked_too()
+    {
+        var (game, mod, species) = Setup();
+        using var _ = game;
+        File(mod, "skins/red-spot/m.png", Png(4, _ => (200, 100, 50)));
+        File(mod, "skins/red-spot/p.png", Png(4, _ => (150, 0, 0)));
+        File(mod, "skins/red-spot/ip.png", Png(4, _ => (0, 120, 255))); // no red
+        mod.Manifest.Skins.Add(new SkinEntry { Id = "red-spot", Species = "Carcharodontosaurus", Name = "Red spot", Base = "Alt 1",
+            Male = new() { ["diffuse"] = "skins/red-spot/m.png", ["pattern"] = "skins/red-spot/p.png", ["infantPattern"] = "skins/red-spot/ip.png" }, Colors = PatternColours() });
+        mod.Save();
+
+        var result = new ModChecker(_ => (4, 4)).Check(mod, Index(), species);
+
+        Assert.Contains(result.Warnings, w => w.Contains("infantPattern") && w.Contains("no red"));
+        Assert.DoesNotContain(result.Warnings, w => w.Contains(" pattern ") && w.Contains("no red") && !w.Contains("infant"));
+    }
 }
