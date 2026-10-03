@@ -1,3 +1,4 @@
+using Spectre.Console;
 using Tyrant.Cli.Commands;
 using Tyrant.Core.Errors;
 using Spectre.Console.Cli;
@@ -20,14 +21,17 @@ public static class CliApp
         app.Configure(config =>
         {
             config.SetApplicationName("tyrant");
+            config.ConfigureConsole(AnsiConsole.Create(new AnsiConsoleSettings { Out = new AnsiConsoleOutput(Console.Out) })); // help goes to the current output
             config.PropagateExceptions();
             config.AddBranch("install", install =>
             {
+                install.SetDescription("Find the game install.");
                 install.AddCommand<InstallDetectCommand>("detect")
                     .WithDescription("Find the Prehistoric Kingdom install and print its build fingerprint.");
             });
             config.AddBranch("workspace", workspace =>
             {
+                workspace.SetDescription("Create a workspace and check what in it is out of date.");
                 workspace.AddCommand<WorkspaceInitCommand>("init")
                     .WithDescription("Create a workspace folder (must be outside the game folder).");
                 workspace.AddCommand<WorkspaceStatusCommand>("status")
@@ -37,6 +41,7 @@ public static class CliApp
                 .WithDescription("Decompile game assemblies into <workspace>/source.");
             config.AddBranch("assets", assets =>
             {
+                assets.SetDescription("Index, search and export the game's textures and models.");
                 assets.AddCommand<AssetsIndexCommand>("index")
                     .WithDescription("Index every object in the game's Addressables bundles.");
                 assets.AddCommand<AssetsListCommand>("list")
@@ -50,6 +55,7 @@ public static class CliApp
             });
             config.AddBranch("species", species =>
             {
+                species.SetDescription("List species and export a species pack.");
                 species.AddCommand<SpeciesListCommand>("list")
                     .WithDescription("List the animals the game ships (park and vivarium).");
                 species.AddCommand<SpeciesPackCommand>("pack")
@@ -57,6 +63,7 @@ public static class CliApp
             });
             config.AddBranch("dump", dump =>
             {
+                dump.SetDescription("Install the dumper mod and dump the game's databases (starts the game).");
                 dump.AddCommand<DumpInstallCommand>("install")
                     .WithDescription("Install MelonLoader and the dumper mod into the game folder (reversible).");
                 dump.AddCommand<DumpRunCommand>("run")
@@ -66,6 +73,7 @@ public static class CliApp
             });
             config.AddBranch("mod", mod =>
             {
+                mod.SetDescription("Make, check and install mods: texture replacements and new skins.");
                 mod.AddCommand<ModNewCommand>("new").WithDescription("Create a mod in the workspace (mods/<id>).");
                 mod.AddCommand<ModReplaceCommand>("replace").WithDescription("Replace a game texture with your PNG in a mod.");
                 mod.AddCommand<ModCheckCommand>("check").WithDescription("Check a mod's files and targets before installing it.");
@@ -80,6 +88,7 @@ public static class CliApp
             });
             config.AddBranch("data", data =>
             {
+                data.SetDescription("Browse and export the dumped game data.");
                 data.AddCommand<DataTypesCommand>("types").WithDescription("List dumped data types and object counts.");
                 data.AddCommand<DataShowCommand>("show").WithDescription("List objects of a type, or print one object's JSON.");
                 data.AddCommand<DataExportCommand>("export").WithDescription("Export all objects of a type as CSV or JSON.");

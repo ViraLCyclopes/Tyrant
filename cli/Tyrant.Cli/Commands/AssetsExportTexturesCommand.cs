@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using Tyrant.Core.Assets;
 using Tyrant.Core.Errors;
+using Spectre.Console;
 using Spectre.Console.Cli;
 
 namespace Tyrant.Cli.Commands;
@@ -16,6 +17,8 @@ public sealed class AssetsExportTexturesCommand : Command<AssetsExportTexturesCo
         [CommandOption("--limit <N>")]
         [Description("Export at most this many textures.")]
         public int? Limit { get; set; }
+
+        public override ValidationResult Validate() => Limit < 1 ? ValidationResult.Error("--limit must be at least 1.") : base.Validate();
     }
 
     public override int Execute(CommandContext context, Settings settings)

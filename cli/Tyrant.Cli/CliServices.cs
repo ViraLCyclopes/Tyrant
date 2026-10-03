@@ -35,7 +35,14 @@ internal static class CliServices
 
     public static void PrintError(TyrantException ex)
     {
-        var fix = ex.Fix == FixAction.None ? "" : $" (fix: {ex.Fix})";
+        var fix = ex.Fix switch
+        {
+            FixAction.PickGameFolder => " (fix: point Tyrant at the game folder with --game <folder>)",
+            FixAction.PickWorkspaceFolder => " (fix: use a workspace folder outside the game folder, e.g. -w D:\\tyrant-workspace)",
+            FixAction.RefreshWorkspace => " (fix: refresh the workspace: 'tyrant decompile', 'tyrant assets index' or 'tyrant dump run')",
+            FixAction.InstallDumper => " (fix: run 'tyrant dump install')",
+            _ => "",
+        };
         Console.Error.WriteLine($"error {ex.Code.ToWire()}: {ex.Message}{fix}");
     }
 }

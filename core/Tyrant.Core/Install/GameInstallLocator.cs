@@ -48,7 +48,10 @@ public sealed class GameInstallLocator(ISteamRootProvider steam)
             {
                 var libraries = KeyValuesParser.Parse(File.ReadAllText(vdf))["libraryfolders"];
                 foreach (var lib in libraries?.Children ?? [])
+                {
                     if (lib["path"]?.Value is { Length: > 0 } p) paths.Add(p);
+                    else if (lib.Value is { Length: > 0 } old && int.TryParse(lib.Key, out _)) paths.Add(old); // the pre-2021 format
+                }
             }
             catch (Exception ex) when (ex is FormatException or IOException or UnauthorizedAccessException)
             {

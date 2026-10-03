@@ -113,6 +113,20 @@ public class GameInstallLocatorTests
     }
 
     [Fact]
+    public void Old_style_library_lists_with_numbered_path_strings_are_read()
+    {
+        var steamRoot = Path.Combine(Path.GetTempPath(), "tyrant-tests", Guid.NewGuid().ToString("N"), "Steam");
+        Directory.CreateDirectory(Path.Combine(steamRoot, "steamapps"));
+        File.WriteAllText(Path.Combine(steamRoot, "steamapps", "libraryfolders.vdf"),
+            "\"LibraryFolders\"\n{\n\t\"TimeNextStatsReport\"\t\t\"1234\"\n\t\"ContentStatsID\"\t\t\"-55\"\n\t\"1\"\t\t\"D:\\\\OldLibrary\"\n}\n");
+
+        var paths = GameInstallLocator.GetLibraryPaths(steamRoot);
+
+        Assert.Contains(Path.GetFullPath(@"D:\OldLibrary"), paths);
+        Assert.Equal(2, paths.Count); // the Steam root and the one library; the stats entries are not libraries
+    }
+
+    [Fact]
     public void Library_with_invalid_path_is_ignored()
     {
         var steamRoot = MakeSteamRoot("bad\0path");

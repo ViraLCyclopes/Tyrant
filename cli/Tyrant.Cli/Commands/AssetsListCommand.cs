@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using Spectre.Console;
 using Spectre.Console.Cli;
 
 namespace Tyrant.Cli.Commands;
@@ -18,6 +19,8 @@ public sealed class AssetsListCommand : Command<AssetsListCommand.Settings>
         [CommandOption("--limit <N>")]
         [Description("Maximum rows to print (default 50).")]
         public int Limit { get; set; } = 50;
+
+        public override ValidationResult Validate() => Limit < 1 ? ValidationResult.Error("--limit must be at least 1.") : base.Validate();
     }
 
     public override int Execute(CommandContext context, Settings settings)
