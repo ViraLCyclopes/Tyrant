@@ -42,14 +42,13 @@ public sealed class SteamLauncher : IGameLauncher
 }
 
 /// <summary>Asks the installed mod for a dump, starts the game and moves the result into &lt;workspace&gt;/data.</summary>
-public sealed class DumpRunner(IGameLauncher launcher)
+public sealed class DumpRunner(IGameLauncher launcher, int moveAttempts = 50)
 {
     public const string OutputName = "data";
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = true };
 
     public TimeSpan PollInterval { get; init; } = TimeSpan.FromSeconds(1);
 
-    private const int MoveAttempts = 50;
     private static readonly TimeSpan MoveRetryDelay = TimeSpan.FromMilliseconds(100);
 
     public static string RequestPath(GameInstall install) => ModLoaderInstaller.RequestPath(install);
@@ -106,8 +105,18 @@ public sealed class DumpRunner(IGameLauncher launcher)
                     "The dumper ran but found no game data: " + string.Join("; ", manifest.Errors.Take(5)));
 
             var old = ws.DataDir + ".old-" + requestId;
-            if (Directory.Exists(ws.DataDir)) MoveWithRetry(ws.DataDir, old, ct);
-            MoveWithRetry(tmp, ws.DataDir, ct);
+            var hadOld = Directory.Exists(ws.DataDir);
+            if (hadOld) MoveWithRetry(ws.DataDir, old, ct);
+            try
+            {
+                MoveWithRetry(tmp, ws.DataDir, ct);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or OperationCanceledException)
+            {
+                if (hadOld) MoveWithRetry(old, ws.DataDir, CancellationToken.None); // put the previous dump back
+                throw new TyrantException(TyrantErrorCode.DumpFailed,
+                    $"The new dump could not be moved into the workspace ({ex.Message}); the previous data was kept. Close anything that has files in the workspace open and run the dump again.", inner: ex);
+            }
             if (Directory.Exists(old)) Directory.Delete(old, recursive: true);
             ws.StampOutput(OutputName, fingerprint);
             success = true;
@@ -134,7 +143,7 @@ public sealed class DumpRunner(IGameLauncher launcher)
                 Directory.Move(source, destination);
                 return;
             }
-            catch (Exception ex) when ((ex is IOException or UnauthorizedAccessException) && attempt < MoveAttempts)
+            catch (Exception ex) when ((ex is IOException or UnauthorizedAccessException) && attempt < moveAttempts)
             {
                 ct.ThrowIfCancellationRequested();
                 Thread.Sleep(MoveRetryDelay);

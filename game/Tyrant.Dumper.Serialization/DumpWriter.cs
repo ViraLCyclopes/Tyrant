@@ -59,6 +59,8 @@ namespace Tyrant.Dumper.Serialization
         public const string ManifestFile = "manifest.json";
 
         private static readonly UTF8Encoding Utf8 = new UTF8Encoding(false);
+        private static readonly System.Text.RegularExpressions.Regex IdPattern = new System.Text.RegularExpressions.Regex("\"\\$id\"\\s*:\\s*-?\\d+");
+
         private static readonly char[] Invalid = Path.GetInvalidFileNameChars().Concat(new[] { '/', '\\', ':', '*', '?', '"', '<', '>', '|' }).Distinct().ToArray();
 
         public static void Write(string outputDir, DumpResult result, IEnumerable<LanguageTable> languages, DumpManifest manifest)
@@ -66,17 +68,20 @@ namespace Tyrant.Dumper.Serialization
             Directory.CreateDirectory(outputDir);
             var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var types = new Dictionary<string, Type>(StringComparer.Ordinal);
-            foreach (var obj in result.Objects)
+            // Unity instance ids change between runs, so objects sharing a name are numbered in the order of their content
+            // (their JSON without "$id"): the same object lands in the same file in every dump.
+            var ordered = result.Objects
+                .OrderBy(o => o.Type, StringComparer.Ordinal)
+                .ThenBy(o => o.Name, StringComparer.Ordinal)
+                .ThenBy(o => IdPattern.Replace(o.Json, ""), StringComparer.Ordinal)
+                .ToList();
+            foreach (var obj in ordered)
             {
                 var typeDir = Path.Combine(outputDir, "objects", SafeName(obj.Type));
                 Directory.CreateDirectory(typeDir);
                 var baseName = SafeName(obj.Name.Length > 0 ? obj.Name : "unnamed");
                 var file = Path.Combine(typeDir, baseName + ".json");
-                if (!used.Add(file))
-                {
-                    file = Path.Combine(typeDir, baseName + "_" + obj.Id + ".json");
-                    for (var n = 2; !used.Add(file); n++) file = Path.Combine(typeDir, baseName + "_" + obj.Id + "_" + n + ".json");
-                }
+                for (var n = 2; !used.Add(file); n++) file = Path.Combine(typeDir, baseName + "_" + n + ".json");
                 if (!TryWrite(file, obj.Json, manifest, obj.Type + " '" + obj.Name + "'")) continue;
                 manifest.Counts[obj.Type] = manifest.Counts.TryGetValue(obj.Type, out var count) ? count + 1 : 1;
                 types[obj.Type] = obj.ClrType;

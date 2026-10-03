@@ -29,7 +29,7 @@ public class DumpWriterTests
 
         var typeDir = Path.Combine(dir, "objects", "Tyrant.Dumper.Tests.TestAnimalData");
         Assert.True(File.Exists(Path.Combine(typeDir, "Stego.json")));
-        Assert.True(File.Exists(Path.Combine(typeDir, "Stego_3.json")));
+        Assert.True(File.Exists(Path.Combine(typeDir, "Stego_2.json")));
         Assert.True(File.Exists(Path.Combine(typeDir, "a_b_c.json")));
         Assert.True(File.Exists(Path.Combine(dir, "objects", "Tyrant.Dumper.Tests.TestDatabase", "AnimalDatabase.json")));
 
@@ -87,5 +87,27 @@ public class DumpWriterTests
     public void Reserved_device_names_are_made_safe(string input, string expected)
     {
         Assert.Equal(expected, DumpWriter.SafeName(input));
+    }
+
+    [Fact]
+    public void Objects_with_the_same_name_get_the_same_file_names_in_every_run()
+    {
+        // Unity instance ids change between runs; the file a duplicate lands in must not.
+        static Dictionary<string, string> FilesByContent(int idA, int idB, bool swapOrder)
+        {
+            var a = new DumpObject(typeof(object), new EngineObjectInfo("T", "Same", idA), $$"""{"$type":"T","$name":"Same","$id":{{idA}},"v":1}""");
+            var b = new DumpObject(typeof(object), new EngineObjectInfo("T", "Same", idB), $$"""{"$type":"T","$name":"Same","$id":{{idB}},"v":2}""");
+            var result = new DumpResult();
+            result.Objects.AddRange(swapOrder ? new[] { b, a } : new[] { a, b });
+            var dir = Path.Combine(Path.GetTempPath(), "tyrant-tests", Guid.NewGuid().ToString("N"));
+            DumpWriter.Write(dir, result, [], new DumpManifest { RequestId = "r" });
+            return Directory.GetFiles(Path.Combine(dir, "objects", "T")).ToDictionary(f => File.ReadAllText(f).Contains("\"v\":1") ? "v1" : "v2", f => Path.GetFileName(f)!);
+        }
+
+        var first = FilesByContent(111, 222, swapOrder: false);
+        var second = FilesByContent(-9876, 5, swapOrder: true);
+
+        Assert.Equal(first, second);
+        Assert.DoesNotContain("111", string.Join(",", first.Values));
     }
 }
