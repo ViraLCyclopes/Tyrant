@@ -12,7 +12,7 @@ public sealed class Workspace
     /// <summary>Workspace file name before the toolkit was renamed to Tyrant; renamed on open.</summary>
     public const string LegacyFileName = "pkws.json";
 
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { WriteIndented = true };
+    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { WriteIndented = true, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
     private Workspace(string dir, WorkspaceFile data)
     {

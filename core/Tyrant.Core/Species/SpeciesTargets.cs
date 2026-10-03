@@ -22,7 +22,7 @@ public static class SpeciesTargets
 {
     public const string FileName = "targets.json";
 
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { WriteIndented = true };
+    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { WriteIndented = true, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
     public static TargetsFile Build(SpeciesEntry species, PrefabModel prefab, IEnumerable<ModelExportResult> models,
         IEnumerable<TextureExportResult> textures, string packDir, string? gameBuild) => new(
