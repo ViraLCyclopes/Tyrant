@@ -267,6 +267,6 @@ public class AssetIntegrationTests(RealGameIndex real) : IClassFixture<RealGameI
         var ex = Assert.Throws<TyrantException>(() => session.Open(texture with { Type = "Mesh" }));
 
         Assert.Equal(TyrantErrorCode.AssetNotFound, ex.Code);
-        Assert.Contains("re-run", ex.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Index the assets again", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 }
