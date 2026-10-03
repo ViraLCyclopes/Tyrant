@@ -29,3 +29,24 @@ public sealed record AssetDetails(AssetRow Asset, long ByteSize, IReadOnlyList<A
 public sealed record SpeciesRow(string Key, string DisplayName, bool Vivarium, string Group, string PrefabRef, int Textures);
 
 public sealed record SpeciesListResult(IReadOnlyList<SpeciesRow> Species);
+
+public enum PreviewKind
+{
+    Texture,
+    Model,
+    None,
+}
+
+/// <summary>Preview files (PNG or .glb) in the workspace cache, loaded by the UI through the asset protocol.</summary>
+public sealed record AssetPreview(PreviewKind Kind, IReadOnlyList<string> Files, int? Width = null, int? Height = null, string? Format = null,
+    int? MipCount = null, int? Vertices = null, int? Triangles = null, bool? Skinned = null, string? Message = null);
+
+public sealed record AssetExportParams(IReadOnlyList<string> Refs);
+
+public sealed record AssetExportFailure(string Name, string Type, string Error);
+
+public sealed record AssetExportRunResult(int Exported, int Failed, string ReportPath, IReadOnlyList<AssetExportFailure> Failures);
+
+public sealed record SpeciesPackParams(string Key);
+
+public sealed record SpeciesPackRunResult(string Directory, int Models, int Textures, int Failed, string TargetsPath);

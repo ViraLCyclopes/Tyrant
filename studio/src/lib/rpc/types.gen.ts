@@ -27,6 +27,23 @@ export interface AssetDetails {
   fields: unknown;
 }
 
+export interface AssetExportFailure {
+  name: string;
+  type: string;
+  error: string;
+}
+
+export interface AssetExportParams {
+  refs: string[];
+}
+
+export interface AssetExportRunResult {
+  exported: number;
+  failed: number;
+  reportPath: string;
+  failures: AssetExportFailure[];
+}
+
 export interface AssetIndexRunResult {
   assets: number;
   failures: number;
@@ -47,6 +64,19 @@ export interface AssetListResult {
   total: number;
   page: number;
   pageSize: number;
+}
+
+export interface AssetPreview {
+  kind: PreviewKind;
+  files: string[];
+  width?: number | null;
+  height?: number | null;
+  format?: string | null;
+  mipCount?: number | null;
+  vertices?: number | null;
+  triangles?: number | null;
+  skinned?: boolean | null;
+  message?: string | null;
 }
 
 export interface AssetRefParams {
@@ -279,6 +309,8 @@ export interface OutputStatus {
   stale: boolean;
 }
 
+export type PreviewKind = "texture" | "model" | "none";
+
 export interface RefreshAllResult {
   steps: RefreshStep[];
 }
@@ -304,6 +336,18 @@ export interface RpcErrorObject {
 
 export interface SpeciesListResult {
   species: SpeciesRow[];
+}
+
+export interface SpeciesPackParams {
+  key: string;
+}
+
+export interface SpeciesPackRunResult {
+  directory: string;
+  models: number;
+  textures: number;
+  failed: number;
+  targetsPath: string;
 }
 
 export interface SpeciesRow {
@@ -337,9 +381,11 @@ export interface RpcMethods {
   "app.diagnostics": { params: void; result: DiagnosticsResult };
   "app.info": { params: void; result: AppInfo };
   "assets.bundles": { params: AssetBundlesParams; result: AssetBundlesResult };
+  "assets.export": { params: AssetExportParams; result: JobStarted };
   "assets.get": { params: AssetRefParams; result: AssetDetails };
   "assets.index": { params: void; result: JobStarted };
   "assets.list": { params: AssetListParams; result: AssetListResult };
+  "assets.preview": { params: AssetRefParams; result: AssetPreview };
   "assets.summary": { params: void; result: AssetsSummary };
   "data.compare": { params: DataCompareParams; result: DataCompareResult };
   "data.export": { params: DataExportParams; result: DataExportResult };
@@ -356,6 +402,7 @@ export interface RpcMethods {
   "install.detect": { params: InstallDetectParams; result: InstallInfo };
   "job.cancel": { params: JobCancelParams; result: JobCancelResult };
   "species.list": { params: void; result: SpeciesListResult };
+  "species.pack": { params: SpeciesPackParams; result: JobStarted };
   "workspace.create": { params: WorkspaceOpenParams; result: WorkspaceStatus };
   "workspace.open": { params: WorkspaceOpenParams; result: WorkspaceStatus };
   "workspace.refreshAll": { params: void; result: JobStarted };
@@ -364,10 +411,12 @@ export interface RpcMethods {
 
 /** What job.done delivers for each job method. */
 export interface RpcJobs {
+  "assets.export": AssetExportRunResult;
   "assets.index": AssetIndexRunResult;
   "decompile.run": DecompileRunResult;
   "dump.install": DumperInstallResult;
   "dump.run": DumpRunResult;
+  "species.pack": SpeciesPackRunResult;
   "workspace.refreshAll": RefreshAllResult;
 }
 
