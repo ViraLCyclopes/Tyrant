@@ -64,6 +64,17 @@ public static class CliApp
                 dump.AddCommand<DumpUninstallCommand>("uninstall")
                     .WithDescription("Remove exactly what 'tyrant dump install' added.");
             });
+            config.AddBranch("mod", mod =>
+            {
+                mod.AddCommand<ModNewCommand>("new").WithDescription("Create a mod in the workspace (mods/<id>).");
+                mod.AddCommand<ModReplaceCommand>("replace").WithDescription("Replace a game texture with your PNG in a mod.");
+                mod.AddCommand<ModCheckCommand>("check").WithDescription("Check a mod's files and targets before installing it.");
+                mod.AddCommand<ModInstallCommand>("install").WithDescription("Install a mod into the game (and Tyrant's framework, if needed).");
+                mod.AddCommand<ModRemoveCommand>("remove").WithDescription("Remove a mod from the game.");
+                mod.AddCommand<ModEnableCommand>("enable").WithDescription("Turn an installed mod on.");
+                mod.AddCommand<ModDisableCommand>("disable").WithDescription("Turn an installed mod off.");
+                mod.AddCommand<ModListCommand>("list").WithDescription("List your mods and what is installed in the game.");
+            });
             config.AddBranch("data", data =>
             {
                 data.AddCommand<DataTypesCommand>("types").WithDescription("List dumped data types and object counts.");
