@@ -8,7 +8,11 @@ import { renderWith } from '$lib/test/fixtures';
 import { Session } from '$lib/stores/session.svelte';
 import AssetPreviewPanel from './AssetPreviewPanel.svelte';
 
-vi.mock('./viewer', () => ({ showModels: vi.fn(async () => ({ setSkeleton: vi.fn(), dispose: vi.fn() })) }));
+vi.mock('./viewer', () => ({
+  showModels: vi.fn(async () => ({
+    setSkeleton: vi.fn(), setTextures: vi.fn(), setSkin: vi.fn(), setGround: vi.fn(), setSky: vi.fn(), frame: vi.fn(), dispose: vi.fn(),
+  })),
+}));
 
 const asset = (type: string): AssetRow => ({ ref: `b#${type}`, bundle: 'b', pathId: 1, type, name: `A ${type}`, containerPath: null, guid: null, script: null });
 
