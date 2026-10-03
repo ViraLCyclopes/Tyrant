@@ -152,6 +152,25 @@ public class StudioMethodsTests
     }
 
     [Fact]
+    public async Task Reopening_the_same_workspace_while_a_job_runs_keeps_its_results()
+    {
+        using var game = new FakeGame();
+        var launcher = new BlockingDumpLauncher(1);
+        var zip = TestStudio.FakeMelonLoaderZip();
+        var (harness, dir) = await Opened(game, TestStudio.Options(launcher, zip));
+        await harness.RunJob("dump.install");
+
+        var jobId = await harness.StartJob("dump.run", new { timeoutSeconds = 60 });
+        Assert.True(launcher.Entered.Wait(TimeSpan.FromSeconds(10)));
+        await harness.Call("workspace.open", new { dir, gamePath = game.Root }); // the app window reloaded mid-job
+        launcher.Release.Set();
+        await harness.WaitJob(jobId);
+
+        var status = await harness.Call("workspace.status");
+        Assert.Contains(status.GetProperty("outputs").EnumerateArray(), o => o.GetProperty("name").GetString() == "data");
+    }
+
+    [Fact]
     public async Task Refresh_all_runs_every_step_and_reports_each()
     {
         using var game = new FakeGame();

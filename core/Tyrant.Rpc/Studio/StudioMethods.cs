@@ -44,6 +44,10 @@ public sealed class StudioMethods(StudioSession session, JobManager jobs)
     [RpcMethod("workspace.open")]
     public WorkspaceStatus Open(WorkspaceOpenParams p)
     {
+        // The app reloaded while a job runs on this folder: keep the copy the job stamps, or its results would be lost.
+        if (jobs.Current() is not null && session.TryCurrent() is { } open
+            && string.Equals(PathGuard.Normalize(open.Workspace.Dir), PathGuard.Normalize(p.Dir), StringComparison.OrdinalIgnoreCase))
+            return StatusOf(open.Workspace, open.Install, Options.DumperDir);
         var (ws, install, repointed) = WorkspaceOpener.Open(p.Dir, p.GamePath, Options.Locator);
         session.Set(ws, install);
         if (repointed) session.Log($"The workspace now points at {install.RootDir}.");
