@@ -26,7 +26,7 @@ which you install and remove explicitly).
 
 ## Assets
 
-Needs an asset index (Home → **Index assets**, about 20 seconds; again after a game update).
+Needs an asset index (Workspace → **Index assets**, about 20 seconds; again after a game update).
 
 - **Browse**: the left column groups bundles the way the game does (one group per animal, plus shared and UI groups);
   ▸ opens a group's bundles. Search matches names, Addressables paths, GUIDs, script names and bundles; **Type**
@@ -41,7 +41,7 @@ Needs an asset index (Home → **Index assets**, about 20 seconds; again after a
     1/3/7 view the front, right side and top (Ctrl: the opposite side), 5 toggles orthographic, and . or Home (or
     **Frame**) centres the model. Click the view first so it gets the keys.
   - **Show skeleton** draws the bones of animated models.
-  - If the preview says textures need a newer asset index, click **Index assets** on Home once.
+  - If the preview says textures need a newer asset index, click **Index assets** on the Workspace tab once.
   - Previews are cached in `<workspace>\cache\previews` per game build and made again after a tool update.
 - Tick assets and click **Export selected**: textures become PNG (`assets\textures`), meshes and prefabs .glb
   (`assets\models`), anything else JSON (`assets\json`). A report in `exports\` lists every asset, its keys and any
@@ -68,11 +68,11 @@ Needs an asset index (Home → **Index assets**, about 20 seconds; again after a
      - optionally tick **Also normal, extra and pattern maps**.
   3. Tyrant copies that skin's textures into `mods\<id>\skins\<skin>\`. Edit them, then **Check** and **Install to game**.
   4. In the game's Nursery the new skin appears next to the vanilla ones, and the row scrolls when there are many.
-  - This needs a data dump (Home → **Run data dump**).
+  - This needs a data dump (Workspace → **Run data dump**).
 - **Clean up skin numbers…** lists skins whose mods are gone; forget the ones you won't reinstall.
 - **Restore cutouts** appears under a Check result when a colour PNG lost the see-through feathers or hair of its vanilla texture (an editor saved it without alpha). It copies the vanilla transparency back; install again afterwards.
 - **In the game's Nursery,** a grid button next to **Design** (species with more than 5 skins) opens **All skins**: every skin with a search box (skin or mod name). Click a skin to wear it; close with the X or Esc.
-- **Update Tyrant in game** (Home) appears after a Tyrant update; installing a mod also updates the framework.
+- **Update Tyrant in game** (Workspace tab) appears after a Tyrant update; installing a mod also updates the framework.
 - **Start the game.** `MelonLoader\Latest.log` lists the mods Tyrant loaded and each texture it replaced.
 - **The file format** is described in `docs/mod-format.md`.
 

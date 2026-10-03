@@ -17,9 +17,9 @@
 <h1>Game data</h1>
 
 {#if !session.workspace}
-  <p class="empty">Open a workspace on the Home tab first.</p>
+  <p class="empty">Open a workspace on the Workspace tab first.</p>
 {:else if !session.workspace.hasData}
-  <p class="empty">No game data yet. Install the dumper and run a data dump on the Home tab.</p>
+  <p class="empty">No game data yet. Install the dumper and run a data dump on the Workspace tab.</p>
 {:else}
   <div class="tabs" role="tablist" aria-label="Data views">
     {#each tabs as t (t.id)}

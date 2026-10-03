@@ -51,7 +51,7 @@
   async function install(row: ModRow) {
     const message = list?.frameworkInstalled
       ? `Copy '${row.name}' into the game (UserData\\Tyrant\\Mods\\${row.id})? No game file is replaced; Remove from game undoes it.`
-      : `Install '${row.name}' into the game? This also installs MelonLoader (if needed) and Tyrant's framework. No game file is replaced; Uninstall from game on the Home tab undoes everything.`;
+      : `Install '${row.name}' into the game? This also installs MelonLoader (if needed) and Tyrant's framework. No game file is replaced; Uninstall from game on the Workspace tab undoes everything.`;
     if (!(await session.platform.confirm(message, 'Install to game'))) return;
     const r = await session.runJob('mods.install', { id: row.id }, `Install ${row.id}`);
     if (r) session.notice = r.warnings.length ? `${r.message} Warnings: ${r.warnings.join(' ')}` : r.message;

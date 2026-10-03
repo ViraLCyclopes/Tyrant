@@ -100,7 +100,7 @@ describe('AssetBrowser', () => {
     const { rpc, session } = setup();
     rpc.on('assets.export', () => ({
       exported: 1, failed: 0, reportPath: 'D:\ws\exports\asset-export-1.json', failures: [],
-      notes: ['Textures kept in other bundles need a newer asset index: click Index assets on the Home tab.'],
+      notes: ['Textures kept in other bundles need a newer asset index: click Index assets on the Workspace tab.'],
     }));
     rpc.on('workspace.status', () => workspaceStatus({ hasAssetIndex: true }));
     renderWith(AssetBrowser, session);

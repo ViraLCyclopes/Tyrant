@@ -39,7 +39,7 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
         if (mod.Manifest.Replace.Count == 0 && mod.Manifest.Skins.Count == 0 && mod.Manifest.Assembly is null)
             warnings.Add("The mod does nothing yet: add a texture replacement or a skin.");
         if (index is null && mod.Manifest.Replace.Count > 0)
-            warnings.Add("There is no asset index, so the target textures were not checked. Click Index assets on the Home tab.");
+            warnings.Add("There is no asset index, so the target textures were not checked. Click Index assets on the Workspace tab.");
 
         foreach (var group in mod.Manifest.Replace.GroupBy(r => r.Texture, StringComparer.OrdinalIgnoreCase).Where(g => g.Count() > 1))
             warnings.Add($"{group.Key} is replaced {group.Count()} times; only the last one is used.");
@@ -66,7 +66,7 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
         }
 
         if (species is null && mod.Manifest.Skins.Count > 0)
-            warnings.Add("There is no data dump, so the skins' species and base skins were not checked (Home → Run data dump).");
+            warnings.Add("There is no data dump, so the skins' species and base skins were not checked (Workspace → Run data dump).");
         foreach (var skin in mod.Manifest.Skins)
         {
             var key = skin.Key(mod.Id);

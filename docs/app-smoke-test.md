@@ -36,7 +36,7 @@ Release build: `npm run build:app`, install `studio/src-tauri/target/release/bun
    with `models\`, the textures and `targets.json`.
 19. Assets → filter `Acrocanthosaurus`, select the prefab (GameObject), **Load 3D preview**. The animal is textured
     (not dark/metallic), stands on grass with a shadow under its feet, and a blue sky with the horizon below is behind it.
-    If the preview asks for a newer asset index, click **Index assets** on Home and load it again.
+    If the preview asks for a newer asset index, click **Index assets** on the Workspace tab and load it again.
 20. Middle-drag orbits, Shift+middle-drag pans, the wheel zooms without scrolling the panel. Click the view, then press
     numpad 1: the head faces you. Numpad 3: the animal's right side. Numpad 7: from above, head towards the bottom.
     Numpad 5: orthographic. Numpad . (or Home): the animal is centred again.
@@ -54,7 +54,7 @@ Release build: `npm run build:app`, install `studio/src-tauri/target/release/bun
 27. **(game)** Start the game, spawn a male Carcharodontosaurus with the alt1 skin: the red spots show. `MelonLoader\Latest.log` has
     `red-spot-carcharo 1.0.0: 1 texture replacement(s)` and `replaced T_carcharodontosaurus_alt1_male_D (_AdultDiffuse) on …`.
 28. **(game)** Close the game, untick **On**, start again: vanilla skin. **Remove from game**: the folder is gone.
-29. **(game)** Home → **Run data dump** (once). Species → Carcharodontosaurus → **Add a skin…** → name `Red spot`, base `Alt 1`, Male only,
+29. **(game)** Workspace → **Run data dump** (once). Species → Carcharodontosaurus → **Add a skin…** → name `Red spot`, base `Alt 1`, Male only,
     mod `red-spot-carcharo` → **Add skin**: `mods\red-spot-carcharo\skins\red-spot\male_D.png` exists. Paint on it.
 30. Mods → **Check** (no errors) → **Install to game**.
 31. **(game)** Start the game → Nursery → Carcharodontosaurus → male: a new swatch "Red spot" is next to the vanilla ones; choosing it shows

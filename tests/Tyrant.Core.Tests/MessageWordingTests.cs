@@ -23,11 +23,28 @@ public class MessageWordingTests
             {
                 var line = lines[i];
                 if (!Regex.IsMatch(line, @"'tyrant [a-z]") || line.TrimStart().StartsWith("//") || line.TrimStart().StartsWith("///")) continue;
-                if (Regex.IsMatch(line, @"Home|tab|in the app|Mods tab|Data tab|Assets tab|Species tab", RegexOptions.IgnoreCase)) continue;
+                if (Regex.IsMatch(line, @"Workspace|Home|tab|in the app|Mods tab|Data tab|Assets tab|Species tab", RegexOptions.IgnoreCase)) continue;
                 offenders.Add($"{Path.GetFileName(file)}:{i + 1}: {line.Trim()}");
             }
         }
 
         Assert.True(offenders.Count == 0, "CLI-only wording:\n" + string.Join("\n", offenders));
+    }
+
+    [Fact]
+    public void Messages_point_to_the_workspace_tab_not_home()
+    {
+        var offenders = new List<string>();
+        foreach (var dir in new[] { Path.Combine("core", "Tyrant.Core"), Path.Combine("core", "Tyrant.Rpc") })
+        foreach (var file in Directory.EnumerateFiles(Path.Combine(RepoRoot(), dir), "*.cs", SearchOption.AllDirectories))
+        {
+            if (file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")) continue;
+            var lines = File.ReadAllLines(file);
+            for (var i = 0; i < lines.Length; i++)
+                if (Regex.IsMatch(lines[i], @"Home (→|tab)|on the Home|on Home\b"))
+                    offenders.Add($"{Path.GetFileName(file)}:{i + 1}: {lines[i].Trim()}");
+        }
+
+        Assert.True(offenders.Count == 0, "Home is only the start screen now; point to the Workspace tab:\n" + string.Join("\n", offenders));
     }
 }

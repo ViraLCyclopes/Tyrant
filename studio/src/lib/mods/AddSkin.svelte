@@ -66,7 +66,7 @@
   <h3>Add a skin</h3>
   {#if data && !data.hasDump}
     <p class="hint">
-      Adding a skin needs the game's data (species and their skins). On the Home tab, click <strong>Run data dump</strong>, then come back.
+      Adding a skin needs the game's data (species and their skins). On the Workspace tab, click <strong>Run data dump</strong>, then come back.
     </p>
   {:else if data}
     {#if unmatched && !species}<p class="warn">Tyrant could not match this species to the game data's species list; pick it below.</p>{/if}

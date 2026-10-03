@@ -31,7 +31,7 @@ public sealed class StudioSession(StudioOptions options)
         lock (_lock)
         {
             if (_workspace is null || _install is null)
-                throw new TyrantException(TyrantErrorCode.WorkspaceInvalid, "No workspace is open. Open or create one on the Home tab.", FixAction.PickWorkspaceFolder);
+                throw new TyrantException(TyrantErrorCode.WorkspaceInvalid, "No workspace is open. Open or create one on the Workspace tab (or File → Open workspace…).", FixAction.PickWorkspaceFolder);
             return (_workspace, _install);
         }
     }

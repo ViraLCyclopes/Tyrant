@@ -42,7 +42,7 @@ public sealed partial class AssetsMethods
         if (model.Failures.Count > 0)
             notes.Add($"{model.Failures.Count} part(s) could not be converted. {string.Join(" ", model.Failures.Take(3))}");
         if (asset.Type == "GameObject" && index.Archives.Count == 0)
-            notes.Add("Textures kept in other bundles need a newer asset index: click Index assets on the Home tab, then load the preview again.");
+            notes.Add("Textures kept in other bundles need a newer asset index: click Index assets on the Workspace tab, then load the preview again.");
         if (model.TextureFailures.Count > 0)
             notes.Add($"{model.TextureFailures.Count} texture(s) could not be decoded, so their materials are plain. {string.Join(" ", model.TextureFailures.Take(3))}");
 

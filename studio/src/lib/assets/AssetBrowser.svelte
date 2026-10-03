@@ -120,10 +120,10 @@
       <button class="primary" disabled={checked.length === 0 || session.busy} onclick={exportChecked}>Export selected ({checked.length})</button>
     </div>
     {#if summary?.newBundles}
-      <p class="warn">{summary.newBundles} bundles were downloaded since the last index (DLC?). Run <strong>Index assets</strong> on Home to include them.</p>
+      <p class="warn">{summary.newBundles} bundles were downloaded since the last index (DLC?). Run <strong>Index assets</strong> on the Workspace tab to include them.</p>
     {/if}
     {#if summary?.stale}
-      <p class="warn">The asset index is from an older game build. Run <strong>Index assets</strong> on Home again.</p>
+      <p class="warn">The asset index is from an older game build. Run <strong>Index assets</strong> on the Workspace tab again.</p>
     {/if}
     {#if result}
       <div class="table-wrap">

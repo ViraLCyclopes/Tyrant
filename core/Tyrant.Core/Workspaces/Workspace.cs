@@ -34,7 +34,7 @@ public sealed class Workspace
         EnsureOutsideGame(full, install.RootDir);
         if (File.Exists(Path.Combine(full, FileName)))
             throw new TyrantException(TyrantErrorCode.WorkspaceInvalid,
-                $"'{full}' is already a workspace. Open it instead (Home → Open workspace…, or 'tyrant workspace status'), or choose an empty folder.",
+                $"'{full}' is already a workspace. Open it instead (File → Open workspace…, or 'tyrant workspace status'), or choose an empty folder.",
                 FixAction.PickWorkspaceFolder);
 
         var ws = new Workspace(full, new WorkspaceFile
@@ -72,7 +72,7 @@ public sealed class Workspace
             }
         }
         if (!File.Exists(file))
-            throw Invalid($"'{full}' is not a workspace (no {FileName}). Create one first (Home → New workspace…, or 'tyrant workspace init').");
+            throw Invalid($"'{full}' is not a workspace (no {FileName}). Create one first (File → New workspace…, or 'tyrant workspace init').");
         WorkspaceFile? data;
         try
         {
