@@ -98,4 +98,22 @@ public class DumpCliTests
         Assert.Equal(ExitCodes.PkError, code);
         Assert.Contains("OUTPUT_IN_GAME_FOLDER", err);
     }
+
+    [Fact]
+    public void Show_and_export_keep_non_ascii_and_the_csv_has_a_bom()
+    {
+        using var game = new FakeGame();
+        var ws = Workspace(game);
+        var result = new DumpResult();
+        result.Objects.Add(new DumpObject(typeof(object), new EngineObjectInfo("PrehistoricKingdom.AnimalData", "Tri", 1),
+            """{"$type":"PrehistoricKingdom.AnimalData","$name":"Tri","$id":1,"displayName":"Tricératops"}"""));
+        DumpWriter.Write(Path.Combine(ws, "data"), result, [], new DumpManifest { RequestId = "r" });
+
+        var show = Run("data", "show", "AnimalData", "Tri", "-w", ws);
+        Run("data", "export", "AnimalData", "-w", ws);
+        var bytes = File.ReadAllBytes(Path.Combine(ws, "exports", "AnimalData.csv"));
+
+        Assert.Contains("Tricératops", show.Out);
+        Assert.Equal(new byte[] { 0xEF, 0xBB, 0xBF }, bytes.Take(3).ToArray());
+    }
 }

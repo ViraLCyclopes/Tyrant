@@ -72,6 +72,18 @@ public sealed class DataStore
             .Select(f => (Path.GetFileNameWithoutExtension(f), Parse(f)));
 
     /// <summary>One row per object; nested objects become dotted columns, arrays compact JSON, references the target name.</summary>
+    /// <summary>Indented JSON that keeps non-ASCII text (é, 日本) and markup readable instead of escape sequences; for files and display only.</summary>
+    public static readonly JsonSerializerOptions ReadableJson = new()
+    {
+        WriteIndented = true,
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+    };
+
+    private static readonly JsonSerializerOptions CompactReadableJson = new() { Encoder = ReadableJson.Encoder };
+
+    /// <summary>UTF-8 with a byte-order mark, so Excel opens exported CSV files with the right characters.</summary>
+    public static readonly System.Text.Encoding CsvEncoding = new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: true);
+
     public static string ToCsv(IEnumerable<(string Name, JsonElement Root)> objects)
     {
         var columns = new List<string> { "$name" };
@@ -109,7 +121,7 @@ public sealed class DataStore
                 break;
             case JsonValueKind.Object:
             case JsonValueKind.Array:
-                row[prefix] = JsonSerializer.Serialize(value);
+                row[prefix] = JsonSerializer.Serialize(value, CompactReadableJson);
                 break;
             case JsonValueKind.String:
                 row[prefix] = value.GetString() ?? "";

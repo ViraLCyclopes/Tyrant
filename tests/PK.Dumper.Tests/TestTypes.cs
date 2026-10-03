@@ -104,6 +104,13 @@ public sealed class FakeAdapter : IDumpAdapter
     }
 }
 
+/// <summary>Each node points twice at the next: no cycle, but exponentially many paths.</summary>
+public sealed class DiamondNode
+{
+    public DiamondNode? left;
+    public DiamondNode? right;
+}
+
 /// <summary>Like the game's GlobalAnimalParameters: one collection field cannot be enumerated.</summary>
 public sealed class BrokenCollection : System.Collections.IEnumerable
 {

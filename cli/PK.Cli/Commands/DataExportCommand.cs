@@ -37,9 +37,10 @@ public sealed class DataExportCommand : Command<DataExportCommand.Settings>
         var output = Path.GetFullPath(settings.Out ?? Path.Combine(ws.Dir, "exports", $"{type.ShortName}.{settings.Format}"));
         Directory.CreateDirectory(Path.GetDirectoryName(output)!);
         var objects = store.LoadAll(type).ToList();
-        File.WriteAllText(output, settings.Format == "csv"
-            ? DataStore.ToCsv(objects)
-            : JsonSerializer.Serialize(objects.Select(o => o.Root), new JsonSerializerOptions { WriteIndented = true }));
+        if (settings.Format == "csv")
+            File.WriteAllText(output, DataStore.ToCsv(objects), DataStore.CsvEncoding);
+        else
+            File.WriteAllText(output, JsonSerializer.Serialize(objects.Select(o => o.Root), DataStore.ReadableJson));
         Console.WriteLine($"Exported {objects.Count} {type.ShortName} objects -> {output}");
         return ExitCodes.Ok;
     }

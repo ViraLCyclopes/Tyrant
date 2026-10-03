@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using MelonLoader;
 using MelonLoader.Utils;
@@ -37,14 +38,29 @@ namespace PK.Dumper
                 LoggerInstance.Error("Unreadable dump request: " + ex.Message);
                 return;
             }
+            finally
+            {
+                // A request is used at most once: a crash or a later normal game start must never repeat the dump.
+                try { File.Delete(requestPath); } catch (Exception ex) { LoggerInstance.Warning("Could not delete the request: " + ex.Message); }
+            }
             if (request == null || string.IsNullOrEmpty(request.requestId) || string.IsNullOrEmpty(request.outputDir))
             {
                 LoggerInstance.Error("Incomplete dump request; ignoring it.");
                 return;
             }
+            if (IsExpired(request))
+            {
+                LoggerInstance.Msg("Ignoring an expired dump request (" + request.expiresUtc + "); 'pk dump run' is no longer waiting for it.");
+                return;
+            }
             LoggerInstance.Msg("Dump requested (" + request.requestId + ") -> " + request.outputDir);
             MelonCoroutines.Start(Run(request, requestPath));
         }
+
+        private static bool IsExpired(DumpRequest request) =>
+            !string.IsNullOrEmpty(request.expiresUtc)
+            && DateTime.TryParse(request.expiresUtc, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var expires)
+            && DateTime.UtcNow > expires.ToUniversalTime();
 
         private IEnumerator Run(DumpRequest request, string requestPath)
         {
@@ -127,6 +143,7 @@ namespace PK.Dumper
         public string requestId = "";
         public string outputDir = "";
         public string? buildGuid;
+        public string? expiresUtc;
         public float timeoutSeconds = 240f;
         public float settleSeconds = 5f;
         public bool quitWhenDone = true;

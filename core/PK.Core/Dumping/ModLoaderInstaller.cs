@@ -26,8 +26,11 @@ public sealed record InstallRecord(bool InstalledLoader, List<string> Files, Lis
 
 public sealed record UninstallResult(bool RemovedLoader, string? Note);
 
-/// <summary>Installs MelonLoader (pinned, checksum-verified official release) and the dumper mod, reversibly.</summary>
-public sealed class ModLoaderInstaller(string expectedSha256 = ModLoaderInstaller.Sha256)
+/// <summary>
+/// Installs MelonLoader (pinned, checksum-verified official release) and the dumper mod, reversibly. Installs roll back on
+/// failure; uninstall deletes its record last so a failed uninstall can be retried.
+/// </summary>
+public sealed class ModLoaderInstaller(string expectedSha256 = ModLoaderInstaller.Sha256, Func<GameInstall, bool>? isGameRunning = null)
 {
     public const string LoaderName = "MelonLoader";
     public const string Version = "0.7.3";
@@ -37,15 +40,22 @@ public sealed class ModLoaderInstaller(string expectedSha256 = ModLoaderInstalle
 
     private const string ModFile = "PK.Dumper.dll";
     private const string RecordFile = "install.json";
+    private const string RequestFile = "pk.dumper.request.json";
 
     /// <summary>Folders MelonLoader uses at runtime; pre-created on a fresh install so uninstall can remove them.</summary>
     private static readonly string[] RuntimeDirs = ["Mods", "Plugins", "UserData", "UserLibs"];
+
+    /// <summary>Entries MelonLoader itself (or we) put in UserData; anything else belongs to another mod.</summary>
+    private static readonly HashSet<string> KnownUserData = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "MelonPreferences.cfg", "Loader.cfg", "MelonStartScreen", "PKModStudio", RequestFile,
+    };
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { WriteIndented = true };
 
     public static string RecordDir(GameInstall install) => Path.Combine(install.RootDir, "UserData", "PKModStudio");
 
-    public static string RequestPath(GameInstall install) => Path.Combine(install.RootDir, "UserData", "pk.dumper.request.json");
+    public static string RequestPath(GameInstall install) => Path.Combine(install.RootDir, "UserData", RequestFile);
 
     public static string LogPath(GameInstall install) => Path.Combine(install.RootDir, "MelonLoader", "Latest.log");
 
@@ -78,6 +88,7 @@ public sealed class ModLoaderInstaller(string expectedSha256 = ModLoaderInstalle
     /// <summary>Installs MelonLoader from loaderZip when the game has none (the archive is ignored otherwise) plus the dumper mod.</summary>
     public InstallRecord Install(GameInstall install, string? loaderZip, string dumperDir)
     {
+        RefuseWhileRunning(install, "installing");
         var state = GetState(install);
         if (state == InstallState.Conflict)
             throw new PkException(PkErrorCode.ModLoaderConflict,
@@ -99,6 +110,16 @@ public sealed class ModLoaderInstaller(string expectedSha256 = ModLoaderInstalle
         var installedLoader = previous?.InstalledLoader ?? false;
         var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(install.RootDir)) + Path.DirectorySeparatorChar;
 
+        // What this call added, so a failure can be rolled back without touching anything that was there before.
+        var addedFiles = new List<string>();
+        var addedDirs = new List<string>();
+        void EnsureTopDir(string dir)
+        {
+            if (Directory.Exists(Path.Combine(root, dir)) || createdDirs.Contains(dir, StringComparer.OrdinalIgnoreCase)) return;
+            Directory.CreateDirectory(Path.Combine(root, dir));
+            addedDirs.Add(dir);
+        }
+
         try
         {
             if (state == InstallState.NotInstalled)
@@ -109,14 +130,9 @@ public sealed class ModLoaderInstaller(string expectedSha256 = ModLoaderInstalle
                     if (!Path.GetFullPath(Path.Combine(root, entry.FullName)).StartsWith(root, StringComparison.OrdinalIgnoreCase))
                         throw new PkException(PkErrorCode.DumperInstallFailed, $"The MelonLoader archive contains an unsafe path '{entry.FullName}'.");
 
-                var topDirs = entries.Select(e => e.FullName.Replace('\\', '/')).Where(n => n.Contains('/')).Select(n => n[..n.IndexOf('/')])
-                    .Concat(RuntimeDirs).Distinct(StringComparer.OrdinalIgnoreCase);
-                foreach (var dir in topDirs)
-                    if (!Directory.Exists(Path.Combine(root, dir)) && !createdDirs.Contains(dir))
-                    {
-                        Directory.CreateDirectory(Path.Combine(root, dir));
-                        createdDirs.Add(dir);
-                    }
+                foreach (var dir in entries.Select(e => e.FullName.Replace('\\', '/')).Where(n => n.Contains('/')).Select(n => n[..n.IndexOf('/')])
+                             .Concat(RuntimeDirs).Distinct(StringComparer.OrdinalIgnoreCase))
+                    EnsureTopDir(dir);
 
                 foreach (var entry in entries)
                 {
@@ -125,65 +141,90 @@ public sealed class ModLoaderInstaller(string expectedSha256 = ModLoaderInstalle
                     if (File.Exists(destination)) continue; // never overwrite anything already in the game folder
                     Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
                     entry.ExtractToFile(destination);
-                    if (!files.Contains(relative)) files.Add(relative);
+                    addedFiles.Add(relative);
                 }
                 installedLoader = true;
             }
 
+            EnsureTopDir("Mods");
+            EnsureTopDir("UserLibs");
+            EnsureTopDir("UserData");
             foreach (var file in dumperFiles)
             {
                 var name = Path.GetFileName(file);
                 var relative = string.Equals(name, ModFile, StringComparison.OrdinalIgnoreCase) ? $"Mods/{name}" : $"UserLibs/{name}";
                 var destination = Path.Combine(root, relative);
-                Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+                var existed = File.Exists(destination);
                 File.Copy(file, destination, overwrite: true); // our own files
-                if (!files.Contains(relative)) files.Add(relative);
+                if (!existed) addedFiles.Add(relative);
             }
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
-        {
-            throw new PkException(PkErrorCode.DumperInstallFailed, $"Installing into the game folder failed (is the game running?): {ex.Message}", FixAction.None, ex);
-        }
 
-        var record = new InstallRecord(installedLoader, files, createdDirs);
-        Directory.CreateDirectory(RecordDir(install));
-        File.WriteAllText(Path.Combine(RecordDir(install), RecordFile), JsonSerializer.Serialize(record, Json));
-        return record;
+            files.AddRange(addedFiles.Where(f => !files.Contains(f)));
+            createdDirs.AddRange(addedDirs);
+            var record = new InstallRecord(installedLoader, files, createdDirs);
+            Directory.CreateDirectory(RecordDir(install));
+            File.WriteAllText(Path.Combine(RecordDir(install), RecordFile), JsonSerializer.Serialize(record, Json));
+            return record;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or PkException)
+        {
+            RollBack(root, addedFiles, addedDirs);
+            if (ex is PkException) throw;
+            throw new PkException(PkErrorCode.DumperInstallFailed,
+                $"Installing into the game folder failed and was rolled back (antivirus? game running?): {ex.Message}", FixAction.None, ex);
+        }
     }
 
     public UninstallResult Uninstall(GameInstall install)
     {
+        RefuseWhileRunning(install, "uninstalling");
         var record = ReadRecord(install)
             ?? throw new PkException(PkErrorCode.DumperNotInstalled, "PK Mod Studio's dumper is not installed in this game folder.");
-        var root = install.RootDir;
+        var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(install.RootDir));
+        ValidateRecord(record, root);
 
         try
         {
             foreach (var file in record.Files.Where(IsOurModFile))
                 DeleteFile(Path.Combine(root, file));
-            Directory.Delete(RecordDir(install), recursive: true);
+            DeleteFile(RequestPath(install));
 
-            if (!record.InstalledLoader)
-                return new UninstallResult(false, null);
-
-            var foreign = new[] { "Mods", "Plugins" }
-                .Select(d => Path.Combine(root, d))
-                .Any(d => Directory.Exists(d) && Directory.EnumerateFileSystemEntries(d).Any());
-            if (foreign)
-                return new UninstallResult(false, "MelonLoader was kept because other mods or plugins are installed.");
-
-            foreach (var dir in record.CreatedDirs)
+            UninstallResult result;
+            var foreign = ForeignContent(root);
+            if (record.InstalledLoader && foreign is null)
             {
-                var path = Path.Combine(root, dir);
-                if (Directory.Exists(path)) Directory.Delete(path, recursive: true); // ours, including runtime logs/config
+                foreach (var dir in record.CreatedDirs.Where(d => !string.Equals(d, "UserData", StringComparison.OrdinalIgnoreCase)))
+                {
+                    var path = Path.Combine(root, dir);
+                    if (Directory.Exists(path)) Directory.Delete(path, recursive: true); // ours, including runtime logs/config
+                }
+                foreach (var file in record.Files)
+                    DeleteFile(Path.Combine(root, file));
+                result = new UninstallResult(true, null);
             }
-            foreach (var file in record.Files)
-                DeleteFile(Path.Combine(root, file));
-            return new UninstallResult(true, null);
+            else
+            {
+                result = new UninstallResult(false, record.InstalledLoader ? $"MelonLoader was kept because {foreign}." : null);
+            }
+
+            // The record goes last, so a failure above leaves the install recorded and the uninstall can be retried.
+            Directory.Delete(RecordDir(install), recursive: true);
+            var userData = Path.Combine(root, "UserData");
+            if (record.CreatedDirs.Contains("UserData", StringComparer.OrdinalIgnoreCase) && Directory.Exists(userData)
+                && (result.RemovedLoader || !Directory.EnumerateFileSystemEntries(userData).Any()))
+                Directory.Delete(userData, recursive: true);
+            if (!result.RemovedLoader)
+                foreach (var dir in record.CreatedDirs)
+                {
+                    var path = Path.Combine(root, dir);
+                    if (Directory.Exists(path) && !Directory.EnumerateFileSystemEntries(path).Any()) Directory.Delete(path);
+                }
+            return result;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            throw new PkException(PkErrorCode.DumperInstallFailed, $"Uninstalling failed (is the game running?): {ex.Message}", FixAction.None, ex);
+            throw new PkException(PkErrorCode.DumperInstallFailed,
+                $"Uninstalling failed (is the game running?); run 'pk dump uninstall' again once it is closed: {ex.Message}", FixAction.None, ex);
         }
     }
 
@@ -206,6 +247,51 @@ public sealed class ModLoaderInstaller(string expectedSha256 = ModLoaderInstalle
         {
             throw new PkException(PkErrorCode.DumperInstallFailed, $"Downloading MelonLoader {Version} failed: {ex.Message}", FixAction.None, ex);
         }
+    }
+
+    /// <summary>Describes content other mods left in MelonLoader's folders, or null when there is none.</summary>
+    private static string? ForeignContent(string root)
+    {
+        foreach (var dir in new[] { "Mods", "Plugins", "UserLibs" })
+        {
+            var path = Path.Combine(root, dir);
+            if (Directory.Exists(path) && Directory.EnumerateFileSystemEntries(path).Any(e => !Path.GetFileName(e).StartsWith("PK.Dumper", StringComparison.OrdinalIgnoreCase)))
+                return $"other mods have files in {dir}";
+        }
+        var userData = Path.Combine(root, "UserData");
+        if (Directory.Exists(userData) && Directory.EnumerateFileSystemEntries(userData).Any(e => !KnownUserData.Contains(Path.GetFileName(e))))
+            return "other mods have files in UserData";
+        return null;
+    }
+
+    /// <summary>Refuses records that point outside the game folder (damaged or edited install.json).</summary>
+    private static void ValidateRecord(InstallRecord record, string root)
+    {
+        var prefix = root + Path.DirectorySeparatorChar;
+        bool Safe(string relative, bool topLevelOnly) =>
+            !string.IsNullOrWhiteSpace(relative) && !Path.IsPathRooted(relative)
+            && !relative.Split('/', '\\').Any(s => s is "" or "." or "..")
+            && (!topLevelOnly || !relative.Contains('/') && !relative.Contains('\\'))
+            && Path.GetFullPath(Path.Combine(root, relative)).StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
+
+        if (record.Files.Any(f => !Safe(f, false)) || record.CreatedDirs.Any(d => !Safe(d, true)))
+            throw new PkException(PkErrorCode.DumperInstallFailed,
+                "The install record (UserData/PKModStudio/install.json) is damaged or points outside the game folder; nothing was removed.");
+    }
+
+    private void RefuseWhileRunning(GameInstall install, string action)
+    {
+        if (isGameRunning?.Invoke(install) == true)
+            throw new PkException(PkErrorCode.DumperInstallFailed, $"Prehistoric Kingdom is running; close the game before {action}.");
+    }
+
+    private static void RollBack(string root, List<string> addedFiles, List<string> addedDirs)
+    {
+        foreach (var file in addedFiles)
+            try { DeleteFile(Path.Combine(root, file)); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+        foreach (var dir in addedDirs)
+            try { if (Directory.Exists(Path.Combine(root, dir))) Directory.Delete(Path.Combine(root, dir), recursive: true); }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
     }
 
     private static bool IsOurModFile(string relative) =>

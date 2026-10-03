@@ -170,4 +170,58 @@ public class DumpRunnerTests
         Assert.Equal(PkErrorCode.DumperNotInstalled, ex.Code);
         Assert.Contains("pk dump install", ex.Message);
     }
+
+    private sealed class CapturingLauncher : IGameLauncher
+    {
+        public string? Request { get; private set; }
+        public bool IsRunning(GameInstall install) => false;
+        public void Launch(GameInstall install) => Request = File.ReadAllText(DumpRunner.RequestPath(install));
+    }
+
+    [Fact]
+    public void Request_carries_an_expiry_matching_the_timeout()
+    {
+        using var game = new FakeGame();
+        var install = Installed(game);
+        var ws = Workspace.Create(TempDir(), install);
+        var launcher = new CapturingLauncher();
+        var started = DateTime.UtcNow;
+
+        Assert.Throws<PkException>(() => new DumpRunner(launcher) { PollInterval = TimeSpan.FromMilliseconds(10) }
+            .Run(install, ws, TimeSpan.FromSeconds(1), null, CancellationToken.None));
+
+        var expires = DateTime.Parse(JsonDocument.Parse(launcher.Request!).RootElement.GetProperty("expiresUtc").GetString()!, null,
+            System.Globalization.DateTimeStyles.RoundtripKind);
+        Assert.InRange(expires, started, started.AddSeconds(5));
+    }
+
+    private sealed class CancellingLauncher(CancellationTokenSource cts) : IGameLauncher
+    {
+        public bool IsRunning(GameInstall install) => false;
+        public void Launch(GameInstall install) => cts.Cancel();
+    }
+
+    [Fact]
+    public void Cancelling_while_waiting_removes_the_request()
+    {
+        using var game = new FakeGame();
+        var install = Installed(game);
+        var ws = Workspace.Create(TempDir(), install);
+        using var cts = new CancellationTokenSource();
+
+        Assert.ThrowsAny<OperationCanceledException>(() => new DumpRunner(new CancellingLauncher(cts)) { PollInterval = TimeSpan.FromMilliseconds(10) }
+            .Run(install, ws, TimeSpan.FromSeconds(30), null, cts.Token));
+
+        Assert.False(File.Exists(DumpRunner.RequestPath(install)));
+        Assert.Empty(LeftoverDumpFolders(ws));
+    }
+
+    [Fact]
+    public void Steam_launcher_without_an_app_id_explains_what_to_do()
+    {
+        using var game = new FakeGame();
+        var ex = Assert.Throws<PkException>(() => new SteamLauncher().Launch(new GameInstall(game.Root, null)));
+        Assert.Contains("Steam app id", ex.Message);
+        Assert.DoesNotContain("while 'pk dump run' waits", ex.Message);
+    }
 }

@@ -153,6 +153,25 @@ public class DumpSerializerTests
         Assert.Equal(2, json.GetProperty("after").GetProperty("ok").GetInt32());
     }
 
+    public sealed class DiamondHolder(DiamondNode node) : FakeAsset
+    {
+        public DiamondNode node = node;
+    }
+
+    [Fact]
+    public void Shared_references_cannot_blow_up_the_output()
+    {
+        DiamondNode? next = null;
+        for (var i = 0; i < 40; i++) next = new DiamondNode { left = next, right = next };
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+        var json = new DumpSerializer(new FakeAdapter(), _ => { }).SerializeRoot(new DiamondHolder(next!));
+
+        Assert.Contains("$truncated", json);
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(20), $"took {stopwatch.Elapsed}");
+        JsonDocument.Parse(json);
+    }
+
     public sealed class Wrapper(Node node) : FakeAsset
     {
         public Node node = node;

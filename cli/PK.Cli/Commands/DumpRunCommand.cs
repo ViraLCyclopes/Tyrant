@@ -17,8 +17,25 @@ public sealed class DumpRunCommand : Command<DumpRunCommand.Settings>
     {
         var (ws, install) = CliServices.OpenWorkspace(settings);
         Console.WriteLine("Starting Prehistoric Kingdom through Steam; it will close by itself when the dump is done.");
-        var manifest = new DumpRunner(new SteamLauncher())
-            .Run(install, ws, TimeSpan.FromSeconds(Math.Max(settings.TimeoutSeconds, 1)), new ConsoleProgress(), CancellationToken.None);
+        // Ctrl+C stops waiting cleanly, so the request file is removed and the next normal game start stays idle.
+        using var cts = new CancellationTokenSource();
+        ConsoleCancelEventHandler onCancel = (_, e) => { e.Cancel = true; cts.Cancel(); };
+        Console.CancelKeyPress += onCancel;
+        DumpManifestFile manifest;
+        try
+        {
+            manifest = new DumpRunner(new SteamLauncher())
+                .Run(install, ws, TimeSpan.FromSeconds(Math.Max(settings.TimeoutSeconds, 1)), new ConsoleProgress(), cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            Console.Error.WriteLine("Cancelled; the dump request was withdrawn. Close the game if it is still starting.");
+            return ExitCodes.PkError;
+        }
+        finally
+        {
+            Console.CancelKeyPress -= onCancel;
+        }
 
         Console.WriteLine($"Dumped {manifest.Counts.Values.Sum()} objects of {manifest.Counts.Count} types and {manifest.Languages.Count} languages -> {ws.DataDir}");
         foreach (var (type, count) in manifest.Counts.OrderByDescending(kv => kv.Value).Take(10))

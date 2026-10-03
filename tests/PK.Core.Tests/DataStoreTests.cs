@@ -77,4 +77,21 @@ public class DataStoreTests
         Assert.Equal(PkErrorCode.DataMissing, ex.Code);
         Assert.Contains("pk dump run", ex.Message);
     }
+
+    [Fact]
+    public void Csv_keeps_non_ascii_text_readable()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "pk-tests", Guid.NewGuid().ToString("N"), "data");
+        var result = new DumpResult();
+        result.Objects.Add(new DumpObject(typeof(object), new EngineObjectInfo("T.Animal", "Tri", 1),
+            """{"$type":"T.Animal","$name":"Tri","$id":1,"name":"Tricératops","tags":["日本","<b>"]}"""));
+        DumpWriter.Write(dir, result, [], new DumpManifest { RequestId = "r" });
+        var store = DataStore.OpenDirectory(dir);
+
+        var csv = DataStore.ToCsv(store.LoadAll(store.FindType("T.Animal")));
+
+        Assert.Contains("Tricératops", csv);
+        Assert.Contains("日本", csv);
+        Assert.Contains("<b>", csv);
+    }
 }

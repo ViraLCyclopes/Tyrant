@@ -14,6 +14,9 @@ namespace PK.Dumper.Serialization
     {
         public const int MaxDepth = 24;
 
+        /// <summary>Values written per root object; shared references can otherwise multiply the output exponentially.</summary>
+        public const int MaxValuesPerObject = 250_000;
+
         private static readonly HashSet<string> SerializeAttributes = new HashSet<string>
         {
             "SerializeField", "OdinSerializeAttribute", "SerializeReference",
@@ -22,6 +25,7 @@ namespace PK.Dumper.Serialization
         private readonly Dictionary<Type, IReadOnlyList<FieldInfo>> _fieldCache = new Dictionary<Type, IReadOnlyList<FieldInfo>>();
         private readonly IDumpAdapter _adapter;
         private readonly Action<object> _onDumpable;
+        private int _valuesLeft;
 
         public DumpSerializer(IDumpAdapter adapter, Action<object> onDumpable)
         {
@@ -33,6 +37,7 @@ namespace PK.Dumper.Serialization
         {
             var writer = new JsonWriter();
             var path = new HashSet<object>(RefEq.Instance) { root };
+            _valuesLeft = MaxValuesPerObject;
             writer.StartObject();
             WriteHeader(writer, _adapter.Describe(root));
             WriteFields(writer, root, path, 1);
@@ -115,7 +120,7 @@ namespace PK.Dumper.Serialization
         private void WriteValue(JsonWriter writer, object? value, HashSet<object> path, int depth)
         {
             if (value == null) { writer.Null(); return; }
-            if (depth > MaxDepth) { writer.String("$truncated"); return; }
+            if (depth > MaxDepth || --_valuesLeft < 0) { writer.String("$truncated"); return; }
 
             switch (value)
             {

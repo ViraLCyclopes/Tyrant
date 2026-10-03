@@ -28,7 +28,7 @@ public sealed class DataShowCommand : Command<DataShowCommand.Settings>
             foreach (var name in store.ObjectNames(type)) Console.WriteLine(name);
             return ExitCodes.Ok;
         }
-        Console.WriteLine(JsonSerializer.Serialize(store.Load(type, settings.Name), new JsonSerializerOptions { WriteIndented = true }));
+        Console.WriteLine(JsonSerializer.Serialize(store.Load(type, settings.Name), DataStore.ReadableJson));
         return ExitCodes.Ok;
     }
 }

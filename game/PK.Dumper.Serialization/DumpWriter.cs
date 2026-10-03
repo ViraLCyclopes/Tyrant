@@ -77,14 +77,14 @@ namespace PK.Dumper.Serialization
                     file = Path.Combine(typeDir, baseName + "_" + obj.Id + ".json");
                     for (var n = 2; !used.Add(file); n++) file = Path.Combine(typeDir, baseName + "_" + obj.Id + "_" + n + ".json");
                 }
-                File.WriteAllText(file, obj.Json, Utf8);
+                if (!TryWrite(file, obj.Json, manifest, obj.Type + " '" + obj.Name + "'")) continue;
                 manifest.Counts[obj.Type] = manifest.Counts.TryGetValue(obj.Type, out var count) ? count + 1 : 1;
                 types[obj.Type] = obj.ClrType;
             }
 
             var schemaDir = Path.Combine(outputDir, "schema");
             Directory.CreateDirectory(schemaDir);
-            foreach (var kv in types) File.WriteAllText(Path.Combine(schemaDir, SafeName(kv.Key) + ".json"), Schema(kv.Value), Utf8);
+            foreach (var kv in types) TryWrite(Path.Combine(schemaDir, SafeName(kv.Key) + ".json"), Schema(kv.Value), manifest, "schema of " + kv.Key);
 
             var localizationDir = Path.Combine(outputDir, "localization");
             foreach (var language in languages)
@@ -98,20 +98,44 @@ namespace PK.Dumper.Serialization
                 foreach (var term in language.Terms.OrderBy(t => t.Key, StringComparer.Ordinal)) { w.Name(term.Key); w.String(term.Value); }
                 w.EndObject();
                 w.EndObject();
-                File.WriteAllText(Path.Combine(localizationDir, SafeName(language.Code) + ".json"), w.ToString(), Utf8);
-                manifest.Languages.Add(language.Code);
+                if (TryWrite(Path.Combine(localizationDir, SafeName(language.Code) + ".json"), w.ToString(), manifest, "language " + language.Code))
+                    manifest.Languages.Add(language.Code);
             }
 
             manifest.Errors.AddRange(result.Errors);
             File.WriteAllText(Path.Combine(outputDir, ManifestFile), manifest.ToJson(), Utf8);
         }
 
+        /// <summary>Writes one file; a failure is recorded in the manifest instead of losing the whole dump.</summary>
+        private static bool TryWrite(string path, string content, DumpManifest manifest, string what)
+        {
+            try
+            {
+                File.WriteAllText(path, content, Utf8);
+                return true;
+            }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is NotSupportedException)
+            {
+                manifest.Errors.Add("Could not write " + what + ": " + ex.Message);
+                return false;
+            }
+        }
+
+        private static readonly HashSet<string> ReservedNames = new HashSet<string>(
+            new[] { "CON", "PRN", "AUX", "NUL" }.Concat(Enumerable.Range(1, 9).SelectMany(n => new[] { "COM" + n, "LPT" + n })),
+            StringComparer.OrdinalIgnoreCase);
+
         public static string SafeName(string text)
         {
             var chars = text.Select(c => Invalid.Contains(c) || c < 32 ? '_' : c).ToArray();
             var cleaned = new string(chars).Trim().TrimEnd('.');
             if (cleaned.Length == 0 || cleaned.All(c => c == '.')) return "_";
-            return cleaned.Length > 120 ? cleaned.Substring(0, 120) : cleaned;
+            if (cleaned.Length > 120) cleaned = cleaned.Substring(0, 120);
+            // Windows device names (CON, NUL, COM1...) cannot be file names, with or without an extension.
+            var dot = cleaned.IndexOf('.');
+            var stem = dot < 0 ? cleaned : cleaned.Substring(0, dot);
+            if (ReservedNames.Contains(stem.TrimEnd(' '))) cleaned = stem + "_" + cleaned.Substring(stem.Length);
+            return cleaned;
         }
 
         private static string Schema(Type type)

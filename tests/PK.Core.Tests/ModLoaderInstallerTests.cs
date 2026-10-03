@@ -210,4 +210,123 @@ public class ModLoaderInstallerTests
         Assert.Equal(PkErrorCode.DumperNotInstalled,
             Assert.Throws<PkException>(() => new ModLoaderInstaller().Uninstall(new GameInstall(game.Root, null))).Code);
     }
+
+    private static List<string> Snapshot(string root) => Directory.GetFileSystemEntries(root, "*", SearchOption.AllDirectories).Order().ToList();
+
+    [Fact]
+    public void Failed_install_rolls_back_everything_it_added()
+    {
+        using var game = new FakeGame();
+        var install = new GameInstall(game.Root, null);
+        var before = Snapshot(game.Root);
+        var blocker = Path.Combine(game.Root, "MelonLoader", "net472", "MelonLoader.dll");
+        Directory.CreateDirectory(blocker); // a folder where a file must be extracted: extraction fails midway
+        var (zip, sha) = FakeMelonLoaderZip();
+
+        var ex = Assert.Throws<PkException>(() => new ModLoaderInstaller(sha).Install(install, zip, FakeDumperDir()));
+
+        Assert.Equal(PkErrorCode.DumperInstallFailed, ex.Code);
+        Assert.False(File.Exists(Path.Combine(game.Root, "version.dll")));
+        Assert.Equal(InstallState.NotInstalled, ModLoaderInstaller.GetState(install));
+        Directory.Delete(Path.Combine(game.Root, "MelonLoader"), recursive: true); // the blocker was ours, not the installer's
+        Assert.Equal(before, Snapshot(game.Root));
+    }
+
+    [Fact]
+    public void Failed_uninstall_keeps_the_record_so_it_can_be_retried()
+    {
+        using var game = new FakeGame();
+        var install = new GameInstall(game.Root, null);
+        var before = Snapshot(game.Root);
+        var (zip, sha) = FakeMelonLoaderZip();
+        var installer = new ModLoaderInstaller(sha);
+        installer.Install(install, zip, FakeDumperDir());
+        var log = Path.Combine(game.Root, "MelonLoader", "Latest.log");
+        File.WriteAllText(log, "held open by the game");
+
+        using (new FileStream(log, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            Assert.Equal(PkErrorCode.DumperInstallFailed, Assert.Throws<PkException>(() => installer.Uninstall(install)).Code);
+            Assert.Equal(InstallState.Installed, ModLoaderInstaller.GetState(install));
+        }
+
+        Assert.True(installer.Uninstall(install).RemovedLoader);
+        Assert.Equal(before, Snapshot(game.Root));
+    }
+
+    [Fact]
+    public void Install_and_uninstall_refuse_while_the_game_is_running()
+    {
+        using var game = new FakeGame();
+        var install = new GameInstall(game.Root, null);
+        var (zip, sha) = FakeMelonLoaderZip();
+        var running = new ModLoaderInstaller(sha, _ => true);
+
+        var installEx = Assert.Throws<PkException>(() => running.Install(install, zip, FakeDumperDir()));
+        new ModLoaderInstaller(sha).Install(install, zip, FakeDumperDir());
+        var uninstallEx = Assert.Throws<PkException>(() => running.Uninstall(install));
+
+        Assert.Contains("close the game", installEx.Message);
+        Assert.Contains("close the game", uninstallEx.Message);
+        Assert.Equal(InstallState.Installed, ModLoaderInstaller.GetState(install));
+    }
+
+    [Fact]
+    public void Damaged_record_with_unsafe_paths_removes_nothing()
+    {
+        using var game = new FakeGame();
+        var install = new GameInstall(game.Root, null);
+        var (zip, sha) = FakeMelonLoaderZip();
+        var installer = new ModLoaderInstaller(sha);
+        installer.Install(install, zip, FakeDumperDir());
+        var victim = Path.Combine(Path.GetDirectoryName(game.Root)!, "Victim");
+        Directory.CreateDirectory(victim);
+        File.WriteAllText(Path.Combine(victim, "precious.txt"), "keep me");
+        File.WriteAllText(Path.Combine(ModLoaderInstaller.RecordDir(install), "install.json"),
+            """{"installedLoader":true,"files":["version.dll"],"createdDirs":["../Victim"]}""");
+
+        var ex = Assert.Throws<PkException>(() => installer.Uninstall(install));
+
+        Assert.Equal(PkErrorCode.DumperInstallFailed, ex.Code);
+        Assert.True(File.Exists(Path.Combine(victim, "precious.txt")));
+        Assert.True(File.Exists(Path.Combine(game.Root, "version.dll")));
+    }
+
+    [Theory]
+    [InlineData("UserData", "OtherMod.cfg")]
+    [InlineData("UserLibs", "OtherLibrary.dll")]
+    public void Leftovers_from_other_mods_keep_melonloader(string folder, string file)
+    {
+        using var game = new FakeGame();
+        var install = new GameInstall(game.Root, null);
+        var (zip, sha) = FakeMelonLoaderZip();
+        var installer = new ModLoaderInstaller(sha);
+        installer.Install(install, zip, FakeDumperDir());
+        File.WriteAllText(Path.Combine(game.Root, "UserData", "MelonPreferences.cfg"), "MelonLoader's own");
+        File.WriteAllText(Path.Combine(game.Root, folder, file), "someone else's");
+
+        var result = installer.Uninstall(install);
+
+        Assert.False(result.RemovedLoader);
+        Assert.NotNull(result.Note);
+        Assert.True(File.Exists(Path.Combine(game.Root, folder, file)));
+        Assert.False(File.Exists(Path.Combine(game.Root, "Mods", "PK.Dumper.dll")));
+    }
+
+    [Fact]
+    public void Uninstall_on_an_existing_loader_removes_the_request_and_empty_folders_it_created()
+    {
+        using var game = new FakeGame();
+        FakeExistingMelonLoader(game);
+        var install = new GameInstall(game.Root, null);
+        var before = Snapshot(game.Root);
+        var (zip, sha) = FakeMelonLoaderZip();
+        var installer = new ModLoaderInstaller(sha);
+        installer.Install(install, zip, FakeDumperDir());
+        File.WriteAllText(ModLoaderInstaller.RequestPath(install), "{}"); // left behind by an interrupted dump
+
+        installer.Uninstall(install);
+
+        Assert.Equal(before, Snapshot(game.Root));
+    }
 }

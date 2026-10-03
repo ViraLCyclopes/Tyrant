@@ -65,4 +65,27 @@ public class DumpWriterTests
     {
         Assert.True(DumpWriter.SafeName(new string('x', 500)).Length <= 120);
     }
+
+    [Fact]
+    public void A_file_that_cannot_be_written_is_reported_and_the_manifest_is_still_written()
+    {
+        var dir = TempDir();
+        Directory.CreateDirectory(Path.Combine(dir, "objects", "PK.Dumper.Tests.TestAnimalData", "Stego.json")); // folder in the way
+
+        DumpWriter.Write(dir, Sample(), [], new DumpManifest { RequestId = "req" });
+
+        var m = JsonDocument.Parse(File.ReadAllText(Path.Combine(dir, DumpWriter.ManifestFile))).RootElement;
+        Assert.Contains(m.GetProperty("errors").EnumerateArray(), e => e.GetString()!.Contains("Stego"));
+        Assert.True(File.Exists(Path.Combine(dir, "objects", "PK.Dumper.Tests.TestAnimalData", "a_b_c.json")));
+    }
+
+    [Theory]
+    [InlineData("CON", "CON_")]
+    [InlineData("nul", "nul_")]
+    [InlineData("Com1", "Com1_")]
+    [InlineData("LPT9", "LPT9_")]
+    public void Reserved_device_names_are_made_safe(string input, string expected)
+    {
+        Assert.Equal(expected, DumpWriter.SafeName(input));
+    }
 }

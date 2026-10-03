@@ -28,8 +28,16 @@ public sealed class SteamLauncher : IGameLauncher
     public void Launch(GameInstall install)
     {
         if (install.SteamAppId is null)
-            throw new PkException(PkErrorCode.DumpFailed, "The game's Steam app id is unknown, so it cannot be started automatically. Start the game yourself while 'pk dump run' waits.");
-        Process.Start(new ProcessStartInfo($"steam://rungameid/{install.SteamAppId}") { UseShellExecute = true });
+            throw new PkException(PkErrorCode.DumpFailed,
+                "The game's Steam app id is unknown (the game folder is not inside a Steam library), so 'pk dump run' cannot start it. Run the game from its Steam library folder.");
+        try
+        {
+            Process.Start(new ProcessStartInfo($"steam://rungameid/{install.SteamAppId}") { UseShellExecute = true });
+        }
+        catch (System.ComponentModel.Win32Exception ex)
+        {
+            throw new PkException(PkErrorCode.DumpFailed, $"Could not ask Steam to start the game (is Steam installed?): {ex.Message}", FixAction.None, ex);
+        }
     }
 }
 
@@ -65,6 +73,8 @@ public sealed class DumpRunner(IGameLauncher launcher)
                 outputDir = tmp,
                 buildGuid = fingerprint.BuildGuid,
                 timeoutSeconds = (float)Math.Max(60, timeout.TotalSeconds - 10),
+                // The mod ignores a request older than this, so one left behind (crash, power loss) never fires a surprise dump.
+                expiresUtc = DateTime.UtcNow.Add(timeout).ToString("o"),
                 settleSeconds = 5f,
                 quitWhenDone = true,
             }, Json));

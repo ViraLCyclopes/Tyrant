@@ -17,18 +17,23 @@ public sealed class DumpInstallCommand : Command<DumpInstallCommand.Settings>
     {
         var (ws, install) = CliServices.OpenWorkspace(settings);
         var zip = settings.LoaderZip;
+        var before = ModLoaderInstaller.GetState(install);
+        var installer = new ModLoaderInstaller(isGameRunning: new SteamLauncher().IsRunning);
         // Only a fresh install needs the MelonLoader archive; an existing MelonLoader just gets the mod.
-        if (zip is null && ModLoaderInstaller.GetState(install) == InstallState.NotInstalled)
+        if (zip is null && before == InstallState.NotInstalled)
         {
             Console.WriteLine($"Downloading {ModLoaderInstaller.LoaderName} {ModLoaderInstaller.Version} ...");
             using var http = new HttpClient();
             zip = ModLoaderInstaller.DownloadAsync(http, Path.Combine(ws.CacheDir, "downloads"), CancellationToken.None).GetAwaiter().GetResult();
         }
 
-        var record = new ModLoaderInstaller().Install(install, zip, Path.Combine(AppContext.BaseDirectory, "dumper"));
-        Console.WriteLine(record.InstalledLoader
-            ? $"Installed {ModLoaderInstaller.LoaderName} {ModLoaderInstaller.Version} and the dumper mod ({record.Files.Count} files added to the game folder)."
-            : $"Added the dumper mod to your existing {ModLoaderInstaller.LoaderName}.");
+        var record = installer.Install(install, zip, Path.Combine(AppContext.BaseDirectory, "dumper"));
+        Console.WriteLine(before switch
+        {
+            InstallState.Installed => "Updated the dumper mod; it was already installed.",
+            InstallState.NotInstalled => $"Installed {ModLoaderInstaller.LoaderName} {ModLoaderInstaller.Version} and the dumper mod ({record.Files.Count} files added to the game folder).",
+            _ => $"Added the dumper mod to your existing {ModLoaderInstaller.LoaderName}.",
+        });
         Console.WriteLine("Normal play is unaffected: the dumper does nothing unless 'pk dump run' asks it to. Undo with 'pk dump uninstall'.");
         return ExitCodes.Ok;
     }
