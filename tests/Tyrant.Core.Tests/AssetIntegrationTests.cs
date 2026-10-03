@@ -1,3 +1,4 @@
+using Tyrant.Core.Species;
 using System.Text.Json;
 using Tyrant.Core.Assets;
 using Tyrant.Core.Catalog;
@@ -23,6 +24,37 @@ public sealed class RealGameIndex
 [Trait("Category", "Integration")]
 public class AssetIntegrationTests(RealGameIndex real) : IClassFixture<RealGameIndex>
 {
+    [SkippableFact]
+    public void Bundle_reader_inspects_and_previews_a_real_skin_texture()
+    {
+        Skip.If(RealGameIndex.GameDir is null, "TYRANT_GAME_DIR not set");
+        var texture = real.Index.Assets.First(a => a.ContainerPath == SkinTexture && a.Type == "Texture2D");
+        var reader = new BundleAssetReader();
+        var png = Path.Combine(Path.GetTempPath(), "tyrant-tests", Guid.NewGuid().ToString("N"), "skin.png");
+
+        var inspection = reader.Inspect(real.Install, texture);
+        var facts = reader.WriteTexture(real.Install, texture, png);
+
+        Assert.True(inspection.ByteSize > 0);
+        Assert.Contains("m_Width", inspection.FieldsJson);
+        Assert.True(facts.Width > 0 && facts.Height > 0);
+        Assert.True(new FileInfo(png).Length > 0);
+    }
+
+    [SkippableFact]
+    public void Bundle_reader_converts_a_real_species_prefab()
+    {
+        Skip.If(RealGameIndex.GameDir is null, "TYRANT_GAME_DIR not set");
+        var species = SpeciesCatalog.Find(SpeciesCatalog.FromIndex(real.Index), "stegosaurus");
+        var dir = Path.Combine(Path.GetTempPath(), "tyrant-tests", Guid.NewGuid().ToString("N"), "model");
+
+        var facts = new BundleAssetReader().WriteModel(real.Install, species.Prefab, dir);
+
+        Assert.NotEmpty(facts.Files);
+        Assert.True(facts.Triangles > 0);
+        Assert.True(facts.Skinned);
+    }
+
     private const string SkinTexture = "Assets/Art/Animals/Dinosaurs/Acrocanthosaurus/Textures/T_Acrocanthosaurus_alt1_D.png";
 
     [SkippableFact]

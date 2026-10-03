@@ -1,0 +1,30 @@
+using Tyrant.Core.Install;
+using Tyrant.Core.Jobs;
+using Tyrant.Core.Species;
+using Tyrant.Core.Workspaces;
+
+namespace Tyrant.Core.Assets;
+
+/// <summary>An object's raw facts: its size in the bundle, its fields as JSON, and what it references.</summary>
+public sealed record AssetInspection(long ByteSize, string FieldsJson, IReadOnlyList<AssetReference> References, IReadOnlyList<string> ExternalFiles);
+
+/// <summary>The .glb files written for a mesh or prefab, with totals over the meshes that converted.</summary>
+public sealed record ModelFacts(IReadOnlyList<string> Files, int Vertices, int Triangles, bool Skinned, IReadOnlyList<string> Failures);
+
+/// <summary>Everything that reads game bundles. Production code uses <see cref="BundleAssetReader"/>; tests use a fake.</summary>
+public interface IAssetReader
+{
+    AssetInspection Inspect(GameInstall install, AssetRecord asset);
+
+    /// <summary>Decodes a Texture2D to a PNG at <paramref name="pngPath"/>.</summary>
+    TextureFacts WriteTexture(GameInstall install, AssetRecord texture, string pngPath);
+
+    /// <summary>Writes a Mesh or prefab GameObject as .glb files into <paramref name="outputDir"/> (replacing its contents).</summary>
+    ModelFacts WriteModel(GameInstall install, AssetRecord asset, string outputDir);
+
+    /// <summary>Writes any object's fields as JSON.</summary>
+    void WriteJson(GameInstall install, AssetRecord asset, string jsonPath);
+
+    SpeciesPackResult WriteSpeciesPack(GameInstall install, Workspace ws, AssetIndex index, SpeciesEntry species,
+        IProgress<JobProgress>? progress, CancellationToken ct);
+}
