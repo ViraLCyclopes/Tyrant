@@ -29,7 +29,7 @@ public sealed class SteamLauncher : IGameLauncher
     {
         if (install.SteamAppId is null)
             throw new TyrantException(TyrantErrorCode.DumpFailed,
-                "The game's Steam app id is unknown (the game folder is not inside a Steam library), so 'tyrant dump run' cannot start it. Run the game from its Steam library folder.");
+                "The game's Steam app id is unknown (the game folder is not inside a Steam library), so Tyrant cannot start it for the data dump. Run the game from its Steam library folder.");
         try
         {
             Process.Start(new ProcessStartInfo($"steam://rungameid/{install.SteamAppId}") { UseShellExecute = true });
@@ -56,11 +56,11 @@ public sealed class DumpRunner(IGameLauncher launcher, int moveAttempts = 50)
     public DumpManifestFile Run(GameInstall install, Workspace ws, TimeSpan timeout, IProgress<JobProgress>? progress, CancellationToken ct)
     {
         if (ModLoaderInstaller.GetState(install) != InstallState.Installed)
-            throw new TyrantException(TyrantErrorCode.DumperNotInstalled, "The dumper mod is not installed in the game folder. Run 'tyrant dump install' first.",
+            throw new TyrantException(TyrantErrorCode.DumperNotInstalled, "The dumper mod is not installed in the game folder. Install it first (Home → Install Tyrant in game, or 'tyrant dump install').",
                 FixAction.InstallDumper);
 
         if (launcher.IsRunning(install))
-            throw new TyrantException(TyrantErrorCode.DumpFailed, "Prehistoric Kingdom is already running; close it first, then run 'tyrant dump run' again.");
+            throw new TyrantException(TyrantErrorCode.DumpFailed, "Prehistoric Kingdom is already running; close it first, then run the data dump again (Home → Run data dump, or 'tyrant dump run').");
 
         var requestId = Guid.NewGuid().ToString("N");
         var tmp = Path.Combine(ws.Dir, $"data.tmp-{requestId}");
