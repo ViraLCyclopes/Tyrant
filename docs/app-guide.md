@@ -27,10 +27,12 @@ Tyrant opens on **Home**: the game's art, a short intro (hide it with **✕ Hide
 
 ## The log
 
-Each tab has a log (**View ▸ Show log**, or **Ctrl+L**): what that tab did, its warnings and errors, plus Tyrant's own
-messages. The status line at the bottom shows the tab's latest message; click it to open the log, which also opens by
-itself when a warning or error arrives. A tab whose log got a warning or error while you were elsewhere shows ⚠ or ✕ on its title. An error you can
-fix shows as a banner in its tab, with a button that fixes it. **Help ▸ Show studio.log** finds the full log file.
+Each tab has a log: what that tab did, its warnings and errors, plus Tyrant's own messages. The **Log** button at the
+right of the menu bar (or **Ctrl+L**) shows or hides it; it sits at the side, and **Dock at the bottom** in its header
+moves it (drag its edge to resize). A dot on the Log button means the tab has a new warning (yellow) or error (red).
+The status line at the bottom shows the tab's latest message; click it to open the log. Errors open the log by
+themselves, and an error you can fix shows as a banner in its tab with a button that fixes it. A tab whose log got a
+warning or error while you were elsewhere shows ⚠ or ✕ on its title. **Help ▸ Show studio.log** finds the full log file.
 
 ## Workspace
 

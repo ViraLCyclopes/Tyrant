@@ -31,12 +31,10 @@ export function attentionFor(all: LogRecord[]): Map<string, 'warn' | 'error'> {
 }
 
 /**
- * The log panel's size while its edge is dragged from `start` to `now` (pointer positions). At the side the panel is
- * twice as wide as its size, so the size moves half as far as the pointer. It never covers more than 60 % of the
- * window, nor shrinks below 80.
+ * The log panel's size (width at the side, height at the bottom) while its edge is dragged from `start` to `now`
+ * (pointer positions). It never covers more than 60 % of the window, nor shrinks below 80.
  */
 export function panelSize(drag: { from: number; start: number; now: number; position: 'bottom' | 'side'; viewport: number }): number {
-  const scale = drag.position === 'side' ? 2 : 1;
-  const wanted = drag.from + (drag.start - drag.now) / scale;
-  return Math.round(Math.min((drag.viewport * 0.6) / scale, Math.max(80, wanted)));
+  const wanted = drag.from + (drag.start - drag.now);
+  return Math.round(Math.min(drag.viewport * 0.6, Math.max(80, wanted)));
 }

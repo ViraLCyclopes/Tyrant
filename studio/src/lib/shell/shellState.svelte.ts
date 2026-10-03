@@ -13,9 +13,11 @@ export interface ShellPrefs {
   logPosition: 'bottom' | 'side';
 }
 
+/** A tab's log panel: open or folded, and its width at the side and height at the bottom (Scute's 360 / 220). */
 export interface PanelState {
   open: boolean;
-  size: number;
+  side: number;
+  bottom: number;
 }
 
 interface SavedTabs {
@@ -27,8 +29,8 @@ const TABS_KEY = 'tyrant.shell.tabs';
 const PREFS_KEY = 'tyrant.shell.prefs';
 const INTRO_KEY = 'tyrant.home.introHidden';
 export const SHELL_KEY = Symbol('tyrant-shell');
-const DEFAULT_PREFS: ShellPrefs = { reopenTabs: true, logPosition: 'bottom' };
-const DEFAULT_PANEL: PanelState = { open: false, size: 180 };
+const DEFAULT_PREFS: ShellPrefs = { reopenTabs: true, logPosition: 'side' };
+const DEFAULT_PANEL: PanelState = { open: false, side: 360, bottom: 220 };
 
 /** The shell's state: which tabs are open, each tab's Tab object, log panels, markers, preferences. No DOM. */
 export class ShellState implements TabHost {
@@ -41,6 +43,8 @@ export class ShellState implements TabHost {
   private readonly panels = new SvelteMap<string, PanelState>();
   /** Per tab: the last log record seen while it was showing; later warnings and errors mark the tab. */
   private readonly seen = new SvelteMap<string, number>();
+  /** Per tab: the last log record seen with its log panel open; later warnings and errors light the Log button's dot. */
+  private readonly logSeen = new SvelteMap<string, number>();
 
   constructor(
     readonly registry: Registry,
@@ -54,9 +58,12 @@ export class ShellState implements TabHost {
       this.version++;
     });
     log.onAdd((record) => {
-      if (record.tab === null || record.tab !== this.store.activeId()) return;
+      if (record.tab === null) return;
+      if (this.panel(record.tab).open) this.logSeen.set(record.tab, record.seq);
+      if (record.tab !== this.store.activeId()) return;
       this.seen.set(record.tab, record.seq);
-      if (record.level !== 'info') this.setPanel(record.tab, { open: true }); // never hide a problem behind a folded panel
+      // An error is never hidden behind a folded log; a warning lights the Log button's dot (and shows in the status line).
+      if (record.level === 'error') this.setPanel(record.tab, { open: true });
     });
   }
 
@@ -102,6 +109,7 @@ export class ShellState implements TabHost {
     tab?.detach(); // a job it started may still finish: its result then goes to every tab
     this.tabObjects.delete(id);
     this.panels.delete(id);
+    this.logSeen.delete(id);
     this.seen.delete(id);
     this.log.clear(id);
     this.save();
@@ -143,6 +151,14 @@ export class ShellState implements TabHost {
 
   setPanel(id: string, patch: Partial<PanelState>): void {
     this.panels.set(id, { ...this.panel(id), ...patch });
+    if (patch.open) this.logSeen.set(id, this.log.lastSeq());
+  }
+
+  /** The Log button's dot: a warning or error the tab logged since its log was last open. */
+  logDot(id: string): 'warn' | 'error' | null {
+    if (this.panel(id).open) return null;
+    const after = this.logSeen.get(id) ?? 0;
+    return attentionFor(this.log.records.filter((r) => r.tab === id && r.seq > after)).get(id) ?? null;
   }
 
   toggleLog(): void {
@@ -189,7 +205,7 @@ export class ShellState implements TabHost {
     }
     for (const [id, tab] of this.tabObjects) tab.active = id === active;
     if (!active) return;
-    if (this.unseenProblem(active) !== null) this.setPanel(active, { open: true }); // show what the ⚠ / ✕ was about
+    if (this.unseenProblem(active) === 'error') this.setPanel(active, { open: true }); // show what the ✕ was about
     this.seen.set(active, this.log.lastSeq());
   }
 }
@@ -200,7 +216,7 @@ function readPrefs(raw: string | null): ShellPrefs {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return { ...DEFAULT_PREFS };
     return {
       reopenTabs: typeof value.reopenTabs === 'boolean' ? value.reopenTabs : DEFAULT_PREFS.reopenTabs,
-      logPosition: value.logPosition === 'side' ? 'side' : 'bottom',
+      logPosition: value.logPosition === 'bottom' ? 'bottom' : 'side',
     };
   } catch {
     return { ...DEFAULT_PREFS };
