@@ -116,4 +116,25 @@ public class GltfModelWriterTests
                 Assert.Equal(expected[r, c], converted[r, c], 4);
         Assert.Equal(new Vector2(0.25f, 0.75f), UnityToGltf.Uv(new Vector2(0.25f, 0.25f)));
     }
+
+    [Fact]
+    public void Prefab_root_is_placed_at_the_origin()
+    {
+        // Some prefabs (e.g. Yi, Archaeopteryx) were saved ~1 km from the origin; Unity overrides the root on spawn.
+        var mesh = ModelFixture.Triangle();
+        var root = new SkeletonNode("Yi", new Vector3(-1056.9f, 93.3f, 125.2f), Quaternion.CreateFromAxisAngle(Vector3.UnitY, 1.2f), new Vector3(2, 2, 2));
+        var hip = new SkeletonNode("Hip", Vector3.UnitY, Quaternion.Identity, Vector3.One, root);
+        root.Children.Add(hip);
+        var tail = new SkeletonNode("Tail", Vector3.UnitZ, Quaternion.Identity, Vector3.One, hip);
+        hip.Children.Add(tail);
+        var prefab = new PrefabModel("Yi", root, [new RendererModel("Body", mesh, [hip, tail], root)], []);
+        var path = TempGlb();
+
+        GltfModelWriter.WriteGlb(prefab, prefab.Renderers[0], path);
+        var node = ModelRoot.Load(path).LogicalNodes.Single(n => n.Name == "Yi");
+
+        Assert.Equal(Vector3.Zero, node.LocalTransform.Translation);
+        Assert.Equal(Quaternion.Identity, node.LocalTransform.Rotation);
+        Assert.Equal(new Vector3(2, 2, 2), node.LocalTransform.Scale);
+    }
 }

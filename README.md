@@ -53,13 +53,15 @@ dotnet run --project cli/PK.Cli -- assets export-model <prefab guid|path|bundle#
 
 Models are `.glb` files with the full skeleton, skin weights and the growth blend shapes (`Adolescent`,
 `Infant`) — import them in Blender with File > Import > glTF 2.0. `targets.json` lists the prefab, mesh and
-texture IDs plus the bone hierarchy that replacement models must keep.
+texture IDs plus the bone hierarchy that replacement models must keep. Each model's rest pose is the
+prefab's saved pose (as Unity shows it), not the bind pose; Blender's glTF importer option "Guess Original
+Bind Pose" (on by default) recovers the bind pose.
 
 Verify output (optional, needs Node and Blender 5.2):
 
 ```powershell
 npm install --prefix tools/verify
-node tools/verify/validate-gltf.js D:\pk-workspace\assets\species\stegosaurusstenops\models\*.glb
+node tools/verify/validate-gltf.js (Get-ChildItem D:\pk-workspace\assets\species\stegosaurusstenops\models\*.glb).FullName
 & "C:\Program Files (x86)\Steam\steamapps\common\Blender\blender.exe" -b --factory-startup -P tools/verify/blender_inspect.py -- <model.glb> <render.png>
 ```
 

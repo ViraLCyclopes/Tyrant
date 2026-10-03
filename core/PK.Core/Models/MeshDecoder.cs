@@ -132,6 +132,7 @@ public static class MeshDecoder
             var c = colorVector.UnpackFloats(1, 4);
             colors = new Vector4[c.Length / 4];
             for (var i = 0; i < colors.Length; i++) colors[i] = new Vector4(c[i * 4], c[i * 4 + 1], c[i * 4 + 2], c[i * 4 + 3]);
+            if (colors.Length != vertexCount) throw new FormatException($"Mesh '{name}' has {colors.Length} colours for {vertexCount} vertices.");
         }
 
         var weightVector = PackedBitVector.FromField(cm["m_Weights"]);

@@ -132,4 +132,17 @@ public class MeshDecoderTests
             shapes: Shapes(("Infant", [(9u, 0f, 0f, 0f)])));
         Assert.Throws<FormatException>(() => MeshDecoder.Decode(field));
     }
+
+    [Fact]
+    public void Compressed_colour_count_must_match_vertex_count()
+    {
+        var compressed = Obj("m_CompressedMesh",
+            Packed("m_Vertices", [0, 0, 0, 0, 1, 0, 1, 0, 0], 8, range: 255, start: 0),
+            Packed("m_FloatColors", [255, 255, 255, 255], 8, range: 1, start: 0),
+            Packed("m_Triangles", [0, 1, 2], 4),
+            U32("m_UVInfo", 0));
+        var field = Mesh("BadColours", VertexData(0, []), [], [SubMesh(0, 3)], compression: 1, compressed: compressed);
+
+        Assert.Throws<FormatException>(() => MeshDecoder.Decode(field));
+    }
 }

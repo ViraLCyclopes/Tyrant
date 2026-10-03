@@ -43,9 +43,9 @@ public sealed class ModelExporter
                 GltfModelWriter.WriteGlb(model, renderer, path);
                 results.Add(new ModelExportResult(name, renderer, true, path, null));
             }
-            catch (Exception ex) when (ex is InvalidDataException or NotSupportedException or IOException
-                                           or UnauthorizedAccessException or InvalidOperationException or ArgumentException)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
+                // SharpGLTF reports invalid models with its own exception types; one bad renderer must not stop the rest.
                 results.Add(new ModelExportResult(name, renderer, false, path, ex.Message));
             }
         }

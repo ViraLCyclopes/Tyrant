@@ -14,18 +14,19 @@ public sealed class SpeciesPackExporter
     public SpeciesPackResult Export(GameInstall install, Workspace ws, AssetIndex index, SpeciesEntry species,
         IProgress<JobProgress>? progress, CancellationToken ct)
     {
-        // Key is ASCII letters/digits only, so this always stays inside assets/species.
-        var dir = Path.Combine(ws.AssetsDir, "species", species.Key);
-        if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
-        Directory.CreateDirectory(dir);
-
         var models = new ModelExporter();
         var textures = new TextureExporter();
         using var session = new AssetSession(install);
 
+        // Read first, so a failure (e.g. bundle gone after a game update) leaves the previous pack intact.
         progress?.Report(new JobProgress(0, $"Reading {species.DisplayName}"));
         var prefab = models.ReadPrefab(session, species.Prefab);
         session.Release();
+
+        // Key is ASCII letters/digits only, so this always stays inside assets/species.
+        var dir = Path.Combine(ws.AssetsDir, "species", species.Key);
+        if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+        Directory.CreateDirectory(dir);
         var modelResults = models.WriteModels(prefab, Path.Combine(dir, "models"));
 
         var list = SpeciesCatalog.TexturesFor(index, species);

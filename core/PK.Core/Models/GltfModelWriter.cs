@@ -16,6 +16,9 @@ public static class GltfModelWriter
         var mesh = renderer.Mesh;
         if (mesh.Normals.Length != mesh.VertexCount)
             throw new NotSupportedException($"Mesh '{mesh.Name}' has no normals, which is not supported yet.");
+        foreach (var (label, count) in new[] { ("UVs", mesh.Uv0.Length), ("colours", mesh.Colors.Length), ("skin weights", mesh.Skin.Length) })
+            if (count != 0 && count != mesh.VertexCount)
+                throw new InvalidDataException($"Mesh '{mesh.Name}' has {count} {label} for {mesh.VertexCount} vertices.");
 
         var nodes = new Dictionary<SkeletonNode, NodeBuilder>();
         var root = BuildNodes(model.Root, null, nodes);
@@ -58,7 +61,11 @@ public static class GltfModelWriter
     private static NodeBuilder BuildNodes(SkeletonNode node, NodeBuilder? parent, Dictionary<SkeletonNode, NodeBuilder> map)
     {
         var builder = parent is null ? new NodeBuilder(node.Name) : parent.CreateNode(node.Name);
-        builder.LocalTransform = new AffineTransform(node.LocalScale, UnityToGltf.Rotation(node.LocalRotation), UnityToGltf.Position(node.LocalPosition));
+        // The prefab root's saved position/rotation is meaningless (Unity overrides it on spawn; some prefabs were
+        // saved ~1 km away), so the root sits at the origin; its scale and every child transform are kept.
+        builder.LocalTransform = parent is null
+            ? new AffineTransform(node.LocalScale, Quaternion.Identity, Vector3.Zero)
+            : new AffineTransform(node.LocalScale, UnityToGltf.Rotation(node.LocalRotation), UnityToGltf.Position(node.LocalPosition));
         map[node] = builder;
         foreach (var child in node.Children) BuildNodes(child, builder, map);
         return builder;

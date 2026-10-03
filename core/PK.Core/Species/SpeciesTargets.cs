@@ -9,6 +9,7 @@ public sealed record AssetTarget(string Ref, string? ContainerPath, string? Guid
 public sealed record ModelTarget(string File, string Mesh, string Renderer, bool Skinned, int VertexCount, int TriangleCount,
     List<string> BlendShapes, List<string> Bones);
 
+/// <summary>A node of the prefab hierarchy; Parent is the parent's Path (names can repeat, paths cannot).</summary>
 public sealed record BoneTarget(string Name, string Path, string? Parent);
 
 public sealed record TextureTarget(string File, string Name, string? ContainerPath, string? Guid, string Ref);
@@ -35,7 +36,7 @@ public static class SpeciesTargets
             Relative(packDir, m.OutputPath), m.Renderer!.Mesh.Name, m.Renderer.Name, m.Renderer.IsSkinned,
             m.Renderer.Mesh.VertexCount, m.Renderer.Mesh.TriangleCount,
             m.Renderer.Mesh.BlendShapes.Select(b => b.Name).ToList(), m.Renderer.Bones.Select(b => b.Name).ToList())).ToList(),
-        Skeleton: prefab.Root.DepthFirst().Select(n => new BoneTarget(n.Name, n.Path, n.Parent?.Name)).ToList(),
+        Skeleton: prefab.Root.DepthFirst().Select(n => new BoneTarget(n.Name, n.Path, n.Parent?.Path)).ToList(),
         Textures: textures.Where(t => t.Success).Select(t => new TextureTarget(
             Relative(packDir, t.OutputPath), t.Asset.Name, t.Asset.ContainerPath, t.Asset.Guid, t.Asset.Ref)).ToList());
 

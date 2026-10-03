@@ -42,14 +42,14 @@ public class SpeciesPackTests
         Assert.Equal(new[] { "Infant" }, model.BlendShapes);
         Assert.Equal(new[] { "Hip", "Tail" }, model.Bones);
         Assert.Equal(new[] { "Animal", "Animal/Hip", "Animal/Hip/Tail" }, loaded.Skeleton.Select(b => b.Path));
-        Assert.Equal("Hip", loaded.Skeleton[2].Parent);
+        Assert.Equal("Animal/Hip", loaded.Skeleton[2].Parent);
         var tex = Assert.Single(loaded.Textures);
         Assert.Equal("textures/Art/T_stego_D.png", tex.File);
         Assert.Equal("19b2ba2040871f64cac8f8c0c66ca525", tex.Guid);
     }
 
     [Fact]
-    public void Export_replaces_an_old_pack_and_reports_missing_bundle()
+    public void Failed_repack_keeps_the_previous_pack()
     {
         using var game = new FakeGame();
         var install = new GameInstall(game.Root, null);
@@ -62,6 +62,6 @@ public class SpeciesPackTests
             new SpeciesPackExporter().Export(install, ws, new AssetIndex(), Stego(), null, CancellationToken.None));
 
         Assert.Equal(PkErrorCode.AssetNotFound, ex.Code);
-        Assert.False(File.Exists(stale));
+        Assert.True(File.Exists(stale));
     }
 }

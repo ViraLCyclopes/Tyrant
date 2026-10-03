@@ -3,6 +3,7 @@ using PK.Core.Errors;
 using PK.Core.Install;
 using PK.Core.Models;
 using PK.Core.Workspaces;
+using System.Numerics;
 
 namespace PK.Core.Tests;
 
@@ -60,5 +61,23 @@ public class ModelExporterTests
         var prefab = new AssetRecord("StandaloneWindows64/gone.bundle", 1, "GameObject", "Stego", "Assets/Prefabs/Animals/V2-MainPrefabs/Stego.V2.prefab", null, null);
 
         Assert.Equal(PkErrorCode.AssetNotFound, Assert.Throws<PkException>(() => new ModelExporter().Export(install, ws, prefab)).Code);
+    }
+
+    [Fact]
+    public void Inconsistent_mesh_data_fails_only_that_renderer()
+    {
+        var good = ModelFixture.Triangle("Fine");
+        var mismatched = new MeshData
+        {
+            Name = "Mismatched", Positions = good.Positions, Normals = good.Normals, Uv0 = good.Uv0, Colors = [System.Numerics.Vector4.One],
+            Skin = good.Skin, Indices = good.Indices, SubMeshes = good.SubMeshes, BindPoses = good.BindPoses, BlendShapes = [],
+        };
+        var prefab = ModelFixture.Prefab(good);
+        prefab = prefab with { Renderers = [prefab.Renderers[0], prefab.Renderers[0] with { Mesh = mismatched }] };
+
+        var results = new ModelExporter().WriteModels(prefab, TempDir());
+
+        Assert.True(results.Single(r => r.Name == "Fine").Success);
+        Assert.False(results.Single(r => r.Name == "Mismatched").Success);
     }
 }
