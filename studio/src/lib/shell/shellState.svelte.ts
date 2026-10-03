@@ -1,3 +1,4 @@
+import { getContext } from 'svelte';
 import { SvelteMap } from 'svelte/reactivity';
 import type { KeyValueStore } from '$lib/storage';
 import { attentionFor } from './log';
@@ -23,12 +24,16 @@ interface SavedTabs {
 
 const TABS_KEY = 'tyrant.shell.tabs';
 const PREFS_KEY = 'tyrant.shell.prefs';
+const INTRO_KEY = 'tyrant.home.introHidden';
+export const SHELL_KEY = Symbol('tyrant-shell');
 const DEFAULT_PREFS: ShellPrefs = { reopenTabs: true, logPosition: 'bottom' };
 const DEFAULT_PANEL: PanelState = { open: false, size: 180 };
 
 /** The shell's state: which tabs are open, each tab's Tab object, log panels, markers, preferences. No DOM. */
 export class ShellState implements TabHost {
   prefs = $state<ShellPrefs>({ ...DEFAULT_PREFS });
+  /** The Home intro card was hidden (Home and Preferences both change it). */
+  introHidden = $state(false);
   private version = $state(0);
   private readonly store = new TabStore();
   private readonly tabObjects = new Map<string, Tab>();
@@ -136,9 +141,15 @@ export class ShellState implements TabHost {
     this.storage.set(PREFS_KEY, JSON.stringify(this.prefs));
   }
 
+  setIntroHidden(hidden: boolean): void {
+    this.introHidden = hidden;
+    this.storage.set(INTRO_KEY, hidden ? '1' : '0');
+  }
+
   /** Opens Home, then (if wanted) the tabs of the last session. */
   start(): void {
     this.prefs = readPrefs(this.storage.get(PREFS_KEY));
+    this.introHidden = this.storage.get(INTRO_KEY) === '1';
     this.openTool('home');
     if (!this.prefs.reopenTabs) return;
     const saved = readTabs(this.storage.get(TABS_KEY));
@@ -193,4 +204,9 @@ function readTabs(raw: string | null): SavedTabs {
   } catch {
     return { tabs: [], active: -1 };
   }
+}
+
+/** The shell, for tools that need it beyond their tab (Home's dock and intro). */
+export function getShell(): ShellState {
+  return getContext<ShellState>(SHELL_KEY);
 }

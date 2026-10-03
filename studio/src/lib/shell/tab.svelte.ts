@@ -1,6 +1,7 @@
 import { getContext, setContext } from 'svelte';
 import { asRpcError, type RpcError } from '$lib/rpc/client';
 import type { LogStore } from './logStore.svelte';
+import type { Menu } from './menu';
 
 export const TAB_KEY = Symbol('tyrant-tab');
 
@@ -21,7 +22,7 @@ export class Tab {
   /** An actionable error (one with a fix) raised by this tab's own actions. */
   error = $state<RpcError | null>(null);
   /** Extra menus this tab's tool adds to the menu bar while it is showing (plan 2's Mod menu). */
-  menus = $state<unknown[]>([]);
+  menus = $state<Menu[]>([]);
   /** False once the tab is closed: late results of its work go to every tab instead. */
   private attached = true;
 

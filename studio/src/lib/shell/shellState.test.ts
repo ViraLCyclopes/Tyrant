@@ -3,7 +3,7 @@ import { RpcError } from '$lib/rpc/client';
 import { memoryStore, type KeyValueStore } from '$lib/storage';
 import { LogStore } from './logStore.svelte';
 import { Registry, type ToolDef } from './registry';
-import { ShellState } from './shell.svelte';
+import { ShellState } from './shellState.svelte';
 
 const load = async () => ({ default: (() => {}) as never });
 
@@ -143,5 +143,13 @@ describe('ShellState', () => {
     first.setPrefs({ reopenTabs: false });
     first.save();
     expect(shell(store).s.tabs.map((t) => t.toolId)).toEqual(['home']);
+  });
+
+  it('remembers whether the Home intro is hidden', () => {
+    const store = memoryStore();
+    const first = shell(store).s;
+    expect(first.introHidden).toBe(false);
+    first.setIntroHidden(true);
+    expect(shell(store).s.introHidden).toBe(true);
   });
 });
