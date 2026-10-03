@@ -72,7 +72,9 @@ namespace Tyrant.Framework
             }
 
             // Colour is sRGB; normal maps and masks are data (linear), as the game's own textures are.
-            var texture = new Texture2D(width, height, TextureFormat.RGBA32, true, kind != SlotKind.Color) { name = replacement.Texture };
+            // Colour and masks without transparency compress to DXT1 like vanilla (half the memory of DXT5).
+            var format = kind != SlotKind.Normal && Pixels.IsOpaque(ToBytes(pixels)) ? TextureFormat.RGB24 : TextureFormat.RGBA32;
+            var texture = new Texture2D(width, height, format, true, kind != SlotKind.Color) { name = replacement.Texture };
             texture.SetPixels32(pixels);
             texture.Apply(true, false);
             if (width % 4 == 0 && height % 4 == 0) texture.Compress(true); // DXT, like vanilla; needs sizes divisible by 4
