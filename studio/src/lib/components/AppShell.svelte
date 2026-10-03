@@ -10,6 +10,7 @@
   const tabs = [
     { href: '/', label: 'Home' },
     { href: '/assets', label: 'Assets' },
+    { href: '/mods', label: 'Mods' },
     { href: '/data', label: 'Data' },
   ];
 </script>

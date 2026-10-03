@@ -52,7 +52,7 @@ describe('HomeView', () => {
     rpc.on('workspace.status', () => workspaceStatus({ dumper: 'installed' }));
     renderWith(HomeView, session);
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Install dumper' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Install Tyrant in game' }));
 
     await waitFor(() => expect(session.notice).toMatch(/Installed MelonLoader/));
     expect(await screen.findByRole('button', { name: 'Run data dump' })).toBeInTheDocument();
@@ -77,7 +77,7 @@ describe('HomeView', () => {
     renderWith(HomeView, session);
 
     expect(screen.getByRole('button', { name: 'Refresh all' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Install dumper' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Install Tyrant in game' })).toBeDisabled();
   });
 
   it('shows the workspace folder in Explorer', async () => {

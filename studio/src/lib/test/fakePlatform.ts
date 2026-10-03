@@ -9,6 +9,12 @@ export class FakePlatform implements Platform {
   readonly revealed: string[] = [];
   readonly copied: string[] = [];
 
+  files: (string | null)[] = [];
+
+  async openFile(): Promise<string | null> {
+    return this.files.shift() ?? null;
+  }
+
   async pickFolder(): Promise<string | null> {
     return this.folders.shift() ?? null;
   }
