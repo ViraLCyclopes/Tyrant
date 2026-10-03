@@ -1,0 +1,7 @@
+Tyrant
+======
+
+studio/static/hero.jpg is the main-menu background of Prehistoric Kingdom. It belongs to the
+game's developer and publisher and is used only as the start-screen art of this modding tool,
+with credit. It is the only game content in this repository; Tyrant never ships other game files.
+tools/hero/extract_hero.py shows how it was exported from the game.

@@ -29,7 +29,7 @@
   }
 </script>
 
-<h1>Home</h1>
+<h1>Workspace</h1>
 
 <section class="card" aria-labelledby="game-heading">
   <h2 id="game-heading">Game</h2>

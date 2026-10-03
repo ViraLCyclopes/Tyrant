@@ -12,7 +12,7 @@ export function registerTools(registry: Registry): void {
     instances: 'single',
     closable: false,
     inDock: false,
-    load: () => import('$lib/home/HomeView.svelte'),
+    load: () => import('$lib/home/HomeTool.svelte'),
   });
   registry.register({
     id: 'workspace',
@@ -21,7 +21,7 @@ export function registerTools(registry: Registry): void {
     icon: WORKSPACE_ICON,
     status: 'ready',
     instances: 'single',
-    load: () => import('$lib/home/HomeView.svelte'),
+    load: () => import('$lib/workspace/WorkspaceView.svelte'),
   });
   registry.register({
     id: 'mods',
