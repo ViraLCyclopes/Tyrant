@@ -19,6 +19,12 @@
   let newId = $state('my-skins');
   let unmatched = $state(false);
   const selected = $derived(data?.species.find((s) => s.speciesId === species) ?? null);
+  const baseSkin = $derived(selected?.skins.find((s) => s.name === base) ?? null);
+  // A sex the base skin has no textures for cannot be templated: switch it off.
+  $effect(() => {
+    if (baseSkin && !baseSkin.male) male = false;
+    if (baseSkin && !baseSkin.female) female = false;
+  });
   const keyOf = (id: string) => id.toLowerCase().replace(/[^a-z0-9]/g, '');
 
   onMount(async () => {
@@ -77,8 +83,8 @@
           {#each selected?.skins ?? [] as s (s.index)}<option value={s.name}>{s.name}</option>{/each}
         </select>
       </label>
-      <label><input type="checkbox" bind:checked={male} /> Male</label>
-      <label><input type="checkbox" bind:checked={female} /> Female</label>
+      <label><input type="checkbox" bind:checked={male} disabled={baseSkin ? !baseSkin.male : false} /> Male</label>
+      <label><input type="checkbox" bind:checked={female} disabled={baseSkin ? !baseSkin.female : false} /> Female</label>
       <label><input type="checkbox" bind:checked={maps} /> Also normal, extra and pattern maps</label>
       <label>Mod
         <select aria-label="Mod" bind:value={target}>

@@ -1,5 +1,6 @@
 import { fireEvent, screen, waitFor } from '@testing-library/svelte';
 import { describe, expect, it } from 'vitest';
+import { RpcError } from '$lib/rpc/client';
 import { memoryStore } from '$lib/storage';
 import { FakePlatform } from '$lib/test/fakePlatform';
 import { FakeRpc } from '$lib/test/fakeRpc';
@@ -42,5 +43,26 @@ describe('CleanSkins', () => {
     renderWith(CleanSkins, session);
 
     expect(await screen.findByText(/No skin numbers to clean up/)).toBeInTheDocument();
+  });
+
+  it('says when the skin numbers cannot be read instead of claiming there is nothing to clean up', async () => {
+    const rpc = new FakeRpc().on('mods.skinSlots', () => {
+      throw new RpcError('skin-slots.json in the game\'s UserData/Tyrant cannot be read: bad JSON', 'MOD_INVALID');
+    });
+    const session = new Session(rpc, new FakePlatform(), memoryStore());
+    renderWith(CleanSkins, session);
+
+    expect(await screen.findByText(/cannot be read/)).toBeInTheDocument();
+    expect(screen.queryByText(/No skin numbers to clean up/)).toBeNull();
+  });
+
+  it('lists the same key under two species', async () => {
+    const { session } = setup([
+      { species: 'Carcharodontosaurus', key: 'gone-mod/blue', number: 15 },
+      { species: 'Velociraptor', key: 'gone-mod/blue', number: 15 },
+    ]);
+    renderWith(CleanSkins, session);
+
+    expect(await screen.findAllByRole('checkbox', { name: 'Forget gone-mod/blue' })).toHaveLength(2);
   });
 });
