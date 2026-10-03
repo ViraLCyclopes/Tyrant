@@ -43,6 +43,26 @@ dotnet run --project cli/PK.Cli -- assets export-textures -w D:\pk-workspace --f
 The GUIDs and container paths shown by `assets list` are what replacement mods target. DLC bundles are
 indexed like any other once Steam has downloaded them (Steam > Properties > DLC).
 
+Models and species packs:
+
+```powershell
+dotnet run --project cli/PK.Cli -- species list -w D:\pk-workspace
+dotnet run --project cli/PK.Cli -- species pack "Stegosaurus Stenops" -w D:\pk-workspace   # models + textures + targets.json
+dotnet run --project cli/PK.Cli -- assets export-model <prefab guid|path|bundle#pathId> -w D:\pk-workspace
+```
+
+Models are `.glb` files with the full skeleton, skin weights and the growth blend shapes (`Adolescent`,
+`Infant`) — import them in Blender with File > Import > glTF 2.0. `targets.json` lists the prefab, mesh and
+texture IDs plus the bone hierarchy that replacement models must keep.
+
+Verify output (optional, needs Node and Blender 5.2):
+
+```powershell
+npm install --prefix tools/verify
+node tools/verify/validate-gltf.js D:\pk-workspace\assets\species\stegosaurusstenops\models\*.glb
+& "C:\Program Files (x86)\Steam\steamapps\common\Blender\blender.exe" -b --factory-startup -P tools/verify/blender_inspect.py -- <model.glb> <render.png>
+```
+
 Every command accepts `--game <folder>` (where relevant) to skip Steam detection.
 Exit codes: 0 ok, 1 usage error, 2 error (code printed, e.g. `GAME_NOT_FOUND`), 3 partial success.
 Open `source\Assembly-CSharp\*.csproj` in Visual Studio or Rider to browse the decompiled game code.
