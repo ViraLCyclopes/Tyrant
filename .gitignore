@@ -8,3 +8,9 @@ node_modules/
 target/
 # local workspaces created while testing
 tyrant-workspace*/
+
+# studio (Tauri app)
+studio/build/
+studio/.svelte-kit/
+studio/src-tauri/gen/
+studio/src-tauri/sidecar/
