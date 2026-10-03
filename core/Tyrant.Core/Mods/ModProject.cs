@@ -1,9 +1,12 @@
 using Tyrant.Core.Assets;
 using Tyrant.Core.Errors;
+using Tyrant.Core.Install;
 using Tyrant.Core.Workspaces;
 using Tyrant.Framework.Core;
 
 namespace Tyrant.Core.Mods;
+
+public sealed record SkinTemplateOptions(bool Male, bool Female, bool Maps);
 
 /// <summary>A mod being made in the workspace: &lt;workspace&gt;/mods/&lt;id&gt;/ with mod.json and textures/.</summary>
 public sealed class ModProject
@@ -117,5 +120,63 @@ public sealed class ModProject
         using var stream = File.OpenRead(path);
         var head = new byte[PngSignature.Length];
         return stream.Read(head, 0, head.Length) == head.Length && head.AsSpan().SequenceEqual(PngSignature);
+    }
+
+    private static readonly (string Slot, string Suffix)[] TemplateSlots = [("diffuse", "D"), ("normal", "N"), ("extra", "extra"), ("pattern", "pattern")];
+
+    /// <summary>
+    /// Adds a new skin based on a vanilla skin: exports the base textures (diffuse; with Maps also normal, extra and pattern) into
+    /// skins/&lt;skin id&gt;/ as an editable template and records the skin in mod.json.
+    /// </summary>
+    public SkinEntry AddSkin(Workspace ws, GameInstall install, AssetIndex index, IAssetReader reader, IReadOnlyList<SpeciesSkins> species,
+        string speciesId, string name, string? baseSkin, SkinTemplateOptions options)
+    {
+        if (!options.Male && !options.Female) throw new TyrantException(TyrantErrorCode.ModInvalid, "Choose male, female or both for the new skin.");
+        var target = species.FirstOrDefault(s => string.Equals(s.SpeciesId, speciesId, StringComparison.OrdinalIgnoreCase))
+            ?? throw new TyrantException(TyrantErrorCode.TargetNotFound, $"No species '{speciesId}' in the game data. Pick one from the list (Species tab).");
+        if (target.Skins.Count == 0) throw new TyrantException(TyrantErrorCode.TargetNotFound, $"{target.SpeciesId} has no skins in the game data to start from.");
+        var based = baseSkin is null ? target.Skins[0]
+            : int.TryParse(baseSkin, out var number) ? target.Skins.FirstOrDefault(s => s.Index == number)
+            : target.Skins.FirstOrDefault(s => string.Equals(s.Name, baseSkin, StringComparison.OrdinalIgnoreCase));
+        if (based is null)
+            throw new TyrantException(TyrantErrorCode.TargetNotFound, $"{target.SpeciesId} has no skin '{baseSkin}'. Its skins: {string.Join(", ", target.Skins.Select(s => s.Name))}.");
+
+        var id = SkinId(name);
+        var entry = new SkinEntry { Id = id, Species = target.SpeciesId, Name = name.Trim(), Base = based.Name };
+        var slots = options.Maps ? TemplateSlots : TemplateSlots[..1];
+        if (options.Male) entry.Male = Template(ws, install, index, reader, id, "male", based.Male, slots);
+        if (options.Female) entry.Female = Template(ws, install, index, reader, id, "female", based.Female, slots);
+        Manifest.Skins.Add(entry);
+        Save();
+        return entry;
+    }
+
+    private Dictionary<string, string> Template(Workspace ws, GameInstall install, AssetIndex index, IAssetReader reader, string skinId, string sex,
+        IReadOnlyDictionary<string, string> textures, (string Slot, string Suffix)[] slots)
+    {
+        if (!textures.ContainsKey("diffuse"))
+            throw new TyrantException(TyrantErrorCode.TargetNotFound, $"The base skin has no {sex} diffuse texture in the game data; pick another base or leave {sex} out.");
+        var files = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var (slot, suffix) in slots)
+        {
+            if (!textures.TryGetValue(slot, out var guid)) continue;
+            var file = $"skins/{skinId}/{sex}_{suffix}.png";
+            reader.WriteTexture(install, index.Resolve(guid, "Texture2D"), Path.Combine(Dir, file.Replace('/', Path.DirectorySeparatorChar)));
+            files[slot] = file;
+        }
+        return files;
+    }
+
+    /// <summary>A skin id from its name ("Red spot" → "red-spot"), unique within the mod.</summary>
+    private string SkinId(string name)
+    {
+        var slug = new string(name.Trim().ToLowerInvariant().Select(c => char.IsAsciiLetterOrDigit(c) ? c : '-').ToArray());
+        while (slug.Contains("--")) slug = slug.Replace("--", "-");
+        slug = slug.Trim('-');
+        if (slug.Length < 3) slug = (slug + "-skin").Trim('-');
+        if (slug.Length > 60) slug = slug[..60].TrimEnd('-');
+        var id = slug;
+        for (var n = 2; Manifest.Skins.Any(s => s.Id == id); n++) id = $"{slug}-{n}";
+        return id;
     }
 }

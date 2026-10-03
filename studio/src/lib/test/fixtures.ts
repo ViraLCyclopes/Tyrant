@@ -19,6 +19,7 @@ export function workspaceStatus(overrides: Partial<WorkspaceStatus> = {}): Works
     hasData: false,
     hasAssetIndex: false,
     hasSource: false,
+    framework: 'missing',
     ...overrides,
   };
 }

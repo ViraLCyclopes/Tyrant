@@ -61,4 +61,14 @@ describe('SpeciesPanel', () => {
 
     await waitFor(() => expect(session.notice).toContain('could not be decoded'));
   });
+
+  it('opens Add a skin for a species', async () => {
+    const { rpc, session } = setup();
+    rpc.on('mods.species', () => ({ hasDump: false, species: [] })).on('mods.list', () => ({ mods: [], frameworkInstalled: false }));
+    renderWith(SpeciesPanel, session);
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Add a skin to Carcharodontosaurus' }));
+
+    expect(await screen.findByText(/Run data dump/)).toBeInTheDocument();
+  });
 });

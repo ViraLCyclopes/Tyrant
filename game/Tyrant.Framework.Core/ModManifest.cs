@@ -8,7 +8,7 @@ namespace Tyrant.Framework.Core
     public static class FrameworkInfo
     {
         /// <summary>The framework version mods compare their "requires": { "tyrant": ... } against.</summary>
-        public const string Version = "0.1.0";
+        public const string Version = "0.2.0";
     }
 
     public static class ModId
@@ -40,6 +40,59 @@ namespace Tyrant.Framework.Core
         public string File { get; set; } = "";
     }
 
+    /// <summary>The texture slots a skin can provide, as written in mod.json, with their shader properties.</summary>
+    public static class SkinSlotNames
+    {
+        public static readonly IReadOnlyList<string> All = new[]
+        {
+            "diffuse", "normal", "extra", "pattern", "fur", "infantDiffuse", "infantNormal", "infantExtra", "infantPattern", "infantFur",
+        };
+
+        public static string? Canonical(string slot) => All.FirstOrDefault(s => string.Equals(s, slot, StringComparison.OrdinalIgnoreCase));
+
+        public static string Property(string slot)
+        {
+            var infant = slot.StartsWith("infant", StringComparison.Ordinal);
+            var part = infant ? slot.Substring("infant".Length).ToLowerInvariant() : slot;
+            var name = part switch
+            {
+                "diffuse" => "Diffuse",
+                "normal" => "Normal",
+                "extra" => "ExtraMap",
+                "pattern" => "PatternMask",
+                "fur" => "FurMask",
+                _ => throw new ArgumentException("Unknown skin slot " + slot),
+            };
+            return (infant ? "_Infant" : "_Adult") + name;
+        }
+
+        public static SlotKind KindOf(string slot) =>
+            slot.EndsWith("iffuse", StringComparison.OrdinalIgnoreCase) ? SlotKind.Color
+            : slot.EndsWith("ormal", StringComparison.OrdinalIgnoreCase) ? SlotKind.Normal
+            : SlotKind.Data;
+    }
+
+    /// <summary>One added skin: a copy of a vanilla skin (Base) with the mod's PNGs per sex and slot.</summary>
+    public sealed class SkinEntry
+    {
+        public string Id { get; set; } = "";
+        public string Species { get; set; } = "";
+        public string Name { get; set; } = "";
+
+        /// <summary>The vanilla skin to copy: its skinName, or its 0-based index as text.</summary>
+        public string Base { get; set; } = "0";
+
+        public string? Thumbnail { get; set; }
+
+        /// <summary>Slot → PNG (relative to the mod folder); null when the skin has no male textures.</summary>
+        public Dictionary<string, string>? Male { get; set; }
+
+        public Dictionary<string, string>? Female { get; set; }
+
+        /// <summary>The skin's permanent key in skin-slots.json.</summary>
+        public string Key(string modId) => modId + "/" + Id;
+    }
+
     /// <summary>A mod's mod.json: who it is, what it needs, and what each content module should do.</summary>
     public sealed class ModManifest
     {
@@ -62,6 +115,8 @@ namespace Tyrant.Framework.Core
         public string? Assembly { get; set; }
 
         public List<TextureReplacement> Replace { get; } = new List<TextureReplacement>();
+
+        public List<SkinEntry> Skins { get; } = new List<SkinEntry>();
 
         public static ModManifest Parse(string json)
         {
@@ -111,6 +166,31 @@ namespace Tyrant.Framework.Core
                 if (string.IsNullOrWhiteSpace(file)) throw new ManifestException($"\"replace\" entry {n} ({texture}) has no \"file\".");
                 manifest.Replace.Add(new TextureReplacement { Texture = texture!, File = file!, Key = Text(entry, "key"), Guid = Text(entry, "guid") });
             }
+            n = 0;
+            foreach (var item in Array(map, "skins"))
+            {
+                n++;
+                if (!(item is Dictionary<string, object?> entry)) throw new ManifestException($"\"skins\" entry {n} must be an object.");
+                var skinId = Text(entry, "id") ?? "";
+                if (!ModId.IsValid(skinId))
+                    throw new ManifestException($"\"skins\" entry {n}: \"id\" must be 3–64 lowercase letters, digits or '-' (got \"{skinId}\").");
+                if (manifest.Skins.Any(s => s.Id == skinId)) throw new ManifestException($"Two skins have the id \"{skinId}\".");
+                var species = Text(entry, "species");
+                if (string.IsNullOrWhiteSpace(species)) throw new ManifestException($"Skin \"{skinId}\" has no \"species\".");
+                var skin = new SkinEntry
+                {
+                    Id = skinId,
+                    Species = species!,
+                    Name = Text(entry, "name") is { Length: > 0 } skinName ? skinName : skinId,
+                    Base = Text(entry, "base") is { Length: > 0 } baseSkin ? baseSkin : "0",
+                    Thumbnail = Text(entry, "thumbnail"),
+                    Male = Slots(entry, "male", skinId),
+                    Female = Slots(entry, "female", skinId),
+                };
+                if ((skin.Male?.Count ?? 0) == 0 && (skin.Female?.Count ?? 0) == 0)
+                    throw new ManifestException($"Skin \"{skinId}\" needs \"male\" or \"female\" textures.");
+                manifest.Skins.Add(skin);
+            }
             return manifest;
         }
 
@@ -130,6 +210,15 @@ namespace Tyrant.Framework.Core
                 entry["file"] = r.File;
                 return (object?)entry;
             }).ToList();
+            if (Skins.Count > 0)
+                map["skins"] = Skins.Select(s =>
+                {
+                    var entry = new Dictionary<string, object?> { ["id"] = s.Id, ["species"] = s.Species, ["name"] = s.Name, ["base"] = s.Base };
+                    if (s.Thumbnail != null) entry["thumbnail"] = s.Thumbnail;
+                    if (s.Male != null) entry["male"] = Ordered(s.Male);
+                    if (s.Female != null) entry["female"] = Ordered(s.Female);
+                    return (object?)entry;
+                }).ToList();
             return Json.Write(map) + "\n";
         }
 
@@ -144,5 +233,22 @@ namespace Tyrant.Framework.Core
             if (!map.TryGetValue(key, out var value) || value == null) return System.Array.Empty<object?>();
             return value as List<object?> ?? throw new ManifestException($"\"{key}\" must be a list.");
         }
+
+        private static Dictionary<string, string>? Slots(Dictionary<string, object?> entry, string sex, string skinId)
+        {
+            if (!entry.TryGetValue(sex, out var value) || value == null) return null;
+            if (!(value is Dictionary<string, object?> map)) throw new ManifestException($"Skin \"{skinId}\": \"{sex}\" must map slots to files.");
+            var slots = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var pair in map)
+            {
+                var slot = SkinSlotNames.Canonical(pair.Key)
+                    ?? throw new ManifestException($"Skin \"{skinId}\" uses unknown slot \"{pair.Key}\" (use {string.Join(", ", SkinSlotNames.All)}).");
+                slots[slot] = pair.Value as string ?? throw new ManifestException($"Skin \"{skinId}\": \"{sex}.{pair.Key}\" must be a file path.");
+            }
+            return slots;
+        }
+
+        private static Dictionary<string, object?> Ordered(Dictionary<string, string> slots) =>
+            SkinSlotNames.All.Where(slots.ContainsKey).ToDictionary(s => s, s => (object?)slots[s]);
     }
 }

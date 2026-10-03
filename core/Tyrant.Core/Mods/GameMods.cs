@@ -100,7 +100,7 @@ public sealed class GameMods(Func<GameInstall, bool>? isGameRunning = null)
                 var manifest = ModManifest.Parse(File.ReadAllText(path));
                 result.Add(new InstalledMod(folder, manifest.Name, manifest.Version, manifest.Replace.Count, enabled, dir, null));
             }
-            catch (ManifestException ex)
+            catch (Exception ex) when (ex is ManifestException or IOException or UnauthorizedAccessException)
             {
                 result.Add(new InstalledMod(folder, folder, "", 0, enabled, dir, ex.Message));
             }

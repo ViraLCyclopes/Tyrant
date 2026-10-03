@@ -92,7 +92,7 @@ describe('HomeView', () => {
 
   it('uninstall asks first, naming installed mods, and does nothing when declined', async () => {
     const { rpc, platform, session } = setup();
-    const mod = (id: string, state: string) => ({ id, name: id, version: '1.0.0', author: null, replacements: 1, state, enabled: true, dir: null, error: null });
+    const mod = (id: string, state: string) => ({ id, name: id, version: '1.0.0', author: null, replacements: 1, skins: 0, state, enabled: true, dir: null, error: null });
     rpc.on('mods.list', () => ({ mods: [mod('red-spot', 'installed'), mod('hand-made', 'gameOnly'), mod('draft', 'notInstalled')], frameworkInstalled: true }));
     session.workspace = workspaceStatus({ dumper: 'installed' });
     platform.confirmAnswer = false;
@@ -117,5 +117,26 @@ describe('HomeView', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Uninstall from game' }));
 
     await waitFor(() => expect(session.notice).toContain('back to vanilla'));
+  });
+
+  it('offers an update when the framework is outdated', async () => {
+    const { rpc, session } = setup();
+    rpc.on('dump.install', () => ({ installedLoader: false, message: "Updated Tyrant's dumper and framework; they were already installed." }));
+    rpc.on('workspace.status', () => workspaceStatus({ dumper: 'installed', framework: 'current' }));
+    session.workspace = workspaceStatus({ dumper: 'installed', framework: 'outdated' });
+    renderWith(HomeView, session);
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Update Tyrant in game' }));
+
+    await waitFor(() => expect(session.notice).toContain('Updated'));
+    expect(rpc.callsTo('dump.install')).toHaveLength(1);
+  });
+
+  it('shows no update button when the framework is current', () => {
+    const { session } = setup();
+    session.workspace = workspaceStatus({ dumper: 'installed', framework: 'current' });
+    renderWith(HomeView, session);
+
+    expect(screen.queryByRole('button', { name: 'Update Tyrant in game' })).toBeNull();
   });
 });

@@ -106,4 +106,72 @@ public class ModsMethodsTests
         Assert.False(Row(off, "red-spot").GetProperty("enabled").GetBoolean());
         Assert.Equal("notInstalled", Row(removed, "red-spot").GetProperty("state").GetString());
     }
+
+    [Fact]
+    public async Task Installing_a_mod_updates_an_outdated_framework()
+    {
+        using var game = new FakeGame();
+        var gameMods = TestStudio.FakeGameModsDir();
+        var options = TestStudio.Options(loaderZip: TestStudio.FakeMelonLoaderZip(), dumperDir: gameMods);
+        var h = new RpcHarness(options);
+        var ws = TestStudio.TempDir();
+        await h.Call("workspace.create", new { dir = ws, gamePath = game.Root });
+        AssetFixtures.WriteIndex(ws, [Texture], GameFingerprint.Compute(new GameInstall(game.Root, null)));
+        await h.Call("mods.create", new { id = "red-spot" });
+        await h.Call("mods.replace", new { id = "red-spot", texture = Texture.Name, png = Png(ws) });
+        await h.RunJob("mods.install", new { id = "red-spot" });
+        File.WriteAllText(Path.Combine(gameMods, "Tyrant.Framework.dll"), "framework v2");
+        Assert.Equal("outdated", (await h.Call("workspace.status")).GetProperty("framework").GetString());
+
+        await h.RunJob("mods.install", new { id = "red-spot" });
+
+        Assert.Equal("framework v2", File.ReadAllText(Path.Combine(game.Root, "Mods", "Tyrant.Framework.dll")));
+        Assert.Equal("current", (await h.Call("workspace.status")).GetProperty("framework").GetString());
+    }
+
+    [Fact]
+    public async Task mods_species_reports_no_dump()
+    {
+        using var game = new FakeGame();
+        var (h, _) = await Opened(game);
+
+        var result = await h.Call("mods.species");
+
+        Assert.False(result.GetProperty("hasDump").GetBoolean());
+        Assert.Equal(0, result.GetProperty("species").GetArrayLength());
+    }
+
+    [Fact]
+    public async Task Species_and_add_skin_work_from_the_dump()
+    {
+        using var game = new FakeGame();
+        var (h, ws) = await Opened(game);
+        SkinDumps.Write(Path.Combine(ws, "data"));
+        AssetFixtures.WriteIndex(ws, SkinDumps.Textures, GameFingerprint.Compute(new GameInstall(game.Root, null)));
+        await h.Call("mods.create", new { id = "red-spot" });
+
+        var species = await h.Call("mods.species");
+        var list = await h.Call("mods.addSkin", new { id = "red-spot", species = "Carcharodontosaurus", name = "Red spot", @base = "Alt 1", male = true, female = false, maps = false });
+
+        var carch = species.GetProperty("species").EnumerateArray().Single(s => s.GetProperty("speciesId").GetString() == "Carcharodontosaurus");
+        Assert.Equal(new[] { "Base", "Alt 1" }, carch.GetProperty("skins").EnumerateArray().Select(s => s.GetProperty("name").GetString()));
+        Assert.Equal(1, Row(list, "red-spot").GetProperty("skins").GetInt32());
+        Assert.True(File.Exists(Path.Combine(ws, "mods", "red-spot", "skins", "red-spot", "male_D.png")));
+    }
+
+    [Fact]
+    public async Task Skin_numbers_of_removed_mods_can_be_listed_and_forgotten()
+    {
+        using var game = new FakeGame();
+        var (h, _) = await Opened(game);
+        var dir = Path.Combine(game.Root, "UserData", "Tyrant");
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, "skin-slots.json"), """{ "format": 1, "species": { "Carcharodontosaurus": { "gone-mod/blue": 3 } } }""");
+
+        var before = await h.Call("mods.skinSlots");
+        var after = await h.Call("mods.forgetSkins", new { keys = new[] { "gone-mod/blue" } });
+
+        Assert.Equal("gone-mod/blue", before.GetProperty("orphans")[0].GetProperty("key").GetString());
+        Assert.Equal(0, after.GetProperty("orphans").GetArrayLength());
+    }
 }

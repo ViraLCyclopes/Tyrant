@@ -9,7 +9,7 @@ import { Session } from '$lib/stores/session.svelte';
 import ModsView from './ModsView.svelte';
 
 const row = (over: Partial<ModRow> = {}): ModRow => ({
-  id: 'red-spot', name: 'Red spot', version: '1.0.0', author: null, replacements: 1, state: 'notInstalled', enabled: null,
+  id: 'red-spot', name: 'Red spot', version: '1.0.0', author: null, replacements: 1, skins: 0, state: 'notInstalled', enabled: null,
   dir: 'D:\\ws\\mods\\red-spot', error: null, ...over,
 });
 
@@ -84,5 +84,25 @@ describe('ModsView', () => {
     await fireEvent.click(await screen.findByRole('checkbox', { name: 'Red spot on' }));
 
     await waitFor(() => expect(rpc.callsTo('mods.enable')[0]?.params).toEqual({ id: 'red-spot', enabled: false }));
+  });
+
+  it('puts the On checkbox back when switching fails', async () => {
+    const { rpc, session } = setup([row({ state: 'installed', enabled: true })], true);
+    rpc.on('mods.enable', () => {
+      throw new Error('Prehistoric Kingdom is running; close the game first.');
+    });
+    renderWith(ModsView, session);
+    const box = (await screen.findByRole('checkbox', { name: 'Red spot on' })) as HTMLInputElement;
+
+    await fireEvent.click(box);
+
+    await waitFor(() => expect(box.checked).toBe(true));
+  });
+
+  it('says what each mod does', async () => {
+    const { session } = setup([row({ replacements: 1, skins: 2 })]);
+    renderWith(ModsView, session);
+
+    expect(await screen.findByText('Replaces 1 texture · Adds 2 skins')).toBeInTheDocument();
   });
 });

@@ -61,4 +61,35 @@ public class ModCliTests
         Assert.Equal(ExitCodes.Ok, code);
         Assert.Contains("does nothing", output);
     }
+
+    [Fact]
+    public void Add_skin_without_a_data_dump_says_how_to_make_one()
+    {
+        using var game = new FakeGame();
+        var ws = InitWorkspace(game);
+        Run("mod", "new", "red-spot", "-w", ws);
+
+        var (code, output, error) = Run("mod", "add-skin", "red-spot", "Carcharodontosaurus", "--name", "Red spot", "-w", ws);
+
+        Assert.Equal(ExitCodes.Error, code);
+        Assert.Contains("Run data dump", output + error);
+    }
+
+    [Fact]
+    public void Clean_skins_lists_skins_from_removed_mods()
+    {
+        using var game = new FakeGame();
+        var ws = InitWorkspace(game);
+        var dir = Path.Combine(game.Root, "UserData", "Tyrant");
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, "skin-slots.json"), """{ "format": 1, "species": { "Carcharodontosaurus": { "gone-mod/blue": 3 } } }""");
+
+        var listed = Run("mod", "clean-skins", "-w", ws);
+        var forgot = Run("mod", "clean-skins", "--forget", "gone-mod/blue", "-w", ws);
+        var after = Run("mod", "clean-skins", "-w", ws);
+
+        Assert.Contains("gone-mod/blue", listed.Out);
+        Assert.Contains("Forgot 1", forgot.Out);
+        Assert.Contains("No skin numbers to clean up", after.Out);
+    }
 }

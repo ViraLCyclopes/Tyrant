@@ -3,6 +3,7 @@ using Tyrant.Core.Install;
 using Tyrant.Core.Mods;
 using Tyrant.Core.Workspaces;
 using Tyrant.Framework.Core;
+using static Tyrant.Core.Tests.SkinDumps;
 
 namespace Tyrant.Core.Tests;
 
@@ -55,7 +56,7 @@ public class ModCheckerTests
         var (game, _, mod) = Setup();
         using var _ = game;
         Directory.CreateDirectory(Path.Combine(mod.Dir, "textures"));
-        File.WriteAllText(Path.Combine(mod.Dir, "textures", "bad.png"), "not an image");
+        File.WriteAllBytes(Path.Combine(mod.Dir, "textures", "bad.png"), [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 1, 2, 3]); // a PNG signature, then garbage
         Entry(mod, "T_Carch_D", "textures/missing.png");
         Entry(mod, "T_Carch_N", "textures/bad.png");
 
@@ -127,5 +128,90 @@ public class ModCheckerTests
         Assert.Contains("does nothing", Assert.Single(empty.Warnings));
         Assert.Contains(noIndex.Warnings, w => w.Contains("asset index"));
         Assert.True(noIndex.Ok);
+    }
+
+    [Fact]
+    public void An_image_that_is_not_a_png_is_an_error()
+    {
+        var (game, _, mod) = Setup();
+        using var _ = game;
+        Directory.CreateDirectory(Path.Combine(mod.Dir, "textures"));
+        var bmp = new byte[4 * 4 * 3];
+        using (var stream = File.Create(Path.Combine(mod.Dir, "textures", "d.png")))
+            new StbImageWriteSharp.ImageWriter().WriteBmp(bmp, 4, 4, StbImageWriteSharp.ColorComponents.RedGreenBlue, stream); // a BMP named .png
+        Entry(mod, "T_Carch_D", "textures/d.png");
+
+        var result = Checker.Check(mod, Index);
+
+        Assert.Contains(result.Errors, e => e.Contains("not a PNG"));
+    }
+
+    private static IReadOnlyList<SpeciesSkins> Species()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "tyrant-tests", Guid.NewGuid().ToString("N"), "data");
+        Write(dir);
+        return SpeciesSkinsReader.Read(Tyrant.Core.Data.DataStore.OpenDirectory(dir));
+    }
+
+    private static void SkinPng(ModProject mod, string relative)
+    {
+        var path = Path.Combine(mod.Dir, relative);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        using var stream = File.Create(path);
+        new StbImageWriteSharp.ImageWriter().WritePng(Enumerable.Repeat((byte)200, 4 * 4 * 4).ToArray(), 4, 4, StbImageWriteSharp.ColorComponents.RedGreenBlueAlpha, stream);
+    }
+
+    private static void Skin(ModProject mod, string species, string baseSkin, string? maleDiffuse)
+    {
+        mod.Manifest.Skins.Add(new SkinEntry
+        {
+            Id = "red-spot", Species = species, Name = "Red spot", Base = baseSkin,
+            Male = maleDiffuse is null ? null : new Dictionary<string, string> { ["diffuse"] = maleDiffuse },
+            Female = maleDiffuse is null ? new Dictionary<string, string> { ["diffuse"] = "skins/red-spot/f.png" } : null,
+        });
+        mod.Save();
+    }
+
+    [Fact]
+    public void A_good_skin_has_no_errors()
+    {
+        var (game, _, mod) = Setup();
+        using var _ = game;
+        SkinPng(mod, "skins/red-spot/m.png");
+        Skin(mod, "Carcharodontosaurus", "Alt 1", "skins/red-spot/m.png");
+
+        var result = new ModChecker(_ => (4, 4)).Check(mod, SkinDumps.Index(), Species());
+
+        Assert.True(result.Ok, string.Join(" ", result.Errors));
+        Assert.Empty(result.Warnings);
+    }
+
+    [Fact]
+    public void Skin_files_missing_or_unknown_species_are_errors()
+    {
+        var (game, _, mod) = Setup();
+        using var _ = game;
+        Skin(mod, "Nessie", "Alt 1", "skins/red-spot/missing.png");
+
+        var result = Checker.Check(mod, SkinDumps.Index(), Species());
+
+        Assert.Contains(result.Errors, e => e.Contains("Nessie"));
+        Assert.Contains(result.Errors, e => e.Contains("missing.png") && e.Contains("missing"));
+    }
+
+    [Fact]
+    public void An_unknown_base_is_an_error_and_no_dump_is_a_warning()
+    {
+        var (game, _, mod) = Setup();
+        using var _ = game;
+        SkinPng(mod, "skins/red-spot/m.png");
+        Skin(mod, "Carcharodontosaurus", "Alt 9", "skins/red-spot/m.png");
+
+        var withDump = Checker.Check(mod, SkinDumps.Index(), Species());
+        var noDump = Checker.Check(mod, SkinDumps.Index(), null);
+
+        Assert.Contains(withDump.Errors, e => e.Contains("Alt 9"));
+        Assert.True(noDump.Ok);
+        Assert.Contains(noDump.Warnings, w => w.Contains("Run data dump"));
     }
 }

@@ -34,6 +34,17 @@ public class ModLoaderInstallerTests
         Directory.CreateDirectory(dir);
         File.WriteAllText(Path.Combine(dir, "Tyrant.Dumper.dll"), "mod");
         File.WriteAllText(Path.Combine(dir, "Tyrant.Dumper.Serialization.dll"), "library");
+        File.WriteAllText(Path.Combine(dir, "Tyrant.Framework.dll"), "framework");
+        File.WriteAllText(Path.Combine(dir, "Tyrant.Framework.Core.dll"), "framework library");
+        return dir;
+    }
+
+    /// <summary>A broken build: the dumper without the framework.</summary>
+    private static string DumperOnlyDir()
+    {
+        var dir = TempDir();
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, "Tyrant.Dumper.dll"), "mod");
         return dir;
     }
 
@@ -375,7 +386,9 @@ public class ModLoaderInstallerTests
         using var game = new FakeGame();
         var (zip, sha) = FakeMelonLoaderZip();
         var install = new GameInstall(game.Root, null);
-        new ModLoaderInstaller(sha).Install(install, zip, FakeDumperDir()); // what the user has today: dumper only
+        new ModLoaderInstaller(sha).Install(install, zip, FakeGameModsDir());
+        File.Delete(Path.Combine(game.Root, "Mods", "Tyrant.Framework.dll")); // what the user had before Plan 8: no framework in the game
+        File.Delete(Path.Combine(game.Root, "UserLibs", "Tyrant.Framework.Core.dll"));
         Assert.False(ModLoaderInstaller.HasFramework(install));
 
         var record = new ModLoaderInstaller(sha).Install(install, null, FakeGameModsDir());
@@ -402,5 +415,34 @@ public class ModLoaderInstallerTests
         Assert.False(Directory.Exists(Path.Combine(game.Root, "Mods")));
         Assert.False(Directory.Exists(Path.Combine(game.Root, "UserData")));
         Assert.False(ModLoaderInstaller.HasFramework(install));
+    }
+
+    [Fact]
+    public void Framework_status_compares_the_shipped_and_installed_files()
+    {
+        using var game = new FakeGame();
+        var (zip, sha) = FakeMelonLoaderZip();
+        var install = new GameInstall(game.Root, null);
+        var shipped = FakeGameModsDir();
+        Assert.Equal(FrameworkState.Missing, ModLoaderInstaller.FrameworkStatus(install, shipped));
+
+        new ModLoaderInstaller(sha).Install(install, zip, shipped);
+        var current = ModLoaderInstaller.FrameworkStatus(install, shipped);
+        File.WriteAllText(Path.Combine(shipped, "Tyrant.Framework.dll"), "framework v2"); // a newer Tyrant ships a different DLL
+        var outdated = ModLoaderInstaller.FrameworkStatus(install, shipped);
+
+        Assert.Equal((FrameworkState.Current, FrameworkState.Outdated), (current, outdated));
+    }
+
+    [Fact]
+    public void Install_refuses_a_build_without_the_framework()
+    {
+        using var game = new FakeGame();
+        var (zip, sha) = FakeMelonLoaderZip();
+
+        var ex = Assert.Throws<TyrantException>(() => new ModLoaderInstaller(sha).Install(new GameInstall(game.Root, null), zip, DumperOnlyDir()));
+
+        Assert.Contains("Tyrant.Framework.dll", ex.Message);
+        Assert.False(File.Exists(Path.Combine(game.Root, "version.dll"))); // nothing was installed
     }
 }

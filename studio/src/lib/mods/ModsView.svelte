@@ -2,9 +2,11 @@
   import { onMount } from 'svelte';
   import type { ModCheckReport, ModRow, ModsListResult } from '$lib/rpc/types.gen';
   import { getSession } from '$lib/stores/session.svelte';
+  import CleanSkins from './CleanSkins.svelte';
 
   const session = getSession();
   let list = $state<ModsListResult | null>(null);
+  let cleaning = $state(false);
   let checks = $state<Record<string, ModCheckReport>>({});
   let newId = $state('');
   let newName = $state('');
@@ -52,9 +54,17 @@
     if (r) list = r;
   }
 
-  async function setEnabled(row: ModRow, enabled: boolean) {
+  function summary(row: ModRow): string {
+    const parts = [];
+    if (row.replacements) parts.push(`Replaces ${row.replacements} texture${row.replacements === 1 ? '' : 's'}`);
+    if (row.skins) parts.push(`Adds ${row.skins} skin${row.skins === 1 ? '' : 's'}`);
+    return parts.join(' · ') || 'Empty';
+  }
+
+  async function setEnabled(row: ModRow, enabled: boolean, box: HTMLInputElement) {
     const r = await session.safely(() => session.rpc.call('mods.enable', { id: row.id, enabled }));
     if (r) list = r;
+    else box.checked = !enabled; // the change did not happen
   }
 </script>
 
@@ -70,6 +80,8 @@
   <input aria-label="Mod name" placeholder="name (optional)" bind:value={newName} />
   <button type="submit" disabled={!newId.trim() || session.busy}>New mod</button>
 </form>
+<button class="ghost" onclick={() => (cleaning = !cleaning)}>Clean up skin numbers…</button>
+{#if cleaning}<CleanSkins />{/if}
 
 {#if list && !list.frameworkInstalled}
   <p class="hint">Tyrant's framework is not in the game yet; installing a mod installs it.</p>
@@ -77,17 +89,17 @@
 
 {#if list?.mods.length}
   <table class="grid">
-    <thead><tr><th>Mod</th><th>Version</th><th>Textures</th><th>State</th><th>On</th><th><span class="visually-hidden">Actions</span></th></tr></thead>
+    <thead><tr><th>Mod</th><th>Version</th><th>Content</th><th>State</th><th>On</th><th><span class="visually-hidden">Actions</span></th></tr></thead>
     <tbody>
       {#each list.mods as row (row.id)}
         <tr>
           <td><strong>{row.name}</strong>{#if row.name !== row.id} <span class="hint">{row.id}</span>{/if}{#if row.error}<div class="warn">{row.error}</div>{/if}</td>
           <td>{row.version}</td>
-          <td>{row.replacements}</td>
+          <td>{summary(row)}</td>
           <td>{STATE_LABEL[row.state] ?? row.state}</td>
           <td>
             {#if row.enabled !== null}
-              <input type="checkbox" aria-label="{row.name} on" checked={row.enabled} onchange={(e) => setEnabled(row, e.currentTarget.checked)} />
+              <input type="checkbox" aria-label="{row.name} on" checked={row.enabled} onchange={(e) => setEnabled(row, e.currentTarget.checked, e.currentTarget)} />
             {/if}
           </td>
           <td class="actions">

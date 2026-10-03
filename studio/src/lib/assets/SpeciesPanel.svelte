@@ -1,12 +1,14 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import type { SpeciesRow } from '$lib/rpc/types.gen';
+  import AddSkin from '$lib/mods/AddSkin.svelte';
   import { getSession } from '$lib/stores/session.svelte';
 
   const session = getSession();
   let species = $state<SpeciesRow[]>([]);
   let filter = $state('');
   let lastPack = $state<string | null>(null);
+  let addingTo = $state<string | null>(null);
   const shown = $derived(species.filter((s) => s.displayName.toLowerCase().includes(filter.trim().toLowerCase())));
 
   onMount(async () => {
@@ -42,6 +44,7 @@
           <td>{row.textures}</td>
           <td>
             <button disabled={session.busy} aria-label="Export {row.displayName} pack" onclick={() => exportPack(row)}>Export pack</button>
+            <button aria-label="Add a skin to {row.displayName}" onclick={() => (addingTo = addingTo === row.key ? null : row.key)}>Add a skin…</button>
           </td>
         </tr>
       {:else}
@@ -50,3 +53,4 @@
     </tbody>
   </table>
 </div>
+{#if addingTo}{#key addingTo}<AddSkin speciesKey={addingTo} />{/key}{/if}

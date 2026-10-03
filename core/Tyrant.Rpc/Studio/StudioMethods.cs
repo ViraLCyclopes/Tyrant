@@ -38,7 +38,7 @@ public sealed class StudioMethods(StudioSession session, JobManager jobs)
         var ws = Workspace.Create(p.Dir, install);
         session.Set(ws, install);
         session.Log($"Created the workspace for {install.RootDir}.");
-        return StatusOf(ws, install);
+        return StatusOf(ws, install, Options.DumperDir);
     }
 
     [RpcMethod("workspace.open")]
@@ -47,14 +47,14 @@ public sealed class StudioMethods(StudioSession session, JobManager jobs)
         var (ws, install, repointed) = WorkspaceOpener.Open(p.Dir, p.GamePath, Options.Locator);
         session.Set(ws, install);
         if (repointed) session.Log($"The workspace now points at {install.RootDir}.");
-        return StatusOf(ws, install);
+        return StatusOf(ws, install, Options.DumperDir);
     }
 
     [RpcMethod("workspace.status")]
     public WorkspaceStatus Status()
     {
         var (ws, install) = session.Current();
-        return StatusOf(ws, install);
+        return StatusOf(ws, install, Options.DumperDir);
     }
 
     [RpcMethod("dump.install", JobResult = typeof(DumperInstallResult))]
@@ -170,7 +170,7 @@ public sealed class StudioMethods(StudioSession session, JobManager jobs)
         return new DiagnosticsResult(text.ToString());
     }
 
-    internal static WorkspaceStatus StatusOf(Workspace ws, GameInstall install)
+    internal static WorkspaceStatus StatusOf(Workspace ws, GameInstall install, string componentDir)
     {
         var current = GameFingerprint.Compute(install);
         var stale = ws.StaleOutputs(current);
@@ -181,7 +181,8 @@ public sealed class StudioMethods(StudioSession session, JobManager jobs)
             ModLoaderInstaller.GetState(install),
             File.Exists(Path.Combine(ws.DataDir, "manifest.json")),
             File.Exists(AssetIndex.PathIn(ws)),
-            Directory.Exists(ws.SourceDir) && Directory.EnumerateDirectories(ws.SourceDir).Any());
+            Directory.Exists(ws.SourceDir) && Directory.EnumerateDirectories(ws.SourceDir).Any(),
+            ModLoaderInstaller.FrameworkStatus(install, componentDir));
     }
 
     private GameInstall Locate(string? gamePath) => gamePath is null ? Options.Locator.Detect() : Options.Locator.FromPath(gamePath);

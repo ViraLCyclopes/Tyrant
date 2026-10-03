@@ -13,7 +13,7 @@ const asset: AssetRow = {
   containerPath: 'Assets/Art/T_carcharodontosaurus_alt1_male_D.png', guid: 'e3583acd2b3b5b14c875f42d110d97ce', script: null,
 };
 
-const existing = { id: 'red-spot', name: 'Red spot', version: '1.0.0', author: null, replacements: 0, state: 'notInstalled', enabled: null, dir: 'D:\\ws\\mods\\red-spot', error: null };
+const existing = { id: 'red-spot', name: 'Red spot', version: '1.0.0', author: null, replacements: 0, skins: 0, state: 'notInstalled', enabled: null, dir: 'D:\\ws\\mods\\red-spot', error: null };
 
 function setup(mods: (typeof existing)[]) {
   const list = { mods, frameworkInstalled: false };
@@ -56,5 +56,27 @@ describe('ReplaceInMod', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Add to mod' }));
 
     await waitFor(() => expect(rpc.callsTo('mods.replace')[0]?.params).toEqual({ id: 'red-spot', texture: 'carch.bundle#7', png: 'D:\\edits\\spots.png' }));
+  });
+
+  it('keeps a mod it created selectable when adding the texture fails', async () => {
+    const created = { ...existing, id: 'blue-stripes', name: 'blue-stripes' };
+    let mods: (typeof existing)[] = [];
+    const rpc = new FakeRpc()
+      .on('mods.list', () => ({ mods, frameworkInstalled: false }))
+      .on('mods.create', () => {
+        mods = [created];
+        return { mods, frameworkInstalled: false };
+      })
+      .on('mods.replace', () => {
+        throw new Error('No PNG was given and the texture has not been exported yet.');
+      });
+    const session = new Session(rpc, new FakePlatform(), memoryStore());
+    renderWith(ReplaceInMod, session, { asset });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Replace in a mod…' }));
+    await fireEvent.input(await screen.findByRole('textbox', { name: 'New mod id' }), { target: { value: 'blue-stripes' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Add to mod' }));
+
+    await waitFor(() => expect((screen.getByRole('combobox', { name: 'Mod' }) as HTMLSelectElement).value).toBe('blue-stripes'));
   });
 });

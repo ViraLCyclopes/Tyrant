@@ -49,6 +49,40 @@ red-spot-carcharo/
 - **Normal maps:** edit the blue-purple PNG Tyrant exports. The framework converts it to the game's packed form.
 - **Genetics colours:** the game tints skins with genetics colours on top of your texture.
 
+## Skins (adding new skins)
+
+A mod can add new skins next to the vanilla ones; nothing vanilla changes. Make one with **Add a skin…** (Species tab) or
+`tyrant mod add-skin`, which copies a vanilla skin's textures into the mod as a template.
+
+```json
+"skins": [
+  {
+    "id": "red-spot",
+    "species": "Carcharodontosaurus",
+    "name": "Red spot",
+    "base": "Alt 1",
+    "thumbnail": "skins/red-spot/thumbnail.png",
+    "male":   { "diffuse": "skins/red-spot/male_D.png", "normal": "skins/red-spot/male_N.png" },
+    "female": { "diffuse": "skins/red-spot/female_D.png" }
+  }
+]
+```
+
+| Field | Meaning |
+|---|---|
+| `id` | Unique within the mod (lowercase letters, digits, `-`). |
+| `species` | The game's species id (Tyrant fills it in). |
+| `name` | Shown in the Nursery. |
+| `base` | The vanilla skin to start from (name or number). Everything the skin doesn't provide comes from it. |
+| `thumbnail` | Optional swatch; otherwise cut from the diffuse. |
+| `male` / `female` | Slots to PNGs: `diffuse`, `normal`, `extra`, `pattern`, `fur`, `infantDiffuse`, `infantNormal`, `infantExtra`, `infantPattern`, `infantFur`. Leave a sex out for a single-sex skin (that sex looks like the base). |
+
+**Numbers and removal:**
+- Each added skin gets a permanent number in `<game>/UserData/Tyrant/skin-slots.json`, so saved animals keep their skin whatever mods you add, remove or reorder.
+- Added skins are numbered from 15 (or after the vanilla skins, if a species has more), never right after the vanilla ones, so a game update that adds vanilla skins does not collide with them. The numbers in between are hidden stand-ins.
+- When a skin's mod is removed, its animals look like their species' first skin until the mod comes back.
+- **Clean up skin numbers…** (Mods tab) frees numbers of mods you won't use again.
+
 ## In the game
 
 - **Where installed mods live:** `<game>/UserData/Tyrant/Mods/<id>/`.

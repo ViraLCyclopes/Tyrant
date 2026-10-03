@@ -60,6 +60,8 @@ public static class TestStudio
         Directory.CreateDirectory(dir);
         File.WriteAllText(Path.Combine(dir, "Tyrant.Dumper.dll"), "mod");
         File.WriteAllText(Path.Combine(dir, "Tyrant.Dumper.Serialization.dll"), "library");
+        File.WriteAllText(Path.Combine(dir, "Tyrant.Framework.dll"), "framework");
+        File.WriteAllText(Path.Combine(dir, "Tyrant.Framework.Core.dll"), "framework library");
         return dir;
     }
 

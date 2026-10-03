@@ -103,12 +103,16 @@
     <h2 id="dumper-heading">Tyrant in the game</h2>
     <p>Status: <strong>{dumperLabel(ws.dumper)}</strong></p>
     <p class="hint">MelonLoader plus two small Tyrant mods: the data dumper (it does nothing unless you run a dump) and the modding framework, which applies the mods you install from the Mods tab. No game file is replaced; Uninstall from game restores vanilla.</p>
+    {#if ws.framework === 'outdated'}<p class="warn">Tyrant was updated: the framework in the game is older than this Tyrant. Update it (the game must be closed).</p>{/if}
     {#if ws.dumper === 'conflict'}
       <p class="warn">Another mod loader (BepInEx) or an unknown version.dll is in the game folder. Remove it to use the dumper.</p>
     {:else}
       <div class="row">
         {#if ws.dumper === 'installed'}
           <button class="primary" onclick={() => report(session.runDump(), summarizeDump)} disabled={session.busy}>Run data dump</button>
+          {#if ws.framework === 'outdated'}
+            <button class="primary" onclick={() => report(session.runJob('dump.install', undefined, 'Update Tyrant in game'), (r) => r.message)} disabled={session.busy}>Update Tyrant in game</button>
+          {/if}
           <button onclick={() => session.uninstallDumper()} disabled={session.busy}>Uninstall from game</button>
         {:else}
           <button class="primary" onclick={() => report(session.runJob('dump.install', undefined, 'Install Tyrant in game'), (r) => r.message)} disabled={session.busy}>Install Tyrant in game</button>

@@ -256,6 +256,8 @@ export interface EnvironmentTexture {
   files: string[];
 }
 
+export type FrameworkState = "missing" | "current" | "outdated";
+
 export interface InstallDetectParams {
   gamePath?: string | null;
 }
@@ -326,6 +328,16 @@ export interface LocalizationRow {
   values: string[];
 }
 
+export interface ModAddSkinParams {
+  id: string;
+  species: string;
+  name: string;
+  base?: string | null;
+  male?: boolean;
+  female?: boolean;
+  maps?: boolean;
+}
+
 export interface ModCheckReport {
   errors: string[];
   warnings: string[];
@@ -340,6 +352,10 @@ export interface ModCreateParams {
 export interface ModEnableParams {
   id: string;
   enabled: boolean;
+}
+
+export interface ModForgetSkinsParams {
+  keys: string[];
 }
 
 export interface ModIdParams {
@@ -363,15 +379,27 @@ export interface ModRow {
   version: string;
   author: string | null;
   replacements: number;
+  skins: number;
   state: string;
   enabled: boolean | null;
   dir: string | null;
   error: string | null;
 }
 
+export interface ModSpeciesResult {
+  hasDump: boolean;
+  species: SpeciesSkinsRow[];
+}
+
 export interface ModsListResult {
   mods: ModRow[];
   frameworkInstalled: boolean;
+}
+
+export interface OrphanSkinRow {
+  species: string;
+  key: string;
+  number: number;
 }
 
 export interface OutputStatus {
@@ -418,6 +446,10 @@ export interface RpcErrorObject {
   data: RpcErrorData | null;
 }
 
+export interface SkinSlotsResult {
+  orphans: OrphanSkinRow[];
+}
+
 export interface SpeciesListResult {
   species: SpeciesRow[];
 }
@@ -444,6 +476,19 @@ export interface SpeciesRow {
   textures: number;
 }
 
+export interface SpeciesSkinsRow {
+  speciesId: string;
+  vivarium: boolean;
+  skins: VanillaSkinRow[];
+}
+
+export interface VanillaSkinRow {
+  index: number;
+  name: string;
+  male: boolean;
+  female: boolean;
+}
+
 export interface WorkspaceOpenParams {
   dir: string;
   gamePath?: string | null;
@@ -460,6 +505,7 @@ export interface WorkspaceStatus {
   hasData: boolean;
   hasAssetIndex: boolean;
   hasSource: boolean;
+  framework?: FrameworkState;
 }
 
 export interface RpcMethods {
@@ -488,13 +534,17 @@ export interface RpcMethods {
   "dump.uninstall": { params: void; result: DumperUninstallResult };
   "install.detect": { params: InstallDetectParams; result: InstallInfo };
   "job.cancel": { params: JobCancelParams; result: JobCancelResult };
+  "mods.addSkin": { params: ModAddSkinParams; result: ModsListResult };
   "mods.check": { params: ModIdParams; result: ModCheckReport };
   "mods.create": { params: ModCreateParams; result: ModsListResult };
   "mods.enable": { params: ModEnableParams; result: ModsListResult };
+  "mods.forgetSkins": { params: ModForgetSkinsParams; result: SkinSlotsResult };
   "mods.install": { params: ModIdParams; result: JobStarted };
   "mods.list": { params: void; result: ModsListResult };
   "mods.remove": { params: ModIdParams; result: ModsListResult };
   "mods.replace": { params: ModReplaceParams; result: ModsListResult };
+  "mods.skinSlots": { params: void; result: SkinSlotsResult };
+  "mods.species": { params: void; result: ModSpeciesResult };
   "species.list": { params: void; result: SpeciesListResult };
   "species.pack": { params: SpeciesPackParams; result: JobStarted };
   "workspace.create": { params: WorkspaceOpenParams; result: WorkspaceStatus };
