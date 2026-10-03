@@ -144,4 +144,17 @@ public class ModCatalogTests
 
         Assert.Equal(["red-spot"], sources.Select(s => s.Folder));
     }
+
+    [Fact]
+    public void A_mod_with_one_bad_skin_still_loads_and_the_skip_is_a_warning()
+    {
+        var plan = ModCatalog.Plan([new ModSource("mod-id", "D:/mods/mod-id", """
+            { "format": 1, "id": "mod-id", "skins": [
+              { "id": "good", "species": "S", "male": { "diffuse": "a.png" } },
+              { "id": "bad", "species": "S" } ] }
+            """)], null, FrameworkInfo.Version);
+
+        Assert.Equal(["good"], Assert.Single(plan.Mods).Manifest.Skins.Select(s => s.Id));
+        Assert.Contains(plan.Warnings, w => w.Contains("mod-id") && w.Contains("bad"));
+    }
 }
