@@ -1,4 +1,4 @@
-import type { CallArgs, ExitInfo, JobHandle, JobMethod, MethodName, ParamsOf, ProgressHandler, ResultOf, Rpc } from '$lib/rpc/client';
+import type { AttachedJob, CallArgs, ExitInfo, JobHandle, JobMethod, MethodName, ParamsOf, ProgressHandler, ResultOf, Rpc } from '$lib/rpc/client';
 import type { RpcJobs } from '$lib/rpc/types.gen';
 
 type Handler = (params: never, onProgress?: ProgressHandler) => unknown;
@@ -31,6 +31,20 @@ export class FakeRpc implements Rpc {
     const id = `job-${this.calls.length}`;
     const done = Promise.resolve().then(() => handler(params as never, onProgress)) as Promise<RpcJobs[M]>;
     return { id, done, cancel: async () => void this.cancelled.push(id) };
+  }
+
+  private readonly attachHandlers = new Map<string, (onProgress?: ProgressHandler) => Promise<unknown>>();
+
+  /** What attaching to a running job (after a reload) resolves with. */
+  onAttach(jobId: string, handler: (onProgress?: ProgressHandler) => Promise<unknown>): this {
+    this.attachHandlers.set(jobId, handler);
+    return this;
+  }
+
+  attachJob(jobId: string, onProgress?: ProgressHandler): AttachedJob {
+    this.calls.push({ method: 'attach', params: { jobId } });
+    const done = Promise.resolve().then(() => this.attachHandlers.get(jobId)?.(onProgress) ?? null);
+    return { id: jobId, done, cancel: async () => void this.cancelled.push(jobId) };
   }
 
   onCoreExit(handler: (info: ExitInfo) => void): void {

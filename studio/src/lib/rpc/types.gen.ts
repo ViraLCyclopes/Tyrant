@@ -279,6 +279,10 @@ export interface JobCancelResult {
   cancelled: boolean;
 }
 
+export interface JobCurrentResult {
+  job: JobInfo | null;
+}
+
 export interface JobDoneNotification {
   jobId: string;
   result: unknown | null;
@@ -287,6 +291,13 @@ export interface JobDoneNotification {
 export interface JobFailedNotification {
   jobId: string;
   error: RpcErrorObject;
+}
+
+export interface JobInfo {
+  jobId: string;
+  title: string;
+  fraction: number;
+  message: string;
 }
 
 export interface JobProgressNotification {
@@ -540,6 +551,7 @@ export interface RpcMethods {
   "dump.uninstall": { params: void; result: DumperUninstallResult };
   "install.detect": { params: InstallDetectParams; result: InstallInfo };
   "job.cancel": { params: JobCancelParams; result: JobCancelResult };
+  "job.current": { params: void; result: JobCurrentResult };
   "mods.addSkin": { params: ModAddSkinParams; result: ModsListResult };
   "mods.check": { params: ModIdParams; result: ModCheckReport };
   "mods.create": { params: ModCreateParams; result: ModsListResult };

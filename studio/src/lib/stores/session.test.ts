@@ -1,3 +1,4 @@
+import { waitFor } from '@testing-library/svelte';
 import { describe, expect, it } from 'vitest';
 import { RpcError } from '$lib/rpc/client';
 import { memoryStore } from '$lib/storage';
@@ -254,5 +255,23 @@ describe('Session', () => {
     await session.openWorkspace('D:\\ws');
 
     expect(platform.allowed).toEqual(['D:\\ws\\cache\\previews']);
+  });
+
+  it('picks up a job that is still running after the window reloads', async () => {
+    const { rpc, session } = setup({ 'tyrant.lastWorkspace': 'D:\\ws' });
+    rpc.on('workspace.open', () => workspaceStatus());
+    rpc.on('workspace.status', () => workspaceStatus());
+    rpc.on('job.current', () => ({ job: { jobId: 'j7', title: 'Decompile code', fraction: 0.4, message: 'Decompiling Assembly-CSharp' } }));
+    let finish!: (value: unknown) => void;
+    rpc.onAttach('j7', () => new Promise((resolve) => (finish = resolve)));
+
+    await session.start();
+
+    await waitFor(() => expect(session.job?.title).toBe('Decompile code'));
+    expect(session.job?.fraction).toBe(0.4);
+    expect(session.job?.cancel).not.toBeNull();
+    finish({});
+    await waitFor(() => expect(session.job).toBeNull());
+    expect(session.notice).toContain('Decompile code');
   });
 });

@@ -189,4 +189,18 @@ describe('RpcClient', () => {
 
     await expect(call).resolves.toMatchObject({ version: '0.1.0' });
   });
+
+  it('attaches to a job it did not start and gets its progress and result', async () => {
+    const { transport, client } = setup();
+    const seen: string[] = [];
+
+    const handle = client.attachJob('j7', (_f, message) => seen.push(message));
+    transport.emit({ jsonrpc: '2.0', method: 'job.progress', params: { jobId: 'j7', fraction: 0.5, message: 'half' } });
+    transport.emit({ jsonrpc: '2.0', method: 'job.done', params: { jobId: 'j7', result: { ok: true } } });
+
+    await expect(handle.done).resolves.toEqual({ ok: true });
+    expect(seen).toEqual(['half']);
+    void handle.cancel(); // the fake transport never answers; the request is what matters
+    expect(transport.last()).toMatchObject({ method: 'job.cancel', params: { jobId: 'j7' } });
+  });
 });

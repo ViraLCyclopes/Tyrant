@@ -83,6 +83,7 @@ export class Session {
     const last = this.store.get(LAST_WORKSPACE);
     if (last && (await this.openWorkspace(last))) {
       this.ready = true;
+      void this.resumeRunningJob();
       return;
     }
     // Forget it only when the folder is no longer a workspace; a missing core or a moved game is recoverable.
@@ -153,6 +154,31 @@ export class Session {
       if (error.code === 'CANCELLED') this.notice = `${title} was cancelled.`;
       else if (error.code !== 'SIDECAR_EXITED') this.error = error; // a core exit was already explained
       return null;
+    } finally {
+      this.job = null;
+      await this.refreshStatus();
+    }
+  }
+
+  /** After a window reload the core may still be running a job: show it again (progress, Cancel) until it ends. */
+  async resumeRunningJob(): Promise<void> {
+    if (this.job) return;
+    const current = (await this.quietly(() => this.rpc.call('job.current')))?.job;
+    if (!current || this.job) return;
+    this.job = { id: current.jobId, title: current.title, fraction: current.fraction, message: current.message, cancel: null };
+    const handle = this.rpc.attachJob(current.jobId, (fraction, message) => {
+      if (!this.job) return;
+      this.job.fraction = fraction;
+      this.job.message = message;
+    });
+    this.job.cancel = () => handle.cancel();
+    try {
+      await handle.done;
+      this.notice = `${current.title} finished.`;
+    } catch (e) {
+      const error = asRpcError(e);
+      if (error.code === 'CANCELLED') this.notice = `${current.title} was cancelled.`;
+      else if (error.code !== 'SIDECAR_EXITED') this.error = error;
     } finally {
       this.job = null;
       await this.refreshStatus();
