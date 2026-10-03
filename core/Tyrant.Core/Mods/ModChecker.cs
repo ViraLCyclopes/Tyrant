@@ -9,10 +9,13 @@ namespace Tyrant.Core.Mods;
 public sealed record ModCheckResult(IReadOnlyList<string> Errors, IReadOnlyList<string> Warnings)
 {
     public bool Ok => Errors.Count == 0;
+
+    /// <summary>Mod-relative colour PNGs without the transparency their vanilla texture cuts feathers or hair out with.</summary>
+    public IReadOnlyList<string> MissingCutouts { get; init; } = [];
 }
 
 /// <summary>Finds what would go wrong in the game before a mod is installed.</summary>
-public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeOf)
+public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeOf, Func<AssetRecord, ImageResult?>? pixelsOf = null)
 {
     /// <summary>Reads original texture sizes from the game's bundles; a texture that cannot be read just skips the size check.</summary>
     public static ModChecker ForGame(GameInstall install) => new(texture =>
@@ -27,7 +30,7 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
         {
             return null;
         }
-    });
+    }, Cutouts.GamePixels(install, new BundleAssetReader()));
 
     public ModCheckResult Check(ModProject mod, AssetIndex? index, IReadOnlyList<SpeciesSkins>? species = null)
     {
@@ -96,7 +99,39 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
                 }
             }
         }
-        return new ModCheckResult(errors, warnings);
+        var missing = index is null || pixelsOf is null ? [] : MissingCutouts(mod, index, species, warnings);
+        return new ModCheckResult(errors, warnings) { MissingCutouts = missing };
+    }
+
+    /// <summary>Opaque colour PNGs whose vanilla texture is partly see-through; the vanilla one is only decoded for those.</summary>
+    private List<string> MissingCutouts(ModProject mod, AssetIndex index, IReadOnlyList<SpeciesSkins>? species, List<string> warnings)
+    {
+        var missing = new List<string>();
+        var vanillaShare = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (file, vanilla) in Cutouts.Targets(mod, index, species).DistinctBy(t => t.File, StringComparer.OrdinalIgnoreCase))
+        {
+            var path = Path.GetFullPath(Path.Combine(mod.Dir, file));
+            if (!ModPaths.IsInside(path, mod.Dir) || !File.Exists(path)) continue;
+            double share;
+            try
+            {
+                using var stream = File.OpenRead(path);
+                share = Cutouts.SeeThrough(ImageResult.FromStream(stream, ColorComponents.RedGreenBlueAlpha).Data);
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or IOException or ArgumentException)
+            {
+                continue; // already reported as unreadable
+            }
+            if (share >= Cutouts.Lost) continue;
+            var key = vanilla.Guid ?? $"{vanilla.Bundle}#{vanilla.PathId}";
+            if (!vanillaShare.TryGetValue(key, out var original))
+                vanillaShare[key] = original = pixelsOf!(vanilla) is { } pixels ? Cutouts.SeeThrough(pixels.Data) : 0;
+            if (original < Cutouts.UsesCutouts) continue;
+            missing.Add(file);
+            warnings.Add($"{file} has no see-through pixels, but {vanilla.Name} cuts feathers or hair out with them ({original:P0} of it is see-through): " +
+                         "in game those parts would show as solid shapes. Keep the alpha channel when saving, or use Restore cutouts.");
+        }
+        return missing;
     }
 
     /// <summary>Checks one PNG of the mod; returns the decoded image, or null after adding an error.</summary>
