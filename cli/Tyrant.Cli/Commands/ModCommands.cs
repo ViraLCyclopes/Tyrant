@@ -18,6 +18,18 @@ public class ModSettings : WorkspaceSettings
 
 internal static class ModCli
 {
+    public static IReadOnlyList<SpeciesSkins>? TrySpecies(Workspace ws)
+    {
+        try
+        {
+            return SpeciesSkinsReader.Load(ws);
+        }
+        catch (TyrantException)
+        {
+            return null;
+        }
+    }
+
     public static AssetIndex? TryIndex(Workspace ws)
     {
         try
@@ -96,7 +108,7 @@ public sealed class ModCheckCommand : Command<ModSettings>
     {
         var (ws, install) = CliServices.OpenWorkspace(settings);
         var mod = ModProject.Open(ws, settings.Id);
-        return ModCli.Print(ModChecker.ForGame(install).Check(mod, ModCli.TryIndex(ws))) ? ExitCodes.Ok : ExitCodes.Error;
+        return ModCli.Print(ModChecker.ForGame(install).Check(mod, ModCli.TryIndex(ws), ModCli.TrySpecies(ws))) ? ExitCodes.Ok : ExitCodes.Error;
     }
 }
 
@@ -113,7 +125,7 @@ public sealed class ModInstallCommand : Command<ModInstallCommand.Settings>
     {
         var (ws, install) = CliServices.OpenWorkspace(settings);
         var mod = ModProject.Open(ws, settings.Id);
-        if (!ModCli.Print(ModChecker.ForGame(install).Check(mod, ModCli.TryIndex(ws))))
+        if (!ModCli.Print(ModChecker.ForGame(install).Check(mod, ModCli.TryIndex(ws), ModCli.TrySpecies(ws))))
         {
             Console.WriteLine("Fix the errors above, then install again.");
             return ExitCodes.Error;
@@ -186,7 +198,7 @@ public sealed class ModListCommand : Command<WorkspaceSettings>
                 var mod = ModProject.Open(ws, id);
                 var state = mods.StateOf(install, mod);
                 var onOff = installed.TryGetValue(id, out var inGame) ? (inGame.Enabled ? " (on)" : " (off)") : "";
-                Console.WriteLine($"  {id,-28} {mod.Manifest.Version,-8} {ModCli.Label(state)}{onOff}  {mod.Manifest.Replace.Count} replacement(s)");
+                Console.WriteLine($"  {id,-28} {mod.Manifest.Version,-8} {ModCli.Label(state)}{onOff}  {mod.Manifest.Replace.Count} replacement(s), {mod.Manifest.Skins.Count} skin(s)");
             }
             catch (TyrantException ex)
             {
@@ -196,6 +208,76 @@ public sealed class ModListCommand : Command<WorkspaceSettings>
         }
         foreach (var other in installed.Values)
             Console.WriteLine($"  {other.Id,-28} {other.Version,-8} in the game only{(other.Enabled ? " (on)" : " (off)")}{(other.Error is null ? "" : "  " + other.Error)}");
+        return ExitCodes.Ok;
+    }
+}
+
+public sealed class ModAddSkinCommand : Command<ModAddSkinCommand.Settings>
+{
+    public sealed class Settings : ModSettings
+    {
+        [CommandArgument(1, "<SPECIES>")]
+        [Description("The species id as the game data names it, e.g. Carcharodontosaurus.")]
+        public string Species { get; set; } = "";
+
+        [CommandOption("--name <NAME>")]
+        [Description("The skin's name in the Nursery.")]
+        public string Name { get; set; } = "";
+
+        [CommandOption("--base <SKIN>")]
+        [Description("The vanilla skin to start from: its name or number (default: the first).")]
+        public string? Base { get; set; }
+
+        [CommandOption("--male")]
+        public bool Male { get; set; }
+
+        [CommandOption("--female")]
+        public bool Female { get; set; }
+
+        [CommandOption("--maps")]
+        [Description("Also export the base normal, extra and pattern maps to edit.")]
+        public bool Maps { get; set; }
+    }
+
+    public override int Execute(CommandContext context, Settings settings)
+    {
+        if (string.IsNullOrWhiteSpace(settings.Name)) throw new TyrantException(TyrantErrorCode.ModInvalid, "Give the skin a name with --name.");
+        var (ws, install) = CliServices.OpenWorkspace(settings);
+        var mod = ModProject.Open(ws, settings.Id);
+        var species = SpeciesSkinsReader.Load(ws);
+        var bothWhenNone = !settings.Male && !settings.Female;
+        var entry = mod.AddSkin(ws, install, CliServices.LoadIndex(ws, install), new BundleAssetReader(), species, settings.Species, settings.Name,
+            settings.Base, new SkinTemplateOptions(settings.Male || bothWhenNone, settings.Female || bothWhenNone, settings.Maps));
+        Console.WriteLine($"Added skin '{entry.Name}' ({entry.Key(mod.Id)}) based on '{entry.Base}':");
+        foreach (var (sex, files) in new[] { ("male", entry.Male), ("female", entry.Female) })
+            if (files is not null)
+                foreach (var (slot, file) in files) Console.WriteLine($"  {sex,-6} {slot,-8} {Path.Combine(mod.Dir, file)}");
+        Console.WriteLine($"Edit those PNGs, then 'tyrant mod check {mod.Id}' and 'tyrant mod install {mod.Id}'.");
+        return ExitCodes.Ok;
+    }
+}
+
+public sealed class ModCleanSkinsCommand : Command<ModCleanSkinsCommand.Settings>
+{
+    public sealed class Settings : WorkspaceSettings
+    {
+        [CommandOption("--forget <KEY>")]
+        [Description("A skin key (mod id/skin id) to forget; repeat for more. Without it, the command lists what can be cleaned up.")]
+        public string[] Forget { get; set; } = [];
+    }
+
+    public override int Execute(CommandContext context, Settings settings)
+    {
+        var (_, install) = CliServices.OpenWorkspace(settings);
+        var slots = new SkinSlots(new SteamLauncher().IsRunning);
+        if (settings.Forget.Length > 0)
+        {
+            Console.WriteLine($"Forgot {slots.Forget(install, settings.Forget)} skin number(s). Saved animals that wore them show their species' skin 0 until a new skin takes the number.");
+            return ExitCodes.Ok;
+        }
+        var orphans = slots.Orphans(install);
+        if (orphans.Count == 0) Console.WriteLine("No skin numbers to clean up: every added skin's mod is installed.");
+        foreach (var orphan in orphans) Console.WriteLine($"  {orphan.Species,-24} #{orphan.Number,-3} {orphan.Key}");
         return ExitCodes.Ok;
     }
 }

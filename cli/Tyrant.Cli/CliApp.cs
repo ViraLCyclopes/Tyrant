@@ -73,6 +73,8 @@ public static class CliApp
                 mod.AddCommand<ModRemoveCommand>("remove").WithDescription("Remove a mod from the game.");
                 mod.AddCommand<ModEnableCommand>("enable").WithDescription("Turn an installed mod on.");
                 mod.AddCommand<ModDisableCommand>("disable").WithDescription("Turn an installed mod off.");
+                mod.AddCommand<ModAddSkinCommand>("add-skin").WithDescription("Add a new skin to a species, starting from a vanilla skin's textures.");
+                mod.AddCommand<ModCleanSkinsCommand>("clean-skins").WithDescription("List or forget skin numbers left by removed mods.");
                 mod.AddCommand<ModListCommand>("list").WithDescription("List your mods and what is installed in the game.");
             });
             config.AddBranch("data", data =>
