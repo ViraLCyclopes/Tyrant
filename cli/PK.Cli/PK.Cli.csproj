@@ -10,4 +10,15 @@
   <ItemGroup>
     <PackageReference Include="Spectre.Console.Cli" Version="0.49.1" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Build the BepInEx plugin (net472) and ship it in <pk.exe folder>/dumper for 'pk dump install'. -->
+    <ProjectReference Include="..\..\game\PK.Dumper\PK.Dumper.csproj" ReferenceOutputAssembly="false" PrivateAssets="all"
+                      SkipGetTargetFrameworkProperties="true" SetTargetFramework="TargetFramework=net472" />
+  </ItemGroup>
+  <Target Name="CopyDumperPlugin" AfterTargets="Build">
+    <ItemGroup>
+      <DumperFiles Include="$(MSBuildThisFileDirectory)..\..\game\PK.Dumper\bin\$(Configuration)\net472\PK.Dumper*.dll" />
+    </ItemGroup>
+    <Copy SourceFiles="@(DumperFiles)" DestinationFolder="$(OutDir)dumper" SkipUnchangedFiles="true" />
+  </Target>
 </Project>
