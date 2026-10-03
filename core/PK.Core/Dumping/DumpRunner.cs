@@ -1,0 +1,122 @@
+using System.Diagnostics;
+using System.Text.Json;
+using PK.Core.Errors;
+using PK.Core.Install;
+using PK.Core.Jobs;
+using PK.Core.Workspaces;
+
+namespace PK.Core.Dumping;
+
+public interface IGameLauncher
+{
+    void Launch(GameInstall install);
+}
+
+/// <summary>Starts the game through Steam (so Steam DRM and overlays behave normally).</summary>
+public sealed class SteamLauncher : IGameLauncher
+{
+    public void Launch(GameInstall install)
+    {
+        if (install.SteamAppId is null)
+            throw new PkException(PkErrorCode.DumpFailed, "The game's Steam app id is unknown, so it cannot be started automatically. Start the game yourself while 'pk dump run' waits.");
+        Process.Start(new ProcessStartInfo($"steam://rungameid/{install.SteamAppId}") { UseShellExecute = true });
+    }
+}
+
+/// <summary>Asks the installed plugin for a dump, starts the game and moves the result into &lt;workspace&gt;/data.</summary>
+public sealed class DumpRunner(IGameLauncher launcher)
+{
+    public const string OutputName = "data";
+    private static readonly JsonSerializerOptions Json = new() { WriteIndented = true };
+
+    public TimeSpan PollInterval { get; init; } = TimeSpan.FromSeconds(1);
+
+    public static string RequestPath(GameInstall install) => Path.Combine(install.RootDir, "BepInEx", "config", "pk.dumper.request.json");
+
+    public DumpManifestFile Run(GameInstall install, Workspace ws, TimeSpan timeout, IProgress<JobProgress>? progress, CancellationToken ct)
+    {
+        if (BepInExInstaller.GetState(install) != InstallState.Installed)
+            throw new PkException(PkErrorCode.DumperNotInstalled, "The dumper is not installed in the game folder. Run 'pk dump install' first.");
+
+        var requestId = Guid.NewGuid().ToString("N");
+        var tmp = Path.Combine(ws.Dir, $"data.tmp-{requestId}");
+        var fingerprint = GameFingerprint.Compute(install);
+        var requestPath = RequestPath(install);
+        var success = false;
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(requestPath)!);
+            File.WriteAllText(requestPath, JsonSerializer.Serialize(new
+            {
+                requestId,
+                outputDir = tmp,
+                buildGuid = fingerprint.BuildGuid,
+                timeoutSeconds = (float)Math.Max(60, timeout.TotalSeconds - 10),
+                settleSeconds = 5f,
+                quitWhenDone = true,
+            }, Json));
+
+            progress?.Report(new JobProgress(0, "Starting the game"));
+            launcher.Launch(install);
+
+            var manifestPath = Path.Combine(tmp, "manifest.json");
+            var stopwatch = Stopwatch.StartNew();
+            DumpManifestFile? manifest;
+            while (true)
+            {
+                ct.ThrowIfCancellationRequested();
+                manifest = DumpManifestFile.TryRead(manifestPath);
+                if (manifest is not null && manifest.RequestId == requestId) break;
+                if (stopwatch.Elapsed > timeout)
+                    throw new PkException(PkErrorCode.DumpTimeout,
+                        $"No dump arrived within {timeout.TotalSeconds:0} s (is Steam running? did the game start?). Last BepInEx log lines:{Environment.NewLine}{LogTail(install)}");
+                progress?.Report(new JobProgress(Math.Min(0.95, stopwatch.Elapsed / timeout), $"Waiting for the game ({stopwatch.Elapsed.TotalSeconds:0} s)"));
+                Thread.Sleep(PollInterval);
+            }
+
+            if (manifest.Counts.Count == 0)
+                throw new PkException(PkErrorCode.DumpFailed,
+                    "The dumper ran but found no game data: " + string.Join("; ", manifest.Errors.Take(5)));
+
+            var old = ws.DataDir + ".old-" + requestId;
+            if (Directory.Exists(ws.DataDir)) Directory.Move(ws.DataDir, old);
+            Directory.Move(tmp, ws.DataDir);
+            if (Directory.Exists(old)) Directory.Delete(old, recursive: true);
+            ws.StampOutput(OutputName, fingerprint);
+            success = true;
+            progress?.Report(new JobProgress(1.0, "Done"));
+            return manifest;
+        }
+        finally
+        {
+            TryDeleteFile(requestPath);
+            if (!success && Directory.Exists(tmp)) TryDeleteDirectory(tmp);
+        }
+    }
+
+    private static string LogTail(GameInstall install)
+    {
+        var log = Path.Combine(install.RootDir, "BepInEx", "LogOutput.log");
+        try
+        {
+            using var stream = new FileStream(log, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            using var reader = new StreamReader(stream);
+            var lines = reader.ReadToEnd().Split('\n');
+            return string.Join(Environment.NewLine, lines.TakeLast(20).Select(l => "  " + l.TrimEnd('\r')));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return "  (no BepInEx log — BepInEx may not have started)";
+        }
+    }
+
+    private static void TryDeleteFile(string path)
+    {
+        try { if (File.Exists(path)) File.Delete(path); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+    }
+
+    private static void TryDeleteDirectory(string path)
+    {
+        try { Directory.Delete(path, recursive: true); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+    }
+}

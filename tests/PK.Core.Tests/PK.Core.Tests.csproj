@@ -8,6 +8,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\core\PK.Core\PK.Core.csproj" />
+    <ProjectReference Include="..\..\game\PK.Dumper.Serialization\PK.Dumper.Serialization.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
