@@ -47,7 +47,7 @@ public sealed class ModsMethods(StudioSession session, JobManager jobs)
     public ModCheckReport Check(ModIdParams p)
     {
         var (ws, install) = session.Current();
-        var result = ModChecker.ForGame(install).Check(ModProject.Open(ws, p.Id), TryIndex(ws));
+        var result = ModChecker.ForGame(install).Check(ModProject.Open(ws, p.Id), TryIndex(ws), TrySpecies(ws));
         return new ModCheckReport(result.Errors, result.Warnings);
     }
 
@@ -59,7 +59,7 @@ public sealed class ModsMethods(StudioSession session, JobManager jobs)
         return jobs.Start($"Install {p.Id}", (progress, ct) =>
         {
             progress.Report(new JobProgress(0.05, $"Checking {p.Id}"));
-            var check = ModChecker.ForGame(install).Check(mod, TryIndex(ws));
+            var check = ModChecker.ForGame(install).Check(mod, TryIndex(ws), TrySpecies(ws));
             if (!check.Ok)
                 throw new TyrantException(TyrantErrorCode.ModInvalid, $"'{p.Id}' has problems, so it was not installed: {string.Join(" ", check.Errors)}");
             if (ModLoaderInstaller.FrameworkStatus(install, Options.DumperDir) != FrameworkState.Current)
@@ -108,16 +108,16 @@ public sealed class ModsMethods(StudioSession session, JobManager jobs)
             try
             {
                 var mod = ModProject.Open(ws, id);
-                rows.Add(new ModRow(id, mod.Manifest.Name, mod.Manifest.Version, mod.Manifest.Author, mod.Manifest.Replace.Count,
+                rows.Add(new ModRow(id, mod.Manifest.Name, mod.Manifest.Version, mod.Manifest.Author, mod.Manifest.Replace.Count, mod.Manifest.Skins.Count,
                     Wire(game.StateOf(install, mod)), inGame?.Enabled, mod.Dir, null));
             }
             catch (TyrantException ex)
             {
-                rows.Add(new ModRow(id, id, "", null, 0, "notInstalled", inGame?.Enabled, Path.Combine(ModProject.RootOf(ws), id), ex.Message));
+                rows.Add(new ModRow(id, id, "", null, 0, 0, "notInstalled", inGame?.Enabled, Path.Combine(ModProject.RootOf(ws), id), ex.Message));
             }
             installed.Remove(id);
         }
-        rows.AddRange(installed.Values.Select(m => new ModRow(m.Id, m.Name, m.Version, null, m.Replacements, "gameOnly", m.Enabled, m.Dir, m.Error)));
+        rows.AddRange(installed.Values.Select(m => new ModRow(m.Id, m.Name, m.Version, null, m.Replacements, 0, "gameOnly", m.Enabled, m.Dir, m.Error)));
         return new ModsListResult(rows, ModLoaderInstaller.HasFramework(install));
     }
 
@@ -127,6 +127,56 @@ public sealed class ModsMethods(StudioSession session, JobManager jobs)
         ModInstallState.Changed => "changed",
         _ => "notInstalled",
     };
+
+    [RpcMethod("mods.species")]
+    public ModSpeciesResult Species()
+    {
+        var (ws, _) = session.Current();
+        var species = TrySpecies(ws);
+        return new ModSpeciesResult(species is not null, (species ?? []).Select(s =>
+            new SpeciesSkinsRow(s.SpeciesId, s.Vivarium, s.Skins.Select(k => new VanillaSkinRow(k.Index, k.Name, k.Male.Count > 0, k.Female.Count > 0)).ToList())).ToList());
+    }
+
+    [RpcMethod("mods.addSkin")]
+    public ModsListResult AddSkin(ModAddSkinParams p)
+    {
+        var (ws, install) = session.Current();
+        var entry = ModProject.Open(ws, p.Id).AddSkin(ws, install, AssetIndex.Load(AssetIndex.PathIn(ws)), Options.AssetReader, SpeciesSkinsReader.Load(ws),
+            p.Species, p.Name, p.Base, new SkinTemplateOptions(p.Male, p.Female, p.Maps));
+        session.Log($"'{p.Id}' adds skin '{entry.Name}' to {entry.Species}.");
+        return ListOf(ws, install);
+    }
+
+    [RpcMethod("mods.skinSlots")]
+    public SkinSlotsResult SkinNumbers()
+    {
+        var (_, install) = session.Current();
+        return SlotsOf(install);
+    }
+
+    [RpcMethod("mods.forgetSkins")]
+    public SkinSlotsResult ForgetSkins(ModForgetSkinsParams p)
+    {
+        var (_, install) = session.Current();
+        var forgotten = new SkinSlots(i => Options.Launcher.IsRunning(i)).Forget(install, p.Keys);
+        session.Log($"Forgot {forgotten} skin number(s).");
+        return SlotsOf(install);
+    }
+
+    private static SkinSlotsResult SlotsOf(GameInstall install) =>
+        new(new SkinSlots().Orphans(install).Select(o => new OrphanSkinRow(o.Species, o.Key, o.Number)).ToList());
+
+    private static IReadOnlyList<SpeciesSkins>? TrySpecies(Workspace ws)
+    {
+        try
+        {
+            return SpeciesSkinsReader.Load(ws);
+        }
+        catch (TyrantException)
+        {
+            return null;
+        }
+    }
 
     private static AssetIndex? TryIndex(Workspace ws)
     {

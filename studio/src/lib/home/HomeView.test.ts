@@ -92,7 +92,7 @@ describe('HomeView', () => {
 
   it('uninstall asks first, naming installed mods, and does nothing when declined', async () => {
     const { rpc, platform, session } = setup();
-    const mod = (id: string, state: string) => ({ id, name: id, version: '1.0.0', author: null, replacements: 1, state, enabled: true, dir: null, error: null });
+    const mod = (id: string, state: string) => ({ id, name: id, version: '1.0.0', author: null, replacements: 1, skins: 0, state, enabled: true, dir: null, error: null });
     rpc.on('mods.list', () => ({ mods: [mod('red-spot', 'installed'), mod('hand-made', 'gameOnly'), mod('draft', 'notInstalled')], frameworkInstalled: true }));
     session.workspace = workspaceStatus({ dumper: 'installed' });
     platform.confirmAnswer = false;

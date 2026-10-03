@@ -13,7 +13,7 @@ const asset: AssetRow = {
   containerPath: 'Assets/Art/T_carcharodontosaurus_alt1_male_D.png', guid: 'e3583acd2b3b5b14c875f42d110d97ce', script: null,
 };
 
-const existing = { id: 'red-spot', name: 'Red spot', version: '1.0.0', author: null, replacements: 0, state: 'notInstalled', enabled: null, dir: 'D:\\ws\\mods\\red-spot', error: null };
+const existing = { id: 'red-spot', name: 'Red spot', version: '1.0.0', author: null, replacements: 0, skins: 0, state: 'notInstalled', enabled: null, dir: 'D:\\ws\\mods\\red-spot', error: null };
 
 function setup(mods: (typeof existing)[]) {
   const list = { mods, frameworkInstalled: false };

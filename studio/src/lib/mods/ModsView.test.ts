@@ -9,7 +9,7 @@ import { Session } from '$lib/stores/session.svelte';
 import ModsView from './ModsView.svelte';
 
 const row = (over: Partial<ModRow> = {}): ModRow => ({
-  id: 'red-spot', name: 'Red spot', version: '1.0.0', author: null, replacements: 1, state: 'notInstalled', enabled: null,
+  id: 'red-spot', name: 'Red spot', version: '1.0.0', author: null, replacements: 1, skins: 0, state: 'notInstalled', enabled: null,
   dir: 'D:\\ws\\mods\\red-spot', error: null, ...over,
 });
 
