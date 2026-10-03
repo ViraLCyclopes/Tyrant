@@ -28,7 +28,10 @@
     let id = target;
     if (id === NEW) {
       id = newId.trim();
-      if (!(await session.safely(() => session.rpc.call('mods.create', { id, name: null, author: null })))) return;
+      const created = await session.safely(() => session.rpc.call('mods.create', { id, name: null, author: null }));
+      if (!created) return;
+      mods = created; // the new mod is real now, even if adding the texture fails below
+      target = id;
     }
     const r = await session.safely(() => session.rpc.call('mods.replace', { id, texture: asset.ref, png: png.trim() || null }));
     if (!r) return;

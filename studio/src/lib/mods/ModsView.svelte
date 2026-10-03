@@ -52,9 +52,10 @@
     if (r) list = r;
   }
 
-  async function setEnabled(row: ModRow, enabled: boolean) {
+  async function setEnabled(row: ModRow, enabled: boolean, box: HTMLInputElement) {
     const r = await session.safely(() => session.rpc.call('mods.enable', { id: row.id, enabled }));
     if (r) list = r;
+    else box.checked = !enabled; // the change did not happen
   }
 </script>
 
@@ -87,7 +88,7 @@
           <td>{STATE_LABEL[row.state] ?? row.state}</td>
           <td>
             {#if row.enabled !== null}
-              <input type="checkbox" aria-label="{row.name} on" checked={row.enabled} onchange={(e) => setEnabled(row, e.currentTarget.checked)} />
+              <input type="checkbox" aria-label="{row.name} on" checked={row.enabled} onchange={(e) => setEnabled(row, e.currentTarget.checked, e.currentTarget)} />
             {/if}
           </td>
           <td class="actions">

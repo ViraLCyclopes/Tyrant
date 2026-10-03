@@ -85,4 +85,17 @@ describe('ModsView', () => {
 
     await waitFor(() => expect(rpc.callsTo('mods.enable')[0]?.params).toEqual({ id: 'red-spot', enabled: false }));
   });
+
+  it('puts the On checkbox back when switching fails', async () => {
+    const { rpc, session } = setup([row({ state: 'installed', enabled: true })], true);
+    rpc.on('mods.enable', () => {
+      throw new Error('Prehistoric Kingdom is running; close the game first.');
+    });
+    renderWith(ModsView, session);
+    const box = (await screen.findByRole('checkbox', { name: 'Red spot on' })) as HTMLInputElement;
+
+    await fireEvent.click(box);
+
+    await waitFor(() => expect(box.checked).toBe(true));
+  });
 });

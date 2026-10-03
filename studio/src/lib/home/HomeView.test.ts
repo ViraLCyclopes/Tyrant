@@ -118,4 +118,25 @@ describe('HomeView', () => {
 
     await waitFor(() => expect(session.notice).toContain('back to vanilla'));
   });
+
+  it('offers an update when the framework is outdated', async () => {
+    const { rpc, session } = setup();
+    rpc.on('dump.install', () => ({ installedLoader: false, message: "Updated Tyrant's dumper and framework; they were already installed." }));
+    rpc.on('workspace.status', () => workspaceStatus({ dumper: 'installed', framework: 'current' }));
+    session.workspace = workspaceStatus({ dumper: 'installed', framework: 'outdated' });
+    renderWith(HomeView, session);
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Update Tyrant in game' }));
+
+    await waitFor(() => expect(session.notice).toContain('Updated'));
+    expect(rpc.callsTo('dump.install')).toHaveLength(1);
+  });
+
+  it('shows no update button when the framework is current', () => {
+    const { session } = setup();
+    session.workspace = workspaceStatus({ dumper: 'installed', framework: 'current' });
+    renderWith(HomeView, session);
+
+    expect(screen.queryByRole('button', { name: 'Update Tyrant in game' })).toBeNull();
+  });
 });
