@@ -17,6 +17,7 @@
   let maps = $state(false);
   let target = $state(NEW);
   let newId = $state('my-skins');
+  let unmatched = $state(false);
   const selected = $derived(data?.species.find((s) => s.speciesId === species) ?? null);
   const keyOf = (id: string) => id.toLowerCase().replace(/[^a-z0-9]/g, '');
 
@@ -25,7 +26,10 @@
     const list = await session.quietly(() => session.rpc.call('mods.list'));
     mods = (list?.mods ?? []).filter((m) => m.state !== 'gameOnly');
     target = mods[0]?.id ?? NEW;
-    const match = data?.species.find((s) => keyOf(s.speciesId) === speciesKey) ?? data?.species[0];
+    // Never guess: a Species tab name that matches no species id leaves the choice to the user.
+    const found = data?.species.find((s) => keyOf(s.speciesId) === speciesKey);
+    unmatched = !!speciesKey && !found && !!data?.hasDump;
+    const match = speciesKey ? found : data?.species[0];
     species = match?.speciesId ?? '';
     base = match?.skins[0]?.name ?? '';
   });
@@ -59,9 +63,11 @@
       Adding a skin needs the game's data (species and their skins). On the Home tab, click <strong>Run data dump</strong>, then come back.
     </p>
   {:else if data}
+    {#if unmatched && !species}<p class="warn">Tyrant could not match this species to the game data's species list; pick it below.</p>{/if}
     <div class="form">
       <label>Species
         <select aria-label="Species" value={species} onchange={(e) => chooseSpecies(e.currentTarget.value)}>
+          {#if !species}<option value="" disabled>Pick a species…</option>{/if}
           {#each data.species as s (s.speciesId)}<option value={s.speciesId}>{s.speciesId}{s.vivarium ? ' (vivarium)' : ''}</option>{/each}
         </select>
       </label>

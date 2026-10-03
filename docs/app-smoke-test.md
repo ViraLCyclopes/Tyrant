@@ -59,10 +59,12 @@ Release build: `npm run build:app`, install `studio/src-tauri/target/release/bun
 30. Mods → **Check** (no errors) → **Install to game**.
 31. **(game)** Start the game → Nursery → Carcharodontosaurus → male: a new swatch "Red spot" is next to the vanilla ones; choosing it shows
     your texture; vanilla skins are unchanged. `MelonLoader\Latest.log` has `Carcharodontosaurus: 1 skin(s) added.` and
-    `skin red-spot-carcharo/red-spot (male) on …`.
+    `skin red-spot-carcharo/red-spot (male) on …`. The swatch sits right after the vanilla ones (no gap where the 12 hidden
+    reserved positions are), and no "(skin from a removed mod)" swatch shows.
 32. **(game)** Place the animal, save, quit, load: it still wears Red spot.
-33. **(game)** Close the game, **Remove from game**, start and load: the park loads; the animal shows the first vanilla skin. Reinstall:
-    Red spot is back.
+33. **(game)** Close the game, **Remove from game** (now no installed mod adds skins), start and load: the park loads; the animal
+    shows the first vanilla skin; the log still has `Carcharodontosaurus: 0 skin(s) added, 1 kept as stand-ins for removed mods`.
+    Save, then reinstall: Red spot is back (the stand-in kept its number).
 34. **(game)** With 6+ skins for one species (add more skins), the Nursery skin row scrolls sideways.
 35. Mods → **Clean up skin numbers…** after removing a skin mod: it is listed; **Forget selected** (confirm) clears it.
 36. **Copy diagnostics** and paste: versions, build, workspace and log tails appear.

@@ -27,14 +27,21 @@ namespace Tyrant.Framework
 
         public static void Apply(HarmonyLib.Harmony harmony)
         {
-            var type = AccessTools.TypeByName(TypeName);
-            var method = type == null ? null : AccessTools.Method(type, MethodName);
-            if (method == null)
+            try
             {
-                FrameworkMod.Log.Error($"{TypeName}.{MethodName} was not found (game updated?); texture replacements and animal events are off.");
-                return;
+                var type = AccessTools.TypeByName(TypeName);
+                var method = type == null ? null : AccessTools.Method(type, MethodName);
+                if (method == null)
+                {
+                    FrameworkMod.Log.Error($"{TypeName}.{MethodName} was not found (game updated?); texture replacements, added skins' textures and animal events are off.");
+                    return;
+                }
+                harmony.Patch(method, postfix: new HarmonyMethod(typeof(AnimalTexturePatch), nameof(Postfix)));
             }
-            harmony.Patch(method, postfix: new HarmonyMethod(typeof(AnimalTexturePatch), nameof(Postfix)));
+            catch (Exception ex)
+            {
+                FrameworkMod.Log.Error($"{TypeName}.{MethodName} could not be patched (game updated?); texture replacements, added skins' textures and animal events are off: {ex.GetBaseException().Message}");
+            }
         }
 
         // __args: the original arguments; the first is the animal (the extension method's 'this IAnimal').

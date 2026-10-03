@@ -103,4 +103,45 @@ public class SkinNumbersTests
         Assert.Empty(SkinNumbers.Parse(null).Species);
         Assert.Throws<FormatException>(() => SkinNumbers.Parse("""{ "format": 1, "species": [] }"""));
     }
+
+    [Fact]
+    public void Species_whose_skin_mods_are_all_gone_are_still_set_up()
+    {
+        var numbers = new SkinNumbers();
+        numbers.Assign(Carch, 3, ["a/red"], []);
+        numbers.Assign("Stegosaurus", 3, ["b/blue"], []);
+
+        Assert.Equal(new[] { Carch, "Stegosaurus", "Trex" }, numbers.SpeciesToSetUp(["Stegosaurus", "Trex"]));
+        Assert.True(numbers.HasAny);
+        Assert.False(new SkinNumbers().HasAny);
+    }
+
+    [Fact]
+    public void A_hand_edited_file_with_one_number_twice_still_lays_out()
+    {
+        var numbers = SkinNumbers.Parse("""{ "format": 1, "species": { "Carcharodontosaurus": { "b/y": 15, "a/x": 15 } } }""");
+
+        var layout = SkinLayout.For(numbers.Of(Carch), 3);
+
+        Assert.Equal((15, "a/x"), (layout[^1].Number, layout[^1].Key));
+        Assert.Equal(13, layout.Count);
+    }
+
+    [Fact]
+    public void A_wrong_format_or_absurd_number_is_refused()
+    {
+        Assert.Throws<FormatException>(() => SkinNumbers.Parse("""{ "format": 2, "species": {} }"""));
+        Assert.Throws<FormatException>(() => SkinNumbers.Parse("""{ "format": 1, "species": { "C": { "a/x": 100000 } } }"""));
+    }
+
+    [Fact]
+    public void Reserved_positions_are_told_apart_from_stand_ins_for_removed_mods()
+    {
+        var layout = SkinLayout.For(new Dictionary<string, int> { ["a/red"] = 15, ["b/blue"] = 17 }, 3);
+
+        Assert.All(layout.Where(e => e.Number < 15), e => Assert.True(e.Reserved));
+        var gap = layout.Single(e => e.Number == 16);
+        Assert.Equal((null, false), (gap.Key, gap.Reserved));
+        Assert.False(layout.Single(e => e.Number == 15).Reserved);
+    }
 }

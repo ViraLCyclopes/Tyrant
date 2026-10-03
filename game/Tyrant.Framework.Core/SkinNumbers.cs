@@ -18,10 +18,24 @@ namespace Tyrant.Framework.Core
         /// </summary>
         public const int FirstNumber = 15;
 
+        /// <summary>Higher numbers in the file are refused: each one below it becomes a skin entry in game.</summary>
+        public const int MaxNumber = 9999;
+
         private static readonly IReadOnlyDictionary<string, int> None = new Dictionary<string, int>();
         private readonly Dictionary<string, Dictionary<string, int>> _species = new Dictionary<string, Dictionary<string, int>>(StringComparer.Ordinal);
 
         public IEnumerable<string> Species => _species.Keys;
+
+        /// <summary>True when any skin has a number: saved animals may wear added skins, so stand-ins and the clamp are needed.</summary>
+        public bool HasAny => _species.Values.Any(n => n.Count > 0);
+
+        /// <summary>
+        /// Species that need set-up in game: those with installed skins plus those with numbers in the file, so a species whose
+        /// skin mods are all gone still gets its stand-ins.
+        /// </summary>
+        public List<string> SpeciesToSetUp(IEnumerable<string> withInstalledSkins) =>
+            withInstalledSkins.Concat(_species.Where(p => p.Value.Count > 0).Select(p => p.Key))
+                .Distinct(StringComparer.Ordinal).OrderBy(s => s, StringComparer.Ordinal).ToList();
 
         public IReadOnlyDictionary<string, int> Of(string species) => _species.TryGetValue(species, out var numbers) ? numbers : None;
 
@@ -31,12 +45,14 @@ namespace Tyrant.Framework.Core
             if (json == null) return result;
             if (!(Json.Parse(json) is Dictionary<string, object?> root) || !(root.TryGetValue("species", out var species) && species is Dictionary<string, object?> map))
                 throw new FormatException("expected { \"format\": 1, \"species\": { ... } }");
+            if (!(root.TryGetValue("format", out var format) && format is double f && f == 1))
+                throw new FormatException("only \"format\": 1 is understood (a newer Tyrant wrote this file?)");
             foreach (var pair in map)
             {
                 if (!(pair.Value is Dictionary<string, object?> keys)) throw new FormatException($"\"{pair.Key}\" must map skin keys to numbers");
                 var numbers = new Dictionary<string, int>(StringComparer.Ordinal);
                 foreach (var key in keys)
-                    numbers[key.Key] = key.Value is double d && d >= 0 && d == Math.Floor(d) ? (int)d : throw new FormatException($"\"{key.Key}\" needs a whole number");
+                    numbers[key.Key] = key.Value is double d && d >= 0 && d <= MaxNumber && d == Math.Floor(d) ? (int)d : throw new FormatException($"\"{key.Key}\" needs a whole number from 0 to {MaxNumber}");
                 result._species[pair.Key] = numbers;
             }
             return result;
@@ -95,14 +111,18 @@ namespace Tyrant.Framework.Core
     /// <summary>One position after the vanilla skins: an added skin (Key) or a hidden stand-in (Key null).</summary>
     public sealed class SkinLayoutEntry
     {
-        public SkinLayoutEntry(int number, string? key)
+        public SkinLayoutEntry(int number, string? key, bool reserved = false)
         {
             Number = number;
             Key = key;
+            Reserved = reserved;
         }
 
         public int Number { get; }
         public string? Key { get; }
+
+        /// <summary>A stand-in below the first added-skin number: never used by any mod, just keeps the numbering.</summary>
+        public bool Reserved { get; }
     }
 
     public static class SkinLayout
@@ -112,10 +132,15 @@ namespace Tyrant.Framework.Core
         {
             var layout = new List<SkinLayoutEntry>();
             if (numbers.Count == 0) return layout;
-            var byNumber = numbers.Where(p => p.Value >= vanillaCount).ToDictionary(p => p.Value, p => p.Key);
+            // A hand-edited file can give two keys one number: the first key in ordinal order gets it.
+            var byNumber = numbers.Where(p => p.Value >= vanillaCount).GroupBy(p => p.Value)
+                .ToDictionary(g => g.Key, g => g.Select(p => p.Key).OrderBy(k => k, StringComparer.Ordinal).First());
             if (byNumber.Count == 0) return layout;
             for (var n = vanillaCount; n <= byNumber.Keys.Max(); n++)
-                layout.Add(new SkinLayoutEntry(n, byNumber.TryGetValue(n, out var key) ? key : null));
+            {
+                var key = byNumber.TryGetValue(n, out var k) ? k : null;
+                layout.Add(new SkinLayoutEntry(n, key, key == null && n < Math.Max(vanillaCount, SkinNumbers.FirstNumber)));
+            }
             return layout;
         }
     }

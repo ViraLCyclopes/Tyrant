@@ -46,16 +46,41 @@ namespace Tyrant.Framework
         private static readonly HashSet<object> StandIns = new HashSet<object>(ReferenceComparer.Instance);
         private static readonly Dictionary<object, HashSet<int>> StandInIndices = new Dictionary<object, HashSet<int>>(ReferenceComparer.Instance);
         private static List<LoadedMod> _mods = new List<LoadedMod>();
+        private static SkinNumbers _numbers = new SkinNumbers();
+        private static bool _canSave = true;
         private static bool _done;
+        private static Type? _persistentData;
+        private static Func<object?>? _instance;
+        private static Func<object?>? _animals;
 
-        public static bool HasSkins => _mods.Count > 0;
+        private static string NumbersPath => Path.Combine(MelonEnvironment.UserDataDirectory, "Tyrant", SkinNumbers.FileName);
 
-        public static void Prepare(IEnumerable<LoadedMod> mods) => _mods = mods.Where(m => m.Manifest.Skins.Count > 0).ToList();
+        /// <summary>
+        /// True when any mod adds skins or skin-slots.json numbers any: even with every skin mod gone, saved animals may wear
+        /// those numbers and need their stand-ins and the clamp.
+        /// </summary>
+        public static bool HasSkins => _mods.Count > 0 || _numbers.HasAny;
+
+        public static void Prepare(IEnumerable<LoadedMod> mods)
+        {
+            _mods = mods.Where(m => m.Manifest.Skins.Count > 0).ToList();
+            var path = NumbersPath;
+            try
+            {
+                _numbers = SkinNumbers.Parse(File.Exists(path) ? File.ReadAllText(path) : null);
+            }
+            catch (Exception ex) when (ex is FormatException || ex is IOException || ex is UnauthorizedAccessException)
+            {
+                FrameworkMod.Log.Error($"{SkinNumbers.FileName} could not be read ({ex.Message}); added skins are numbered for this session only and the file is left alone.");
+                _numbers = new SkinNumbers();
+                _canSave = false;
+            }
+        }
 
         /// <summary>Called every frame until the animal database exists; then adds the skins once.</summary>
         public static void Tick()
         {
-            if (_done || _mods.Count == 0) return;
+            if (_done || !HasSkins) return;
             var database = AnimalDatabase();
             if (database == null) return;
             _done = true;
@@ -87,13 +112,24 @@ namespace Tyrant.Framework
             return false;
         }
 
+        /// <summary>PKPersistentData.Animals once PKPersistentData.Instance exists; members are looked up once, not every frame.</summary>
         private static object? AnimalDatabase()
         {
+            if (_persistentData == null)
+            {
+                _persistentData = AccessTools.TypeByName("PrehistoricKingdom.PKPersistentData");
+                _instance = _persistentData == null ? null : StaticGetter(_persistentData, "Instance");
+                _animals = _persistentData == null ? null : StaticGetter(_persistentData, "Animals");
+                if (_instance == null || _animals == null)
+                {
+                    FrameworkMod.Log.Error("PKPersistentData.Instance/Animals was not found (game updated?); added skins are off.");
+                    _done = true;
+                    return null;
+                }
+            }
             try
             {
-                var type = AccessTools.TypeByName("PrehistoricKingdom.PKPersistentData");
-                if (type == null || AccessTools.Property(type, "Instance")?.GetValue(null, null) == null) return null;
-                return AccessTools.Property(type, "Animals")?.GetValue(null, null);
+                return _instance!() == null ? null : _animals!();
             }
             catch (Exception)
             {
@@ -101,69 +137,42 @@ namespace Tyrant.Framework
             }
         }
 
+        private static Func<object?>? StaticGetter(Type type, string name)
+        {
+            var property = AccessTools.Property(type, name);
+            if (property != null) return () => property.GetValue(null, null);
+            var field = AccessTools.Field(type, name);
+            return field == null ? (Func<object?>?)null : () => field.GetValue(null);
+        }
+
         private static void Inject(object database)
         {
-            var path = Path.Combine(MelonEnvironment.UserDataDirectory, "Tyrant", SkinNumbers.FileName);
-            SkinNumbers numbers;
-            var canSave = true;
-            try
-            {
-                numbers = SkinNumbers.Parse(File.Exists(path) ? File.ReadAllText(path) : null);
-            }
-            catch (Exception ex) when (ex is FormatException || ex is IOException || ex is UnauthorizedAccessException)
-            {
-                FrameworkMod.Log.Error($"{SkinNumbers.FileName} could not be read ({ex.Message}); added skins are numbered for this session only and the file is left alone.");
-                numbers = new SkinNumbers();
-                canSave = false;
-            }
-
+            var numbers = _numbers;
             var get = AccessTools.Method(database.GetType(), "Get", new[] { typeof(string) });
             var messages = new List<string>();
             var changed = false;
-            foreach (var group in _mods.SelectMany(m => m.Manifest.Skins.Select(s => (Mod: m, Skin: s))).GroupBy(x => x.Skin.Species, StringComparer.Ordinal))
+            var installed = _mods.SelectMany(m => m.Manifest.Skins.Select(s => (Mod: m, Skin: s)))
+                .GroupBy(x => x.Skin.Species, StringComparer.Ordinal)
+                .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.Ordinal);
+            // Species with numbers but no installed skins are set up too: their saved animals need the stand-ins.
+            foreach (var species in numbers.SpeciesToSetUp(installed.Keys))
             {
-                var species = group.Key;
-                var data = get?.Invoke(database, new object[] { species });
-                if (data == null)
+                var group = installed.TryGetValue(species, out var skins) ? skins : new List<(LoadedMod Mod, SkinEntry Skin)>();
+                try
                 {
-                    foreach (var x in group) FrameworkMod.Log.Warning($"{x.Skin.Key(x.Mod.Manifest.Id)}: species \"{species}\" is not in the game; the skin is skipped.");
-                    continue;
+                    changed |= SetUp(species, group, get, database, numbers, messages);
                 }
-                if (!(Traverse.Create(data).Field("skinsData").GetValue() is IList list) || list.Count == 0) continue;
-                var vanilla = list.Count;
-                changed |= numbers.Assign(species, vanilla, group.Select(x => x.Skin.Key(x.Mod.Manifest.Id)), messages);
-                var byKey = group.ToDictionary(x => x.Skin.Key(x.Mod.Manifest.Id), StringComparer.Ordinal);
-                var standIns = new HashSet<int>();
-                var added = 0;
-                foreach (var slot in SkinLayout.For(numbers.Of(species), vanilla))
+                catch (Exception ex)
                 {
-                    object? skin = null;
-                    if (slot.Key != null && byKey.TryGetValue(slot.Key, out var x))
-                    {
-                        skin = MakeSkin(list, vanilla, x.Mod, x.Skin);
-                        if (skin != null)
-                        {
-                            AddedSkins[skin] = new Added(x.Mod.Manifest.Id, x.Skin, x.Mod.Directory);
-                            added++;
-                        }
-                    }
-                    if (skin == null)
-                    {
-                        skin = Clone(list[0]);
-                        Traverse.Create(skin).Field("skinName").SetValue("(skin from a removed mod)");
-                        StandIns.Add(skin);
-                        standIns.Add(slot.Number);
-                    }
-                    list.Add(skin); // its index is slot.Number: the layout is contiguous from the vanilla count
+                    FrameworkMod.Log.Error($"{species}: added skins could not be set up ({ex.GetBaseException().Message}); it keeps the skins added so far.");
                 }
-                if (standIns.Count > 0) StandInIndices[data] = standIns;
-                FrameworkMod.Log.Msg($"{species}: {added} skin(s) added{(standIns.Count > 0 ? $", {standIns.Count} kept as stand-ins for removed mods" : "")}.");
             }
             foreach (var message in messages) FrameworkMod.Log.Warning(message);
-            if (changed && canSave)
+            if (changed && _canSave)
             {
                 try
                 {
+                    var path = NumbersPath;
                     Directory.CreateDirectory(Path.GetDirectoryName(path)!);
                     File.WriteAllText(path, numbers.ToJson());
                 }
@@ -172,6 +181,68 @@ namespace Tyrant.Framework
                     FrameworkMod.Log.Error($"{SkinNumbers.FileName} could not be saved ({ex.Message}); new skins may get other numbers next time.");
                 }
             }
+        }
+
+        private static bool SetUp(string species, List<(LoadedMod Mod, SkinEntry Skin)> group, MethodInfo? get, object database, SkinNumbers numbers, List<string> messages)
+        {
+            object? data;
+            try
+            {
+                data = get?.Invoke(database, new object[] { species });
+            }
+            catch (Exception)
+            {
+                data = null; // some databases throw on unknown ids instead of returning null
+            }
+            if (data == null)
+            {
+                foreach (var x in group) FrameworkMod.Log.Warning($"{x.Skin.Key(x.Mod.Manifest.Id)}: species \"{species}\" is not in the game; the skin is skipped.");
+                return false;
+            }
+            if (!(Traverse.Create(data).Field("skinsData").GetValue() is IList list) || list.Count == 0) return false;
+            var vanilla = list.Count;
+            var changed = numbers.Assign(species, vanilla, group.Select(x => x.Skin.Key(x.Mod.Manifest.Id)), messages);
+            var byKey = new Dictionary<string, (LoadedMod Mod, SkinEntry Skin)>(StringComparer.Ordinal);
+            foreach (var x in group) byKey[x.Skin.Key(x.Mod.Manifest.Id)] = x;
+            var standIns = new HashSet<int>();
+            int added = 0, reserved = 0, removed = 0;
+            foreach (var slot in SkinLayout.For(numbers.Of(species), vanilla))
+            {
+                object? skin = null;
+                if (slot.Key != null && byKey.TryGetValue(slot.Key, out var x))
+                {
+                    try
+                    {
+                        skin = MakeSkin(list, vanilla, x.Mod, x.Skin);
+                    }
+                    catch (Exception ex)
+                    {
+                        FrameworkMod.Log.Warning($"{slot.Key}: the skin could not be made ({ex.GetBaseException().Message}); it is skipped.");
+                        skin = null;
+                    }
+                    if (skin != null)
+                    {
+                        AddedSkins[skin] = new Added(x.Mod.Manifest.Id, x.Skin, x.Mod.Directory);
+                        added++;
+                    }
+                }
+                if (skin == null)
+                {
+                    skin = Clone(list[0]); // hidden in the Nursery; saved animals wearing this number look like skin 0
+                    if (slot.Reserved) reserved++;
+                    else
+                    {
+                        Traverse.Create(skin).Field("skinName").SetValue("(skin from a removed mod)");
+                        removed++;
+                    }
+                    StandIns.Add(skin);
+                    standIns.Add(slot.Number);
+                }
+                list.Add(skin); // its index is slot.Number: the layout is contiguous from the vanilla count
+            }
+            if (standIns.Count > 0) StandInIndices[data] = standIns;
+            FrameworkMod.Log.Msg($"{species}: {added} skin(s) added{(removed > 0 ? $", {removed} kept as stand-ins for removed mods" : "")}{(reserved > 0 ? $", {reserved} reserved position(s) hidden" : "")}.");
+            return changed;
         }
 
         private static object? MakeSkin(IList list, int vanilla, LoadedMod mod, SkinEntry entry)

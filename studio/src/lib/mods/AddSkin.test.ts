@@ -59,4 +59,14 @@ describe('AddSkin', () => {
     await waitFor(() => expect(rpc.callsTo('mods.addSkin')[0]?.params).toMatchObject({ id: 'blue-stripes' }));
     expect(rpc.callsTo('mods.create')[0]?.params).toEqual({ id: 'blue-stripes', name: null, author: null });
   });
+
+  it('asks for the species instead of guessing when the Species tab name does not match', async () => {
+    const { session } = setup();
+    renderWith(AddSkin, session, { speciesKey: 'tyrannosaurusrex' });
+
+    expect(await screen.findByText(/could not match/)).toBeInTheDocument();
+    expect((screen.getByRole('combobox', { name: 'Species' }) as HTMLSelectElement).value).toBe('');
+    await fireEvent.input(screen.getByRole('textbox', { name: 'Skin name' }), { target: { value: 'Red spot' } });
+    expect(screen.getByRole('button', { name: 'Add skin' })).toBeDisabled();
+  });
 });

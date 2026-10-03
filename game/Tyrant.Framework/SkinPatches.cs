@@ -19,18 +19,26 @@ namespace Tyrant.Framework
             Patch(harmony, "AnimalsV2.AnimalGenetics", "Load", nameof(BeforeGeneticsLoad), postfix: false);
         }
 
+        /// <summary>Each patch stands alone: a game update that renames, overloads or re-signs one method turns off only that part.</summary>
         private static void Patch(HarmonyLib.Harmony harmony, string typeName, string methodName, string patch, bool postfix)
         {
-            var type = AccessTools.TypeByName(typeName);
-            var method = type == null ? null : AccessTools.Method(type, methodName);
-            if (method == null)
+            try
             {
-                FrameworkMod.Log.Warning($"{typeName}.{methodName} was not found (game updated?); one part of added skins is off.");
-                return;
+                var type = AccessTools.TypeByName(typeName);
+                var method = type == null ? null : AccessTools.Method(type, methodName);
+                if (method == null)
+                {
+                    FrameworkMod.Log.Warning($"{typeName}.{methodName} was not found (game updated?); one part of added skins is off.");
+                    return;
+                }
+                var harmonyMethod = new HarmonyMethod(typeof(SkinPatches), patch);
+                if (postfix) harmony.Patch(method, postfix: harmonyMethod);
+                else harmony.Patch(method, prefix: harmonyMethod);
             }
-            var harmonyMethod = new HarmonyMethod(typeof(SkinPatches), patch);
-            if (postfix) harmony.Patch(method, postfix: harmonyMethod);
-            else harmony.Patch(method, prefix: harmonyMethod);
+            catch (Exception ex)
+            {
+                FrameworkMod.Log.Warning($"{typeName}.{methodName} could not be patched (game updated?); one part of added skins is off: {ex.GetBaseException().Message}");
+            }
         }
 
         private static void Unlocked(object reward, ref bool __result)
