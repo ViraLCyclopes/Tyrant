@@ -10,7 +10,7 @@ import AssetPreviewPanel from './AssetPreviewPanel.svelte';
 
 vi.mock('./viewer', () => ({
   showModels: vi.fn(async () => ({
-    setSkeleton: vi.fn(), setTextures: vi.fn(), setSkin: vi.fn(), setGround: vi.fn(), setSky: vi.fn(), frame: vi.fn(), dispose: vi.fn(),
+    setSkeleton: vi.fn(), setTextures: vi.fn(), setSkin: vi.fn(), setGround: vi.fn(), setSky: vi.fn(), frame: vi.fn(), pause: vi.fn(), resume: vi.fn(), dispose: vi.fn(),
   })),
 }));
 
