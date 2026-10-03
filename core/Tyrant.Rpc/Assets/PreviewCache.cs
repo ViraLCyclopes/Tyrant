@@ -16,6 +16,12 @@ namespace Tyrant.Rpc.Assets;
 internal sealed class PreviewCache
 {
     private const string MetaFile = "preview.json";
+
+    /// <summary>
+    /// Bumped whenever previews are made differently (2: packed normal maps rebuilt), so a tool update never shows
+    /// previews made the old way. Part of the build folder name; older folders are removed like old builds.
+    /// </summary>
+    internal const int FormatVersion = 2;
     private readonly ConcurrentDictionary<string, object> _locks = new(StringComparer.OrdinalIgnoreCase);
 
     public static string Root(Workspace ws) => Path.Combine(ws.CacheDir, "previews");
@@ -23,7 +29,7 @@ internal sealed class PreviewCache
     public AssetPreview GetOrCreate(Workspace ws, GameFingerprint build, AssetRecord asset, Func<string, AssetPreview> create)
     {
         // The build id alone is "unknown" when boot.config has none; the assembly hash still tells builds apart.
-        var buildFolder = Path.Combine(Root(ws), Safe($"{build.BuildGuid}-{build.AssemblySha256[..Math.Min(8, build.AssemblySha256.Length)]}"));
+        var buildFolder = Path.Combine(Root(ws), Safe($"{build.BuildGuid}-{build.AssemblySha256[..Math.Min(8, build.AssemblySha256.Length)]}-p{FormatVersion}"));
         if (!Directory.Exists(buildFolder)) RemoveOtherBuilds(Root(ws), buildFolder);
         var dir = Path.Combine(buildFolder, FolderFor(asset));
         lock (_locks.GetOrAdd(dir, _ => new object())) // two requests for one asset must not write the same files at once

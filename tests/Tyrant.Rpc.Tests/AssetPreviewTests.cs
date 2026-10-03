@@ -173,4 +173,16 @@ public class AssetPreviewTests
 
         Assert.Contains("Normal map rebuilt", preview.GetProperty("message").GetString());
     }
+
+    [Fact]
+    public async Task Previews_are_keyed_by_the_preview_format_so_tool_updates_redo_them()
+    {
+        using var game = new FakeGame(buildGuid: "build-one");
+        var (h, _, _) = await Opened(game);
+
+        var file = (await h.Call("assets.preview", new { @ref = StegoD.Ref })).GetProperty("files")[0].GetString()!;
+
+        var buildFolder = Path.GetFileName(Path.GetDirectoryName(Path.GetDirectoryName(file)))!;
+        Assert.EndsWith($"-p{Tyrant.Rpc.Assets.PreviewCache.FormatVersion}", buildFolder);
+    }
 }
