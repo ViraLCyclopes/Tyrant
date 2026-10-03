@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { memoryStore } from '$lib/storage';
 import { FakePlatform } from '$lib/test/fakePlatform';
 import { FakeRpc } from '$lib/test/fakeRpc';
-import { renderWith, workspaceStatus } from '$lib/test/fixtures';
+import { renderWith, workspaceStatus, messages } from '$lib/test/fixtures';
 import { Session } from '$lib/stores/session.svelte';
 import SpeciesPanel from './SpeciesPanel.svelte';
 
@@ -44,7 +44,7 @@ describe('SpeciesPanel', () => {
     await fireEvent.click(await screen.findByRole('button', { name: 'Export Carcharodontosaurus pack' }));
 
     await waitFor(() => expect(rpc.callsTo('species.pack')[0]?.params).toEqual({ key: 'carcharodontosaurus' }));
-    await waitFor(() => expect(session.notice).toBe('Exported 3 models and 14 textures to D:\\ws\\assets\\species\\carcharodontosaurus.'));
+    await waitFor(() => expect(messages(session, 'tab-test').join('\n')).toContain('Exported 3 models and 14 textures to D:\\ws\\assets\\species\\carcharodontosaurus.'));
     await fireEvent.click(await screen.findByRole('button', { name: 'Show in Explorer' }));
     expect(platform.revealed).toEqual(['D:\\ws\\assets\\species\\carcharodontosaurus']);
   });
@@ -59,7 +59,7 @@ describe('SpeciesPanel', () => {
 
     await fireEvent.click(await screen.findByRole('button', { name: 'Export Carcharodontosaurus pack' }));
 
-    await waitFor(() => expect(session.notice).toContain('could not be decoded'));
+    await waitFor(() => expect(messages(session, 'tab-test').join('\n')).toContain('could not be decoded'));
   });
 
   it('opens Add a skin for a species', async () => {

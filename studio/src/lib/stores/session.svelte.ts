@@ -3,6 +3,9 @@ import { RpcError, asRpcError, type JobMethod, type ParamsOf, type Rpc } from '$
 import type { DumpRunResult, InstallInfo, RefreshAllResult, RpcJobs, WorkspaceStatus } from '$lib/rpc/types.gen';
 import type { Platform } from '$lib/platform';
 import type { KeyValueStore } from '$lib/storage';
+import { toLevel } from '$lib/shell/log';
+import { LogStore } from '$lib/shell/logStore.svelte';
+import type { Tab } from '$lib/shell/tab.svelte';
 
 export const SESSION_KEY = Symbol('tyrant-session');
 const LAST_WORKSPACE = 'tyrant.lastWorkspace';
@@ -20,12 +23,13 @@ export interface ActiveJob {
   cancel: (() => Promise<void>) | null;
 }
 
-/** App state shared by every view: the game, the open workspace, the running job and what to tell the user. */
+/** App state shared by every tab: the game, the open workspace, the running job and the log. */
 export class Session {
   install = $state<InstallInfo | null>(null);
   workspace = $state<WorkspaceStatus | null>(null);
+  /** A session-level error (core stopped, workspace could not open), shown above every tab. Tabs show their own. */
   error = $state<RpcError | null>(null);
-  notice = $state<string | null>(null);
+  readonly log = new LogStore();
   job = $state<ActiveJob | null>(null);
   recent = $state<string[]>([]);
   ready = $state(false);
@@ -38,6 +42,7 @@ export class Session {
     readonly store: KeyValueStore,
   ) {
     this.recent = readList(store.get(RECENT_WORKSPACES));
+    rpc.onLog((n) => this.log.add({ level: toLevel(n.level), message: n.message, tab: null }));
     rpc.onCoreExit((info) => {
       this.job = null;
       const message =
@@ -51,6 +56,17 @@ export class Session {
       const dir = this.workspace?.dir;
       if (dir) void this.reopen(dir);
     });
+  }
+
+  /** A message for the tab that asked (or every tab when none did, e.g. after a reload). */
+  private tell(message: string, tab?: Tab): void {
+    if (tab) tab.info(message);
+    else this.log.add({ level: 'info', message, tab: null });
+  }
+
+  private report(error: RpcError, tab?: Tab): void {
+    if (tab) tab.fail(error);
+    else this.error = error;
   }
 
   get busy(): boolean {
@@ -133,13 +149,23 @@ export class Session {
     }
   }
 
-  /** Runs a job with progress in the top bar; returns its result, or null if it failed (error shown) or was cancelled. */
-  async runJob<M extends JobMethod>(method: M, params: ParamsOf<M>, title: string): Promise<RpcJobs[M] | null> {
+  /**
+   * Runs a job with progress in the status line; its start, each new progress message and any error go to the tab that
+   * started it. Returns the result, or null if it failed (error reported) or was cancelled.
+   */
+  async runJob<M extends JobMethod>(method: M, params: ParamsOf<M>, title: string, tab?: Tab): Promise<RpcJobs[M] | null> {
     if (this.job) return null;
-    this.error = null;
+    if (tab) tab.error = null;
+    else this.error = null;
     this.job = { id: null, title, fraction: 0, message: 'Starting…', cancel: null };
+    this.tell(`${title} started.`, tab);
+    let lastMessage = '';
     try {
       const handle = await this.rpc.job(method, params, (fraction, message) => {
+        if (message && message !== lastMessage) {
+          lastMessage = message;
+          this.tell(message, tab);
+        }
         if (!this.job) return;
         this.job.fraction = fraction;
         this.job.message = message;
@@ -151,8 +177,8 @@ export class Session {
       return await handle.done;
     } catch (e) {
       const error = asRpcError(e);
-      if (error.code === 'CANCELLED') this.notice = `${title} was cancelled.`;
-      else if (error.code !== 'SIDECAR_EXITED') this.error = error; // a core exit was already explained
+      if (error.code === 'CANCELLED') this.tell(`${title} was cancelled.`, tab);
+      else if (error.code !== 'SIDECAR_EXITED') this.report(error, tab); // a core exit was already explained
       return null;
     } finally {
       this.job = null;
@@ -174,11 +200,11 @@ export class Session {
     this.job.cancel = () => handle.cancel();
     try {
       await handle.done;
-      this.notice = `${current.title} finished.`;
+      this.tell(`${current.title} finished.`);
     } catch (e) {
       const error = asRpcError(e);
-      if (error.code === 'CANCELLED') this.notice = `${current.title} was cancelled.`;
-      else if (error.code !== 'SIDECAR_EXITED') this.error = error;
+      if (error.code === 'CANCELLED') this.tell(`${current.title} was cancelled.`);
+      else if (error.code !== 'SIDECAR_EXITED') this.report(error);
     } finally {
       this.job = null;
       await this.refreshStatus();
@@ -189,18 +215,18 @@ export class Session {
     await this.job?.cancel?.();
   }
 
-  async refreshAll(): Promise<RefreshAllResult | null> {
+  async refreshAll(tab?: Tab): Promise<RefreshAllResult | null> {
     if (this.workspace?.dumper === 'installed' && !(await this.platform.confirm(START_GAME_WARNING, 'Refresh all'))) return null;
-    return this.runJob('workspace.refreshAll', undefined, 'Refresh all');
+    return this.runJob('workspace.refreshAll', undefined, 'Refresh all', tab);
   }
 
-  async runDump(): Promise<DumpRunResult | null> {
+  async runDump(tab?: Tab): Promise<DumpRunResult | null> {
     if (!(await this.platform.confirm(START_GAME_WARNING, 'Run data dump'))) return null;
-    return this.runJob('dump.run', { timeoutSeconds: 300 }, 'Data dump');
+    return this.runJob('dump.run', { timeoutSeconds: 300 }, 'Data dump', tab);
   }
 
   /** Removes Tyrant from the game after asking: this also deletes every installed mod, some of which may exist nowhere else. */
-  async uninstallDumper(): Promise<void> {
+  async uninstallDumper(tab?: Tab): Promise<void> {
     let installed: { state: string }[] = [];
     try {
       installed = (await this.rpc.call('mods.list')).mods.filter((m) => m.state !== 'notInstalled');
@@ -216,20 +242,21 @@ export class Session {
       'Mods in your workspace stay; you can install them again.',
     ].filter(Boolean).join(' ');
     if (!(await this.platform.confirm(message, 'Uninstall from game'))) return;
-    const result = await this.safely(() => this.rpc.call('dump.uninstall'));
-    if (result) this.notice = result.message;
+    const result = tab ? await tab.safely(() => this.rpc.call('dump.uninstall')) : await this.safely(() => this.rpc.call('dump.uninstall'));
+    if (result) this.tell(result.message, tab);
     await this.refreshStatus();
   }
 
-  async copyDiagnostics(): Promise<void> {
-    const result = await this.safely(() => this.rpc.call('app.diagnostics'));
+  async copyDiagnostics(tab?: Tab): Promise<void> {
+    const result = tab ? await tab.safely(() => this.rpc.call('app.diagnostics')) : await this.safely(() => this.rpc.call('app.diagnostics'));
     if (!result) return;
     await this.platform.copy(result.text);
-    this.notice = 'Diagnostics copied to the clipboard; paste them into your bug report.';
+    this.tell('Diagnostics copied to the clipboard; paste them into your bug report.', tab);
   }
 
-  /** Handles the fix button of an error. */
-  async applyFix(fix: string): Promise<void> {
+  /** Handles the fix button of an error (raised by `tab`'s actions when given). */
+  async applyFix(fix: string, tab?: Tab): Promise<void> {
+    if (tab) tab.error = null;
     switch (fix) {
       case 'PICK_GAME_FOLDER': {
         const dir = await this.platform.pickFolder('Select the Prehistoric Kingdom folder');
@@ -250,10 +277,10 @@ export class Session {
         return;
       }
       case 'REFRESH_WORKSPACE':
-        await this.refreshAll();
+        await this.refreshAll(tab);
         return;
       case 'INSTALL_DUMPER':
-        await this.runJob('dump.install', undefined, 'Install dumper');
+        await this.runJob('dump.install', undefined, 'Install dumper', tab);
         return;
     }
   }

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { memoryStore } from '$lib/storage';
 import { FakePlatform } from '$lib/test/fakePlatform';
 import { FakeRpc } from '$lib/test/fakeRpc';
-import { installInfo, renderWith, workspaceStatus } from '$lib/test/fixtures';
+import { installInfo, renderWith, workspaceStatus, messages } from '$lib/test/fixtures';
 import { Session } from '$lib/stores/session.svelte';
 import HomeView from './HomeView.svelte';
 
@@ -54,7 +54,7 @@ describe('HomeView', () => {
 
     await fireEvent.click(screen.getByRole('button', { name: 'Install Tyrant in game' }));
 
-    await waitFor(() => expect(session.notice).toMatch(/Installed MelonLoader/));
+    await waitFor(() => expect(messages(session, 'tab-test').join('\n')).toMatch(/Installed MelonLoader/));
     expect(await screen.findByRole('button', { name: 'Run data dump' })).toBeInTheDocument();
   });
 
@@ -116,7 +116,7 @@ describe('HomeView', () => {
 
     await fireEvent.click(screen.getByRole('button', { name: 'Uninstall from game' }));
 
-    await waitFor(() => expect(session.notice).toContain('back to vanilla'));
+    await waitFor(() => expect(messages(session, 'tab-test').join('\n')).toContain('back to vanilla'));
   });
 
   it('offers an update when the framework is outdated', async () => {
@@ -128,7 +128,7 @@ describe('HomeView', () => {
 
     await fireEvent.click(screen.getByRole('button', { name: 'Update Tyrant in game' }));
 
-    await waitFor(() => expect(session.notice).toContain('Updated'));
+    await waitFor(() => expect(messages(session, 'tab-test').join('\n')).toContain('Updated'));
     expect(rpc.callsTo('dump.install')).toHaveLength(1);
   });
 

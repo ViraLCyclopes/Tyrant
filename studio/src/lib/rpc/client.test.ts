@@ -203,4 +203,12 @@ describe('RpcClient', () => {
     void handle.cancel(); // the fake transport never answers; the request is what matters
     expect(transport.last()).toMatchObject({ method: 'job.cancel', params: { jobId: 'j7' } });
   });
+
+  it('hands log notifications to the log handler', () => {
+    const { transport, client } = setup();
+    const seen: string[] = [];
+    client.onLog((n) => seen.push(`${n.level}:${n.message}`));
+    transport.emit({ jsonrpc: '2.0', method: 'log', params: { level: 'info', message: 'Installed.' } });
+    expect(seen).toEqual(['info:Installed.']);
+  });
 });

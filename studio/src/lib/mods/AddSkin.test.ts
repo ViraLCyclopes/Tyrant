@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { memoryStore } from '$lib/storage';
 import { FakePlatform } from '$lib/test/fakePlatform';
 import { FakeRpc } from '$lib/test/fakeRpc';
-import { renderWith } from '$lib/test/fixtures';
+import { renderWith, messages } from '$lib/test/fixtures';
 import { Session } from '$lib/stores/session.svelte';
 import AddSkin from './AddSkin.svelte';
 
@@ -45,7 +45,7 @@ describe('AddSkin', () => {
         id: 'red-spot', species: 'Carcharodontosaurus', name: 'Red spot', base: 'Alt 1', male: true, female: false, maps: false,
       }),
     );
-    expect(session.notice).toContain('Red spot');
+    expect(messages(session, 'tab-test').join('\n')).toContain('Red spot');
   });
 
   it('creates a new mod first when there is none', async () => {

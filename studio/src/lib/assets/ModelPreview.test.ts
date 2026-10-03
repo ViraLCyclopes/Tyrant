@@ -1,10 +1,11 @@
 import { fireEvent, screen, waitFor } from '@testing-library/svelte';
+import { tick } from 'svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AssetPreview } from '$lib/rpc/types.gen';
 import { memoryStore } from '$lib/storage';
 import { FakePlatform } from '$lib/test/fakePlatform';
 import { FakeRpc } from '$lib/test/fakeRpc';
-import { renderWith } from '$lib/test/fixtures';
+import { renderWith, testTab } from '$lib/test/fixtures';
 import { Session } from '$lib/stores/session.svelte';
 import ModelPreview from './ModelPreview.svelte';
 
@@ -17,6 +18,8 @@ const viewer = vi.hoisted(() => ({
   setSky: vi.fn(),
   frame: vi.fn(),
   dispose: vi.fn(),
+  pause: vi.fn(),
+  resume: vi.fn(),
 }));
 vi.mock('./viewer', () => ({ showModels: viewer.showModels }));
 
@@ -74,6 +77,22 @@ describe('ModelPreview', () => {
     await fireEvent.click(screen.getByRole('checkbox', { name: 'Show skeleton' }));
 
     expect(viewer.setSkeleton).toHaveBeenCalledWith(true);
+  });
+
+  it('stops drawing while its tab is hidden and resumes when shown', async () => {
+    const { session } = setup();
+    const tab = testTab(session);
+    tab.active = true;
+    renderWith(ModelPreview, session, { preview }, tab);
+    await waitFor(() => expect(viewer.showModels).toHaveBeenCalled());
+    await tick();
+
+    tab.active = false;
+    await tick();
+    expect(viewer.pause).toHaveBeenCalled();
+    tab.active = true;
+    await tick();
+    expect(viewer.resume).toHaveBeenCalled();
   });
 
   it('starts with the remembered ground and the default noon sky', async () => {

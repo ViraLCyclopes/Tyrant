@@ -1,16 +1,18 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import type { DataCompareResult } from '$lib/rpc/types.gen';
+  import { getTab } from '$lib/shell/tab.svelte';
   import { getSession } from '$lib/stores/session.svelte';
 
   let { type, names, onClose }: { type: string; names: string[]; onClose: () => void } = $props();
 
   const session = getSession();
+  const tab = getTab();
   let onlyDifferences = $state(true);
   let result = $state<DataCompareResult | null>(null);
 
   async function load() {
-    result = await session.safely(() => session.rpc.call('data.compare', { type, names, onlyDifferences }));
+    result = await tab.safely(() => session.rpc.call('data.compare', { type, names, onlyDifferences }));
   }
 
   onMount(load);

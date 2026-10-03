@@ -1,12 +1,14 @@
 <script lang="ts">
+  import { getTab } from '$lib/shell/tab.svelte';
   import { getSession } from '$lib/stores/session.svelte';
   import { dumperLabel, formatDate, outputLabel, summarizeDecompile, summarizeDump, summarizeIndex, summarizeRefresh } from '$lib/format';
 
   const session = getSession();
+  const tab = getTab();
 
   async function report<T>(work: Promise<T | null>, summary: (result: T) => string) {
     const result = await work;
-    if (result !== null) session.notice = summary(result);
+    if (result !== null) tab.info(summary(result));
   }
 
   async function newWorkspace() {
@@ -93,9 +95,9 @@
       </tbody>
     </table>
     <div class="row">
-      <button class="primary" onclick={() => report(session.refreshAll(), summarizeRefresh)} disabled={session.busy}>Refresh all</button>
-      <button onclick={() => report(session.runJob('decompile.run', {}, 'Decompile'), summarizeDecompile)} disabled={session.busy}>Decompile code</button>
-      <button onclick={() => report(session.runJob('assets.index', undefined, 'Asset index'), summarizeIndex)} disabled={session.busy}>Index assets</button>
+      <button class="primary" onclick={() => report(session.refreshAll(tab), summarizeRefresh)} disabled={session.busy}>Refresh all</button>
+      <button onclick={() => report(session.runJob('decompile.run', {}, 'Decompile', tab), summarizeDecompile)} disabled={session.busy}>Decompile code</button>
+      <button onclick={() => report(session.runJob('assets.index', undefined, 'Asset index', tab), summarizeIndex)} disabled={session.busy}>Index assets</button>
     </div>
   </section>
 
@@ -109,13 +111,13 @@
     {:else}
       <div class="row">
         {#if ws.dumper === 'installed'}
-          <button class="primary" onclick={() => report(session.runDump(), summarizeDump)} disabled={session.busy}>Run data dump</button>
+          <button class="primary" onclick={() => report(session.runDump(tab), summarizeDump)} disabled={session.busy}>Run data dump</button>
           {#if ws.framework === 'outdated'}
-            <button class="primary" onclick={() => report(session.runJob('dump.install', undefined, 'Update Tyrant in game'), (r) => r.message)} disabled={session.busy}>Update Tyrant in game</button>
+            <button class="primary" onclick={() => report(session.runJob('dump.install', undefined, 'Update Tyrant in game', tab), (r) => r.message)} disabled={session.busy}>Update Tyrant in game</button>
           {/if}
-          <button onclick={() => session.uninstallDumper()} disabled={session.busy}>Uninstall from game</button>
+          <button onclick={() => session.uninstallDumper(tab)} disabled={session.busy}>Uninstall from game</button>
         {:else}
-          <button class="primary" onclick={() => report(session.runJob('dump.install', undefined, 'Install Tyrant in game'), (r) => r.message)} disabled={session.busy}>Install Tyrant in game</button>
+          <button class="primary" onclick={() => report(session.runJob('dump.install', undefined, 'Install Tyrant in game', tab), (r) => r.message)} disabled={session.busy}>Install Tyrant in game</button>
         {/if}
       </div>
     {/if}
@@ -125,7 +127,7 @@
 <section class="card" aria-labelledby="support-heading">
   <h2 id="support-heading">Support</h2>
   <p class="hint">Diagnostics list versions, the game build and recent log lines (never game files), ready to paste into a bug report.</p>
-  <button onclick={() => session.copyDiagnostics()}>Copy diagnostics</button>
+  <button onclick={() => session.copyDiagnostics(tab)}>Copy diagnostics</button>
 </section>
 
 <style>

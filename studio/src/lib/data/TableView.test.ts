@@ -5,7 +5,7 @@ import type { DataQueryParams, DataQueryResult } from '$lib/rpc/types.gen';
 import { memoryStore } from '$lib/storage';
 import { FakePlatform } from '$lib/test/fakePlatform';
 import { FakeRpc } from '$lib/test/fakeRpc';
-import { renderWith, workspaceStatus } from '$lib/test/fixtures';
+import { messages, renderWith, testTab, workspaceStatus } from '$lib/test/fixtures';
 import { Session } from '$lib/stores/session.svelte';
 import TableView from './TableView.svelte';
 
@@ -114,7 +114,7 @@ describe('TableView', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Export CSV' }));
 
     await waitFor(() => expect(rpc.callsTo('data.export')[0]?.params).toEqual({ type: ANIMAL, format: 'csv', path: 'D:\\out\\AnimalData.csv' }));
-    await waitFor(() => expect(session.notice).toBe('Exported 2 objects to D:\\out\\AnimalData.csv.'));
+    await waitFor(() => expect(messages(session, 'tab-test').join('\n')).toContain('Exported 2 objects to D:\\out\\AnimalData.csv.'));
   });
 
   it('remembers the chosen columns per type', async () => {
@@ -132,13 +132,14 @@ describe('TableView', () => {
 
   it('typing a filter keeps an unrelated error on screen', async () => {
     const { rpc, session } = setup();
-    renderWith(TableView, session);
+    const tab = testTab(session);
+    renderWith(TableView, session, {}, tab);
     await screen.findByText('Herbivore');
-    session.error = new RpcError('No dump arrived.', 'DUMP_TIMEOUT');
+    tab.error = new RpcError('No dump arrived.', 'DUMP_TIMEOUT', 'REFRESH_WORKSPACE');
 
     await fireEvent.input(screen.getByRole('searchbox', { name: 'Filter rows' }), { target: { value: 'herb' } });
 
     await waitFor(() => expect(lastQuery(rpc)).toMatchObject({ filter: 'herb' }));
-    expect(session.error?.code).toBe('DUMP_TIMEOUT');
+    expect(tab.error?.code).toBe('DUMP_TIMEOUT');
   });
 });

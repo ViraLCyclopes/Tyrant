@@ -4,7 +4,7 @@ import { RpcError } from '$lib/rpc/client';
 import { memoryStore } from '$lib/storage';
 import { FakePlatform } from '$lib/test/fakePlatform';
 import { FakeRpc } from '$lib/test/fakeRpc';
-import { installInfo, workspaceStatus } from '$lib/test/fixtures';
+import { installInfo, messages, testTab, workspaceStatus } from '$lib/test/fixtures';
 import { Session, START_GAME_WARNING } from './session.svelte';
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -96,7 +96,7 @@ describe('Session', () => {
     expect(session.error?.code).toBe('DUMP_TIMEOUT');
   });
 
-  it('a cancelled job shows a notice, not an error', async () => {
+  it('a cancelled job without a tab is a core-wide record, not an error', async () => {
     const { rpc, session } = setup();
     rpc.on('decompile.run', () => {
       throw new RpcError('Cancelled.', 'CANCELLED');
@@ -105,7 +105,7 @@ describe('Session', () => {
     await session.runJob('decompile.run', {}, 'Decompile');
 
     expect(session.error).toBeNull();
-    expect(session.notice).toBe('Decompile was cancelled.');
+    expect(messages(session, null)).toContain('Decompile was cancelled.');
   });
 
   it('refuses a second job while one runs', async () => {
@@ -184,7 +184,7 @@ describe('Session', () => {
     await session.copyDiagnostics();
 
     expect(platform.copied).toEqual(['Tyrant diagnostics']);
-    expect(session.notice).toMatch(/copied/);
+    expect(messages(session, null).at(-1)).toMatch(/copied/);
   });
 
   it('PICK_GAME_FOLDER fixes the workspace that failed to open, not the one already open', async () => {
@@ -272,6 +272,68 @@ describe('Session', () => {
     expect(session.job?.cancel).not.toBeNull();
     finish({});
     await waitFor(() => expect(session.job).toBeNull());
-    expect(session.notice).toContain('Decompile code');
+    expect(messages(session, null).at(-1)).toContain('Decompile code');
+  });
+
+  it("logs a job's progress once per new message to the tab that started it", async () => {
+    const { rpc, session } = setup();
+    session.workspace = workspaceStatus();
+    rpc.on('decompile.run', (_p, onProgress) => {
+      onProgress?.(0.1, 'Reading');
+      onProgress?.(0.2, 'Reading');
+      onProgress?.(0.5, 'Writing');
+      return { assemblies: [], failed: [] };
+    });
+    rpc.on('workspace.status', () => workspaceStatus());
+    const tab = testTab(session);
+
+    await session.runJob('decompile.run', {}, 'Decompile', tab);
+
+    expect(messages(session, tab)).toEqual(['Decompile started.', 'Reading', 'Writing']);
+  });
+
+  it('a cancelled job is an info record in its tab, not an error', async () => {
+    const { rpc, session } = setup();
+    rpc.on('decompile.run', () => {
+      throw new RpcError('Cancelled.', 'CANCELLED');
+    });
+    rpc.on('workspace.status', () => workspaceStatus());
+    session.workspace = workspaceStatus();
+    const tab = testTab(session);
+
+    await session.runJob('decompile.run', {}, 'Decompile', tab);
+
+    expect(session.error).toBeNull();
+    expect(tab.error).toBeNull();
+    expect(messages(session, tab)).toContain('Decompile was cancelled.');
+  });
+
+  it('a failed job reports to its tab, not the session', async () => {
+    const { rpc, session } = setup();
+    rpc.on('assets.index', () => {
+      throw new RpcError('The game folder is gone.', 'GAME_NOT_FOUND', 'PICK_GAME_FOLDER');
+    });
+    rpc.on('workspace.status', () => workspaceStatus());
+    session.workspace = workspaceStatus();
+    const tab = testTab(session);
+
+    await session.runJob('assets.index', undefined, 'Asset index', tab);
+
+    expect(session.error).toBeNull();
+    expect(tab.error?.code).toBe('GAME_NOT_FOUND');
+  });
+
+  it('core log lines become records for every tab', () => {
+    const { rpc, session } = setup();
+    rpc.emitLog({ level: 'warn', message: 'The workspace now points at G:\\PK.' });
+    expect(session.log.records[0]).toMatchObject({ tab: null, level: 'warn', message: 'The workspace now points at G:\\PK.' });
+  });
+
+  it('a core restart keeps the log and reports once', () => {
+    const { rpc, session } = setup();
+    session.log.add({ level: 'info', message: 'before', tab: 'tab-1' });
+    rpc.emitExit({ code: 1, restarting: true, error: null });
+    expect(session.error?.code).toBe('SIDECAR_EXITED');
+    expect(session.log.records.map((r) => r.message)).toEqual(['before']);
   });
 });

@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { AssetPreview, AssetRow } from '$lib/rpc/types.gen';
+  import { getTab } from '$lib/shell/tab.svelte';
   import { getSession } from '$lib/stores/session.svelte';
   import ModelPreview from './ModelPreview.svelte';
   import TexturePreview from './TexturePreview.svelte';
@@ -7,6 +8,7 @@
   let { asset }: { asset: AssetRow } = $props();
 
   const session = getSession();
+  const tab = getTab();
   let preview = $state<AssetPreview | null>(null);
   let loading = $state(false);
   let sequence = 0;
@@ -23,7 +25,7 @@
   async function load(ref: string) {
     const mine = ++sequence;
     loading = true;
-    const r = await session.quietly(() => session.rpc.call('assets.preview', { ref }));
+    const r = await tab.quietly(() => session.rpc.call('assets.preview', { ref }));
     if (mine !== sequence) return;
     loading = false;
     preview = r;

@@ -2,11 +2,13 @@
   import { onMount } from 'svelte';
   import { debounce } from '$lib/debounce';
   import type { AssetCount, AssetListResult, AssetsSummary } from '$lib/rpc/types.gen';
+  import { getTab } from '$lib/shell/tab.svelte';
   import { getSession } from '$lib/stores/session.svelte';
   import AssetDetail from './AssetDetail.svelte';
 
   const PAGE_SIZE = 200;
   const session = getSession();
+  const tab = getTab();
 
   let summary = $state<AssetsSummary | null>(null);
   let bundles = $state<Record<string, AssetCount[]>>({});
@@ -25,13 +27,13 @@
   const lastPart = (name: string) => name.split('/').at(-1) ?? name;
 
   onMount(async () => {
-    summary = await session.quietly(() => session.rpc.call('assets.summary'));
+    summary = await tab.quietly(() => session.rpc.call('assets.summary'));
     await query();
   });
 
   async function query() {
     const mine = ++sequence;
-    const r = await session.quietly(() =>
+    const r = await tab.quietly(() =>
       session.rpc.call('assets.list', { filter: filter || null, type: type || null, group, bundle, page, pageSize: PAGE_SIZE }),
     );
     if (mine === sequence && r) result = r; // ignore answers to superseded queries
@@ -45,7 +47,7 @@
   async function toggleGroup(name: string) {
     expanded = expanded === name ? null : name;
     if (expanded === name && !bundles[name]) {
-      const r = await session.quietly(() => session.rpc.call('assets.bundles', { group: name }));
+      const r = await tab.quietly(() => session.rpc.call('assets.bundles', { group: name }));
       if (r) bundles[name] = r.bundles;
     }
   }
@@ -67,11 +69,11 @@
   }
 
   async function exportChecked() {
-    const r = await session.runJob('assets.export', { refs: checked }, 'Export assets');
+    const r = await session.runJob('assets.export', { refs: checked }, 'Export assets', tab);
     if (!r) return;
     const failures = r.failed === 0 ? '' : `, ${r.failed} failed (first: ${r.failures[0]?.name}: ${r.failures[0]?.error})`;
     const notes = r.notes?.length ? ` ${r.notes.join(' ')}` : '';
-    session.notice = `Exported ${r.exported} assets${failures}. Report: ${r.reportPath}${notes}`;
+    tab.info(`Exported ${r.exported} assets${failures}. Report: ${r.reportPath}${notes}`);
   }
 </script>
 

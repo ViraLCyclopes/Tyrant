@@ -31,12 +31,6 @@
     {#if session.error}
       <ErrorBanner error={session.error} onFix={(fix) => session.applyFix(fix)} onDismiss={() => (session.error = null)} />
     {/if}
-    {#if session.notice}
-      <div class="banner info" role="status">
-        <span class="text">{session.notice}</span>
-        <button class="ghost" aria-label="Dismiss" onclick={() => (session.notice = null)}>✕</button>
-      </div>
-    {/if}
     <main class="content">{@render children()}</main>
   </div>
 </div>

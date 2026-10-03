@@ -50,6 +50,9 @@ export interface ModelViewer {
   setSky(faces: string[] | null): void;
   /** Centres the model in the view, keeping the angle (Home / numpad .). */
   frame(): void;
+  /** Stops drawing (the tab is hidden); resume starts again. */
+  pause(): void;
+  resume(): void;
   dispose(): void;
 }
 
@@ -277,6 +280,11 @@ export async function showModels(canvas: HTMLCanvasElement, models: ModelFile[],
     setGround,
     setSky,
     frame,
+    pause: () => engine.stopRenderLoop(),
+    resume: () => {
+      engine.stopRenderLoop(); // never two loops
+      engine.runRenderLoop(() => scene.render());
+    },
     dispose: () => {
       for (const [type, listener] of listeners) canvas.removeEventListener(type, listener);
       observer.disconnect();

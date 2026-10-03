@@ -2,10 +2,12 @@
   import { onMount } from 'svelte';
   import { debounce } from '$lib/debounce';
   import type { LanguageInfo, LocalizationQueryResult } from '$lib/rpc/types.gen';
+  import { getTab } from '$lib/shell/tab.svelte';
   import { getSession } from '$lib/stores/session.svelte';
 
   const PAGE_SIZE = 100;
   const session = getSession();
+  const tab = getTab();
   let languages = $state<LanguageInfo[]>([]);
   let chosen = $state<string[]>([]);
   let filter = $state('');
@@ -17,7 +19,7 @@
   const nameOf = (code: string) => languages.find((l) => l.code === code)?.name ?? code;
 
   onMount(async () => {
-    const r = await session.quietly(() => session.rpc.call('data.languages'));
+    const r = await tab.quietly(() => session.rpc.call('data.languages'));
     if (!r) return;
     languages = r.languages;
     const english = r.languages.find((l) => l.code.toLowerCase().startsWith('en') || /english/i.test(l.name));
@@ -27,7 +29,7 @@
 
   async function query() {
     const mine = ++sequence;
-    const r = await session.quietly(() =>
+    const r = await tab.quietly(() =>
       session.rpc.call('data.localization', { filter: filter || null, languages: chosen, page, pageSize: PAGE_SIZE }),
     );
     if (mine === sequence && r) result = r; // ignore answers to superseded searches

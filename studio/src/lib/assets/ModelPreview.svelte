@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import type { AssetPreview, EnvironmentList } from '$lib/rpc/types.gen';
+  import { getTab } from '$lib/shell/tab.svelte';
   import { getSession } from '$lib/stores/session.svelte';
   import type { ModelViewer } from './viewer';
 
@@ -9,6 +10,7 @@
   const GROUND_KEY = 'tyrant.viewer.ground';
   const SKY_KEY = 'tyrant.viewer.sky';
   const session = getSession();
+  const tab = getTab();
   let canvas = $state<HTMLCanvasElement>();
   let failed = $state<string | null>(null);
   let notes = $state<string[]>([]);
@@ -18,7 +20,7 @@
   let ground = $state(session.store.get(GROUND_KEY) ?? 'lush-grass');
   let sky = $state(session.store.get(SKY_KEY) ?? 'noon');
   let skin = $state('');
-  let viewer: ModelViewer | null = null;
+  let viewer = $state.raw<ModelViewer | null>(null);
   const textured = $derived((preview.materials ?? []).some((m) => m.baseColor !== null || m.normal !== null));
   const ownSkin = $derived(preview.skins?.find((s) => s.current)?.ref ?? '');
 
@@ -48,6 +50,12 @@
       viewer?.dispose();
       viewer = null;
     };
+  });
+
+  // A hidden tab must not keep drawing.
+  $effect(() => {
+    if (tab.active) viewer?.resume();
+    else viewer?.pause();
   });
 
   function message(e: unknown): string {

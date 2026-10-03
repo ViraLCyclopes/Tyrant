@@ -1,9 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import type { OrphanSkinRow } from '$lib/rpc/types.gen';
+  import { getTab } from '$lib/shell/tab.svelte';
   import { getSession } from '$lib/stores/session.svelte';
 
   const session = getSession();
+  const tab = getTab();
   let orphans = $state<OrphanSkinRow[] | null>(null);
   let unreadable = $state<string | null>(null);
   let chosen = $state<string[]>([]);
@@ -23,9 +25,9 @@
   async function forget() {
     const message = `Forget ${chosen.length} skin number(s)? Animals in saved parks that still wear those skins will show their species' first skin, or whichever new skin later takes the number. The game must be closed.`;
     if (!(await session.platform.confirm(message, 'Clean up skin numbers'))) return;
-    const r = await session.safely(() => session.rpc.call('mods.forgetSkins', { keys: chosen }));
+    const r = await tab.safely(() => session.rpc.call('mods.forgetSkins', { keys: chosen }));
     if (!r) return;
-    session.notice = `Forgot ${chosen.length} skin number(s).`;
+    tab.info(`Forgot ${chosen.length} skin number(s).`);
     orphans = r.orphans;
     chosen = [];
   }
