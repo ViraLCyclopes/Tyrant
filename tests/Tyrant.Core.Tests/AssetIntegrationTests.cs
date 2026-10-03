@@ -26,6 +26,24 @@ public sealed class RealGameIndex
 public class AssetIntegrationTests(RealGameIndex real) : IClassFixture<RealGameIndex>
 {
     [SkippableFact]
+    public void Bundle_reader_writes_a_real_prefab_with_its_textures()
+    {
+        Skip.If(RealGameIndex.GameDir is null, "TYRANT_GAME_DIR not set");
+        var species = SpeciesCatalog.Find(SpeciesCatalog.FromIndex(real.Index), "Acrocanthosaurus");
+        var dir = Path.Combine(Path.GetTempPath(), "tyrant-tests", Guid.NewGuid().ToString("N"), "model");
+
+        var facts = new BundleAssetReader().WriteModel(real.Install, species.Prefab, dir, real.Index);
+
+        var body = facts.Materials.First(m => m.BaseColor is not null);
+        Assert.StartsWith("T_Acrocanthosaurus", body.BaseColor!.Name);
+        Assert.Equal("T_Acrocanthosaurus_N", body.Normal?.Name);
+        Assert.Empty(facts.TextureFailures);
+        Assert.True(File.Exists(Path.Combine(dir, "textures", body.BaseColor.Name + ".png")));
+        var glb = File.ReadAllBytes(facts.Files[0]);
+        Assert.Contains("\"uri\":\"textures/", System.Text.Encoding.UTF8.GetString(glb, 20, BitConverter.ToInt32(glb, 12)));
+    }
+
+    [SkippableFact]
     public void Prefab_renderers_carry_their_material_texture_slots()
     {
         Skip.If(RealGameIndex.GameDir is null, "TYRANT_GAME_DIR not set");

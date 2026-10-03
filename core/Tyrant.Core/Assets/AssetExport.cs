@@ -14,9 +14,9 @@ public sealed record AssetExportReport(DateTimeOffset CreatedUtc, string BuildGu
 
 /// <summary>
 /// Exports chosen assets by type — Texture2D → PNG, Mesh/GameObject → .glb, anything else → JSON — and writes a report
-/// with every asset's keys. One failure never stops the rest (spec §5).
+/// with every asset's keys. One failure never stops the rest (spec §5). Models are written with their textures when an index is given.
 /// </summary>
-public sealed class AssetExport(IAssetReader reader)
+public sealed class AssetExport(IAssetReader reader, AssetIndex? index = null)
 {
     private static readonly JsonSerializerOptions ReportJson = new(DataStore.ReadableJson) { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
@@ -54,7 +54,7 @@ public sealed class AssetExport(IAssetReader reader)
                 case "Mesh":
                 case "GameObject":
                     var dir = Unique(Path.Combine(ws.AssetsDir, "models", SafeName(asset)), asset, used);
-                    outputs = reader.WriteModel(install, asset, dir).Files;
+                    outputs = reader.WriteModel(install, asset, dir, index).Files;
                     break;
                 default:
                     var json = Unique(Path.Combine(ws.AssetsDir, "json", TextureExporter.Sanitize(asset.Type), $"{SafeName(asset)}_{asset.PathId}.json"), asset, used);

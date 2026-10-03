@@ -27,7 +27,8 @@ public sealed class SpeciesPackExporter
         var dir = Path.Combine(ws.AssetsDir, "species", species.Key);
         if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
         Directory.CreateDirectory(dir);
-        var modelResults = models.WriteModels(prefab, Path.Combine(dir, "models"));
+        var modelsDir = Path.Combine(dir, "models");
+        var modelResults = models.WriteModels(prefab, modelsDir, ModelTextures.Write(session, index, species.Prefab.Bundle, prefab, modelsDir));
 
         var list = SpeciesCatalog.TexturesFor(index, species);
         var textureResults = new List<TextureExportResult>();

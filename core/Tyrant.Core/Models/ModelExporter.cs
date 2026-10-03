@@ -28,7 +28,7 @@ public sealed class ModelExporter
         }
     }
 
-    public IReadOnlyList<ModelExportResult> WriteModels(PrefabModel model, string outputDir)
+    public IReadOnlyList<ModelExportResult> WriteModels(PrefabModel model, string outputDir, ModelTextures? textures = null)
     {
         var results = new List<ModelExportResult>();
         var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -40,7 +40,7 @@ public sealed class ModelExporter
             for (var n = 2; !used.Add(path); n++) path = Path.Combine(outputDir, $"{baseName}_{n}.glb");
             try
             {
-                GltfModelWriter.WriteGlb(model, renderer, path);
+                GltfModelWriter.WriteGlb(model, renderer, path, textures?.For(renderer));
                 results.Add(new ModelExportResult(name, renderer, true, path, null));
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
@@ -55,14 +55,16 @@ public sealed class ModelExporter
     }
 
     /// <summary>Writes &lt;workspace&gt;/assets/models/&lt;prefab&gt;/*.glb, replacing a previous export of the same prefab.</summary>
-    public IReadOnlyList<ModelExportResult> Export(GameInstall install, Workspace ws, AssetRecord prefab)
+    /// <param name="index">Finds the materials' textures; without it the models are written plain.</param>
+    public IReadOnlyList<ModelExportResult> Export(GameInstall install, Workspace ws, AssetRecord prefab, AssetIndex? index = null)
     {
         using var session = new AssetSession(install);
         var model = ReadPrefab(session, prefab);
         session.Release();
         var dir = Path.Combine(ws.AssetsDir, "models", TextureExporter.Sanitize(model.Name));
         if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
-        var results = WriteModels(model, dir);
+        var textures = index is null ? null : ModelTextures.Write(session, index, prefab.Bundle, model, dir);
+        var results = WriteModels(model, dir, textures);
         if (results.Any(r => r.Success)) ws.StampOutput(OutputName, GameFingerprint.Compute(install));
         return results;
     }

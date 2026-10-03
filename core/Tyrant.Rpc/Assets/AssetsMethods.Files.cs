@@ -47,7 +47,7 @@ public sealed partial class AssetsMethods
         var assets = p.Refs.Distinct(StringComparer.Ordinal).Select(r => index.Resolve(r)).ToList(); // an unknown ref fails before the job starts
         return _jobs.Start("Export assets", (progress, ct) =>
         {
-            var (report, reportPath) = new AssetExport(Reader).Run(install, ws, assets, progress, ct);
+            var (report, reportPath) = new AssetExport(Reader, index).Run(install, ws, assets, progress, ct);
             var failed = report.Items.Where(i => !i.Success).ToList();
             return new AssetExportRunResult(report.Items.Count - failed.Count, failed.Count, reportPath,
                 failed.Take(20).Select(i => new AssetExportFailure(i.Name, i.Type, i.Error ?? "")).ToList());

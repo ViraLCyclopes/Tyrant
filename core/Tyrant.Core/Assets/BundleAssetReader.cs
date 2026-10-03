@@ -34,36 +34,40 @@ public sealed class BundleAssetReader : IAssetReader
         return facts with { RebuiltNormal = result.RebuiltNormal };
     }
 
-    public ModelFacts WriteModel(GameInstall install, AssetRecord asset, string outputDir)
+    public ModelFacts WriteModel(GameInstall install, AssetRecord asset, string outputDir, AssetIndex? index = null)
     {
+        using var session = new AssetSession(install);
         PrefabModel model;
-        using (var session = new AssetSession(install))
+        try
         {
-            try
+            model = asset.Type switch
             {
-                model = asset.Type switch
-                {
-                    "GameObject" => new ModelExporter().ReadPrefab(session, asset),
-                    "Mesh" => StandaloneMesh.ToPrefab(MeshDecoder.Decode(session.Open(asset).BaseField)),
-                    _ => throw new TyrantException(TyrantErrorCode.AssetUnreadable,
-                        $"'{asset.Name}' is a {asset.Type}; only meshes and prefabs can be shown in 3D."),
-                };
-            }
-            catch (Exception ex) when (ex is InvalidDataException or FormatException or NotSupportedException)
-            {
-                // e.g. vertex data streamed in a .resS file, or a vertex format the decoder does not read yet
-                throw new TyrantException(TyrantErrorCode.AssetUnreadable, $"'{asset.Name}' could not be converted: {ex.Message}", FixAction.None, ex);
-            }
+                "GameObject" => new ModelExporter().ReadPrefab(session, asset),
+                "Mesh" => StandaloneMesh.ToPrefab(MeshDecoder.Decode(session.Open(asset).BaseField)),
+                _ => throw new TyrantException(TyrantErrorCode.AssetUnreadable,
+                    $"'{asset.Name}' is a {asset.Type}; only meshes and prefabs can be shown in 3D."),
+            };
         }
+        catch (Exception ex) when (ex is InvalidDataException or FormatException or NotSupportedException)
+        {
+            // e.g. vertex data streamed in a .resS file, or a vertex format the decoder does not read yet
+            throw new TyrantException(TyrantErrorCode.AssetUnreadable, $"'{asset.Name}' could not be converted: {ex.Message}", FixAction.None, ex);
+        }
+        session.Release();
         if (Directory.Exists(outputDir)) Directory.Delete(outputDir, recursive: true);
-        var results = new ModelExporter().WriteModels(model, outputDir);
+        var textures = index is null ? null : ModelTextures.Write(session, index, asset.Bundle, model, outputDir);
+        var results = new ModelExporter().WriteModels(model, outputDir, textures);
         var converted = results.Where(r => r.Success && r.Renderer is not null).ToList();
         if (converted.Count == 0)
             throw new TyrantException(TyrantErrorCode.AssetUnreadable,
                 $"'{asset.Name}' has no mesh that could be converted. {string.Join(" ", results.Select(r => r.Error))}".TrimEnd());
         return new ModelFacts(
             converted.Select(r => new ModelPart(r.OutputPath, r.Name, r.Renderer!.Mesh.VertexCount, r.Renderer.Mesh.TriangleCount, r.Renderer.IsSkinned)).ToList(),
-            results.Where(r => !r.Success).Select(r => r.Error ?? r.Name).ToList());
+            results.Where(r => !r.Success).Select(r => r.Error ?? r.Name).ToList())
+        {
+            Materials = textures?.Materials ?? [],
+            TextureFailures = textures?.Failures ?? [],
+        };
     }
 
     public void WriteJson(GameInstall install, AssetRecord asset, string jsonPath)

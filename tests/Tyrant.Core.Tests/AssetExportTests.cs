@@ -132,4 +132,17 @@ public class AssetExportTests
         Assert.Contains(".resS", report.Items[1].Error);
         Assert.True(File.Exists(reportPath));
     }
+
+    [Fact]
+    public void Models_are_written_with_the_index_so_their_textures_are_found()
+    {
+        var (game, install, ws) = Setup();
+        using var _ = game;
+        var reader = new FakeAssetReader();
+        var index = new AssetIndex();
+
+        new AssetExport(reader, index).Run(install, ws, [Asset("GameObject", "Stegosaurus", 2)], null, CancellationToken.None);
+
+        Assert.Same(index, reader.LastModelIndex);
+    }
 }

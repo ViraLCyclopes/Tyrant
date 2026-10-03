@@ -2,6 +2,7 @@ using Tyrant.Core.Assets;
 using Tyrant.Core.Errors;
 using Tyrant.Core.Install;
 using Tyrant.Core.Jobs;
+using Tyrant.Core.Models;
 using Tyrant.Core.Species;
 using Tyrant.Core.Workspaces;
 
@@ -21,6 +22,10 @@ public sealed class FakeAssetReader : IAssetReader
 
     /// <summary>Names of the parts WriteModel writes (150 vertices and 50 triangles each).</summary>
     public string[] ModelParts { get; set; } = ["Body", "Eyes"];
+    /// <summary>What WriteModel reports as the model's materials when it is given an index.</summary>
+    public IReadOnlyList<ResolvedMaterial> ModelMaterials { get; set; } = [];
+    public IReadOnlyList<string> ModelTextureFailures { get; set; } = [];
+    public AssetIndex? LastModelIndex { get; private set; }
     public int Textures => _textures;
     public int Models => _models;
     public int Json => _json;
@@ -41,14 +46,15 @@ public sealed class FakeAssetReader : IAssetReader
         return new TextureFacts(64, 32, "DXT5", 7, NormalMap.IsCandidate(texture.Name));
     }
 
-    public ModelFacts WriteModel(GameInstall install, AssetRecord asset, string outputDir)
+    public ModelFacts WriteModel(GameInstall install, AssetRecord asset, string outputDir, AssetIndex? index = null)
     {
         Interlocked.Increment(ref _models);
+        LastModelIndex = index;
         Fail(asset);
         if (Directory.Exists(outputDir)) Directory.Delete(outputDir, recursive: true);
         var parts = ModelParts.Select(name => new ModelPart(Path.Combine(outputDir, name + ".glb"), name, 150, 50, asset.Type == "GameObject")).ToList();
         foreach (var part in parts) Write(part.File, "glb");
-        return new ModelFacts(parts, []);
+        return new ModelFacts(parts, []) { Materials = index is null ? [] : ModelMaterials, TextureFailures = ModelTextureFailures };
     }
 
     public void WriteJson(GameInstall install, AssetRecord asset, string jsonPath)
