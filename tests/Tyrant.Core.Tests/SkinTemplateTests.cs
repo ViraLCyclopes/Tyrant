@@ -147,4 +147,21 @@ public class SkinTemplateTests
         Assert.False(Directory.Exists(Path.Combine(mod.Dir, "skins", "red")));
         Assert.Empty(ModProject.Open(ws, "red-spot-carcharo").Manifest.Skins);
     }
+
+    [Fact]
+    public void A_failed_template_keeps_files_that_were_in_the_skin_folder_before()
+    {
+        var (game, ws, install) = Setup();
+        using var _ = game;
+        var mod = ModProject.Create(ws, "red-spot-carcharo", null, null);
+        var folder = Path.Combine(mod.Dir, "skins", "red");
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(Path.Combine(folder, "my-art.psd"), "the user's own work"); // left from an entry removed by hand
+        var maleOnly = new[] { new SpeciesSkins("Carcharodontosaurus", false,
+            [new VanillaSkin(0, "Base", new Dictionary<string, string> { ["diffuse"] = MaleDiffuse }, new Dictionary<string, string>())]) };
+
+        Assert.Throws<TyrantException>(() => mod.AddSkin(ws, install, Index, new FakeAssetReader(), maleOnly, "Carcharodontosaurus", "Red", null, new SkinTemplateOptions(true, true, false)));
+
+        Assert.Equal(["my-art.psd"], Directory.GetFiles(folder).Select(Path.GetFileName));
+    }
 }

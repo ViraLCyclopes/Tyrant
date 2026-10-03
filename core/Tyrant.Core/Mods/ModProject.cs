@@ -146,6 +146,9 @@ public sealed class ModProject
         var named = based.Name != $"Skin {based.Index}" && target.Skins.Count(s => string.Equals(s.Name, based.Name, StringComparison.OrdinalIgnoreCase)) == 1;
         var entry = new SkinEntry { Id = id, Species = target.SpeciesId, Name = name.Trim(), Base = named ? based.Name : based.Index.ToString(System.Globalization.CultureInfo.InvariantCulture) };
         var slots = options.Maps ? TemplateSlots : TemplateSlots[..1];
+        var folder = Path.Combine(Dir, "skins", id);
+        var existed = Directory.Exists(folder);
+        var before = existed ? Directory.GetFiles(folder, "*", SearchOption.AllDirectories).ToHashSet(StringComparer.OrdinalIgnoreCase) : [];
         try
         {
             if (options.Male) entry.Male = Template(ws, install, index, reader, id, "male", based.Male, slots);
@@ -153,8 +156,14 @@ public sealed class ModProject
         }
         catch
         {
-            var folder = Path.Combine(Dir, "skins", id); // the template files written before the failure
-            try { if (Directory.Exists(folder)) Directory.Delete(folder, recursive: true); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+            try // remove the template files written before the failure; files that were already there stay
+            {
+                if (!existed) { if (Directory.Exists(folder)) Directory.Delete(folder, recursive: true); }
+                else
+                    foreach (var file in Directory.GetFiles(folder, "*", SearchOption.AllDirectories))
+                        if (!before.Contains(file)) File.Delete(file);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
             throw;
         }
         Manifest.Skins.Add(entry);
