@@ -36,7 +36,7 @@ public sealed partial class AssetsMethods(StudioSession session, JobManager jobs
             index.Warnings,
             index.Failures.Count,
             index.MissingBundles.Count,
-            index.Fingerprint != GameFingerprint.Compute(install),
+            index.Fingerprint != GameFingerprint.Compute(install) || index.IsOutdatedFormat,
             index.NowDownloaded(install).Count);
     }
 

@@ -48,6 +48,7 @@ public class AssetIndexTests
         Assert.Equal(TyrantErrorCode.AssetAmbiguous, ex.Code);
         Assert.Contains($"{Bundle}#10", ex.Message);
         Assert.Contains($"{Bundle}#11", ex.Message);
+        Assert.Contains("matches 2 assets", ex.Message);
     }
 
     [Fact]
@@ -172,5 +173,20 @@ public class AssetIndexTests
         var index = new AssetIndex { MissingBundles = ["StandaloneWindows64/dlc_now.bundle", "StandaloneWindows64/still_missing.bundle"] };
 
         Assert.Equal(["StandaloneWindows64/dlc_now.bundle"], index.NowDownloaded(install));
+    }
+
+    [Fact]
+    public void An_index_from_an_older_Tyrant_is_outdated_and_one_from_a_newer_Tyrant_is_refused()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "tyrant-tests", System.Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var older = Path.Combine(dir, "old.json");
+        var newer = Path.Combine(dir, "new.json");
+        File.WriteAllText(older, """{"schemaVersion":1,"assets":[]}""");
+        File.WriteAllText(newer, """{"schemaVersion":99,"assets":[]}""");
+
+        Assert.True(AssetIndex.Load(older).IsOutdatedFormat);
+        Assert.False(new AssetIndex().IsOutdatedFormat);
+        Assert.Contains("newer Tyrant", Assert.Throws<TyrantException>(() => AssetIndex.Load(newer)).Message);
     }
 }

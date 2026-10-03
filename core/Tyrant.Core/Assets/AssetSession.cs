@@ -47,7 +47,12 @@ public sealed class AssetSession : IDisposable
                 if (!bundle.file.IsAssetsFile(i)) continue;
                 var file = _manager.LoadAssetsFileFromBundle(bundle, i, false);
                 var info = file.file.AssetInfos.FirstOrDefault(a => a.PathId == asset.PathId);
-                if (info is not null) return (file, _manager.GetBaseField(file, info));
+                if (info is null) continue;
+                // A game update can reuse an object number for another kind of object: never hand back the wrong one.
+                if (Enum.TryParse<AssetClassID>(asset.Type, out var expected) && info.TypeId != (int)expected)
+                    throw new TyrantException(TyrantErrorCode.AssetNotFound,
+                        $"Object {asset.PathId} in '{asset.Bundle}' is no longer a {asset.Type} (game updated?). Re-run 'tyrant assets index'.", FixAction.RefreshWorkspace);
+                return (file, _manager.GetBaseField(file, info));
             }
         }
         catch (Exception ex) when (ex is not TyrantException and not OperationCanceledException)

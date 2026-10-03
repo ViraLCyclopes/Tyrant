@@ -28,7 +28,14 @@ public sealed class AssetIndex
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     private static readonly Regex GuidPattern = new("^[0-9a-f]{32}$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-    public int SchemaVersion { get; set; } = 2;
+    /// <summary>The index format this Tyrant writes (2: materials' archive map).</summary>
+    public const int CurrentSchemaVersion = 2;
+
+    public int SchemaVersion { get; set; } = CurrentSchemaVersion;
+
+    /// <summary>Made by an older Tyrant: it works, but newer features (e.g. textured previews) need a fresh index.</summary>
+    [JsonIgnore]
+    public bool IsOutdatedFormat => SchemaVersion < CurrentSchemaVersion;
     public GameFingerprint? Fingerprint { get; set; }
     public List<AssetRecord> Assets { get; set; } = [];
     public List<IndexFailure> Failures { get; set; } = [];
@@ -80,6 +87,8 @@ public sealed class AssetIndex
         {
             using var stream = File.OpenRead(path);
             var index = JsonSerializer.Deserialize<AssetIndex>(stream, Json) ?? throw Missing("The asset index is empty. Run 'tyrant assets index' again.");
+            if (index.SchemaVersion > CurrentSchemaVersion)
+                throw Missing($"The asset index was made by a newer Tyrant (format {index.SchemaVersion}). Update Tyrant, or run 'tyrant assets index' again.");
             index.Assets ??= [];
             index.Failures ??= [];
             index.MissingBundles ??= [];
@@ -134,7 +143,7 @@ public sealed class AssetIndex
                 $"No asset matches '{key}'{(type is null ? "" : $" with type {type}")}. Use 'tyrant assets list --filter <text>' to search."),
             1 => matches[0],
             _ => throw new TyrantException(TyrantErrorCode.AssetAmbiguous,
-                $"'{key}' matches several assets; pass --type or use one of these refs:{Environment.NewLine}"
+                $"'{key}' matches {matches.Count} assets; pass --type or use one of these refs{(matches.Count > 10 ? " (first 10)" : "")}:{Environment.NewLine}"
                 + string.Join(Environment.NewLine, matches.Take(10).Select(a => $"  {a.Type,-16} {a.Ref}"))),
         };
     }
