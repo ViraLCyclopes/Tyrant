@@ -6,13 +6,35 @@ which you install and remove explicitly).
 
 ## First run
 
-1. Start Tyrant. It finds Prehistoric Kingdom through Steam. If it cannot, click **Change game folder…** and pick
-   the folder that contains `Prehistoric Kingdom.exe`.
-2. Click **New workspace…** and choose an empty folder outside the game folder (for example `D:\Tyrant\workspace`).
-3. Click **Refresh all**. Tyrant decompiles the game code into `source/`, indexes the game's assets and, if the
-   dumper is installed, dumps the game data. Progress shows in the top bar; **Cancel** stops the current task.
+1. Start Tyrant. It opens on **Home** and finds Prehistoric Kingdom through Steam. If it cannot, click
+   **Find the game folder…** on Home and pick the folder that contains `Prehistoric Kingdom.exe`.
+2. Click **New workspace…** on Home and choose an empty folder outside the game folder (for example `D:\Tyrant\workspace`).
+3. Open the **Workspace** tab (its button in the dock at the bottom of Home) and click **Refresh all**. Tyrant
+   decompiles the game code into `source/`, indexes the game's assets and, if the dumper is installed, dumps the game
+   data. Progress shows in the status line at the bottom; **Cancel** stops the current task.
 
-## Home
+## Home and tabs
+
+Tyrant opens on **Home**: the game's art, a short intro (hide it with **✕ Hide this**; **i** brings it back) and the
+**dock** of tools at the bottom. Click a tool to open it in its own tab. Greyed tools are not built yet.
+
+- **Tabs** keep their place while you look at another tab. **Assets** and **Data** can be open more than once (**+**
+  opens another Assets tab); the other tools have one tab each.
+- **Ctrl+Tab** / **Ctrl+Shift+Tab** switch tabs, **Ctrl+W** closes one, **Ctrl+L** shows the log, **Ctrl+,** opens
+  Preferences.
+- The **File** menu opens or creates a workspace, lists recent ones and changes the game folder, from any tab.
+- Tyrant reopens your tabs next time (turn this off in **Edit ▸ Preferences**).
+
+## The log
+
+Each tab has a log (**View ▸ Show log**, or **Ctrl+L**): what that tab did, its warnings and errors, plus Tyrant's own
+messages. A tab whose log got a warning or error while you were elsewhere shows ⚠ or ✕ on its title. An error you can
+fix shows as a banner in its tab, with a button that fixes it. **Help ▸ Show studio.log** finds the full log file.
+
+## Workspace
+
+The game folder, your workspace and its outputs.
+
 
 - **Outputs** lists what the workspace contains and when it was made. After a game update the outputs are marked
   *stale*; run **Refresh all** again.
@@ -21,7 +43,7 @@ which you install and remove explicitly).
   the mods you install from the Mods tab. **Run data dump** starts the game through Steam, reads every game database at
   the main menu and closes the game again (about a minute). **Uninstall from game** removes exactly what was installed,
   including installed mods; MelonLoader stays if other mods use it.
-- **Copy diagnostics** puts versions, the game build and recent log lines (never game files) on the clipboard for
+- **Copy diagnostics** (also in the **Help** menu) puts versions, the game build and recent log lines (never game files) on the clipboard for
   bug reports.
 
 ## Assets
@@ -87,8 +109,9 @@ Needs an asset index (Workspace → **Index assets**, about 20 seconds; again af
 
 ## When something goes wrong
 
-- Errors appear in a red bar with a button that fixes the usual cause (pick the game folder, pick a workspace,
-  install the dumper, refresh outputs).
+- Errors appear in a red banner in the tab that caused them, with a button that fixes the usual cause (pick the game
+  folder, pick a workspace, install the dumper, refresh outputs). Other errors and warnings go to the tab's log, which
+  opens by itself when an error arrives.
 - If the background core stops, Tyrant restarts it (up to three times a minute) and reopens your workspace.
 - Logs: `<workspace>\logs\studio.log` (what Tyrant did in that workspace) and
   `%LOCALAPPDATA%\com.tyrant.toolkit\logs\core.log` (the core's own log). The dumper's log is

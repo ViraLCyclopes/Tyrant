@@ -6,14 +6,15 @@ change the game folder or start the game.
 Development build: `dotnet build Tyrant.slnx`, then in `studio/`: `npm run tauri dev`.
 Release build: `npm run build:app`, install `studio/src-tauri/target/release/bundle/nsis/Tyrant_0.1.0_x64-setup.exe`.
 
-1. The window opens; Home shows the detected game folder, its build and Steam app 666150.
+1. The window opens on Home: the two-sauropod art, the intro card and the dock. Open **Workspace** from the dock: it
+   shows the detected game folder, its build and Steam app 666150.
 2. **New workspace…** in an empty folder: the workspace path and an empty Outputs table appear.
    **Show in Explorer** opens it. Closing and reopening the app reopens the same workspace.
 3. Pick a folder inside the game folder as a new workspace: a red error explains why and offers **Pick workspace folder**.
-4. **Decompile code**: the top bar shows progress; Outputs lists six `Code:` rows marked current.
-5. **Index assets**: completes with an asset count in the green notice.
+4. **Decompile code**: the status line shows progress and the Workspace tab's log (Ctrl+L) lists each step; Outputs lists six `Code:` rows marked current.
+5. **Index assets**: completes with an asset count in the tab's log.
 6. **(game)** **Install dumper**: the status becomes *Installed*.
-7. **(game)** **Run data dump**: confirm the prompt; the game starts and closes by itself; the notice reports
+7. **(game)** **Run data dump**: confirm the prompt; the game starts and closes by itself; the log reports
    objects, types and languages; Outputs shows *Game data*.
 8. Data → Tables: AnimalData opens first; sort by a numeric column (numbers sort by value); filter `herbivore`;
    choose columns; tick two species and **Compare**; **Only differences** toggles.
@@ -21,7 +22,7 @@ Release build: `npm run build:app`, install `studio/src-tauri/target/release/bun
 10. Data → Browse: pick a type and an object; nested fields expand; **Copy JSON** works.
 11. Data → Localization: English shows; ticking another language adds a column; searching finds a term.
 12. End `tyrant.exe` in Task Manager: a red bar says the core restarted; the workspace is open again and
-    Home still shows its status.
+    the Workspace tab still shows its status.
 13. Start **Run data dump** and close the app while the game is starting: `tyrant.exe` exits within a few seconds
     and `<game>\UserData\tyrant.dumper.request.json` does not exist.
 14. Assets: with the asset index built, the Assets tab lists groups and assets; searching `carcharo` finds the
@@ -79,3 +80,15 @@ Release build: `npm run build:app`, install `studio/src-tauri/target/release/bun
     `MelonLoader\`, `Mods\`, `UserData\` and `UserLibs\` are gone from the game folder (if Tyrant installed them).
 43. Release build only: the installed app starts, finds the core next to itself (step 1 works) and installs the
     dumper from its own `sidecar\dumper` folder.
+
+**Shell (tabs, log, preferences):**
+
+- Open Assets twice (dock, then **+**): two tabs, the second titled *Assets (2)*. Filter one; switch away and back: the
+  filter is still there. **Ctrl+Tab** cycles; **Ctrl+W** closes; Home has no close button.
+- Start an asset export in one Assets tab and switch to Home: when it finishes, the Assets tab shows ⚠ if it had warnings.
+- **Ctrl+L** opens the log; drag its edge to resize; **View ▸ Log at the side** moves it; **Clear** empties only that tab.
+- **Edit ▸ Preferences**: untick *Show the intro on Home* (the card goes; **i** brings it back); untick *Reopen my tabs on
+  start*, restart: only Home opens. Tick it again, open a few tabs, restart: they come back.
+- **File ▸ Open workspace…** from the Data tab opens another workspace; **Help ▸ Show studio.log** reveals the log file;
+  **Help ▸ About Tyrant** shows the version.
+- Narrow the window to about 700 px: the tab strip scrolls, the intro and dock still fit.
