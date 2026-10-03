@@ -30,4 +30,12 @@ public class TyrantErrorTests
     {
         Assert.Equal(FixAction.None, new TyrantException(TyrantErrorCode.WorkspaceStale, "x").Fix);
     }
+
+    [Fact]
+    public void Fix_actions_have_a_wire_form()
+    {
+        Assert.Equal("PICK_GAME_FOLDER", FixAction.PickGameFolder.ToWire());
+        Assert.Null(FixAction.None.ToWire());
+        Assert.Equal("JOB_RUNNING", TyrantErrorCode.JobRunning.ToWire());
+    }
 }

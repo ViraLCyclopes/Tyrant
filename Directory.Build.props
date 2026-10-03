@@ -4,6 +4,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
+    <Version>0.1.0</Version>
   </PropertyGroup>
   <!-- The toolset targets Windows only (spec §1); Steam detection reads the registry. -->
   <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
