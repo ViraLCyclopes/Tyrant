@@ -216,4 +216,22 @@ public class GameModsTests
 
         Assert.Equal(1, Assert.Single(new GameMods().List(install)).Skins);
     }
+
+    [Fact]
+    public void A_reinstall_that_fails_leaves_the_installed_copy_whole()
+    {
+        var (game, install, ws) = Setup();
+        using var _ = game;
+        var red = Mod(ws, "red-spot", "T_A_D.png", "T_B_D.png", "T_C_D.png");
+        var mods = new GameMods();
+        mods.Install(install, red);
+        var installed = Path.Combine(ModLoaderInstaller.ModsDir(install), "red-spot", "textures");
+
+        using (new FileStream(Path.Combine(installed, "T_B_D.png"), FileMode.Open, FileAccess.Read, FileShare.None)) // e.g. open in an editor
+            Assert.Equal(Tyrant.Core.Errors.TyrantErrorCode.DumperInstallFailed, Assert.Throws<Tyrant.Core.Errors.TyrantException>(() => mods.Install(install, red)).Code);
+
+        Assert.True(File.Exists(Path.Combine(installed, "T_A_D.png")));
+        Assert.True(File.Exists(Path.Combine(installed, "T_C_D.png")));
+        Assert.Equal(new[] { "red-spot" }, new GameMods().List(install).Select(m => m.Id)); // no stray backup folder listed
+    }
 }

@@ -26,6 +26,7 @@ public sealed record InstalledMod(string Id, string Name, string Version, int Re
 public sealed class GameMods(Func<GameInstall, bool>? isGameRunning = null)
 {
     private const string Staging = ".installing";
+    private const string Previous = ".previous";
 
     public static string ListPath(GameInstall install) => Path.Combine(ModLoaderInstaller.RecordDir(install), ModList.FileName);
 
@@ -39,19 +40,30 @@ public sealed class GameMods(Func<GameInstall, bool>? isGameRunning = null)
 
         var target = Path.Combine(ModLoaderInstaller.ModsDir(install), mod.Id);
         var staging = target + Staging;
+        var previous = target + Previous;
+        var movedAside = false;
         try
         {
+            TryDeleteDirectory(previous); // left by an earlier install that could not clean up
             if (Directory.Exists(staging)) Directory.Delete(staging, recursive: true);
             CopyDirectory(mod.Dir, staging);
-            if (Directory.Exists(target)) Directory.Delete(target, recursive: true); // a reinstall leaves no stale files
+            // Swap whole folders: a move either happens completely or not at all, so a failure never leaves a half-deleted copy.
+            if (Directory.Exists(target))
+            {
+                Directory.Move(target, previous);
+                movedAside = true;
+            }
             Directory.Move(staging, target);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            try { if (Directory.Exists(staging)) Directory.Delete(staging, recursive: true); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+            if (movedAside && !Directory.Exists(target))
+                try { Directory.Move(previous, target); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+            TryDeleteDirectory(staging);
             throw new TyrantException(TyrantErrorCode.DumperInstallFailed,
-                $"Copying '{mod.Id}' into the game failed (is the game or an editor holding a file?): {ex.Message}", FixAction.None, ex);
+                $"Copying '{mod.Id}' into the game failed (is the game or an editor holding a file?); the installed copy was left as it was: {ex.Message}", FixAction.None, ex);
         }
+        TryDeleteDirectory(previous); // the old copy; a locked file there is cleaned up by the next install
 
         var entries = ReadList(install);
         var at = entries.FindIndex(e => e.Id == mod.Id);
@@ -89,7 +101,7 @@ public sealed class GameMods(Func<GameInstall, bool>? isGameRunning = null)
         if (!Directory.Exists(root)) return [];
         var entries = ReadList(install);
         var result = new List<InstalledMod>();
-        foreach (var dir in Directory.GetDirectories(root).Where(d => !d.EndsWith(Staging, StringComparison.Ordinal)).Order(StringComparer.Ordinal))
+        foreach (var dir in Directory.GetDirectories(root).Where(d => !d.EndsWith(Staging, StringComparison.Ordinal) && !d.EndsWith(Previous, StringComparison.Ordinal)).Order(StringComparer.Ordinal))
         {
             var folder = Path.GetFileName(dir);
             var enabled = entries.FirstOrDefault(e => e.Id == folder)?.Enabled ?? true;
@@ -162,6 +174,18 @@ public sealed class GameMods(Func<GameInstall, bool>? isGameRunning = null)
         HashReads.AddOrUpdate(Path.GetFullPath(path), 1, (_, n) => n + 1);
         FileHashCache[path] = (info.Length, info.LastWriteTimeUtc, hash);
         return hash;
+    }
+
+    private static void TryDeleteDirectory(string dir)
+    {
+        try
+        {
+            if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // still in use; the next install retries
+        }
     }
 
     private static void CopyDirectory(string from, string to)

@@ -68,6 +68,8 @@ namespace Tyrant.Framework.Core
             foreach (var dir in System.IO.Directory.GetDirectories(modsDir).OrderBy(d => d, StringComparer.Ordinal))
             {
                 var folder = Path.GetFileName(dir);
+                if (folder.EndsWith(".installing", StringComparison.Ordinal) || folder.EndsWith(".previous", StringComparison.Ordinal))
+                    continue; // Tyrant's own working copies while it installs a mod, never mods themselves
                 var path = Path.Combine(dir, ModManifest.FileName);
                 try
                 {

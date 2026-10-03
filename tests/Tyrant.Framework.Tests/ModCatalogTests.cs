@@ -129,4 +129,19 @@ public class ModCatalogTests
     {
         Assert.False(ModPaths.IsInside(@"C:\m\bad" + "\0" + "name.dll", @"C:\m")); // a NUL makes the path unresolvable
     }
+
+    [Fact]
+    public void Tyrants_own_working_folders_are_not_mods()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "tyrant-tests", Guid.NewGuid().ToString("N"));
+        foreach (var folder in new[] { "red-spot", "red-spot.previous", "red-spot.installing" })
+        {
+            Directory.CreateDirectory(Path.Combine(dir, folder));
+            File.WriteAllText(Path.Combine(dir, folder, "mod.json"), """{ "format": 1, "id": "red-spot" }""");
+        }
+
+        var sources = ModCatalog.Discover(dir);
+
+        Assert.Equal(["red-spot"], sources.Select(s => s.Folder));
+    }
 }
