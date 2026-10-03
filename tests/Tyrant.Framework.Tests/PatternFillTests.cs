@@ -51,10 +51,42 @@ public class PatternFillTests
         Assert.True(reds.Min() < 0.3f && reds.Max() > 0.7f);
     }
 
+    private static StoredPattern Stored(Rgb a, float alphaA, Rgb b, float alphaB, float strength, float softness) =>
+        new(a, alphaA, b, alphaB, C("#000000"), 0f, C("#000000"), 0f, strength, softness);
+
     [Fact]
-    public void Stored_colours_are_kept_and_unset_ones_are_filled()
+    public void Stored_values_inside_the_palette_and_ranges_are_kept_on_load()
     {
-        Assert.True(PatternFill.NeedsColours(0f)); // a vanilla normal animal: the game never set pattern colours
-        Assert.False(PatternFill.NeedsColours(1f)); // set before (saved): keep them on load
+        var set = new SkinColorSet { A = [C("#000000"), C("#ffffff")], B = [C("#20c040")], Strength = new FloatRange(0.6f, 0.8f), Softness = new FloatRange(0.1f, 0.4f) };
+        var grey = C("#808080");
+
+        var v = PatternFill.Keep(Stored(grey, 1f, C("#20c040"), 1f, 0.7f, 0.2f), set, new Random(3));
+
+        Assert.Equal(grey, v.A); // on the black-to-white ramp: unchanged
+        Assert.Equal((0.7f, 0.2f), (v.Strength, v.Softness));
+    }
+
+    [Fact]
+    public void A_half_mixed_offspring_gets_its_missing_values_drawn_not_black_or_zero()
+    {
+        var set = new SkinColorSet { A = [C("#3060ff")], B = [C("#20c040")] }; // breeding mixed fields with a vanilla parent: B, strength, softness are 0
+
+        var v = PatternFill.Keep(Stored(C("#3060ff"), 1f, C("#000000"), 0f, 0f, 0f), set, new Random(3));
+
+        Assert.Equal(C("#20c040"), v.B);
+        Assert.InRange(v.Strength, PatternFill.DefaultStrength.Min, PatternFill.DefaultStrength.Max);
+        Assert.InRange(v.Softness, PatternFill.DefaultSoftness.Min, PatternFill.DefaultSoftness.Max);
+        Assert.Equal(PatternFill.DefaultSecondary, v.Secondary);
+    }
+
+    [Fact]
+    public void A_changed_palette_and_ranges_pull_stored_values_in()
+    {
+        var set = new SkinColorSet { A = [C("#ff0000")], Strength = new FloatRange(0.6f, 0.8f), Softness = new FloatRange(0.1f, 0.4f) }; // the modder changed A to red
+
+        var v = PatternFill.Keep(Stored(C("#3060ff"), 1f, C("#3060ff"), 1f, 0.95f, 1f), set, new Random(3)); // e.g. the Nursery forced softness to 1
+
+        Assert.Equal(C("#ff0000"), v.A);
+        Assert.Equal((0.8f, 0.4f), (v.Strength, v.Softness));
     }
 }

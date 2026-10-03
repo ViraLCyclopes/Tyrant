@@ -1,12 +1,22 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Reflection.Emit;
 using HarmonyLib;
 using Tyrant.Framework.Core;
 using UnityEngine;
 
 namespace Tyrant.Framework
 {
+    /// <summary>
+    /// Pattern colours on normal animals of a pattern-coloured skin. The game keeps an animal's colours in the
+    /// AnimalSkinVariationRuntime struct and resets its genetics colouring for normal animals in two places:
+    /// ClampValues (on load, vivarium load and breeding, right before the material is built from it) and the Nursery's
+    /// UpdateAnimalPreview (on every skin pick, before the preview and placement read the VirtualAnimal). A transpiler on
+    /// ClampValues and prefixes where the preview and placement read the VirtualAnimal put the colours back. A struct cannot be
+    /// patched through an object __instance (and __args changes to it are not written back), hence the transpiler.
+    /// </summary>
     internal static partial class SkinColorsModule
     {
         private static readonly System.Random Random = new System.Random();
@@ -14,13 +24,23 @@ namespace Tyrant.Framework
 
         public static void Patch(HarmonyLib.Harmony harmony)
         {
-            Hook(harmony, "PrehistoricKingdom.NurseryMenuV2", m => m.Name == "GenerateNewSkinVariation", nameof(AfterNurseryVariation), postfix: true);
-            Hook(harmony, "PrehistoricKingdom.VirtualAnimal", m => m.Name == "CreateVirtualAnimal" && m.IsStatic && m.ReturnType.Name == "VirtualAnimal", nameof(AfterCreateVirtualAnimal), postfix: true);
-            foreach (var type in new[] { "PrehistoricKingdom.Animal", "PrehistoricKingdom.VivariumAnimal" })
-                Hook(harmony, type, m => m.Name == "set_SkinVariationRuntime", nameof(BeforeSetVariation), postfix: false);
+            Hook(harmony, "PrehistoricKingdom.NurseryMenuV2", m => m.Name == "GenerateNewSkinVariation", nameof(AfterNurseryVariation), HookKind.Postfix);
+            Hook(harmony, "PrehistoricKingdom.VirtualAnimal",
+                m => m.Name == "CreateVirtualAnimal" && m.IsStatic && m.GetParameters().FirstOrDefault()?.ParameterType.Name == "BaseAnimalData",
+                nameof(AfterCreateVirtualAnimal), HookKind.Postfix);
+            Hook(harmony, "PrehistoricKingdom.AnimalPreviewComponent", m => m.Name == "CreateAnimalPreview" || m.Name == "UpdateAnimalPreview", nameof(BeforePreview), HookKind.Prefix);
+            Hook(harmony, "PrehistoricKingdom.AnimalPlacementPipeline", m => m.Name == "ApplyPostPlacementStartStateForNewPlacement", nameof(BeforePlacement), HookKind.Prefix);
+            Hook(harmony, "PrehistoricKingdom.AnimalSkinVariationRuntime", m => m.Name == "ClampValues" && m.GetParameters().Length == 2, nameof(ClampTranspiler), HookKind.Transpiler);
         }
 
-        private static void Hook(HarmonyLib.Harmony harmony, string typeName, Func<MethodInfo, bool> match, string patch, bool postfix)
+        private enum HookKind
+        {
+            Prefix,
+            Postfix,
+            Transpiler,
+        }
+
+        private static void Hook(HarmonyLib.Harmony harmony, string typeName, Func<MethodInfo, bool> match, string patch, HookKind kind)
         {
             try
             {
@@ -33,8 +53,11 @@ namespace Tyrant.Framework
                 }
                 var harmonyMethod = new HarmonyMethod(typeof(SkinColorsModule), patch);
                 foreach (var method in methods)
-                    if (postfix) harmony.Patch(method, postfix: harmonyMethod);
-                    else harmony.Patch(method, prefix: harmonyMethod);
+                {
+                    if (kind == HookKind.Prefix) harmony.Patch(method, prefix: harmonyMethod);
+                    else if (kind == HookKind.Postfix) harmony.Patch(method, postfix: harmonyMethod);
+                    else harmony.Patch(method, transpiler: harmonyMethod);
+                }
             }
             catch (Exception ex)
             {
@@ -42,12 +65,19 @@ namespace Tyrant.Framework
             }
         }
 
-        /// <summary>The Nursery made new colours for a VirtualAnimal: give a pattern skin's normal animal its pattern colours.</summary>
-        private static void AfterNurseryVariation(object animal) => FillVirtual(animal);
+        // ---- Nursery and spawns (VirtualAnimal is a class) ----
 
-        private static void AfterCreateVirtualAnimal(object __result) => FillVirtual(__result);
+        /// <summary>The Nursery made new colours: give a pattern skin's normal animal new pattern colours.</summary>
+        private static void AfterNurseryVariation(object animal) => FillVirtual(animal, keepStored: false);
 
-        private static void FillVirtual(object? animal)
+        private static void AfterCreateVirtualAnimal(object __result) => FillVirtual(__result, keepStored: false);
+
+        /// <summary>UpdateAnimalPreview resets the genetics colouring on every skin pick: put it back before the preview reads it.</summary>
+        private static void BeforePreview(object animal) => FillVirtual(animal, keepStored: true);
+
+        private static void BeforePlacement(object virtualAnimal) => FillVirtual(virtualAnimal, keepStored: true);
+
+        private static void FillVirtual(object? animal, bool keepStored)
         {
             try
             {
@@ -59,58 +89,97 @@ namespace Tyrant.Framework
                 var field = AccessTools.Field(animal.GetType(), "variationRuntimeData");
                 if (field == null) return;
                 var box = field.GetValue(animal);
-                Fill(box, pattern, asset!, keepStored: false);
+                Fill(box, pattern, asset!, keepStored);
                 field.SetValue(animal, box);
             }
             catch (Exception ex)
             {
-                FrameworkMod.Log.Warning("Pattern colours could not be given to a new animal: " + ex.GetBaseException().Message);
+                FrameworkMod.Log.Warning("Pattern colours could not be given to an animal in the Nursery: " + ex.GetBaseException().Message);
             }
         }
 
-        /// <summary>
-        /// Breeding and loading reset geneticsOn for normal animals (ClampValues) before this setter: turn it back on for a pattern
-        /// skin, keeping colours stored before and filling them for an animal that never had them.
-        /// </summary>
-        private static void BeforeSetVariation(object __instance, object[] __args)
+        // ---- Load, vivarium load and breeding: ClampValues ----
+
+        /// <summary>Before every return of ClampValues: this = AfterClamp((object)this, variationAsset, (object)skinType).</summary>
+        private static IEnumerable<CodeInstruction> ClampTranspiler(IEnumerable<CodeInstruction> instructions, MethodBase original)
+        {
+            var runtime = original.DeclaringType!;
+            var skinType = original.GetParameters()[1].ParameterType;
+            var after = AccessTools.Method(typeof(SkinColorsModule), nameof(AfterClamp));
+            foreach (var instruction in instructions)
+            {
+                if (instruction.opcode == OpCodes.Ret)
+                {
+                    var first = new CodeInstruction(OpCodes.Ldarg_0);
+                    first.labels.AddRange(instruction.labels); // jumps to the return now run our code first
+                    instruction.labels.Clear();
+                    first.blocks.AddRange(instruction.blocks);
+                    instruction.blocks.Clear();
+                    yield return first;
+                    yield return new CodeInstruction(OpCodes.Ldarg_0);
+                    yield return new CodeInstruction(OpCodes.Ldobj, runtime);
+                    yield return new CodeInstruction(OpCodes.Box, runtime);
+                    yield return new CodeInstruction(OpCodes.Ldarg_1);
+                    yield return new CodeInstruction(OpCodes.Ldarg_2);
+                    yield return new CodeInstruction(OpCodes.Box, skinType);
+                    yield return new CodeInstruction(OpCodes.Call, after);
+                    yield return new CodeInstruction(OpCodes.Unbox_Any, runtime);
+                    yield return new CodeInstruction(OpCodes.Stobj, runtime);
+                }
+                yield return instruction;
+            }
+        }
+
+        /// <summary>ClampValues just turned the genetics colouring off for a normal animal: back on for a pattern skin, stored colours kept.</summary>
+        private static object AfterClamp(object runtime, object asset, object skinType)
         {
             try
             {
-                if (__args.Length == 0 || __args[0] == null || !IsBase(Traverse.Create(__instance).Property("SkinType").GetValue())) return;
-                var skin = Traverse.Create(__instance).Property("SkinData").GetValue();
-                var male = string.Equals(Traverse.Create(__instance).Property("Sex").GetValue()?.ToString(), "Male", StringComparison.Ordinal);
-                var asset = skin == null ? null : Traverse.Create(skin).Field(male ? "maleVariationData" : "femaleVariationData").GetValue();
-                if (!TryGetPattern(asset, out var pattern)) return;
-                var box = __args[0];
-                Fill(box, pattern, asset!, keepStored: true);
-                __args[0] = box;
-                if (!_keptAnnounced) FrameworkMod.Log.Msg("Skin pattern colours are applied to normal animals (and kept on load).");
+                if (!IsBase(skinType) || !TryGetPattern(asset, out var pattern)) return runtime;
+                Fill(runtime, pattern, asset, keepStored: true);
+                if (!_keptAnnounced) FrameworkMod.Log.Msg("Skin pattern colours were kept for a loaded or bred animal.");
                 _keptAnnounced = true;
             }
             catch (Exception ex)
             {
                 FrameworkMod.Log.Warning("Pattern colours could not be kept for an animal: " + ex.GetBaseException().Message);
             }
+            return runtime;
         }
+
+        // ---- shared ----
 
         /// <summary>Writes pattern colours into a boxed AnimalSkinVariationRuntime and turns the genetics colouring on.</summary>
         private static void Fill(object box, SkinColorSet pattern, object asset, bool keepStored)
         {
             var type = box.GetType();
-            var storedA = AccessTools.Field(type, "patternColorA")?.GetValue(box) is Color c ? c.a : 0f;
-            if (!keepStored || PatternFill.NeedsColours(storedA))
+            PatternValues v;
+            if (keepStored)
             {
-                var v = PatternFill.Create(pattern, Random);
-                var (eyeFeather, secondaryFeather) = Feathers(asset);
-                AccessTools.Field(type, "patternColorA")?.SetValue(box, ToColor(v.A));
-                AccessTools.Field(type, "patternColorB")?.SetValue(box, ToColor(v.B));
-                AccessTools.Field(type, "patternColorSecondary")?.SetValue(box, ToColor(v.Secondary));
-                AccessTools.Field(type, "patternColorEye")?.SetValue(box, ToColor(v.Eye));
-                AccessTools.Field(type, "baseOverride")?.SetValue(box, v.Strength);
-                AccessTools.Field(type, "patternsFeathers")?.SetValue(box, new Vector3(v.Softness, eyeFeather, secondaryFeather));
+                var (a, alphaA) = Read(box, "patternColorA");
+                var (b, alphaB) = Read(box, "patternColorB");
+                var (secondary, alphaSecondary) = Read(box, "patternColorSecondary");
+                var (eye, alphaEye) = Read(box, "patternColorEye");
+                var strength = AccessTools.Field(type, "baseOverride")?.GetValue(box) is float s ? s : 0f;
+                var softness = AccessTools.Field(type, "patternsFeathers")?.GetValue(box) is Vector3 f ? f.x : 0f;
+                v = PatternFill.Keep(new StoredPattern(a, alphaA, b, alphaB, secondary, alphaSecondary, eye, alphaEye, strength, softness), pattern, Random);
             }
+            else
+            {
+                v = PatternFill.Create(pattern, Random);
+            }
+            var (eyeFeather, secondaryFeather) = Feathers(asset);
+            AccessTools.Field(type, "patternColorA")?.SetValue(box, ToColor(v.A));
+            AccessTools.Field(type, "patternColorB")?.SetValue(box, ToColor(v.B));
+            AccessTools.Field(type, "patternColorSecondary")?.SetValue(box, ToColor(v.Secondary));
+            AccessTools.Field(type, "patternColorEye")?.SetValue(box, ToColor(v.Eye));
+            AccessTools.Field(type, "baseOverride")?.SetValue(box, v.Strength);
+            AccessTools.Field(type, "patternsFeathers")?.SetValue(box, new Vector3(v.Softness, eyeFeather, secondaryFeather));
             AccessTools.Field(type, "geneticsOn")?.SetValue(box, true);
         }
+
+        private static (Rgb Colour, float Alpha) Read(object box, string field) =>
+            AccessTools.Field(box.GetType(), field)?.GetValue(box) is Color c ? (new Rgb(c.r, c.g, c.b), c.a) : (default, 0f);
 
         private static object? AssetOf(object? speciesData, int skinIndex, object? sex)
         {

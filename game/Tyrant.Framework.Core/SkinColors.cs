@@ -244,5 +244,20 @@ namespace Tyrant.Framework.Core
             var b = stops[i + 1];
             return new Rgb(a.R + (b.R - a.R) * f, a.G + (b.G - a.G) * f, a.B + (b.B - a.B) * f);
         }
+
+        /// <summary>The point of the ramp closest to a colour (32 steps, as the game snaps mutation colours to their gradients).</summary>
+        public static Rgb Nearest(IReadOnlyList<Rgb> stops, Rgb colour)
+        {
+            var best = stops[0];
+            var bestDistance = double.MaxValue;
+            for (var i = 0; i <= 32; i++)
+            {
+                var c = Sample(stops, i / 32.0);
+                double dr = c.R - colour.R, dg = c.G - colour.G, db = c.B - colour.B;
+                var distance = dr * dr + dg * dg + db * db;
+                if (distance < bestDistance) (best, bestDistance) = (c, distance);
+            }
+            return best;
+        }
     }
 }
