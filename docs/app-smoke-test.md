@@ -54,8 +54,19 @@ Release build: `npm run build:app`, install `studio/src-tauri/target/release/bun
 27. **(game)** Start the game, spawn a male Carcharodontosaurus with the alt1 skin: the red spots show. `MelonLoader\Latest.log` has
     `red-spot-carcharo 1.0.0: 1 texture replacement(s)` and `replaced T_carcharodontosaurus_alt1_male_D (_AdultDiffuse) on …`.
 28. **(game)** Close the game, untick **On**, start again: vanilla skin. **Remove from game**: the folder is gone.
-29. **Copy diagnostics** and paste: versions, build, workspace and log tails appear.
-30. **(game)** **Uninstall from game**: the notice says the game folder is back to vanilla; `version.dll`,
+29. **(game)** Home → **Run data dump** (once). Species → Carcharodontosaurus → **Add a skin…** → name `Red spot`, base `Alt 1`, Male only,
+    mod `red-spot-carcharo` → **Add skin**: `mods\red-spot-carcharo\skins\red-spot\male_D.png` exists. Paint on it.
+30. Mods → **Check** (no errors) → **Install to game**.
+31. **(game)** Start the game → Nursery → Carcharodontosaurus → male: a new swatch "Red spot" is next to the vanilla ones; choosing it shows
+    your texture; vanilla skins are unchanged. `MelonLoader\Latest.log` has `Carcharodontosaurus: 1 skin(s) added.` and
+    `skin red-spot-carcharo/red-spot (male) on …`.
+32. **(game)** Place the animal, save, quit, load: it still wears Red spot.
+33. **(game)** Close the game, **Remove from game**, start and load: the park loads; the animal shows the first vanilla skin. Reinstall:
+    Red spot is back.
+34. **(game)** With 6+ skins for one species (add more skins), the Nursery skin row scrolls sideways.
+35. Mods → **Clean up skin numbers…** after removing a skin mod: it is listed; **Forget selected** (confirm) clears it.
+36. **Copy diagnostics** and paste: versions, build, workspace and log tails appear.
+37. **(game)** **Uninstall from game**: the notice says the game folder is back to vanilla; `version.dll`,
     `MelonLoader\`, `Mods\`, `UserData\` and `UserLibs\` are gone from the game folder (if Tyrant installed them).
-31. Release build only: the installed app starts, finds the core next to itself (step 1 works) and installs the
+38. Release build only: the installed app starts, finds the core next to itself (step 1 works) and installs the
     dumper from its own `sidecar\dumper` folder.

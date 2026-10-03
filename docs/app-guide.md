@@ -60,6 +60,17 @@ Needs an asset index (Home → **Index assets**, about 20 seconds; again after a
   - **Install to game** copies the mod into the game. The first time, it also installs MelonLoader and Tyrant's framework, after asking.
   - **On** switches a mod for the next game start. **Remove from game** takes it out again.
   - *Changed since install* means you edited the workspace copy; install again to update the game.
+- **Add a skin:**
+  1. On the Species tab, click **Add a skin…** for a species.
+  2. Fill in the form:
+     - pick a mod (or **New mod…**) and name the skin;
+     - choose the vanilla skin to start from and which sexes;
+     - optionally tick **Also normal, extra and pattern maps**.
+  3. Tyrant copies that skin's textures into `mods\<id>\skins\<skin>\`. Edit them, then **Check** and **Install to game**.
+  4. In the game's Nursery the new skin appears next to the vanilla ones, and the row scrolls when there are many.
+  - This needs a data dump (Home → **Run data dump**).
+- **Clean up skin numbers…** lists skins whose mods are gone; forget the ones you won't reinstall.
+- **Update Tyrant in game** (Home) appears after a Tyrant update; installing a mod also updates the framework.
 - **Start the game.** `MelonLoader\Latest.log` lists the mods Tyrant loaded and each texture it replaced.
 - **The file format** is described in `docs/mod-format.md`.
 

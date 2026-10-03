@@ -81,10 +81,12 @@ Mods (texture replacements; format in [docs/mod-format.md](docs/mod-format.md)):
 ```powershell
 dotnet run --project cli/Tyrant.Cli -- mod new red-spot-carcharo --name "Red-spot Carcharodontosaurus" -w D:\tyrant-workspace
 dotnet run --project cli/Tyrant.Cli -- mod replace red-spot-carcharo T_carcharodontosaurus_alt1_male_D [your.png] -w D:\tyrant-workspace
+dotnet run --project cli/Tyrant.Cli -- mod add-skin red-spot-carcharo Carcharodontosaurus --name "Red spot" --base "Alt 1" -w D:\tyrant-workspace   # a new skin from a vanilla template (needs a data dump)
 dotnet run --project cli/Tyrant.Cli -- mod check red-spot-carcharo -w D:\tyrant-workspace
 dotnet run --project cli/Tyrant.Cli -- mod install red-spot-carcharo -w D:\tyrant-workspace   # adds MelonLoader + Tyrant's framework if needed
 dotnet run --project cli/Tyrant.Cli -- mod disable red-spot-carcharo -w D:\tyrant-workspace   # also: enable, remove
 dotnet run --project cli/Tyrant.Cli -- mod list -w D:\tyrant-workspace
+dotnet run --project cli/Tyrant.Cli -- mod clean-skins -w D:\tyrant-workspace   # list skin numbers left by removed mods; --forget <mod/skin> frees one
 ```
 
 `dump install` and `mod install` are the only commands that add files to the game folder (MelonLoader, Tyrant's
