@@ -15,6 +15,12 @@ public enum PkErrorCode
     AssetAmbiguous,
     OutputInGameFolder,
     AssetUnreadable,
+    DumperNotInstalled,
+    DumperInstallFailed,
+    BepInExConflict,
+    DumpTimeout,
+    DumpFailed,
+    DataMissing,
 }
 
 /// <summary>A suggested remedy the UI can render as a button.</summary>
