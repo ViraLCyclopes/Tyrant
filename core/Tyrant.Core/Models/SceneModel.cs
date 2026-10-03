@@ -28,10 +28,19 @@ public sealed class SkeletonNode(string name, Vector3 localPosition, Quaternion 
     }
 }
 
+/// <summary>A texture a material uses; Archive names the serialized file holding it ("archive:/CAB-…"), null for the material's own file.</summary>
+public sealed record TextureSlot(string Slot, string? Archive, long PathId);
+
+/// <summary>A renderer's material: its name and every slot that points at a texture.</summary>
+public sealed record MaterialModel(string Name, IReadOnlyList<TextureSlot> Textures);
+
 /// <summary>One mesh renderer of a prefab; Bones is empty for static (MeshFilter) meshes.</summary>
 public sealed record RendererModel(string Name, MeshData Mesh, IReadOnlyList<SkeletonNode> Bones, SkeletonNode Owner)
 {
     public bool IsSkinned => Bones.Count > 0;
+
+    /// <summary>One material per sub-mesh, in Unity's order; empty when none could be read (e.g. a bare mesh).</summary>
+    public IReadOnlyList<MaterialModel> Materials { get; init; } = [];
 }
 
 /// <summary>A prefab's hierarchy and decodable renderers; Failures lists renderers that could not be decoded.</summary>

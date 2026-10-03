@@ -3,6 +3,7 @@ using System.Text.Json;
 using Tyrant.Core.Assets;
 using Tyrant.Core.Catalog;
 using Tyrant.Core.Install;
+using Tyrant.Core.Models;
 
 namespace Tyrant.Core.Tests;
 
@@ -24,6 +25,21 @@ public sealed class RealGameIndex
 [Trait("Category", "Integration")]
 public class AssetIntegrationTests(RealGameIndex real) : IClassFixture<RealGameIndex>
 {
+    [SkippableFact]
+    public void Prefab_renderers_carry_their_material_texture_slots()
+    {
+        Skip.If(RealGameIndex.GameDir is null, "TYRANT_GAME_DIR not set");
+        var species = SpeciesCatalog.Find(SpeciesCatalog.FromIndex(real.Index), "Acrocanthosaurus");
+        using var session = new AssetSession(real.Install);
+
+        var model = new ModelExporter().ReadPrefab(session, species.Prefab);
+
+        Assert.All(model.Renderers, r => Assert.NotEmpty(r.Materials));
+        var material = model.Renderers.SelectMany(r => r.Materials).First(m => m.Textures.Any(t => t.Slot == "_AdultDiffuse"));
+        Assert.NotNull(material.Textures.Single(t => t.Slot == "_AdultDiffuse").Archive); // kept in another bundle
+        Assert.Contains(material.Textures, t => t.Slot == "_AdultNormal");
+    }
+
     [SkippableFact]
     public void Index_knows_which_bundle_holds_each_serialized_file()
     {

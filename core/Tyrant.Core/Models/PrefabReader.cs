@@ -16,13 +16,14 @@ internal static class PrefabReader
 
         var nodes = new Dictionary<long, SkeletonNode>();
         var root = BuildNode(manager, file, transforms, rootTransform, null, nodes);
+        var externals = file.file.Metadata.Externals.Select(e => e.PathName).ToList();
 
         var renderers = new List<RendererModel>();
         var failures = new List<string>();
         foreach (var info in file.file.GetAssetsOfType(AssetClassID.SkinnedMeshRenderer))
-            AddRenderer(manager, file, manager.GetBaseField(file, info), skinned: true, transformByGameObject, nodes, renderers, failures);
+            AddRenderer(manager, file, manager.GetBaseField(file, info), skinned: true, transformByGameObject, nodes, renderers, failures, externals);
         foreach (var info in file.file.GetAssetsOfType(AssetClassID.MeshFilter))
-            AddRenderer(manager, file, manager.GetBaseField(file, info), skinned: false, transformByGameObject, nodes, renderers, failures);
+            AddRenderer(manager, file, manager.GetBaseField(file, info), skinned: false, transformByGameObject, nodes, renderers, failures, externals);
 
         return new PrefabModel(root.Name, root, renderers, failures);
     }
@@ -49,7 +50,8 @@ internal static class PrefabReader
     }
 
     private static void AddRenderer(AssetsManager manager, AssetsFileInstance file, AssetTypeValueField renderer, bool skinned,
-        Dictionary<long, long> transformByGameObject, Dictionary<long, SkeletonNode> nodes, List<RendererModel> renderers, List<string> failures)
+        Dictionary<long, long> transformByGameObject, Dictionary<long, SkeletonNode> nodes, List<RendererModel> renderers, List<string> failures,
+        IReadOnlyList<string> externals)
     {
         if (!transformByGameObject.TryGetValue(renderer["m_GameObject.m_PathID"].AsLong, out var transformId)
             || !nodes.TryGetValue(transformId, out var owner))
@@ -65,7 +67,7 @@ internal static class PrefabReader
                     .Select(b => nodes.TryGetValue(b["m_PathID"].AsLong, out var bone) ? bone : throw new InvalidDataException("one of its bones is outside the prefab"))
                     .ToList()
                 : [];
-            renderers.Add(new RendererModel(owner.Name, mesh, bones, owner));
+            renderers.Add(new RendererModel(owner.Name, mesh, bones, owner) { Materials = ReadMaterials(manager, file, renderer, externals) });
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -73,4 +75,13 @@ internal static class PrefabReader
             failures.Add($"{owner.Name}: {ex.Message}");
         }
     }
+
+    /// <summary>One material per sub-mesh slot; a material kept in another bundle is listed without textures (drawn plain).</summary>
+    private static List<MaterialModel> ReadMaterials(AssetsManager manager, AssetsFileInstance file, AssetTypeValueField renderer,
+        IReadOnlyList<string> externals) =>
+        renderer["m_Materials.Array"].Children
+            .Select(m => m["m_FileID"].AsInt == 0 && file.file.GetAssetInfo(m["m_PathID"].AsLong) is { } info
+                ? MaterialReader.Read(manager.GetBaseField(file, info), externals)
+                : new MaterialModel("", []))
+            .ToList();
 }
