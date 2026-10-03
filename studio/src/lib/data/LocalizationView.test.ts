@@ -53,4 +53,27 @@ describe('LocalizationView', () => {
 
     await waitFor(() => expect(lastQuery(rpc)).toMatchObject({ filter: 'stego', page: 0 }));
   });
+
+  it('ignores answers to superseded searches', async () => {
+    const { rpc, session } = setup();
+    let releaseOld!: () => void;
+    const answer = (text: string) => ({ languages: ['en'], rows: [{ term: 'T', values: [text] }], total: 1, page: 0, pageSize: 100 });
+    rpc.on('data.localization', (p) => {
+      if (p.filter === 'old') return new Promise((resolve) => (releaseOld = () => resolve(answer('old answer'))));
+      return answer(p.filter === 'new' ? 'new answer' : 'Stegosaurus');
+    });
+    renderWith(LocalizationView, session);
+    await screen.findByText('Stegosaurus');
+    const box = screen.getByRole('searchbox', { name: 'Search localization' });
+
+    await fireEvent.input(box, { target: { value: 'old' } });
+    await waitFor(() => expect(lastQuery(rpc).filter).toBe('old'));
+    await fireEvent.input(box, { target: { value: 'new' } });
+    expect(await screen.findByText('new answer')).toBeInTheDocument();
+    releaseOld();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(screen.queryByText('old answer')).toBeNull();
+    expect(screen.getByText('new answer')).toBeInTheDocument();
+  });
 });

@@ -225,4 +225,24 @@ public class DumpRunnerTests
         Assert.Contains("Steam app id", ex.Message);
         Assert.DoesNotContain("while 'tyrant dump run' waits", ex.Message);
     }
+
+    [Fact]
+    public void A_file_briefly_open_in_the_old_data_does_not_lose_the_dump()
+    {
+        using var game = new FakeGame();
+        var install = Installed(game);
+        var ws = Workspace.Create(TempDir(), install);
+        var old = Path.Combine(ws.DataDir, "old.txt");
+        File.WriteAllText(old, "previous dump");
+        FileStream? held = null;
+        var launcher = new FakePluginLauncher(2, _ => held = new FileStream(old, FileMode.Open, FileAccess.Read, FileShare.Read));
+        using var releaseLater = new Timer(_ => held?.Dispose(), null, 600, Timeout.Infinite);
+
+        var manifest = new DumpRunner(launcher) { PollInterval = TimeSpan.FromMilliseconds(10) }
+            .Run(install, ws, TimeSpan.FromSeconds(10), null, CancellationToken.None);
+
+        Assert.Equal(2, manifest.Counts["PrehistoricKingdom.AnimalData"]);
+        Assert.False(File.Exists(old));
+        Assert.Empty(LeftoverDumpFolders(ws));
+    }
 }

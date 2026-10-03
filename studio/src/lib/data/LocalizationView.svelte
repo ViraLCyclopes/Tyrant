@@ -11,12 +11,13 @@
   let filter = $state('');
   let page = $state(0);
   let result = $state<LocalizationQueryResult | null>(null);
+  let sequence = 0;
 
   const pages = $derived(result ? Math.max(1, Math.ceil(result.total / result.pageSize)) : 1);
   const nameOf = (code: string) => languages.find((l) => l.code === code)?.name ?? code;
 
   onMount(async () => {
-    const r = await session.safely(() => session.rpc.call('data.languages'));
+    const r = await session.quietly(() => session.rpc.call('data.languages'));
     if (!r) return;
     languages = r.languages;
     const english = r.languages.find((l) => l.code.toLowerCase().startsWith('en') || /english/i.test(l.name));
@@ -25,10 +26,11 @@
   });
 
   async function query() {
-    const r = await session.safely(() =>
+    const mine = ++sequence;
+    const r = await session.quietly(() =>
       session.rpc.call('data.localization', { filter: filter || null, languages: chosen, page, pageSize: PAGE_SIZE }),
     );
-    if (r) result = r;
+    if (mine === sequence && r) result = r; // ignore answers to superseded searches
   }
 
   const queryLater = debounce(() => {

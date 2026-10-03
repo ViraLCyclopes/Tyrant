@@ -37,6 +37,7 @@ public sealed class JobManager(Action<string, object> notify, Action<string>? lo
     private readonly Action<string, object> _notify = notify;
     private readonly object _lock = new();
     private RunningJob? _running;
+    private Task _lastJob = Task.CompletedTask; // completes only after the job's final notification is sent
 
     /// <summary>Minimum time between two progress notifications; the final 100 % report is always sent.</summary>
     public TimeSpan ProgressInterval { get; init; } = TimeSpan.FromMilliseconds(100);
@@ -58,6 +59,7 @@ public sealed class JobManager(Action<string, object> notify, Action<string>? lo
             task = new Task(() => Execute(job, work), TaskCreationOptions.LongRunning);
             job.Task = task;
             _running = job;
+            _lastJob = task;
         }
         task.Start();
         return new JobStarted(job.Id);
@@ -78,10 +80,10 @@ public sealed class JobManager(Action<string, object> notify, Action<string>? lo
         lock (_lock) _running?.Cancellation.Cancel();
     }
 
-    /// <summary>Completes when no job is running.</summary>
+    /// <summary>Completes when no job is running and the last one's final notification has been sent.</summary>
     public Task WhenIdle()
     {
-        lock (_lock) return _running?.Task ?? Task.CompletedTask;
+        lock (_lock) return _lastJob;
     }
 
     private void Execute<T>(RunningJob job, Func<IProgress<JobProgress>, CancellationToken, T> work)
@@ -107,7 +109,17 @@ public sealed class JobManager(Action<string, object> notify, Action<string>? lo
             lock (_lock) _running = null;
             job.Cancellation.Dispose();
         }
-        _notify(method, notification);
+        try
+        {
+            _notify(method, notification);
+        }
+        catch (Exception ex) when (method == DoneMethod)
+        {
+            // The result could not be sent (e.g. it failed to serialize): end the job anyway, or Studio would wait forever.
+            log?.Invoke($"Job '{job.Title}' ({job.Id}) finished but its result could not be sent: {ex}");
+            _notify(FailedMethod, new JobFailedNotification(job.Id,
+                new RpcErrorObject(RpcErrorCodes.InternalError, $"The result could not be sent ({ex.GetType().Name}): {ex.Message}", null)));
+        }
     }
 
     private sealed class ThrottledProgress(JobManager owner, string jobId) : IProgress<JobProgress>

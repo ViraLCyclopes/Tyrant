@@ -5,4 +5,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Tyrant.Core\Tyrant.Core.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Tyrant.Rpc.Tests" />
+  </ItemGroup>
 </Project>

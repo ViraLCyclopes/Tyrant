@@ -25,7 +25,7 @@
   const pages = $derived(result ? Math.max(1, Math.ceil(result.total / result.pageSize)) : 1);
 
   onMount(async () => {
-    const r = await session.safely(() => session.rpc.call('data.types'));
+    const r = await session.quietly(() => session.rpc.call('data.types'));
     if (!r) return;
     types = r.types;
     const preferred = r.types.find((t) => t.shortName === 'AnimalData') ?? r.types[0];
@@ -46,7 +46,7 @@
   async function query() {
     if (!type) return;
     const mine = ++sequence;
-    const r = await session.safely(() =>
+    const r = await session.quietly(() =>
       session.rpc.call('data.query', { type, filter: filter || null, sort, descending, page, pageSize: PAGE_SIZE, columns }),
     );
     if (mine === sequence && r) result = r; // ignore answers to queries that were superseded

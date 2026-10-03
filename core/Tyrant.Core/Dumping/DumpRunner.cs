@@ -49,6 +49,9 @@ public sealed class DumpRunner(IGameLauncher launcher)
 
     public TimeSpan PollInterval { get; init; } = TimeSpan.FromSeconds(1);
 
+    private const int MoveAttempts = 50;
+    private static readonly TimeSpan MoveRetryDelay = TimeSpan.FromMilliseconds(100);
+
     public static string RequestPath(GameInstall install) => ModLoaderInstaller.RequestPath(install);
 
     public DumpManifestFile Run(GameInstall install, Workspace ws, TimeSpan timeout, IProgress<JobProgress>? progress, CancellationToken ct)
@@ -103,8 +106,8 @@ public sealed class DumpRunner(IGameLauncher launcher)
                     "The dumper ran but found no game data: " + string.Join("; ", manifest.Errors.Take(5)));
 
             var old = ws.DataDir + ".old-" + requestId;
-            if (Directory.Exists(ws.DataDir)) Directory.Move(ws.DataDir, old);
-            Directory.Move(tmp, ws.DataDir);
+            if (Directory.Exists(ws.DataDir)) MoveWithRetry(ws.DataDir, old, ct);
+            MoveWithRetry(tmp, ws.DataDir, ct);
             if (Directory.Exists(old)) Directory.Delete(old, recursive: true);
             ws.StampOutput(OutputName, fingerprint);
             success = true;
@@ -115,6 +118,27 @@ public sealed class DumpRunner(IGameLauncher launcher)
         {
             TryDeleteFile(requestPath);
             if (!success && Directory.Exists(tmp)) TryDeleteDirectory(tmp);
+        }
+    }
+
+    /// <summary>
+    /// Windows refuses to move a folder while any file in it is open (the app may be reading the previous dump), so
+    /// retry for a few seconds before giving up rather than throwing away a dump the user waited for.
+    /// </summary>
+    private void MoveWithRetry(string source, string destination, CancellationToken ct)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                Directory.Move(source, destination);
+                return;
+            }
+            catch (Exception ex) when ((ex is IOException or UnauthorizedAccessException) && attempt < MoveAttempts)
+            {
+                ct.ThrowIfCancellationRequested();
+                Thread.Sleep(MoveRetryDelay);
+            }
         }
     }
 

@@ -17,22 +17,32 @@ public static class DataQuery
         if (!string.IsNullOrEmpty(sort))
         {
             var comparer = Comparer<string>.Create(CompareValues);
-            rows = descending ? rows.OrderByDescending(r => r.Get(sort), comparer) : rows.OrderBy(r => r.Get(sort), comparer);
+            var ordered = rows.OrderBy(r => r.Get(sort).Length == 0); // empty values last in both directions
+            rows = descending ? ordered.ThenByDescending(r => r.Get(sort), comparer) : ordered.ThenBy(r => r.Get(sort), comparer);
         }
         return rows.ToList();
     }
 
-    /// <summary>Numbers compare by value ("9" before "10"), other text case-insensitively; empty values sort last.</summary>
+    /// <summary>
+    /// A total order: finite numbers first, by value ("9" before "10"); then other text, case-insensitively; empty values last.
+    /// </summary>
     public static int CompareValues(string? a, string? b)
     {
-        a ??= "";
-        b ??= "";
-        if (a.Length == 0 || b.Length == 0) return (a.Length == 0).CompareTo(b.Length == 0);
-        if (double.TryParse(a, NumberStyles.Float, CultureInfo.InvariantCulture, out var x)
-            && double.TryParse(b, NumberStyles.Float, CultureInfo.InvariantCulture, out var y))
-            return x.CompareTo(y);
-        return string.Compare(a, b, StringComparison.OrdinalIgnoreCase);
+        var (rankA, numberA) = Rank(a ?? "");
+        var (rankB, numberB) = Rank(b ?? "");
+        if (rankA != rankB) return rankA.CompareTo(rankB);
+        return rankA switch
+        {
+            0 => numberA.CompareTo(numberB),
+            1 => string.Compare(a, b, StringComparison.OrdinalIgnoreCase),
+            _ => 0,
+        };
     }
+
+    private static (int Rank, double Number) Rank(string value) =>
+        value.Length == 0 ? (2, 0)
+        : double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var number) && double.IsFinite(number) ? (0, number)
+        : (1, 0);
 
     private static bool Matches(DataTableRow row, string token) =>
         row.Name.Contains(token, StringComparison.OrdinalIgnoreCase)

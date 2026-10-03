@@ -173,4 +173,65 @@ describe('Session', () => {
     expect(platform.copied).toEqual(['Tyrant diagnostics']);
     expect(session.notice).toMatch(/copied/);
   });
+
+  it('PICK_GAME_FOLDER fixes the workspace that failed to open, not the one already open', async () => {
+    const { rpc, platform, session } = setup();
+    rpc.on('workspace.open', (p) => {
+      if (p.dir === 'D:\\B' && !p.gamePath) throw new RpcError('The game folder moved.', 'GAME_NOT_FOUND', 'PICK_GAME_FOLDER');
+      return workspaceStatus({ dir: p.dir, gameRoot: p.gamePath ?? 'G:\\PK' });
+    });
+    await session.openWorkspace('D:\\A');
+    await session.openWorkspace('D:\\B');
+    platform.folders.push('G:\\Moved');
+
+    await session.applyFix('PICK_GAME_FOLDER');
+
+    expect(rpc.callsTo('workspace.open').at(-1)?.params).toEqual({ dir: 'D:\\B', gamePath: 'G:\\Moved' });
+    expect(session.workspace?.dir).toBe('D:\\B');
+  });
+
+  it('PICK_WORKSPACE_FOLDER after a failed new workspace creates one in the picked folder', async () => {
+    const { rpc, platform, session } = setup();
+    session.install = installInfo();
+    rpc.on('workspace.create', (p) => {
+      if (p.dir === 'G:\\PK\\ws') throw new RpcError('Inside the game folder.', 'WORKSPACE_IN_GAME_FOLDER', 'PICK_WORKSPACE_FOLDER');
+      return workspaceStatus({ dir: p.dir });
+    });
+    await session.createWorkspace('G:\\PK\\ws');
+    platform.folders.push('D:\\ws');
+
+    await session.applyFix('PICK_WORKSPACE_FOLDER');
+
+    expect(rpc.callsTo('workspace.create').at(-1)?.params).toEqual({ dir: 'D:\\ws', gamePath: 'G:\\PK' });
+    expect(rpc.callsTo('workspace.open')).toHaveLength(0);
+    expect(session.workspace?.dir).toBe('D:\\ws');
+  });
+
+  it('keeps the last workspace when the core is not available at start', async () => {
+    const { rpc, store, session } = setup({ 'tyrant.lastWorkspace': 'D:\\ws' });
+    rpc.on('workspace.open', () => {
+      throw new RpcError('The Tyrant core is restarting.', 'SIDECAR_UNAVAILABLE');
+    });
+    rpc.on('install.detect', () => {
+      throw new RpcError('The Tyrant core is restarting.', 'SIDECAR_UNAVAILABLE');
+    });
+
+    await session.start();
+
+    expect(store.get('tyrant.lastWorkspace')).toBe('D:\\ws');
+  });
+
+  it('quietly keeps an earlier error and reports only its own failure', async () => {
+    const { session } = setup();
+    session.error = new RpcError('No dump arrived.', 'DUMP_TIMEOUT');
+
+    expect(await session.quietly(async () => 1)).toBe(1);
+    expect(session.error?.code).toBe('DUMP_TIMEOUT');
+    expect(
+      await session.quietly(async () => {
+        throw new RpcError('No data.', 'DATA_MISSING');
+      }),
+    ).toBeNull();
+    expect(session.error?.code).toBe('DATA_MISSING');
+  });
 });

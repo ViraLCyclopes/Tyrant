@@ -29,7 +29,8 @@ export class Session {
   job = $state<ActiveJob | null>(null);
   recent = $state<string[]>([]);
   ready = $state(false);
-  private lastTriedWorkspace: string | null = null;
+  /** The workspace action that failed last, so an error's fix button repeats it on the right folder. */
+  private lastFailed: { kind: 'open' | 'create'; dir: string } | null = null;
 
   constructor(
     readonly rpc: Rpc,
@@ -56,6 +57,16 @@ export class Session {
     return this.job !== null;
   }
 
+  /** For background loads (table queries, lookups): keeps the error the user is reading and reports only its own failure. */
+  async quietly<T>(work: () => Promise<T>): Promise<T | null> {
+    try {
+      return await work();
+    } catch (e) {
+      this.error = asRpcError(e);
+      return null;
+    }
+  }
+
   /** Runs a user action: clears the previous error, shows a new one, returns null on failure. */
   async safely<T>(work: () => Promise<T>): Promise<T | null> {
     this.error = null;
@@ -74,7 +85,8 @@ export class Session {
       this.ready = true;
       return;
     }
-    if (last) this.store.remove(LAST_WORKSPACE);
+    // Forget it only when the folder is no longer a workspace; a missing core or a moved game is recoverable.
+    if (last && this.error?.code === 'WORKSPACE_INVALID') this.store.remove(LAST_WORKSPACE);
     try {
       this.install = await this.rpc.call('install.detect', {});
     } catch (e) {
@@ -90,14 +102,15 @@ export class Session {
   }
 
   async openWorkspace(dir: string, gamePath?: string): Promise<boolean> {
-    this.lastTriedWorkspace = dir;
     const status = await this.safely(() => this.rpc.call('workspace.open', { dir, gamePath: gamePath ?? null }));
+    this.lastFailed = status ? null : { kind: 'open', dir };
     if (status) this.useWorkspace(status);
     return status !== null;
   }
 
   async createWorkspace(dir: string): Promise<boolean> {
     const status = await this.safely(() => this.rpc.call('workspace.create', { dir, gamePath: this.install?.rootDir ?? null }));
+    this.lastFailed = status ? null : { kind: 'create', dir };
     if (status) this.useWorkspace(status);
     return status !== null;
   }
@@ -171,14 +184,19 @@ export class Session {
       case 'PICK_GAME_FOLDER': {
         const dir = await this.platform.pickFolder('Select the Prehistoric Kingdom folder');
         if (!dir) return;
-        const workspace = this.workspace?.dir ?? this.lastTriedWorkspace;
+        // Re-point the workspace whose open failed, not the one that happens to be open.
+        const failedOpen = this.lastFailed?.kind === 'open' ? this.lastFailed.dir : null;
+        const workspace = failedOpen ?? this.workspace?.dir;
         if (workspace) await this.openWorkspace(workspace, dir);
         else await this.detectGame(dir);
         return;
       }
       case 'PICK_WORKSPACE_FOLDER': {
-        const dir = await this.platform.pickFolder('Open a workspace folder');
-        if (dir) await this.openWorkspace(dir);
+        const creating = this.lastFailed?.kind === 'create';
+        const dir = await this.platform.pickFolder(creating ? 'Choose an empty folder for the new workspace' : 'Open a workspace folder');
+        if (!dir) return;
+        if (creating) await this.createWorkspace(dir);
+        else await this.openWorkspace(dir);
         return;
       }
       case 'REFRESH_WORKSPACE':

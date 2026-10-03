@@ -12,9 +12,11 @@
   let names = $state<string[]>([]);
   let name = $state<string | null>(null);
   let json = $state<unknown>(null);
+  let namesSequence = 0;
+  let objectSequence = 0;
 
   onMount(async () => {
-    const r = await session.safely(() => session.rpc.call('data.types'));
+    const r = await session.quietly(() => session.rpc.call('data.types'));
     if (r) types = r.types;
   });
 
@@ -29,8 +31,9 @@
   async function loadNames() {
     const current = type;
     if (!current) return;
-    const r = await session.safely(() => session.rpc.call('data.objects', { type: current, filter: filter || null }));
-    if (r) names = r.names;
+    const mine = ++namesSequence;
+    const r = await session.quietly(() => session.rpc.call('data.objects', { type: current, filter: filter || null }));
+    if (mine === namesSequence && r) names = r.names; // ignore answers to superseded lookups
   }
 
   const loadNamesLater = debounce(() => void loadNames(), 250);
@@ -39,8 +42,9 @@
     const current = type;
     if (!current) return;
     name = objectName;
-    const r = await session.safely(() => session.rpc.call('data.object', { type: current, name: objectName }));
-    json = r?.json ?? null;
+    const mine = ++objectSequence;
+    const r = await session.quietly(() => session.rpc.call('data.object', { type: current, name: objectName }));
+    if (mine === objectSequence) json = r?.json ?? null; // a later click wins
   }
 
   async function copyJson() {

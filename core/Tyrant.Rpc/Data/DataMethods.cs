@@ -20,6 +20,9 @@ public sealed class DataMethods
     private IReadOnlyList<LocalizationTable>? _languages;
     private string _cacheKey = "";
 
+    /// <summary>Builds one type's table; replaceable so tests can interleave a slow build with a new dump.</summary>
+    internal Func<DataStore, DataType, DataTable> BuildTable { get; set; } = (store, type) => DataTable.From(store.LoadAll(type));
+
     public DataMethods(StudioSession session)
     {
         _session = session;
@@ -29,7 +32,7 @@ public sealed class DataMethods
     [RpcMethod("data.types")]
     public DataTypesResult Types()
     {
-        var (store, _, _) = Open();
+        var (store, _, _, key) = Open();
         return new DataTypesResult(store.Manifest.CreatedUtc, store.Manifest.BuildGuid,
             store.Types().Select(t => new DataTypeInfo(t.FullName, t.ShortName, t.Count)).ToList(), store.Manifest.Errors);
     }
@@ -37,9 +40,9 @@ public sealed class DataMethods
     [RpcMethod("data.query")]
     public DataQueryResult Query(DataQueryParams p)
     {
-        var (store, _, _) = Open();
+        var (store, _, _, key) = Open();
         var type = store.FindType(p.Type);
-        var table = TableOf(store, type);
+        var table = TableOf(store, type, key);
         var known = table.Columns.ToHashSet(StringComparer.Ordinal);
         var columns = p.Columns is null
             ? table.Columns.Take(DefaultColumnCount).ToList()
@@ -54,7 +57,7 @@ public sealed class DataMethods
     [RpcMethod("data.objects")]
     public DataObjectsResult Objects(DataObjectsParams p)
     {
-        var (store, _, _) = Open();
+        var (store, _, _, key) = Open();
         var names = store.ObjectNames(store.FindType(p.Type));
         var tokens = DataQuery.Tokens(p.Filter);
         return new DataObjectsResult(tokens.Length == 0
@@ -65,7 +68,7 @@ public sealed class DataMethods
     [RpcMethod("data.object")]
     public DataObjectResult Object(DataObjectParams p)
     {
-        var (store, _, _) = Open();
+        var (store, _, _, key) = Open();
         var type = store.FindType(p.Type);
         return new DataObjectResult(type.FullName, p.Name, store.Load(type, p.Name));
     }
@@ -75,7 +78,7 @@ public sealed class DataMethods
     {
         if (p.Names.Count is < 2 or > MaxCompare)
             throw new ArgumentException($"Pick between 2 and {MaxCompare} objects to compare.");
-        var (store, _, _) = Open();
+        var (store, _, _, key) = Open();
         var type = store.FindType(p.Type);
         var table = DataTable.From(p.Names.Select(n => (n, store.Load(type, n))));
         var fields = table.Columns.Skip(1)
@@ -88,15 +91,15 @@ public sealed class DataMethods
     [RpcMethod("data.languages")]
     public LanguagesResult Languages()
     {
-        var (store, _, _) = Open();
-        return new LanguagesResult(LanguagesOf(store).Select(l => new LanguageInfo(l.Code, l.Name, l.Terms.Count)).ToList());
+        var (store, _, _, key) = Open();
+        return new LanguagesResult(LanguagesOf(store, key).Select(l => new LanguageInfo(l.Code, l.Name, l.Terms.Count)).ToList());
     }
 
     [RpcMethod("data.localization")]
     public LocalizationQueryResult Localization(LocalizationQueryParams p)
     {
-        var (store, _, _) = Open();
-        var all = LanguagesOf(store);
+        var (store, _, _, key) = Open();
+        var all = LanguagesOf(store, key);
         var selected = p.Languages is null ? all : all.Where(l => p.Languages.Contains(l.Code, StringComparer.OrdinalIgnoreCase)).ToList();
         var tokens = DataQuery.Tokens(p.Filter);
         var rows = all.SelectMany(l => l.Terms.Keys).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)
@@ -110,7 +113,7 @@ public sealed class DataMethods
     [RpcMethod("data.export")]
     public DataExportResult Export(DataExportParams p)
     {
-        var (store, ws, install) = Open();
+        var (store, ws, install, _) = Open();
         var type = store.FindType(p.Type);
         var format = p.Format.ToLowerInvariant();
         var path = Path.GetFullPath(p.Path ?? Path.Combine(ws.Dir, "exports", $"{type.ShortName}.{format}"));
@@ -121,7 +124,8 @@ public sealed class DataMethods
 
     private static (int Page, int PageSize) Paging(int page, int pageSize) => (Math.Max(0, page), Math.Clamp(pageSize, 1, MaxPageSize));
 
-    private (DataStore Store, Workspace Workspace, GameInstall Install) Open()
+    /// <summary>Opens the dump; the returned key identifies it, so results built from an older dump are never cached.</summary>
+    private (DataStore Store, Workspace Workspace, GameInstall Install, string Key) Open()
     {
         var (ws, install) = _session.Current();
         var store = DataStore.Open(ws);
@@ -135,24 +139,26 @@ public sealed class DataMethods
                 _cacheKey = key;
             }
         }
-        return (store, ws, install);
+        return (store, ws, install, key);
     }
 
-    private DataTable TableOf(DataStore store, DataType type)
+    private DataTable TableOf(DataStore store, DataType type, string key)
     {
         lock (_lock)
-            if (_tables.TryGetValue(type.FullName, out var cached)) return cached;
-        var table = DataTable.From(store.LoadAll(type)); // outside the lock: a big type takes a moment to read
-        lock (_lock) _tables[type.FullName] = table;
+            if (key == _cacheKey && _tables.TryGetValue(type.FullName, out var cached)) return cached;
+        var table = BuildTable(store, type); // outside the lock: a big type takes a moment to read
+        lock (_lock)
+            if (key == _cacheKey) _tables[type.FullName] = table; // a newer dump arrived meanwhile: don't cache the old one
         return table;
     }
 
-    private IReadOnlyList<LocalizationTable> LanguagesOf(DataStore store)
+    private IReadOnlyList<LocalizationTable> LanguagesOf(DataStore store, string key)
     {
         lock (_lock)
-            if (_languages is not null) return _languages;
+            if (key == _cacheKey && _languages is not null) return _languages;
         var languages = store.LoadLocalization();
-        lock (_lock) _languages = languages;
+        lock (_lock)
+            if (key == _cacheKey) _languages = languages;
         return languages;
     }
 

@@ -176,4 +176,23 @@ public class JobManagerTests
         Assert.True(response.GetProperty("result").GetProperty("cancelled").GetBoolean());
         Assert.Contains(lines, l => l.Contains("\"job.failed\"") && l.Contains("CANCELLED"));
     }
+
+    [Fact]
+    public void A_result_that_cannot_be_sent_still_ends_the_job()
+    {
+        var recorder = new Recorder();
+        var logged = new List<string>();
+        var jobs = new JobManager((method, payload) =>
+        {
+            if (method == JobManager.DoneMethod) throw new InvalidOperationException("cannot serialize the result");
+            recorder.Add(method, payload);
+        }, logged.Add);
+
+        jobs.Start("Bad result", (_, _) => 1);
+        Idle(jobs);
+
+        var failed = Assert.IsType<JobFailedNotification>(Assert.Single(recorder.Items).Payload);
+        Assert.Equal(RpcErrorCodes.InternalError, failed.Error.Code);
+        Assert.Contains(logged, l => l.Contains("cannot serialize the result"));
+    }
 }

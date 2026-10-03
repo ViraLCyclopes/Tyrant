@@ -1,5 +1,6 @@
 import { fireEvent, screen, waitFor } from '@testing-library/svelte';
 import { describe, expect, it } from 'vitest';
+import { RpcError } from '$lib/rpc/client';
 import type { DataQueryParams, DataQueryResult } from '$lib/rpc/types.gen';
 import { memoryStore } from '$lib/storage';
 import { FakePlatform } from '$lib/test/fakePlatform';
@@ -127,5 +128,17 @@ describe('TableView', () => {
 
     await waitFor(() => expect(lastQuery(rpc)).toMatchObject({ columns: ['cost'] }));
     expect(store.get(`tyrant.columns.${ANIMAL}`)).toBe('["cost"]');
+  });
+
+  it('typing a filter keeps an unrelated error on screen', async () => {
+    const { rpc, session } = setup();
+    renderWith(TableView, session);
+    await screen.findByText('Herbivore');
+    session.error = new RpcError('No dump arrived.', 'DUMP_TIMEOUT');
+
+    await fireEvent.input(screen.getByRole('searchbox', { name: 'Filter rows' }), { target: { value: 'herb' } });
+
+    await waitFor(() => expect(lastQuery(rpc)).toMatchObject({ filter: 'herb' }));
+    expect(session.error?.code).toBe('DUMP_TIMEOUT');
   });
 });

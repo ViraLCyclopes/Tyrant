@@ -1,3 +1,8 @@
+using Tyrant.Rpc.Studio;
+using Tyrant.Rpc.Data;
+using Tyrant.Core.Workspaces;
+using Tyrant.Core.Install;
+using Tyrant.Core.Data;
 using System.Text.Json;
 using Tyrant.Core.Tests;
 using Tyrant.Dumper.Serialization;
@@ -211,5 +216,42 @@ public class DataMethodsTests
         WriteDump(ws, "r2", [Animal("Stego", "\"cost\":1"), Animal("Rex", "\"cost\":2")]);
 
         Assert.Equal(2, (await h.Call("data.query", new { type = "AnimalData" })).GetProperty("total").GetInt32());
+    }
+
+    [Fact]
+    public async Task A_table_built_from_an_older_dump_never_replaces_the_new_one()
+    {
+        using var game = new FakeGame();
+        var dir = TestStudio.TempDir();
+        var install = new GameInstall(game.Root, null);
+        var session = new StudioSession(TestStudio.Options());
+        session.Set(Workspace.Create(dir, install), install);
+        WriteDump(dir, "r1", [Animal("Old", "\"cost\":1")]);
+        var data = new DataMethods(session);
+        using var entered = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        var first = true;
+        data.BuildTable = (store, type) =>
+        {
+            var table = DataTable.From(store.LoadAll(type));
+            if (first)
+            {
+                first = false;
+                entered.Set();
+                release.Wait(TimeSpan.FromSeconds(10));
+            }
+            return table;
+        };
+
+        var slow = Task.Run(() => data.Query(new DataQueryParams("AnimalData")));
+        Assert.True(entered.Wait(TimeSpan.FromSeconds(10)));
+        WriteDump(dir, "r2", [Animal("New", "\"cost\":2")]);
+        var fresh = data.Query(new DataQueryParams("AnimalData"));
+        release.Set();
+        await slow;
+        var after = data.Query(new DataQueryParams("AnimalData"));
+
+        Assert.Equal("New", Assert.Single(fresh.Rows).Name);
+        Assert.Equal("New", Assert.Single(after.Rows).Name);
     }
 }
