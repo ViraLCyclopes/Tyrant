@@ -153,7 +153,7 @@ namespace Tyrant.Framework
             rect.anchorMin = new Vector2(0f, 0f);
             rect.anchorMax = new Vector2(0f, 1f);
             rect.pivot = new Vector2(0f, 1f);
-            rect.anchoredPosition = new Vector2(24f, -72f);
+            rect.anchoredPosition = new Vector2(56f, -72f); // clear of the vertical line by Back to List
             rect.sizeDelta = new Vector2(600f, -120f);
             SetColor(window.AddComponent(Image!), Panel);
 
