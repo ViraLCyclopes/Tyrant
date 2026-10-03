@@ -54,7 +54,8 @@ public sealed class DumpRunner(IGameLauncher launcher)
     public DumpManifestFile Run(GameInstall install, Workspace ws, TimeSpan timeout, IProgress<JobProgress>? progress, CancellationToken ct)
     {
         if (ModLoaderInstaller.GetState(install) != InstallState.Installed)
-            throw new TyrantException(TyrantErrorCode.DumperNotInstalled, "The dumper mod is not installed in the game folder. Run 'tyrant dump install' first.");
+            throw new TyrantException(TyrantErrorCode.DumperNotInstalled, "The dumper mod is not installed in the game folder. Run 'tyrant dump install' first.",
+                FixAction.InstallDumper);
 
         if (launcher.IsRunning(install))
             throw new TyrantException(TyrantErrorCode.DumpFailed, "Prehistoric Kingdom is already running; close it first, then run 'tyrant dump run' again.");

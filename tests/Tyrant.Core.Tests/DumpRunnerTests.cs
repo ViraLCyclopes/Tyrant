@@ -169,6 +169,7 @@ public class DumpRunnerTests
 
         Assert.Equal(TyrantErrorCode.DumperNotInstalled, ex.Code);
         Assert.Contains("tyrant dump install", ex.Message);
+        Assert.Equal(FixAction.InstallDumper, ex.Fix);
     }
 
     private sealed class CapturingLauncher : IGameLauncher

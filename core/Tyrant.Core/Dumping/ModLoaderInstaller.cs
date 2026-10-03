@@ -59,6 +59,19 @@ public sealed class ModLoaderInstaller(string expectedSha256 = ModLoaderInstalle
 
     public static string LogPath(GameInstall install) => Path.Combine(install.RootDir, "MelonLoader", "Latest.log");
 
+    /// <summary>One-line result of an install, shared by the CLI and the app.</summary>
+    public static string InstallSummary(InstallState before, InstallRecord record) => before switch
+    {
+        InstallState.Installed => "Updated the dumper mod; it was already installed.",
+        InstallState.NotInstalled => $"Installed {LoaderName} {Version} and the dumper mod ({record.Files.Count} files added to the game folder).",
+        _ => $"Added the dumper mod to your existing {LoaderName}.",
+    };
+
+    /// <summary>One-line result of an uninstall, shared by the CLI and the app.</summary>
+    public static string UninstallSummary(UninstallResult result) =>
+        (result.RemovedLoader ? "Removed MelonLoader and the dumper mod; the game folder is back to vanilla." : "Removed the dumper mod.")
+        + (result.Note is null ? "" : " " + result.Note);
+
     public static InstallState GetState(GameInstall install)
     {
         var root = install.RootDir;

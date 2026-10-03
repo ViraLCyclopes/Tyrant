@@ -1,0 +1,58 @@
+using Tyrant.Core.Errors;
+using Tyrant.Core.Install;
+using Tyrant.Core.Workspaces;
+
+namespace Tyrant.Rpc.Studio;
+
+/// <summary>The workspace and game install Studio has open (one per sidecar process).</summary>
+public sealed class StudioSession(StudioOptions options)
+{
+    public const string LogFileName = "studio.log";
+
+    private readonly object _lock = new();
+    private readonly object _logLock = new();
+    private Workspace? _workspace;
+    private GameInstall? _install;
+
+    public StudioOptions Options { get; } = options;
+
+    /// <summary>Raised when the open workspace's dump may have changed (new dump, other workspace).</summary>
+    public event Action? DataChanged;
+
+    public (Workspace Workspace, GameInstall Install) Current()
+    {
+        lock (_lock)
+        {
+            if (_workspace is null || _install is null)
+                throw new TyrantException(TyrantErrorCode.WorkspaceInvalid, "No workspace is open. Open or create one on the Home tab.", FixAction.PickWorkspaceFolder);
+            return (_workspace, _install);
+        }
+    }
+
+    public void Set(Workspace workspace, GameInstall install)
+    {
+        lock (_lock) (_workspace, _install) = (workspace, install);
+        DataChanged?.Invoke();
+    }
+
+    public void NotifyDataChanged() => DataChanged?.Invoke();
+
+    /// <summary>Appends a line to &lt;workspace&gt;/logs/studio.log; logging never fails an operation.</summary>
+    public void Log(string message)
+    {
+        Workspace? ws;
+        lock (_lock) ws = _workspace;
+        if (ws is null) return;
+        try
+        {
+            lock (_logLock)
+            {
+                Directory.CreateDirectory(ws.LogsDir);
+                File.AppendAllText(Path.Combine(ws.LogsDir, LogFileName), $"{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss} {message}{Environment.NewLine}");
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+        }
+    }
+}

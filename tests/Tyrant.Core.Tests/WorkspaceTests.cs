@@ -155,4 +155,52 @@ public class WorkspaceTests
         Assert.True(File.Exists(Path.Combine(dir, Workspace.FileName)));
         Assert.False(File.Exists(Path.Combine(dir, Workspace.LegacyFileName)));
     }
+
+    private sealed class NoSteam : ISteamRootProvider
+    {
+        public string? GetSteamRoot() => null;
+    }
+
+    [Fact]
+    public void Opener_repoints_a_workspace_at_a_moved_game()
+    {
+        using var oldGame = new FakeGame();
+        using var newGame = new FakeGame(buildGuid: "moved");
+        var dir = TempDir();
+        Workspace.Create(dir, new GameInstall(oldGame.Root, null));
+
+        var (ws, install, repointed) = WorkspaceOpener.Open(dir, newGame.Root, new GameInstallLocator(new NoSteam()));
+
+        Assert.True(repointed);
+        Assert.Equal(newGame.Root, install.RootDir);
+        Assert.Equal(newGame.Root, ws.Data.GameRoot);
+        Assert.Equal(newGame.Root, Workspace.Open(dir).Data.GameRoot);
+    }
+
+    [Fact]
+    public void Opener_without_a_game_path_uses_the_recorded_game()
+    {
+        using var game = new FakeGame();
+        var dir = TempDir();
+        Workspace.Create(dir, new GameInstall(game.Root, null));
+
+        var (_, install, repointed) = WorkspaceOpener.Open(dir, null, new GameInstallLocator(new NoSteam()));
+
+        Assert.False(repointed);
+        Assert.Equal(game.Root, install.RootDir);
+    }
+
+    [Fact]
+    public void Opener_refuses_a_workspace_inside_the_game_folder()
+    {
+        using var game = new FakeGame();
+        var dir = Path.Combine(game.Root, "my-workspace");
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, Workspace.FileName), $$"""{"gameRoot":{{System.Text.Json.JsonSerializer.Serialize(game.Root)}}}""");
+
+        var ex = Assert.Throws<TyrantException>(() => WorkspaceOpener.Open(dir, null, new GameInstallLocator(new NoSteam())));
+
+        Assert.Equal(TyrantErrorCode.WorkspaceInGameFolder, ex.Code);
+        Assert.Equal(FixAction.PickWorkspaceFolder, ex.Fix);
+    }
 }

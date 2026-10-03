@@ -3,6 +3,7 @@ using Tyrant.Core.Assets;
 using Tyrant.Core.Errors;
 using Tyrant.Core.Install;
 using Tyrant.Core.Jobs;
+using Tyrant.Core.Workspaces;
 using Spectre.Console.Cli;
 using CoreWorkspace = Tyrant.Core.Workspaces.Workspace;
 
@@ -19,17 +20,8 @@ internal static class CliServices
     /// <summary>Opens a workspace; a --game override re-points it at a moved install and is saved.</summary>
     public static (CoreWorkspace Workspace, GameInstall Install) OpenWorkspace(WorkspaceSettings settings)
     {
-        var ws = CoreWorkspace.Open(settings.Workspace);
-        var install = ResolveInstall(settings.GamePath ?? ws.Data.GameRoot);
-        if (install.ContainsPath(ws.Dir))
-            throw new TyrantException(TyrantErrorCode.WorkspaceInGameFolder,
-                $"The workspace '{ws.Dir}' is inside the game folder. Mods and tools never write game files; move it elsewhere.",
-                FixAction.PickWorkspaceFolder);
-        if (settings.GamePath is not null && !string.Equals(ws.Data.GameRoot, install.RootDir, StringComparison.OrdinalIgnoreCase))
-        {
-            ws.SetGameRoot(install.RootDir);
-            Console.WriteLine($"Workspace now points at: {install.RootDir}");
-        }
+        var (ws, install, repointed) = WorkspaceOpener.Open(settings.Workspace, settings.GamePath, new GameInstallLocator(new RegistrySteamRootProvider()));
+        if (repointed) Console.WriteLine($"Workspace now points at: {install.RootDir}");
         return (ws, install);
     }
 

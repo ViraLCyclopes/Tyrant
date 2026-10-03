@@ -329,4 +329,18 @@ public class ModLoaderInstallerTests
 
         Assert.Equal(before, Snapshot(game.Root));
     }
+
+    [Fact]
+    public void Summaries_describe_what_happened()
+    {
+        var record = new InstallRecord(true, ["version.dll", "Mods/Tyrant.Dumper.dll"], []);
+
+        Assert.Contains("Installed MelonLoader 0.7.3", ModLoaderInstaller.InstallSummary(InstallState.NotInstalled, record));
+        Assert.Contains("2 files", ModLoaderInstaller.InstallSummary(InstallState.NotInstalled, record));
+        Assert.Contains("existing MelonLoader", ModLoaderInstaller.InstallSummary(InstallState.LoaderOnly, record));
+        Assert.Contains("already installed", ModLoaderInstaller.InstallSummary(InstallState.Installed, record));
+        Assert.Contains("back to vanilla", ModLoaderInstaller.UninstallSummary(new UninstallResult(true, null)));
+        Assert.Equal("Removed the dumper mod. MelonLoader was kept because other mods have files in Mods.",
+            ModLoaderInstaller.UninstallSummary(new UninstallResult(false, "MelonLoader was kept because other mods have files in Mods.")));
+    }
 }

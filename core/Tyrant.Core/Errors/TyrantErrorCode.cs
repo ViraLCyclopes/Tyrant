@@ -31,6 +31,7 @@ public enum FixAction
     PickGameFolder,
     PickWorkspaceFolder,
     RefreshWorkspace,
+    InstallDumper,
 }
 
 public static class TyrantErrorCodeExtensions

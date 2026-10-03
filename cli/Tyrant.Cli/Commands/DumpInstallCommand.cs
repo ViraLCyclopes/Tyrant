@@ -28,12 +28,7 @@ public sealed class DumpInstallCommand : Command<DumpInstallCommand.Settings>
         }
 
         var record = installer.Install(install, zip, Path.Combine(AppContext.BaseDirectory, "dumper"));
-        Console.WriteLine(before switch
-        {
-            InstallState.Installed => "Updated the dumper mod; it was already installed.",
-            InstallState.NotInstalled => $"Installed {ModLoaderInstaller.LoaderName} {ModLoaderInstaller.Version} and the dumper mod ({record.Files.Count} files added to the game folder).",
-            _ => $"Added the dumper mod to your existing {ModLoaderInstaller.LoaderName}.",
-        });
+        Console.WriteLine(ModLoaderInstaller.InstallSummary(before, record));
         Console.WriteLine("Normal play is unaffected: the dumper does nothing unless 'tyrant dump run' asks it to. Undo with 'tyrant dump uninstall'.");
         return ExitCodes.Ok;
     }
