@@ -70,6 +70,8 @@ Needs an asset index (Home → **Index assets**, about 20 seconds; again after a
   4. In the game's Nursery the new skin appears next to the vanilla ones, and the row scrolls when there are many.
   - This needs a data dump (Home → **Run data dump**).
 - **Clean up skin numbers…** lists skins whose mods are gone; forget the ones you won't reinstall.
+- **Restore cutouts** appears under a Check result when a colour PNG lost the see-through feathers or hair of its vanilla texture (an editor saved it without alpha). It copies the vanilla transparency back; install again afterwards.
+- **In the game's Nursery,** a grid button next to **Design** (species with more than 5 skins) opens **All skins**: every skin with a search box (skin or mod name). Click a skin to wear it; close with the X or Esc.
 - **Update Tyrant in game** (Home) appears after a Tyrant update; installing a mod also updates the framework.
 - **Start the game.** `MelonLoader\Latest.log` lists the mods Tyrant loaded and each texture it replaced.
 - **The file format** is described in `docs/mod-format.md`.

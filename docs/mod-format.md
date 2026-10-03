@@ -48,6 +48,7 @@ red-spot-carcharo/
 - **Size:** keep the original size (Tyrant's check warns otherwise). Sizes divisible by 4 are compressed like the game's own.
 - **Normal maps:** edit the blue-purple PNG Tyrant exports. The framework converts it to the game's packed form.
 - **Genetics colours:** the game tints skins with genetics colours on top of your texture.
+- **See-through parts (cutouts):** feathered and furry species (Velociraptor, Gallimimus, Megaloceros, …) cut feathers and hair out with the diffuse's transparency. Keep the alpha channel when you save. **Check** warns when a colour PNG has lost it, and **Restore cutouts** (Mods tab, or `tyrant mod restore-cutouts <id>`) copies the vanilla transparency back without touching your colours.
 
 ## Skins (adding new skins)
 

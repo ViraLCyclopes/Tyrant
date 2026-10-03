@@ -174,4 +174,18 @@ public class ModsMethodsTests
         Assert.Equal("gone-mod/blue", before.GetProperty("orphans")[0].GetProperty("key").GetString());
         Assert.Equal(0, after.GetProperty("orphans").GetArrayLength());
     }
+
+    [Fact]
+    public async Task Check_reports_missing_cutouts_and_restore_cutouts_answers_with_the_fixed_files()
+    {
+        using var game = new FakeGame();
+        var (h, _) = await Opened(game);
+        await h.Call("mods.create", new { id = "red-spot" });
+
+        var check = await h.Call("mods.check", new { id = "red-spot" });
+        var restored = await h.Call("mods.restoreCutouts", new { id = "red-spot" });
+
+        Assert.Equal(0, check.GetProperty("missingCutouts").GetArrayLength());
+        Assert.Equal(0, restored.GetProperty("restored").GetArrayLength());
+    }
 }

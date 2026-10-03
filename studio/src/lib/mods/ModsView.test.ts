@@ -105,4 +105,23 @@ describe('ModsView', () => {
 
     expect(await screen.findByText('Replaces 1 texture · Adds 2 skins')).toBeInTheDocument();
   });
+
+  it('offers to restore cutouts a check found missing, then checks again', async () => {
+    const { rpc, session } = setup([row()]);
+    let missing = ['skins/raptor/male_D.png'];
+    rpc.on('mods.check', () => ({ errors: [], warnings: ['skins/raptor/male_D.png has no see-through pixels…'], missingCutouts: missing }));
+    rpc.on('mods.restoreCutouts', () => {
+      const restored = missing;
+      missing = [];
+      return { restored };
+    });
+    renderWith(ModsView, session);
+    await fireEvent.click(await screen.findByRole('button', { name: 'Check Red spot' }));
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Restore cutouts for Red spot' }));
+
+    await waitFor(() => expect(session.notice).toContain('1 PNG'));
+    expect(rpc.callsTo('mods.restoreCutouts')[0]?.params).toEqual({ id: 'red-spot' });
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Restore cutouts for Red spot' })).toBeNull());
+  });
 });

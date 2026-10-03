@@ -341,6 +341,7 @@ export interface ModAddSkinParams {
 export interface ModCheckReport {
   errors: string[];
   warnings: string[];
+  missingCutouts?: string[] | null;
 }
 
 export interface ModCreateParams {
@@ -371,6 +372,10 @@ export interface ModReplaceParams {
   id: string;
   texture: string;
   png?: string | null;
+}
+
+export interface ModRestoreCutoutsResult {
+  restored: string[];
 }
 
 export interface ModRow {
@@ -543,6 +548,7 @@ export interface RpcMethods {
   "mods.list": { params: void; result: ModsListResult };
   "mods.remove": { params: ModIdParams; result: ModsListResult };
   "mods.replace": { params: ModReplaceParams; result: ModsListResult };
+  "mods.restoreCutouts": { params: ModIdParams; result: ModRestoreCutoutsResult };
   "mods.skinSlots": { params: void; result: SkinSlotsResult };
   "mods.species": { params: void; result: ModSpeciesResult };
   "species.list": { params: void; result: SpeciesListResult };
