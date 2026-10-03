@@ -185,6 +185,22 @@ public class StudioMethodsTests
     }
 
     [Fact]
+    public async Task Diagnostics_include_the_last_dumps_errors()
+    {
+        using var game = new FakeGame();
+        var (harness, dir) = await Opened(game);
+        Directory.CreateDirectory(Path.Combine(dir, "data"));
+        File.WriteAllText(Path.Combine(dir, "data", "manifest.json"),
+            """{"schemaVersion":1,"requestId":"r","buildGuid":"b","dumperVersion":"0.1.0","createdUtc":"2026-10-03T10:00:00Z","counts":{"AnimalData":69},"languages":["en"],"errors":["AnimalData 'Broken': field x failed","I2 Localization had no loaded languages"]}""");
+
+        var text = (await harness.Call("app.diagnostics")).GetProperty("text").GetString()!;
+
+        Assert.Contains("Data dump", text);
+        Assert.Contains("AnimalData 'Broken': field x failed", text);
+        Assert.Contains("I2 Localization had no loaded languages", text);
+    }
+
+    [Fact]
     public async Task Diagnostics_work_without_a_workspace()
     {
         var text = (await new RpcHarness(TestStudio.Options()).Call("app.diagnostics")).GetProperty("text").GetString()!;

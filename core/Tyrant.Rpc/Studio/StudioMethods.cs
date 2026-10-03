@@ -160,6 +160,12 @@ public sealed class StudioMethods(StudioSession session, JobManager jobs)
             foreach (var (name, stamp) in ws.Outputs().OrderBy(kv => kv.Key, StringComparer.Ordinal))
                 text.AppendLine($"  {name}: {stamp.CreatedUtc:yyyy-MM-dd HH:mm} UTC{(stale.Contains(name) ? " (stale)" : "")}");
             text.AppendLine($"Dumper: {ModLoaderInstaller.GetState(install)}");
+            if (DumpManifestFile.TryRead(Path.Combine(ws.DataDir, "manifest.json")) is { } dump)
+            {
+                text.AppendLine($"Data dump: {dump.CreatedUtc}, build {dump.BuildGuid}, dumper {dump.DumperVersion}, {dump.Counts.Values.Sum()} objects, {dump.Errors.Count} error(s)");
+                foreach (var error in dump.Errors.Take(30)) text.AppendLine($"  {error}");
+                if (dump.Errors.Count > 30) text.AppendLine($"  ... and {dump.Errors.Count - 30} more (data/manifest.json)");
+            }
             AppendTail(text, "Studio log", Path.Combine(ws.LogsDir, StudioSession.LogFileName));
             AppendTail(text, "MelonLoader log", ModLoaderInstaller.LogPath(install));
         }
