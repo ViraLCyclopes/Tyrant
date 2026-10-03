@@ -234,4 +234,13 @@ describe('Session', () => {
     ).toBeNull();
     expect(session.error?.code).toBe('DATA_MISSING');
   });
+
+  it('opens the workspace preview folder to the app', async () => {
+    const { rpc, platform, session } = setup();
+    rpc.on('workspace.open', (p) => workspaceStatus({ dir: p.dir }));
+
+    await session.openWorkspace('D:\\ws');
+
+    expect(platform.allowed).toEqual(['D:\\ws\\cache\\previews']);
+  });
 });

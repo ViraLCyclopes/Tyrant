@@ -1,3 +1,4 @@
+import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import { ask, open, save } from '@tauri-apps/plugin-dialog';
 import { revealItemInDir } from '@tauri-apps/plugin-opener';
 
@@ -8,6 +9,10 @@ export interface Platform {
   confirm(message: string, title: string): Promise<boolean>;
   reveal(path: string): Promise<void>;
   copy(text: string): Promise<void>;
+  /** URL the webview can load a local preview file from (Tauri's asset protocol). */
+  fileUrl(path: string): string;
+  /** Opens a workspace's cache\previews folder to the asset protocol. */
+  allowPreviews(dir: string): Promise<void>;
 }
 
 export const tauriPlatform: Platform = {
@@ -21,4 +26,6 @@ export const tauriPlatform: Platform = {
   confirm: (message, title) => ask(message, { title, kind: 'warning' }),
   reveal: (path) => revealItemInDir(path),
   copy: (text) => navigator.clipboard.writeText(text),
+  fileUrl: (path) => convertFileSrc(path),
+  allowPreviews: (dir) => invoke('allow_previews', { dir }),
 };

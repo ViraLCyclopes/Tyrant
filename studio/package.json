@@ -15,6 +15,8 @@
     "build:app": "npm run sidecar && tauri build --config src-tauri/tauri.bundle.conf.json"
   },
   "dependencies": {
+    "@babylonjs/core": "7.54.3",
+    "@babylonjs/loaders": "7.54.3",
     "@tauri-apps/api": "2.12.1",
     "@tauri-apps/plugin-dialog": "2.8.1",
     "@tauri-apps/plugin-opener": "2.7.0"

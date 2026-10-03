@@ -85,6 +85,22 @@ pub fn rotate_if_large(path: &Path, max_bytes: u64) {
     }
 }
 
+/// True only for an absolute `<workspace>\cache\previews` folder: the one place the UI may load files from.
+pub fn is_preview_dir(path: &Path) -> bool {
+    use std::path::Component;
+    if !path.is_absolute() || path.components().any(|c| matches!(c, Component::ParentDir | Component::CurDir)) {
+        return false;
+    }
+    let names: Vec<String> = path
+        .components()
+        .filter_map(|c| match c {
+            Component::Normal(name) => Some(name.to_string_lossy().to_lowercase()),
+            _ => None,
+        })
+        .collect();
+    names.len() >= 3 && names[names.len() - 2] == "cache" && names[names.len() - 1] == "previews"
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -145,5 +161,16 @@ mod tests {
     fn exit_payload_is_camel_case_json() {
         let json = serde_json::to_string(&ExitPayload { code: Some(1), restarting: true, error: None }).unwrap();
         assert_eq!(json, r#"{"code":1,"restarting":true,"error":null}"#);
+    }
+
+    #[test]
+    fn only_preview_folders_can_be_served() {
+        assert!(is_preview_dir(Path::new(r"D:\ws\cache\previews")));
+        assert!(is_preview_dir(Path::new(r"D:\Tyrant\My Workspace\Cache\Previews\")));
+        assert!(!is_preview_dir(Path::new(r"D:\ws\cache")));
+        assert!(!is_preview_dir(Path::new(r"C:\Windows\System32")));
+        assert!(!is_preview_dir(Path::new(r"D:\ws\cache\previews\..\..")));
+        assert!(!is_preview_dir(Path::new(r"D:\cache\previews")));
+        assert!(!is_preview_dir(Path::new(r"cache\previews")));
     }
 }

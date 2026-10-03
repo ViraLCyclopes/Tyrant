@@ -29,4 +29,14 @@ export class FakePlatform implements Platform {
   async copy(text: string): Promise<void> {
     this.copied.push(text);
   }
+
+  readonly allowed: string[] = [];
+
+  fileUrl(path: string): string {
+    return `asset://${path}`;
+  }
+
+  async allowPreviews(dir: string): Promise<void> {
+    this.allowed.push(dir);
+  }
 }

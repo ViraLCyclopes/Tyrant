@@ -214,12 +214,21 @@ export class Session {
     this.store.set(LAST_WORKSPACE, status.dir);
     this.recent = [status.dir, ...this.recent.filter((d) => d.toLowerCase() !== status.dir.toLowerCase())].slice(0, MAX_RECENT);
     this.store.set(RECENT_WORKSPACES, JSON.stringify(this.recent));
+    this.openPreviews(status.dir);
+  }
+
+  /** Previews are files in <workspace>\cache\previews; the shell only serves that folder once asked. */
+  private openPreviews(dir: string): void {
+    void this.platform.allowPreviews(`${dir}\\cache\\previews`).catch(() => {
+      // without it previews show as broken images; the rest of the app is unaffected
+    });
   }
 
   /** After a core restart the new process has no workspace open; reopen it without hiding the restart message. */
   private async reopen(dir: string): Promise<void> {
     try {
       this.workspace = await this.rpc.call('workspace.open', { dir });
+      this.openPreviews(dir);
     } catch (e) {
       this.error = asRpcError(e);
     }
