@@ -16,7 +16,29 @@ namespace Tyrant.Framework
             Patch(harmony, "PrehistoricKingdom.ScenarioManager", "IsRewardUnlocked", nameof(Unlocked), postfix: true);
             Patch(harmony, "PrehistoricKingdom.NurseryMenuV2", "SetCreationRect", nameof(AfterSkinRow), postfix: true);
             Patch(harmony, "PrehistoricKingdom.NurseryMenuV2", "GenerateNewAnimal", nameof(AfterGenerate), postfix: true);
-            Patch(harmony, "AnimalsV2.AnimalGenetics", "Load", nameof(BeforeGeneticsLoad), postfix: false);
+            // AnimalGenetics is a struct, so its Load cannot be prefixed with an object __instance; every path that gives an animal
+            // its skin number (save load via AnimalGenetics.Load, SetAnimalVisuals, eggs) sets CurrentSkinIDX, so the clamp sits there.
+            PatchSetter(harmony, "PrehistoricKingdom.Animal");
+            PatchSetter(harmony, "PrehistoricKingdom.VivariumAnimal");
+        }
+
+        private static void PatchSetter(HarmonyLib.Harmony harmony, string typeName)
+        {
+            try
+            {
+                var type = AccessTools.TypeByName(typeName);
+                var setter = type == null ? null : AccessTools.PropertySetter(type, "CurrentSkinIDX");
+                if (setter == null)
+                {
+                    FrameworkMod.Log.Warning($"{typeName}.CurrentSkinIDX was not found (game updated?); unknown saved skin numbers are not checked.");
+                    return;
+                }
+                harmony.Patch(setter, prefix: new HarmonyMethod(typeof(SkinPatches), nameof(BeforeSetSkin)));
+            }
+            catch (Exception ex)
+            {
+                FrameworkMod.Log.Warning($"{typeName}.CurrentSkinIDX could not be patched (game updated?); unknown saved skin numbers are not checked: {ex.GetBaseException().Message}");
+            }
         }
 
         /// <summary>Each patch stands alone: a game update that renames, overloads or re-signs one method turns off only that part.</summary>
@@ -69,7 +91,9 @@ namespace Tyrant.Framework
                 if (!SkinsModule.IsStandInIndex(data, skin.GetValue<int>())) return;
                 var count = (Traverse.Create(data).Field("skinsData").GetValue() as IList)?.Count ?? 0;
                 var choices = Enumerable.Range(0, count).Where(i => !SkinsModule.IsStandInIndex(data, i)).ToList();
-                if (choices.Count > 0) skin.SetValue(choices[UnityEngine.Random.Range(0, choices.Count)]);
+                if (choices.Count == 0) return;
+                skin.SetValue(choices[UnityEngine.Random.Range(0, choices.Count)]);
+                AccessTools.Method(__instance.GetType(), "GenerateNewSkinVariation")?.Invoke(__instance, new[] { __result });
             }
             catch (Exception ex)
             {
@@ -77,22 +101,21 @@ namespace Tyrant.Framework
             }
         }
 
-        private static void BeforeGeneticsLoad(object __instance, object animal)
+        /// <summary>A skin number past the species' list (its mod's numbers were lost) becomes skin 0 instead of breaking the animal.</summary>
+        private static void BeforeSetSkin(object __instance, ref int value)
         {
             try
             {
-                var data = Traverse.Create(animal).Property("BaseData").GetValue();
-                var count = (Traverse.Create(data).Field("skinsData").GetValue() as IList)?.Count ?? 0;
-                var skin = Traverse.Create(__instance).Field("skinIdx");
-                var index = skin.GetValue<int>();
-                if (count == 0 || (index >= 0 && index < count)) return;
-                skin.SetValue(0);
-                if (!_clampAnnounced) FrameworkMod.Log.Warning($"A saved animal wore skin number {index}, which does not exist now; it shows skin 0.");
+                var data = Traverse.Create(__instance).Property("BaseData").GetValue();
+                var count = data == null ? 0 : (Traverse.Create(data).Field("skinsData").GetValue() as IList)?.Count ?? 0;
+                if (count == 0 || (value >= 0 && value < count)) return;
+                if (!_clampAnnounced) FrameworkMod.Log.Warning($"An animal wore skin number {value}, which does not exist now; it shows skin 0.");
                 _clampAnnounced = true;
+                value = 0;
             }
             catch (Exception ex)
             {
-                FrameworkMod.Log.Warning("A saved skin number could not be checked: " + ex.Message);
+                FrameworkMod.Log.Warning("A skin number could not be checked: " + ex.Message);
             }
         }
     }
