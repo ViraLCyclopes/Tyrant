@@ -49,7 +49,7 @@ public class DumpCliTests
         Directory.CreateDirectory(Path.GetDirectoryName(zip)!);
         using (var archive = ZipFile.Open(zip, ZipArchiveMode.Create)) archive.CreateEntry("winhttp.dll");
 
-        var (code, _, err) = Run("dump", "install", "-w", Workspace(game), "--bepinex-zip", zip);
+        var (code, _, err) = Run("dump", "install", "-w", Workspace(game), "--loader-zip", zip);
 
         Assert.Equal(ExitCodes.PkError, code);
         Assert.Contains("DUMPER_INSTALL_FAILED", err);

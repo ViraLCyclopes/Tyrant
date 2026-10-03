@@ -8,25 +8,27 @@ public sealed class DumpInstallCommand : Command<DumpInstallCommand.Settings>
 {
     public sealed class Settings : WorkspaceSettings
     {
-        [CommandOption("--bepinex-zip <PATH>")]
-        [Description("Use an already-downloaded BepInEx_win_x64_5.4.23.5.zip instead of downloading it.")]
-        public string? BepInExZip { get; set; }
+        [CommandOption("--loader-zip <PATH>")]
+        [Description("Use an already-downloaded MelonLoader.x64.zip (0.7.3) instead of downloading it.")]
+        public string? LoaderZip { get; set; }
     }
 
     public override int Execute(CommandContext context, Settings settings)
     {
         var (ws, install) = CliServices.OpenWorkspace(settings);
-        var zip = settings.BepInExZip;
-        if (zip is null)
+        var zip = settings.LoaderZip;
+        // Only a fresh install needs the MelonLoader archive; an existing MelonLoader just gets the mod.
+        if (zip is null && ModLoaderInstaller.GetState(install) == InstallState.NotInstalled)
         {
-            Console.WriteLine($"Downloading BepInEx {BepInExInstaller.Version} ...");
+            Console.WriteLine($"Downloading {ModLoaderInstaller.LoaderName} {ModLoaderInstaller.Version} ...");
             using var http = new HttpClient();
-            zip = BepInExInstaller.DownloadAsync(http, Path.Combine(ws.CacheDir, "downloads"), CancellationToken.None).GetAwaiter().GetResult();
+            zip = ModLoaderInstaller.DownloadAsync(http, Path.Combine(ws.CacheDir, "downloads"), CancellationToken.None).GetAwaiter().GetResult();
         }
-        var record = new BepInExInstaller().Install(install, zip, Path.Combine(AppContext.BaseDirectory, "dumper"));
-        Console.WriteLine(record.InstalledBepInEx
-            ? $"Installed BepInEx {BepInExInstaller.Version} and the dumper ({record.Files.Count} files added to the game folder)."
-            : "Added the dumper to your existing BepInEx.");
+
+        var record = new ModLoaderInstaller().Install(install, zip, Path.Combine(AppContext.BaseDirectory, "dumper"));
+        Console.WriteLine(record.InstalledLoader
+            ? $"Installed {ModLoaderInstaller.LoaderName} {ModLoaderInstaller.Version} and the dumper mod ({record.Files.Count} files added to the game folder)."
+            : $"Added the dumper mod to your existing {ModLoaderInstaller.LoaderName}.");
         Console.WriteLine("Normal play is unaffected: the dumper does nothing unless 'pk dump run' asks it to. Undo with 'pk dump uninstall'.");
         return ExitCodes.Ok;
     }

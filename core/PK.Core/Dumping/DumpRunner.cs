@@ -23,7 +23,7 @@ public sealed class SteamLauncher : IGameLauncher
     }
 }
 
-/// <summary>Asks the installed plugin for a dump, starts the game and moves the result into &lt;workspace&gt;/data.</summary>
+/// <summary>Asks the installed mod for a dump, starts the game and moves the result into &lt;workspace&gt;/data.</summary>
 public sealed class DumpRunner(IGameLauncher launcher)
 {
     public const string OutputName = "data";
@@ -31,12 +31,12 @@ public sealed class DumpRunner(IGameLauncher launcher)
 
     public TimeSpan PollInterval { get; init; } = TimeSpan.FromSeconds(1);
 
-    public static string RequestPath(GameInstall install) => Path.Combine(install.RootDir, "BepInEx", "config", "pk.dumper.request.json");
+    public static string RequestPath(GameInstall install) => ModLoaderInstaller.RequestPath(install);
 
     public DumpManifestFile Run(GameInstall install, Workspace ws, TimeSpan timeout, IProgress<JobProgress>? progress, CancellationToken ct)
     {
-        if (BepInExInstaller.GetState(install) != InstallState.Installed)
-            throw new PkException(PkErrorCode.DumperNotInstalled, "The dumper is not installed in the game folder. Run 'pk dump install' first.");
+        if (ModLoaderInstaller.GetState(install) != InstallState.Installed)
+            throw new PkException(PkErrorCode.DumperNotInstalled, "The dumper mod is not installed in the game folder. Run 'pk dump install' first.");
 
         var requestId = Guid.NewGuid().ToString("N");
         var tmp = Path.Combine(ws.Dir, $"data.tmp-{requestId}");
@@ -69,7 +69,7 @@ public sealed class DumpRunner(IGameLauncher launcher)
                 if (manifest is not null && manifest.RequestId == requestId) break;
                 if (stopwatch.Elapsed > timeout)
                     throw new PkException(PkErrorCode.DumpTimeout,
-                        $"No dump arrived within {timeout.TotalSeconds:0} s (is Steam running? did the game start?). Last BepInEx log lines:{Environment.NewLine}{LogTail(install)}");
+                        $"No dump arrived within {timeout.TotalSeconds:0} s (is Steam running? did the game start?). Last MelonLoader log lines:{Environment.NewLine}{LogTail(install)}");
                 progress?.Report(new JobProgress(Math.Min(0.95, stopwatch.Elapsed / timeout), $"Waiting for the game ({stopwatch.Elapsed.TotalSeconds:0} s)"));
                 Thread.Sleep(PollInterval);
             }
@@ -96,7 +96,7 @@ public sealed class DumpRunner(IGameLauncher launcher)
 
     private static string LogTail(GameInstall install)
     {
-        var log = Path.Combine(install.RootDir, "BepInEx", "LogOutput.log");
+        var log = ModLoaderInstaller.LogPath(install);
         try
         {
             using var stream = new FileStream(log, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
@@ -106,7 +106,7 @@ public sealed class DumpRunner(IGameLauncher launcher)
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return "  (no BepInEx log — BepInEx may not have started)";
+            return "  (no MelonLoader log — MelonLoader may not have started)";
         }
     }
 

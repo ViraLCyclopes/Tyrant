@@ -9,7 +9,7 @@ public sealed class WorkspaceFile
     public string GameRoot { get; set; } = "";
     public GameFingerprint? Fingerprint { get; set; }
 
-    /// <summary>Files this toolset added to the game folder (BepInEx, plugins) — removed on uninstall.</summary>
+    /// <summary>Unused since Plan 4: the install record lives with the install (UserData/PKModStudio/install.json).</summary>
     public List<string> InstalledFiles { get; set; } = [];
 
     /// <summary>Output name ("source", "assets", "data") → build it was generated from.</summary>

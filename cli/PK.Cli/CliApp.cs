@@ -58,7 +58,7 @@ public static class CliApp
             config.AddBranch("dump", dump =>
             {
                 dump.AddCommand<DumpInstallCommand>("install")
-                    .WithDescription("Install BepInEx 5 and the dumper plugin into the game folder (reversible).");
+                    .WithDescription("Install MelonLoader and the dumper mod into the game folder (reversible).");
                 dump.AddCommand<DumpRunCommand>("run")
                     .WithDescription("Start the game once and dump every game database into <workspace>/data.");
                 dump.AddCommand<DumpUninstallCommand>("uninstall")

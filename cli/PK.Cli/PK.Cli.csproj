@@ -11,9 +11,9 @@
     <PackageReference Include="Spectre.Console.Cli" Version="0.49.1" />
   </ItemGroup>
   <ItemGroup>
-    <!-- Build the BepInEx plugin (net472) and ship it in <pk.exe folder>/dumper for 'pk dump install'. -->
+    <!-- Build the MelonLoader mod (net472) and ship it in <pk.exe folder>/dumper for 'pk dump install'. -->
     <ProjectReference Include="..\..\game\PK.Dumper\PK.Dumper.csproj" ReferenceOutputAssembly="false" PrivateAssets="all"
-                      SkipGetTargetFrameworkProperties="true" SetTargetFramework="TargetFramework=net472" />
+                      SkipGetTargetFrameworkProperties="true" />
   </ItemGroup>
   <Target Name="CopyDumperPlugin" AfterTargets="Build">
     <ItemGroup>

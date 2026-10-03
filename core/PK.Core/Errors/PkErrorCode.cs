@@ -17,7 +17,7 @@ public enum PkErrorCode
     AssetUnreadable,
     DumperNotInstalled,
     DumperInstallFailed,
-    BepInExConflict,
+    ModLoaderConflict,
     DumpTimeout,
     DumpFailed,
     DataMissing,

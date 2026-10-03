@@ -2,24 +2,28 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
-using BepInEx;
+using MelonLoader;
+using MelonLoader.Utils;
+using PK.Dumper;
 using PK.Dumper.Serialization;
 using UnityEngine;
+
+[assembly: MelonInfo(typeof(DumperMod), "PK Mod Studio Dumper", "1.0.0", "PK Mod Studio")]
+[assembly: MelonGame("Blue Meridian", "Prehistoric Kingdom")]
 
 namespace PK.Dumper
 {
     /// <summary>Idle unless pk wrote a request file; then waits for the game's databases, dumps them and quits.</summary>
-    [BepInPlugin("dev.pkmodstudio.dumper", "PK Mod Studio Dumper", "1.0.0")]
-    public sealed class DumperPlugin : BaseUnityPlugin
+    public sealed class DumperMod : MelonMod
     {
         public const string RequestFileName = "pk.dumper.request.json";
 
-        private void Awake()
+        public override void OnInitializeMelon()
         {
-            var requestPath = Path.Combine(Paths.ConfigPath, RequestFileName);
+            var requestPath = Path.Combine(MelonEnvironment.UserDataDirectory, RequestFileName);
             if (!File.Exists(requestPath))
             {
-                Logger.LogInfo("No dump requested; the dumper stays idle.");
+                LoggerInstance.Msg("No dump requested; the dumper stays idle.");
                 return;
             }
 
@@ -30,16 +34,16 @@ namespace PK.Dumper
             }
             catch (Exception ex)
             {
-                Logger.LogError("Unreadable dump request: " + ex.Message);
+                LoggerInstance.Error("Unreadable dump request: " + ex.Message);
                 return;
             }
             if (request == null || string.IsNullOrEmpty(request.requestId) || string.IsNullOrEmpty(request.outputDir))
             {
-                Logger.LogError("Incomplete dump request; ignoring it.");
+                LoggerInstance.Error("Incomplete dump request; ignoring it.");
                 return;
             }
-            Logger.LogInfo("Dump requested (" + request.requestId + ") → " + request.outputDir);
-            StartCoroutine(Run(request, requestPath));
+            LoggerInstance.Msg("Dump requested (" + request.requestId + ") -> " + request.outputDir);
+            MelonCoroutines.Start(Run(request, requestPath));
         }
 
         private IEnumerator Run(DumpRequest request, string requestPath)
@@ -60,7 +64,7 @@ namespace PK.Dumper
                 yield return new WaitForSecondsRealtime(1f);
             }
 
-            Logger.LogInfo("Game databases found; waiting " + request.settleSeconds + " s for localization.");
+            LoggerInstance.Msg("Game databases found; waiting " + request.settleSeconds + " s for localization.");
             yield return new WaitForSecondsRealtime(request.settleSeconds);
 
             DumpResult result;
@@ -88,19 +92,19 @@ namespace PK.Dumper
                 {
                     RequestId = request.requestId,
                     BuildGuid = request.buildGuid ?? "",
-                    DumperVersion = Info.Metadata.Version.ToString(),
+                    DumperVersion = Info.Version,
                     CreatedUtc = DateTime.UtcNow.ToString("o"),
                 };
                 DumpWriter.Write(request.outputDir, result, languages, manifest);
-                Logger.LogInfo("Dump written: " + result.Objects.Count + " objects, " + result.Errors.Count + " errors.");
+                LoggerInstance.Msg("Dump written: " + result.Objects.Count + " objects, " + result.Errors.Count + " errors.");
             }
             catch (Exception ex)
             {
-                Logger.LogError("Could not write the dump: " + ex);
+                LoggerInstance.Error("Could not write the dump: " + ex);
             }
             finally
             {
-                try { File.Delete(requestPath); } catch (Exception ex) { Logger.LogWarning("Could not delete the request: " + ex.Message); }
+                try { File.Delete(requestPath); } catch (Exception ex) { LoggerInstance.Warning("Could not delete the request: " + ex.Message); }
             }
             if (request.quitWhenDone) Application.Quit();
         }

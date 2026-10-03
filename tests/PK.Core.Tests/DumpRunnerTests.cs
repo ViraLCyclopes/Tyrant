@@ -15,13 +15,21 @@ public class DumpRunnerTests
 
     private static string TempDir() => Path.Combine(Path.GetTempPath(), "pk-tests", Guid.NewGuid().ToString("N"));
 
-    /// <summary>Marks the fake game as having our plugin installed.</summary>
+    /// <summary>Marks the fake game as having our mod installed.</summary>
     private static GameInstall Installed(FakeGame game)
     {
         var install = new GameInstall(game.Root, null);
-        Directory.CreateDirectory(BepInExInstaller.PluginDir(install));
-        File.WriteAllText(Path.Combine(BepInExInstaller.PluginDir(install), "install.json"), """{"installedBepInEx":true,"files":[]}""");
+        Directory.CreateDirectory(ModLoaderInstaller.RecordDir(install));
+        File.WriteAllText(Path.Combine(ModLoaderInstaller.RecordDir(install), "install.json"), """{"installedLoader":true,"files":[],"createdDirs":[]}""");
         return install;
+    }
+
+    [Fact]
+    public void Request_and_log_live_in_melonloader_folders()
+    {
+        using var game = new FakeGame();
+        var install = new GameInstall(game.Root, null);
+        Assert.Equal(Path.Combine(game.Root, "UserData", "pk.dumper.request.json"), DumpRunner.RequestPath(install));
     }
 
     /// <summary>Simulates the plugin: reads the request and writes a dump with the given number of objects.</summary>
@@ -74,7 +82,8 @@ public class DumpRunnerTests
         var install = Installed(game);
         var ws = Workspace.Create(TempDir(), install);
         File.WriteAllText(Path.Combine(ws.DataDir, "old.txt"), "previous dump");
-        File.WriteAllText(Path.Combine(game.Root, "BepInEx", "LogOutput.log"), "line one\n[Error] something broke\n");
+        Directory.CreateDirectory(Path.Combine(game.Root, "MelonLoader"));
+        File.WriteAllText(ModLoaderInstaller.LogPath(install), "line one\n[Error] something broke\n");
 
         var ex = Assert.Throws<PkException>(() => new DumpRunner(new SilentLauncher()) { PollInterval = TimeSpan.FromMilliseconds(10) }
             .Run(install, ws, TimeSpan.FromMilliseconds(200), null, CancellationToken.None));
