@@ -56,11 +56,10 @@ public sealed class ModsMethods(StudioSession session, JobManager jobs)
     public ModRestoreCutoutsResult RestoreCutouts(ModIdParams p)
     {
         var (ws, install) = session.Current();
-        var index = TryIndex(ws);
-        if (index is null) return new ModRestoreCutoutsResult([]);
-        var restored = new CutoutRestorer(Cutouts.GamePixels(install, Options.AssetReader)).Restore(ModProject.Open(ws, p.Id), index, TrySpecies(ws));
-        if (restored.Count > 0) session.Log($"'{p.Id}': restored the see-through parts of {string.Join(", ", restored)}.");
-        return new ModRestoreCutoutsResult(restored);
+        var index = AssetIndex.Load(AssetIndex.PathIn(ws)); // without it the game textures are unknown: say so, not "nothing to restore"
+        var result = new CutoutRestorer(Cutouts.GamePixels(install, Options.AssetReader)).Restore(ModProject.Open(ws, p.Id), index, TrySpecies(ws));
+        if (result.Restored.Count > 0) session.Log($"'{p.Id}': restored the see-through parts of {string.Join(", ", result.Restored)}.");
+        return new ModRestoreCutoutsResult(result.Restored, result.Problems);
     }
 
     [RpcMethod("mods.install", JobResult = typeof(ModInstallResult))]

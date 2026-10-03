@@ -118,12 +118,13 @@ public sealed class ModRestoreCutoutsCommand : Command<ModSettings>
     {
         var (ws, install) = CliServices.OpenWorkspace(settings);
         var mod = ModProject.Open(ws, settings.Id);
-        var index = ModCli.TryIndex(ws);
-        var restored = index is null ? [] : new CutoutRestorer(Cutouts.GamePixels(install, new BundleAssetReader())).Restore(mod, index, ModCli.TrySpecies(ws));
-        if (restored.Count == 0) Console.WriteLine("No colour PNGs need their see-through parts restored.");
-        foreach (var file in restored) Console.WriteLine($"  restored  {Path.Combine(mod.Dir, file)}");
-        if (restored.Count > 0) Console.WriteLine($"Install again to update the game: 'tyrant mod install {mod.Id}'.");
-        return ExitCodes.Ok;
+        var index = CliServices.LoadIndex(ws, install); // errors when there is no index: the game textures would be unknown
+        var result = new CutoutRestorer(Cutouts.GamePixels(install, new BundleAssetReader())).Restore(mod, index, ModCli.TrySpecies(ws));
+        foreach (var file in result.Restored) Console.WriteLine($"  restored  {Path.Combine(mod.Dir, file.Replace('/', Path.DirectorySeparatorChar))}");
+        foreach (var problem in result.Problems) Console.WriteLine($"  WARN      {problem}");
+        if (result.Restored.Count == 0 && result.Problems.Count == 0) Console.WriteLine("No colour PNGs need their see-through parts restored.");
+        if (result.Restored.Count > 0) Console.WriteLine($"Install again to update the game: 'tyrant mod install {mod.Id}'.");
+        return result.Problems.Count == 0 ? ExitCodes.Ok : ExitCodes.Partial;
     }
 }
 

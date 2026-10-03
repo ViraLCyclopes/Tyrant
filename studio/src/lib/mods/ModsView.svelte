@@ -41,9 +41,10 @@
   async function restoreCutouts(row: ModRow) {
     const r = await session.safely(() => session.rpc.call('mods.restoreCutouts', { id: row.id }));
     if (!r) return;
-    session.notice = r.restored.length
+    const done = r.restored.length
       ? `Restored the see-through parts of ${r.restored.length} PNG${r.restored.length === 1 ? '' : 's'} in '${row.id}'. Install it again to update the game.`
       : `Nothing to restore in '${row.id}'.`;
+    session.notice = r.problems.length ? `${done} Not done: ${r.problems.join(' ')}` : done;
     await check(row);
   }
 

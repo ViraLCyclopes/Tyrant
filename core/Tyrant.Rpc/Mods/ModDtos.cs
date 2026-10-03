@@ -20,7 +20,7 @@ public sealed record ModEnableParams(string Id, bool Enabled);
 /// <summary>MissingCutouts: colour PNGs that lost the see-through parts (feathers, hair) of their vanilla texture.</summary>
 public sealed record ModCheckReport(IReadOnlyList<string> Errors, IReadOnlyList<string> Warnings, IReadOnlyList<string>? MissingCutouts = null);
 
-public sealed record ModRestoreCutoutsResult(IReadOnlyList<string> Restored);
+public sealed record ModRestoreCutoutsResult(IReadOnlyList<string> Restored, IReadOnlyList<string> Problems);
 
 public sealed record ModInstallResult(string Message, IReadOnlyList<string> Warnings);
 

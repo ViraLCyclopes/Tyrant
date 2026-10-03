@@ -214,4 +214,20 @@ public class ModCheckerTests
         Assert.True(noDump.Ok);
         Assert.Contains(noDump.Warnings, w => w.Contains("Run data dump"));
     }
+
+    [Fact]
+    public void A_png_locked_by_another_program_is_an_error_not_a_crash()
+    {
+        var (game, _, mod) = Setup();
+        using var _ = game;
+        Png(mod, "d.png", 4, _ => (1, 2, 3, 255));
+        Entry(mod, "T_Carch_D", "textures/d.png");
+
+        using (new FileStream(Path.Combine(mod.Dir, "textures", "d.png"), FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            var result = Checker.Check(mod, Index);
+
+            Assert.Contains(result.Errors, e => e.Contains("d.png") && e.Contains("could not be read"));
+        }
+    }
 }

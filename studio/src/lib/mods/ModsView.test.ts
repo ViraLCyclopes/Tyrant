@@ -113,7 +113,7 @@ describe('ModsView', () => {
     rpc.on('mods.restoreCutouts', () => {
       const restored = missing;
       missing = [];
-      return { restored };
+      return { restored, problems: [] };
     });
     renderWith(ModsView, session);
     await fireEvent.click(await screen.findByRole('button', { name: 'Check Red spot' }));

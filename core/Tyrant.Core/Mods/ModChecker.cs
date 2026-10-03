@@ -109,7 +109,7 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
     {
         var missing = new List<string>();
         var vanillaShare = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
-        foreach (var (file, vanilla) in Cutouts.Targets(mod, index, species).DistinctBy(t => t.File, StringComparer.OrdinalIgnoreCase))
+        foreach (var (file, vanillas) in Cutouts.ByFile(mod, index, species))
         {
             var path = Path.GetFullPath(Path.Combine(mod.Dir, file));
             if (!ModPaths.IsInside(path, mod.Dir) || !File.Exists(path)) continue;
@@ -124,10 +124,16 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
                 continue; // already reported as unreadable
             }
             if (share >= Cutouts.Lost) continue;
-            var key = vanilla.Guid ?? $"{vanilla.Bundle}#{vanilla.PathId}";
-            if (!vanillaShare.TryGetValue(key, out var original))
-                vanillaShare[key] = original = pixelsOf!(vanilla) is { } pixels ? Cutouts.SeeThrough(pixels.Data) : 0;
-            if (original < Cutouts.UsesCutouts) continue;
+            AssetRecord? vanilla = null;
+            var original = 0.0;
+            foreach (var candidate in vanillas) // the one with the most cutouts decides
+            {
+                var key = candidate.Guid ?? $"{candidate.Bundle}#{candidate.PathId}";
+                if (!vanillaShare.TryGetValue(key, out var candidateShare))
+                    vanillaShare[key] = candidateShare = pixelsOf!(candidate) is { } pixels ? Cutouts.SeeThrough(pixels.Data) : 0;
+                if (candidateShare > original) (vanilla, original) = (candidate, candidateShare);
+            }
+            if (vanilla is null || original < Cutouts.UsesCutouts) continue;
             missing.Add(file);
             warnings.Add($"{file} has no see-through pixels, but {vanilla.Name} cuts feathers or hair out with them ({original:P0} of it is see-through): " +
                          "in game those parts would show as solid shapes. Keep the alpha channel when saving, or use Restore cutouts.");
@@ -141,13 +147,18 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
         var path = Path.GetFullPath(Path.Combine(mod.Dir, file));
         if (!ModPaths.IsInside(path, mod.Dir)) { errors.Add($"{label}: \"{file}\" points outside the mod folder."); return null; }
         if (!File.Exists(path)) { errors.Add($"{label}: {file} is missing."); return null; }
-        if (!HasPngSignature(path)) { errors.Add($"{label}: {file} is not a PNG (other image formats are not supported in game)."); return null; }
         try
         {
+            if (!HasPngSignature(path)) { errors.Add($"{label}: {file} is not a PNG (other image formats are not supported in game)."); return null; }
             using var stream = File.OpenRead(path);
             return ImageResult.FromStream(stream, ColorComponents.RedGreenBlueAlpha);
         }
-        catch (Exception ex) when (ex is InvalidOperationException or IOException or ArgumentException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            errors.Add($"{label}: {file} could not be read ({ex.Message}); is it open in another program?");
+            return null;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
         {
             errors.Add($"{label}: {file} is not a readable PNG.");
             return null;

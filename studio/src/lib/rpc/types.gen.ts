@@ -388,6 +388,7 @@ export interface ModReplaceParams {
 
 export interface ModRestoreCutoutsResult {
   restored: string[];
+  problems: string[];
 }
 
 export interface ModRow {

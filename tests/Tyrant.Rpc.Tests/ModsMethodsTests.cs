@@ -179,13 +179,17 @@ public class ModsMethodsTests
     public async Task Check_reports_missing_cutouts_and_restore_cutouts_answers_with_the_fixed_files()
     {
         using var game = new FakeGame();
-        var (h, _) = await Opened(game);
+        var (h, ws) = await Opened(game);
         await h.Call("mods.create", new { id = "red-spot" });
-
         var check = await h.Call("mods.check", new { id = "red-spot" });
-        var restored = await h.Call("mods.restoreCutouts", new { id = "red-spot" });
+        var restoredNothing = await h.Call("mods.restoreCutouts", new { id = "red-spot" });
+        File.Delete(Path.Combine(ws, "cache", "asset-index.json"));
+
+        var withoutIndex = await Assert.ThrowsAsync<RpcCallException>(() => h.Call("mods.restoreCutouts", new { id = "red-spot" }));
 
         Assert.Equal(0, check.GetProperty("missingCutouts").GetArrayLength());
-        Assert.Equal(0, restored.GetProperty("restored").GetArrayLength());
+        Assert.Equal(0, restoredNothing.GetProperty("restored").GetArrayLength());
+        Assert.Equal(0, restoredNothing.GetProperty("problems").GetArrayLength());
+        Assert.Equal("ASSET_INDEX_MISSING", withoutIndex.DataCode); // not a silent "nothing to restore"
     }
 }
