@@ -32,8 +32,9 @@ public sealed class WorkspaceStatusCommand : Command<WorkspaceSettings>
                 // an unreadable index is reported by the commands that use it
             }
         }
-        if (ws.Data.Outputs.Count == 0) Console.WriteLine("Outputs   : (none yet)");
-        foreach (var (name, stamp) in ws.Data.Outputs.OrderBy(kv => kv.Key))
+        var outputs = ws.Outputs();
+        if (outputs.Count == 0) Console.WriteLine("Outputs   : (none yet)");
+        foreach (var (name, stamp) in outputs.OrderBy(kv => kv.Key))
             Console.WriteLine($"  {name,-8} {stamp.CreatedUtc:yyyy-MM-dd HH:mm} UTC{(stale.Contains(name) ? "  (stale)" : "")}");
         return ExitCodes.Ok;
     }

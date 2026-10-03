@@ -52,6 +52,18 @@ describe('Session', () => {
     expect(JSON.parse(store.get('tyrant.recentWorkspaces')!)).toEqual(['B', 'f', 'e', 'd', 'c']);
   });
 
+  it('drops a recent workspace whose folder no longer opens', async () => {
+    const { rpc, store, session } = setup({ 'tyrant.recentWorkspaces': JSON.stringify(['D:\\gone', 'D:\\ok']) });
+    rpc.on('workspace.open', () => {
+      throw new RpcError("'D:\\gone' is not a workspace.", 'WORKSPACE_INVALID', 'PICK_WORKSPACE_FOLDER');
+    });
+
+    await session.openWorkspace('D:\\gone');
+
+    expect(session.recent).toEqual(['D:\\ok']);
+    expect(JSON.parse(store.get('tyrant.recentWorkspaces')!)).toEqual(['D:\\ok']);
+  });
+
   it('runJob shows progress, returns the result and refreshes the status', async () => {
     const { rpc, session } = setup();
     const seen: number[] = [];

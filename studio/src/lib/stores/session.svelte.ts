@@ -105,7 +105,15 @@ export class Session {
     const status = await this.safely(() => this.rpc.call('workspace.open', { dir, gamePath: gamePath ?? null }));
     this.lastFailed = status ? null : { kind: 'open', dir };
     if (status) this.useWorkspace(status);
+    else if (this.error?.code === 'WORKSPACE_INVALID') this.forgetRecent(dir); // the folder is gone or no longer a workspace
     return status !== null;
+  }
+
+  private forgetRecent(dir: string) {
+    const kept = this.recent.filter((d) => d.toLowerCase() !== dir.toLowerCase());
+    if (kept.length === this.recent.length) return;
+    this.recent = kept;
+    this.store.set(RECENT_WORKSPACES, JSON.stringify(this.recent));
   }
 
   async createWorkspace(dir: string): Promise<boolean> {

@@ -110,15 +110,27 @@ public sealed class Workspace
         }
     }
 
+    private readonly object _outputsLock = new();
+
+    /// <summary>A copy of the output stamps: safe to read while a job is stamping outputs on another thread.</summary>
+    public IReadOnlyDictionary<string, OutputStamp> Outputs()
+    {
+        lock (_outputsLock) return new Dictionary<string, OutputStamp>(Data.Outputs);
+    }
+
     public void StampOutput(string name, GameFingerprint fingerprint)
     {
-        Data.Outputs[name] = new OutputStamp(fingerprint, DateTimeOffset.UtcNow);
-        Save();
+        lock (_outputsLock)
+        {
+            Data.Outputs[name] = new OutputStamp(fingerprint, DateTimeOffset.UtcNow);
+            Save();
+        }
     }
 
     public void RemoveOutput(string name)
     {
-        if (Data.Outputs.Remove(name)) Save();
+        lock (_outputsLock)
+            if (Data.Outputs.Remove(name)) Save();
     }
 
     /// <summary>Points the workspace at a (moved) game install.</summary>
@@ -129,7 +141,7 @@ public sealed class Workspace
     }
 
     public IReadOnlyList<string> StaleOutputs(GameFingerprint current) =>
-        Data.Outputs.Where(kv => kv.Value.Fingerprint != current).Select(kv => kv.Key).Order().ToList();
+        Outputs().Where(kv => kv.Value.Fingerprint != current).Select(kv => kv.Key).Order().ToList();
 
     /// <summary>True when any generated output came from a different game build than <paramref name="current"/>.</summary>
     public bool IsStale(GameFingerprint current) => StaleOutputs(current).Count > 0;
