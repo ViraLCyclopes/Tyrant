@@ -46,8 +46,16 @@ Release build: `npm run build:app`, install `studio/src-tauri/target/release/bun
     Evening are still chosen. Set them to None: the plain dark-green background, no floor.
 23. Tick the prefab, **Export selected**, open the `.glb` in Blender 5.2 (File → Import → glTF): the model is textured,
     and `assets/models/<name>/textures/` holds the PNGs.
-24. **Copy diagnostics** and paste: versions, build, workspace and log tails appear.
-25. **(game)** **Uninstall dumper**: the notice says the game folder is back to vanilla; `version.dll`,
+24. Assets → open `T_carcharodontosaurus_alt1_male_D` → **Replace in a mod…** → New mod `red-spot-carcharo` → leave Your PNG empty
+    (after exporting and editing it) → **Add to mod**: the notice says to install it from the Mods tab.
+25. Mods: the mod shows *Not installed* with 1 texture; **Check** says no problems (or warns about size if it differs).
+26. **(game)** **Install to game** → confirm: the notice says it was installed; the row shows *Installed* and **On** is ticked;
+    `<game>\UserData\Tyrant\Mods\red-spot-carcharo\` exists and `<game>\Mods\Tyrant.Framework.dll` is present.
+27. **(game)** Start the game, spawn a male Carcharodontosaurus with the alt1 skin: the red spots show. `MelonLoader\Latest.log` has
+    `red-spot-carcharo 1.0.0: 1 texture replacement(s)` and `replaced T_carcharodontosaurus_alt1_male_D (_AdultDiffuse) on …`.
+28. **(game)** Close the game, untick **On**, start again: vanilla skin. **Remove from game**: the folder is gone.
+29. **Copy diagnostics** and paste: versions, build, workspace and log tails appear.
+30. **(game)** **Uninstall from game**: the notice says the game folder is back to vanilla; `version.dll`,
     `MelonLoader\`, `Mods\`, `UserData\` and `UserLibs\` are gone from the game folder (if Tyrant installed them).
-26. Release build only: the installed app starts, finds the core next to itself (step 1 works) and installs the
+31. Release build only: the installed app starts, finds the core next to itself (step 1 works) and installs the
     dumper from its own `sidecar\dumper` folder.

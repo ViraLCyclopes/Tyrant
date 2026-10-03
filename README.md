@@ -76,7 +76,20 @@ dotnet run --project cli/Tyrant.Cli -- data export AnimalData -w D:\tyrant-works
 dotnet run --project cli/Tyrant.Cli -- dump uninstall -w D:\tyrant-workspace   # removes exactly what install added
 ```
 
-`dump install` is the only command that adds files to the game folder; the dumper mod stays idle during normal play.
+Mods (texture replacements; format in [docs/mod-format.md](docs/mod-format.md)):
+
+```powershell
+dotnet run --project cli/Tyrant.Cli -- mod new red-spot-carcharo --name "Red-spot Carcharodontosaurus" -w D:\tyrant-workspace
+dotnet run --project cli/Tyrant.Cli -- mod replace red-spot-carcharo T_carcharodontosaurus_alt1_male_D [your.png] -w D:\tyrant-workspace
+dotnet run --project cli/Tyrant.Cli -- mod check red-spot-carcharo -w D:\tyrant-workspace
+dotnet run --project cli/Tyrant.Cli -- mod install red-spot-carcharo -w D:\tyrant-workspace   # adds MelonLoader + Tyrant's framework if needed
+dotnet run --project cli/Tyrant.Cli -- mod disable red-spot-carcharo -w D:\tyrant-workspace   # also: enable, remove
+dotnet run --project cli/Tyrant.Cli -- mod list -w D:\tyrant-workspace
+```
+
+`dump install` and `mod install` are the only commands that add files to the game folder (MelonLoader, Tyrant's
+dumper and framework mods, and installed mods under `UserData\Tyrant`); no game file is ever replaced, and the dumper
+stays idle during normal play.
 Tyrant uses MelonLoader, the loader the Prehistoric Kingdom modding community already uses; if you have
 MelonLoader installed, only the mod is added (and only the mod is removed on uninstall).
 

@@ -16,10 +16,11 @@ which you install and remove explicitly).
 
 - **Outputs** lists what the workspace contains and when it was made. After a game update the outputs are marked
   *stale*; run **Refresh all** again.
-- **Game data dumper** installs MelonLoader (the community's mod loader, version 0.7.3, checksum-verified) and a
-  small dumper mod. The mod does nothing during normal play. **Run data dump** starts the game through Steam, reads
-  every game database at the main menu and closes the game again (about a minute). **Uninstall dumper** removes
-  exactly what was installed; MelonLoader stays if other mods use it.
+- **Tyrant in the game** installs MelonLoader (the community's mod loader, version 0.7.3, checksum-verified) and two
+  small Tyrant mods: the data dumper, which does nothing during normal play, and the modding framework, which applies
+  the mods you install from the Mods tab. **Run data dump** starts the game through Steam, reads every game database at
+  the main menu and closes the game again (about a minute). **Uninstall from game** removes exactly what was installed,
+  including installed mods; MelonLoader stays if other mods use it.
 - **Copy diagnostics** puts versions, the game build and recent log lines (never game files) on the clipboard for
   bug reports.
 
@@ -48,6 +49,19 @@ Needs an asset index (Home → **Index assets**, about 20 seconds; again after a
   `textures` folder next to the `.glb` files, which Blender picks up on import.
 - **Species**: export one animal's pack — its models, every texture of its group and `targets.json` with each asset's
   key — into `assets\species\<name>`.
+
+## Mods
+
+- **Make a texture mod:**
+  1. Open a texture in the Assets tab, click **Export selected** (or use the exported PNG under `assets\textures`) and edit it.
+  2. Click **Replace in a mod…** on that texture: pick a mod (or **New mod…**), leave **Your PNG** empty to use your edited export (or **Browse…**), then **Add to mod**.
+- **Mods tab:**
+  - **Check** lists problems: errors stop an install, warnings don't.
+  - **Install to game** copies the mod into the game. The first time, it also installs MelonLoader and Tyrant's framework, after asking.
+  - **On** switches a mod for the next game start. **Remove from game** takes it out again.
+  - *Changed since install* means you edited the workspace copy; install again to update the game.
+- **Start the game.** `MelonLoader\Latest.log` lists the mods Tyrant loaded and each texture it replaced.
+- **The file format** is described in `docs/mod-format.md`.
 
 ## Data
 
