@@ -22,6 +22,12 @@ public enum TyrantErrorCode
     DumpFailed,
     DataMissing,
     JobRunning,
+    ModNotFound,
+    ModInvalid,
+    ModIdInvalid,
+    GameRunning,
+    FrameworkMissing,
+    TargetNotFound,
 }
 
 /// <summary>A suggested remedy the UI can render as a button.</summary>

@@ -6,6 +6,8 @@ public class TyrantErrorTests
 {
     [Theory]
     [InlineData(TyrantErrorCode.GameNotFound, "GAME_NOT_FOUND")]
+    [InlineData(TyrantErrorCode.FrameworkMissing, "FRAMEWORK_MISSING")]
+    [InlineData(TyrantErrorCode.ModIdInvalid, "MOD_ID_INVALID")]
     [InlineData(TyrantErrorCode.WorkspaceInvalid, "WORKSPACE_INVALID")]
     [InlineData(TyrantErrorCode.WorkspaceInGameFolder, "WORKSPACE_IN_GAME_FOLDER")]
     [InlineData(TyrantErrorCode.DecompileFailed, "DECOMPILE_FAILED")]
