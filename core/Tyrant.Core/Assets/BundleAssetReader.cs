@@ -10,13 +10,17 @@ namespace Tyrant.Core.Assets;
 /// <summary>Reads the game's Addressables bundles through AssetsTools.NET (one session per call).</summary>
 public sealed class BundleAssetReader : IAssetReader
 {
+    public const int MaxDisplayedArrayElements = 100;
+
     public AssetInspection Inspect(GameInstall install, AssetRecord asset)
     {
         using var session = new AssetSession(install);
         var (file, baseField) = session.Open(asset);
         var info = file.file.GetAssetInfo(asset.PathId);
         var externals = file.file.Metadata.Externals.Select(e => e.PathName).ToList();
-        return new AssetInspection(info?.ByteSize ?? 0, FieldJsonWriter.ToJson(baseField), AssetReferences.Collect(baseField), externals);
+        // Capped for display: some meshes carry tens of megabytes of blend-shape structs. Exports write the full tree.
+        return new AssetInspection(info?.ByteSize ?? 0, FieldJsonWriter.ToJson(baseField, maxArrayElements: MaxDisplayedArrayElements),
+            AssetReferences.Collect(baseField), externals);
     }
 
     public TextureFacts WriteTexture(GameInstall install, AssetRecord texture, string pngPath)
@@ -35,13 +39,21 @@ public sealed class BundleAssetReader : IAssetReader
         PrefabModel model;
         using (var session = new AssetSession(install))
         {
-            model = asset.Type switch
+            try
             {
-                "GameObject" => new ModelExporter().ReadPrefab(session, asset),
-                "Mesh" => StandaloneMesh.ToPrefab(DecodeMesh(session, asset)),
-                _ => throw new TyrantException(TyrantErrorCode.AssetUnreadable,
-                    $"'{asset.Name}' is a {asset.Type}; only meshes and prefabs can be shown in 3D."),
-            };
+                model = asset.Type switch
+                {
+                    "GameObject" => new ModelExporter().ReadPrefab(session, asset),
+                    "Mesh" => StandaloneMesh.ToPrefab(MeshDecoder.Decode(session.Open(asset).BaseField)),
+                    _ => throw new TyrantException(TyrantErrorCode.AssetUnreadable,
+                        $"'{asset.Name}' is a {asset.Type}; only meshes and prefabs can be shown in 3D."),
+                };
+            }
+            catch (Exception ex) when (ex is InvalidDataException or FormatException or NotSupportedException)
+            {
+                // e.g. vertex data streamed in a .resS file, or a vertex format the decoder does not read yet
+                throw new TyrantException(TyrantErrorCode.AssetUnreadable, $"'{asset.Name}' could not be converted: {ex.Message}", FixAction.None, ex);
+            }
         }
         if (Directory.Exists(outputDir)) Directory.Delete(outputDir, recursive: true);
         var results = new ModelExporter().WriteModels(model, outputDir);
@@ -50,10 +62,7 @@ public sealed class BundleAssetReader : IAssetReader
             throw new TyrantException(TyrantErrorCode.AssetUnreadable,
                 $"'{asset.Name}' has no mesh that could be converted. {string.Join(" ", results.Select(r => r.Error))}".TrimEnd());
         return new ModelFacts(
-            converted.Select(r => r.OutputPath).ToList(),
-            converted.Sum(r => r.Renderer!.Mesh.VertexCount),
-            converted.Sum(r => r.Renderer!.Mesh.TriangleCount),
-            converted.Any(r => r.Renderer!.IsSkinned),
+            converted.Select(r => new ModelPart(r.OutputPath, r.Name, r.Renderer!.Mesh.VertexCount, r.Renderer.Mesh.TriangleCount, r.Renderer.IsSkinned)).ToList(),
             results.Where(r => !r.Success).Select(r => r.Error ?? r.Name).ToList());
     }
 
@@ -68,17 +77,4 @@ public sealed class BundleAssetReader : IAssetReader
     public SpeciesPackResult WriteSpeciesPack(GameInstall install, Workspace ws, AssetIndex index, SpeciesEntry species,
         IProgress<JobProgress>? progress, CancellationToken ct) =>
         new SpeciesPackExporter().Export(install, ws, index, species, progress, ct);
-
-    private static MeshData DecodeMesh(AssetSession session, AssetRecord asset)
-    {
-        var (_, field) = session.Open(asset);
-        try
-        {
-            return MeshDecoder.Decode(field);
-        }
-        catch (InvalidDataException ex)
-        {
-            throw new TyrantException(TyrantErrorCode.AssetUnreadable, $"Mesh '{asset.Name}' could not be decoded: {ex.Message}", FixAction.None, ex);
-        }
-    }
 }

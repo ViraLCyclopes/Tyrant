@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Tyrant.Core.Assets;
+using Tyrant.Core.Install;
 using Tyrant.Core.Workspaces;
 using Tyrant.Rpc.Protocol;
 
@@ -19,9 +20,12 @@ internal sealed class PreviewCache
 
     public static string Root(Workspace ws) => Path.Combine(ws.CacheDir, "previews");
 
-    public AssetPreview GetOrCreate(Workspace ws, string buildGuid, AssetRecord asset, Func<string, AssetPreview> create)
+    public AssetPreview GetOrCreate(Workspace ws, GameFingerprint build, AssetRecord asset, Func<string, AssetPreview> create)
     {
-        var dir = Path.Combine(Root(ws), Safe(buildGuid.Length > 0 ? buildGuid : "unknown-build"), FolderFor(asset));
+        // The build id alone is "unknown" when boot.config has none; the assembly hash still tells builds apart.
+        var buildFolder = Path.Combine(Root(ws), Safe($"{build.BuildGuid}-{build.AssemblySha256[..Math.Min(8, build.AssemblySha256.Length)]}"));
+        if (!Directory.Exists(buildFolder)) RemoveOtherBuilds(Root(ws), buildFolder);
+        var dir = Path.Combine(buildFolder, FolderFor(asset));
         lock (_locks.GetOrAdd(dir, _ => new object())) // two requests for one asset must not write the same files at once
         {
             var meta = Path.Combine(dir, MetaFile);
@@ -31,6 +35,24 @@ internal sealed class PreviewCache
             var preview = create(dir);
             File.WriteAllText(meta, JsonSerializer.Serialize(preview, RpcJson.Options));
             return preview;
+        }
+    }
+
+    /// <summary>The first preview of a new build clears the previous builds' previews, so the cache never grows without bound.</summary>
+    private static void RemoveOtherBuilds(string root, string keep)
+    {
+        if (!Directory.Exists(root)) return;
+        foreach (var folder in Directory.GetDirectories(root))
+        {
+            if (string.Equals(Path.GetFullPath(folder), Path.GetFullPath(keep), StringComparison.OrdinalIgnoreCase)) continue;
+            try
+            {
+                Directory.Delete(folder, recursive: true);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // a file still open (e.g. shown in the app); it goes next time
+            }
         }
     }
 

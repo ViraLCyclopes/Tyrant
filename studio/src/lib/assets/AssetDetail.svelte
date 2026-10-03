@@ -9,6 +9,7 @@
 
   const session = getSession();
   let details = $state<AssetDetails | null>(null);
+  let failed = $state(false);
   let sequence = 0;
 
   $effect(() => {
@@ -18,8 +19,11 @@
   async function load(target: string) {
     const mine = ++sequence;
     details = null;
+    failed = false;
     const r = await session.quietly(() => session.rpc.call('assets.get', { ref: target }));
-    if (mine === sequence) details = r; // a later pick wins
+    if (mine !== sequence) return; // a later pick wins
+    details = r;
+    failed = r === null;
   }
 
   async function copy(label: string, text: string) {
@@ -82,6 +86,8 @@
     <h3>Fields</h3>
     <JsonTree value={details.fields} />
   </section>
+{:else if failed}
+  <p class="warn">This asset could not be loaded; the message at the top says why.</p>
 {:else}
   <p class="hint">Loading…</p>
 {/if}

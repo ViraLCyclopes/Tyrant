@@ -1,5 +1,6 @@
 import { fireEvent, screen, waitFor } from '@testing-library/svelte';
 import { describe, expect, it, vi } from 'vitest';
+import { RpcError } from '$lib/rpc/client';
 import type { AssetRow } from '$lib/rpc/types.gen';
 import { memoryStore } from '$lib/storage';
 import { FakePlatform } from '$lib/test/fakePlatform';
@@ -59,5 +60,16 @@ describe('AssetDetail', () => {
 
     expect(await screen.findByText('cost:')).toBeInTheDocument();
     expect(screen.getByText('28368')).toBeInTheDocument();
+  });
+
+  it('says when the asset could not be loaded', async () => {
+    const { rpc, session } = setup();
+    rpc.on('assets.get', () => {
+      throw new RpcError("Bundle 'stego/textures.bundle' no longer exists.", 'ASSET_NOT_FOUND', 'REFRESH_WORKSPACE');
+    });
+    renderWith(AssetDetail, session, { ref: row.ref, onOpen: vi.fn() });
+
+    expect(await screen.findByText(/could not be loaded/)).toBeInTheDocument();
+    expect(screen.queryByText('Loading…')).toBeNull();
   });
 });

@@ -64,7 +64,7 @@ public sealed class AssetExport(IAssetReader reader)
             }
             return Item(asset, true, outputs, null);
         }
-        catch (Exception ex) when (ex is TyrantException or IOException or UnauthorizedAccessException or InvalidDataException)
+        catch (Exception ex) when (ex is not OperationCanceledException) // spec §5: one item never stops the batch
         {
             return Item(asset, false, [], ex.Message);
         }

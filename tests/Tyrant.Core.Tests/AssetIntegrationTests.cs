@@ -25,6 +25,18 @@ public sealed class RealGameIndex
 public class AssetIntegrationTests(RealGameIndex real) : IClassFixture<RealGameIndex>
 {
     [SkippableFact]
+    public void A_mesh_streamed_from_a_resS_file_is_reported_as_unreadable()
+    {
+        Skip.If(RealGameIndex.GameDir is null, "TYRANT_GAME_DIR not set");
+        var mesh = real.Index.Assets.First(a => a.Type == "Mesh" && a.Name == "carnivore.macromound.medium");
+        var dir = Path.Combine(Path.GetTempPath(), "tyrant-tests", Guid.NewGuid().ToString("N"), "model");
+
+        var ex = Assert.Throws<Tyrant.Core.Errors.TyrantException>(() => new BundleAssetReader().WriteModel(real.Install, mesh, dir));
+
+        Assert.Equal(Tyrant.Core.Errors.TyrantErrorCode.AssetUnreadable, ex.Code);
+    }
+
+    [SkippableFact]
     public void Bundle_reader_inspects_and_previews_a_real_skin_texture()
     {
         Skip.If(RealGameIndex.GameDir is null, "TYRANT_GAME_DIR not set");

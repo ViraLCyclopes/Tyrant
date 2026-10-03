@@ -11,15 +11,21 @@ public static class FieldJsonWriter
     /// <summary>Primitive arrays longer than this are summarized instead of written out.</summary>
     public const int MaxInlinePrimitiveArray = 256;
 
-    public static string ToJson(AssetTypeValueField field)
+    /// <summary>
+    /// The whole tree as JSON. With <paramref name="maxArrayElements"/>, every array (struct arrays too) keeps only that
+    /// many elements followed by <c>{"$more": n}</c> — for display; exports write everything.
+    /// </summary>
+    public static string ToJson(AssetTypeValueField field, int? maxArrayElements = null)
     {
         using var stream = new MemoryStream();
         using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true }))
-            Write(writer, field);
+            Write(writer, field, maxArrayElements);
         return Encoding.UTF8.GetString(stream.ToArray());
     }
 
-    public static void Write(Utf8JsonWriter writer, AssetTypeValueField field)
+    public static void Write(Utf8JsonWriter writer, AssetTypeValueField field) => Write(writer, field, null);
+
+    private static void Write(Utf8JsonWriter writer, AssetTypeValueField field, int? cap)
     {
         var valueType = field.Value?.ValueType ?? AssetValueType.None;
         if (valueType == AssetValueType.ByteArray)
@@ -36,13 +42,13 @@ public static class FieldJsonWriter
         }
         if (field.TemplateField.IsArray)
         {
-            WriteArray(writer, field);
+            WriteArray(writer, field, cap);
             return;
         }
         var children = field.Children ?? [];
         if (children.Count == 1 && children[0].TemplateField.IsArray && children[0].FieldName == "Array")
         {
-            WriteArray(writer, children[0]);
+            WriteArray(writer, children[0], cap);
             return;
         }
         if (children.Count > 0)
@@ -51,7 +57,7 @@ public static class FieldJsonWriter
             foreach (var child in children)
             {
                 writer.WritePropertyName(child.FieldName);
-                Write(writer, child);
+                Write(writer, child, cap);
             }
             writer.WriteEndObject();
             return;
@@ -59,7 +65,7 @@ public static class FieldJsonWriter
         WritePrimitive(writer, field, valueType);
     }
 
-    private static void WriteArray(Utf8JsonWriter writer, AssetTypeValueField array)
+    private static void WriteArray(Utf8JsonWriter writer, AssetTypeValueField array, int? cap)
     {
         var elements = array.Children ?? [];
         // Only numbers/bools are summarized (vertex/index buffers); strings are always written so no data is lost.
@@ -72,8 +78,15 @@ public static class FieldJsonWriter
             writer.WriteEndObject();
             return;
         }
+        var shown = cap is { } limit && elements.Count > limit ? limit : elements.Count;
         writer.WriteStartArray();
-        foreach (var element in elements) Write(writer, element);
+        for (var i = 0; i < shown; i++) Write(writer, elements[i], cap);
+        if (shown < elements.Count)
+        {
+            writer.WriteStartObject();
+            writer.WriteNumber("$more", elements.Count - shown);
+            writer.WriteEndObject();
+        }
         writer.WriteEndArray();
     }
 

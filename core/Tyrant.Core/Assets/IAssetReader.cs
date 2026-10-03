@@ -8,8 +8,17 @@ namespace Tyrant.Core.Assets;
 /// <summary>An object's raw facts: its size in the bundle, its fields as JSON, and what it references.</summary>
 public sealed record AssetInspection(long ByteSize, string FieldsJson, IReadOnlyList<AssetReference> References, IReadOnlyList<string> ExternalFiles);
 
-/// <summary>The .glb files written for a mesh or prefab, with totals over the meshes that converted.</summary>
-public sealed record ModelFacts(IReadOnlyList<string> Files, int Vertices, int Triangles, bool Skinned, IReadOnlyList<string> Failures);
+/// <summary>One converted mesh: its .glb file and counts.</summary>
+public sealed record ModelPart(string File, string Name, int Vertices, int Triangles, bool Skinned);
+
+/// <summary>The .glb files written for a mesh or prefab (one part per converted mesh), and what could not be converted.</summary>
+public sealed record ModelFacts(IReadOnlyList<ModelPart> Parts, IReadOnlyList<string> Failures)
+{
+    public IReadOnlyList<string> Files => Parts.Select(p => p.File).ToList();
+    public int Vertices => Parts.Sum(p => p.Vertices);
+    public int Triangles => Parts.Sum(p => p.Triangles);
+    public bool Skinned => Parts.Any(p => p.Skinned);
+}
 
 /// <summary>Everything that reads game bundles. Production code uses <see cref="BundleAssetReader"/>; tests use a fake.</summary>
 public interface IAssetReader

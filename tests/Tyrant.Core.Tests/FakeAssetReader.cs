@@ -13,8 +13,14 @@ public sealed class FakeAssetReader : IAssetReader
     private int _textures, _models, _json, _inspections;
 
     public HashSet<string> FailFor { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>The exception a FailFor asset throws (default: an AssetUnreadable TyrantException).</summary>
+    public Func<AssetRecord, Exception>? FailWith { get; set; }
     public AssetInspection Inspection { get; set; } = new(128, """{"m_Name":"fake"}""", [], []);
     public SpeciesPackResult? SpeciesPack { get; set; }
+
+    /// <summary>Names of the parts WriteModel writes (150 vertices and 50 triangles each).</summary>
+    public string[] ModelParts { get; set; } = ["Body", "Eyes"];
     public int Textures => _textures;
     public int Models => _models;
     public int Json => _json;
@@ -40,9 +46,9 @@ public sealed class FakeAssetReader : IAssetReader
         Interlocked.Increment(ref _models);
         Fail(asset);
         if (Directory.Exists(outputDir)) Directory.Delete(outputDir, recursive: true);
-        var files = new[] { Path.Combine(outputDir, "Body.glb"), Path.Combine(outputDir, "Eyes.glb") };
-        foreach (var f in files) Write(f, "glb");
-        return new ModelFacts(files, 300, 100, asset.Type == "GameObject", []);
+        var parts = ModelParts.Select(name => new ModelPart(Path.Combine(outputDir, name + ".glb"), name, 150, 50, asset.Type == "GameObject")).ToList();
+        foreach (var part in parts) Write(part.File, "glb");
+        return new ModelFacts(parts, []);
     }
 
     public void WriteJson(GameInstall install, AssetRecord asset, string jsonPath)
@@ -63,7 +69,7 @@ public sealed class FakeAssetReader : IAssetReader
     private void Fail(AssetRecord asset)
     {
         if (FailFor.Contains(asset.Ref))
-            throw new TyrantException(TyrantErrorCode.AssetUnreadable, $"Bundle '{asset.Bundle}' could not be read (fake).", FixAction.RefreshWorkspace);
+            throw FailWith?.Invoke(asset) ?? new TyrantException(TyrantErrorCode.AssetUnreadable, $"Bundle '{asset.Bundle}' could not be read (fake).", FixAction.RefreshWorkspace);
     }
 
     private static void Write(string path, string content)

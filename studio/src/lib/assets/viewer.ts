@@ -27,7 +27,7 @@ export async function showModels(canvas: HTMLCanvasElement, urls: string[]): Pro
   sun.intensity = 1.2;
 
   const camera = new ArcRotateCamera('camera', -Math.PI / 2.5, Math.PI / 2.6, 10, Vector3.Zero(), scene);
-  camera.attachControl(canvas, true);
+  camera.attachControl(canvas); // no 'noPreventDefault': the wheel zooms instead of also scrolling the panel
 
   const roots: AbstractMesh[] = [];
   const skeletons: SkeletonViewer[] = [];

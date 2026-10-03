@@ -115,4 +115,21 @@ public class AssetExportTests
         Assert.ThrowsAny<OperationCanceledException>(() =>
             new AssetExport(new FakeAssetReader()).Run(install, ws, [Asset("Texture2D", "T", 1)], null, cts.Token));
     }
+
+    [Fact]
+    public void An_unexpected_reader_error_fails_only_that_item_and_the_report_is_still_written()
+    {
+        var (game, install, ws) = Setup();
+        using var _ = game;
+        var streamed = Asset("Mesh", "carnivore.macromound.medium", 1);
+        var reader = new FakeAssetReader { FailWith = _ => new NotSupportedException("The vertex data is streamed in a .resS file.") };
+        reader.FailFor.Add(streamed.Ref);
+
+        var (report, reportPath) = new AssetExport(reader).Run(install, ws, [Asset("Texture2D", "T", 2), streamed], null, CancellationToken.None);
+
+        Assert.True(report.Items[0].Success);
+        Assert.False(report.Items[1].Success);
+        Assert.Contains(".resS", report.Items[1].Error);
+        Assert.True(File.Exists(reportPath));
+    }
 }

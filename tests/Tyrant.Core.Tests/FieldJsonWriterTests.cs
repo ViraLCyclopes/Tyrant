@@ -99,4 +99,19 @@ public class FieldJsonWriterTests
         Assert.Equal(JsonValueKind.Array, terms.ValueKind);
         Assert.Equal("term299", terms[299].GetString());
     }
+
+    [Fact]
+    public void Long_struct_arrays_are_capped_only_when_asked()
+    {
+        var shapes = Enumerable.Range(0, 300).Select(i => MeshFields.Obj("data", MeshFields.I32("index", i))).ToArray();
+        var field = MeshFields.Obj("Base", MeshFields.Vector("m_Shapes", shapes));
+
+        var capped = JsonDocument.Parse(FieldJsonWriter.ToJson(field, maxArrayElements: 100)).RootElement.GetProperty("m_Shapes");
+        var full = JsonDocument.Parse(FieldJsonWriter.ToJson(field)).RootElement.GetProperty("m_Shapes");
+
+        Assert.Equal(101, capped.GetArrayLength());
+        Assert.Equal(99, capped[99].GetProperty("index").GetInt32());
+        Assert.Equal(200, capped[100].GetProperty("$more").GetInt32());
+        Assert.Equal(300, full.GetArrayLength());
+    }
 }

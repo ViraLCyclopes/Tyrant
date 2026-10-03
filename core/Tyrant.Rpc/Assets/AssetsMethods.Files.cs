@@ -18,7 +18,7 @@ public sealed partial class AssetsMethods
         var asset = index.Resolve(p.Ref);
         if (asset.Type is not ("Texture2D" or "Mesh" or "GameObject"))
             return new AssetPreview(PreviewKind.None, [], Message: $"{asset.Type} assets have no picture or 3D preview; their fields are shown below.");
-        return _previews.GetOrCreate(ws, GameFingerprint.Compute(install).BuildGuid, asset, dir =>
+        return _previews.GetOrCreate(ws, GameFingerprint.Compute(install), asset, dir =>
         {
             if (asset.Type == "Texture2D")
             {
@@ -27,8 +27,14 @@ public sealed partial class AssetsMethods
                 return new AssetPreview(PreviewKind.Texture, [png], facts.Width, facts.Height, facts.Format, facts.MipCount);
             }
             var model = Reader.WriteModel(install, asset, Path.Combine(dir, "model"));
-            var message = model.Failures.Count == 0 ? null : $"{model.Failures.Count} part(s) could not be converted. {string.Join(" ", model.Failures.Take(3))}";
-            return new AssetPreview(PreviewKind.Model, model.Files, Vertices: model.Vertices, Triangles: model.Triangles, Skinned: model.Skinned, Message: message);
+            var shown = PreviewParts.Pick(model.Parts);
+            var notes = new List<string>();
+            if (shown.Count < model.Parts.Count)
+                notes.Add($"Showing the most detailed level of detail ({shown.Count} of {model.Parts.Count} parts); exports include every LOD.");
+            if (model.Failures.Count > 0)
+                notes.Add($"{model.Failures.Count} part(s) could not be converted. {string.Join(" ", model.Failures.Take(3))}");
+            return new AssetPreview(PreviewKind.Model, shown.Select(p => p.File).ToList(), Vertices: shown.Sum(p => p.Vertices),
+                Triangles: shown.Sum(p => p.Triangles), Skinned: shown.Any(p => p.Skinned), Message: notes.Count == 0 ? null : string.Join(" ", notes));
         });
     }
 

@@ -38,6 +38,8 @@ public class AssetPreviewTests
         Assert.NotEqual(before, after);
         Assert.Contains("build-two", after);
         Assert.Equal(2, reader.Textures);
+        var oldBuildFolder = Path.GetDirectoryName(Path.GetDirectoryName(before))!;
+        Assert.False(Directory.Exists(oldBuildFolder), "previews of the old build are removed");
     }
 
     [Fact]
@@ -129,5 +131,34 @@ public class AssetPreviewTests
         var ex = await Assert.ThrowsAsync<RpcCallException>(() => h.Call("species.pack", new { key = "nope" }));
 
         Assert.Equal("ASSET_NOT_FOUND", ex.DataCode);
+    }
+
+    [Fact]
+    public async Task Without_a_build_id_a_changed_game_still_gets_new_previews()
+    {
+        using var game = new FakeGame(buildGuid: null);
+        var (h, _, reader) = await Opened(game);
+        var before = (await h.Call("assets.preview", new { @ref = StegoD.Ref })).GetProperty("files")[0].GetString();
+
+        File.AppendAllText(new GameInstall(game.Root, null).AssemblyCSharpPath, "patched");
+        var after = (await h.Call("assets.preview", new { @ref = StegoD.Ref })).GetProperty("files")[0].GetString();
+
+        Assert.NotEqual(before, after);
+        Assert.Equal(2, reader.Textures);
+    }
+
+    [Fact]
+    public async Task Model_preview_shows_only_the_most_detailed_lod()
+    {
+        using var game = new FakeGame();
+        var (h, _, reader) = await Opened(game);
+        reader.ModelParts = ["Acro_LOD02", "Acro_LOD01", "Acro_LOD00"];
+
+        var preview = await h.Call("assets.preview", new { @ref = StegoPrefab.Ref });
+
+        var file = Assert.Single(preview.GetProperty("files").EnumerateArray()).GetString()!;
+        Assert.EndsWith("Acro_LOD00.glb", file);
+        Assert.Equal(50, preview.GetProperty("triangles").GetInt32());
+        Assert.Contains("1 of 3 parts", preview.GetProperty("message").GetString());
     }
 }
