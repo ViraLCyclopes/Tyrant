@@ -167,7 +167,8 @@ Needs Tyrant Framework 0.4.0 or newer (Tyrant writes `requires.tyrant` for you w
   own. Within one level, the later mod in the load order wins. Many animals share sounds (every large theropod uses the
   same calls): a replacement for everyone changes all of them, while a `species` one changes only that animal. When a
   shared call plays for a Carcharodontosaurus with its own call and for an Acrocanthosaurus at the same moment, each
-  hears its own.
+  hears its own. Sounds the game plays in menus (the Nursery and Paleopedia calls) or without an animal can only be
+  replaced for everyone; Check warns about a `species` or `skin` entry for one.
 - **How it plays:** the game's sound is silenced and the file plays in its place, at the animal and in the game's own
   mixer, so the Sounds and Music sliders apply. A looping sound (breathing) loops the file until the game stops it; a
   one-shot plays the file to its end.

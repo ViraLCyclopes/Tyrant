@@ -138,9 +138,9 @@ namespace Tyrant.Dumper
                     DumperVersion = Info.Version,
                     CreatedUtc = DateTime.UtcNow.ToString("o"),
                 };
+                WriteAudioEvents(request.outputDir); // before manifest.json: Tyrant takes the folder as soon as that appears
                 DumpWriter.Write(request.outputDir, result, languages, manifest);
                 LoggerInstance.Msg("Dump written: " + result.Objects.Count + " objects, " + result.Errors.Count + " errors.");
-                WriteAudioEvents(request.outputDir);
             }
             catch (Exception ex)
             {

@@ -7,7 +7,8 @@ using Tyrant.Rpc.Studio;
 namespace Tyrant.Rpc.Sounds;
 
 /// <summary>A game sound: its picker group and name, the species that use it, and its length and kind when the event list has it.</summary>
-public sealed record SoundDto(string Event, string Name, string Group, IReadOnlyList<string> Species, int? LengthMs, bool? OneShot);
+/// <summary>PerAnimal false: menu sounds and the like, which only a replacement for everyone changes.</summary>
+public sealed record SoundDto(string Event, string Name, string Group, IReadOnlyList<string> Species, int? LengthMs, bool? OneShot, bool PerAnimal);
 
 public sealed record SoundsForSpeciesParams(string Species);
 
@@ -48,7 +49,7 @@ public sealed class SoundsMethods
         return new SoundsSearchResult(catalog.Search(p.Text, Math.Clamp(p.Limit, 1, 2000)).Select(Dto).ToList(), catalog.HasEventList);
     }
 
-    internal static SoundDto Dto(SoundInfo s) => new(s.Event, s.Name, s.Group, s.Species, s.LengthMs, s.OneShot);
+    internal static SoundDto Dto(SoundInfo s) => new(s.Event, s.Name, s.Group, s.Species, s.LengthMs, s.OneShot, s.PerAnimal);
 
     /// <summary>Built once per workspace and dump (reading every species' data takes a moment).</summary>
     private SoundCatalog Catalog()

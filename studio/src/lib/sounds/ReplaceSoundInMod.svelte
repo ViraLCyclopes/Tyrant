@@ -21,7 +21,9 @@
   let onlySpecies = $state(true);
   const workspaceMods = $derived((mods?.mods ?? []).filter((m) => m.state !== 'gameOnly'));
   const fileNames = $derived(files.map((f) => f.split(/[\\/]/).pop()).join(', '));
-  const unique = $derived(speciesId !== null && onlySpecies);
+  /** Only sounds an animal plays can be one species' own; menu sounds are replaced for everyone. */
+  const canBeUnique = $derived(speciesId !== null && sound.perAnimal);
+  const unique = $derived(canBeUnique && onlySpecies);
 
   async function start() {
     open = true;
@@ -71,7 +73,10 @@
     {/if}
     <button onclick={choose}>Choose files…</button>
     {#if files.length}<span class="files">{fileNames}</span>{/if}
-    {#if speciesId}
+    {#if speciesId && !sound.perAnimal}
+      <p class="hint">This sound plays in menus (the Nursery, the Paleopedia), not from the animal, so it is replaced for everyone.</p>
+    {/if}
+    {#if canBeUnique}
       <fieldset class="scope">
         <legend class="visually-hidden">Who hears it</legend>
         <label><input type="radio" name="scope-{sound.event}" checked={onlySpecies} onchange={() => (onlySpecies = true)} /> Only {speciesId}</label>

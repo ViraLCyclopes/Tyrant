@@ -7,7 +7,7 @@ import { renderWith } from '$lib/test/fixtures';
 import { Session } from '$lib/stores/session.svelte';
 import AllSounds from './AllSounds.svelte';
 
-const click = { event: 'event:/User Interface/Buttons/UI_Click', name: 'Click', group: 'Interface', species: [], lengthMs: 90, oneShot: true };
+const click = { event: 'event:/User Interface/Buttons/UI_Click', name: 'Click', group: 'Interface', species: [], lengthMs: 90, oneShot: true, perAnimal: false };
 
 function setup(hasEventList = true) {
   const rpc = new FakeRpc()

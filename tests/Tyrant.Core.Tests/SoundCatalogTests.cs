@@ -101,6 +101,17 @@ public class SoundCatalogTests
     }
 
     [Fact]
+    public void Sounds_an_animal_plays_can_be_its_own_while_menu_sounds_cannot()
+    {
+        var catalog = SoundCatalog.Read(Dump());
+
+        Assert.True(catalog.Find(Roar)!.PerAnimal);    // an audio database
+        Assert.True(catalog.Find(Hit)!.PerAnimal);     // animalHitEventAudio plays from the attacker
+        Assert.False(catalog.Find(Nursery)!.PerAnimal); // the Nursery menu plays it
+        Assert.False(catalog.Find(Click)!.PerAnimal);   // only in the event list
+    }
+
+    [Fact]
     public void A_species_is_found_by_its_id_or_the_asset_key()
     {
         var catalog = SoundCatalog.Read(Dump());

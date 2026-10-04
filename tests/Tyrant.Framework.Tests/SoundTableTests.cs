@@ -42,6 +42,19 @@ public class SoundTableTests
     }
 
     [Fact]
+    public void The_animal_matters_for_unique_sounds_and_for_baby_pitch()
+    {
+        var unique = SoundTable.Build([Mod("carch-voice", "[" + Entry("Carcharodontosaurus", null, "sounds/carch.ogg") + "]")], []);
+        var everyone = SoundTable.Build([Mod("all", "[" + Entry(null, null, "sounds/all.ogg") + "]")], []);
+        var flat = SoundTable.Build([Mod("flat", "[" + Entry(null, null, "sounds/all.ogg").TrimEnd('}') + ",\"agePitch\":0}]")], []);
+
+        Assert.True(unique.NeedsAnimal(Call));
+        Assert.True(everyone.NeedsAnimal(Call)); // babies play a for-everyone replacement higher too
+        Assert.False(flat.NeedsAnimal(Call));
+        Assert.False(everyone.NeedsAnimal("event:/Other"));
+    }
+
+    [Fact]
     public void A_unique_sound_alone_leaves_other_species_with_the_original()
     {
         var table = SoundTable.Build([Mod("carch-voice", "[" + Entry("Carcharodontosaurus", null, "sounds/carch.ogg") + "]")], []);

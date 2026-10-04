@@ -6,8 +6,12 @@ using Tyrant.Core.Workspaces;
 
 namespace Tyrant.Core.Sounds;
 
-/// <summary>A game sound (an FMOD event): its picker group and name, the species that use it, and what the event list knows.</summary>
-public sealed record SoundInfo(string Event, string Name, string Group, IReadOnlyList<string> Species, int? LengthMs, bool? OneShot);
+/// <summary>
+/// A game sound (an FMOD event): its picker group and name, the species that use it, and what the event list knows. PerAnimal:
+/// an animal plays it (its audio databases, breathing, skin and hit sounds), so a species or skin can have its own; menu sounds
+/// (Nursery, Paleopedia) and the rest can only be replaced for everyone.
+/// </summary>
+public sealed record SoundInfo(string Event, string Name, string Group, IReadOnlyList<string> Species, int? LengthMs, bool? OneShot, bool PerAnimal);
 
 /// <summary>
 /// The game's sounds from the data dump: each species' audio databases and event fields (AnimalData), and every event the
@@ -18,6 +22,9 @@ public sealed class SoundCatalog
     private const string DatabaseType = "PrehistoricKingdom.AnimalAudioDatabase";
     private static readonly string[] AnimalTypes = ["PrehistoricKingdom.AnimalData", "PrehistoricKingdom.VivariumAnimalData"];
     private const string EventPrefix = "event:/";
+
+    /// <summary>AnimalData fields the game plays from the animal itself (the others play in menus or without the animal).</summary>
+    private static readonly string[] AnimalFields = ["breathingCore", "bodyCore", "animalHitEventAudio"];
 
     /// <summary>Folder word → group, checked from the deepest folder up; within a folder the first word that matches wins.</summary>
     private static readonly Dictionary<string, string> Groups = new(StringComparer.OrdinalIgnoreCase)
@@ -63,11 +70,13 @@ public sealed class SoundCatalog
         var databases = new Dictionary<long, List<string>>();
         var databasesByName = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
         var known = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var perAnimal = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         if (types.FirstOrDefault(t => t.FullName == DatabaseType) is { } databaseType)
             foreach (var (name, root) in store.LoadAll(databaseType))
             {
                 var events = DatabaseEvents(root);
                 known.UnionWith(events);
+                perAnimal.UnionWith(events);
                 if (root.TryGetProperty("$id", out var id) && id.TryGetInt64(out var key)) databases[key] = events;
                 databasesByName[name] = events;
             }
@@ -83,7 +92,11 @@ public sealed class SoundCatalog
                     foreach (var reference in list.EnumerateArray())
                         if (Referenced(reference, databases, databasesByName) is { } databaseEvents) events.AddRange(databaseEvents);
                 foreach (var field in root.EnumerateObject())
-                    if (IsEvent(field.Value)) events.Add(field.Value.GetString()!);
+                    if (IsEvent(field.Value))
+                    {
+                        events.Add(field.Value.GetString()!);
+                        if (AnimalFields.Contains(field.Name, StringComparer.OrdinalIgnoreCase)) perAnimal.Add(field.Value.GetString()!);
+                    }
                 var distinct = events.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
                 known.UnionWith(distinct);
                 speciesEvents[speciesId] = distinct;
@@ -105,7 +118,7 @@ public sealed class SoundCatalog
         {
             (int Length, bool OneShot)? details = listed != null && listed.TryGetValue(path, out var d) ? d : null;
             sounds[path] = new SoundInfo(path, NameOf(path), GroupOf(path),
-                sharers.TryGetValue(path, out var set) ? set.ToList() : [], details?.Length, details?.OneShot);
+                sharers.TryGetValue(path, out var set) ? set.ToList() : [], details?.Length, details?.OneShot, perAnimal.Contains(path));
         }
         var bySpecies = speciesEvents.ToDictionary(kv => kv.Key, kv => Sorted(kv.Value.Select(p => sounds[p])).ToList(), StringComparer.OrdinalIgnoreCase);
         return new SoundCatalog(sounds, bySpecies, listed != null);

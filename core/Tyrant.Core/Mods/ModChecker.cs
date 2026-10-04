@@ -141,6 +141,8 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
                     warnings.Add($"{label}: {file} is {size / (1024 * 1024)} MB; the game loads it into memory, so a shorter or compressed (OGG) file is better.");
             }
 
+            if (sounds?.Find(sound.Event) is { PerAnimal: false } menuSound && sound.IsUnique)
+                warnings.Add($"{label}: {menuSound.Name.ToLowerInvariant()} plays in menus or without an animal, so only a replacement for everyone applies; choose Everyone on its page.");
             if (sounds is not null && sounds.Find(sound.Event) is null)
                 warnings.Add(sounds.HasEventList
                     ? $"{label}: {sound.Event} is not one of the game's sounds, so it never plays; copy the name from a species' Sounds list or All sounds."

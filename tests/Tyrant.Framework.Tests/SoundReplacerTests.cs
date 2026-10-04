@@ -12,11 +12,14 @@ public class SoundReplacerTests
         public readonly HashSet<IntPtr> Stopped = [];
         public readonly HashSet<IntPtr> Invalid = [];
         public readonly HashSet<IntPtr> Looping = [];
+        public readonly HashSet<IntPtr> TwoD = [];
         public readonly Dictionary<IntPtr, Vec3> Positions = [];
         public readonly HashSet<IntPtr> Muted = [];
         public readonly HashSet<string> Unreadable = [];
         public readonly HashSet<IntPtr> Finished = [];
         public readonly Dictionary<IntPtr, IntPtr> RoutedTo = [];
+        /// <summary>Where a channel really is now (FMOD moves a channel to master when its group is released).</summary>
+        public readonly Dictionary<IntPtr, IntPtr> ChannelIn = [];
         public readonly HashSet<IntPtr> Unpaused = [];
         public readonly Dictionary<IntPtr, Vec3> ChannelPositions = [];
         public readonly Dictionary<IntPtr, bool> PlayedLooping = [];
@@ -25,6 +28,7 @@ public class SoundReplacerTests
         public bool InstanceValid(IntPtr instance) => !Invalid.Contains(instance);
         public bool InstanceStopped(IntPtr instance) => Stopped.Contains(instance);
         public bool InstanceLooping(IntPtr instance) => Looping.Contains(instance);
+        public bool InstanceIs3D(IntPtr instance) => !TwoD.Contains(instance);
         public bool InstancePosition(IntPtr instance, out Vec3 position, out Vec3 velocity)
         {
             velocity = default;
@@ -44,7 +48,8 @@ public class SoundReplacerTests
             PlayedLooping[channel] = loop;
             return channel;
         }
-        public void Route(IntPtr channel, IntPtr bus) => RoutedTo[channel] = bus;
+        public void Route(IntPtr channel, IntPtr bus) => RoutedTo[channel] = ChannelIn[channel] = bus;
+        public IntPtr ChannelBus(IntPtr channel) => ChannelIn.TryGetValue(channel, out var bus) ? bus : IntPtr.Zero;
         public void SetPosition(IntPtr channel, Vec3 position, Vec3 velocity) => ChannelPositions[channel] = position;
         public void SetVolume(IntPtr channel, float volume) => Calls.Add($"volume {volume:0.##}");
         public void SetPitch(IntPtr channel, float pitch) => Calls.Add($"pitch {pitch:0.##}");
@@ -74,7 +79,7 @@ public class SoundReplacerTests
     public void It_stays_paused_until_it_is_in_the_instances_bus()
     {
         var (engine, replacer) = Setup();
-        Assert.True(replacer.Start(I1, "event:/X", Choice("a.ogg"), 1f, ui: false, music: false, new Random(1)));
+        Assert.True(replacer.Start(I1, "event:/X", Choice("a.ogg"), 1f, music: false, new Random(1)));
         var channel = OnlyChannel(engine);
 
         replacer.Tick();
@@ -94,7 +99,7 @@ public class SoundReplacerTests
     public void Without_a_bus_after_five_frames_it_joins_the_sounds_or_music_bus(bool music, int bus)
     {
         var (engine, replacer) = Setup();
-        replacer.Start(I1, "event:/X", Choice("a.ogg"), 1f, ui: false, music, new Random(1));
+        replacer.Start(I1, "event:/X", Choice("a.ogg"), 1f, music, new Random(1));
         var channel = OnlyChannel(engine);
 
         for (var i = 0; i < 4; i++) replacer.Tick();
@@ -106,11 +111,12 @@ public class SoundReplacerTests
     }
 
     [Fact]
-    public void A_world_sound_follows_the_instance_and_an_interface_sound_does_not()
+    public void A_3D_event_follows_the_instance_and_a_2D_event_plays_without_a_position()
     {
         var (engine, replacer) = Setup();
-        replacer.Start(I1, "event:/X", Choice("a.ogg"), 1f, ui: false, music: false, new Random(1));
-        replacer.Start(I2, "event:/User Interface/Click", Choice("b.ogg"), 1f, ui: true, music: false, new Random(1));
+        engine.TwoD.Add(I2); // e.g. the level ambience: no 3D attributes, (0,0,0) if asked
+        replacer.Start(I1, "event:/X", Choice("a.ogg"), 1f, music: false, new Random(1));
+        replacer.Start(I2, "event:/Ambience/Level", Choice("b.ogg"), 1f, music: false, new Random(1));
         engine.Buses[I1] = engine.Buses[I2] = new IntPtr(5);
 
         engine.Positions[I1] = new Vec3 { X = 1, Y = 2, Z = 3 };
@@ -127,21 +133,94 @@ public class SoundReplacerTests
     }
 
     [Fact]
+    public void One_file_used_by_a_3D_and_a_2D_event_is_loaded_for_each()
+    {
+        var (engine, replacer) = Setup();
+        engine.TwoD.Add(I2);
+
+        replacer.Start(I1, "event:/X", Choice("a.ogg"), 1f, music: false, new Random(1));
+        replacer.Start(I2, "event:/Y", Choice("a.ogg"), 1f, music: false, new Random(1));
+
+        Assert.Contains("load a.ogg 3d", engine.Calls);
+        Assert.Contains("load a.ogg 2d", engine.Calls);
+    }
+
+    [Fact]
     public void A_looping_original_loops_the_replacement_until_the_game_stops_it()
     {
         var (engine, replacer) = Setup();
         engine.Looping.Add(I1);
         engine.Buses[I1] = new IntPtr(5);
-        replacer.Start(I1, "event:/Breathing", Choice("breath.ogg"), 1f, ui: false, music: false, new Random(1));
+        replacer.Start(I1, "event:/Breathing", Choice("breath.ogg"), 1f, music: false, new Random(1));
         var channel = OnlyChannel(engine);
         replacer.Tick();
 
         Assert.True(engine.PlayedLooping[channel]);
         engine.Stopped.Add(I1);
         replacer.Tick();
-
         Assert.Contains(channel, engine.Finished);
+
+        engine.Invalid.Add(I1); // released
+        replacer.Tick();
         Assert.Equal(0, replacer.Active);
+    }
+
+    [Fact]
+    public void A_looping_replacement_outlives_the_frame_cap_while_its_instance_plays()
+    {
+        var (engine, replacer) = Setup();
+        engine.Looping.Add(I1);
+        engine.Buses[I1] = new IntPtr(5);
+        replacer.Start(I1, "event:/Music/Theme", Choice("theme.ogg"), 1f, music: true, new Random(1));
+        var channel = OnlyChannel(engine);
+
+        for (var i = 0; i < SoundReplacer.MaxFrames + 10; i++) replacer.Tick();
+
+        Assert.DoesNotContain(channel, engine.Finished);
+        Assert.Equal(1, replacer.Active);
+    }
+
+    [Fact]
+    public void It_waits_for_the_game_to_start_an_instance_it_created_earlier()
+    {
+        var (engine, replacer) = Setup();
+        engine.Looping.Add(I1);
+        engine.Stopped.Add(I1); // created at level load, started on the first dive
+        engine.Buses[I1] = new IntPtr(5);
+        replacer.Start(I1, "event:/Ambience/Underwater", Choice("under.ogg"), 1f, music: false, new Random(1));
+        var channel = OnlyChannel(engine);
+
+        for (var i = 0; i < 20; i++) replacer.Tick();
+        Assert.Empty(engine.Unpaused);
+        Assert.Equal(1, replacer.Active);
+
+        engine.Stopped.Remove(I1);
+        replacer.Tick();
+        Assert.Contains(channel, engine.Unpaused);
+    }
+
+    [Fact]
+    public void An_instance_the_game_starts_again_plays_the_replacement_again()
+    {
+        var (engine, replacer) = Setup();
+        engine.Buses[I1] = new IntPtr(5);
+        replacer.Start(I1, "event:/Water/Enter", Choice("splash.ogg"), 1f, music: false, new Random(1));
+        var first = OnlyChannel(engine);
+        replacer.Tick();
+        Assert.Contains(first, engine.Unpaused);
+
+        engine.Stopped.Add(I1);     // the game's splash ended
+        engine.Finished.Add(first); // and so did ours
+        replacer.Tick();
+        Assert.Equal(1, replacer.Active); // the instance is kept for the next dive
+
+        engine.Stopped.Remove(I1);  // the next dive
+        replacer.Tick();
+        replacer.Tick();
+
+        var second = Assert.Single(engine.PlayedLooping.Keys, c => c != first);
+        Assert.Contains(second, engine.Unpaused);
+        Assert.Equal(new IntPtr(5), engine.RoutedTo[second]);
     }
 
     [Fact]
@@ -149,7 +228,7 @@ public class SoundReplacerTests
     {
         var (engine, replacer) = Setup();
         engine.Buses[I1] = new IntPtr(5);
-        replacer.Start(I1, "event:/Roar", Choice("roar.ogg"), 1f, ui: false, music: false, new Random(1));
+        replacer.Start(I1, "event:/Roar", Choice("roar.ogg"), 1f, music: false, new Random(1));
         var channel = OnlyChannel(engine);
         replacer.Tick();
 
@@ -164,14 +243,30 @@ public class SoundReplacerTests
     }
 
     [Fact]
+    public void A_one_shot_whose_bus_goes_away_moves_to_the_sounds_bus_not_master()
+    {
+        var (engine, replacer) = Setup();
+        engine.Buses[I1] = new IntPtr(5);
+        replacer.Start(I1, "event:/Roar", Choice("long-roar.ogg"), 1f, music: false, new Random(1));
+        var channel = OnlyChannel(engine);
+        replacer.Tick();
+
+        engine.Invalid.Add(I1);
+        engine.ChannelIn[channel] = new IntPtr(99); // FMOD released the bus group: the channel fell back to master
+        replacer.Tick();
+
+        Assert.Equal(new IntPtr(1), engine.ChannelIn[channel]);
+    }
+
+    [Fact]
     public void A_file_fmod_cannot_open_keeps_the_original_and_is_logged_once()
     {
         var (engine, replacer) = Setup();
         engine.Unreadable.Add("broken.ogg");
         Log.Clear();
 
-        Assert.False(replacer.Start(I1, "event:/X", Choice("broken.ogg"), 1f, false, false, new Random(1)));
-        Assert.False(replacer.Start(I2, "event:/X", Choice("broken.ogg"), 1f, false, false, new Random(1)));
+        Assert.False(replacer.Start(I1, "event:/X", Choice("broken.ogg"), 1f, false, new Random(1)));
+        Assert.False(replacer.Start(I2, "event:/X", Choice("broken.ogg"), 1f, false, new Random(1)));
 
         Assert.Empty(engine.Muted);
         Assert.Single(Log, l => l.Contains("broken.ogg"));
@@ -182,8 +277,8 @@ public class SoundReplacerTests
     public void Two_instances_started_together_keep_their_own_channel_and_place()
     {
         var (engine, replacer) = Setup();
-        replacer.Start(I1, "event:/X", Choice("a.ogg"), 1f, false, false, new Random(1));
-        replacer.Start(I2, "event:/X", Choice("a.ogg"), 1f, false, false, new Random(1));
+        replacer.Start(I1, "event:/X", Choice("a.ogg"), 1f, false, new Random(1));
+        replacer.Start(I2, "event:/X", Choice("a.ogg"), 1f, false, new Random(1));
         engine.Buses[I1] = engine.Buses[I2] = new IntPtr(5);
         engine.Positions[I1] = new Vec3 { X = 10 };
         engine.Positions[I2] = new Vec3 { X = -10 };
@@ -200,7 +295,7 @@ public class SoundReplacerTests
     public void Volume_and_pitch_are_applied()
     {
         var (engine, replacer) = Setup();
-        replacer.Start(I1, "event:/X", Choice("a.ogg"), 1.5f, false, false, new Random(1));
+        replacer.Start(I1, "event:/X", Choice("a.ogg"), 1.5f, false, new Random(1));
         Assert.Contains("volume 0.8", engine.Calls);
         Assert.Contains("pitch 1.5", engine.Calls);
     }

@@ -11,7 +11,7 @@ import ReplaceSoundInMod from './ReplaceSoundInMod.svelte';
 
 const roar: SoundDto = {
   event: 'event:/AnimalFamily Master/Dinosaurs/Shared_TheropodLarge/_TheroLarge_Comp/Vox/TheroLarge_VoxSocialCall',
-  name: 'Social call', group: 'Calls', species: ['Acrocanthosaurus', 'Carcharodontosaurus'], lengthMs: 2400, oneShot: true,
+  name: 'Social call', group: 'Calls', species: ['Acrocanthosaurus', 'Carcharodontosaurus'], lengthMs: 2400, oneShot: true, perAnimal: true,
 };
 
 function setup() {
@@ -68,6 +68,20 @@ describe('ReplaceSoundInMod', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Add to mod' }));
 
     await waitFor(() => expect(rpc.callsTo('mods.replaceSound')[0]?.params).toMatchObject({ species: null, skin: null }));
+  });
+
+  it('a sound only menus play offers no species choice', async () => {
+    const { rpc, session } = setup();
+    renderWith(ReplaceSoundInMod, session, { sound: { ...roar, name: 'Nursery carch', perAnimal: false }, speciesId: 'Carcharodontosaurus' });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Replace Nursery carch' }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Choose files…' }));
+    await screen.findByText('roar1.wav, roar2.ogg');
+
+    expect(screen.queryByRole('radio')).toBeNull();
+    expect(screen.getByText(/plays in menus/)).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Add to mod' }));
+    await waitFor(() => expect(rpc.callsTo('mods.replaceSound')[0]?.params).toMatchObject({ species: null }));
   });
 
   it('can make a new mod for it', async () => {

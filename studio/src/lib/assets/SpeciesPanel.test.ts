@@ -21,7 +21,7 @@ function setup() {
   rpc.on('workspace.status', () => workspaceStatus({ hasAssetIndex: true }));
   rpc.on('sounds.forSpecies', () => ({
     speciesId: 'Carcharodontosaurus', hasEventList: true,
-    sounds: [{ event: 'event:/X/Roar', name: 'Social call', group: 'Calls', species: ['Carcharodontosaurus'], lengthMs: null, oneShot: null }],
+    sounds: [{ event: 'event:/X/Roar', name: 'Social call', group: 'Calls', species: ['Carcharodontosaurus'], lengthMs: null, oneShot: null, perAnimal: true }],
   }));
   rpc.on('sounds.search', () => ({ hasEventList: true, sounds: [] }));
   const platform = new FakePlatform();

@@ -19,6 +19,10 @@ namespace Tyrant.Framework
         private static readonly Dictionary<IntPtr, string> PathByDescription = new Dictionary<IntPtr, string>();
         private static readonly HashSet<string> Failures = new HashSet<string>();
         private static FieldInfo? InstanceHandle;
+        private static PropertyInfo? CoreAnimalProperty;
+
+        /// <summary>The animal whose breathing or skin core is being created (those sounds start outside AnimalAudioEvents).</summary>
+        [ThreadStatic] private static object? CoreAnimal;
 
         public static bool HasSounds => Table.Count > 0;
 
@@ -37,7 +41,17 @@ namespace Tyrant.Framework
                 Table = SoundTable.Empty;
                 return;
             }
-            harmony.Patch(create, postfix: new HarmonyMethod(typeof(SoundsModule), nameof(AfterCreateInstance)));
+            try
+            {
+                harmony.Patch(create, postfix: new HarmonyMethod(typeof(SoundsModule), nameof(AfterCreateInstance)));
+            }
+            catch (Exception ex)
+            {
+                FrameworkMod.Log.Warning("Sound replacements are off: FMOD's CreateInstance could not be patched (" + ex.Message + "). Other mods still load.");
+                Table = SoundTable.Empty;
+                return;
+            }
+            PatchCores(harmony);
             Replacer = new SoundReplacer(new FmodSoundEngine(), message => FrameworkMod.Log.Warning(message));
             var modCount = 0;
             foreach (var mod in mods) if (mod.Manifest.Sounds.Count > 0) modCount++;
@@ -71,7 +85,7 @@ namespace Tyrant.Framework
 
                 string? species = null, skin = null;
                 var maturity = 1f;
-                if (Table.HasUnique(path) && AnimalPlaying(path) is { } animal)
+                if (Table.NeedsAnimal(path) && (CoreAnimal ?? AnimalPlaying(path)) is { } animal)
                 {
                     species = AnimalInfo.Species(animal);
                     skin = AnimalInfo.SkinKey(animal, species);
@@ -80,15 +94,57 @@ namespace Tyrant.Framework
                 var choice = Table.Choose(path, species, skin);
                 if (choice == null) return;
                 var pitch = species == null ? 1f : AgePitch.For(choice.AgePitch, maturity);
-                var ui = path.StartsWith("event:/User Interface", StringComparison.OrdinalIgnoreCase);
                 var music = path.StartsWith("event:/Music", StringComparison.OrdinalIgnoreCase);
-                if (Replacer.Start(instance, path, choice, pitch, ui, music, Random) && Failures.Add("first:" + path))
+                if (Replacer.Start(instance, path, choice, pitch, music, Random) && Failures.Add("first:" + path))
                     FrameworkMod.Log.Msg($"Replaced {path}{(species == null ? "" : $" for {species}")} ({choice.ModId}).");
             }
             catch (Exception ex)
             {
                 Once("hook", "Sound replacements: " + ex.Message); // never break the game's audio
             }
+        }
+
+        /// <summary>
+        /// AnimalAudioComp creates each animal's breathing and skin core directly: while it does, the animal is known, so a
+        /// species' own breathing applies. Optional: without these patches those sounds are only replaced for everyone.
+        /// </summary>
+        private static void PatchCores(HarmonyLib.Harmony harmony)
+        {
+            var comp = AccessTools.TypeByName("PrehistoricKingdom.Audio.AnimalAudioComp");
+            CoreAnimalProperty = comp == null ? null : AccessTools.Property(comp, "Animal");
+            if (comp == null || CoreAnimalProperty == null) return;
+            foreach (var name in new[] { "InitializeBreathingCore", "InitializeSkinCore" })
+            {
+                try
+                {
+                    var method = AccessTools.Method(comp, name);
+                    if (method != null)
+                        harmony.Patch(method, prefix: new HarmonyMethod(typeof(SoundsModule), nameof(BeforeCore)),
+                            finalizer: new HarmonyMethod(typeof(SoundsModule), nameof(AfterCore)));
+                }
+                catch (Exception ex)
+                {
+                    Once("core:" + name, $"Species-only {name.Replace("Initialize", "").ToLowerInvariant()} sounds are off: {ex.Message}");
+                }
+            }
+        }
+
+        private static void BeforeCore(object __instance)
+        {
+            try
+            {
+                CoreAnimal = CoreAnimalProperty?.GetValue(__instance, null);
+            }
+            catch (Exception)
+            {
+                CoreAnimal = null;
+            }
+        }
+
+        private static Exception? AfterCore(Exception? __exception)
+        {
+            CoreAnimal = null;
+            return __exception; // the game's own exception, unchanged
         }
 
         private static string? PathOf(IntPtr instance)

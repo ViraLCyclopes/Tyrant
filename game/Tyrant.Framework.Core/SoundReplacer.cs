@@ -15,8 +15,15 @@ namespace Tyrant.Framework.Core
     public interface ISoundEngine
     {
         bool InstanceValid(IntPtr instance);
+
+        /// <summary>True before the game starts the instance and after it ends (or when it is gone).</summary>
         bool InstanceStopped(IntPtr instance);
+
         bool InstanceLooping(IntPtr instance);
+
+        /// <summary>The event is positional (an animal, a building); false for interface sounds, music and ambiences.</summary>
+        bool InstanceIs3D(IntPtr instance);
+
         bool InstancePosition(IntPtr instance, out Vec3 position, out Vec3 velocity);
         void MuteInstance(IntPtr instance);
 
@@ -33,6 +40,10 @@ namespace Tyrant.Framework.Core
         IntPtr Play(IntPtr sound, bool loop);
 
         void Route(IntPtr channel, IntPtr bus);
+
+        /// <summary>The group the channel plays in now (FMOD moves it to master when its bus group is released).</summary>
+        IntPtr ChannelBus(IntPtr channel);
+
         void SetPosition(IntPtr channel, Vec3 position, Vec3 velocity);
         void SetVolume(IntPtr channel, float volume);
         void SetPitch(IntPtr channel, float pitch);
@@ -42,28 +53,38 @@ namespace Tyrant.Framework.Core
     }
 
     /// <summary>
-    /// Plays replacements for the game's sound instances: mutes the instance, plays the file paused, puts it in the instance's
-    /// bus (so the game's volume sliders apply) before it is heard, follows the instance's position, loops with a looping
-    /// original and lets a one-shot finish.
+    /// Plays replacements for the game's sound instances. The instance is muted; each time the game starts it, a file plays
+    /// paused, goes into the instance's bus (so the game's volume sliders apply) and is then heard; it follows a positional
+    /// instance, loops with a looping original and lets a one-shot finish. An instance the game keeps and starts again (water
+    /// splashes, menu sounds) plays the replacement again.
     /// </summary>
     public sealed class SoundReplacer
     {
-        /// <summary>Frames to wait for the instance's bus before falling back to the Sounds/Soundtrack bus.</summary>
+        /// <summary>Frames to wait for the instance's bus, once it started, before falling back to the Sounds/Soundtrack bus.</summary>
         public const int RouteFrames = 5;
 
-        /// <summary>A safety cap: entries are dropped after this many frames (about five minutes).</summary>
+        /// <summary>A safety cap for one-shots only: a non-looping channel still "playing" after this many frames is stopped.</summary>
         public const int MaxFrames = 18000;
 
         private sealed class Entry
         {
             public IntPtr Instance;
-            public IntPtr Channel;
+            public SoundChoice Choice = null!;
+            public Random Random = null!;
+            public float Pitch;
             public bool ThreeD;
             public bool Music;
             public bool Loop;
-            public bool Routed;
+
+            /// <summary>Zero between plays (the replacement ended; waiting for the game to start the instance again).</summary>
+            public IntPtr Channel;
+            public bool SeenStart;
             public bool Started;
+            public IntPtr Bus;
+            public bool OnFallback;
             public int Frames;
+            public int PlayFrames;
+            public bool WasRunning;
         }
 
         private readonly ISoundEngine _engine;
@@ -83,24 +104,17 @@ namespace Tyrant.Framework.Core
         /// Replaces a game instance the table chose a replacement for; false keeps the original (the file could not be played),
         /// and then the instance is left audible.
         /// </summary>
-        public bool Start(IntPtr instance, string eventPath, SoundChoice choice, float pitch, bool ui, bool music, Random random)
+        public bool Start(IntPtr instance, string eventPath, SoundChoice choice, float pitch, bool music, Random random)
         {
-            var threeD = !ui && !music;
-            var file = choice.NextFile(random);
-            if (!_sounds.TryGetValue(file, out var sound))
+            var entry = new Entry
             {
-                sound = _engine.LoadSound(file, threeD);
-                _sounds[file] = sound;
-                if (sound == IntPtr.Zero) _log($"Could not open {file} for {eventPath} ({choice.ModId}); the game's own sound plays instead.");
-            }
-            if (sound == IntPtr.Zero) return false;
-            var loop = _engine.InstanceLooping(instance);
-            var channel = _engine.Play(sound, loop);
-            if (channel == IntPtr.Zero) return false;
-            _engine.SetVolume(channel, (float)choice.Volume);
-            _engine.SetPitch(channel, pitch);
+                Instance = instance, Choice = choice, Random = random, Pitch = pitch, Music = music,
+                ThreeD = _engine.InstanceIs3D(instance), Loop = _engine.InstanceLooping(instance),
+            };
+            if (!Begin(entry, eventPath)) return false;
+            entry.SeenStart = false; // the game starts it now (PlayOneShot) or later (an instance it keeps)
             _engine.MuteInstance(instance);
-            _entries.Add(new Entry { Instance = instance, Channel = channel, ThreeD = threeD, Music = music, Loop = loop });
+            _entries.Add(entry);
             return true;
         }
 
@@ -110,38 +124,114 @@ namespace Tyrant.Framework.Core
             for (var i = _entries.Count - 1; i >= 0; i--)
             {
                 var e = _entries[i];
+                var valid = _engine.InstanceValid(e.Instance);
+                var running = valid && !_engine.InstanceStopped(e.Instance);
+                if (!Advance(e, valid, running)) _entries.RemoveAt(i);
+                e.WasRunning = running;
+            }
+        }
+
+        /// <summary>One frame of one entry; false drops it.</summary>
+        private bool Advance(Entry e, bool valid, bool running)
+        {
+            if (e.Channel == IntPtr.Zero)
+            {
+                if (!valid) return false;
+                if (running && !e.WasRunning) return Begin(e, e.Choice.Event); // the game started it again
+                return true;
+            }
+
+            if (!e.SeenStart)
+            {
+                if (running) e.SeenStart = true;
+                else if (!valid)
+                {
+                    _engine.Stop(e.Channel); // released without ever playing
+                    return false;
+                }
+                else return true; // created, not started yet: stay paused
+            }
+
+            if (!e.Started)
+            {
                 e.Frames++;
-                if (!e.Routed)
+                var bus = _engine.InstanceBus(e.Instance);
+                var fallback = false;
+                if (bus == IntPtr.Zero && e.Frames >= RouteFrames)
                 {
-                    var bus = _engine.InstanceBus(e.Instance);
-                    if (bus == IntPtr.Zero && e.Frames >= RouteFrames) bus = _engine.FallbackBus(e.Music);
-                    if (bus != IntPtr.Zero)
-                    {
-                        _engine.Route(e.Channel, bus);
-                        e.Routed = true;
-                    }
+                    bus = _engine.FallbackBus(e.Music);
+                    fallback = true;
                 }
-                var alive = _engine.InstanceValid(e.Instance) && !_engine.InstanceStopped(e.Instance);
-                if (e.ThreeD && alive && _engine.InstancePosition(e.Instance, out var position, out var velocity))
-                    _engine.SetPosition(e.Channel, position, velocity);
-                if (e.Routed && !e.Started)
+                if (bus != IntPtr.Zero)
                 {
-                    _engine.Unpause(e.Channel);
-                    e.Started = true;
-                }
-                if (!alive && e.Loop)
-                {
-                    _engine.Stop(e.Channel);
-                    _entries.RemoveAt(i);
-                }
-                else if (e.Started && !_engine.Playing(e.Channel))
-                    _entries.RemoveAt(i);
-                else if (e.Frames > MaxFrames)
-                {
-                    _engine.Stop(e.Channel);
-                    _entries.RemoveAt(i);
+                    _engine.Route(e.Channel, bus);
+                    e.Bus = bus;
+                    e.OnFallback = fallback;
                 }
             }
+
+            if (e.ThreeD && running && _engine.InstancePosition(e.Instance, out var position, out var velocity))
+                _engine.SetPosition(e.Channel, position, velocity);
+
+            if (e.Bus != IntPtr.Zero && !e.Started)
+            {
+                _engine.Unpause(e.Channel);
+                e.Started = true;
+            }
+
+            // The original ended: its bus group may be released, and FMOD would move the channel to master (outside the sliders).
+            if (e.Started && !running && !e.OnFallback && _engine.ChannelBus(e.Channel) != e.Bus)
+            {
+                var fallbackBus = _engine.FallbackBus(e.Music);
+                if (fallbackBus != IntPtr.Zero)
+                {
+                    _engine.Route(e.Channel, fallbackBus);
+                    e.Bus = fallbackBus;
+                    e.OnFallback = true;
+                }
+            }
+
+            if (e.Loop && !running && e.SeenStart)
+                return Ended(e, valid, stop: true);
+            if (e.Started && !_engine.Playing(e.Channel))
+                return Ended(e, valid, stop: false);
+            if (!e.Loop && e.Started && ++e.PlayFrames > MaxFrames)
+                return Ended(e, valid, stop: true);
+            return true;
+        }
+
+        /// <summary>The replacement ended; the entry waits for the next start while the game keeps the instance.</summary>
+        private bool Ended(Entry e, bool valid, bool stop)
+        {
+            if (stop) _engine.Stop(e.Channel);
+            e.Channel = IntPtr.Zero;
+            return valid;
+        }
+
+        /// <summary>A new paused channel with one of the choice's files; false when the file cannot be played.</summary>
+        private bool Begin(Entry e, string eventPath)
+        {
+            var file = e.Choice.NextFile(e.Random);
+            var key = (e.ThreeD ? "3d|" : "2d|") + file;
+            if (!_sounds.TryGetValue(key, out var sound))
+            {
+                sound = _engine.LoadSound(file, e.ThreeD);
+                _sounds[key] = sound;
+                if (sound == IntPtr.Zero) _log($"Could not open {file} for {eventPath} ({e.Choice.ModId}); the game's own sound plays instead.");
+            }
+            if (sound == IntPtr.Zero) return false;
+            var channel = _engine.Play(sound, e.Loop);
+            if (channel == IntPtr.Zero) return false;
+            _engine.SetVolume(channel, (float)e.Choice.Volume);
+            _engine.SetPitch(channel, e.Pitch);
+            e.Channel = channel;
+            e.SeenStart = true;
+            e.Started = false;
+            e.Bus = IntPtr.Zero;
+            e.OnFallback = false;
+            e.Frames = 0;
+            e.PlayFrames = 0;
+            return true;
         }
     }
 }

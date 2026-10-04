@@ -263,8 +263,25 @@ public class ModProjectSoundsTests
         Assert.Contains(warnings, w => w.Contains("must be written \"Carcharodontosaurus\""));
         Assert.Contains(warnings, w => w.Contains("Carcharodontosaurus/Pink"));
         Assert.Contains(warnings, w => w.Contains("carch-voice/missing-skin"));
-        Assert.DoesNotContain(warnings, w => w.Contains("for skin Carcharodontosaurus/Alt 1:"));
-        Assert.DoesNotContain(warnings, w => w.Contains("someone-else"));
+        // (both events exist only in this fixture's event list, so the menu-sound warning applies to them; the skin keys are fine)
+        Assert.DoesNotContain(warnings, w => w.Contains("for skin Carcharodontosaurus/Alt 1:") && !w.Contains("plays in menus"));
+        Assert.DoesNotContain(warnings, w => w.Contains("someone-else") && !w.Contains("plays in menus"));
+    }
+
+    [Fact]
+    public void A_species_only_replacement_of_a_menu_sound_is_a_warning()
+    {
+        var (game, mod, dir) = Setup();
+        using var _ = game;
+        var data = Path.Combine(Path.GetTempPath(), "tyrant-tests", Guid.NewGuid().ToString("N"), "data");
+        SoundDumps.Write(data);
+        mod.ReplaceSound(SoundDumps.Nursery, [Wav(dir, "a.wav")], "Carcharodontosaurus", null);
+        mod.ReplaceSound(SoundDumps.Hit, [Wav(dir, "b.wav", "b")], "Carcharodontosaurus", null);
+
+        var warnings = Check(mod, SoundCatalog.Read(data)).Warnings;
+
+        Assert.Contains(warnings, w => w.Contains("Nursery_Carch") && w.Contains("for everyone"));
+        Assert.DoesNotContain(warnings, w => w.Contains("C_Hit_Carnivore"));
     }
 
     [Fact]

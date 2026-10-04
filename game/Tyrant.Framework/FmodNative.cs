@@ -44,6 +44,7 @@ namespace Tyrant.Framework
         [DllImport(Dll)] public static extern int FMOD_Studio_EventInstance_GetChannelGroup(IntPtr instance, out IntPtr group);
         [DllImport(Dll)] public static extern int FMOD_Studio_EventDescription_GetPath(IntPtr description, IntPtr path, int size, out int retrieved);
         [DllImport(Dll)] public static extern int FMOD_Studio_EventDescription_IsOneshot(IntPtr description, out bool oneshot);
+        [DllImport(Dll)] public static extern int FMOD_Studio_EventDescription_Is3D(IntPtr description, out bool is3D);
         [DllImport(Dll)] public static extern int FMOD_Studio_EventDescription_GetID(IntPtr description, out Guid id);
         [DllImport(Dll)] public static extern int FMOD_Studio_EventDescription_GetLength(IntPtr description, out int length);
 
@@ -64,6 +65,7 @@ namespace Tyrant.Framework
         [DllImport(Dll)] public static extern int FMOD5_System_GetMasterChannelGroup(IntPtr system, out IntPtr group);
         [DllImport(Dll)] public static extern int FMOD5_ChannelGroup_GetParentGroup(IntPtr group, out IntPtr parent);
         [DllImport(Dll)] public static extern int FMOD5_Channel_SetChannelGroup(IntPtr channel, IntPtr group);
+        [DllImport(Dll)] public static extern int FMOD5_Channel_GetChannelGroup(IntPtr channel, out IntPtr group);
         [DllImport(Dll)] public static extern int FMOD5_Channel_Set3DAttributes(IntPtr channel, ref Vector position, ref Vector velocity);
         [DllImport(Dll)] public static extern int FMOD5_Channel_Set3DMinMaxDistance(IntPtr channel, float min, float max);
         [DllImport(Dll)] public static extern int FMOD5_Channel_SetPaused(IntPtr channel, bool paused);

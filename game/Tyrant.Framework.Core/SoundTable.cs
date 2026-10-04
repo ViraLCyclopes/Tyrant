@@ -84,6 +84,12 @@ namespace Tyrant.Framework.Core
         /// <summary>A species or skin replacement exists for this event (then the animal playing it matters).</summary>
         public bool HasUnique(string eventPath) => _unique.Contains(eventPath);
 
+        /// <summary>
+        /// Which animal plays this event matters: a species or skin replacement exists, or the one for everyone pitches babies up.
+        /// </summary>
+        public bool NeedsAnimal(string eventPath) =>
+            HasUnique(eventPath) || (_everyone.TryGetValue(eventPath, out var everyone) && everyone.AgePitch > 0);
+
         public SoundChoice? Choose(string eventPath, string? speciesId, string? skinKey)
         {
             if (skinKey != null && _skins.TryGetValue((eventPath, skinKey), out var skin)) return skin;

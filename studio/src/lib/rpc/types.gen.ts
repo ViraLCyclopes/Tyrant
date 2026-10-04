@@ -790,6 +790,7 @@ export interface SoundDto {
   species: string[];
   lengthMs: number | null;
   oneShot: boolean | null;
+  perAnimal: boolean;
 }
 
 export interface SoundsForSpeciesParams {

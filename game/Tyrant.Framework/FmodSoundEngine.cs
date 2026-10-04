@@ -39,6 +39,11 @@ namespace Tyrant.Framework
             FmodNative.FMOD_Studio_EventInstance_GetDescription(instance, out var description) == FmodNative.Ok
             && FmodNative.FMOD_Studio_EventDescription_IsOneshot(description, out var oneshot) == FmodNative.Ok && !oneshot;
 
+        /// <summary>From the event itself: interface sounds, music and ambiences are 2D and have no position.</summary>
+        public bool InstanceIs3D(IntPtr instance) =>
+            FmodNative.FMOD_Studio_EventInstance_GetDescription(instance, out var description) == FmodNative.Ok
+            && FmodNative.FMOD_Studio_EventDescription_Is3D(description, out var is3D) == FmodNative.Ok && is3D;
+
         public bool InstancePosition(IntPtr instance, out Vec3 position, out Vec3 velocity)
         {
             position = velocity = default;
@@ -85,6 +90,9 @@ namespace Tyrant.Framework
         }
 
         public void Route(IntPtr channel, IntPtr bus) => FmodNative.FMOD5_Channel_SetChannelGroup(channel, bus);
+
+        public IntPtr ChannelBus(IntPtr channel) =>
+            FmodNative.FMOD5_Channel_GetChannelGroup(channel, out var group) == FmodNative.Ok ? group : IntPtr.Zero;
 
         public void SetPosition(IntPtr channel, Vec3 position, Vec3 velocity)
         {

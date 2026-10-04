@@ -8,7 +8,7 @@ import { renderWith } from '$lib/test/fixtures';
 import { Session } from '$lib/stores/session.svelte';
 import SpeciesSounds from './SpeciesSounds.svelte';
 
-const sound = (name: string, group: string, species: string[]): SoundDto => ({ event: `event:/X/${name}`, name, group, species, lengthMs: null, oneShot: null });
+const sound = (name: string, group: string, species: string[]): SoundDto => ({ event: `event:/X/${name}`, name, group, species, lengthMs: null, oneShot: null, perAnimal: true });
 
 function setup(speciesId: string | null = 'Carcharodontosaurus') {
   const rpc = new FakeRpc()
