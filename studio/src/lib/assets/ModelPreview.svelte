@@ -20,13 +20,14 @@
   let ground = $state(session.store.get(GROUND_KEY) ?? 'lush-grass');
   let sky = $state(session.store.get(SKY_KEY) ?? 'noon');
   let skin = $state('');
+  let shownSkin = ''; // the skin the viewer shows, for going back when another fails
   let viewer = $state.raw<ModelViewer | null>(null);
   const textured = $derived((preview.materials ?? []).some((m) => m.baseColor !== null || m.normal !== null));
   const ownSkin = $derived(preview.skins?.find((s) => s.current)?.ref ?? '');
 
   onMount(() => {
     let disposed = false;
-    skin = ownSkin;
+    skin = shownSkin = ownSkin;
     const models = preview.files.map((file) => ({ file, url: session.platform.fileUrl(file) }));
     session.rpc.call('assets.environments').then(
       (list) => (environments = list),
@@ -40,6 +41,10 @@
           return;
         }
         viewer = v;
+        for (const failure of v.failures ?? []) note(`A part could not be shown: ${failure}`);
+        // Choices made while it loaded (C11).
+        if (!textures) v.setTextures(false);
+        if (skin && skin !== ownSkin) void chooseSkin(skin);
         void chooseGround(ground);
         void chooseSky(sky);
       })
@@ -92,15 +97,22 @@
   }
 
   async function chooseSkin(ref: string) {
+    const previous = viewer ? shownSkin : skin;
     skin = ref;
+    if (!viewer) return; // applied when the viewer is ready
     if (ref === ownSkin) {
       viewer?.setSkin(null);
+      shownSkin = ref;
       return;
     }
     try {
       const texture = await session.rpc.call('assets.preview', { ref });
-      if (skin === ref) viewer?.setSkin(session.platform.fileUrl(texture.files[0]));
+      if (skin === ref) {
+        viewer?.setSkin(session.platform.fileUrl(texture.files[0]));
+        shownSkin = ref;
+      }
     } catch (e) {
+      if (skin === ref) skin = previous; // back to what is shown (C11)
       note(`That skin could not be loaded: ${message(e)}`);
     }
   }

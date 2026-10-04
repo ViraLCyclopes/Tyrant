@@ -61,6 +61,56 @@ function setup(store = memoryStore()) {
 }
 
 describe('ModelPreview', () => {
+  it('shows the parts that loaded and notes the one that failed', async () => {
+    const { session } = setup();
+    const { showModels, ...methods } = viewer;
+    showModels.mockResolvedValue({ ...methods, failures: ['Eyes.glb: bad accessor'] });
+    renderWith(ModelPreview, session, { preview });
+
+    expect(await screen.findByText(/Eyes\.glb: bad accessor/)).toBeInTheDocument();
+  });
+
+  it('applies a textures choice made before the viewer was ready', async () => {
+    const { session } = setup();
+    let ready!: (v: unknown) => void;
+    viewer.showModels.mockReturnValue(new Promise((r) => (ready = r)));
+    renderWith(ModelPreview, session, { preview });
+
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Textures' }));
+    const { showModels, ...methods } = viewer;
+    ready({ ...methods, failures: [] });
+
+    await waitFor(() => expect(viewer.setTextures).toHaveBeenCalledWith(false));
+  });
+
+  it('applies a skin chosen before the viewer was ready', async () => {
+    const { session } = setup();
+    let ready!: (v: unknown) => void;
+    viewer.showModels.mockReturnValue(new Promise((r) => (ready = r)));
+    renderWith(ModelPreview, session, { preview });
+
+    await fireEvent.change(screen.getByRole('combobox', { name: 'Skin' }), { target: { value: 'b#2' } });
+    const { showModels, ...methods } = viewer;
+    ready({ ...methods, failures: [] });
+
+    await waitFor(() => expect(viewer.setSkin).toHaveBeenCalledWith('asset://D:\\skins\\b_2.png'));
+  });
+
+  it('a skin that fails to load returns to the previous choice', async () => {
+    const { rpc, session } = setup();
+    rpc.on('assets.preview', () => {
+      throw new Error('gone');
+    });
+    renderWith(ModelPreview, session, { preview });
+    await waitFor(() => expect(viewer.showModels).toHaveBeenCalled());
+
+    const select = screen.getByRole('combobox', { name: 'Skin' }) as HTMLSelectElement;
+    await fireEvent.change(select, { target: { value: 'b#2' } });
+
+    await waitFor(() => expect(select.value).toBe('b#1'));
+    expect(screen.getByText(/That skin could not be loaded/)).toBeInTheDocument();
+  });
+
   it('passes the materials to the viewer and says the look is close, not exact', async () => {
     const { session } = setup();
     renderWith(ModelPreview, session, { preview });

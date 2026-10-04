@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { babylonFaces, linkedFile } from './viewerFiles';
+import { babylonFaces, linkedFile, loadParts } from './viewerFiles';
 
 const glbFile = 'D:\\ws\\cache\\previews\\b\\acro\\model\\Acro_LOD00.glb';
 const glbUrl = `http://asset.localhost/${encodeURIComponent(glbFile)}`;
@@ -28,5 +28,16 @@ describe('linkedFile', () => {
 describe('babylonFaces', () => {
   it("reorders Unity's cube faces into Babylon's order", () => {
     expect(babylonFaces(['+x', '-x', '+y', '-y', '+z', '-z'])).toEqual(['+x', '+y', '+z', '-x', '-y', '-z']);
+  });
+});
+
+describe('loadParts', () => {
+  it('one failed part leaves the others and is reported by file name', async () => {
+    const files = [{ file: 'D:\\p\\Body.glb', url: 'u1' }, { file: 'D:\\p\\Eyes.glb', url: 'u2' }];
+    const result = await loadParts(files, async (f) => {
+      if (f.url === 'u2') throw new Error('bad accessor');
+      return f.url;
+    });
+    expect(result).toEqual({ loaded: ['u1'], failures: ['Eyes.glb: bad accessor'] });
   });
 });

@@ -7,11 +7,11 @@ import {
   DirectionalLight,
   Engine,
   HemisphericLight,
+  ImportMeshAsync,
   Material,
   MeshBuilder,
   PBRMaterial,
   Scene,
-  SceneLoader,
   ShadowGenerator,
   SkeletonViewer,
   StandardMaterial,
@@ -22,12 +22,11 @@ import {
   type Mesh,
   type Nullable,
 } from '@babylonjs/core';
-import type { GLTFFileLoader } from '@babylonjs/loaders/glTF';
 import '@babylonjs/loaders/glTF'; // registers the .glb loader
 import type { ModSampledColors, PreviewMaterial } from '$lib/rpc/types.gen';
-import { clampBeta, dragMode, keyAction, orthoExtents, ROTATE_PER_PIXEL, unitsPerPixel, zoomed, type DragMode } from './navigation';
+import { clampBeta, dragMode, keyAction, orthoExtents, orthoZoom, ROTATE_PER_PIXEL, unitsPerPixel, type DragMode } from './navigation';
 import { PkAnimalPlugin } from './pkAnimalPlugin';
-import { babylonFaces, linkedFile } from './viewerFiles';
+import { babylonFaces, linkedFile, loadParts } from './viewerFiles';
 import { animalUniforms, planMaterial } from './viewerMaterials';
 
 /** A .glb preview file and the URL the page loads it from. */
@@ -52,6 +51,8 @@ export interface AnimalMaps {
 }
 
 export interface ModelViewer {
+  /** One line per .glb part that could not be loaded ("<file>: <why>"); the other parts are shown. */
+  failures: string[];
   setSkeleton(visible: boolean): void;
   setTextures(visible: boolean): void;
   /** Shows a skin texture on the skinnable materials; null puts their own picture back. */
@@ -79,6 +80,16 @@ const GROUND_TILE_METRES = 4;
 export async function showModels(canvas: HTMLCanvasElement, models: ModelFile[], options: ViewerOptions): Promise<ModelViewer> {
   const engine = new Engine(canvas, true, { stencil: true });
   const scene = new Scene(engine);
+  try {
+    return await build(canvas, models, options, engine, scene);
+  } catch (e) {
+    scene.dispose(); // never leak the WebGL context (C1, C10)
+    engine.dispose();
+    throw e;
+  }
+}
+
+async function build(canvas: HTMLCanvasElement, models: ModelFile[], options: ViewerOptions, engine: Engine, scene: Scene): Promise<ModelViewer> {
   scene.clearColor = BACKGROUND;
   new HemisphericLight('sky-light', new Vector3(0, 1, 0), scene).intensity = 0.9;
   const sun = new DirectionalLight('sun', new Vector3(-0.5, -1, -0.4), scene);
@@ -87,17 +98,22 @@ export async function showModels(canvas: HTMLCanvasElement, models: ModelFile[],
 
   const roots: AbstractMesh[] = [];
   const skeletons: SkeletonViewer[] = [];
-  for (const model of models) {
-    // The .glb links its textures beside it; send those requests to the files there (see linkedFile).
-    SceneLoader.OnPluginActivatedObservable.addOnce((plugin) => {
-      if (plugin.name !== 'gltf') return;
-      (plugin as GLTFFileLoader).preprocessUrlAsync = async (url) => {
-        const file = linkedFile(url, model.url, model.file);
-        return file ? options.fileUrl(file) : url;
-      };
-    });
-    // Asset-protocol URLs have no .glb extension, so name the loader explicitly.
-    const result = await SceneLoader.ImportMeshAsync('', '', model.url, scene, undefined, '.glb');
+  const { loaded, failures } = await loadParts(models, (model) =>
+    ImportMeshAsync(model.url, scene, {
+      pluginExtension: '.glb', // asset-protocol URLs have no .glb extension
+      pluginOptions: {
+        gltf: {
+          // The .glb links its textures beside it; send those requests to the files there (see linkedFile). Per load, not global (C10).
+          preprocessUrlAsync: async (url: string) => {
+            const file = linkedFile(url, model.url, model.file);
+            return file ? options.fileUrl(file) : url;
+          },
+        },
+      },
+    }),
+  );
+  if (loaded.length === 0) throw new Error(failures.join(' ') || 'No part of the model could be loaded.');
+  for (const result of loaded) {
     roots.push(result.meshes[0]);
     for (const skeleton of result.skeletons) {
       const mesh = result.meshes.find((m) => m.skeleton === skeleton);
@@ -222,21 +238,24 @@ export async function showModels(canvas: HTMLCanvasElement, models: ModelFile[],
   };
 
   let ortho = false;
+  let orthoRadius = camera.radius; // the orthographic view's scale; zooming there never moves the camera (C9)
   const fitOrtho = () => {
     if (!ortho) return;
-    const extents = orthoExtents(camera.radius, camera.fov, engine.getAspectRatio(camera));
+    const extents = orthoExtents(orthoRadius, camera.fov, engine.getAspectRatio(camera));
     camera.orthoTop = extents.top;
     camera.orthoBottom = extents.bottom;
     camera.orthoLeft = extents.left;
     camera.orthoRight = extents.right;
   };
   const zoom = (delta: number) => {
-    camera.radius = zoomed(camera.radius, delta, camera.lowerRadiusLimit ?? 0, camera.upperRadiusLimit ?? Infinity);
+    const next = orthoZoom({ radius: camera.radius, orthoRadius }, ortho, delta, camera.lowerRadiusLimit ?? 0, camera.upperRadiusLimit ?? Infinity);
+    camera.radius = next.radius;
+    orthoRadius = next.orthoRadius;
     fitOrtho();
   };
   const frame = () => {
     camera.setTarget(center.clone(), false, false, true); // keep alpha/beta: only the target moves
-    camera.radius = span * 1.2;
+    camera.radius = orthoRadius = span * 1.2;
     fitOrtho();
   };
 
@@ -290,6 +309,7 @@ export async function showModels(canvas: HTMLCanvasElement, models: ModelFile[],
       camera.beta = clampBeta(camera.beta + action.beta);
     } else if (action.kind === 'ortho') {
       ortho = !ortho;
+      if (ortho) orthoRadius = camera.radius;
       camera.mode = ortho ? Camera.ORTHOGRAPHIC_CAMERA : Camera.PERSPECTIVE_CAMERA;
       fitOrtho();
     } else {
@@ -318,6 +338,7 @@ export async function showModels(canvas: HTMLCanvasElement, models: ModelFile[],
   engine.runRenderLoop(() => scene.render());
 
   return {
+    failures,
     setSkeleton: (visible) => skeletons.forEach((viewer) => (viewer.isEnabled = visible)),
     setTextures: (visible) => {
       texturesOn = visible;

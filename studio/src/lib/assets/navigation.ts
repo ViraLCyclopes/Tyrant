@@ -70,3 +70,10 @@ export function orthoExtents(radius: number, fov: number, aspect: number): { top
   const top = radius * Math.tan(fov / 2);
   return { top, bottom: -top, left: -top * aspect, right: top * aspect };
 }
+
+/** Zoom: orthographic view changes only its scale (the camera never moves into the model, C9); perspective view moves the camera. */
+export function orthoZoom(state: { radius: number; orthoRadius: number }, ortho: boolean, delta: number, min: number, max: number) {
+  return ortho
+    ? { radius: state.radius, orthoRadius: zoomed(state.orthoRadius, delta, min, max) }
+    : { radius: zoomed(state.radius, delta, min, max), orthoRadius: state.orthoRadius };
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clampBeta, dragMode, keyAction, MAX_BETA, MIN_BETA, orthoExtents, unitsPerPixel, zoomed } from './navigation';
+import { clampBeta, dragMode, keyAction, MAX_BETA, MIN_BETA, orthoExtents, unitsPerPixel, zoomed, orthoZoom } from './navigation';
 
 describe('dragMode', () => {
   it('maps the middle button like Blender: orbit, Shift pans, Ctrl zooms', () => {
@@ -62,5 +62,19 @@ describe('camera math', () => {
     expect(extents.right).toBeCloseTo(20);
     expect(extents.left).toBeCloseTo(-20);
     expect(unitsPerPixel(10, Math.PI / 2, 200)).toBeCloseTo(0.1);
+  });
+});
+
+describe('orthoZoom', () => {
+  it('in orthographic view zoom changes the scale and never moves the camera', () => {
+    const next = orthoZoom({ radius: 10, orthoRadius: 10 }, true, 120, 0.1, 200);
+    expect(next.radius).toBe(10);
+    expect(next.orthoRadius).toBeGreaterThan(10);
+  });
+
+  it('in perspective view zoom moves the camera', () => {
+    const next = orthoZoom({ radius: 10, orthoRadius: 10 }, false, 120, 0.1, 200);
+    expect(next.radius).toBeGreaterThan(10);
+    expect(next.orthoRadius).toBe(10);
   });
 });
