@@ -98,6 +98,35 @@ public class ModModelMethodsTests
     }
 
     [Fact]
+    public async Task A_changed_source_file_is_flagged_with_its_path()
+    {
+        using var game = new FakeGame();
+        var (h, _, _, glb) = await Setup(game);
+        await h.Call("mods.replaceModel", new { id = "big-carch", file = glb, target = "Carcharodontosaurus" });
+        File.AppendAllText(glb, " ");
+        File.SetLastWriteTimeUtc(glb, DateTime.UtcNow.AddMinutes(5));
+
+        var model = (await h.Call("mods.get", new { id = "big-carch" })).GetProperty("models")[0];
+
+        Assert.Equal(Path.GetFullPath(glb), model.GetProperty("origin").GetString());
+        Assert.True(model.GetProperty("originChanged").GetBoolean());
+    }
+
+    [Fact]
+    public async Task The_model_preview_is_made_once_per_build()
+    {
+        using var game = new FakeGame();
+        var (h, _, reader, glb) = await Setup(game);
+        await h.Call("mods.replaceModel", new { id = "big-carch", file = glb, target = "Carcharodontosaurus" });
+
+        var first = await h.Call("mods.modelPreview", new { id = "big-carch", target = "Carcharodontosaurus" });
+        var again = await h.Call("mods.modelPreview", new { id = "big-carch", target = "Carcharodontosaurus" });
+
+        Assert.Equal(1, reader.ReplacedModelWrites);
+        Assert.Equal(first.GetProperty("lods")[0].GetProperty("file").GetString(), again.GetProperty("lods")[0].GetProperty("file").GetString());
+    }
+
+    [Fact]
     public async Task Check_rebuilds_a_changed_model_first()
     {
         using var game = new FakeGame();

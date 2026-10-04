@@ -73,6 +73,7 @@ public class GlbModelReaderTests
     [InlineData("Carch_LOD1", 1)]
     [InlineData("carch_lod02", 2)]
     [InlineData("Carch", 0)]
+    [InlineData("Carch_LOD1.001", 1)]
     public void Lod_numbers_come_from_the_mesh_name(string name, int lod)
     {
         Assert.Equal(lod, GlbModelReader.LodOf(name));
@@ -100,6 +101,16 @@ public class GlbModelReaderTests
         GltfModelWriter.WriteGlbs(prefab with { Renderers = [prefab.Renderers[0], lod1] }, path);
 
         Assert.Equal([0, 1], GlbModelReader.Read(path).Select(m => m.Lod));
+    }
+
+    [Fact]
+    public void Blenders_duplicate_name_suffix_is_ignored_on_materials()
+    {
+        var path = TempGlb();
+        var prefab = ModelFixture.Prefab(ModelFixture.Triangle(name: "Carch_LOD00"), skinned: true);
+        GltfModelWriter.WriteGlb(prefab, prefab.Renderers[0], path, [new GltfMaterial("Carch.001")]); // Blender renames on a second import
+
+        Assert.Equal(["Carch"], Assert.Single(GlbModelReader.Read(path)).MaterialNames);
     }
 
     [Fact]

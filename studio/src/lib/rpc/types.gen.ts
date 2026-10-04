@@ -431,6 +431,8 @@ export interface ModModelDto {
   errors: string[];
   warnings: string[];
   stale: boolean;
+  origin: string | null;
+  originChanged: boolean;
 }
 
 export interface ModModelLodDto {

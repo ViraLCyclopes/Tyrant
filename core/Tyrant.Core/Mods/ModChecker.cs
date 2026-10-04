@@ -114,8 +114,13 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
     /// <summary>Each model's file, species and build report (built by Replace, rebuilt by Check and Install when its .glb changed).</summary>
     private static void ModelProblems(ModProject mod, IReadOnlyList<SpeciesSkins>? species, List<string> errors, List<string> warnings)
     {
-        foreach (var (speciesId, file) in mod.ModelEntries())
+        foreach (var (speciesId, file) in mod.AllModelEntries())
         {
+            if (!mod.IsInsideMod(file))
+            {
+                errors.Add($"Model of {speciesId}: {file} points outside the mod; a mod may only use its own files.");
+                continue;
+            }
             if (species is not null && !species.Any(s => s.SpeciesId == speciesId))
                 errors.Add($"Model of {speciesId}: species \"{speciesId}\" is not in the game data.");
             if (!File.Exists(Path.Combine(mod.Dir, file)))
@@ -131,6 +136,8 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
             }
             errors.AddRange(report.Errors.Select(e => $"Model of {speciesId}: {e}"));
             warnings.AddRange(report.Warnings.Select(w => $"Model of {speciesId}: {w}"));
+            if (Tyrant.Core.ModelReplacements.ModelBuilder.OriginChanged(report))
+                warnings.Add($"Model of {speciesId}: your file {report.Origin} changed since you added it; to use the new version click Re-import on the model's page (Mods tab → open the mod → Models), or run 'tyrant mod replace-model' again.");
         }
     }
 

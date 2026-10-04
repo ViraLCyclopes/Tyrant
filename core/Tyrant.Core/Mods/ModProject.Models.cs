@@ -31,7 +31,8 @@ public sealed partial class ModProject
         if (!string.Equals(Path.GetFullPath(glbPath), Path.GetFullPath(destination), StringComparison.OrdinalIgnoreCase))
             File.Copy(glbPath, destination, overwrite: true);
 
-        var report = ModelBuilder.Build(Dir, file, reader.ReadPrefabModel(install, prefab));
+        var copiedFromOutside = !string.Equals(Path.GetFullPath(glbPath), Path.GetFullPath(destination), StringComparison.OrdinalIgnoreCase);
+        var report = ModelBuilder.Build(Dir, file, reader.ReadPrefabModel(install, prefab), copiedFromOutside ? Path.GetFullPath(glbPath) : null);
         if (report.Errors.Count > 0)
             throw new TyrantException(TyrantErrorCode.ModInvalid, $"The model was not added: {string.Join(" ", report.Errors)}");
 
@@ -73,10 +74,15 @@ public sealed partial class ModProject
         return rebuilt;
     }
 
-    /// <summary>Every (species, .glb file) the mod uses: species replacements and skin models.</summary>
-    public IEnumerable<(string Species, string File)> ModelEntries() =>
+    /// <summary>Every (species, .glb file) the mod uses whose file lies inside the mod: species replacements and skin models.</summary>
+    public IEnumerable<(string Species, string File)> ModelEntries() => AllModelEntries().Where(e => IsInsideMod(e.File));
+
+    /// <summary>Every model entry as mod.json writes it, including files that point outside the mod (Check reports those).</summary>
+    public IEnumerable<(string Species, string File)> AllModelEntries() =>
         Manifest.Models.Select(m => (m.Target, m.File))
             .Concat(Manifest.Skins.Where(s => s.Model is not null).Select(s => (s.Species, s.Model!)));
+
+    public bool IsInsideMod(string file) => ModPaths.IsInside(Path.Combine(Dir, file), Dir);
 
     /// <summary>The species and its prefab: from the prefab (Assets tab) or from the species id (data dump → animalRef → index).</summary>
     public static (string Species, AssetRecord Prefab) ResolveModelTarget(AssetIndex index, IReadOnlyList<SpeciesSkins> species, string? target, string? prefabRef)

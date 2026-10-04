@@ -38,7 +38,7 @@
     }
     const detail = await tab.safely(() => session.rpc.call('mods.replaceModel', { id, file: file.trim(), prefabRef: asset.ref }));
     if (!detail) return;
-    const model = detail.models.find((m) => m.skin === null && m.lods.length > 0);
+    const model = detail.models.findLast((m) => m.skin === null); // the model just added comes last
     tab.info(`${asset.name}'s model is now in '${id}' (${model?.lods.length ?? 0} LOD(s)). Install it from the Mods tab.`);
     for (const warning of model?.warnings ?? []) tab.warn(warning);
     open = false;

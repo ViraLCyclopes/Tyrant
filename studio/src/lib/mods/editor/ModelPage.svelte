@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { ModelViewer } from '$lib/assets/viewer';
   import { asRpcError } from '$lib/rpc/client';
-  import type { ModModelDto } from '$lib/rpc/types.gen';
+  import type { ModModelDto, ModModelPreview } from '$lib/rpc/types.gen';
   import { getTab } from '$lib/shell/tab.svelte';
   import { getSession } from '$lib/stores/session.svelte';
   import type { ModDoc } from './modDoc.svelte';
@@ -16,11 +16,24 @@
   let reason = $state<string | null>(null);
   let generation = 0;
   let disposed = false;
+  // The preview's files for this build of the model: asked for once, then each LOD button only switches between them.
+  let previewKey = '';
+  let previewing: Promise<ModModelPreview> | null = null;
+
+  function loadPreview(): Promise<ModModelPreview> {
+    const key = `${model.file}|${doc.detail?.revision ?? ''}`;
+    if (key !== previewKey || !previewing) {
+      previewKey = key;
+      previewing = session.rpc.call('mods.modelPreview', { id: doc.id, target: model.target, skin: model.skin });
+      previewing.catch(() => (previewKey = '')); // asked again next time
+    }
+    return previewing;
+  }
 
   async function show(level: number) {
     const mine = ++generation;
     try {
-      const preview = await session.rpc.call('mods.modelPreview', { id: doc.id, target: model.target, skin: model.skin });
+      const preview = await loadPreview();
       const part = preview.lods[Math.min(level, preview.lods.length - 1)];
       if (mine !== generation || disposed || !part) return;
       const module = await import('$lib/assets/viewer');
@@ -63,6 +76,10 @@
     if (file) await doc.edit('mods.replaceModel', { file, target: model.skin ? null : model.target, skin: model.skin });
   }
 
+  async function reimport() {
+    if (model.origin) await doc.edit('mods.replaceModel', { file: model.origin, target: model.skin ? null : model.target, skin: model.skin });
+  }
+
   async function remove() {
     if (await doc.edit('mods.removeModel', { target: model.target, skin: model.skin })) onRemoved();
   }
@@ -84,15 +101,20 @@
   </ul>
   {#each model.errors as e (e)}<p class="warn">{e}</p>{/each}
   {#each model.warnings as w (w)}<p class="hint">{w}</p>{/each}
-  {#if model.stale}<p class="hint">Your .glb changed since it was built; Check and Install rebuild it.</p>{/if}
+  {#if model.stale}<p class="hint">The model's .glb in the mod changed since it was built; Check and Install build it again.</p>{/if}
+  {#if model.originChanged && model.origin}
+    <p class="hint">{model.origin} changed since you added it. Re-import it to use the new version.</p>
+    <div class="row"><button onclick={reimport}>Re-import</button></div>
+  {/if}
   <div class="row">
     <button onclick={replace}>Replace…</button>
     <button onclick={() => doc.edit('mods.rebuildModels', {})}>Rebuild LODs</button>
     <button onclick={remove}>Remove</button>
   </div>
   <p class="hint">
-    Made in Blender from Tyrant's export: keep the armature, its bone names and the growth shape keys (reshape those too when you reshape the
-    Basis). Name extra meshes …_LOD1 / …_LOD2 to use your own levels of detail; otherwise Tyrant makes them.
+    Made in Blender from Tyrant's export: keep the armature, its bone names and the growth shape keys. Reshape the Basis in Edit Mode and the
+    growth keys follow it; do not repeat the change on them. Name extra meshes …_LOD1 / …_LOD2 to use your own levels of detail; otherwise
+    Tyrant makes them.
   </p>
 </section>
 

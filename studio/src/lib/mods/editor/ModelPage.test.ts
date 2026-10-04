@@ -15,7 +15,7 @@ const viewer = vi.hoisted(() => ({
 vi.mock('$lib/assets/viewer', () => ({ showModels: viewer.showModels }));
 
 const model: ModModelDto = {
-  target: 'Carcharodontosaurus', skin: null, file: 'models/carch-1a2b.glb', stale: false, errors: [],
+  target: 'Carcharodontosaurus', skin: null, file: 'models/carch-1a2b.glb', stale: false, origin: null, originChanged: false, errors: [],
   warnings: ["The rest pose of bone 'Jaw' differs from the game's"],
   lods: [{ file: 'a.lod0.tmesh', vertices: 9000, index32: false, vanilla: 20000 }, { file: 'a.lod1.tmesh', vertices: 3000, index32: false, vanilla: 7000 }],
 };
@@ -43,6 +43,29 @@ describe('ModelPage', () => {
     await waitFor(() => expect(viewer.showModels.mock.calls[0]?.[1]).toEqual([{ file: 'D:\\p\\lod0.glb', url: 'asset://D:\\p\\lod0.glb' }]));
     await fireEvent.click(screen.getByRole('button', { name: 'LOD 1' }));
     await waitFor(() => expect(viewer.showModels.mock.calls.at(-1)![1]).toEqual([{ file: 'D:\\p\\lod1.glb', url: 'asset://D:\\p\\lod1.glb' }]));
+  });
+
+  it('switching LODs reuses the preview it already has', async () => {
+    const { rpc, session, doc } = setup();
+    renderWith(ModelPage, session, { doc, model });
+    await waitFor(() => expect(viewer.showModels).toHaveBeenCalledTimes(1));
+
+    await fireEvent.click(screen.getByRole('button', { name: 'LOD 1' }));
+    await waitFor(() => expect(viewer.showModels).toHaveBeenCalledTimes(2));
+    await fireEvent.click(screen.getByRole('button', { name: 'LOD 0' }));
+
+    await waitFor(() => expect(viewer.showModels).toHaveBeenCalledTimes(3));
+    expect(rpc.callsTo('mods.modelPreview')).toHaveLength(1);
+  });
+
+  it('a source file changed since it was added can be imported again', async () => {
+    const { session, doc } = setup();
+    renderWith(ModelPage, session, { doc, model: { ...model, origin: 'D:\\blender\\carch.glb', originChanged: true } });
+
+    expect(screen.getByText(/D:\\blender\\carch.glb changed since you added it/)).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Re-import' }));
+
+    expect(doc.edit).toHaveBeenCalledWith('mods.replaceModel', { file: 'D:\\blender\\carch.glb', target: 'Carcharodontosaurus', skin: null });
   });
 
   it('shows each LOD against the game and the warnings', () => {

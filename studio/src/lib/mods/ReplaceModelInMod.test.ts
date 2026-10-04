@@ -12,7 +12,7 @@ import ReplaceModelInMod from './ReplaceModelInMod.svelte';
 const prefab: AssetRow = { ref: 'carch#1', bundle: 'carch.bundle', pathId: 1, type: 'GameObject', name: 'Carcharodontosaurus', containerPath: 'Assets/Carch.prefab', guid: 'g', script: null };
 
 const added = modDetail({
-  models: [{ target: 'Carcharodontosaurus', skin: null, file: 'models/x.glb', lods: [{ file: 'a', vertices: 9000, index32: false, vanilla: 20000 }, { file: 'b', vertices: 3000, index32: false, vanilla: 7000 }], errors: [], warnings: ['Shape key \'Smile\' was left out.'], stale: false }],
+  models: [{ target: 'Carcharodontosaurus', skin: null, file: 'models/x.glb', lods: [{ file: 'a', vertices: 9000, index32: false, vanilla: 20000 }, { file: 'b', vertices: 3000, index32: false, vanilla: 7000 }], errors: [], warnings: ['Shape key \'Smile\' was left out.'], stale: false, origin: null, originChanged: false }],
 });
 
 function setup() {
@@ -36,6 +36,20 @@ describe('ReplaceModelInMod', () => {
     await waitFor(() => expect(rpc.callsTo('mods.replaceModel')[0]?.params).toEqual({ id: 'big-carch', file: 'D:\\blender\\carch.glb', prefabRef: 'carch#1' }));
     await waitFor(() => expect(messages(session, 'tab-test').join('\n')).toContain("Carcharodontosaurus's model is now in 'big-carch' (2 LOD(s))"));
     expect(messages(session, 'tab-test').join('\n')).toContain("'Smile' was left out");
+  });
+
+  it("reports the model it just added, not another of the mod's", async () => {
+    const { rpc, session } = setup();
+    const other = { target: 'Allosaurus', skin: null, file: 'models/allo.glb', lods: [{ file: 'x', vertices: 1, index32: false, vanilla: 1 }], errors: [], warnings: ['Allosaurus warning'], stale: false, origin: null, originChanged: false };
+    rpc.on('mods.replaceModel', () => modDetail({ models: [other, ...added.models] }));
+    renderWith(ReplaceModelInMod, session, { asset: prefab });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Replace model in a mod…' }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Browse…' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Add to mod' }));
+
+    await waitFor(() => expect(messages(session, 'tab-test').join('\n')).toContain('(2 LOD(s))'));
+    expect(messages(session, 'tab-test').join('\n')).not.toContain('Allosaurus warning');
   });
 
   it('asks for a file before adding', async () => {

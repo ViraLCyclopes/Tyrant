@@ -36,13 +36,20 @@ public sealed partial class ModsMethods
         var mod = ModProject.Open(ws, p.Id, p.Revision);
         var index = RequireIndex(ws);
         var species = RequireSpecies(ws);
-        foreach (var (speciesId, file) in mod.ModelEntries())
+        foreach (var (speciesId, file) in mod.ModelEntries()) // only files inside the mod
             ModelBuilder.Build(mod.Dir, file, Options.AssetReader.ReadPrefabModel(install, ModProject.ResolveModelTarget(index, species, speciesId, null).Prefab));
         session.Log($"'{p.Id}': rebuilt its models and their levels of detail.");
         return DetailOf(ws, mod);
     }
 
-    /// <summary>One .glb per LOD of a replacement model, on the game's skeleton with the game's materials, for the 3D preview.</summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, object> PreviewLocks = new();
+
+    private static readonly System.Text.Json.JsonSerializerOptions PreviewJson = new() { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase };
+
+    /// <summary>
+    /// One .glb per LOD of a replacement model, on the game's skeleton with the game's materials, for the 3D preview. Made once per
+    /// build (kept in a folder keyed by the model's stamp) and one request at a time per model, so overlapping requests share it.
+    /// </summary>
     [RpcMethod("mods.modelPreview")]
     public ModModelPreview ModelPreview(ModModelPreviewParams p)
     {
@@ -55,17 +62,36 @@ public sealed partial class ModsMethods
         var report = ModelBuilder.ReadReport(mod.Dir, file);
         if (report is null || report.Errors.Count > 0 || report.Lods.Count == 0)
             throw new TyrantException(TyrantErrorCode.ModInvalid, "The model has no built levels of detail to show: fix its problems (see Check), then click Rebuild LODs.");
-        var lods = report.Lods.Select(l =>
-        {
-            using var stream = File.OpenRead(Path.Combine(mod.Dir, l.File));
-            return TMesh.Read(stream);
-        }).ToList();
         var key = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes($"{mod.Dir}|{file}|{report.Stamp}")))[..16].ToLowerInvariant();
-        var facts = Options.AssetReader.WriteReplacedModel(install, prefab, lods, Path.Combine(PreviewsDir(ws, "model-replacements"), key), index);
-        return new ModModelPreview(prefab.Ref,
-            facts.Parts.Select((part, i) => new ModModelPreviewLod(part.File, i < lods.Count ? lods[i].VertexCount : part.Vertices)).ToList(),
-            facts.Materials.Select(m => new PreviewMaterial(m.Name, m.BaseColor?.Name, m.Normal?.Name, false, m.Shader, m.Animal, m.Cutoff,
-                m.Slots.Select(s => new PreviewSlot(s.Name, s.Texture.Name, facts.TextureFiles.GetValueOrDefault(s.Texture.Ref))).ToList())).ToList());
+        var dir = Path.Combine(PreviewsDir(ws, "model-replacements"), key);
+        lock (PreviewLocks.GetOrAdd(dir, _ => new object()))
+        {
+            var saved = Path.Combine(dir, "preview.json");
+            if (File.Exists(saved))
+            {
+                try
+                {
+                    var cached = System.Text.Json.JsonSerializer.Deserialize<ModModelPreview>(File.ReadAllText(saved), PreviewJson);
+                    if (cached is not null && cached.Lods.All(l => File.Exists(Path.Combine(dir, l.File)))) return cached;
+                }
+                catch (Exception ex) when (ex is System.Text.Json.JsonException or IOException or NotSupportedException)
+                {
+                    // made again below
+                }
+            }
+            var lods = report.Lods.Select(l =>
+            {
+                using var stream = File.OpenRead(Path.Combine(mod.Dir, l.File));
+                return TMesh.Read(stream);
+            }).ToList();
+            var facts = Options.AssetReader.WriteReplacedModel(install, prefab, lods, dir, index);
+            var preview = new ModModelPreview(prefab.Ref,
+                facts.Parts.Select((part, i) => new ModModelPreviewLod(part.File, i < lods.Count ? lods[i].VertexCount : part.Vertices)).ToList(),
+                facts.Materials.Select(m => new PreviewMaterial(m.Name, m.BaseColor?.Name, m.Normal?.Name, false, m.Shader, m.Animal, m.Cutoff,
+                    m.Slots.Select(s => new PreviewSlot(s.Name, s.Texture.Name, facts.TextureFiles.GetValueOrDefault(s.Texture.Ref))).ToList())).ToList());
+            File.WriteAllText(saved, System.Text.Json.JsonSerializer.Serialize(preview, PreviewJson));
+            return preview;
+        }
     }
 
     private static ModModelDto ModelDto(ModProject mod, string target, string? skin, string file)
@@ -73,7 +99,8 @@ public sealed partial class ModsMethods
         var report = ModelBuilder.ReadReport(mod.Dir, file);
         return new ModModelDto(target, skin, file,
             report?.Lods.Select(l => new ModModelLodDto(l.File, l.Vertices, l.Index32, l.Vanilla)).ToList() ?? [],
-            report?.Errors ?? [], report?.Warnings ?? [], ModelBuilder.IsStale(mod.Dir, file));
+            report?.Errors ?? [], report?.Warnings ?? [], ModelBuilder.IsStale(mod.Dir, file),
+            report?.Origin, report is not null && ModelBuilder.OriginChanged(report));
     }
 
     /// <summary>Before Check and Install: models whose .glb changed are built again (needs the index and the data dump).</summary>

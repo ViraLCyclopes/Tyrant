@@ -170,6 +170,52 @@ public class ModProjectModelsTests
     }
 
     [Fact]
+    public void Check_says_when_the_users_own_glb_changed_since_it_was_added()
+    {
+        var (game, ws, install, mod, reader, glb) = Setup();
+        using var _ = game;
+        mod.ReplaceModel(install, Index(), SpeciesSkinsReader.Load(ws), reader, glb, "Carcharodontosaurus", null, null);
+        File.AppendAllText(glb, " "); // re-exported from Blender over the same file
+        File.SetLastWriteTimeUtc(glb, DateTime.UtcNow.AddMinutes(5));
+
+        var result = new ModChecker(_ => (2, 2)).Check(mod, Index(), SpeciesSkinsReader.Load(ws));
+
+        Assert.Contains(result.Warnings, w => w.Contains("carch-edit.glb") && w.Contains("changed since you added it") && w.Contains("Re-import"));
+        Assert.Equal(Path.GetFullPath(glb), ModelBuilder.ReadReport(mod.Dir, mod.Manifest.Models[0].File)!.Origin);
+    }
+
+    [Fact]
+    public void A_rebuild_keeps_where_the_model_came_from()
+    {
+        var (game, ws, install, mod, reader, glb) = Setup();
+        using var _ = game;
+        mod.ReplaceModel(install, Index(), SpeciesSkinsReader.Load(ws), reader, glb, "Carcharodontosaurus", null, null);
+        var file = mod.Manifest.Models[0].File;
+
+        ModelBuilder.Build(mod.Dir, file, reader.PrefabModelToReturn!);
+
+        Assert.Equal(Path.GetFullPath(glb), ModelBuilder.ReadReport(mod.Dir, file)!.Origin);
+    }
+
+    [Fact]
+    public void A_model_file_outside_the_mod_is_an_error_and_never_built()
+    {
+        var (game, ws, install, mod, reader, glb) = Setup();
+        using var _ = game;
+        var outside = Path.Combine(ws.Dir, "evil.glb");
+        File.Copy(glb, outside);
+        mod.Manifest.Models.Add(new ModelReplacement { Target = "Carcharodontosaurus", File = "../../evil.glb" });
+        mod.Save();
+
+        var result = new ModChecker(_ => (2, 2)).Check(mod, Index(), SpeciesSkinsReader.Load(ws));
+        mod.RebuildStaleModels(install, Index(), SpeciesSkinsReader.Load(ws), reader);
+
+        Assert.Contains(result.Errors, e => e.Contains("evil.glb") && e.Contains("outside the mod"));
+        Assert.False(File.Exists(Path.Combine(ws.Dir, "evil.model.json")));
+        Assert.False(File.Exists(Path.Combine(ws.Dir, "evil.lod0.tmesh")));
+    }
+
+    [Fact]
     public void A_mod_with_only_a_model_is_not_empty()
     {
         var (game, ws, install, mod, reader, glb) = Setup();

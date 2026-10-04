@@ -134,10 +134,11 @@ and on a skin: `"model": "models/carcharodontosaurus-spiked-5e6f7a8b.glb"`.
 | `file` | Your Blender export, copied into the mod. Tyrant writes the converted files next to it: `….lod0.tmesh`, `….lod1.tmesh`, … (one per level of detail) and `….model.json` (what it found). |
 
 - **Which model an animal wears:** its skin's `model`, else its species' entry in `models`, else the game's. When two mods replace the same species, the later one in the load order wins.
-- **Making the model in Blender:** start from Tyrant's export of the prefab. Keep the armature and its bone names (new bones are not supported yet), keep the two growth shape keys (the game drives them from baby to adult; when you reshape the Basis, reshape those keys too), and keep the material names. The game's materials and textures stay; change the look with texture replacements or skin textures.
+- **Making the model in Blender:** start from Tyrant's export of the prefab. Keep the armature and its bone names (new bones are not supported yet), keep the two growth shape keys (the game drives them from baby to adult), and keep the material names. Reshape the Basis in Edit Mode: Blender carries the change into the growth keys, so do not make it on them again (it would count twice). A growth key that moves the mesh far more than the game's is a warning. The game's materials and textures stay; change the look with texture replacements or skin textures.
 - **Levels of detail:** name extra meshes `…_LOD1` / `…_LOD2` to use your own; otherwise Tyrant simplifies your mesh to the game's own ratios.
 - **Size:** more than 4× the game's vertices is a warning (many animals can lower the frame rate); over 65,535 vertices the mesh uses 32-bit indices.
-- Check and Install rebuild the converted files when your `.glb` changed.
+- `file` must lie inside the mod; a path that leads outside it is an error, and Tyrant builds nothing for it.
+- Check and Install rebuild the converted files when the `.glb` in the mod changed. Tyrant also remembers the file you added the model from; when you export it again, Check warns and the model's page offers **Re-import** (or run `tyrant mod replace-model` again).
 
 ## In the game
 

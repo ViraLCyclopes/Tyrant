@@ -29,7 +29,7 @@ async function setup(detail = modDetail()) {
 
 describe('SkinPage', () => {
   it('a skin without a model of its own shows the species replacement and offers Replace…', async () => {
-    const species = { target: 'Carcharodontosaurus', skin: null, file: 'models/carch-1a2b.glb', lods: [], errors: [], warnings: [], stale: false };
+    const species = { target: 'Carcharodontosaurus', skin: null, file: 'models/carch-1a2b.glb', lods: [], errors: [], warnings: [], stale: false, origin: null, originChanged: false };
     const { rpc, platform } = await setup(modDetail({ models: [species] }));
     platform.files.push('D:\\blender\\spiked.glb');
     rpc.on('mods.replaceModel', () => modDetail({ revision: 'r2', models: [species] }));
@@ -43,7 +43,7 @@ describe('SkinPage', () => {
   it('a skin with its own model can go back to the species model', async () => {
     const own = modDetail();
     own.skins[0] = { ...own.skins[0], model: 'models/carch-blue-9f9f.glb' };
-    own.models = [{ target: 'Carcharodontosaurus', skin: 'blue', file: 'models/carch-blue-9f9f.glb', lods: [], errors: [], warnings: [], stale: false }];
+    own.models = [{ target: 'Carcharodontosaurus', skin: 'blue', file: 'models/carch-blue-9f9f.glb', lods: [], errors: [], warnings: [], stale: false, origin: null, originChanged: false }];
     const { rpc } = await setup(own);
     rpc.on('mods.removeModel', () => modDetail({ revision: 'r2' }));
 

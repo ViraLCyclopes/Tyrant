@@ -11,7 +11,9 @@ namespace Tyrant.Core.ModelReplacements;
 public sealed record ModelLodStats(string File, int Vertices, bool Index32, int Vanilla);
 
 /// <summary>What building a model found: errors (then no .tmesh is written), warnings, and each LOD written; saved next to the .glb.</summary>
-public sealed record ModelReport(string Source, string Stamp, IReadOnlyList<string> Errors, IReadOnlyList<string> Warnings, IReadOnlyList<ModelLodStats> Lods);
+/// <remarks>Origin: the user's own .glb the model was added from (outside the mod), with its stamp then, to notice a re-export.</remarks>
+public sealed record ModelReport(string Source, string Stamp, IReadOnlyList<string> Errors, IReadOnlyList<string> Warnings, IReadOnlyList<ModelLodStats> Lods,
+    string? Origin = null, string? OriginStamp = null);
 
 /// <summary>Turns the user's .glb into one .tmesh per game LOD: their own LOD meshes when present, else LOD 0 decimated.</summary>
 public static class ModelBuilder
@@ -46,10 +48,19 @@ public static class ModelBuilder
         return report.Errors.Count == 0 && report.Lods.Any(l => !File.Exists(Path.Combine(modDir, l.File)));
     }
 
-    public static ModelReport Build(string modDir, string glbFile, PrefabModel game)
+    /// <summary>True when the user's own .glb (where the model was added from) changed since then: a re-export to import again.</summary>
+    public static bool OriginChanged(ModelReport report) =>
+        report.Origin is { } origin && File.Exists(origin) && Stamp(origin) != report.OriginStamp;
+
+    /// <param name="origin">The user's .glb the model is added from; a rebuild keeps the one recorded before.</param>
+    public static ModelReport Build(string modDir, string glbFile, PrefabModel game, string? origin = null)
     {
         var glbPath = Path.Combine(modDir, glbFile);
         var stamp = Stamp(glbPath);
+        var previous = origin is null ? ReadReport(modDir, glbFile) : null;
+        var (from, fromStamp) = origin is not null ? (origin, Stamp(origin)) : (previous?.Origin, previous?.OriginStamp);
+        ModelReport Report(IReadOnlyList<string> errors, IReadOnlyList<string> warnings, IReadOnlyList<ModelLodStats> lods) =>
+            new(glbFile, stamp, errors, warnings, lods, from, fromStamp);
         var renderers = GameRenderers(game);
         IReadOnlyList<ImportedMesh> imported;
         try
@@ -58,10 +69,10 @@ public static class ModelBuilder
         }
         catch (TyrantException ex)
         {
-            return Save(modDir, glbFile, new ModelReport(glbFile, stamp, [ex.Message], [], []));
+            return Save(modDir, glbFile, Report([ex.Message], [], []));
         }
         if (renderers.Count == 0)
-            return Save(modDir, glbFile, new ModelReport(glbFile, stamp, ["The game prefab has no skinned mesh to replace."], [], []));
+            return Save(modDir, glbFile, Report(["The game prefab has no skinned mesh to replace."], [], []));
 
         var errors = new List<string>();
         var warnings = new List<string>();
@@ -90,7 +101,7 @@ public static class ModelBuilder
             }
         }
         if (errors.Count > 0 || fitted.Count != renderers.Count)
-            return Save(modDir, glbFile, new ModelReport(glbFile, stamp, errors.Distinct().ToList(), warnings.Distinct().ToList(), []));
+            return Save(modDir, glbFile, Report(errors.Distinct().ToList(), warnings.Distinct().ToList(), []));
 
         var lods = new List<ModelLodStats>();
         for (var lod = 0; lod < fitted.Count; lod++)
@@ -102,7 +113,7 @@ public static class ModelBuilder
             using (var stream = File.Create(path)) tmesh.Write(stream);
             lods.Add(new ModelLodStats(file, tmesh.VertexCount, tmesh.Index32, renderers[lod].Mesh.VertexCount));
         }
-        return Save(modDir, glbFile, new ModelReport(glbFile, stamp, [], warnings.Distinct().ToList(), lods));
+        return Save(modDir, glbFile, Report([], warnings.Distinct().ToList(), lods));
     }
 
     /// <summary>The prefab's skinned renderers in LOD order: by a _LOD&lt;n&gt; suffix on the renderer or its mesh, then most vertices first.</summary>

@@ -15,9 +15,15 @@ public static partial class GlbModelReader
     [GeneratedRegex(@"_lod0*(\d+)$", RegexOptions.IgnoreCase)]
     private static partial Regex LodSuffix();
 
-    public static int LodOf(string name) => LodSuffix().Match(name) is { Success: true } m ? int.Parse(m.Groups[1].Value) : 0;
+    [GeneratedRegex(@"\.\d{3}$")]
+    private static partial Regex BlenderCopySuffix();
 
-    public static bool HasLodSuffix(string name) => LodSuffix().IsMatch(name);
+    /// <summary>A name without the ".001" Blender adds when a name is already taken (importing a file twice).</summary>
+    public static string BaseName(string name) => BlenderCopySuffix().Replace(name, "");
+
+    public static int LodOf(string name) => LodSuffix().Match(BaseName(name)) is { Success: true } m ? int.Parse(m.Groups[1].Value) : 0;
+
+    public static bool HasLodSuffix(string name) => LodSuffix().IsMatch(BaseName(name));
 
     public static IReadOnlyList<ImportedMesh> Read(string glbPath)
     {
@@ -117,7 +123,7 @@ public static partial class GlbModelReader
                 indices.Add((uint)(b + baseVertex));
             }
             subMeshes.Add(new SubMesh(first, indices.Count - first, 0));
-            materials.Add(primitive.Material?.Name ?? "");
+            materials.Add(BaseName(primitive.Material?.Name ?? ""));
         }
 
         var shapes = targetNames.Select((shapeName, s) =>

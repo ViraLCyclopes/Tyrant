@@ -89,7 +89,8 @@ public class ModelFitterTests
         var fit = ModelFitter.Fit(Imported(shapes: stale), Game, ["Carch"]);
 
         Assert.NotNull(fit.Mesh);
-        Assert.Contains(fit.Warnings, w => w.Contains("Infant") && w.Contains("reshape the growth keys too"));
+        Assert.Contains(fit.Warnings, w => w.Contains("Infant") && w.Contains("applied twice") && w.Contains("Edit Mode"));
+        Assert.DoesNotContain(fit.Warnings, w => w.Contains("reshape the growth keys too"));
     }
 
     [Fact]

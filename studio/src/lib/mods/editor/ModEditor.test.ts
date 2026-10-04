@@ -27,7 +27,7 @@ function setup(detail = modDetail()) {
 
 describe('ModEditor', () => {
   it('lists species models under Models and opens their page', async () => {
-    setup(modDetail({ models: [{ target: 'Carcharodontosaurus', skin: null, file: 'models/carch-1a2b.glb', lods: [], errors: [], warnings: [], stale: false }] }));
+    setup(modDetail({ models: [{ target: 'Carcharodontosaurus', skin: null, file: 'models/carch-1a2b.glb', lods: [], errors: [], warnings: [], stale: false, origin: null, originChanged: false }] }));
 
     await fireEvent.click(await screen.findByRole('button', { name: 'Carcharodontosaurus' }));
 

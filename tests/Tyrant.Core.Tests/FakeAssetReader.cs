@@ -34,8 +34,11 @@ public sealed class FakeAssetReader : IAssetReader
     public IReadOnlyList<string> ModelMaterialFailures { get; set; } = [];
 
     /// <summary>Writes a placeholder .glb per LOD (WriteReplacedModel), with ModelMaterials as the materials.</summary>
+    public int ReplacedModelWrites { get; private set; }
+
     public ModelFacts WriteReplacedModel(GameInstall install, AssetRecord prefab, IReadOnlyList<Tyrant.Framework.Core.TMesh> lods, string outputDir, AssetIndex index)
     {
+        ReplacedModelWrites++;
         Fail(prefab);
         var parts = lods.Select((lod, i) => new ModelPart(Path.Combine(outputDir, $"lod{i}.glb"), $"LOD {i}", lod.VertexCount, lod.Indices.Length / 3, true)).ToList();
         foreach (var part in parts) Write(part.File, "glb");

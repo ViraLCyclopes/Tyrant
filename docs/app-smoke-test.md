@@ -95,7 +95,7 @@ Release build: `npm run build:app`, install `studio/src-tauri/target/release/bun
 50. In a test workspace without `data\`, open the mod editor's Colours: the 3D area says to Run data dump; the 2D strip
     still draws.
 51. Assets → Carcharodontosaurus prefab → **Export selected** → open the LOD00 .glb in Blender 5.2 (plain bones) → scale the head up in
-    Edit Mode (and the same on the two growth shape keys) → File → Export → glTF 2.0 (.glb).
+    Edit Mode with the Basis selected (the growth keys follow; do not edit them) → File → Export → glTF 2.0 (.glb).
 52. Assets → the prefab → **Replace model in a mod…** → new mod `big-head-carch` → Browse… your .glb → **Add to mod**: the notice names
     3 LODs. Mods → open it: Models → Carcharodontosaurus shows the big head; LOD 1 and LOD 2 show simpler versions; the numbers sit near
     the game's.
@@ -103,6 +103,8 @@ Release build: `npm run build:app`, install `studio/src-tauri/target/release/bun
     normally (feet on the ground) and wears its skin. `MelonLoader\Latest.log` has "Replaced Carcharodontosaurus's model".
 54. Give a skin its own model (skin page → Model → Replace model…): in the Nursery that skin shows its model, other skins the species
     model; switching an animal back to another skin puts that skin's model (or the game's) back.
+55. Export the .glb from step 51 again from Blender: the model's page says it changed since you added it; **Re-import** brings in the
+    new version (Ctrl+Z goes back).
 
 **Shell (tabs, log, preferences):**
 

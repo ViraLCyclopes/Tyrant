@@ -47,9 +47,12 @@ public sealed record ModSkinDto(string Id, string Key, string Species, string Na
 /// <summary>One converted level of detail: its .tmesh, its vertices, 32-bit indices, and the game LOD's vertices.</summary>
 public sealed record ModModelLodDto(string File, int Vertices, bool Index32, int Vanilla);
 
-/// <summary>A model replacement (Skin null: the species'); Stale: its .glb changed since it was built.</summary>
+/// <summary>
+/// A model replacement (Skin null: the species'); Stale: its .glb changed since it was built; Origin: the user's own .glb it was
+/// added from, OriginChanged: that file changed since (a re-export to import again).
+/// </summary>
 public sealed record ModModelDto(string Target, string? Skin, string File, IReadOnlyList<ModModelLodDto> Lods, IReadOnlyList<string> Errors,
-    IReadOnlyList<string> Warnings, bool Stale);
+    IReadOnlyList<string> Warnings, bool Stale, string? Origin, bool OriginChanged);
 
 /// <summary>Revision is null from the Assets tab (no editor open); Target or PrefabRef names the species, Skin gives a skin its own model.</summary>
 public sealed record ModReplaceModelParams(string Id, string File, string? Revision = null, string? Target = null, string? PrefabRef = null, string? Skin = null);
