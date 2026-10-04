@@ -1,6 +1,8 @@
 using System.IO.Compression;
 using System.Text;
 using Tyrant.Core.Dumping;
+using Tyrant.Core.Errors;
+using Tyrant.Core.Workspaces;
 using Tyrant.Framework.Core;
 
 namespace Tyrant.Core.Mods;
@@ -56,6 +58,76 @@ public static class ModSharing
         }
         File.Move(temp, zipPath, overwrite: true);
         return zipPath;
+    }
+
+    /// <summary>
+    /// Brings a shared mod into the workspace (mods/&lt;id&gt;): an Export zip (UserData/Tyrant/Mods/&lt;id&gt;/…), a zip of the
+    /// mod folder, or mod.json at the zip's root. Unsafe paths, no mod or several refuse the whole zip; an existing mod is
+    /// replaced only with <paramref name="replace"/>, and only once the new one has unpacked.
+    /// </summary>
+    public static ModProject Import(Workspace ws, string zipPath, bool replace)
+    {
+        var zipName = Path.GetFileName(zipPath);
+        using var archive = ZipFile.OpenRead(zipPath);
+        var files = archive.Entries.Where(e => !string.IsNullOrEmpty(e.Name))
+            .Select(e => (Entry: e, Name: e.FullName.Replace('\\', '/').TrimStart('/'))).ToList();
+        if (files.Any(f => f.Name.Split('/').Any(part => part == "..") || Path.IsPathRooted(f.Name) || f.Name.Contains(':')))
+            throw new TyrantException(TyrantErrorCode.ModInvalid, $"'{zipName}' contains an unsafe path; nothing was imported.");
+
+        var manifests = files.Where(f => f.Name == ModManifest.FileName || f.Name.EndsWith("/" + ModManifest.FileName, StringComparison.Ordinal)).ToList();
+        if (manifests.Count != 1)
+            throw new TyrantException(TyrantErrorCode.ModInvalid, manifests.Count == 0
+                ? $"'{zipName}' has no mod.json, so it is not a Tyrant mod."
+                : $"'{zipName}' holds {manifests.Count} mods; import one zip per mod.");
+        var prefix = manifests[0].Name[..^ModManifest.FileName.Length];
+
+        ModManifest manifest;
+        using (var reader = new StreamReader(manifests[0].Entry.Open()))
+        {
+            try { manifest = ModManifest.Parse(reader.ReadToEnd()); }
+            catch (ManifestException ex) { throw new TyrantException(TyrantErrorCode.ModInvalid, $"The mod in '{zipName}' cannot be read: {ex.Message}"); }
+        }
+        var folder = prefix.TrimEnd('/').Split('/').Last();
+        if (!ModId.IsValid(manifest.Id) || (folder.Length > 0 && folder != manifest.Id))
+            throw new TyrantException(TyrantErrorCode.ModInvalid,
+                $"The mod's id \"{manifest.Id}\" {(ModId.IsValid(manifest.Id) ? $"does not match its folder \"{folder}\"" : "is not a valid mod id")}; nothing was imported.");
+
+        var target = Path.Combine(ModProject.RootOf(ws), manifest.Id);
+        if (Directory.Exists(target) && !replace)
+            throw new TyrantException(TyrantErrorCode.ModExists,
+                $"This workspace already has a mod '{manifest.Id}'. Import again and confirm to replace it (Mods tab), or add --replace.");
+
+        var staging = target + ".importing";
+        var previous = target + ".previous";
+        if (Directory.Exists(staging)) Directory.Delete(staging, recursive: true);
+        try
+        {
+            foreach (var (entry, name) in files.Where(f => f.Name.StartsWith(prefix, StringComparison.Ordinal)))
+            {
+                var destination = Path.GetFullPath(Path.Combine(staging, name[prefix.Length..]));
+                if (!ModPaths.IsInside(destination, staging))
+                    throw new TyrantException(TyrantErrorCode.ModInvalid, $"'{zipName}' contains an unsafe path; nothing was imported.");
+                Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+                entry.ExtractToFile(destination);
+            }
+            if (Directory.Exists(previous)) Directory.Delete(previous, recursive: true);
+            if (Directory.Exists(target)) Directory.Move(target, previous);
+            try
+            {
+                Directory.Move(staging, target);
+            }
+            catch
+            {
+                if (Directory.Exists(previous) && !Directory.Exists(target)) Directory.Move(previous, target);
+                throw;
+            }
+            if (Directory.Exists(previous)) Directory.Delete(previous, recursive: true);
+        }
+        finally
+        {
+            if (Directory.Exists(staging)) Directory.Delete(staging, recursive: true);
+        }
+        return ModProject.Open(ws, manifest.Id);
     }
 
     private static string Readme(ModProject mod, string frameworkVersion)

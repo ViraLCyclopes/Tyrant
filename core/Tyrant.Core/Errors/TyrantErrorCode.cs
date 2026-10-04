@@ -29,6 +29,7 @@ public enum TyrantErrorCode
     GameRunning,
     FrameworkMissing,
     TargetNotFound,
+    ModExists,
 }
 
 /// <summary>A suggested remedy the UI can render as a button.</summary>
