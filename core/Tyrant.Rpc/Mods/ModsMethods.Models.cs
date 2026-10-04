@@ -48,7 +48,7 @@ public sealed partial class ModsMethods
 
     /// <summary>
     /// One .glb per LOD of a replacement model, on the game's skeleton with the game's materials, for the 3D preview. Made once per
-    /// build (kept in a folder keyed by the model's stamp) and one request at a time per model, so overlapping requests share it.
+    /// build (kept in a folder keyed by its LOD files' stamps) and one request at a time per model, so overlapping requests share it.
     /// </summary>
     [RpcMethod("mods.modelPreview")]
     public ModModelPreview ModelPreview(ModModelPreviewParams p)
@@ -62,7 +62,8 @@ public sealed partial class ModsMethods
         var report = ModelBuilder.ReadReport(mod.Dir, file);
         if (report is null || report.Errors.Count > 0 || report.Lods.Count == 0)
             throw new TyrantException(TyrantErrorCode.ModInvalid, "The model has no built levels of detail to show: fix its problems (see Check), then click Rebuild LODs.");
-        var key = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes($"{mod.Dir}|{file}|{report.Stamp}")))[..16].ToLowerInvariant();
+        var key = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(
+            $"{mod.Dir}|{file}|{string.Join("|", report.Lods.Select(l => ModelBuilder.Stamp(Path.Combine(mod.Dir, l.File))))}")))[..16].ToLowerInvariant();
         var dir = Path.Combine(PreviewsDir(ws, "model-replacements"), key);
         lock (PreviewLocks.GetOrAdd(dir, _ => new object()))
         {

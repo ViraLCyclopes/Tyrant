@@ -127,6 +127,20 @@ public class ModModelMethodsTests
     }
 
     [Fact]
+    public async Task Rebuilding_the_lods_makes_a_new_preview()
+    {
+        using var game = new FakeGame();
+        var (h, _, reader, glb) = await Setup(game);
+        var detail = await h.Call("mods.replaceModel", new { id = "big-carch", file = glb, target = "Carcharodontosaurus" });
+        await h.Call("mods.modelPreview", new { id = "big-carch", target = "Carcharodontosaurus" });
+
+        await h.Call("mods.rebuildModels", new { id = "big-carch", revision = detail.GetProperty("revision").GetString() });
+        await h.Call("mods.modelPreview", new { id = "big-carch", target = "Carcharodontosaurus" });
+
+        Assert.Equal(2, reader.ReplacedModelWrites); // the same .glb, but new LOD files: the old preview would be stale
+    }
+
+    [Fact]
     public async Task Check_rebuilds_a_changed_model_first()
     {
         using var game = new FakeGame();
