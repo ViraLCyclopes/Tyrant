@@ -12,7 +12,7 @@
     "tauri": "tauri",
     "gen:types": "dotnet run --project ../cli/Tyrant.Cli/Tyrant.Cli.csproj -- rpc --emit-ts src/lib/rpc/types.gen.ts",
     "sidecar": "dotnet publish ../cli/Tyrant.Cli/Tyrant.Cli.csproj -c Release -r win-x64 --self-contained true -o src-tauri/sidecar",
-    "build:app": "npm run sidecar && tauri build --config src-tauri/tauri.bundle.conf.json",
+    "build:app": "npm run sidecar && tauri build --config src-tauri/tauri.bundle.conf.json && node scripts/copy-setup.mjs",
     "build:portable": "npm run sidecar && tauri build --no-bundle && node scripts/portable.mjs"
   },
   "dependencies": {

@@ -33,7 +33,8 @@ studio/src-tauri/sidecar/
 studio/portable/
 studio/vite.config.*.timestamp-*
 
-# release archives built locally
+# release builds (Setup programs, archives): they go on GitHub's Releases page
+release/
 *.zip
 *.7z
 
