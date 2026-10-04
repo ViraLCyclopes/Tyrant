@@ -51,11 +51,14 @@ The game folder, your workspace and its outputs.
 
 ## Assets
 
-Needs an asset index (Workspace → **Index assets**, about 20 seconds; again after a game update).
+Needs an asset index (Workspace → **Index assets**: the first run takes about two minutes, later runs only read the
+files that changed; again after a game update).
 
 - **Browse**: the left column groups bundles the way the game does (one group per animal, plus shared and UI groups);
   ▸ opens a group's bundles. Search matches names, Addressables paths, GUIDs, script names and bundles; **Type**
   narrows to one kind (Texture2D, Mesh, GameObject = prefab, MonoBehaviour = game data, …).
+- **Built-in** groups (`Built-in · sharedassets0`, `resources`, `level…`) are the game's own files outside the bundles:
+  fences, paths, buildings, scenery and their textures. They browse, preview, export and replace like everything else.
 - Click an asset to see its **keys** (Addressables path, GUID and reference, each with a copy button — replacement mods
   point at these), its size, what it **references** (click to follow) and all of its **fields**.
 - **Preview**: textures show at once, with **R/G/B/Alpha** views for packed maps. Meshes and prefabs show in 3D after
@@ -68,10 +71,14 @@ Needs an asset index (Workspace → **Index assets**, about 20 seconds; again af
   - **Show skeleton** draws the bones of animated models.
   - If the preview says textures need a newer asset index, click **Index assets** on the Workspace tab once.
   - Previews are cached in `<workspace>\cache\previews` per game build and made again after a tool update.
+- **Select all** ticks every asset the search and filters match (all pages), **Clear** unticks them, and **Export
+  group** exports every asset of the group picked on the left. **Export selected** counts only ticked assets the
+  current search shows.
 - Tick assets and click **Export selected**: textures become PNG (`assets\textures`), meshes and prefabs .glb
   (`assets\models`), anything else JSON (`assets\json`). A report in `exports\` lists every asset, its keys and any
   failure; one failure never stops the rest. Models are written with their materials; their textures go to a
-  `textures` folder next to the `.glb` files, which Blender picks up on import.
+  `textures` folder next to the `.glb` files, which Blender picks up on import. A bare Mesh is exported without its
+  bones; export its prefab (GameObject) to keep them. Very long names are shortened with a short code at the end.
 - **Species**: export one animal's pack — its models, every texture of its group and `targets.json` with each asset's
   key — into `assets\species\<name>`.
 
@@ -79,7 +86,7 @@ Needs an asset index (Workspace → **Index assets**, about 20 seconds; again af
 
 - **Make a texture mod:**
   1. Open a texture in the Assets tab, click **Export selected** (or use the exported PNG under `assets\textures`) and edit it.
-  2. Click **Replace in a mod…** on that texture: pick a mod (or **New mod…**), leave **Your PNG** empty to use your edited export (or **Browse…**), then **Add to mod**.
+  2. Click **Replace in a mod…** on that texture (an animal's, or any object's: fences, buildings, scenery): pick a mod (or **New mod…**), leave **Your PNG** empty to use your edited export (or **Browse…**), then **Add to mod**.
 - **Edit a mod:** **Open** a mod in the Mods tab (a new mod opens by itself) to edit it in its own tab.
   - The list on the left has **Mod details**, each **skin**, each **texture replacement** and **Check**; the page on the right edits what you picked.
   - Every change is saved at once. **Ctrl+Z** / **Ctrl+Y** (or **Edit ▸ Undo / Redo**) step back and forward. Replacing or deleting a file cannot be undone.

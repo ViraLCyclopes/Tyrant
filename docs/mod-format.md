@@ -40,11 +40,13 @@ red-spot-carcharo/
 | `requires.tyrant` | The oldest Tyrant framework that runs the mod. |
 | `dependencies` | Ids of mods that must be installed and on. |
 | `assembly` | (code mods) a DLL in the mod folder with a `Tyrant.Framework.TyrantMod` subclass. |
-| `replace` | Game textures to swap at runtime. `texture` is the game texture's name (copy it from the Assets tab); `file` is your PNG, inside the mod folder. `key` and `guid` are filled in by Tyrant. |
+| `replace` | Game textures to swap at runtime. `texture` is the game texture's name (copy it from the Assets tab); `file` is your PNG, inside the mod folder. `key` and `guid` are filled in by Tyrant (built-in textures have neither; the name is enough). |
 
 ## Textures
 
 - **Slots:** any animal skin texture can be replaced: diffuse (`_D`), normal (`_N`), extra, pattern and fur, for adults and infants.
+- **Any object:** textures of fences, paths, buildings and scenery (the Assets tab's **Built-in** groups and the shared bundles) can be replaced too. The framework points each game material that uses the texture at yours when a park loads and as new objects appear.
+- **Same name twice:** when several game textures share a name, all of them are replaced; **Check** warns and lists the files.
 - **Size:** keep the original size (Tyrant's check warns otherwise). Sizes divisible by 4 are compressed like the game's own.
 - **Normal maps:** edit the blue-purple PNG Tyrant exports. The framework converts it to the game's packed form.
 - **Genetics colours:** the game tints skins with genetics colours on top of your texture.

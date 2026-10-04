@@ -75,6 +75,13 @@ Release build: `npm run build:app`, install `studio/src-tauri/target/release/bun
      Check, Install. **(game)** Normal animals of Purple spots show yellow to orange pattern colours where the pattern map is red.
 39. **(game)** Place one, save, quit, load: same colours. `Latest.log` has `Skin pattern colours were kept for a loaded or bred animal.`
 40. **(game)** Close the game, remove `test-skins`, start and load: the park loads; that animal looks like the first vanilla skin.
+41. Workspace → **Index assets** twice: the second run is much faster (only changed files are read). Assets lists
+    `Built-in · sharedassets…` groups; a fence texture (search `fence`) previews and exports to a PNG.
+42. Assets → **Select all** with a search typed: **Export selected (N)** matches the result count; **Clear** sets it to 0.
+    Pick a group, **Export group**: the notice reports the group's asset count.
+43. **(game)** Fence texture → **Replace in a mod…** → new mod with a recoloured PNG → **Install to game**. Start the game,
+    place that fence: the new texture shows on the fence and in the build menu. `MelonLoader\Latest.log` has
+    `Replaced … on game materials`.
 41. **Copy diagnostics** and paste: versions, build, workspace and log tails appear.
 42. **(game)** **Uninstall from game**: the notice says the game folder is back to vanilla; `version.dll`,
     `MelonLoader\`, `Mods\`, `UserData\` and `UserLibs\` are gone from the game folder (if Tyrant installed them).
