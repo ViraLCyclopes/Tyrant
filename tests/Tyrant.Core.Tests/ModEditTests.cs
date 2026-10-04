@@ -110,4 +110,175 @@ public class ModEditTests
         Assert.True(File.Exists(Path.Combine(mod.Dir, "textures", "a.png")));
         Assert.Equal(TyrantErrorCode.TargetNotFound, Assert.Throws<TyrantException>(() => mod.RemoveReplacement("T_A_D")).Code);
     }
+
+    private static string Png(string dir, string name = "in.png")
+    {
+        Directory.CreateDirectory(dir);
+        var path = Path.Combine(dir, name);
+        using var stream = File.Create(path);
+        new StbImageWriteSharp.ImageWriter().WritePng(new byte[4 * 4 * 4], 4, 4, StbImageWriteSharp.ColorComponents.RedGreenBlueAlpha, stream);
+        return path;
+    }
+
+    private static ModProject WithSkins(Workspace ws, ModProject mod)
+    {
+        var skins = Path.Combine(mod.Dir, "skins", "blue");
+        Png(skins, "male_D.png");
+        Png(skins, "male_pattern.png");
+        Png(skins, "female_D.png");
+        mod.Manifest.Skins.Add(new SkinEntry { Id = "blue", Species = "Carcharodontosaurus", Name = "Blue", Base = "Alt 1",
+            Male = new() { ["diffuse"] = "skins/blue/male_D.png", ["pattern"] = "skins/blue/male_pattern.png" },
+            Female = new() { ["diffuse"] = "skins/blue/female_D.png" } });
+        mod.Manifest.Skins.Add(new SkinEntry { Id = "green", Species = "Carcharodontosaurus", Name = "Green", Base = "Base",
+            Male = new() { ["diffuse"] = "skins/blue/male_D.png" } }); // shares a file with blue
+        mod.Save();
+        return ModProject.Open(ws, mod.Id);
+    }
+
+    [Fact]
+    public void Renaming_a_skin_keeps_its_id_and_refuses_a_name_already_used()
+    {
+        var (game, ws, mod) = Setup();
+        using var _ = game;
+        mod = WithSkins(ws, mod);
+
+        mod.RenameSkin("blue", "  Ocean blue ");
+
+        var skin = ModProject.Open(ws, "red-spot").Skin("blue");
+        Assert.Equal(("blue", "Ocean blue"), (skin.Id, skin.Name));
+        var ex = Assert.Throws<TyrantException>(() => mod.RenameSkin("blue", "green"));
+        Assert.Equal(TyrantErrorCode.ModInvalid, ex.Code);
+        Assert.Contains("already called", ex.Message);
+        Assert.Equal(TyrantErrorCode.TargetNotFound, Assert.Throws<TyrantException>(() => mod.RenameSkin("nope", "X")).Code);
+    }
+
+    [Fact]
+    public void Removing_a_skin_keeps_its_files_unless_asked_and_never_deletes_shared_ones()
+    {
+        var (game, ws, mod) = Setup();
+        using var _ = game;
+        mod = WithSkins(ws, mod);
+
+        var deleted = mod.RemoveSkin("blue", deleteFiles: true);
+
+        Assert.Equal(["green"], ModProject.Open(ws, "red-spot").Manifest.Skins.Select(s => s.Id));
+        Assert.Equal(["skins/blue/female_D.png", "skins/blue/male_pattern.png"], deleted.Order(StringComparer.Ordinal));
+        Assert.True(File.Exists(Path.Combine(mod.Dir, "skins", "blue", "male_D.png"))); // green uses it
+        mod.RemoveSkin("green", deleteFiles: false);
+        Assert.True(File.Exists(Path.Combine(mod.Dir, "skins", "blue", "male_D.png")));
+    }
+
+    [Fact]
+    public void Colours_are_validated_and_an_empty_section_is_removed()
+    {
+        var (game, ws, mod) = Setup();
+        using var _ = game;
+        mod = WithSkins(ws, mod);
+
+        mod.SetColors("blue", "{\"pattern\":{\"a\":\"#3060ff\",\"strength\":[0.6,0.8]}}");
+        Assert.Equal("#3060ff", ModProject.Open(ws, "red-spot").Skin("blue").Colors!.Pattern!.A![0].ToString());
+
+        Assert.Equal(TyrantErrorCode.ModInvalid, Assert.Throws<TyrantException>(() => mod.SetColors("blue", "{\"pattern\":{\"strength\":2}}")).Code);
+        mod.SetColors("blue", "{}");
+        Assert.Null(ModProject.Open(ws, "red-spot").Skin("blue").Colors);
+        mod.SetColors("blue", "{\"tint\":{\"hue\":0}}");
+        mod.SetColors("blue", null);
+        Assert.Null(ModProject.Open(ws, "red-spot").Skin("blue").Colors);
+    }
+
+    [Fact]
+    public void A_skin_file_is_copied_into_the_skin_folder_and_can_go_back_to_the_base()
+    {
+        var (game, ws, mod) = Setup();
+        using var _ = game;
+        mod = WithSkins(ws, mod);
+        var source = Png(Path.Combine(ws.Dir, "art"), "my extra.png");
+
+        var file = mod.SetSkinFile("blue", "female", "extra", source);
+
+        Assert.Equal("skins/blue/female_extra.png", file);
+        Assert.True(File.Exists(Path.Combine(mod.Dir, "skins", "blue", "female_extra.png")));
+        Assert.Equal(file, ModProject.Open(ws, "red-spot").Skin("blue").Female!["extra"]);
+        Assert.Null(mod.SetSkinFile("blue", "male", "pattern", null));
+        Assert.False(ModProject.Open(ws, "red-spot").Skin("blue").Male!.ContainsKey("pattern"));
+        Assert.Equal(TyrantErrorCode.ModInvalid, Assert.Throws<TyrantException>(() => mod.SetSkinFile("blue", "male", "glow", source)).Code);
+        Assert.Equal(TyrantErrorCode.ModInvalid, Assert.Throws<TyrantException>(() => mod.SetSkinFile("blue", "both", "diffuse", source)).Code);
+    }
+
+    [Fact]
+    public void Clearing_the_last_file_of_a_skin_is_refused()
+    {
+        var (game, ws, mod) = Setup();
+        using var _ = game;
+        mod = WithSkins(ws, mod);
+
+        var ex = Assert.Throws<TyrantException>(() => mod.SetSkinFile("green", "male", "diffuse", null));
+
+        Assert.Equal(TyrantErrorCode.ModInvalid, ex.Code);
+        Assert.Contains("remove the skin instead", ex.Message);
+        Assert.NotNull(ModProject.Open(ws, "red-spot").Skin("green").Male);
+    }
+
+    [Fact]
+    public void Clearing_the_last_file_of_one_sex_drops_that_sex()
+    {
+        var (game, ws, mod) = Setup();
+        using var _ = game;
+        mod = WithSkins(ws, mod);
+
+        mod.SetSkinFile("blue", "female", "diffuse", null);
+
+        Assert.Null(ModProject.Open(ws, "red-spot").Skin("blue").Female);
+    }
+
+    [Fact]
+    public void A_non_png_skin_file_is_refused()
+    {
+        var (game, ws, mod) = Setup();
+        using var _ = game;
+        mod = WithSkins(ws, mod);
+        var jpeg = Path.Combine(ws.Dir, "photo.png");
+        File.WriteAllBytes(jpeg, [0xFF, 0xD8, 0xFF, 0xE0, 1, 2]);
+
+        var ex = Assert.Throws<TyrantException>(() => mod.SetSkinFile("blue", "male", "diffuse", jpeg));
+
+        Assert.Equal(TyrantErrorCode.ModInvalid, ex.Code);
+        Assert.Contains("not a PNG", ex.Message);
+        Assert.Equal(TyrantErrorCode.ModInvalid, Assert.Throws<TyrantException>(() => mod.SetSkinFile("blue", "male", "diffuse", Path.Combine(ws.Dir, "missing.png"))).Code);
+    }
+
+    [Fact]
+    public void A_png_with_spaces_and_accents_in_its_path_is_copied()
+    {
+        var (game, ws, mod) = Setup();
+        using var _ = game;
+        mod = WithSkins(ws, mod);
+        var source = Png(Path.Combine(ws.Dir, "Mes dessins é"), "peau bleue.png");
+
+        Assert.Equal("skins/blue/male_N.png", mod.SetSkinFile("blue", "male", "normal", source));
+    }
+
+    [Fact]
+    public void The_thumbnail_is_copied_or_removed()
+    {
+        var (game, ws, mod) = Setup();
+        using var _ = game;
+        mod = WithSkins(ws, mod);
+
+        Assert.Equal("skins/blue/thumbnail.png", mod.SetThumbnail("blue", Png(Path.Combine(ws.Dir, "art"))));
+        Assert.Equal("skins/blue/thumbnail.png", ModProject.Open(ws, "red-spot").Skin("blue").Thumbnail);
+        Assert.Null(mod.SetThumbnail("blue", null));
+        Assert.Null(ModProject.Open(ws, "red-spot").Skin("blue").Thumbnail);
+    }
+
+    [Theory]
+    [InlineData("male", "diffuse", "male_D.png")]
+    [InlineData("female", "normal", "female_N.png")]
+    [InlineData("male", "extra", "male_extra.png")]
+    [InlineData("male", "infantDiffuse", "male_infant_D.png")]
+    [InlineData("female", "infantPattern", "female_infant_pattern.png")]
+    public void Skin_files_are_named_like_the_templates(string sex, string slot, string expected)
+    {
+        Assert.Equal(expected, ModProject.SkinFileName(sex, slot));
+    }
 }
