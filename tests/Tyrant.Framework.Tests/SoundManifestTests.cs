@@ -77,4 +77,26 @@ public class SoundManifestTests
         var m = ModManifest.Parse(Manifest("[{\"event\":\"event:/X\",\"files\":[\"a.wav\"],\"volume\":5,\"agePitch\":-1}]"));
         Assert.Equal((2.0, 0.0), (m.Sounds[0].Volume, m.Sounds[0].AgePitch));
     }
+
+    [Theory]
+    [InlineData("0.3", 0.3)]
+    [InlineData("1.7", 1.0)]
+    [InlineData("-1", 0.0)]
+    public void A_sound_can_set_its_own_chance_kept_in_range(string chance, double expected)
+    {
+        var m = ModManifest.Parse(Manifest("[{\"event\":\"event:/X\",\"files\":[\"a.wav\"],\"chance\":" + chance + "}]"));
+
+        Assert.Equal(expected, m.Sounds[0].Chance);
+    }
+
+    [Fact]
+    public void Without_a_chance_the_sound_follows_the_game_and_none_is_written()
+    {
+        var m = ModManifest.Parse(Two);
+        Assert.Null(m.Sounds[0].Chance);
+        Assert.DoesNotContain("chance", m.ToJson());
+
+        m.Sounds[0].Chance = 0.25;
+        Assert.Equal(0.25, ModManifest.Parse(m.ToJson()).Sounds[0].Chance);
+    }
 }

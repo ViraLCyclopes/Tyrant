@@ -55,6 +55,16 @@ public class SoundTableTests
     }
 
     [Fact]
+    public void A_chosen_sound_carries_its_chance()
+    {
+        var table = SoundTable.Build([Mod("rare", "[" + Entry(null, null, "sounds/all.ogg").TrimEnd('}') + ",\"chance\":0.2}]")], []);
+        var follow = SoundTable.Build([Mod("follow", "[" + Entry(null, null, "sounds/all.ogg") + "]")], []);
+
+        Assert.Equal(0.2, table.Choose(Call, null, null)!.Chance);
+        Assert.Null(follow.Choose(Call, null, null)!.Chance);
+    }
+
+    [Fact]
     public void A_unique_sound_alone_leaves_other_species_with_the_original()
     {
         var table = SoundTable.Build([Mod("carch-voice", "[" + Entry("Carcharodontosaurus", null, "sounds/carch.ogg") + "]")], []);

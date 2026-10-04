@@ -71,6 +71,9 @@ namespace Tyrant.Framework.Core
         /// <summary>0–1: how much babies play higher (animal sounds only).</summary>
         public double AgePitch { get; set; } = 1.0;
 
+        /// <summary>0–1: how often a one-off sound plays when the game starts it; null follows the game's own chances.</summary>
+        public double? Chance { get; set; }
+
         public bool IsUnique => Species != null || Skin != null;
     }
 
@@ -316,6 +319,7 @@ namespace Tyrant.Framework.Core
                     entry["files"] = s.Files.Cast<object?>().ToList();
                     if (s.Volume != 1.0) entry["volume"] = s.Volume;
                     if (s.AgePitch != 1.0) entry["agePitch"] = s.AgePitch;
+                    if (s.Chance is double chance) entry["chance"] = chance;
                     return (object?)entry;
                 }).ToList();
             if (Skins.Count > 0)
@@ -345,6 +349,7 @@ namespace Tyrant.Framework.Core
             if (sound.Files.Count == 0) throw new ManifestException($"Sound {eventPath} has no files.");
             if (entry.TryGetValue("volume", out var volume) && volume is double v) sound.Volume = Math.Max(0, Math.Min(2, v));
             if (entry.TryGetValue("agePitch", out var agePitch) && agePitch is double a) sound.AgePitch = Math.Max(0, Math.Min(1, a));
+            if (entry.TryGetValue("chance", out var chance) && chance is double c) sound.Chance = Math.Max(0, Math.Min(1, c));
             return sound;
         }
 

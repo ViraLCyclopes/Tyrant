@@ -9,8 +9,9 @@ namespace Tyrant.Framework.Core
     {
         private int _last = -1;
 
-        public SoundChoice(string modId, string eventPath, IReadOnlyList<string> filePaths, double volume, double agePitch, bool unique)
+        public SoundChoice(string modId, string eventPath, IReadOnlyList<string> filePaths, double volume, double agePitch, bool unique, double? chance = null)
         {
+            Chance = chance;
             ModId = modId;
             Event = eventPath;
             FilePaths = filePaths;
@@ -20,6 +21,9 @@ namespace Tyrant.Framework.Core
         }
 
         public string ModId { get; }
+
+        /// <summary>The mod's own chance for one-off sounds; null follows the game's.</summary>
+        public double? Chance { get; }
         public string Event { get; }
         public IReadOnlyList<string> FilePaths { get; }
         public double Volume { get; }
@@ -68,7 +72,7 @@ namespace Tyrant.Framework.Core
                         else files.Add(path);
                     }
                     if (files.Count == 0) continue;
-                    var choice = new SoundChoice(mod.Manifest.Id, sound.Event, files, sound.Volume, sound.AgePitch, sound.IsUnique);
+                    var choice = new SoundChoice(mod.Manifest.Id, sound.Event, files, sound.Volume, sound.AgePitch, sound.IsUnique, sound.Chance);
                     if (sound.Skin != null) table._skins[(sound.Event, sound.Skin)] = choice;
                     else if (sound.Species != null) table._species[(sound.Event, sound.Species)] = choice;
                     else table._everyone[sound.Event] = choice;
