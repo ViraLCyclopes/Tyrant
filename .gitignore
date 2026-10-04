@@ -1,13 +1,29 @@
+# .NET
 bin/
 obj/
+artifacts/
+publish/
+*.nupkg
+TestResults/
+*.trx
+coverage*/
+*.user
+
+# editors and OS clutter
 .vs/
 .idea/
-*.user
-TestResults/
+.vscode/
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Node / Rust
 node_modules/
 target/
-# local workspaces created while testing
-tyrant-workspace*/
+
+# Python helper scripts (tools/)
+__pycache__/
+*.pyc
 
 # studio (Tauri app)
 studio/build/
@@ -15,3 +31,33 @@ studio/.svelte-kit/
 studio/src-tauri/gen/
 studio/src-tauri/sidecar/
 studio/portable/
+studio/vite.config.*.timestamp-*
+
+# release archives built locally
+*.zip
+*.7z
+
+# signing keys and secrets: never commit these
+*.pfx
+*.p12
+*.pem
+*.key
+.env
+.env.*
+
+# local workspaces created while testing
+tyrant-workspace*/
+
+# Game content stays out of the repository (studio/static/hero.jpg is the one credited exception, see NOTICE).
+# These are what exports, mods and Blender produce; add a test fixture with 'git add -f' when you really mean it.
+*.glb
+*.gltf
+*.tmesh
+*.blend
+*.blend1
+*.bundle
+*.assets
+*.resS
+
+# agent scratch (plans' working files)
+.superpowers/
