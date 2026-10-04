@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Updates } from './updates.svelte';
+  import { RELEASES, type Updates } from './updates.svelte';
 
   /** Tyrant's own update: Update now (GitHub), the Nexus page, Later; or a note from Help → Check for updates. */
   let { updates }: { updates: Updates } = $props();
@@ -10,12 +10,14 @@
   <div class="banner" role="status">
     {#if updates.offer.kind === 'github'}
       <strong>Tyrant {updates.offer.version} is available</strong>
-      {#if updates.offer.notes}<details><summary>What's new</summary><p class="notes">{updates.offer.notes}</p></details>{/if}
-      {#if updates.progress !== null}
-        <span>Installing… {Math.round(updates.progress * 100)}%</span>
+      {#if updates.offer.notes}<details><summary>Notes</summary><p class="notes">{updates.offer.notes}</p></details>{/if}
+      {#if updates.installing}
+        <span>Installing…{updates.progress !== null ? ` ${Math.round(updates.progress * 100)}%` : ''}</span>
       {:else}
         <button class="primary" onclick={() => void updates.install()}>Update now</button>
       {/if}
+      {@const page = `${RELEASES}/tag/v${updates.offer.version}`}
+      <button class="ghost" onclick={() => void platform.openUrl(page)}>What's new</button>
       {#if updates.offer.nexusUrl}
         {@const url = updates.offer.nexusUrl}
         <button class="ghost" onclick={() => void platform.openUrl(url)}>Also on Nexus</button>

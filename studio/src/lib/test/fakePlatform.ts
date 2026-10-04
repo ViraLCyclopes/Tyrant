@@ -68,9 +68,14 @@ export class FakePlatform implements Platform {
     return this.update;
   }
 
+  /** installUpdate waits for this (a download in progress) and reports these fractions first. */
+  installGate: Promise<void> | null = null;
+  progressReports: (number | null)[] = [1];
+
   async installUpdate(onProgress: (fraction: number | null) => void): Promise<void> {
     this.installed++;
-    onProgress(1);
+    for (const fraction of this.progressReports) onProgress(fraction);
+    if (this.installGate) await this.installGate;
   }
 
   async openUrl(url: string): Promise<void> {

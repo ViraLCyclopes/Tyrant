@@ -31,6 +31,7 @@ studio/.svelte-kit/
 studio/src-tauri/gen/
 studio/src-tauri/sidecar/
 studio/portable/
+studio/src-tauri/tauri.ci.conf.json
 studio/vite.config.*.timestamp-*
 
 # release builds (Setup programs, archives): they go on GitHub's Releases page

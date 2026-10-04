@@ -4,7 +4,7 @@ import type { Session } from '$lib/stores/session.svelte';
 
 const LAST_CHECK = 'tyrant.updates.lastCheck';
 const DAY = 24 * 60 * 60 * 1000;
-const RELEASES = 'https://github.com/ViraLCyclopes/Tyrant/releases';
+export const RELEASES = 'https://github.com/ViraLCyclopes/Tyrant/releases';
 
 export type UpdateOffer =
   | { kind: 'github'; version: string; notes: string; nexusUrl: string | null }
@@ -14,6 +14,9 @@ export type UpdateOffer =
 export class Updates {
   offer = $state<UpdateOffer | null>(null);
   checking = $state(false);
+  /** Downloading and installing: Update now stays hidden and Tyrant counts as busy (no job may start). */
+  installing = $state(false);
+  /** 0..1 while downloading; null when the size is unknown. */
   progress = $state<number | null>(null);
   note = $state<string | null>(null);
 
@@ -40,17 +43,26 @@ export class Updates {
   }
 
   async install(): Promise<void> {
-    if (this.offer?.kind !== 'github') return;
+    if (this.offer?.kind !== 'github' || this.installing) return;
     if (this.session.busy) {
       this.note = `Wait for ${this.session.job?.title ?? 'the running job'} to finish, then update.`;
       return;
     }
+    this.installing = true;
     this.progress = 0;
+    // The installer closes Tyrant when it starts: hold the job slot so nothing starts that it would cut off.
+    this.session.job = { id: null, title: 'Update Tyrant', fraction: 0, message: 'Downloading the update', cancel: null };
     try {
-      await this.session.platform.installUpdate((fraction) => (this.progress = fraction));
+      await this.session.platform.installUpdate((fraction) => {
+        this.progress = fraction;
+        if (this.session.job) this.session.job = { ...this.session.job, fraction: fraction ?? 0 };
+      });
     } catch (e) {
-      this.progress = null;
       this.note = `The update could not be installed; nothing changed (${e instanceof Error ? e.message : String(e)}).`;
+    } finally {
+      this.installing = false;
+      this.progress = null;
+      if (this.session.job?.title === 'Update Tyrant') this.session.job = null;
     }
   }
 

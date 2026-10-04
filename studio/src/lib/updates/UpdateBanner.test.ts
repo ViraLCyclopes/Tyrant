@@ -28,6 +28,27 @@ describe('UpdateBanner', () => {
     expect(platform.opened).toEqual(['https://www.nexusmods.com/prehistorickingdom/mods/7']);
   });
 
+  it('links to the release page for what changed', async () => {
+    const { platform, updates } = setup();
+    updates.offer = { kind: 'github', version: '0.2.0', notes: '', nexusUrl: null };
+    render(UpdateBanner, { props: { updates } });
+
+    await fireEvent.click(screen.getByRole('button', { name: "What's new" }));
+
+    expect(platform.opened).toEqual(['https://github.com/ViraLCyclopes/Tyrant/releases/tag/v0.2.0']);
+  });
+
+  it('while installing it shows progress, never a second Update now', () => {
+    const { updates } = setup();
+    updates.offer = { kind: 'github', version: '0.2.0', notes: '', nexusUrl: null };
+    updates.installing = true;
+    updates.progress = null;
+    render(UpdateBanner, { props: { updates } });
+
+    expect(screen.queryByRole('button', { name: 'Update now' })).toBeNull();
+    expect(screen.getByText(/Installing/)).toBeInTheDocument();
+  });
+
   it('a Nexus-only offer links to the page and cannot install', async () => {
     const { platform, updates } = setup();
     updates.offer = { kind: 'nexus', version: '0.2.0', url: 'https://www.nexusmods.com/prehistorickingdom/mods/7' };

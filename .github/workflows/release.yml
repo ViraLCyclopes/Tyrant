@@ -4,9 +4,16 @@ on:
   push:
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag to draft (e.g. v0.2.0); it must match the app version
+        required: true
 
 permissions:
   contents: write
+
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
 
 jobs:
   release:
@@ -15,16 +22,20 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: The tag must match the app version
-        if: startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
         run: |
           $version = (Get-Content studio/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
-          if ("v$version" -ne "${{ github.ref_name }}") { throw "Tag ${{ github.ref_name }} does not match the app version $version (npm run set-version)." }
+          if ("v$version" -ne $env:TAG) { throw "Tag $env:TAG does not match the app version $version (npm run set-version)." }
 
-      - name: The updater key must be set up
+      - name: The updater key must be set up (and goes into the build config)
         shell: pwsh
         run: |
-          if (-not (Get-Content studio/src-tauri/updater-key.pub -Raw).Trim()) { throw "studio/src-tauri/updater-key.pub is empty: run 'npm run updater-key' (docs/making-a-release.md)." }
+          $key = (Get-Content studio/src-tauri/updater-key.pub -Raw).Trim()
+          if (-not $key) { throw "studio/src-tauri/updater-key.pub is empty: run 'npm run updater-key' (docs/making-a-release.md)." }
+          # Tauri's CLI signs the Setup and checks it against plugins > updater > pubkey, which tauri.conf.json leaves empty.
+          $config = Get-Content studio/src-tauri/tauri.release.conf.json -Raw | ConvertFrom-Json
+          $config | Add-Member -NotePropertyName plugins -NotePropertyValue @{ updater = @{ pubkey = $key } } -Force
+          $config | ConvertTo-Json -Depth 10 | Set-Content -Encoding utf8 studio/src-tauri/tauri.ci.conf.json
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -58,10 +69,10 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: studio
-          args: --config src-tauri/tauri.release.conf.json
-          tagName: ${{ github.ref_name }}
-          releaseName: Tyrant ${{ github.ref_name }}
-          releaseBody: Write what changed here, then publish.
+          args: --config src-tauri/tauri.ci.conf.json
+          tagName: ${{ env.TAG }}
+          releaseName: Tyrant ${{ env.TAG }}
+          releaseBody: ''
           releaseDraft: true
           includeUpdaterJson: true
 
@@ -72,6 +83,6 @@ jobs:
           $zip = Get-ChildItem release-assets/framework.zip
           $name = "Tyrant-Framework-$((Select-String -Path game/Tyrant.Framework.Core/ModManifest.cs -Pattern 'Version = "([^"]+)"').Matches[0].Groups[1].Value).zip"
           Rename-Item $zip.FullName $name
-          gh release upload "${{ github.ref_name }}" "release-assets/$name" --clobber
+          gh release upload "$env:TAG" "release-assets/$name" --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

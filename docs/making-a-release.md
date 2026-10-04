@@ -28,7 +28,10 @@ Builds made before step 1 still run; their Help → Check for updates says updat
 5. Open the draft (Releases), write what changed, **Publish**. Only published releases are offered to users.
 6. Upload the same Setup to the Nexus page.
 
-The first time, try it on a test tag (e.g. `v0.1.1-test`, then delete the draft and the tag) or with **Run workflow**.
+The first time, do a dry run: GitHub → Actions → **Release** → **Run workflow**, and give the tag of the current version
+(e.g. `v0.1.0`; it must match `tauri.conf.json`). Check the draft it makes (the Setup, its `.sig`, `latest.json` and the
+framework zip), then delete the draft and, if GitHub created it, the tag. The update banner links to the release page
+for what changed, so write the notes there.
 
 ## Nexus
 

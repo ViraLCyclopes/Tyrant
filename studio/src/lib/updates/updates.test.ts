@@ -112,6 +112,40 @@ describe('Updates', () => {
     expect(platform.installed).toBe(1);
   });
 
+  it('while an update installs Tyrant counts as busy, so no job can start', async () => {
+    const { platform, session, updates } = setup();
+    platform.update = { version: '0.2.0', notes: '' };
+    await updates.check();
+    let finish = () => {};
+    platform.installGate = new Promise<void>((resolve) => (finish = resolve));
+
+    const installing = updates.install();
+    await Promise.resolve();
+
+    expect(updates.installing).toBe(true);
+    expect(session.busy).toBe(true);
+    expect(await session.runJob('assets.index', undefined, 'Asset index')).toBeNull();
+    finish();
+    await installing;
+  });
+
+  it('an unknown download size keeps the update installing', async () => {
+    const { platform, updates } = setup();
+    platform.update = { version: '0.2.0', notes: '' };
+    await updates.check();
+    platform.progressReports = [null];
+    let finish = () => {};
+    platform.installGate = new Promise<void>((resolve) => (finish = resolve));
+
+    const installing = updates.install();
+    await Promise.resolve();
+
+    expect(updates.progress).toBeNull();
+    expect(updates.installing).toBe(true);
+    finish();
+    await installing;
+  });
+
   it('versions compare as releases write them', () => {
     expect(compareVersions('0.2.0', '0.1.9')).toBeGreaterThan(0);
     expect(compareVersions('v0.2.0', '0.2.0')).toBe(0);
