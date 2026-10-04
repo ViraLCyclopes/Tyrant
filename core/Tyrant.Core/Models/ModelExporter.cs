@@ -35,7 +35,7 @@ public sealed class ModelExporter
         foreach (var renderer in model.Renderers)
         {
             var name = renderer.Mesh.Name.Length > 0 ? renderer.Mesh.Name : renderer.Name;
-            var baseName = TextureExporter.Sanitize(name);
+            var baseName = AssetExport.Shorten(TextureExporter.Sanitize(name));
             var path = Path.Combine(outputDir, baseName + ".glb");
             for (var n = 2; !used.Add(path); n++) path = Path.Combine(outputDir, $"{baseName}_{n}.glb");
             try

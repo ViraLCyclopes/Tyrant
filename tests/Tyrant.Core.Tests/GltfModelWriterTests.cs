@@ -205,6 +205,23 @@ public class GltfModelWriterTests
     }
 
     [Fact]
+    public void A_texture_already_beside_the_file_is_linked_without_being_written_again()
+    {
+        var path = TempGlb();
+        var textures = Path.Combine(Path.GetDirectoryName(path)!, GltfModelWriter.TexturesFolder);
+        var png = Png(textures, "T_Skin_D.png");
+        var old = new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        File.SetLastWriteTimeUtc(png, old);
+        var prefab = ModelFixture.Prefab(TwoSubMeshes(), skinned: false);
+
+        GltfModelWriter.WriteGlb(prefab, prefab.Renderers[0], path, [new("Skin", png), new("Eyes")]);
+        GltfModelWriter.WriteGlb(prefab, prefab.Renderers[0], Path.ChangeExtension(path, ".lod1.glb"), [new("Skin", png), new("Eyes")]);
+
+        Assert.Equal(old, File.GetLastWriteTimeUtc(png)); // each LOD links the PNG ModelTextures wrote once
+        Assert.Equal("textures/T_Skin_D.png", GlbJson(path)["images"]![0]!["uri"]!.GetValue<string>());
+    }
+
+    [Fact]
     public void Sub_meshes_without_a_material_are_kept_plain()
     {
         var path = TempGlb();

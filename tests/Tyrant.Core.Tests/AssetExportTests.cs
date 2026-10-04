@@ -158,4 +158,63 @@ public class AssetExportTests
         Assert.True(report.Items[0].Success);
         Assert.Contains("BC7", Assert.Single(report.Items[0].Notes!));
     }
+
+    [Fact]
+    public void A_model_export_lists_its_texture_pngs_in_the_report()
+    {
+        var (game, install, ws) = Setup();
+        using var _ = game;
+        var reader = new FakeAssetReader { ModelTextureFiles = ["T_Stego_D.png"] };
+
+        var (report, _) = new AssetExport(reader).Run(install, ws, [Asset("GameObject", "Stegosaurus", 2)], null, CancellationToken.None);
+
+        Assert.Contains(report.Items[0].Outputs, o => o.EndsWith(Path.Combine("textures", "T_Stego_D.png")));
+        Assert.Contains(report.Items[0].Outputs, o => o.EndsWith(".glb"));
+    }
+
+    [Fact]
+    public void A_bare_mesh_export_says_its_skin_is_not_included()
+    {
+        var (game, install, ws) = Setup();
+        using var _ = game;
+
+        var (report, _) = new AssetExport(new FakeAssetReader()).Run(install, ws, [Asset("Mesh", "Stego_Body", 3), Asset("GameObject", "Stegosaurus", 2)], null, CancellationToken.None);
+
+        Assert.Contains(report.Items[0].Notes ?? [], n => n.Contains("without its bones"));
+        Assert.DoesNotContain(report.Items[1].Notes ?? [], n => n.Contains("without its bones"));
+    }
+
+    [Fact]
+    public void An_export_runs_in_one_batch()
+    {
+        var (game, install, ws) = Setup();
+        using var _ = game;
+        var reader = new FakeAssetReader();
+
+        new AssetExport(reader).Run(install, ws, [Asset("MonoBehaviour", "A", 1), Asset("MonoBehaviour", "B", 2), Asset("Texture2D", "C", 3)], null, CancellationToken.None);
+
+        Assert.Equal(1, reader.Batches);
+        Assert.Equal(3, reader.CallsInBatch);
+    }
+
+    [Theory]
+    [InlineData(20, 20)]
+    [InlineData(80, 80)]
+    [InlineData(200, 79)]
+    public void Long_names_are_shortened_with_a_hash(int length, int expected)
+    {
+        Assert.Equal(expected, AssetExport.Shorten(new string('a', length)).Length);
+        Assert.NotEqual(AssetExport.Shorten(new string('a', 200)), AssetExport.Shorten(new string('a', 199) + "b"));
+    }
+
+    [Fact]
+    public void A_long_asset_name_gives_a_short_file_name()
+    {
+        var (game, install, ws) = Setup();
+        using var _ = game;
+
+        var (report, _) = new AssetExport(new FakeAssetReader()).Run(install, ws, [Asset("MonoBehaviour", new string('x', 240), 9)], null, CancellationToken.None);
+
+        Assert.True(Path.GetFileName(report.Items[0].Outputs[0]).Length <= 100, report.Items[0].Outputs[0]);
+    }
 }

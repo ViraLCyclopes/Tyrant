@@ -7,14 +7,46 @@ using Tyrant.Core.Workspaces;
 
 namespace Tyrant.Core.Assets;
 
-/// <summary>Reads the game's Addressables bundles through AssetsTools.NET (one session per call).</summary>
+/// <summary>Reads the game's Addressables bundles through AssetsTools.NET (one session per call, or per batch).</summary>
 public sealed class BundleAssetReader : IAssetReader
 {
     public const int MaxDisplayedArrayElements = 100;
 
+    // Per async flow: the reader is shared by every RPC call, so a batch only covers the calls made inside it.
+    private readonly AsyncLocal<(GameInstall Install, AssetSession Session)?> _batch = new();
+
+    public IDisposable Batch(GameInstall install)
+    {
+        if (_batch.Value is not null) return new Lease(null, null);
+        var session = new AssetSession(install);
+        _batch.Value = (install, session);
+        return new Lease(session, () => _batch.Value = null);
+    }
+
+    /// <summary>The batch's session for this install (released, not closed, when done), or a session of the call's own.</summary>
+    private Lease Session(GameInstall install, out AssetSession session)
+    {
+        if (_batch.Value is { } batch && batch.Install == install)
+        {
+            session = batch.Session;
+            return new Lease(null, batch.Session.Release);
+        }
+        session = new AssetSession(install);
+        return new Lease(session, null);
+    }
+
+    private sealed class Lease(AssetSession? owned, Action? done) : IDisposable
+    {
+        public void Dispose()
+        {
+            done?.Invoke();
+            owned?.Dispose();
+        }
+    }
+
     public AssetInspection Inspect(GameInstall install, AssetRecord asset)
     {
-        using var session = new AssetSession(install);
+        using var lease = Session(install, out var session);
         var (file, baseField) = session.Open(asset);
         var info = file.file.GetAssetInfo(asset.PathId);
         var externals = file.file.Metadata.Externals.Select(e => e.PathName).ToList();
@@ -25,7 +57,7 @@ public sealed class BundleAssetReader : IAssetReader
 
     public TextureFacts WriteTexture(GameInstall install, AssetRecord texture, string pngPath)
     {
-        using var session = new AssetSession(install);
+        using var lease = Session(install, out var session);
         var (_, baseField) = session.Open(texture);
         var facts = TextureFacts.Read(baseField);
         var result = new TextureExporter().Export(session, texture, pngPath);
@@ -36,7 +68,7 @@ public sealed class BundleAssetReader : IAssetReader
 
     public ModelFacts WriteModel(GameInstall install, AssetRecord asset, string outputDir, AssetIndex? index = null)
     {
-        using var session = new AssetSession(install);
+        using var lease = Session(install, out var session);
         PrefabModel model;
         try
         {
@@ -73,7 +105,7 @@ public sealed class BundleAssetReader : IAssetReader
 
     public void WriteJson(GameInstall install, AssetRecord asset, string jsonPath)
     {
-        using var session = new AssetSession(install);
+        using var lease = Session(install, out var session);
         var (_, baseField) = session.Open(asset);
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(jsonPath))!);
         File.WriteAllText(jsonPath, FieldJsonWriter.ToJson(baseField));

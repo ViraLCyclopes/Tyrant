@@ -27,6 +27,31 @@ public sealed class FakeAssetReader : IAssetReader
     public IReadOnlyList<string> ModelTextureFailures { get; set; } = [];
     public IReadOnlyList<string> ModelNotes { get; set; } = [];
     public AssetIndex? LastModelIndex { get; private set; }
+
+    /// <summary>Texture PNGs WriteModel writes into outputDir/textures (as ModelTextures does).</summary>
+    public string[] ModelTextureFiles { get; set; } = [];
+
+    private int _batches, _callsInBatch;
+    private bool _inBatch;
+    public int Batches => _batches;
+    public int CallsInBatch => _callsInBatch;
+
+    public IDisposable Batch(GameInstall install)
+    {
+        Interlocked.Increment(ref _batches);
+        _inBatch = true;
+        return new End(() => _inBatch = false);
+    }
+
+    private sealed class End(Action end) : IDisposable
+    {
+        public void Dispose() => end();
+    }
+
+    private void Count()
+    {
+        if (_inBatch) Interlocked.Increment(ref _callsInBatch);
+    }
     public int Textures => _textures;
     public int Models => _models;
     public int Json => _json;
@@ -43,6 +68,7 @@ public sealed class FakeAssetReader : IAssetReader
     public TextureFacts WriteTexture(GameInstall install, AssetRecord texture, string pngPath)
     {
         Interlocked.Increment(ref _textures);
+        Count();
         Fail(texture);
         Write(pngPath, "png");
         return new TextureFacts(64, 32, "DXT5", 7, NormalMap.IsCandidate(texture.Name));
@@ -51,17 +77,20 @@ public sealed class FakeAssetReader : IAssetReader
     public ModelFacts WriteModel(GameInstall install, AssetRecord asset, string outputDir, AssetIndex? index = null)
     {
         Interlocked.Increment(ref _models);
+        Count();
         LastModelIndex = index;
         Fail(asset);
         if (Directory.Exists(outputDir)) Directory.Delete(outputDir, recursive: true);
         var parts = ModelParts.Select(name => new ModelPart(Path.Combine(outputDir, name + ".glb"), name, 150, 50, asset.Type == "GameObject")).ToList();
         foreach (var part in parts) Write(part.File, "glb");
+        foreach (var texture in ModelTextureFiles) Write(Path.Combine(outputDir, "textures", texture), "png");
         return new ModelFacts(parts, []) { Materials = index is null ? [] : ModelMaterials, TextureFailures = ModelTextureFailures, Notes = ModelNotes };
     }
 
     public void WriteJson(GameInstall install, AssetRecord asset, string jsonPath)
     {
         Interlocked.Increment(ref _json);
+        Count();
         Fail(asset);
         Write(jsonPath, "{}");
     }

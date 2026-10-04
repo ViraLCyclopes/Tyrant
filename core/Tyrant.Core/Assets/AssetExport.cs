@@ -25,12 +25,13 @@ public sealed class AssetExport(IAssetReader reader, AssetIndex? index = null)
     {
         var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var items = new List<AssetExportItem>();
-        for (var i = 0; i < assets.Count; i++)
-        {
-            ct.ThrowIfCancellationRequested();
-            progress?.Report(new JobProgress((double)i / assets.Count, $"Exporting {assets[i].Name}"));
-            items.Add(ExportOne(install, ws, assets[i], used));
-        }
+        using (reader.Batch(install))
+            for (var i = 0; i < assets.Count; i++)
+            {
+                ct.ThrowIfCancellationRequested();
+                progress?.Report(new JobProgress((double)i / assets.Count, $"Exporting {assets[i].Name}"));
+                items.Add(ExportOne(install, ws, assets[i], used));
+            }
         var report = new AssetExportReport(DateTimeOffset.UtcNow, GameFingerprint.Compute(install).BuildGuid, items);
         var reportPath = ReportPath(ws);
         Directory.CreateDirectory(Path.GetDirectoryName(reportPath)!);
@@ -56,8 +57,9 @@ public sealed class AssetExport(IAssetReader reader, AssetIndex? index = null)
                 case "GameObject":
                     var dir = Unique(Path.Combine(ws.AssetsDir, "models", SafeName(asset)), asset, used);
                     var model = reader.WriteModel(install, asset, dir, index);
-                    outputs = model.Files;
-                    notes = model.Notes.Count == 0 ? null : model.Notes;
+                    outputs = [.. model.Files, .. TexturePngs(dir)];
+                    var modelNotes = asset.Type == "Mesh" ? [.. model.Notes, BareMeshNote] : model.Notes;
+                    notes = modelNotes.Count == 0 ? null : modelNotes;
                     break;
                 default:
                     var json = Unique(Path.Combine(ws.AssetsDir, "json", TextureExporter.Sanitize(asset.Type), $"{SafeName(asset)}_{asset.PathId}.json"), asset, used);
@@ -76,11 +78,28 @@ public sealed class AssetExport(IAssetReader reader, AssetIndex? index = null)
     private static AssetExportItem Item(AssetRecord a, bool success, IReadOnlyList<string> outputs, string? error, IReadOnlyList<string>? notes = null) =>
         new(a.Ref, a.Type, a.Name, a.ContainerPath, a.Guid, success, outputs, error, notes);
 
+    public const string BareMeshNote = "This Mesh is exported without its bones (skin); export its prefab (GameObject) to keep them.";
+
+    /// <summary>The PNGs written beside a model's .glb files (outputDir/textures).</summary>
+    private static IEnumerable<string> TexturePngs(string dir)
+    {
+        var textures = Path.Combine(dir, Models.GltfModelWriter.TexturesFolder);
+        return Directory.Exists(textures) ? Directory.EnumerateFiles(textures, "*.png").Order(StringComparer.OrdinalIgnoreCase) : [];
+    }
+
+    /// <summary>At most 80 characters: long names keep their start and get a short hash, so paths stay under Windows' limit.</summary>
+    internal static string Shorten(string name)
+    {
+        if (name.Length <= 80) return name;
+        var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(name)))[..8].ToLowerInvariant();
+        return $"{name[..70]}_{hash}";
+    }
+
     /// <summary>A file or folder name from the asset name; never empty, never a path.</summary>
     private static string SafeName(AssetRecord asset)
     {
         var name = string.Join("_", asset.Name.Split('/', '\\').Where(s => s is not ("" or "." or "..")));
-        return name.Length > 0 ? TextureExporter.Sanitize(name) : $"{asset.Type}_{asset.PathId}";
+        return name.Length > 0 ? Shorten(TextureExporter.Sanitize(name)) : $"{asset.Type}_{asset.PathId}";
     }
 
     /// <summary>Appends the path id (then a counter) when two assets would share a path.</summary>

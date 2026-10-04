@@ -33,6 +33,9 @@ public sealed record ModelFacts(IReadOnlyList<ModelPart> Parts, IReadOnlyList<st
 /// <summary>Everything that reads game bundles. Production code uses <see cref="BundleAssetReader"/>; tests use a fake.</summary>
 public interface IAssetReader
 {
+    /// <summary>Until disposed, calls for this install made in the same flow share one session (the class database loads once).</summary>
+    IDisposable Batch(GameInstall install);
+
     AssetInspection Inspect(GameInstall install, AssetRecord asset);
 
     /// <summary>Decodes a Texture2D to a PNG at <paramref name="pngPath"/>.</summary>

@@ -69,8 +69,19 @@ public static class GltfModelWriter
         // Some prefabs (e.g. Titanoboa) reuse a transform name; glTF allows it and renaming would break bone targets.
         var settings = SceneBuilderSchema2Settings.Default;
         settings.AllowArmatureDuplicatedNames = true;
-        // Linked, not embedded: the LODs of one model share one set of PNGs in textures/.
-        scene.ToGltf2(settings).SaveGLB(path, new SharpGLTF.Schema2.WriteSettings { ImageWriting = SharpGLTF.Schema2.ResourceWriteMode.SatelliteFile });
+        // Linked, not embedded: the LODs of one model share one set of PNGs in textures/, written once.
+        scene.ToGltf2(settings).SaveGLB(path, new SharpGLTF.Schema2.WriteSettings
+        {
+            ImageWriting = SharpGLTF.Schema2.ResourceWriteMode.SatelliteFile,
+            ImageWriteCallback = (context, uri, image) => WriteOnce(Path.GetDirectoryName(Path.GetFullPath(path))!, context, uri, image),
+        });
+    }
+
+    /// <summary>A PNG already beside the file (ModelTextures wrote it, or an earlier LOD did) is linked as it is.</summary>
+    private static string WriteOnce(string dir, SharpGLTF.Schema2.WriteContext context, string uri, MemoryImage image)
+    {
+        if (!File.Exists(Path.Combine(dir, uri))) context.WriteAllBytesToEnd(uri, new ArraySegment<byte>(image.Content.ToArray()));
+        return uri;
     }
 
     /// <summary>An explicit dielectric surface: glTF's defaults (metallic 1) render animals as dark metal.</summary>
