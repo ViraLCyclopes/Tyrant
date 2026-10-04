@@ -8,17 +8,23 @@ namespace Tyrant.Core.ModelReplacements;
 /// normal seams) move together: a position collapses onto a neighbouring position only if every copy has a copy of that
 /// position next to it in its own UV island, so seams can shorten but never smear across islands. Each collapse keeps the
 /// target vertices as they are, so every surviving vertex keeps its own skin weights, UVs, colour and shape-key deltas
-/// exactly. Positions on open borders never move.
+/// exactly. Positions on open borders never move. It stops at the target triangle count, or earlier when the next collapse
+/// would move the surface by more than <see cref="ShapeTolerance"/> of the mesh's size, so a far LOD is never crushed.
 /// </summary>
 public static class MeshDecimator
 {
     /// <summary>A collapse may not turn a triangle's normal more than about 78 degrees.</summary>
     private const double FlipLimit = 0.2;
 
-    public static MeshData Decimate(MeshData mesh, int targetVertices)
+    /// <summary>The furthest a collapse may move the surface (root mean square), as a share of the bounding box diagonal.</summary>
+    public const double ShapeTolerance = 0.01;
+
+    public static MeshData Decimate(MeshData mesh, int targetTriangles)
     {
         var n = mesh.VertexCount;
-        if (targetVertices >= n || n == 0) return mesh;
+        if (targetTriangles >= mesh.TriangleCount || n == 0) return mesh;
+        var size = (mesh.Positions.Aggregate(Vector3.Max) - mesh.Positions.Aggregate(Vector3.Min)).Length();
+        var maxError = Math.Pow(ShapeTolerance * size, 2);
 
         // Position groups (welded vertices).
         var groupOf = new int[n];
@@ -91,10 +97,12 @@ public static class MeshDecimator
             Push(b, a);
         }
 
-        var alive = n - Enumerable.Range(0, n).Count(v => vertexTris[v].Count == 0); // vertices no triangle uses are dropped anyway
-        while (alive > targetVertices && queue.TryDequeue(out var c, out _))
+        var aliveTris = tris.Count;
+        while (aliveTris > targetTriangles && queue.TryDequeue(out var c, out var cost))
         {
             if (deadGroup[c.U] || deadGroup[c.V] || version[c.U] != c.VersionU || version[c.V] != c.VersionV) continue;
+            // The cheapest collapse left already bends the surface too far: everything after it would bend it more.
+            if ((q[c.U] + q[c.V]).MeanSquaredDistance(cost) > maxError) break;
             var map = MapCopies(c.U, c.V);
             if (map is null || Flips(c.U, c.V)) continue;
 
@@ -106,6 +114,7 @@ public static class MeshDecimator
                     if (groupOf[tri.A] == c.V || groupOf[tri.B] == c.V || groupOf[tri.C] == c.V)
                     {
                         aliveTri[t] = false; // it spanned the collapsed edge
+                        aliveTris--;
                         vertexTris[tri.A].Remove(t);
                         vertexTris[tri.B].Remove(t);
                         vertexTris[tri.C].Remove(t);
@@ -118,7 +127,6 @@ public static class MeshDecimator
                 }
                 vertexTris[cu].Clear();
                 deadVertex[cu] = true;
-                alive--;
             }
             groupVerts[c.U].Clear();
             deadGroup[c.U] = true;
@@ -244,6 +252,13 @@ public static class MeshDecimator
 
         public static Quadric operator +(Quadric x, Quadric y) => new(x.A2 + y.A2, x.AB + y.AB, x.AC + y.AC, x.AD + y.AD, x.B2 + y.B2,
             x.BC + y.BC, x.BD + y.BD, x.C2 + y.C2, x.CD + y.CD, x.D2 + y.D2);
+
+        /// <summary>An error as the mean squared distance over the area the quadric covers (its planes are area-weighted unit normals).</summary>
+        public double MeanSquaredDistance(double error)
+        {
+            var area = A2 + B2 + C2;
+            return area <= 0 ? 0 : error / area;
+        }
 
         public double Error(Vector3 p)
         {

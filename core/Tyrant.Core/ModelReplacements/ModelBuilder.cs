@@ -90,9 +90,10 @@ public static class ModelBuilder
             }
             else if (lod > 0 && fitted.Count == lod)
             {
-                // No mesh of their own for this LOD: decimate LOD 0 to the game's own ratio.
-                var ratio = renderers[0].Mesh.VertexCount == 0 ? 1.0 : (double)game0.Mesh.VertexCount / renderers[0].Mesh.VertexCount;
-                fitted.Add(MeshDecimator.Decimate(fitted[0], Math.Max(3, (int)Math.Round(fitted[0].VertexCount * ratio))));
+                // No mesh of their own for this LOD: decimate LOD 0 to the game's own triangle ratio (seam copies make vertex
+                // counts a poor measure of detail).
+                var ratio = renderers[0].Mesh.TriangleCount == 0 ? 1.0 : (double)game0.Mesh.TriangleCount / renderers[0].Mesh.TriangleCount;
+                fitted.Add(MeshDecimator.Decimate(fitted[0], Math.Max(1, (int)Math.Round(fitted[0].TriangleCount * ratio))));
             }
             else if (lod == 0)
             {

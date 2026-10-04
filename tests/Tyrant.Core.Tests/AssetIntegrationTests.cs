@@ -87,8 +87,20 @@ public class AssetIntegrationTests(RealGameIndex real) : IClassFixture<RealGameI
         var positions = renderers[0].Mesh.Positions.Select(p => (MathF.Round(p.X, 3), MathF.Round(p.Y, 3), MathF.Round(p.Z, 3))).ToHashSet();
         for (var v = 0; v < tmesh.VertexCount; v++)
             Assert.Contains((MathF.Round(tmesh.Positions[v * 3], 3), MathF.Round(tmesh.Positions[v * 3 + 1], 3), MathF.Round(tmesh.Positions[v * 3 + 2], 3)), positions);
-        foreach (var lod in report.Lods.Skip(1)) // decimated to the game's own ratios, seams included
-            Assert.True(lod.Vertices <= lod.Vanilla * 5 / 4, $"{lod.File}: {lod.Vertices} vertices for the game's {lod.Vanilla}");
+        float Area(Tyrant.Framework.Core.TMesh t) => Enumerable.Range(0, t.Indices.Length / 3).Sum(k =>
+        {
+            System.Numerics.Vector3 P(int i) => new(t.Positions[i * 3], t.Positions[i * 3 + 1], t.Positions[i * 3 + 2]);
+            var (a, b, c) = (t.Indices[k * 3], t.Indices[k * 3 + 1], t.Indices[k * 3 + 2]);
+            return System.Numerics.Vector3.Cross(P(b) - P(a), P(c) - P(a)).Length() / 2;
+        });
+        for (var i = 1; i < report.Lods.Count; i++) // simplified to the game's own triangle ratios, never crushed
+        {
+            using var lodStream = File.OpenRead(Path.Combine(dir, report.Lods[i].File));
+            var lod = Tyrant.Framework.Core.TMesh.Read(lodStream);
+            var gameTriangles = renderers[i].Mesh.Indices.Length / 3;
+            Assert.True(lod.Indices.Length / 3 <= gameTriangles * 5 / 4, $"LOD {i}: {lod.Indices.Length / 3} triangles for the game's {gameTriangles}");
+            Assert.True(Area(lod) >= Area(tmesh) * 0.9f, $"LOD {i} kept {Area(lod) / Area(tmesh):P0} of the surface");
+        }
         Assert.Equal(renderers[0].Bones.Count, tmesh.BoneCount);
         Assert.Equal(renderers[0].Mesh.BlendShapes.Take(2).Select(s => s.Name), tmesh.Shapes.Take(2).Select(s => s.Name));
         Assert.True(clock.Elapsed < TimeSpan.FromSeconds(60), $"building took {clock.Elapsed}");

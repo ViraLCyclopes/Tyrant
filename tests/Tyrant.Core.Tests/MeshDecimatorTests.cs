@@ -90,20 +90,63 @@ public class MeshDecimatorTests
         };
     }
 
+    /// <summary>A smooth closed sphere (no borders, no seams): every collapse has to be paid for in shape.</summary>
+    private static MeshData Sphere(int segments, int rings)
+    {
+        var positions = new List<Vector3> { Vector3.UnitY };
+        for (var r = 1; r < rings; r++)
+            for (var s = 0; s < segments; s++)
+            {
+                var (lat, lon) = (MathF.PI * r / rings, 2 * MathF.PI * s / segments);
+                positions.Add(new Vector3(MathF.Sin(lat) * MathF.Cos(lon), MathF.Cos(lat), MathF.Sin(lat) * MathF.Sin(lon)));
+            }
+        positions.Add(-Vector3.UnitY);
+        uint V(int r, int s) => r == 0 ? 0u : r == rings ? (uint)(positions.Count - 1) : (uint)(1 + (r - 1) * segments + (s % segments));
+        var indices = new List<uint>();
+        for (var r = 0; r < rings; r++)
+            for (var s = 0; s < segments; s++)
+            {
+                if (r > 0) indices.AddRange([V(r, s), V(r, s + 1), V(r + 1, s)]);
+                if (r < rings - 1) indices.AddRange([V(r, s + 1), V(r + 1, s + 1), V(r + 1, s)]);
+            }
+        var count = positions.Count;
+        return new MeshData
+        {
+            Name = "Sphere", Positions = [.. positions], Normals = [.. positions], Uv0 = [], Colors = [],
+            Skin = Enumerable.Range(0, count).Select(_ => new BoneWeight4(0, 0, 0, 0, 1, 0, 0, 0)).ToArray(),
+            Indices = [.. indices], SubMeshes = [new SubMesh(0, indices.Count, 0)], BindPoses = [Matrix4x4.Identity], BlendShapes = [],
+        };
+    }
+
+    private static float Area(MeshData m) => Enumerable.Range(0, m.Indices.Length / 3).Sum(t =>
+        Vector3.Cross(m.Positions[m.Indices[t * 3 + 1]] - m.Positions[m.Indices[t * 3]], m.Positions[m.Indices[t * 3 + 2]] - m.Positions[m.Indices[t * 3]]).Length() / 2);
+
+    [Fact]
+    public void It_stops_before_the_shape_is_crushed()
+    {
+        var sphere = Sphere(32, 16); // 960 triangles
+
+        var lod = MeshDecimator.Decimate(sphere, 8); // an octahedron would keep barely half the surface
+
+        Assert.True(lod.TriangleCount > 8, $"{lod.TriangleCount} triangles");
+        Assert.True(Area(lod) >= Area(sphere) * 0.85f, $"kept {Area(lod) / Area(sphere):P0} of the surface");
+        Assert.True(lod.TriangleCount < sphere.TriangleCount, "it still simplifies what it can");
+    }
+
     [Fact]
     public void A_mesh_full_of_seams_still_reaches_its_target()
     {
         var mesh = Islands(24, every: 3); // 8 islands: almost every vertex sits on a seam
 
-        var lod = MeshDecimator.Decimate(mesh, mesh.VertexCount / 4);
+        var lod = MeshDecimator.Decimate(mesh, mesh.TriangleCount / 4);
 
-        Assert.InRange(lod.VertexCount, 1, mesh.VertexCount / 4 * 13 / 10);
+        Assert.InRange(lod.TriangleCount, 1, mesh.TriangleCount / 4);
     }
 
     [Fact]
     public void Collapses_never_mix_two_uv_islands_in_one_triangle()
     {
-        var lod = MeshDecimator.Decimate(Islands(24, every: 3), 150);
+        var lod = MeshDecimator.Decimate(Islands(24, every: 3), 250);
 
         for (var t = 0; t < lod.Indices.Length; t += 3)
         {
@@ -113,14 +156,14 @@ public class MeshDecimatorTests
     }
 
     [Fact]
-    public void It_reaches_the_target_vertex_count()
+    public void It_reaches_the_target_triangle_count()
     {
-        var mesh = Grid(20); // 441 vertices
+        var mesh = Grid(20); // 800 triangles
 
-        var lod = MeshDecimator.Decimate(mesh, 150);
+        var lod = MeshDecimator.Decimate(mesh, 250);
 
-        Assert.InRange(lod.VertexCount, 100, 165);
-        Assert.True(lod.TriangleCount < mesh.TriangleCount);
+        Assert.InRange(lod.TriangleCount, 200, 250);
+        Assert.True(lod.VertexCount < mesh.VertexCount);
     }
 
     [Fact]
@@ -128,7 +171,7 @@ public class MeshDecimatorTests
     {
         var mesh = Grid(20);
 
-        var lod = MeshDecimator.Decimate(mesh, 150);
+        var lod = MeshDecimator.Decimate(mesh, 250);
 
         for (var v = 0; v < lod.VertexCount; v++)
         {
@@ -147,7 +190,7 @@ public class MeshDecimatorTests
     {
         var mesh = Grid(20, seam: true);
 
-        var lod = MeshDecimator.Decimate(mesh, 150);
+        var lod = MeshDecimator.Decimate(mesh, 250);
 
         for (var y = 0; y <= 20; y++)
         {
@@ -160,7 +203,7 @@ public class MeshDecimatorTests
     [Fact]
     public void No_triangle_is_degenerate_and_every_index_is_valid()
     {
-        var lod = MeshDecimator.Decimate(Grid(20), 150);
+        var lod = MeshDecimator.Decimate(Grid(20), 250);
 
         Assert.All(Enumerable.Range(0, lod.Indices.Length / 3), t =>
         {
@@ -172,7 +215,7 @@ public class MeshDecimatorTests
     }
 
     [Fact]
-    public void A_target_above_the_vertex_count_changes_nothing()
+    public void A_target_above_the_triangle_count_changes_nothing()
     {
         var mesh = Grid(4);
 
