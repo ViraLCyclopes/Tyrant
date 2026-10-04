@@ -3,6 +3,7 @@ const labels: Record<string, string> = {
   PICK_WORKSPACE_FOLDER: 'Pick workspace folder',
   REFRESH_WORKSPACE: 'Refresh all',
   INSTALL_DUMPER: 'Install dumper',
+  REINDEX_ASSETS: 'Index assets',
 };
 
 /** Button label for an error's fix action; null when this version of the app has no button for it. */

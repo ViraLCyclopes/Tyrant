@@ -69,7 +69,7 @@
 
   {#if details.references.length}
     <section aria-label="References">
-      <h3>References ({details.references.length})</h3>
+      <h3>References ({details.referencesCapped ? `first ${details.references.length}` : details.references.length})</h3>
       <ul class="references">
         {#each details.references as reference, i (i)}
           <li>

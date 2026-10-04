@@ -1,5 +1,6 @@
 using Tyrant.Core.Assets;
 using Tyrant.Core.Install;
+using Tyrant.Core.Models;
 using Tyrant.Core.Species;
 using Tyrant.Rpc.Jobs;
 using Tyrant.Rpc.Protocol;
@@ -54,7 +55,14 @@ public sealed partial class AssetsMethods
         return new AssetPreview(PreviewKind.Model, shown.Select(p => p.File).ToList(), Vertices: shown.Sum(p => p.Vertices),
             Triangles: shown.Sum(p => p.Triangles), Skinned: shown.Any(p => p.Skinned), Message: notes.Count == 0 ? null : string.Join(" ", notes),
             Materials: materials.Count == 0 ? null : materials,
-            Skins: materials.Any(m => m.Skinnable) ? skins.Select(s => new PreviewSkin(s.Ref, s.Name, worn.Contains(s.Ref))).ToList() : null);
+            Skins: materials.Any(m => m.Skinnable) ? skins.Select(s => new PreviewSkin(s.Ref, s.Name, worn.Contains(s.Ref))).ToList() : null,
+            Textures: LinkedTextures(Path.Combine(dir, "model")));
+    }
+
+    private static IReadOnlyList<string>? LinkedTextures(string modelDir)
+    {
+        var textures = Path.Combine(modelDir, GltfModelWriter.TexturesFolder);
+        return Directory.Exists(textures) ? Directory.GetFiles(textures, "*.png").Order(StringComparer.OrdinalIgnoreCase).ToList() : null;
     }
 
     [RpcMethod("assets.export", JobResult = typeof(AssetExportRunResult))]

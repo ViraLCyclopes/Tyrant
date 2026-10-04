@@ -70,7 +70,7 @@ internal sealed class PreviewCache
         {
             if (!File.Exists(meta)) return null;
             var preview = JsonSerializer.Deserialize<T>(File.ReadAllText(meta), RpcJson.Options);
-            return preview is not null && preview.Files.All(File.Exists) ? preview : null;
+            return preview is not null && preview.Files.All(File.Exists) && (((IPreviewFiles)preview).Textures ?? []).All(File.Exists) ? preview : null;
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
         {

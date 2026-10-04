@@ -19,12 +19,17 @@ public sealed record AssetListParams(string? Filter = null, string? Type = null,
 
 public sealed record AssetListResult(IReadOnlyList<AssetRow> Rows, int Total, int Page, int PageSize);
 
+public sealed record AssetRefsParams(string? Filter = null, string? Type = null, string? Group = null, string? Bundle = null);
+
+public sealed record AssetRefsResult(IReadOnlyList<string> Refs);
+
 public sealed record AssetRefParams(string Ref);
 
 /// <summary>A reference from the asset's fields: <see cref="Ref"/> when it points into the index, otherwise <see cref="External"/> names the target.</summary>
 public sealed record AssetReferenceRow(string Field, string? Ref, string? Type, string? Name, string? External);
 
-public sealed record AssetDetails(AssetRow Asset, long ByteSize, IReadOnlyList<AssetReferenceRow> References, JsonElement Fields);
+/// <summary>ReferencesCapped: the object has more references than <see cref="Tyrant.Core.Assets.AssetReferences.MaxShown"/>; only the first are listed.</summary>
+public sealed record AssetDetails(AssetRow Asset, long ByteSize, IReadOnlyList<AssetReferenceRow> References, JsonElement Fields, bool ReferencesCapped = false);
 
 public sealed record SpeciesRow(string Key, string DisplayName, bool Vivarium, string Group, string PrefabRef, int Textures);
 
@@ -47,12 +52,15 @@ public sealed record PreviewSkin(string Ref, string Name, bool Current);
 internal interface IPreviewFiles
 {
     IReadOnlyList<string> Files { get; }
+
+    /// <summary>Further files the preview needs (a model's linked PNGs); a cached preview missing one is made again.</summary>
+    IReadOnlyList<string>? Textures => null;
 }
 
 /// <summary>Preview files (PNG or .glb) in the workspace cache, loaded by the UI through the asset protocol.</summary>
 public sealed record AssetPreview(PreviewKind Kind, IReadOnlyList<string> Files, int? Width = null, int? Height = null, string? Format = null,
     int? MipCount = null, int? Vertices = null, int? Triangles = null, bool? Skinned = null, string? Message = null,
-    IReadOnlyList<PreviewMaterial>? Materials = null, IReadOnlyList<PreviewSkin>? Skins = null) : IPreviewFiles;
+    IReadOnlyList<PreviewMaterial>? Materials = null, IReadOnlyList<PreviewSkin>? Skins = null, IReadOnlyList<string>? Textures = null) : IPreviewFiles;
 
 public sealed record AssetExportParams(IReadOnlyList<string> Refs);
 

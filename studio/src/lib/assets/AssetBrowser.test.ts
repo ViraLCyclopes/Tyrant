@@ -87,6 +87,63 @@ describe('AssetBrowser', () => {
     await waitFor(() => expect(messages(session, 'tab-test').join('\n')).toContain('Exported 1 assets'));
   });
 
+  it('Select all selects every asset on the filter, across pages', async () => {
+    const { rpc, session } = setup();
+    rpc.on('assets.refs', () => ({ refs: [stegoD.ref, `${STEGO}/textures.bundle#2`, `${STEGO}/prefabs.bundle#3`] }));
+    renderWith(AssetBrowser, session);
+    await screen.findByRole('button', { name: 'T_Stego_D' });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Select all' }));
+
+    expect(await screen.findByRole('button', { name: 'Export selected (3)' })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Select T_Stego_D' })).toBeChecked();
+  });
+
+  it('Clear empties the selection', async () => {
+    const { session } = setup();
+    renderWith(AssetBrowser, session);
+    await screen.findByRole('button', { name: 'T_Stego_D' });
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Select T_Stego_D' }));
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+
+    expect(screen.getByRole('button', { name: 'Export selected (0)' })).toBeDisabled();
+  });
+
+  it('counts and exports only the selected assets the filter shows', async () => {
+    const { rpc, session } = setup();
+    const stegoN: AssetRow = { ...stegoD, ref: `${STEGO}/textures.bundle#2`, pathId: 2, name: 'T_Stego_N' };
+    const rex: AssetRow = { ...stegoD, ref: 'rex.bundle#5', bundle: 'rex.bundle', pathId: 5, name: 'T_Rex_D' };
+    rpc.on('assets.list', (p) => (p.filter ? { rows: [stegoD, stegoN], total: 2, page: 0, pageSize: 200 } : { rows: [stegoD, stegoN, rex], total: 3, page: 0, pageSize: 200 }));
+    rpc.on('assets.refs', () => ({ refs: [stegoD.ref, stegoN.ref] }));
+    rpc.on('assets.export', () => ({ exported: 2, failed: 0, reportPath: 'r.json', failures: [] }));
+    rpc.on('workspace.status', () => workspaceStatus({ hasAssetIndex: true }));
+    renderWith(AssetBrowser, session);
+    for (const name of ['T_Stego_D', 'T_Stego_N', 'T_Rex_D']) await fireEvent.click(await screen.findByRole('checkbox', { name: `Select ${name}` }));
+
+    await fireEvent.input(screen.getByRole('searchbox', { name: 'Search assets' }), { target: { value: 'stego' } });
+    await fireEvent.click(await screen.findByRole('button', { name: 'Export selected (2)' }));
+
+    await waitFor(() => expect(rpc.callsTo('assets.export')[0]?.params).toEqual({ refs: [stegoD.ref, stegoN.ref] }));
+  });
+
+  it('Export group exports every asset of the picked group', async () => {
+    const { rpc, session } = setup();
+    const refs = [stegoD.ref, `${STEGO}/textures.bundle#2`, `${STEGO}/prefabs.bundle#3`];
+    rpc.on('assets.refs', () => ({ refs }));
+    rpc.on('assets.export', () => ({ exported: 3, failed: 0, reportPath: 'r.json', failures: [] }));
+    rpc.on('workspace.status', () => workspaceStatus({ hasAssetIndex: true }));
+    renderWith(AssetBrowser, session);
+    await screen.findByRole('button', { name: 'T_Stego_D' });
+    expect(screen.getByRole('button', { name: 'Export group' })).toBeDisabled();
+
+    await fireEvent.click(screen.getByRole('button', { name: /^stego_assets_assets/ }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Export group' }));
+
+    await waitFor(() => expect(rpc.callsTo('assets.export')[0]?.params).toEqual({ refs }));
+    expect(rpc.callsTo('assets.refs').at(-1)?.params).toEqual({ group: STEGO });
+  });
+
   it('an export with failures is a warning, so the tab gets a marker', async () => {
     const { rpc, session } = setup();
     rpc.on('assets.export', () => ({ exported: 0, failed: 1, reportPath: 'D:\\ws\\report.json', failures: [{ ref: stegoD.ref, name: 'T_Stego_D', error: 'unreadable' }] }));

@@ -54,6 +54,22 @@ describe('AssetDetail', () => {
     expect(screen.getByText('CAB-abc #77')).toBeInTheDocument();
   });
 
+  it('says when only the first references are listed', async () => {
+    const { rpc, session } = setup();
+    const references = Array.from({ length: 500 }, (_, i) => ({ field: `m_${i}`, ref: null, type: null, name: null, external: `CAB-abc #${i}` }));
+    rpc.on('assets.get', () => ({ asset: row, byteSize: 1, references, fields: {}, referencesCapped: true }));
+    renderWith(AssetDetail, session, { ref: row.ref, onOpen: vi.fn() });
+
+    expect(await screen.findByRole('heading', { name: 'References (first 500)' })).toBeInTheDocument();
+  });
+
+  it('counts every reference when the list is whole', async () => {
+    const { session } = setup();
+    renderWith(AssetDetail, session, { ref: row.ref, onOpen: vi.fn() });
+
+    expect(await screen.findByRole('heading', { name: 'References (2)' })).toBeInTheDocument();
+  });
+
   it('shows the fields', async () => {
     const { session } = setup();
     renderWith(AssetDetail, session, { ref: row.ref, onOpen: vi.fn() });

@@ -7,6 +7,9 @@ public sealed record AssetReference(string Field, int FileId, long PathId);
 
 public static class AssetReferences
 {
+    /// <summary>How many references the app shows; an object with more says the list was cut.</summary>
+    public const int MaxShown = 500;
+
     /// <summary>Every non-null PPtr (an m_FileID/m_PathID pair) in field order, at most <paramref name="max"/>.</summary>
     public static IReadOnlyList<AssetReference> Collect(AssetTypeValueField root, int max = 500)
     {

@@ -311,6 +311,9 @@ export class Session {
       case 'INSTALL_DUMPER':
         await this.runJob('dump.install', undefined, 'Install dumper', tab);
         return;
+      case 'REINDEX_ASSETS':
+        await this.runJob('assets.index', undefined, 'Asset index', tab);
+        return;
     }
   }
 
@@ -325,8 +328,9 @@ export class Session {
 
   /** Previews are files in <workspace>\cache\previews; the shell only serves that folder once asked. */
   private openPreviews(dir: string): void {
-    void this.platform.allowPreviews(`${dir}\\cache\\previews`).catch(() => {
+    void this.platform.allowPreviews(`${dir}\\cache\\previews`).catch((e: unknown) => {
       // without it previews show as broken images; the rest of the app is unaffected
+      this.log.add({ level: 'warn', message: `Previews will not load: ${asRpcError(e).message}`, tab: null });
     });
   }
 

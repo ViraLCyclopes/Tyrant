@@ -52,7 +52,7 @@ public sealed class BundleAssetReader : IAssetReader
         var externals = file.file.Metadata.Externals.Select(e => e.PathName).ToList();
         // Capped for display: some meshes carry tens of megabytes of blend-shape structs. Exports write the full tree.
         return new AssetInspection((info?.ByteSize ?? 0) + AssetSizes.StreamedBytes(baseField), FieldJsonWriter.ToJson(baseField, maxArrayElements: MaxDisplayedArrayElements),
-            AssetReferences.Collect(baseField), externals);
+            AssetReferences.Collect(baseField, AssetReferences.MaxShown + 1), externals); // one more than shown tells the app the list was cut
     }
 
     public TextureFacts WriteTexture(GameInstall install, AssetRecord texture, string pngPath)

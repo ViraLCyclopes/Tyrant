@@ -83,7 +83,7 @@ public sealed class EnvironmentTextureWriter
     {
         var sample = index.Assets.FirstOrDefault(a => a.Type == "Texture2D")
             ?? throw new TyrantException(TyrantErrorCode.AssetIndexMissing,
-                "The asset index has no textures to learn the game's texture layout from. Click Index assets on the Workspace tab.", FixAction.RefreshWorkspace);
+                "The asset index has no textures to learn the game's texture layout from. Click Index assets on the Workspace tab.", FixAction.ReindexAssets);
         var (file, _) = session.Open(sample);
         var type = file.file.Metadata.FindTypeTreeTypeByID((int)AssetClassID.Texture2D)
             ?? throw new TyrantException(TyrantErrorCode.AssetUnreadable, $"'{sample.Bundle}' carries no texture layout to borrow.");

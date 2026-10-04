@@ -51,16 +51,29 @@ public sealed partial class AssetsMethods(StudioSession session, JobManager jobs
     public AssetListResult List(AssetListParams p)
     {
         var (_, _, index) = Open();
-        var tokens = DataQuery.Tokens(p.Filter);
-        IEnumerable<AssetRecord> rows = index.Assets;
-        if (p.Type is not null) rows = rows.Where(a => string.Equals(a.Type, p.Type, Ignore));
-        if (p.Group is not null) rows = rows.Where(a => string.Equals(SpeciesCatalog.BundleGroup(a.Bundle), p.Group, Ignore));
-        if (p.Bundle is not null) rows = rows.Where(a => string.Equals(a.Bundle, p.Bundle, Ignore));
-        if (tokens.Length > 0) rows = rows.Where(a => tokens.All(t => Matches(a, t)));
-        var list = rows.OrderBy(a => a.Name, StringComparer.OrdinalIgnoreCase).ThenBy(a => a.Bundle, StringComparer.Ordinal).ThenBy(a => a.PathId).ToList();
+        var list = Matching(index, p.Filter, p.Type, p.Group, p.Bundle);
         var pageSize = Math.Clamp(p.PageSize, 1, MaxPageSize);
         var page = Math.Clamp(p.Page, 0, int.MaxValue / MaxPageSize);
         return new AssetListResult(list.Skip(page * pageSize).Take(pageSize).Select(Row).ToList(), list.Count, page, pageSize);
+    }
+
+    /// <summary>Every ref on a filter, unpaged: for Select all and Export group.</summary>
+    [RpcMethod("assets.refs")]
+    public AssetRefsResult Refs(AssetRefsParams p)
+    {
+        var (_, _, index) = Open();
+        return new AssetRefsResult(Matching(index, p.Filter, p.Type, p.Group, p.Bundle).Select(a => a.Ref).ToList());
+    }
+
+    private static List<AssetRecord> Matching(AssetIndex index, string? filter, string? type, string? group, string? bundle)
+    {
+        var tokens = DataQuery.Tokens(filter);
+        IEnumerable<AssetRecord> rows = index.Assets;
+        if (type is not null) rows = rows.Where(a => string.Equals(a.Type, type, Ignore));
+        if (group is not null) rows = rows.Where(a => string.Equals(SpeciesCatalog.BundleGroup(a.Bundle), group, Ignore));
+        if (bundle is not null) rows = rows.Where(a => string.Equals(a.Bundle, bundle, Ignore));
+        if (tokens.Length > 0) rows = rows.Where(a => tokens.All(t => Matches(a, t)));
+        return rows.OrderBy(a => a.Name, StringComparer.OrdinalIgnoreCase).ThenBy(a => a.Bundle, StringComparer.Ordinal).ThenBy(a => a.PathId).ToList();
     }
 
     [RpcMethod("assets.get")]
@@ -70,7 +83,7 @@ public sealed partial class AssetsMethods(StudioSession session, JobManager jobs
         var asset = index.Resolve(p.Ref);
         var inspection = Reader.Inspect(install, asset);
         var sameFile = index.Assets.Where(a => string.Equals(a.Bundle, asset.Bundle, Ignore)).GroupBy(a => a.PathId).ToDictionary(g => g.Key, g => g.First());
-        var references = inspection.References.Select(r =>
+        var references = inspection.References.Take(AssetReferences.MaxShown).Select(r =>
         {
             if (r.FileId == 0)
                 return sameFile.TryGetValue(r.PathId, out var target)
@@ -80,7 +93,7 @@ public sealed partial class AssetsMethods(StudioSession session, JobManager jobs
             return new AssetReferenceRow(r.Field, null, null, null, $"{external} #{r.PathId}");
         }).ToList();
         using var fields = JsonDocument.Parse(inspection.FieldsJson);
-        return new AssetDetails(Row(asset), inspection.ByteSize, references, fields.RootElement.Clone());
+        return new AssetDetails(Row(asset), inspection.ByteSize, references, fields.RootElement.Clone(), inspection.References.Count > AssetReferences.MaxShown);
     }
 
     [RpcMethod("species.list")]

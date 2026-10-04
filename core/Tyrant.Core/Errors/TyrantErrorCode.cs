@@ -39,6 +39,7 @@ public enum FixAction
     PickWorkspaceFolder,
     RefreshWorkspace,
     InstallDumper,
+    ReindexAssets,
 }
 
 public static class TyrantErrorCodeExtensions

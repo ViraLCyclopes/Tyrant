@@ -42,7 +42,11 @@ export class FakePlatform implements Platform {
     return `asset://${path}`;
   }
 
+  /** Set to make allowPreviews reject. */
+  previewsError: Error | null = null;
+
   async allowPreviews(dir: string): Promise<void> {
+    if (this.previewsError) throw this.previewsError;
     this.allowed.push(dir);
   }
 }

@@ -323,6 +323,30 @@ describe('Session', () => {
     expect(tab.error?.code).toBe('GAME_NOT_FOUND');
   });
 
+  it('REINDEX_ASSETS indexes the assets without refreshing everything', async () => {
+    const { rpc, session } = setup();
+    rpc.on('assets.index', () => ({ assets: 1, failures: 0, missingBundles: 0 }));
+    rpc.on('workspace.status', () => workspaceStatus());
+    session.workspace = workspaceStatus();
+    const tab = testTab(session);
+
+    await session.applyFix('REINDEX_ASSETS', tab);
+
+    expect(rpc.callsTo('assets.index')).toHaveLength(1);
+    expect(rpc.callsTo('workspace.refreshAll')).toHaveLength(0);
+  });
+
+  it('says when previews cannot be allowed', async () => {
+    const { rpc, platform, session } = setup();
+    platform.previewsError = new Error('scope refused');
+    rpc.on('workspace.open', () => workspaceStatus());
+
+    await session.openWorkspace('D:\\ws');
+    await flush();
+
+    expect(session.log.records.some((r) => r.level === 'warn' && r.message.startsWith('Previews will not load: '))).toBe(true);
+  });
+
   it('core log lines become records for every tab', () => {
     const { rpc, session } = setup();
     rpc.emitLog({ level: 'warn', message: 'The workspace now points at G:\\PK.' });

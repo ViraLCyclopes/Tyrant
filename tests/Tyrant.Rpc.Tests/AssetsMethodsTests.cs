@@ -99,6 +99,20 @@ public class AssetsMethodsTests
     }
 
     [Fact]
+    public async Task Refs_lists_every_match_without_paging()
+    {
+        using var game = new FakeGame();
+        var many = Enumerable.Range(1, 1500).Select(i => new AssetRecord("big.bundle", i, "Texture2D", $"T_{i:0000}", null, null, null));
+        var (h, _, _) = await Opened(game, [.. many, StegoD]);
+
+        var all = (await h.Call("assets.refs", new { group = "big.bundle" })).GetProperty("refs");
+        var one = (await h.Call("assets.refs", new { filter = "stego_d" })).GetProperty("refs");
+
+        Assert.Equal(1500, all.GetArrayLength());
+        Assert.Equal([StegoD.Ref], one.EnumerateArray().Select(r => r.GetString()!).ToArray());
+    }
+
+    [Fact]
     public async Task Without_an_index_asks_to_refresh()
     {
         using var game = new FakeGame();
@@ -129,6 +143,29 @@ public class AssetsMethodsTests
         Assert.Equal("CAB-abc #77", refs[1].GetProperty("external").GetString());
         Assert.Equal(JsonValueKind.Null, refs[1].GetProperty("ref").ValueKind);
         Assert.Contains("999", refs[2].GetProperty("external").GetString());
+    }
+
+    [Fact]
+    public async Task Get_says_when_the_references_were_capped()
+    {
+        using var game = new FakeGame();
+        var (h, _, reader) = await Opened(game);
+        reader.Inspection = new AssetInspection(1, "{}", Enumerable.Range(1, 600).Select(i => new AssetReference($"m_{i}", 1, i)).ToList(), ["CAB-abc"]);
+
+        var details = await h.Call("assets.get", new { @ref = StegoD.Ref });
+
+        Assert.True(details.GetProperty("referencesCapped").GetBoolean());
+        Assert.Equal(AssetReferences.MaxShown, details.GetProperty("references").GetArrayLength());
+    }
+
+    [Fact]
+    public async Task Get_of_a_few_references_is_not_capped()
+    {
+        using var game = new FakeGame();
+        var (h, _, reader) = await Opened(game);
+        reader.Inspection = new AssetInspection(1, "{}", [new AssetReference("m_Normal", 0, 2)], []);
+
+        Assert.False((await h.Call("assets.get", new { @ref = StegoD.Ref })).GetProperty("referencesCapped").GetBoolean());
     }
 
     [Fact]

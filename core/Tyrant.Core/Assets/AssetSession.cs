@@ -48,7 +48,7 @@ public sealed class AssetSession : IDisposable
         if (!full.StartsWith(_aaDir + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
             throw new TyrantException(TyrantErrorCode.AssetNotFound,
                 $"Bundle path '{relativeBundle}' points outside the game's Addressables folder. Index the assets again (Workspace → Index assets, or 'tyrant assets index').",
-                FixAction.RefreshWorkspace);
+                FixAction.ReindexAssets);
         return full;
     }
 
@@ -59,7 +59,7 @@ public sealed class AssetSession : IDisposable
         if (!full.StartsWith(_dataDir + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
             throw new TyrantException(TyrantErrorCode.AssetNotFound,
                 $"'{dataFile}' points outside the game's data folder. Index the assets again (Workspace → Index assets, or 'tyrant assets index').",
-                FixAction.RefreshWorkspace);
+                FixAction.ReindexAssets);
         return full;
     }
 
@@ -69,7 +69,7 @@ public sealed class AssetSession : IDisposable
         var path = BundlePath(asset.Bundle);
         if (!File.Exists(path))
             throw new TyrantException(TyrantErrorCode.AssetNotFound,
-                $"Bundle '{asset.Bundle}' no longer exists (game updated?). Index the assets again (Workspace → Index assets, or 'tyrant assets index').", FixAction.RefreshWorkspace);
+                $"Bundle '{asset.Bundle}' no longer exists (game updated?). Index the assets again (Workspace → Index assets, or 'tyrant assets index').", FixAction.ReindexAssets);
 
         try
         {
@@ -83,7 +83,7 @@ public sealed class AssetSession : IDisposable
                 // A game update can reuse an object number for another kind of object: never hand back the wrong one.
                 if (Enum.TryParse<AssetClassID>(asset.Type, out var expected) && info.TypeId != (int)expected)
                     throw new TyrantException(TyrantErrorCode.AssetNotFound,
-                        $"Object {asset.PathId} in '{asset.Bundle}' is no longer a {asset.Type} (game updated?). Index the assets again (Workspace → Index assets, or 'tyrant assets index').", FixAction.RefreshWorkspace);
+                        $"Object {asset.PathId} in '{asset.Bundle}' is no longer a {asset.Type} (game updated?). Index the assets again (Workspace → Index assets, or 'tyrant assets index').", FixAction.ReindexAssets);
                 return (file, _manager.GetBaseField(file, info));
             }
         }
@@ -92,10 +92,10 @@ public sealed class AssetSession : IDisposable
             // AssetsTools.NET throws plain Exceptions for data it cannot parse (e.g. a bundle changed by a game update).
             throw new TyrantException(TyrantErrorCode.AssetUnreadable,
                 $"Bundle '{asset.Bundle}' could not be read ({ex.Message}). If the game was updated, index the assets again (Workspace → Index assets, or 'tyrant assets index').",
-                FixAction.RefreshWorkspace, ex);
+                FixAction.ReindexAssets, ex);
         }
         throw new TyrantException(TyrantErrorCode.AssetNotFound,
-            $"Object {asset.PathId} is not in '{asset.Bundle}' (game updated?). Index the assets again (Workspace → Index assets, or 'tyrant assets index').", FixAction.RefreshWorkspace);
+            $"Object {asset.PathId} is not in '{asset.Bundle}' (game updated?). Index the assets again (Workspace → Index assets, or 'tyrant assets index').", FixAction.ReindexAssets);
     }
 
     private (AssetsFileInstance File, AssetTypeValueField BaseField) OpenBuiltIn(AssetRecord asset)
@@ -103,24 +103,24 @@ public sealed class AssetSession : IDisposable
         var path = DataPath(asset.DataFile!);
         if (!File.Exists(path))
             throw new TyrantException(TyrantErrorCode.AssetNotFound,
-                $"'{asset.DataFile}' no longer exists (game updated?). Index the assets again (Workspace → Index assets, or 'tyrant assets index').", FixAction.RefreshWorkspace);
+                $"'{asset.DataFile}' no longer exists (game updated?). Index the assets again (Workspace → Index assets, or 'tyrant assets index').", FixAction.ReindexAssets);
         try
         {
             var file = _manager.LoadAssetsFile(path, true);
             UseClassDatabase(file);
             var info = file.file.AssetInfos.FirstOrDefault(a => a.PathId == asset.PathId)
                 ?? throw new TyrantException(TyrantErrorCode.AssetNotFound,
-                    $"Object {asset.PathId} is not in '{asset.DataFile}' (game updated?). Index the assets again (Workspace → Index assets, or 'tyrant assets index').", FixAction.RefreshWorkspace);
+                    $"Object {asset.PathId} is not in '{asset.DataFile}' (game updated?). Index the assets again (Workspace → Index assets, or 'tyrant assets index').", FixAction.ReindexAssets);
             if (Enum.TryParse<AssetClassID>(asset.Type, out var expected) && info.TypeId != (int)expected)
                 throw new TyrantException(TyrantErrorCode.AssetNotFound,
-                    $"Object {asset.PathId} in '{asset.DataFile}' is no longer a {asset.Type} (game updated?). Index the assets again (Workspace → Index assets, or 'tyrant assets index').", FixAction.RefreshWorkspace);
+                    $"Object {asset.PathId} in '{asset.DataFile}' is no longer a {asset.Type} (game updated?). Index the assets again (Workspace → Index assets, or 'tyrant assets index').", FixAction.ReindexAssets);
             return (file, _manager.GetBaseField(file, info));
         }
         catch (Exception ex) when (ex is not TyrantException and not OperationCanceledException)
         {
             throw new TyrantException(TyrantErrorCode.AssetUnreadable,
                 $"'{asset.DataFile}' could not be read ({ex.Message}). If the game was updated, index the assets again (Workspace → Index assets, or 'tyrant assets index').",
-                FixAction.RefreshWorkspace, ex);
+                FixAction.ReindexAssets, ex);
         }
     }
 

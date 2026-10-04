@@ -39,18 +39,17 @@ internal static class CliServices
     /// <summary>Starts the game and tells whether it runs; the CLI's tests replace it so they never depend on the real game.</summary>
     public static IGameLauncher Launcher { get; set; } = new SteamLauncher();
 
-    public static void PrintError(TyrantException ex)
+    public static void PrintError(TyrantException ex) => Console.Error.WriteLine($"error {ex.Code.ToWire()}: {ex.Message}{FixHint(ex.Fix)}");
+
+    internal static string FixHint(FixAction fix) => fix switch
     {
-        var fix = ex.Fix switch
-        {
-            FixAction.PickGameFolder => " (fix: point Tyrant at the game folder with --game <folder>)",
-            FixAction.PickWorkspaceFolder => " (fix: use a workspace folder outside the game folder, e.g. -w D:\\tyrant-workspace)",
-            FixAction.RefreshWorkspace => " (fix: refresh the workspace: 'tyrant decompile', 'tyrant assets index' or 'tyrant dump run')",
-            FixAction.InstallDumper => " (fix: run 'tyrant dump install')",
-            _ => "",
-        };
-        Console.Error.WriteLine($"error {ex.Code.ToWire()}: {ex.Message}{fix}");
-    }
+        FixAction.PickGameFolder => " (fix: point Tyrant at the game folder with --game <folder>)",
+        FixAction.PickWorkspaceFolder => " (fix: use a workspace folder outside the game folder, e.g. -w D:\\tyrant-workspace)",
+        FixAction.RefreshWorkspace => " (fix: refresh the workspace: 'tyrant decompile', 'tyrant assets index' or 'tyrant dump run')",
+        FixAction.InstallDumper => " (fix: run 'tyrant dump install')",
+        FixAction.ReindexAssets => " (fix: run 'tyrant assets index')",
+        _ => "",
+    };
 }
 
 /// <summary>

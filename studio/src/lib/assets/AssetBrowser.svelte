@@ -20,9 +20,13 @@
   let page = $state(0);
   let result = $state<AssetListResult | null>(null);
   let checked = $state<string[]>([]);
+  /** Every ref the current filter matches (beyond this page); null while the selection is known to be on the filter. */
+  let matching = $state<Set<string> | null>(null);
   let current = $state<string | null>(null);
   let sequence = 0;
 
+  /** The selection the filter shows: hidden selected rows are neither counted nor exported. */
+  const shown = $derived(matching ? checked.filter((r) => matching!.has(r)) : checked);
   const pages = $derived(result ? Math.max(1, Math.ceil(result.total / result.pageSize)) : 1);
   const lastPart = (name: string) => name.split('/').at(-1) ?? name;
   /** A built-in file group ("@data/sharedassets0.assets") reads as "Built-in · sharedassets0". */
@@ -38,7 +42,39 @@
     const r = await tab.quietly(() =>
       session.rpc.call('assets.list', { filter: filter || null, type: type || null, group, bundle, page, pageSize: PAGE_SIZE }),
     );
-    if (mine === sequence && r) result = r; // ignore answers to superseded queries
+    if (mine !== sequence || !r) return; // ignore answers to superseded queries
+    result = r;
+    // Rows picked from now on are on this filter; earlier ones may not be.
+    const refs = checked.length ? await allRefs() : null;
+    if (mine === sequence) matching = refs;
+  }
+
+  async function allRefs(onlyGroup?: string): Promise<Set<string> | null> {
+    const params = onlyGroup !== undefined ? { group: onlyGroup } : { filter: filter || null, type: type || null, group, bundle };
+    const r = await tab.quietly(() => session.rpc.call('assets.refs', params));
+    return r ? new Set(r.refs) : null;
+  }
+
+  async function selectAll() {
+    const refs = await allRefs();
+    if (!refs) return;
+    matching = refs;
+    checked = [...new Set([...checked, ...refs])];
+  }
+
+  async function exportRefs(refs: string[]) {
+    const r = await session.runJob('assets.export', { refs }, 'Export assets', tab);
+    if (!r) return;
+    const notes = r.notes?.length ? ` ${r.notes.join(' ')}` : '';
+    tab.info(`Exported ${r.exported} assets. Report: ${r.reportPath}${notes}`);
+    const first = r.failures[0];
+    if (r.failed > 0) tab.warn(`${r.failed} asset(s) could not be exported${first ? ` (first: ${first.name}: ${first.error})` : ''}; the report lists them.`);
+  }
+
+  async function exportGroup() {
+    if (!group) return;
+    const refs = await allRefs(group);
+    if (refs) await exportRefs([...refs]);
   }
 
   const queryLater = debounce(() => {
@@ -70,14 +106,6 @@
     void query();
   }
 
-  async function exportChecked() {
-    const r = await session.runJob('assets.export', { refs: checked }, 'Export assets', tab);
-    if (!r) return;
-    const notes = r.notes?.length ? ` ${r.notes.join(' ')}` : '';
-    tab.info(`Exported ${r.exported} assets. Report: ${r.reportPath}${notes}`);
-    const first = r.failures[0];
-    if (r.failed > 0) tab.warn(`${r.failed} asset(s) could not be exported${first ? ` (first: ${first.name}: ${first.error})` : ''}; the report lists them.`);
-  }
 </script>
 
 <div class="assets">
@@ -122,7 +150,10 @@
           {#each summary?.types ?? [] as t (t.name)}<option value={t.name}>{t.name} ({t.count})</option>{/each}
         </select>
       </label>
-      <button class="primary" disabled={checked.length === 0 || session.busy} onclick={exportChecked}>Export selected ({checked.length})</button>
+      <button onclick={selectAll} disabled={!result?.total}>Select all</button>
+      <button onclick={() => (checked = [])} disabled={checked.length === 0}>Clear</button>
+      <button disabled={!group || session.busy} title={group ? `Export every asset in ${groupLabel(group)}` : 'Pick a group on the left first'} onclick={exportGroup}>Export group</button>
+      <button class="primary" disabled={shown.length === 0 || session.busy} onclick={() => exportRefs(shown)}>Export selected ({shown.length})</button>
     </div>
     {#if summary?.newBundles}
       <p class="warn">{summary.newBundles} bundles were downloaded since the last index (DLC?). Run <strong>Index assets</strong> on the Workspace tab to include them.</p>

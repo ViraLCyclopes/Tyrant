@@ -25,6 +25,7 @@ export interface AssetDetails {
   byteSize: number;
   references: AssetReferenceRow[];
   fields: unknown;
+  referencesCapped?: boolean;
 }
 
 export interface AssetExportFailure {
@@ -80,6 +81,7 @@ export interface AssetPreview {
   message?: string | null;
   materials?: PreviewMaterial[] | null;
   skins?: PreviewSkin[] | null;
+  textures?: string[] | null;
 }
 
 export interface AssetRefParams {
@@ -92,6 +94,17 @@ export interface AssetReferenceRow {
   type: string | null;
   name: string | null;
   external: string | null;
+}
+
+export interface AssetRefsParams {
+  filter?: string | null;
+  type?: string | null;
+  group?: string | null;
+  bundle?: string | null;
+}
+
+export interface AssetRefsResult {
+  refs: string[];
 }
 
 export interface AssetRow {
@@ -659,6 +672,7 @@ export interface RpcMethods {
   "assets.index": { params: void; result: JobStarted };
   "assets.list": { params: AssetListParams; result: AssetListResult };
   "assets.preview": { params: AssetRefParams; result: AssetPreview };
+  "assets.refs": { params: AssetRefsParams; result: AssetRefsResult };
   "assets.summary": { params: void; result: AssetsSummary };
   "data.compare": { params: DataCompareParams; result: DataCompareResult };
   "data.export": { params: DataExportParams; result: DataExportResult };

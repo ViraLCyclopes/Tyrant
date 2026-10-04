@@ -45,6 +45,23 @@ public class AssetPreviewTests
     }
 
     [Fact]
+    public async Task A_model_preview_whose_texture_was_deleted_is_made_again()
+    {
+        using var game = new FakeGame();
+        var (h, _, reader) = await Opened(game);
+        reader.ModelTextureFiles = ["T_Stego_D.png"];
+        var first = await h.Call("assets.preview", new { @ref = StegoPrefab.Ref });
+        var png = Path.Combine(Path.GetDirectoryName(first.GetProperty("files")[0].GetString()!)!, "textures", "T_Stego_D.png");
+        Assert.True(File.Exists(png));
+
+        File.Delete(png);
+        await h.Call("assets.preview", new { @ref = StegoPrefab.Ref });
+
+        Assert.Equal(2, reader.Models);
+        Assert.True(File.Exists(png));
+    }
+
+    [Fact]
     public async Task Model_preview_for_a_prefab_lists_its_glb_files()
     {
         using var game = new FakeGame();
