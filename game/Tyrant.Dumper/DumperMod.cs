@@ -112,6 +112,21 @@ namespace Tyrant.Dumper
             Environment.Exit(0);
         }
 
+        /// <summary>data/audio/events.json for the sound pickers; a failure is logged and never fails the dump.</summary>
+        private void WriteAudioEvents(string outputDir)
+        {
+            try
+            {
+                var events = AudioEventDump.Collect();
+                AudioEventList.Write(outputDir, events);
+                LoggerInstance.Msg("Audio events listed: " + events.Count + ".");
+            }
+            catch (Exception ex)
+            {
+                LoggerInstance.Warning("Could not list the game's audio events: " + ex.Message);
+            }
+        }
+
         private void Finish(DumpRequest request, string requestPath, DumpResult result, List<LanguageTable> languages)
         {
             try
@@ -125,6 +140,7 @@ namespace Tyrant.Dumper
                 };
                 DumpWriter.Write(request.outputDir, result, languages, manifest);
                 LoggerInstance.Msg("Dump written: " + result.Objects.Count + " objects, " + result.Errors.Count + " errors.");
+                WriteAudioEvents(request.outputDir);
             }
             catch (Exception ex)
             {

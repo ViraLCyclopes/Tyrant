@@ -12,6 +12,10 @@
     <PackageReference Include="UnityEngine.Modules" Version="2022.3.62" ExcludeAssets="runtime" PrivateAssets="all" />
   </ItemGroup>
   <ItemGroup>
+    <!-- FMOD's C functions, shared with the framework (the audio event list). -->
+    <Compile Include="..\Tyrant.Framework\FmodNative.cs" Link="FmodNative.cs" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\Tyrant.Dumper.Serialization\Tyrant.Dumper.Serialization.csproj" />
   </ItemGroup>
 </Project>

@@ -22,7 +22,7 @@ public class VersionAgreementTests
         var cargo = Regex.Match(File.ReadAllText(Path.Combine(root, "studio", "src-tauri", "Cargo.toml")), @"(?m)^version = ""([^""]+)""").Groups[1].Value;
         var props = XDocument.Load(Path.Combine(root, "Directory.Build.props")).Descendants("Version").First().Value;
 
-        Assert.Equal([package, package, package], new[] { tauri, cargo, props });
+        Assert.Equal(new[] { package, package, package }, new[] { tauri, cargo, props });
     }
 
     [Fact]
