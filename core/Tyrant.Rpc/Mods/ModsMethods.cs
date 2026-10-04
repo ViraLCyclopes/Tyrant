@@ -132,7 +132,8 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
             installed.Remove(id);
         }
         rows.AddRange(installed.Values.Select(m => new ModRow(m.Id, m.Name, m.Version, null, m.Replacements, m.Skins, "gameOnly", m.Enabled, m.Dir, m.Error)));
-        return new ModsListResult(rows, ModLoaderInstaller.HasFramework(install));
+        return new ModsListResult(rows, ModLoaderInstaller.HasFramework(install),
+            ModLoaderInstaller.FrameworkStatus(install, Options.DumperDir) == FrameworkState.Outdated);
     }
 
     private static string Wire(ModInstallState state) => state switch

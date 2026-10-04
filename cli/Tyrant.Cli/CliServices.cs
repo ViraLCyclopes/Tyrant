@@ -42,6 +42,9 @@ internal static class CliServices
     /// <summary>Reads the game's bundles (tests set a fake).</summary>
     public static IAssetReader AssetReader { get; set; } = new BundleAssetReader();
 
+    /// <summary>Tyrant's game mods (dumper and framework) shipped next to the CLI.</summary>
+    public static string GameModsDir => Path.Combine(AppContext.BaseDirectory, "dumper");
+
     public static void PrintError(TyrantException ex) => Console.Error.WriteLine($"error {ex.Code.ToWire()}: {ex.Message}{FixHint(ex.Fix)}");
 
     internal static string FixHint(FixAction fix) => fix switch

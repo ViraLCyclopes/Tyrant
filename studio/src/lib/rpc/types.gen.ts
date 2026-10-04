@@ -637,6 +637,7 @@ export interface ModThumbnailResult {
 export interface ModsListResult {
   mods: ModRow[];
   frameworkInstalled: boolean;
+  frameworkOutdated?: boolean;
 }
 
 export interface OrphanSkinRow {
@@ -759,6 +760,9 @@ export interface WorkspaceStatus {
   hasAssetIndex: boolean;
   hasSource: boolean;
   framework?: FrameworkState;
+  frameworkInGame?: string | null;
+  frameworkBundled?: string;
+  loaderInGame?: string | null;
 }
 
 export interface RpcMethods {

@@ -27,7 +27,7 @@ public sealed class DumpInstallCommand : Command<DumpInstallCommand.Settings>
             zip = ModLoaderInstaller.DownloadAsync(http, Path.Combine(ws.CacheDir, "downloads"), CancellationToken.None).GetAwaiter().GetResult();
         }
 
-        var record = installer.Install(install, zip, Path.Combine(AppContext.BaseDirectory, "dumper"));
+        var record = installer.Install(install, zip, CliServices.GameModsDir);
         Console.WriteLine(ModLoaderInstaller.InstallSummary(before, record));
         Console.WriteLine("Normal play is unaffected: the dumper does nothing unless 'tyrant dump run' asks it to. Undo with 'tyrant dump uninstall'.");
         return ExitCodes.Ok;

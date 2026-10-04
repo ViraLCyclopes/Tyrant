@@ -71,6 +71,15 @@ public static class CliApp
                 dump.AddCommand<DumpUninstallCommand>("uninstall")
                     .WithDescription("Remove exactly what 'tyrant dump install' added.");
             });
+            config.AddBranch("game", game =>
+            {
+                game.SetDescription("Tyrant in the game: MelonLoader and Tyrant's framework (the Workspace tab's 'Tyrant in the game').");
+                game.AddCommand<GameStatusCommand>("status").WithDescription("Show the framework version in the game and in this Tyrant.");
+                game.AddCommand<DumpInstallCommand>("install").WithDescription("Install MelonLoader (if needed) and Tyrant's framework and dumper into the game.");
+                game.AddCommand<DumpInstallCommand>("update").WithDescription("Update Tyrant's framework and dumper in the game to this Tyrant's.");
+                game.AddCommand<DumpUninstallCommand>("uninstall").WithDescription("Remove Tyrant (and MelonLoader, if Tyrant installed it) from the game.");
+            });
+
             config.AddBranch("mod", mod =>
             {
                 mod.SetDescription("Make, check and install mods: texture replacements and new skins.");

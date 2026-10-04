@@ -16,7 +16,7 @@ const asset: AssetRow = {
 const existing = { id: 'red-spot', name: 'Red spot', version: '1.0.0', author: null, replacements: 0, skins: 0, state: 'notInstalled', enabled: null, dir: 'D:\\ws\\mods\\red-spot', error: null };
 
 function setup(mods: (typeof existing)[]) {
-  const list = { mods, frameworkInstalled: false };
+  const list = { mods, frameworkInstalled: false, frameworkOutdated: false };
   const rpc = new FakeRpc().on('mods.list', () => list).on('mods.create', () => list).on('mods.replace', () => list);
   const platform = new FakePlatform();
   return { rpc, platform, session: new Session(rpc, platform, memoryStore()) };
@@ -62,10 +62,10 @@ describe('ReplaceInMod', () => {
     const created = { ...existing, id: 'blue-stripes', name: 'blue-stripes' };
     let mods: (typeof existing)[] = [];
     const rpc = new FakeRpc()
-      .on('mods.list', () => ({ mods, frameworkInstalled: false }))
+      .on('mods.list', () => ({ mods, frameworkInstalled: false, frameworkOutdated: false }))
       .on('mods.create', () => {
         mods = [created];
-        return { mods, frameworkInstalled: false };
+        return { mods, frameworkInstalled: false, frameworkOutdated: false };
       })
       .on('mods.replace', () => {
         throw new Error('No PNG was given and the texture has not been exported yet.');

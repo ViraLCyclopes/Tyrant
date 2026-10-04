@@ -77,6 +77,20 @@ public class ModsMethodsTests
     }
 
     [Fact]
+    public async Task The_mods_list_says_when_the_games_framework_is_out_of_date()
+    {
+        using var game = new FakeGame();
+        var (h, _) = await Opened(game, withLoaderZip: true);
+        await h.RunJob("dump.install");
+        Assert.False((await h.Call("mods.list")).GetProperty("frameworkOutdated").GetBoolean());
+        File.WriteAllText(Path.Combine(game.Root, "Mods", "Tyrant.Framework.dll"), "an older framework");
+
+        var list = await h.Call("mods.list");
+
+        Assert.True(list.GetProperty("frameworkOutdated").GetBoolean());
+    }
+
+    [Fact]
     public async Task A_mod_with_errors_is_not_installed()
     {
         using var game = new FakeGame();

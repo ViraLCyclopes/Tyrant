@@ -143,6 +143,19 @@ public class StudioMethodsTests
     }
 
     [Fact]
+    public async Task Status_reports_the_framework_versions()
+    {
+        using var game = new FakeGame();
+        var (harness, _) = await Opened(game, TestStudio.Options(null, TestStudio.FakeMelonLoaderZip()));
+        await harness.RunJob("dump.install");
+
+        var status = await harness.Call("workspace.status");
+
+        Assert.Equal(Tyrant.Framework.Core.FrameworkInfo.Version, status.GetProperty("frameworkBundled").GetString());
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, status.GetProperty("frameworkInGame").ValueKind); // the fake DLL has no version
+    }
+
+    [Fact]
     public async Task A_second_job_or_an_uninstall_while_a_job_runs_is_refused()
     {
         using var game = new FakeGame();

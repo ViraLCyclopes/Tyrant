@@ -93,7 +93,7 @@ describe('WorkspaceView', () => {
   it('uninstall asks first, naming installed mods, and does nothing when declined', async () => {
     const { rpc, platform, session } = setup();
     const mod = (id: string, state: string) => ({ id, name: id, version: '1.0.0', author: null, replacements: 1, skins: 0, state, enabled: true, dir: null, error: null });
-    rpc.on('mods.list', () => ({ mods: [mod('red-spot', 'installed'), mod('hand-made', 'gameOnly'), mod('draft', 'notInstalled')], frameworkInstalled: true }));
+    rpc.on('mods.list', () => ({ mods: [mod('red-spot', 'installed'), mod('hand-made', 'gameOnly'), mod('draft', 'notInstalled')], frameworkInstalled: true, frameworkOutdated: false }));
     session.workspace = workspaceStatus({ dumper: 'installed' });
     platform.confirmAnswer = false;
     renderWith(WorkspaceView, session);
@@ -108,7 +108,7 @@ describe('WorkspaceView', () => {
 
   it('uninstall goes ahead once confirmed', async () => {
     const { rpc, session } = setup();
-    rpc.on('mods.list', () => ({ mods: [], frameworkInstalled: true }));
+    rpc.on('mods.list', () => ({ mods: [], frameworkInstalled: true, frameworkOutdated: false }));
     rpc.on('dump.uninstall', () => ({ removedLoader: true, message: 'Removed MelonLoader, Tyrant and its installed mods; the game folder is back to vanilla.' }));
     rpc.on('workspace.status', () => workspaceStatus({ dumper: 'notInstalled' }));
     session.workspace = workspaceStatus({ dumper: 'installed' });

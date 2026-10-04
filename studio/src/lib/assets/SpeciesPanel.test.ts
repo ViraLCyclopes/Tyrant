@@ -76,7 +76,7 @@ describe('SpeciesPanel', () => {
 
   it('opens Add a skin for a species', async () => {
     const { rpc, session } = setup();
-    rpc.on('mods.species', () => ({ hasDump: false, species: [] })).on('mods.list', () => ({ mods: [], frameworkInstalled: false }));
+    rpc.on('mods.species', () => ({ hasDump: false, species: [] })).on('mods.list', () => ({ mods: [], frameworkInstalled: false, frameworkOutdated: false }));
     renderWith(SpeciesPanel, session);
 
     await fireEvent.click(await screen.findByRole('button', { name: 'Add a skin to Carcharodontosaurus' }));

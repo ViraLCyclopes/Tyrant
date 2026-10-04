@@ -6,7 +6,7 @@ namespace Tyrant.Rpc.Mods;
 /// </summary>
 public sealed record ModRow(string Id, string Name, string Version, string? Author, int Replacements, int Skins, string State, bool? Enabled, string? Dir, string? Error);
 
-public sealed record ModsListResult(IReadOnlyList<ModRow> Mods, bool FrameworkInstalled);
+public sealed record ModsListResult(IReadOnlyList<ModRow> Mods, bool FrameworkInstalled, bool FrameworkOutdated = false);
 
 public sealed record ModCreateParams(string Id, string? Name = null, string? Author = null);
 

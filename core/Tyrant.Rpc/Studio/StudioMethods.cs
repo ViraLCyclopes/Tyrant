@@ -192,7 +192,10 @@ public sealed class StudioMethods(StudioSession session, JobManager jobs)
             File.Exists(Path.Combine(ws.DataDir, "manifest.json")),
             File.Exists(AssetIndex.PathIn(ws)),
             Directory.Exists(ws.SourceDir) && Directory.EnumerateDirectories(ws.SourceDir).Any(),
-            ModLoaderInstaller.FrameworkStatus(install, componentDir));
+            ModLoaderInstaller.FrameworkStatus(install, componentDir),
+            ModLoaderInstaller.InstalledFrameworkVersion(install),
+            Tyrant.Framework.Core.FrameworkInfo.Version,
+            ModLoaderInstaller.LoaderVersionInGame(install));
     }
 
     private GameInstall Locate(string? gamePath) => gamePath is null ? Options.Locator.Detect() : Options.Locator.FromPath(gamePath);

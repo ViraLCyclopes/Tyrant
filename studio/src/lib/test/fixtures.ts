@@ -21,6 +21,9 @@ export function workspaceStatus(overrides: Partial<WorkspaceStatus> = {}): Works
     hasAssetIndex: false,
     hasSource: false,
     framework: 'missing',
+    frameworkInGame: null,
+    frameworkBundled: '0.3.0',
+    loaderInGame: null,
     ...overrides,
   };
 }

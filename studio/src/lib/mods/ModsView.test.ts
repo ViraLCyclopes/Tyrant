@@ -34,7 +34,7 @@ describe('ModsView', () => {
 
   it('creates a mod', async () => {
     const { rpc, session } = setup([]);
-    rpc.on('mods.create', () => ({ mods: [row({ id: 'blue-stripes', name: 'blue-stripes' })], frameworkInstalled: false }));
+    rpc.on('mods.create', () => ({ mods: [row({ id: 'blue-stripes', name: 'blue-stripes' })], frameworkInstalled: false, frameworkOutdated: false }));
     renderWith(ModsView, session);
 
     await fireEvent.input(await screen.findByRole('textbox', { name: 'Mod id' }), { target: { value: 'blue-stripes' } });
@@ -79,7 +79,7 @@ describe('ModsView', () => {
 
   it('turns an installed mod off', async () => {
     const { rpc, session } = setup([row({ state: 'installed', enabled: true })], true);
-    rpc.on('mods.enable', () => ({ mods: [row({ state: 'installed', enabled: false })], frameworkInstalled: true }));
+    rpc.on('mods.enable', () => ({ mods: [row({ state: 'installed', enabled: false })], frameworkInstalled: true, frameworkOutdated: false }));
     renderWith(ModsView, session);
 
     await fireEvent.click(await screen.findByRole('checkbox', { name: 'Red spot on' }));
@@ -137,7 +137,7 @@ describe('ModsView', () => {
 
   it('a new mod opens in its editor tab', async () => {
     const { rpc, session } = setup([]);
-    rpc.on('mods.create', (p) => ({ mods: [row({ id: p.id, name: p.name ?? p.id })], frameworkInstalled: false }));
+    rpc.on('mods.create', (p) => ({ mods: [row({ id: p.id, name: p.name ?? p.id })], frameworkInstalled: false, frameworkOutdated: false }));
     const opened: unknown[] = [];
     const tab = new Tab('tab-test', session.log, { retitle: () => {}, openTool: (id, options) => (opened.push([id, options]), 'tab-2') });
     renderWith(ModsView, session, {}, tab);

@@ -14,7 +14,7 @@ const carch = {
 const modRow = { id: 'red-spot', name: 'Red spot', version: '1.0.0', author: null, replacements: 0, skins: 0, state: 'notInstalled', enabled: null, dir: null, error: null };
 
 function setup(hasDump = true, mods = [modRow]) {
-  const list = { mods, frameworkInstalled: false };
+  const list = { mods, frameworkInstalled: false, frameworkOutdated: false };
   const rpc = new FakeRpc()
     .on('mods.species', () => ({ hasDump, species: hasDump ? [carch] : [] }))
     .on('mods.list', () => list)
@@ -73,7 +73,7 @@ describe('AddSkin', () => {
   it('turns off a sex the chosen base skin does not have', async () => {
     const rpc = new FakeRpc()
       .on('mods.species', () => ({ hasDump: true, species: [{ ...carch, skins: [{ index: 0, name: 'Base', male: true, female: false }] }] }))
-      .on('mods.list', () => ({ mods: [modRow], frameworkInstalled: false }));
+      .on('mods.list', () => ({ mods: [modRow], frameworkInstalled: false, frameworkOutdated: false }));
     const session = new Session(rpc, new FakePlatform(), memoryStore());
     renderWith(AddSkin, session, { speciesKey: 'carcharodontosaurus' });
 
