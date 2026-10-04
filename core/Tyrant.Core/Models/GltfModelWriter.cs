@@ -28,17 +28,31 @@ public static class GltfModelWriter
     /// <param name="materials">One per sub-mesh in Unity's order; sub-meshes beyond the list get a plain material.</param>
     public static void WriteGlb(PrefabModel model, RendererModel renderer, string path, IReadOnlyList<GltfMaterial>? materials = null)
     {
+        var nodes = new Dictionary<SkeletonNode, NodeBuilder>();
+        var scene = new SceneBuilder();
+        scene.AddNode(BuildNodes(model.Root, null, nodes));
+        AddRenderer(scene, nodes, renderer, materials);
+        Save(scene, path);
+    }
+
+    /// <summary>Every renderer of a prefab in one .glb (tests: a file with several meshes, as Blender writes when objects are not joined).</summary>
+    internal static void WriteGlbs(PrefabModel model, string path)
+    {
+        var nodes = new Dictionary<SkeletonNode, NodeBuilder>();
+        var scene = new SceneBuilder();
+        scene.AddNode(BuildNodes(model.Root, null, nodes));
+        foreach (var renderer in model.Renderers) AddRenderer(scene, nodes, renderer, null);
+        Save(scene, path);
+    }
+
+    private static void AddRenderer(SceneBuilder scene, Dictionary<SkeletonNode, NodeBuilder> nodes, RendererModel renderer, IReadOnlyList<GltfMaterial>? materials)
+    {
         var mesh = renderer.Mesh;
         if (mesh.Normals.Length != mesh.VertexCount)
             throw new NotSupportedException($"Mesh '{mesh.Name}' has no normals, which is not supported yet.");
         foreach (var (label, count) in new[] { ("UVs", mesh.Uv0.Length), ("colours", mesh.Colors.Length), ("skin weights", mesh.Skin.Length) })
             if (count != 0 && count != mesh.VertexCount)
                 throw new InvalidDataException($"Mesh '{mesh.Name}' has {count} {label} for {mesh.VertexCount} vertices.");
-
-        var nodes = new Dictionary<SkeletonNode, NodeBuilder>();
-        var root = BuildNodes(model.Root, null, nodes);
-        var scene = new SceneBuilder();
-        scene.AddNode(root);
 
         var fallback = new GltfMaterial(mesh.Name.Length > 0 ? mesh.Name : renderer.Name);
         var built = new Dictionary<GltfMaterial, MaterialBuilder>();
@@ -71,7 +85,10 @@ public static class GltfModelWriter
             AddMorphTargets(builder, mesh);
             scene.AddRigidMesh(builder, nodes[renderer.Owner]);
         }
+    }
 
+    private static void Save(SceneBuilder scene, string path)
+    {
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
         // Some prefabs (e.g. Titanoboa) reuse a transform name; glTF allows it and renaming would break bone targets.
         var settings = SceneBuilderSchema2Settings.Default;
