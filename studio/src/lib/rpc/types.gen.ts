@@ -361,10 +361,34 @@ export interface ModCheckReport {
   missingCutouts?: string[] | null;
 }
 
+export interface ModColorPreviewParams {
+  id: string;
+  skin: string;
+  colors?: string | null;
+  variant?: string;
+  sex?: string;
+  seed?: number;
+  count?: number;
+  size?: number;
+}
+
 export interface ModCreateParams {
   id: string;
   name?: string | null;
   author?: string | null;
+}
+
+export interface ModDetail {
+  id: string;
+  name: string;
+  version: string;
+  author: string | null;
+  description: string | null;
+  dir: string;
+  revision: string;
+  manifestJson: string;
+  replace: ModReplacementDto[];
+  skins: ModSkinDto[];
 }
 
 export interface ModEnableParams {
@@ -385,10 +409,41 @@ export interface ModInstallResult {
   warnings: string[];
 }
 
+export interface ModPreviewFiles {
+  files: string[];
+}
+
+export interface ModRemoveReplacementParams {
+  id: string;
+  revision: string;
+  texture: string;
+}
+
+export interface ModRemoveSkinParams {
+  id: string;
+  revision: string;
+  skin: string;
+  deleteFiles?: boolean;
+}
+
+export interface ModRenameSkinParams {
+  id: string;
+  revision: string;
+  skin: string;
+  name: string;
+}
+
 export interface ModReplaceParams {
   id: string;
   texture: string;
   png?: string | null;
+}
+
+export interface ModReplacementDto {
+  texture: string;
+  key: string | null;
+  guid: string | null;
+  file: string;
 }
 
 export interface ModRestoreCutoutsResult {
@@ -409,9 +464,71 @@ export interface ModRow {
   error: string | null;
 }
 
+export interface ModSaveManifestParams {
+  id: string;
+  revision: string;
+  manifest: string;
+}
+
+export interface ModSetColorsParams {
+  id: string;
+  revision: string;
+  skin: string;
+  colors?: string | null;
+}
+
+export interface ModSetDetailsParams {
+  id: string;
+  revision: string;
+  name: string;
+  version: string;
+  author?: string | null;
+  description?: string | null;
+}
+
+export interface ModSetSkinFileParams {
+  id: string;
+  revision: string;
+  skin: string;
+  sex: string;
+  slot: string;
+  png?: string | null;
+}
+
+export interface ModSetThumbnailParams {
+  id: string;
+  revision: string;
+  skin: string;
+  png?: string | null;
+}
+
+export interface ModSkinDto {
+  id: string;
+  key: string;
+  species: string;
+  name: string;
+  base: string;
+  thumbnail: string | null;
+  male: Record<string, string> | null;
+  female: Record<string, string> | null;
+  colorsJson: string | null;
+  baseMaleSlots: string[] | null;
+  baseFemaleSlots: string[] | null;
+}
+
 export interface ModSpeciesResult {
   hasDump: boolean;
   species: SpeciesSkinsRow[];
+}
+
+export interface ModThumbnailParams {
+  id: string;
+  file: string;
+  size?: number;
+}
+
+export interface ModThumbnailResult {
+  file: string | null;
 }
 
 export interface ModsListResult {
@@ -560,16 +677,27 @@ export interface RpcMethods {
   "job.current": { params: void; result: JobCurrentResult };
   "mods.addSkin": { params: ModAddSkinParams; result: ModsListResult };
   "mods.check": { params: ModIdParams; result: ModCheckReport };
+  "mods.colorPreview": { params: ModColorPreviewParams; result: ModPreviewFiles };
   "mods.create": { params: ModCreateParams; result: ModsListResult };
   "mods.enable": { params: ModEnableParams; result: ModsListResult };
   "mods.forgetSkins": { params: ModForgetSkinsParams; result: SkinSlotsResult };
+  "mods.get": { params: ModIdParams; result: ModDetail };
   "mods.install": { params: ModIdParams; result: JobStarted };
   "mods.list": { params: void; result: ModsListResult };
   "mods.remove": { params: ModIdParams; result: ModsListResult };
+  "mods.removeReplacement": { params: ModRemoveReplacementParams; result: ModDetail };
+  "mods.removeSkin": { params: ModRemoveSkinParams; result: ModDetail };
+  "mods.renameSkin": { params: ModRenameSkinParams; result: ModDetail };
   "mods.replace": { params: ModReplaceParams; result: ModsListResult };
   "mods.restoreCutouts": { params: ModIdParams; result: ModRestoreCutoutsResult };
+  "mods.saveManifest": { params: ModSaveManifestParams; result: ModDetail };
+  "mods.setColors": { params: ModSetColorsParams; result: ModDetail };
+  "mods.setDetails": { params: ModSetDetailsParams; result: ModDetail };
+  "mods.setSkinFile": { params: ModSetSkinFileParams; result: ModDetail };
+  "mods.setThumbnail": { params: ModSetThumbnailParams; result: ModDetail };
   "mods.skinSlots": { params: void; result: SkinSlotsResult };
   "mods.species": { params: void; result: ModSpeciesResult };
+  "mods.thumbnail": { params: ModThumbnailParams; result: ModThumbnailResult };
   "species.list": { params: void; result: SpeciesListResult };
   "species.pack": { params: SpeciesPackParams; result: JobStarted };
   "workspace.create": { params: WorkspaceOpenParams; result: WorkspaceStatus };

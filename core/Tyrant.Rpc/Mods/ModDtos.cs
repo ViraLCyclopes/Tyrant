@@ -38,3 +38,41 @@ public sealed record OrphanSkinRow(string Species, string Key, int Number);
 public sealed record SkinSlotsResult(IReadOnlyList<OrphanSkinRow> Orphans);
 
 public sealed record ModForgetSkinsParams(IReadOnlyList<string> Keys);
+
+/// <summary>One added skin as the mod editor shows it. BaseMaleSlots / BaseFemaleSlots: the base skin's slots (null without a data dump).</summary>
+public sealed record ModSkinDto(string Id, string Key, string Species, string Name, string Base, string? Thumbnail,
+    IReadOnlyDictionary<string, string>? Male, IReadOnlyDictionary<string, string>? Female, string? ColorsJson,
+    IReadOnlyList<string>? BaseMaleSlots, IReadOnlyList<string>? BaseFemaleSlots);
+
+public sealed record ModReplacementDto(string Texture, string? Key, string? Guid, string File);
+
+/// <summary>A whole mod for the editor. Revision: SHA-256 of mod.json, sent back with every change; ManifestJson: the file itself (undo).</summary>
+public sealed record ModDetail(string Id, string Name, string Version, string? Author, string? Description, string Dir, string Revision,
+    string ManifestJson, IReadOnlyList<ModReplacementDto> Replace, IReadOnlyList<ModSkinDto> Skins);
+
+public sealed record ModSetDetailsParams(string Id, string Revision, string Name, string Version, string? Author = null, string? Description = null);
+
+public sealed record ModRenameSkinParams(string Id, string Revision, string Skin, string Name);
+
+public sealed record ModRemoveSkinParams(string Id, string Revision, string Skin, bool DeleteFiles = false);
+
+/// <summary>Colors: the skin's "colors" JSON, or null to remove them.</summary>
+public sealed record ModSetColorsParams(string Id, string Revision, string Skin, string? Colors = null);
+
+/// <summary>Png null: use the base skin's texture for that slot.</summary>
+public sealed record ModSetSkinFileParams(string Id, string Revision, string Skin, string Sex, string Slot, string? Png = null);
+
+public sealed record ModSetThumbnailParams(string Id, string Revision, string Skin, string? Png = null);
+
+public sealed record ModRemoveReplacementParams(string Id, string Revision, string Texture);
+
+public sealed record ModSaveManifestParams(string Id, string Revision, string Manifest);
+
+/// <summary>Variant: normal, albino, melanistic or leucistic. Colors null: the skin's saved colours.</summary>
+public sealed record ModColorPreviewParams(string Id, string Skin, string? Colors = null, string Variant = "normal", string Sex = "male", int Seed = 1, int Count = 6, int Size = 256);
+
+public sealed record ModPreviewFiles(IReadOnlyList<string> Files);
+
+public sealed record ModThumbnailParams(string Id, string File, int Size = 96);
+
+public sealed record ModThumbnailResult(string? File);

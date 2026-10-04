@@ -178,6 +178,99 @@ public sealed class ModsMethods(StudioSession session, JobManager jobs)
     private static SkinSlotsResult SlotsOf(GameInstall install) =>
         new(new SkinSlots().Orphans(install).Select(o => new OrphanSkinRow(o.Species, o.Key, o.Number)).ToList());
 
+    private ModImages Images(GameInstall install) => new(Cutouts.GamePixels(install, Options.AssetReader, onlyIfAlpha: false));
+
+    private static string PreviewsDir(Workspace ws, string kind) => Path.Combine(ws.Dir, "cache", "previews", kind);
+
+    [RpcMethod("mods.get")]
+    public ModDetail Get(ModIdParams p)
+    {
+        var (ws, _) = session.Current();
+        return DetailOf(ws, ModProject.Open(ws, p.Id));
+    }
+
+    [RpcMethod("mods.setDetails")]
+    public ModDetail SetDetails(ModSetDetailsParams p) => Edit(p.Id, p.Revision, mod => mod.SetDetails(p.Name, p.Version, p.Author, p.Description), "changed its details");
+
+    [RpcMethod("mods.renameSkin")]
+    public ModDetail RenameSkin(ModRenameSkinParams p) => Edit(p.Id, p.Revision, mod => mod.RenameSkin(p.Skin, p.Name), $"renamed skin '{p.Skin}' to '{p.Name}'");
+
+    [RpcMethod("mods.removeSkin")]
+    public ModDetail RemoveSkin(ModRemoveSkinParams p) =>
+        Edit(p.Id, p.Revision, mod => mod.RemoveSkin(p.Skin, p.DeleteFiles), $"removed skin '{p.Skin}'{(p.DeleteFiles ? " and its files" : "")}");
+
+    [RpcMethod("mods.setColors")]
+    public ModDetail SetColors(ModSetColorsParams p) => Edit(p.Id, p.Revision, mod => mod.SetColors(p.Skin, p.Colors), $"set the colours of '{p.Skin}'");
+
+    [RpcMethod("mods.setSkinFile")]
+    public ModDetail SetSkinFile(ModSetSkinFileParams p) =>
+        Edit(p.Id, p.Revision, mod => mod.SetSkinFile(p.Skin, p.Sex, p.Slot, p.Png),
+            p.Png is null ? $"'{p.Skin}' {p.Sex} {p.Slot} uses the base skin's texture" : $"'{p.Skin}' {p.Sex} {p.Slot} uses {p.Png}");
+
+    [RpcMethod("mods.setThumbnail")]
+    public ModDetail SetThumbnail(ModSetThumbnailParams p) => Edit(p.Id, p.Revision, mod => mod.SetThumbnail(p.Skin, p.Png), $"set the thumbnail of '{p.Skin}'");
+
+    [RpcMethod("mods.removeReplacement")]
+    public ModDetail RemoveReplacement(ModRemoveReplacementParams p) => Edit(p.Id, p.Revision, mod => mod.RemoveReplacement(p.Texture), $"no longer replaces {p.Texture}");
+
+    [RpcMethod("mods.saveManifest")]
+    public ModDetail SaveManifest(ModSaveManifestParams p)
+    {
+        var (ws, _) = session.Current();
+        var mod = ModProject.SaveManifest(ws, p.Id, p.Manifest, p.Revision);
+        session.Log($"'{p.Id}': mod.json put back to an earlier version (undo/redo).");
+        return DetailOf(ws, mod);
+    }
+
+    [RpcMethod("mods.colorPreview")]
+    public ModPreviewFiles ColorPreview(ModColorPreviewParams p)
+    {
+        var (ws, install) = session.Current();
+        var mod = ModProject.Open(ws, p.Id);
+        return new ModPreviewFiles(Images(install).ColorPreview(mod, p.Skin, p.Colors, p.Variant, p.Sex, p.Seed, p.Count, Math.Clamp(p.Size, 16, 512),
+            PreviewsDir(ws, "colors"), TryIndex(ws), TrySpecies(ws)));
+    }
+
+    [RpcMethod("mods.thumbnail")]
+    public ModThumbnailResult Thumbnail(ModThumbnailParams p)
+    {
+        var (ws, install) = session.Current();
+        return new ModThumbnailResult(Images(install).Thumbnail(ModProject.Open(ws, p.Id), p.File, Math.Clamp(p.Size, 16, 512), PreviewsDir(ws, "mods")));
+    }
+
+    private ModDetail Edit(string id, string revision, Action<ModProject> change, string what)
+    {
+        var (ws, _) = session.Current();
+        var mod = ModProject.Open(ws, id, revision);
+        change(mod);
+        session.Log($"'{id}' {what}.");
+        return DetailOf(ws, mod);
+    }
+
+    private static ModDetail DetailOf(Workspace ws, ModProject mod)
+    {
+        var species = mod.Manifest.Skins.Count > 0 ? TrySpecies(ws) : null;
+        var m = mod.Manifest;
+        return new ModDetail(m.Id, m.Name, m.Version, m.Author, m.Description, mod.Dir, mod.Revision(),
+            File.ReadAllText(Path.Combine(mod.Dir, Tyrant.Framework.Core.ModManifest.FileName)),
+            m.Replace.Select(r => new ModReplacementDto(r.Texture, r.Key, r.Guid, r.File)).ToList(),
+            m.Skins.Select(s =>
+            {
+                var based = BaseSkin(species, s);
+                return new ModSkinDto(s.Id, s.Key(m.Id), s.Species, s.Name, s.Base, s.Thumbnail, s.Male, s.Female,
+                    s.Colors is null ? null : Tyrant.Framework.Core.Json.Write(s.Colors.ToJson()),
+                    based?.Male.Keys.ToList(), based?.Female.Keys.ToList());
+            }).ToList());
+    }
+
+    private static VanillaSkin? BaseSkin(IReadOnlyList<SpeciesSkins>? species, Tyrant.Framework.Core.SkinEntry skin)
+    {
+        var target = species?.FirstOrDefault(s => s.SpeciesId == skin.Species);
+        return target is null ? null
+            : int.TryParse(skin.Base, out var number) ? target.Skins.FirstOrDefault(v => v.Index == number)
+            : target.Skins.FirstOrDefault(v => string.Equals(v.Name, skin.Base, StringComparison.OrdinalIgnoreCase));
+    }
+
     private static IReadOnlyList<SpeciesSkins>? TrySpecies(Workspace ws)
     {
         try
