@@ -25,6 +25,8 @@
 
   const pages = $derived(result ? Math.max(1, Math.ceil(result.total / result.pageSize)) : 1);
   const lastPart = (name: string) => name.split('/').at(-1) ?? name;
+  /** A built-in file group ("@data/sharedassets0.assets") reads as "Built-in · sharedassets0". */
+  const groupLabel = (name: string) => (name.startsWith('@data/') ? `Built-in · ${name.slice(6).replace(/\.assets$/, '')}` : lastPart(name));
 
   onMount(async () => {
     summary = await tab.quietly(() => session.rpc.call('assets.summary'));
@@ -89,7 +91,7 @@
           {expanded === g.name ? '▾' : '▸'}
         </button>
         <button class="node" class:active={group === g.name && !bundle} title={g.name} onclick={() => pick(g.name, null)}>
-          {lastPart(g.name)} <span class="count">{g.count}</span>
+          {groupLabel(g.name)} <span class="count">{g.count}</span>
         </button>
       </div>
       {#if expanded === g.name}

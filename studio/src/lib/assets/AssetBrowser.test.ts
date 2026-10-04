@@ -132,4 +132,16 @@ describe('AssetBrowser', () => {
 
     expect(await screen.findByText(/2 bundles were downloaded since the last index/)).toBeInTheDocument();
   });
+
+  it('shows a built-in file group by a readable name', async () => {
+    const { rpc, session } = setup();
+    rpc.on('assets.summary', () => ({
+      assets: 6, bundles: 4, warnings: [], failures: 0, missingBundles: 0, stale: false,
+      groups: [{ name: STEGO, count: 3 }, { name: '@data/sharedassets0.assets', count: 1 }],
+      types: [{ name: 'Texture2D', count: 4 }],
+    }));
+    renderWith(AssetBrowser, session);
+
+    expect(await screen.findByRole('button', { name: /Built-in · sharedassets0/ })).toBeInTheDocument();
+  });
 });

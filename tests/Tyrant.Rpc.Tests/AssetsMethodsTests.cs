@@ -30,6 +30,20 @@ public class AssetsMethodsTests
     }
 
     [Fact]
+    public async Task Built_in_files_are_groups_of_their_own()
+    {
+        using var game = new FakeGame();
+        var fence = new AssetRecord("@data/sharedassets0.assets", 11, "Texture2D", "T_Fence_Adobe_D", null, null, null);
+        var (h, _, _) = await Opened(game, [.. All, fence]);
+
+        var summary = await h.Call("assets.summary");
+        var listed = await h.Call("assets.list", new { group = "@data/sharedassets0.assets", page = 0, pageSize = 50 });
+
+        Assert.Equal(1, CountOf(summary.GetProperty("groups"), "@data/sharedassets0.assets"));
+        Assert.Equal("T_Fence_Adobe_D", listed.GetProperty("rows")[0].GetProperty("name").GetString());
+    }
+
+    [Fact]
     public async Task Summary_flags_an_index_from_an_older_build()
     {
         using var game = new FakeGame();

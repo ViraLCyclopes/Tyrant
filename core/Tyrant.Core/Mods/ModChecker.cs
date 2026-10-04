@@ -57,6 +57,9 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
                     errors.Add($"{entry.Texture} is not in the asset index; check the name (the game would never use this file).");
                     continue;
                 }
+                var copies = index.Assets.Where(a => a.Type == "Texture2D" && string.Equals(a.Name, entry.Texture, StringComparison.OrdinalIgnoreCase)).ToList();
+                if (copies.Count > 1)
+                    warnings.Add($"{entry.Texture}: {copies.Count} textures have this name ({string.Join(", ", copies.Select(c => c.DataFile ?? c.Bundle).Distinct(StringComparer.OrdinalIgnoreCase))}); the game replaces all of them.");
                 if (sizeOf(target) is { } original && (original.Width, original.Height) != (image.Width, image.Height))
                     warnings.Add($"{entry.Texture}: {entry.File} is {image.Width}x{image.Height} but the original is {original.Width}x{original.Height}; it will look stretched or blurry.");
             }

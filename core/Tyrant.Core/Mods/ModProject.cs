@@ -117,14 +117,11 @@ public sealed partial class ModProject
         }
         catch (TyrantException ex) when (ex.Code == TyrantErrorCode.AssetNotFound)
         {
-            var byName = index.Assets.Where(a => a.Type == "Texture2D" && string.Equals(a.Name, key, StringComparison.OrdinalIgnoreCase)).Take(2).ToList();
-            return byName.Count switch
-            {
-                1 => byName[0],
-                0 => throw new TyrantException(TyrantErrorCode.TargetNotFound,
-                    $"No texture called '{key}' is in the asset index. Copy its name, Addressables path or GUID from the Assets tab."),
-                _ => throw new TyrantException(TyrantErrorCode.AssetAmbiguous, $"Several textures are called '{key}'; use its Addressables path or GUID instead."),
-            };
+            // Several textures can share a name (copies in built-in files and bundles): the game replaces all of them by name,
+            // so any one of them stands for the rest; Check says how many there are.
+            return index.Assets.FirstOrDefault(a => a.Type == "Texture2D" && string.Equals(a.Name, key, StringComparison.OrdinalIgnoreCase))
+                ?? throw new TyrantException(TyrantErrorCode.TargetNotFound,
+                    $"No texture called '{key}' is in the asset index. Copy its name, Addressables path or GUID from the Assets tab.");
         }
     }
 
