@@ -8,16 +8,15 @@ using Tyrant.Core.Workspaces;
 
 namespace Tyrant.Core.Assets;
 
-/// <summary>Scans every Addressables bundle into an <see cref="AssetIndex"/>.</summary>
+/// <summary>Scans every Addressables bundle and the game's built-in files into an <see cref="AssetIndex"/>.</summary>
 public sealed class AssetIndexer
 {
     public AssetIndex Build(GameInstall install, IProgress<JobProgress>? progress, CancellationToken ct)
     {
         var aaDir = AssetSession.AaDirOf(install);
         var catalogPath = Path.Combine(aaDir, "catalog.json");
-        var bundles = Directory.Exists(aaDir)
-            ? Directory.GetFiles(aaDir, "*.bundle", SearchOption.AllDirectories).Order(StringComparer.OrdinalIgnoreCase).ToList()
-            : [];
+        var sources = AssetSources.Discover(install);
+        var bundles = sources.Where(s => !s.BuiltIn).ToList();
         var warnings = new List<string>();
         AddressablesCatalog? catalog = null;
         if (File.Exists(catalogPath))
@@ -40,19 +39,19 @@ public sealed class AssetIndexer
         var archives = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var failures = new List<IndexFailure>();
         using var session = new AssetSession(install);
-        for (var i = 0; i < bundles.Count; i++)
+        for (var i = 0; i < sources.Count; i++)
         {
             ct.ThrowIfCancellationRequested();
-            var relative = Path.GetRelativePath(aaDir, bundles[i]).Replace('\\', '/');
-            if (i % 100 == 0) progress?.Report(new JobProgress((double)i / bundles.Count, $"Indexing {relative}"));
+            var source = sources[i];
+            if (i % 100 == 0 || source.BuiltIn) progress?.Report(new JobProgress((double)i / sources.Count, $"Indexing {source.Key}"));
             try
             {
-                records.AddRange(ScanBundle(session.Manager, bundles[i], relative, archives));
+                records.AddRange(source.BuiltIn ? ScanBuiltIn(session, source, archives) : ScanBundle(session.Manager, source.FullPath, source.Key, archives));
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                // AssetsTools.NET throws plain Exceptions for unsupported data; one bad bundle must not stop the index.
-                failures.Add(new IndexFailure(relative, ex.Message));
+                // AssetsTools.NET throws plain Exceptions for unsupported data; one bad file must not stop the index.
+                failures.Add(new IndexFailure(source.Key, ex.Message));
             }
             finally
             {
@@ -114,6 +113,33 @@ public sealed class AssetIndexer
                     null,
                     type == AssetClassID.MonoBehaviour ? ScriptClass(manager, file, baseField) : null));
             }
+        }
+        return result;
+    }
+
+    /// <summary>One of the game's built-in files (no type trees: read with the class database). Other files reference it by name.</summary>
+    private static List<AssetRecord> ScanBuiltIn(AssetSession session, AssetSource source, Dictionary<string, string> archives)
+    {
+        var manager = session.Manager;
+        var file = manager.LoadAssetsFile(source.FullPath, false);
+        session.UseClassDatabase(file);
+        archives.TryAdd(Path.GetFileName(source.FullPath), source.Key);
+        var result = new List<AssetRecord>();
+        foreach (var info in file.file.AssetInfos)
+        {
+            var type = (AssetClassID)info.TypeId;
+            AssetTypeValueField? baseField = null;
+            try
+            {
+                baseField = manager.GetBaseField(file, info);
+            }
+            catch (Exception)
+            {
+                // a type the class database does not describe still gets a record, without a name
+            }
+            var name = baseField?["m_Name"];
+            result.Add(new AssetRecord(source.Key, info.PathId, type.ToString(), name is null || name.IsDummy ? "" : name.AsString, null, null,
+                type == AssetClassID.MonoBehaviour && baseField is not null ? ScriptClass(manager, file, baseField) : null));
         }
         return result;
     }

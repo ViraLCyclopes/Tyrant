@@ -27,6 +27,29 @@ public sealed class RealGameIndex
 public class AssetIntegrationTests(RealGameIndex real) : IClassFixture<RealGameIndex>
 {
     [SkippableFact]
+    public void The_built_in_files_are_indexed_and_a_fence_prefab_is_found()
+    {
+        Skip.If(RealGameIndex.GameDir is null, "TYRANT_GAME_DIR not set");
+        var builtIn = real.Index.Assets.Where(a => a.IsBuiltIn).ToList();
+
+        Assert.Contains(builtIn, a => a.DataFile == "sharedassets0.assets");
+        Assert.Contains(builtIn, a => a.Type == "GameObject" && a.Name.StartsWith("Fence_AdobeClay", StringComparison.Ordinal));
+        Assert.Contains(builtIn, a => a.Type == "Texture2D");
+    }
+
+    [SkippableFact]
+    public void A_built_in_texture_opens_through_the_session()
+    {
+        Skip.If(RealGameIndex.GameDir is null, "TYRANT_GAME_DIR not set");
+        var texture = real.Index.Assets.First(a => a.IsBuiltIn && a.Type == "Texture2D" && a.Name.Length > 0);
+        using var session = new AssetSession(real.Install);
+
+        var (_, baseField) = session.Open(texture);
+
+        Assert.True(baseField["m_Width"].AsInt > 0);
+    }
+
+    [SkippableFact]
     public void Static_prefab_renderers_get_their_materials_from_the_mesh_renderer()
     {
         Skip.If(RealGameIndex.GameDir is null, "TYRANT_GAME_DIR not set");

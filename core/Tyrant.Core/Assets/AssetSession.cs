@@ -5,15 +5,17 @@ using Tyrant.Core.Install;
 
 namespace Tyrant.Core.Assets;
 
-/// <summary>Opens objects from the game's Addressables bundles. Not thread-safe; Release() frees loaded bundles.</summary>
+/// <summary>Opens objects from the game's Addressables bundles and built-in files. Not thread-safe; Release() frees loaded files.</summary>
 public sealed class AssetSession : IDisposable
 {
     private readonly AssetsManager _manager = new();
     private readonly string _aaDir;
+    private readonly string _dataDir;
 
     public AssetSession(GameInstall install)
     {
         _aaDir = Path.TrimEndingDirectorySeparator(Path.GetFullPath(AaDirOf(install)));
+        _dataDir = Path.TrimEndingDirectorySeparator(Path.GetFullPath(install.DataDir));
         _manager.MonoTempGenerator = new MonoCecilTempGenerator(install.ManagedDir);
     }
 
@@ -50,8 +52,20 @@ public sealed class AssetSession : IDisposable
         return full;
     }
 
+    /// <summary>Full path of a built-in file; refuses anything outside Prehistoric Kingdom_Data.</summary>
+    public string DataPath(string dataFile)
+    {
+        var full = Path.GetFullPath(Path.Combine(_dataDir, dataFile.Replace('/', Path.DirectorySeparatorChar)));
+        if (!full.StartsWith(_dataDir + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            throw new TyrantException(TyrantErrorCode.AssetNotFound,
+                $"'{dataFile}' points outside the game's data folder. Index the assets again (Workspace → Index assets, or 'tyrant assets index').",
+                FixAction.RefreshWorkspace);
+        return full;
+    }
+
     public (AssetsFileInstance File, AssetTypeValueField BaseField) Open(AssetRecord asset)
     {
+        if (asset.IsBuiltIn) return OpenBuiltIn(asset);
         var path = BundlePath(asset.Bundle);
         if (!File.Exists(path))
             throw new TyrantException(TyrantErrorCode.AssetNotFound,
@@ -82,6 +96,32 @@ public sealed class AssetSession : IDisposable
         }
         throw new TyrantException(TyrantErrorCode.AssetNotFound,
             $"Object {asset.PathId} is not in '{asset.Bundle}' (game updated?). Index the assets again (Workspace → Index assets, or 'tyrant assets index').", FixAction.RefreshWorkspace);
+    }
+
+    private (AssetsFileInstance File, AssetTypeValueField BaseField) OpenBuiltIn(AssetRecord asset)
+    {
+        var path = DataPath(asset.DataFile!);
+        if (!File.Exists(path))
+            throw new TyrantException(TyrantErrorCode.AssetNotFound,
+                $"'{asset.DataFile}' no longer exists (game updated?). Index the assets again (Workspace → Index assets, or 'tyrant assets index').", FixAction.RefreshWorkspace);
+        try
+        {
+            var file = _manager.LoadAssetsFile(path, true);
+            UseClassDatabase(file);
+            var info = file.file.AssetInfos.FirstOrDefault(a => a.PathId == asset.PathId)
+                ?? throw new TyrantException(TyrantErrorCode.AssetNotFound,
+                    $"Object {asset.PathId} is not in '{asset.DataFile}' (game updated?). Index the assets again (Workspace → Index assets, or 'tyrant assets index').", FixAction.RefreshWorkspace);
+            if (Enum.TryParse<AssetClassID>(asset.Type, out var expected) && info.TypeId != (int)expected)
+                throw new TyrantException(TyrantErrorCode.AssetNotFound,
+                    $"Object {asset.PathId} in '{asset.DataFile}' is no longer a {asset.Type} (game updated?). Index the assets again (Workspace → Index assets, or 'tyrant assets index').", FixAction.RefreshWorkspace);
+            return (file, _manager.GetBaseField(file, info));
+        }
+        catch (Exception ex) when (ex is not TyrantException and not OperationCanceledException)
+        {
+            throw new TyrantException(TyrantErrorCode.AssetUnreadable,
+                $"'{asset.DataFile}' could not be read ({ex.Message}). If the game was updated, index the assets again (Workspace → Index assets, or 'tyrant assets index').",
+                FixAction.RefreshWorkspace, ex);
+        }
     }
 
     public void Release() => _manager.UnloadAll();

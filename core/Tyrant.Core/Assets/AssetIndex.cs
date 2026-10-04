@@ -15,6 +15,16 @@ public sealed record AssetRecord(string Bundle, long PathId, string Type, string
     /// <summary>Unambiguous reference accepted by <see cref="AssetIndex.Resolve"/>: "bundle#pathId".</summary>
     [JsonIgnore]
     public string Ref => $"{Bundle}#{PathId}";
+
+    /// <summary>"@data/&lt;file&gt;": an object in one of the game's built-in files (Prehistoric Kingdom_Data), not a bundle.</summary>
+    public const string BuiltInPrefix = "@data/";
+
+    [JsonIgnore]
+    public bool IsBuiltIn => Bundle.StartsWith(BuiltInPrefix, StringComparison.Ordinal);
+
+    /// <summary>The built-in file's name, e.g. "sharedassets0.assets"; null for a bundle.</summary>
+    [JsonIgnore]
+    public string? DataFile => IsBuiltIn ? Bundle[BuiltInPrefix.Length..] : null;
 }
 
 public sealed record IndexFailure(string Bundle, string Error);
