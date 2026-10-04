@@ -3,5 +3,5 @@
   "identifier": "default",
   "description": "What the main window may use: core events and commands, native dialogs, showing folders in Explorer.",
   "windows": ["main"],
-  "permissions": ["core:default", "dialog:default", "opener:default", "opener:allow-reveal-item-in-dir"]
+  "permissions": ["core:default", "dialog:default", "opener:default", "opener:allow-reveal-item-in-dir", "updater:default", "process:allow-restart"]
 }

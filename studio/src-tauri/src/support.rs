@@ -101,9 +101,24 @@ pub fn is_preview_dir(path: &Path) -> bool {
     names.len() >= 3 && names[names.len() - 2] == "cache" && names[names.len() - 1] == "previews"
 }
 
+/// The updater's public key (from `npm run updater-key`), trimmed; None in builds made before the key exists.
+pub fn updater_pubkey(raw: &str) -> Option<&str> {
+    let key = raw.trim();
+    (!key.is_empty()).then_some(key)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn updater_key_is_used_only_when_present() {
+        assert_eq!(updater_pubkey(""), None);
+        assert_eq!(updater_pubkey(" 
+"), None);
+        assert_eq!(updater_pubkey("dW50cnVzdGVk
+"), Some("dW50cnVzdGVk"));
+    }
 
     #[test]
     fn restart_policy_allows_three_restarts_a_minute() {

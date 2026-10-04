@@ -1,4 +1,4 @@
-import type { Platform } from '$lib/platform';
+import type { AvailableUpdate, Platform } from '$lib/platform';
 
 /** Answers dialogs from queues and records what the UI asked for. */
 export class FakePlatform implements Platform {
@@ -48,5 +48,32 @@ export class FakePlatform implements Platform {
   async allowPreviews(dir: string): Promise<void> {
     if (this.previewsError) throw this.previewsError;
     this.allowed.push(dir);
+  }
+
+  version = '0.1.0';
+  /** What checkForUpdate answers; checkError makes it throw. */
+  update: AvailableUpdate | null | 'unavailable' = null;
+  checkError: Error | null = null;
+  checks = 0;
+  installed = 0;
+  readonly opened: string[] = [];
+
+  async appVersion(): Promise<string> {
+    return this.version;
+  }
+
+  async checkForUpdate(): Promise<AvailableUpdate | null | 'unavailable'> {
+    this.checks++;
+    if (this.checkError) throw this.checkError;
+    return this.update;
+  }
+
+  async installUpdate(onProgress: (fraction: number | null) => void): Promise<void> {
+    this.installed++;
+    onProgress(1);
+  }
+
+  async openUrl(url: string): Promise<void> {
+    this.opened.push(url);
   }
 }
