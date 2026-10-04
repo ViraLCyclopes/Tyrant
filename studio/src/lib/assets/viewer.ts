@@ -7,6 +7,7 @@ import {
   DirectionalLight,
   Engine,
   HemisphericLight,
+  Material,
   MeshBuilder,
   PBRMaterial,
   Scene,
@@ -23,8 +24,11 @@ import {
 } from '@babylonjs/core';
 import type { GLTFFileLoader } from '@babylonjs/loaders/glTF';
 import '@babylonjs/loaders/glTF'; // registers the .glb loader
+import type { ModSampledColors, PreviewMaterial } from '$lib/rpc/types.gen';
 import { clampBeta, dragMode, keyAction, orthoExtents, ROTATE_PER_PIXEL, unitsPerPixel, zoomed, type DragMode } from './navigation';
+import { PkAnimalPlugin } from './pkAnimalPlugin';
 import { babylonFaces, linkedFile } from './viewerFiles';
+import { animalUniforms, planMaterial } from './viewerMaterials';
 
 /** A .glb preview file and the URL the page loads it from. */
 export interface ModelFile {
@@ -35,8 +39,16 @@ export interface ModelFile {
 export interface ViewerOptions {
   /** A local file as a URL the page may load (the asset protocol); used for the textures a .glb links. */
   fileUrl(path: string): string;
-  /** Materials whose picture is a species skin, so a chosen skin replaces it. */
-  skinnable: string[];
+  /** The preview's materials: how each is dressed (animal plugin, cutout) and which take a chosen skin. */
+  materials: PreviewMaterial[];
+}
+
+/** A skin's maps as URLs; a missing map keeps the model's own. */
+export interface AnimalMaps {
+  diffuse?: string;
+  normal?: string;
+  extra?: string;
+  pattern?: string;
 }
 
 export interface ModelViewer {
@@ -44,6 +56,10 @@ export interface ModelViewer {
   setTextures(visible: boolean): void;
   /** Shows a skin texture on the skinnable materials; null puts their own picture back. */
   setSkin(url: string | null): void;
+  /** Shows a skin's maps on the skinnable materials; null puts their own back. */
+  setAnimalMaps(maps: AnimalMaps | null): void;
+  /** One animal's colours on the animal materials; null leaves the textures untouched. */
+  setColors(colors: ModSampledColors | null): void;
   /** A terrain texture tiled on a floor under the model; null removes the floor. */
   setGround(url: string | null): void;
   /** Six faces in Unity's order (+X, -X, +Y, -Y, +Z, -Z); null for the plain background. */
@@ -111,18 +127,54 @@ export async function showModels(canvas: HTMLCanvasElement, models: ModelFile[],
   camera.minZ = span / 1000;
   camera.maxZ = span * 100;
 
-  // Materials: remember each one's own textures, so textures can be turned off and skins swapped and put back.
-  const skinnable = new Set(options.skinnable);
-  const own = new Map<PBRMaterial, { albedo: Nullable<BaseTexture>; bump: Nullable<BaseTexture> }>();
-  for (const material of scene.materials)
-    if (material instanceof PBRMaterial) own.set(material, { albedo: material.albedoTexture, bump: material.bumpTexture });
+  // Materials: each is dressed by its plan (animal plugin, cutout); remember its own textures, so textures can be turned
+  // off and skins swapped and put back.
+  const skinnable = new Set(options.materials.filter((m) => m.skinnable).map((m) => m.name));
+  const plans = new Map(options.materials.map((m) => [m.name, planMaterial(m)]));
+  const load = (url: string | null | undefined) => (url ? new Texture(url, scene, false, false) : null); // invertY false, like the glTF loader
+  type Own = { albedo: Nullable<BaseTexture>; bump: Nullable<BaseTexture>; extra: Nullable<BaseTexture>; pattern: Nullable<BaseTexture> };
+  const own = new Map<PBRMaterial, Own>();
+  const plugins = new Map<PBRMaterial, PkAnimalPlugin>();
+  for (const material of scene.materials) {
+    if (!(material instanceof PBRMaterial)) continue;
+    const plan = plans.get(material.name);
+    if (plan?.cutoff != null && material.albedoTexture) {
+      material.albedoTexture.hasAlpha = true;
+      material.transparencyMode = PBRMaterial.PBRMATERIAL_ALPHATEST;
+      material.alphaCutOff = plan.cutoff;
+    }
+    const textures: Own = { albedo: material.albedoTexture, bump: material.bumpTexture, extra: null, pattern: null };
+    if (plan?.kind === 'animal') {
+      material.metallic = 0; // metallic workflow, so the plugin can set roughness from the extra map
+      material.roughness = 1;
+      const plugin = new PkAnimalPlugin(material);
+      plugin.extra = textures.extra = load(plan.extra && options.fileUrl(plan.extra));
+      plugin.pattern = textures.pattern = load(plan.pattern && options.fileUrl(plan.pattern));
+      plugins.set(material, plugin);
+    }
+    own.set(material, textures);
+  }
   let texturesOn = true;
-  let skin: Texture | null = null;
+  let skin: { diffuse: Nullable<Texture>; normal: Nullable<Texture>; extra: Nullable<Texture>; pattern: Nullable<Texture> } | null = null;
   const applyTextures = () => {
     for (const [material, textures] of own) {
-      material.albedoTexture = !texturesOn ? null : skin && skinnable.has(material.name) ? skin : textures.albedo;
-      material.bumpTexture = texturesOn ? textures.bump : null;
+      const worn = skin && skinnable.has(material.name) ? skin : null;
+      material.albedoTexture = !texturesOn ? null : (worn?.diffuse ?? textures.albedo);
+      if (material.albedoTexture && plans.get(material.name)?.cutoff != null) material.albedoTexture.hasAlpha = true;
+      material.bumpTexture = !texturesOn ? null : (worn?.normal ?? textures.bump);
+      const plugin = plugins.get(material);
+      if (plugin) {
+        plugin.extra = worn?.extra ?? textures.extra;
+        plugin.pattern = worn?.pattern ?? textures.pattern;
+        material.markAsDirty(Material.TextureDirtyFlag);
+      }
     }
+  };
+  const setAnimalMaps = (maps: AnimalMaps | null) => {
+    const previous = skin;
+    skin = maps ? { diffuse: load(maps.diffuse), normal: load(maps.normal), extra: load(maps.extra), pattern: load(maps.pattern) } : null;
+    applyTextures();
+    for (const texture of [previous?.diffuse, previous?.normal, previous?.extra, previous?.pattern]) texture?.dispose();
   };
 
   sun.position = center.subtract(sun.direction.normalizeToNew().scale(span * 2));
@@ -271,11 +323,11 @@ export async function showModels(canvas: HTMLCanvasElement, models: ModelFile[],
       texturesOn = visible;
       applyTextures();
     },
-    setSkin: (url) => {
-      const previous = skin;
-      skin = url ? new Texture(url, scene, false, false) : null; // invertY false, like the glTF loader: its UVs are already flipped
-      applyTextures();
-      previous?.dispose();
+    setSkin: (url) => setAnimalMaps(url ? { diffuse: url } : null),
+    setAnimalMaps,
+    setColors: (colors) => {
+      const uniforms = animalUniforms(colors);
+      for (const plugin of plugins.values()) plugin.uniforms = uniforms;
     },
     setGround,
     setSky,

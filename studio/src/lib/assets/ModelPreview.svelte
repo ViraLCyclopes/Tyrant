@@ -28,13 +28,12 @@
     let disposed = false;
     skin = ownSkin;
     const models = preview.files.map((file) => ({ file, url: session.platform.fileUrl(file) }));
-    const skinnable = (preview.materials ?? []).filter((m) => m.skinnable).map((m) => m.name);
     session.rpc.call('assets.environments').then(
       (list) => (environments = list),
       () => (environments = null), // the viewer works without surroundings
     );
     import('./viewer')
-      .then((module) => module.showModels(canvas!, models, { fileUrl: (path) => session.platform.fileUrl(path), skinnable }))
+      .then((module) => module.showModels(canvas!, models, { fileUrl: (path) => session.platform.fileUrl(path), materials: preview.materials ?? [] }))
       .then((v) => {
         if (disposed) {
           v.dispose();
@@ -108,6 +107,7 @@
 </script>
 
 <canvas bind:this={canvas} class="viewport" aria-label="3D preview"></canvas>
+<p class="hint look">3D look: close, not exact (lighting, rim and fur are approximated).</p>
 {#if failed}<p class="warn">The 3D preview could not be shown: {failed}</p>{/if}
 {#each notes as text (text)}<p class="warn">{text}</p>{/each}
 <div class="row tools">

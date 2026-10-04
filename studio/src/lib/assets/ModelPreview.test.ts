@@ -14,6 +14,8 @@ const viewer = vi.hoisted(() => ({
   setSkeleton: vi.fn(),
   setTextures: vi.fn(),
   setSkin: vi.fn(),
+  setColors: vi.fn(),
+  setAnimalMaps: vi.fn(),
   setGround: vi.fn(),
   setSky: vi.fn(),
   frame: vi.fn(),
@@ -29,8 +31,8 @@ const preview: AssetPreview = {
   kind: 'model', files: ['D:\\p\\Body.glb', 'D:\\p\\Eyes.glb'], width: null, height: null, format: null, mipCount: null,
   vertices: 12000, triangles: 8000, skinned: true, message: null,
   materials: [
-    { name: 'Acro', baseColor: 'T_Acro_D', normal: 'T_Acro_N', skinnable: true },
-    { name: 'Eyes', baseColor: null, normal: null, skinnable: false },
+    { name: 'Acro', baseColor: 'T_Acro_D', normal: 'T_Acro_N', skinnable: true, shader: 'AnimalShader', animal: true, cutoff: 0.5, slots: [] },
+    { name: 'Eyes', baseColor: null, normal: null, skinnable: false, shader: null, animal: false, cutoff: null, slots: [] },
   ],
   skins: [
     { ref: 'b#1', name: 'T_Acro_D', current: true },
@@ -59,6 +61,15 @@ function setup(store = memoryStore()) {
 }
 
 describe('ModelPreview', () => {
+  it('passes the materials to the viewer and says the look is close, not exact', async () => {
+    const { session } = setup();
+    renderWith(ModelPreview, session, { preview });
+
+    await waitFor(() => expect(viewer.showModels).toHaveBeenCalled());
+    expect(viewer.showModels.mock.calls[0][2].materials).toEqual(preview.materials);
+    expect(screen.getByText(/close, not exact/)).toBeInTheDocument();
+  });
+
   beforeEach(() => Object.values(viewer).forEach((fn) => fn.mockReset()));
 
   it('loads every part with the skinnable materials and toggles the skeleton', async () => {
@@ -71,7 +82,7 @@ describe('ModelPreview', () => {
       { file: 'D:\\p\\Body.glb', url: 'asset://D:\\p\\Body.glb' },
       { file: 'D:\\p\\Eyes.glb', url: 'asset://D:\\p\\Eyes.glb' },
     ]);
-    expect(options.skinnable).toEqual(['Acro']);
+    expect(options.materials.filter((m: { skinnable: boolean }) => m.skinnable).map((m: { name: string }) => m.name)).toEqual(['Acro']);
     expect(options.fileUrl('D:\\x.png')).toBe('asset://D:\\x.png');
     expect(screen.getByText('12,000 vertices · 8,000 triangles · 2 part(s)')).toBeInTheDocument();
     await fireEvent.click(screen.getByRole('checkbox', { name: 'Show skeleton' }));
