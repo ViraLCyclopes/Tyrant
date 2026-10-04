@@ -14,6 +14,7 @@
   } from './colors';
   import ColourPreviewStrip from './ColourPreviewStrip.svelte';
   import ColourStops from './ColourStops.svelte';
+  import SkinModel3D from './SkinModel3D.svelte';
   import type { ModDoc } from './modDoc.svelte';
   import RangeField from './RangeField.svelte';
 
@@ -71,6 +72,7 @@
 </script>
 
 <div class="colours">
+  <SkinModel3D {doc} {skin} colorsJson={skin.colorsJson} {variant} />
   <ColourPreviewStrip {doc} {skin} colorsJson={skin.colorsJson} {variant} />
 
   <div class="variants" role="radiogroup" aria-label="Animal type">

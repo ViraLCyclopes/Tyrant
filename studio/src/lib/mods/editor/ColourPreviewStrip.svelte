@@ -49,7 +49,7 @@
     {/each}
   </div>
   <button class="ghost" aria-label="Show 6 other animals" title="Show 6 other animals" onclick={() => { seed += 1; void draw(); }}>↻</button>
-  <span class="note">Approximate 2D preview (no lighting); the game's own look comes with the viewer update.</span>
+  <span class="note">Approximate 2D picture of six animals (no lighting); the 3D view above follows the game's shader more closely.</span>
 </div>
 
 <style>
