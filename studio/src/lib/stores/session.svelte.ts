@@ -9,6 +9,7 @@ import type { Tab } from '$lib/shell/tab.svelte';
 
 export const SESSION_KEY = Symbol('tyrant-session');
 const LAST_WORKSPACE = 'tyrant.lastWorkspace';
+const FRAMEWORK_OFFERED = 'tyrant.frameworkOfferedFor';
 const RECENT_WORKSPACES = 'tyrant.recentWorkspaces';
 const MAX_RECENT = 5;
 
@@ -101,6 +102,7 @@ export class Session {
     if (last && (await this.openWorkspace(last))) {
       this.ready = true;
       void this.resumeRunningJob();
+      void this.offerFrameworkUpdate();
       return;
     }
     // Forget it only when the folder is no longer a workspace; a missing core or a moved game is recoverable.
@@ -139,6 +141,18 @@ export class Session {
     this.lastFailed = status ? null : { kind: 'create', dir };
     if (status) this.useWorkspace(status);
     return status !== null;
+  }
+
+  /** After Tyrant was updated: offer once (per bundled framework version) to bring the game's framework up to date. */
+  async offerFrameworkUpdate(tab?: Tab): Promise<void> {
+    const ws = this.workspace;
+    if (!ws || ws.framework !== 'outdated' || this.store.get(FRAMEWORK_OFFERED) === ws.frameworkBundled) return;
+    this.store.set(FRAMEWORK_OFFERED, ws.frameworkBundled ?? '');
+    const yes = await this.platform.confirm(
+      `This Tyrant brings framework ${ws.frameworkBundled}; the game has ${ws.frameworkInGame ?? 'an older one'}. Update Tyrant in game now? Close the game first.`,
+      'Update Tyrant in game',
+    );
+    if (yes) await this.runJob('dump.install', undefined, 'Update Tyrant in game', tab);
   }
 
   async refreshStatus(): Promise<void> {

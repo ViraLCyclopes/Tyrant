@@ -23,6 +23,21 @@ function setup(mods: ModRow[], frameworkInstalled = false) {
 }
 
 describe('ModsView', () => {
+  it('says when the framework in the game is out of date and updates it', async () => {
+    const rpc = new FakeRpc()
+      .on('mods.list', () => ({ mods: [], frameworkInstalled: true, frameworkOutdated: true }))
+      .on('workspace.status', () => workspaceStatus())
+      .on('dump.install', () => ({ installedLoader: false, message: 'Updated' }));
+    const session = new Session(rpc, new FakePlatform(), memoryStore());
+    session.workspace = workspaceStatus();
+    renderWith(ModsView, session);
+
+    expect(await screen.findByText(/framework in the game is older than this Tyrant/)).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Update Tyrant in game' }));
+
+    await waitFor(() => expect(rpc.callsTo('dump.install')).toHaveLength(1));
+  });
+
   it('lists mods with their state', async () => {
     const { session } = setup([row(), row({ id: 'blue', name: 'Blue', state: 'installed', enabled: true })]);
     renderWith(ModsView, session);

@@ -17,6 +17,30 @@ function setup(stored: Record<string, string> = {}) {
 }
 
 describe('Session', () => {
+  it('offers the framework update once per bundled framework version, only when it is out of date', async () => {
+    const { platform, session } = setup();
+    platform.confirmAnswer = false;
+    session.workspace = workspaceStatus({ framework: 'outdated', frameworkInGame: '0.3.0', frameworkBundled: '0.4.0' });
+
+    await session.offerFrameworkUpdate();
+    await session.offerFrameworkUpdate();
+    session.workspace = workspaceStatus({ framework: 'missing', frameworkBundled: '0.5.0' });
+    await session.offerFrameworkUpdate();
+
+    expect(platform.confirms).toHaveLength(1); // once, and never for a framework that was never installed
+    expect(platform.confirms[0]).toContain('0.4.0');
+  });
+
+  it('accepting the framework offer runs the update job', async () => {
+    const { rpc, session } = setup();
+    rpc.on('dump.install', () => ({ installedLoader: false, message: 'Updated' })).on('workspace.status', () => workspaceStatus());
+    session.workspace = workspaceStatus({ framework: 'outdated', frameworkInGame: '0.3.0', frameworkBundled: '0.4.0' });
+
+    await session.offerFrameworkUpdate();
+
+    expect(rpc.callsTo('dump.install')).toHaveLength(1);
+  });
+
   it('reopens the last workspace on start', async () => {
     const { rpc, session } = setup({ 'tyrant.lastWorkspace': 'D:\\ws' });
     rpc.on('workspace.open', () => workspaceStatus());

@@ -56,6 +56,10 @@
     if (await installMod(session, tab, row.id, row.name)) await refresh();
   }
 
+  async function updateFramework() {
+    if (await session.runJob('dump.install', undefined, 'Update Tyrant in game', tab)) await refresh();
+  }
+
   async function remove(row: ModRow) {
     if (await removeFromGame(session, tab, row.id, row.name)) await refresh();
   }
@@ -86,6 +90,10 @@
   <input aria-label="Mod name" placeholder="name (optional)" bind:value={newName} />
   <button type="submit" disabled={!newId.trim() || session.busy}>New mod</button>
 </form>
+{#if list?.frameworkOutdated}
+  <p class="warn">Tyrant was updated: the framework in the game is older than this Tyrant. Update it (the game must be closed).</p>
+  <button class="primary" onclick={updateFramework} disabled={session.busy}>Update Tyrant in game</button>
+{/if}
 <button class="ghost" onclick={() => (cleaning = !cleaning)}>Clean up skin numbers…</button>
 {#if cleaning}<CleanSkins />{/if}
 

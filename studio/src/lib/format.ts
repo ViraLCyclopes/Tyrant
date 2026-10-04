@@ -1,10 +1,16 @@
-import type { AssetIndexRunResult, DecompileRunResult, DumpRunResult, InstallState, RefreshAllResult } from '$lib/rpc/types.gen';
+import type { AssetIndexRunResult, DecompileRunResult, DumpRunResult, InstallState, RefreshAllResult, WorkspaceStatus } from '$lib/rpc/types.gen';
 
 export function outputLabel(name: string): string {
   if (name === 'data') return 'Game data';
   if (name === 'assets/index') return 'Asset index';
   if (name.startsWith('source/')) return `Code: ${name.slice('source/'.length)}`;
   return name;
+}
+
+/** "Framework: 0.3.0 in the game · 0.4.0 in this Tyrant" for the Workspace tab's Tyrant in the game card. */
+export function frameworkLine(ws: WorkspaceStatus): string {
+  const inGame = ws.framework === 'missing' ? 'not installed' : (ws.frameworkInGame ?? 'installed (version unknown)');
+  return `Framework: ${inGame} in the game · ${ws.frameworkBundled} in this Tyrant`;
 }
 
 export function dumperLabel(state: InstallState): string {

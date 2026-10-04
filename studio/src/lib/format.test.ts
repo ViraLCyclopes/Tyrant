@@ -1,7 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { dumperLabel, formatBytes, outputLabel, summarizeDecompile, summarizeDump, summarizeRefresh } from './format';
+import { dumperLabel, formatBytes, frameworkLine, outputLabel, summarizeDecompile, summarizeDump, summarizeRefresh } from './format';
+import { workspaceStatus } from '$lib/test/fixtures';
 
 describe('format', () => {
+  it('frameworkLine names the version in the game and in this Tyrant', () => {
+    expect(frameworkLine(workspaceStatus({ framework: 'missing', frameworkBundled: '0.4.0' }))).toBe('Framework: not installed in the game · 0.4.0 in this Tyrant');
+    expect(frameworkLine(workspaceStatus({ framework: 'outdated', frameworkInGame: '0.3.0', frameworkBundled: '0.4.0' }))).toBe(
+      'Framework: 0.3.0 in the game · 0.4.0 in this Tyrant',
+    );
+    expect(frameworkLine(workspaceStatus({ framework: 'current', frameworkInGame: null, frameworkBundled: '0.4.0' }))).toBe(
+      'Framework: installed (version unknown) in the game · 0.4.0 in this Tyrant',
+    );
+  });
+
   it('names workspace outputs for people', () => {
     expect(outputLabel('data')).toBe('Game data');
     expect(outputLabel('assets/index')).toBe('Asset index');

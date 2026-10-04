@@ -15,6 +15,14 @@ function setup() {
 }
 
 describe('WorkspaceView', () => {
+  it('names the framework version in the game and in this Tyrant', () => {
+    const { session } = setup();
+    session.workspace = workspaceStatus({ dumper: 'installed', framework: 'outdated', frameworkInGame: '0.3.0', frameworkBundled: '0.4.0' });
+    renderWith(WorkspaceView, session);
+
+    expect(screen.getByText(/Framework: 0\.3\.0 in the game · 0\.4\.0 in this Tyrant/)).toBeInTheDocument();
+  });
+
   it('without a workspace offers to create one in a picked folder', async () => {
     const { rpc, platform, session } = setup();
     session.install = installInfo();

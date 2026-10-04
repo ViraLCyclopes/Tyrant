@@ -1,7 +1,7 @@
 <script lang="ts">
   import { getTab } from '$lib/shell/tab.svelte';
   import { getSession } from '$lib/stores/session.svelte';
-  import { dumperLabel, formatDate, outputLabel, summarizeDecompile, summarizeDump, summarizeIndex, summarizeRefresh } from '$lib/format';
+  import { dumperLabel, formatDate, frameworkLine, outputLabel, summarizeDecompile, summarizeDump, summarizeIndex, summarizeRefresh } from '$lib/format';
 
   const session = getSession();
   const tab = getTab();
@@ -104,6 +104,7 @@
   <section class="card" aria-labelledby="dumper-heading">
     <h2 id="dumper-heading">Tyrant in the game</h2>
     <p>Status: <strong>{dumperLabel(ws.dumper)}</strong></p>
+    <p>{frameworkLine(ws)}{ws.loaderInGame ? ` · MelonLoader ${ws.loaderInGame}` : ''}</p>
     <p class="hint">MelonLoader plus two small Tyrant mods: the data dumper (it does nothing unless you run a dump) and the modding framework, which applies the mods you install from the Mods tab. No game file is replaced; Uninstall from game restores vanilla.</p>
     {#if ws.framework === 'outdated'}<p class="warn">Tyrant was updated: the framework in the game is older than this Tyrant. Update it (the game must be closed).</p>{/if}
     {#if ws.dumper === 'conflict'}
