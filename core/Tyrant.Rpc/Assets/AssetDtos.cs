@@ -43,7 +43,12 @@ public enum PreviewKind
 }
 
 /// <summary>A material in a 3D preview: the names of its picture and normal map; Skinnable when its picture is one of the species' skins.</summary>
-public sealed record PreviewMaterial(string Name, string? BaseColor, string? Normal, bool Skinnable);
+/// <summary>One texture slot of a material; File is its PNG when the preview wrote one (diffuse, normal, animal extra and pattern).</summary>
+public sealed record PreviewSlot(string Name, string Texture, string? File);
+
+/// <summary>Shader: its name when known; Animal: the game's animal shader; Cutoff: alpha below it is cut away (null: none).</summary>
+public sealed record PreviewMaterial(string Name, string? BaseColor, string? Normal, bool Skinnable, string? Shader = null, bool Animal = false,
+    float? Cutoff = null, IReadOnlyList<PreviewSlot>? Slots = null);
 
 /// <summary>A diffuse texture of the prefab's species that the viewer can show on the skinnable materials; Current: the one it wears.</summary>
 public sealed record PreviewSkin(string Ref, string Name, bool Current);

@@ -33,6 +33,35 @@ public class ModelTexturesTests
     }
 
     [Fact]
+    public void An_animal_materials_extra_and_pattern_maps_are_written_next_to_the_diffuse()
+    {
+        using var game = new FakeGame(); // no bundles: every write fails, so Failures shows exactly which textures were written
+        using var session = new AssetSession(new GameInstall(game.Root, null));
+        string[] names = ["T_Acro_D", "T_Acro_N", "T_Acro_E", "T_Acro_P", "T_Acro_F"];
+        string[] slots = ["_AdultDiffuse", "_AdultNormal", "_AdultExtraMap", "_AdultPatternMask", "_AdultFurMask"];
+        var index = new AssetIndex { Assets = names.Select((n, i) => new AssetRecord(Prefabs, i + 1, "Texture2D", n, null, null, null)).ToList() };
+        var prefab = WithMaterials(new MaterialModel("Acro", slots.Select((s, i) => new TextureSlot(s, null, i + 1)).ToList()));
+
+        var textures = ModelTextures.Write(session, index, Prefabs, prefab, TempDir());
+
+        Assert.Equal(["T_Acro_D", "T_Acro_E", "T_Acro_N", "T_Acro_P"], textures.Failures.Select(f => f[..f.IndexOf(':')]).Order()); // fur is not used by the viewer
+        Assert.Empty(textures.TextureFiles);
+    }
+
+    [Fact]
+    public void A_scenery_materials_mask_maps_are_not_written()
+    {
+        using var game = new FakeGame();
+        using var session = new AssetSession(new GameInstall(game.Root, null));
+        var index = new AssetIndex { Assets = [new AssetRecord(Prefabs, 1, "Texture2D", "Fence_D", null, null, null), new AssetRecord(Prefabs, 2, "Texture2D", "Fence_Mix", null, null, null)] };
+        var prefab = WithMaterials(new MaterialModel("Fence", [new TextureSlot("_DiffuseTex", null, 1), new TextureSlot("_MixTex", null, 2)]));
+
+        var textures = ModelTextures.Write(session, index, Prefabs, prefab, TempDir());
+
+        Assert.Equal(["Fence_D"], textures.Failures.Select(f => f[..f.IndexOf(':')]));
+    }
+
+    [Fact]
     public void A_material_without_a_name_is_named_after_its_mesh_and_left_out_of_the_list()
     {
         using var game = new FakeGame();

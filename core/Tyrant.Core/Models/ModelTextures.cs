@@ -26,6 +26,13 @@ public sealed class ModelTextures
         _dir = dir;
     }
 
+    /// <summary>Data maps the viewer reads for animals; written next to the diffuse and normal, never treated as normal maps.</summary>
+    private static readonly string[] AnimalDataSlots = ["_AdultExtraMap", "_AdultPatternMask"];
+
+    /// <summary>Texture ref → the PNG written for it.</summary>
+    public IReadOnlyDictionary<string, string> TextureFiles =>
+        _pngs.Where(p => p.Value is not null).ToDictionary(p => p.Key, p => p.Value!, StringComparer.Ordinal);
+
     /// <summary>The prefab's named materials with the textures found for them.</summary>
     public IReadOnlyList<ResolvedMaterial> Materials => _materials;
 
@@ -62,17 +69,21 @@ public sealed class ModelTextures
         if (material.Name.Length > 0 && !_materials.Any(m => m.Name == resolved.Name && m.BaseColor == resolved.BaseColor && m.Normal == resolved.Normal))
             _materials.Add(resolved);
         var name = material.Name.Length > 0 ? material.Name : renderer.Mesh.Name.Length > 0 ? renderer.Mesh.Name : renderer.Name;
-        return new GltfMaterial(name, Png(resolved.BaseColor), Png(resolved.Normal));
+        var gltf = new GltfMaterial(name, Png(resolved.BaseColor), Png(resolved.Normal));
+        if (resolved.Animal)
+            foreach (var slot in resolved.Slots.Where(s => AnimalDataSlots.Contains(s.Name)))
+                Png(slot.Texture, rebuildNormals: false);
+        return gltf;
     }
 
-    private string? Png(AssetRecord? texture)
+    private string? Png(AssetRecord? texture, bool rebuildNormals = true)
     {
         if (texture is null) return null;
         if (_pngs.TryGetValue(texture.Ref, out var known)) return known;
         var name = TextureExporter.Sanitize(texture.Name.Length > 0 ? texture.Name : $"texture_{texture.PathId}");
         var path = Path.Combine(_dir, name + ".png");
         if (!_files.Add(path)) _files.Add(path = Path.Combine(_dir, $"{name}_{texture.PathId}.png")); // two textures share a name
-        var result = new TextureExporter().Export(_session, texture, path); // rebuilds packed normal maps; releases the session
+        var result = new TextureExporter().Export(_session, texture, path, rebuildNormals); // rebuilds packed normal maps; releases the session
         if (!result.Success) _failures.Add($"{texture.Name}: {result.Error}");
         return _pngs[texture.Ref] = result.Success ? path : null;
     }

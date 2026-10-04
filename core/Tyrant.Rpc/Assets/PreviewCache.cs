@@ -18,10 +18,10 @@ internal sealed class PreviewCache
     private const string MetaFile = "preview.json";
 
     /// <summary>
-    /// Bumped whenever previews are made differently (2: packed normal maps rebuilt; 3: found by their pixels; 4: models carry their materials; 5: scenery shaders textured), so a tool update never shows
+    /// Bumped whenever previews are made differently (2: packed normal maps rebuilt; 3: found by their pixels; 4: models carry their materials; 5: scenery shaders textured; 6: materials carry their slots, animal extra/pattern maps), so a tool update never shows
     /// previews made the old way. Part of the build folder name; older folders are removed like old builds.
     /// </summary>
-    internal const int FormatVersion = 5;
+    internal const int FormatVersion = 6;
     private readonly ConcurrentDictionary<string, object> _locks = new(StringComparer.OrdinalIgnoreCase);
 
     public static string Root(Workspace ws) => Path.Combine(ws.CacheDir, "previews");

@@ -568,12 +568,22 @@ export interface PreviewMaterial {
   baseColor: string | null;
   normal: string | null;
   skinnable: boolean;
+  shader?: string | null;
+  animal?: boolean;
+  cutoff?: number | null;
+  slots?: PreviewSlot[] | null;
 }
 
 export interface PreviewSkin {
   ref: string;
   name: string;
   current: boolean;
+}
+
+export interface PreviewSlot {
+  name: string;
+  texture: string;
+  file: string | null;
 }
 
 export interface RefreshAllResult {

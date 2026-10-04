@@ -58,7 +58,7 @@ public sealed class AssetExport(IAssetReader reader, AssetIndex? index = null)
                     var dir = Unique(Path.Combine(ws.AssetsDir, "models", SafeName(asset)), asset, used);
                     var model = reader.WriteModel(install, asset, dir, index);
                     outputs = [.. model.Files, .. TexturePngs(dir)];
-                    var modelNotes = asset.Type == "Mesh" ? [.. model.Notes, BareMeshNote] : model.Notes;
+                    IReadOnlyList<string> modelNotes = asset.Type == "Mesh" ? [.. model.Notes, .. model.MaterialFailures, BareMeshNote] : [.. model.Notes, .. model.MaterialFailures];
                     notes = modelNotes.Count == 0 ? null : modelNotes;
                     break;
                 default:

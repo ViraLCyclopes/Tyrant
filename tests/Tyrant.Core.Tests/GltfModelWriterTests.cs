@@ -222,6 +222,17 @@ public class GltfModelWriterTests
     }
 
     [Fact]
+    public void A_skinned_model_is_written_as_one_mesh_with_no_helper_shapes()
+    {
+        var path = TempGlb();
+        var prefab = ModelFixture.Prefab(ModelFixture.Triangle(skinned: true, withShape: false), skinned: true);
+
+        GltfModelWriter.WriteGlb(prefab, prefab.Renderers[0], path);
+
+        Assert.Single(GlbJson(path)["meshes"]!.AsArray()); // Blender's "Icosphere" is its own bone display shape, made on import
+    }
+
+    [Fact]
     public void Sub_meshes_without_a_material_are_kept_plain()
     {
         var path = TempGlb();

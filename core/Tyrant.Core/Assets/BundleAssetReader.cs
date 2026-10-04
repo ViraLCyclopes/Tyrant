@@ -100,6 +100,8 @@ public sealed class BundleAssetReader : IAssetReader
             Materials = textures?.Materials ?? [],
             TextureFailures = textures?.Failures ?? [],
             Notes = textures?.Notes ?? [],
+            TextureFiles = textures?.TextureFiles ?? new Dictionary<string, string>(),
+            MaterialFailures = model.MaterialFailures,
         };
     }
 

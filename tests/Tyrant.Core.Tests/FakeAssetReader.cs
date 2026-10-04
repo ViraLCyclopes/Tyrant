@@ -31,6 +31,8 @@ public sealed class FakeAssetReader : IAssetReader
     /// <summary>Texture PNGs WriteModel writes into outputDir/textures (as ModelTextures does).</summary>
     public string[] ModelTextureFiles { get; set; } = [];
 
+    public IReadOnlyList<string> ModelMaterialFailures { get; set; } = [];
+
     private int _batches, _callsInBatch;
     private bool _inBatch;
     public int Batches => _batches;
@@ -83,8 +85,15 @@ public sealed class FakeAssetReader : IAssetReader
         if (Directory.Exists(outputDir)) Directory.Delete(outputDir, recursive: true);
         var parts = ModelParts.Select(name => new ModelPart(Path.Combine(outputDir, name + ".glb"), name, 150, 50, asset.Type == "GameObject")).ToList();
         foreach (var part in parts) Write(part.File, "glb");
-        foreach (var texture in ModelTextureFiles) Write(Path.Combine(outputDir, "textures", texture), "png");
-        return new ModelFacts(parts, []) { Materials = index is null ? [] : ModelMaterials, TextureFailures = ModelTextureFailures, Notes = ModelNotes };
+        var textureFiles = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var texture in ModelTextureFiles)
+        {
+            var png = Path.Combine(outputDir, "textures", texture);
+            Write(png, "png");
+            if (index?.Assets.FirstOrDefault(a => a.Name == Path.GetFileNameWithoutExtension(texture)) is { } record) textureFiles[record.Ref] = png;
+        }
+        return new ModelFacts(parts, []) { Materials = index is null ? [] : ModelMaterials, TextureFailures = ModelTextureFailures, Notes = ModelNotes,
+            TextureFiles = textureFiles, MaterialFailures = ModelMaterialFailures };
     }
 
     public void WriteJson(GameInstall install, AssetRecord asset, string jsonPath)

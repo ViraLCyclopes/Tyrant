@@ -47,9 +47,14 @@ public sealed partial class AssetsMethods
         if (model.TextureFailures.Count > 0)
             notes.Add($"{model.TextureFailures.Count} texture(s) could not be decoded, so their materials are plain. {string.Join(" ", model.TextureFailures.Take(3))}");
 
+        if (model.MaterialFailures.Count > 0)
+            notes.Add($"{model.MaterialFailures.Count} material(s) could not be read, so their meshes are plain. {string.Join(" ", model.MaterialFailures.Take(3))}");
+
         IReadOnlyList<AssetRecord> skins = asset.Type == "GameObject" ? PreviewSkins.Candidates(index, asset) : [];
         var materials = model.Materials
-            .Select(m => new PreviewMaterial(m.Name, m.BaseColor?.Name, m.Normal?.Name, m.BaseColor is not null && skins.Contains(m.BaseColor)))
+            .Select(m => new PreviewMaterial(m.Name, m.BaseColor?.Name, m.Normal?.Name, m.BaseColor is not null && skins.Contains(m.BaseColor),
+                m.Shader, m.Animal, m.Cutoff,
+                m.Slots.Select(s => new PreviewSlot(s.Name, s.Texture.Name, model.TextureFiles.GetValueOrDefault(s.Texture.Ref))).ToList()))
             .ToList();
         var worn = model.Materials.Select(m => m.BaseColor?.Ref).OfType<string>().ToHashSet(StringComparer.Ordinal);
         return new AssetPreview(PreviewKind.Model, shown.Select(p => p.File).ToList(), Vertices: shown.Sum(p => p.Vertices),

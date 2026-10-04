@@ -28,6 +28,12 @@ public sealed record ModelFacts(IReadOnlyList<ModelPart> Parts, IReadOnlyList<st
 
     /// <summary>Notes for exports: an index too old to follow textures, and textures that failed (see ModelTextures.Notes).</summary>
     public IReadOnlyList<string> Notes { get; init; } = [];
+
+    /// <summary>Texture ref → PNG written into outputDir/textures.</summary>
+    public IReadOnlyDictionary<string, string> TextureFiles { get; init; } = new Dictionary<string, string>();
+
+    /// <summary>Materials that could not be read (their meshes are drawn plain).</summary>
+    public IReadOnlyList<string> MaterialFailures { get; init; } = [];
 }
 
 /// <summary>Everything that reads game bundles. Production code uses <see cref="BundleAssetReader"/>; tests use a fake.</summary>

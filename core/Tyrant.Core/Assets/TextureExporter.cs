@@ -34,7 +34,7 @@ public sealed class TextureExporter
             : Path.Combine(root, $"texture_{texture.PathId}.png");
     }
 
-    public TextureExportResult Export(AssetSession session, AssetRecord texture, string outputPath)
+    public TextureExportResult Export(AssetSession session, AssetRecord texture, string outputPath, bool rebuildNormals = true)
     {
         if (!string.Equals(texture.Type, "Texture2D", StringComparison.Ordinal))
             return new TextureExportResult(texture, false, outputPath, $"'{texture.Ref}' is a {texture.Type}, not a Texture2D.");
@@ -49,7 +49,7 @@ public sealed class TextureExporter
                 return new TextureExportResult(texture, false, outputPath, "The texture has no image data.");
 
             Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
-            var rebuilt = TryWriteRebuiltNormal(tex, raw, tmp); // judged from the pixels: names miss maps like Detail_Skin
+            var rebuilt = rebuildNormals && TryWriteRebuiltNormal(tex, raw, tmp); // judged from the pixels: names miss maps like Detail_Skin
             if (!rebuilt)
             {
                 bool decoded;

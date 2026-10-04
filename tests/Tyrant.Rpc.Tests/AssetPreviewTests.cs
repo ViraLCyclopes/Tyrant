@@ -62,6 +62,42 @@ public class AssetPreviewTests
     }
 
     [Fact]
+    public async Task Model_preview_materials_carry_shader_slots_and_files()
+    {
+        using var game = new FakeGame();
+        var (h, _, reader) = await Opened(game);
+        reader.ModelMaterials = [new ResolvedMaterial("Stego", StegoD, "_AdultDiffuse", StegoN, [])
+        {
+            Shader = "AnimalShader", Animal = true, Cutoff = 0.5f,
+            Slots = [new ResolvedSlot("_AdultDiffuse", StegoD), new ResolvedSlot("_AdultNormal", StegoN)],
+        }];
+        reader.ModelTextureFiles = ["T_Stego_D.png"];
+
+        var material = (await h.Call("assets.preview", new { @ref = StegoPrefab.Ref })).GetProperty("materials")[0];
+
+        Assert.Equal("AnimalShader", material.GetProperty("shader").GetString());
+        Assert.True(material.GetProperty("animal").GetBoolean());
+        Assert.Equal(0.5, material.GetProperty("cutoff").GetDouble(), 3);
+        var slots = material.GetProperty("slots");
+        Assert.Equal("_AdultDiffuse", slots[0].GetProperty("name").GetString());
+        Assert.EndsWith(Path.Combine("textures", "T_Stego_D.png"), slots[0].GetProperty("file").GetString());
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, slots[1].GetProperty("file").ValueKind); // no PNG was written for it
+    }
+
+    [Fact]
+    public async Task A_material_that_could_not_be_read_is_a_note_not_a_failure()
+    {
+        using var game = new FakeGame();
+        var (h, _, reader) = await Opened(game);
+        reader.ModelMaterialFailures = ["Body: material 2 could not be read (bad field); it is drawn plain."];
+
+        var preview = await h.Call("assets.preview", new { @ref = StegoPrefab.Ref });
+
+        Assert.Equal("model", preview.GetProperty("kind").GetString());
+        Assert.Contains("could not be read", preview.GetProperty("message").GetString());
+    }
+
+    [Fact]
     public async Task Model_preview_for_a_prefab_lists_its_glb_files()
     {
         using var game = new FakeGame();
@@ -203,7 +239,7 @@ public class AssetPreviewTests
 
         var buildFolder = Path.GetFileName(Path.GetDirectoryName(Path.GetDirectoryName(file)))!;
         Assert.EndsWith($"-p{Tyrant.Rpc.Assets.PreviewCache.FormatVersion}", buildFolder);
-        Assert.True(Tyrant.Rpc.Assets.PreviewCache.FormatVersion >= 5, "scenery materials (format 5) must not reuse untextured format-4 previews");
+        Assert.True(Tyrant.Rpc.Assets.PreviewCache.FormatVersion >= 6, "materials with slots (format 6) must not reuse format-5 previews");
     }
 
     private static readonly AssetRecord StegoAlt = new("animals/stego_assets_assets/textures.bundle", 7, "Texture2D", "T_Stego_alt1_D", null, null, null);
