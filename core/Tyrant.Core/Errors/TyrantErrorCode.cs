@@ -30,6 +30,7 @@ public enum TyrantErrorCode
     FrameworkMissing,
     TargetNotFound,
     ModExists,
+    UpdateCheckFailed,
 }
 
 /// <summary>A suggested remedy the UI can render as a button.</summary>
