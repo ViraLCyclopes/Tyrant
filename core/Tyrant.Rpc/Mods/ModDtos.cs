@@ -8,6 +8,16 @@ public sealed record ModRow(string Id, string Name, string Version, string? Auth
 
 public sealed record ModsListResult(IReadOnlyList<ModRow> Mods, bool FrameworkInstalled, bool FrameworkOutdated = false);
 
+/// <summary>Out: where to write the zip; null writes &lt;workspace&gt;/exports/&lt;id&gt;-&lt;version&gt;.zip.</summary>
+public sealed record ModExportParams(string Id, string? Out = null);
+
+public sealed record ModExportResult(string Path, IReadOnlyList<string> Warnings);
+
+public sealed record ModImportParams(string File, bool Replace = false);
+
+/// <summary>The imported mod's id, its Check errors and warnings, and the refreshed list.</summary>
+public sealed record ModImportResult(string Id, IReadOnlyList<string> Problems, ModsListResult Mods);
+
 public sealed record ModCreateParams(string Id, string? Name = null, string? Author = null);
 
 /// <summary>Texture: name, Addressables path, GUID or ref. Png: null uses the texture's exported PNG.</summary>

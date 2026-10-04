@@ -78,6 +78,7 @@ public static class CliApp
                 game.AddCommand<DumpInstallCommand>("install").WithDescription("Install MelonLoader (if needed) and Tyrant's framework and dumper into the game.");
                 game.AddCommand<DumpInstallCommand>("update").WithDescription("Update Tyrant's framework and dumper in the game to this Tyrant's.");
                 game.AddCommand<DumpUninstallCommand>("uninstall").WithDescription("Remove Tyrant (and MelonLoader, if Tyrant installed it) from the game.");
+                game.AddCommand<GamePackageFrameworkCommand>("package-framework").WithDescription("Save Tyrant's framework as a zip for players without Tyrant.");
             });
 
             config.AddBranch("mod", mod =>
@@ -90,6 +91,8 @@ public static class CliApp
                 mod.AddCommand<ModRebuildModelsCommand>("rebuild-models").WithDescription("Rebuild a mod's models and their levels of detail.");
                 mod.AddCommand<ModCheckCommand>("check").WithDescription("Check a mod's files and targets before installing it.");
                 mod.AddCommand<ModRestoreCutoutsCommand>("restore-cutouts").WithDescription("Copy the see-through parts (feathers, hair) of the vanilla textures back into colour PNGs that lost them.");
+                mod.AddCommand<ModExportCommand>("export").WithDescription("Export a mod as a zip players unzip into the game folder.");
+                mod.AddCommand<ModImportCommand>("import").WithDescription("Add a mod from a zip to the workspace.");
                 mod.AddCommand<ModInstallCommand>("install").WithDescription("Install a mod into the game (and Tyrant's framework, if needed).");
                 mod.AddCommand<ModRemoveCommand>("remove").WithDescription("Remove a mod from the game.");
                 mod.AddCommand<ModEnableCommand>("enable").WithDescription("Turn an installed mod on.");

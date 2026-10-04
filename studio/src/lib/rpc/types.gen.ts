@@ -272,6 +272,14 @@ export interface EnvironmentTexture {
 
 export type FrameworkState = "missing" | "current" | "outdated";
 
+export interface GamePackageFrameworkParams {
+  out?: string | null;
+}
+
+export interface GamePackageFrameworkResult {
+  path: string;
+}
+
 export interface InstallDetectParams {
   gamePath?: string | null;
 }
@@ -410,12 +418,33 @@ export interface ModEnableParams {
   enabled: boolean;
 }
 
+export interface ModExportParams {
+  id: string;
+  out?: string | null;
+}
+
+export interface ModExportResult {
+  path: string;
+  warnings: string[];
+}
+
 export interface ModForgetSkinsParams {
   keys: string[];
 }
 
 export interface ModIdParams {
   id: string;
+}
+
+export interface ModImportParams {
+  file: string;
+  replace?: boolean;
+}
+
+export interface ModImportResult {
+  id: string;
+  problems: string[];
+  mods: ModsListResult;
 }
 
 export interface ModInstallResult {
@@ -790,6 +819,7 @@ export interface RpcMethods {
   "dump.install": { params: void; result: JobStarted };
   "dump.run": { params: DumpRunParams; result: JobStarted };
   "dump.uninstall": { params: void; result: DumperUninstallResult };
+  "game.packageFramework": { params: GamePackageFrameworkParams; result: GamePackageFrameworkResult };
   "install.detect": { params: InstallDetectParams; result: InstallInfo };
   "job.cancel": { params: JobCancelParams; result: JobCancelResult };
   "job.current": { params: void; result: JobCurrentResult };
@@ -798,8 +828,10 @@ export interface RpcMethods {
   "mods.colorPreview": { params: ModColorPreviewParams; result: ModPreviewFiles };
   "mods.create": { params: ModCreateParams; result: ModsListResult };
   "mods.enable": { params: ModEnableParams; result: ModsListResult };
+  "mods.export": { params: ModExportParams; result: JobStarted };
   "mods.forgetSkins": { params: ModForgetSkinsParams; result: SkinSlotsResult };
   "mods.get": { params: ModIdParams; result: ModDetail };
+  "mods.import": { params: ModImportParams; result: ModImportResult };
   "mods.install": { params: ModIdParams; result: JobStarted };
   "mods.list": { params: void; result: ModsListResult };
   "mods.modelPreview": { params: ModModelPreviewParams; result: ModModelPreview };
@@ -837,6 +869,7 @@ export interface RpcJobs {
   "decompile.run": DecompileRunResult;
   "dump.install": DumperInstallResult;
   "dump.run": DumpRunResult;
+  "mods.export": ModExportResult;
   "mods.install": ModInstallResult;
   "species.pack": SpeciesPackRunResult;
   "workspace.refreshAll": RefreshAllResult;

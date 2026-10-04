@@ -21,3 +21,22 @@ public sealed class GameStatusCommand : Command<WorkspaceSettings>
         return ExitCodes.Ok;
     }
 }
+
+public sealed class GamePackageFrameworkCommand : Command<GamePackageFrameworkCommand.Settings>
+{
+    public sealed class Settings : WorkspaceSettings
+    {
+        [CommandOption("--out <FILE>")]
+        [System.ComponentModel.Description("Where to write the zip (default: <workspace>\\exports\\Tyrant-Framework-<version>.zip).")]
+        public string? Out { get; set; }
+    }
+
+    public override int Execute(CommandContext context, Settings settings)
+    {
+        var (ws, _) = CliServices.OpenWorkspace(settings);
+        var path = FrameworkPackage.Write(CliServices.GameModsDir,
+            Path.GetFullPath(settings.Out ?? Path.Combine(ws.Dir, "exports", FrameworkPackage.FileName)));
+        Console.WriteLine($"Saved the framework zip: {path}. Players unzip it into the game folder after installing MelonLoader.");
+        return ExitCodes.Ok;
+    }
+}

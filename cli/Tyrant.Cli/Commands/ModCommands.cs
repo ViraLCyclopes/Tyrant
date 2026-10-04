@@ -54,6 +54,10 @@ internal static class ModCli
     }
 
     /// <summary>Prints a check; returns false when it has errors.</summary>
+    /// <summary>Check as 'tyrant mod check' and the app's Mods tab do it: the asset index and, for skins, the data dump when present.</summary>
+    public static ModCheckResult Check(Workspace ws, GameInstall install, ModProject mod) =>
+        ModChecker.ForGame(install).Check(mod, TryIndex(ws), mod.Manifest.Skins.Count > 0 ? TrySpecies(ws) : null);
+
     public static bool Print(ModCheckResult result)
     {
         foreach (var error in result.Errors) Console.WriteLine($"  ERROR  {error}");
@@ -120,7 +124,7 @@ public sealed class ModCheckCommand : Command<ModSettings>
         var (ws, install) = CliServices.OpenWorkspace(settings);
         var mod = ModProject.Open(ws, settings.Id);
         ModCli.RebuildStaleModels(ws, install, mod);
-        return ModCli.Print(ModChecker.ForGame(install).Check(mod, ModCli.TryIndex(ws), mod.Manifest.Skins.Count > 0 ? ModCli.TrySpecies(ws) : null)) ? ExitCodes.Ok : ExitCodes.Error;
+        return ModCli.Print(ModCli.Check(ws, install, mod)) ? ExitCodes.Ok : ExitCodes.Error;
     }
 }
 

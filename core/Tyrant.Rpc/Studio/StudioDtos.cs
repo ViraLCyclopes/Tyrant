@@ -20,6 +20,11 @@ public sealed record WorkspaceStatus(string Dir, string GameRoot, string? SteamA
 
 public sealed record DumperInstallResult(bool InstalledLoader, string Message);
 
+/// <summary>Out: where to write the zip; null writes &lt;workspace&gt;/exports/Tyrant-Framework-&lt;version&gt;.zip.</summary>
+public sealed record GamePackageFrameworkParams(string? Out = null);
+
+public sealed record GamePackageFrameworkResult(string Path);
+
 public sealed record DumperUninstallResult(bool RemovedLoader, string Message);
 
 public sealed record DumpRunParams(int TimeoutSeconds = 300);

@@ -81,6 +81,15 @@ public sealed class StudioMethods(StudioSession session, JobManager jobs)
         });
     }
 
+    [RpcMethod("game.packageFramework")]
+    public GamePackageFrameworkResult PackageFramework(GamePackageFrameworkParams p)
+    {
+        var (ws, _) = session.Current();
+        var path = FrameworkPackage.Write(Options.DumperDir, p.Out ?? Path.Combine(ws.Dir, "exports", FrameworkPackage.FileName));
+        session.Log($"Saved the framework zip: {path}.");
+        return new GamePackageFrameworkResult(path);
+    }
+
     [RpcMethod("dump.uninstall")]
     public DumperUninstallResult DumpUninstall()
     {

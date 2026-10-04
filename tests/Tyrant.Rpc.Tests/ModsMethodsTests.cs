@@ -91,6 +91,52 @@ public class ModsMethodsTests
     }
 
     [Fact]
+    public async Task Export_writes_the_zip_and_import_brings_it_back()
+    {
+        using var game = new FakeGame();
+        var (h, ws) = await Opened(game);
+        await h.Call("mods.create", new { id = "red-spot" });
+        await h.Call("mods.replace", new { id = "red-spot", texture = Texture.Name, png = Png(ws) });
+
+        var zip = (await h.RunJob("mods.export", new { id = "red-spot" })).GetProperty("path").GetString()!;
+        var again = await Assert.ThrowsAsync<RpcCallException>(() => h.Call("mods.import", new { file = zip }));
+        var imported = await h.Call("mods.import", new { file = zip, replace = true });
+
+        Assert.True(File.Exists(zip));
+        Assert.EndsWith("red-spot-1.0.0.zip", zip);
+        Assert.Equal("MOD_EXISTS", again.DataCode);
+        Assert.Equal("red-spot", imported.GetProperty("id").GetString());
+        Assert.Contains(imported.GetProperty("mods").GetProperty("mods").EnumerateArray(), m => m.GetProperty("id").GetString() == "red-spot");
+    }
+
+    [Fact]
+    public async Task A_mod_with_problems_is_not_exported()
+    {
+        using var game = new FakeGame();
+        var (h, ws) = await Opened(game);
+        await h.Call("mods.create", new { id = "red-spot" });
+        await h.Call("mods.replace", new { id = "red-spot", texture = Texture.Name, png = Png(ws) });
+        File.Delete(Path.Combine(ws, "mods", "red-spot", "textures", "T_carcharodontosaurus_alt1_male_D.png"));
+
+        var ex = await Assert.ThrowsAsync<RpcCallException>(() => h.RunJob("mods.export", new { id = "red-spot" }));
+
+        Assert.Equal("MOD_INVALID", ex.DataCode);
+        Assert.False(Directory.Exists(Path.Combine(ws, "exports")) && Directory.GetFiles(Path.Combine(ws, "exports"), "*.zip").Length > 0);
+    }
+
+    [Fact]
+    public async Task The_framework_zip_is_saved_in_exports()
+    {
+        using var game = new FakeGame();
+        var (h, _) = await Opened(game);
+
+        var path = (await h.Call("game.packageFramework", new { })).GetProperty("path").GetString()!;
+
+        Assert.True(File.Exists(path));
+        Assert.EndsWith($"Tyrant-Framework-{Tyrant.Framework.Core.FrameworkInfo.Version}.zip", path);
+    }
+
+    [Fact]
     public async Task A_mod_with_errors_is_not_installed()
     {
         using var game = new FakeGame();
