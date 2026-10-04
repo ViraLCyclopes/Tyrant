@@ -53,6 +53,9 @@ public interface IAssetReader
     /// </summary>
     ModelFacts WriteModel(GameInstall install, AssetRecord asset, string outputDir, AssetIndex? index = null);
 
+    /// <summary>The prefab's materials (each renderer's, distinct by name), for the skin page's slot list.</summary>
+    IReadOnlyList<MaterialModel> ReadMaterials(GameInstall install, AssetRecord prefab);
+
     /// <summary>Writes any object's fields as JSON.</summary>
     void WriteJson(GameInstall install, AssetRecord asset, string jsonPath);
 

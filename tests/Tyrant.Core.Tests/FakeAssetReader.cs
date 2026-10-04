@@ -33,6 +33,17 @@ public sealed class FakeAssetReader : IAssetReader
 
     public IReadOnlyList<string> ModelMaterialFailures { get; set; } = [];
 
+    /// <summary>What ReadMaterials returns; PrefabReads counts the calls.</summary>
+    public IReadOnlyList<Tyrant.Core.Models.MaterialModel> PrefabMaterials { get; set; } = [];
+    public int PrefabReads { get; private set; }
+
+    public IReadOnlyList<Tyrant.Core.Models.MaterialModel> ReadMaterials(GameInstall install, AssetRecord prefab)
+    {
+        PrefabReads++;
+        Fail(prefab);
+        return PrefabMaterials;
+    }
+
     private int _batches, _callsInBatch;
     private bool _inBatch;
     public int Batches => _batches;

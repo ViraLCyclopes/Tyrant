@@ -11,6 +11,10 @@ public static class SkinDumps
     public const string FemaleDiffuse = "33333333333333333333333333333333";
     public const string MalePattern = "44444444444444444444444444444444";
     public const string FemaleExtra = "55555555555555555555555555555555";
+    public const string PrefabGuid = "09eb8efa8e623a043864dffadc868eb7";
+
+    /// <summary>The species prefab AnimalData.animalRef points at.</summary>
+    public static readonly AssetRecord Prefab = new("carch.bundle", 9, "GameObject", "Carcharodontosaurus", "Assets/Carcharodontosaurus.prefab", PrefabGuid, null);
 
     public static readonly AssetRecord[] Textures =
     [
@@ -29,7 +33,7 @@ public static class SkinDumps
         void Add(string type, string name, long id, string json) => result.Objects.Add(new DumpObject(typeof(object), new EngineObjectInfo(type, name, id), json));
         const string Var = "PrehistoricKingdom.AnimalSkinVariationAsset";
         Add("PrehistoricKingdom.AnimalData", "Carcharodontosaurus", 1, $$$$"""
-            {"$type":"PrehistoricKingdom.AnimalData","$name":"Carcharodontosaurus","$id":1,"speciesID":"Carcharodontosaurus",
+            {"$type":"PrehistoricKingdom.AnimalData","$name":"Carcharodontosaurus","$id":1,"speciesID":"Carcharodontosaurus","animalRef":{"m_AssetGUID":"{{{{PrefabGuid}}}}"},
              "skinsData":[
                {"skinName":"Base","maleVariationData":{"$ref":{"type":"{{{{Var}}}}","name":"Carch_Base_M","id":10}},"femaleVariationData":{"$ref":{"type":"{{{{Var}}}}","name":"Carch_Base_F","id":11}}},
                {"skinName":"Alt 1","maleVariationData":{"$ref":{"type":"{{{{Var}}}}","name":"Carch_Alt1_M","id":12}},"femaleVariationData":{"$ref":{"type":"{{{{Var}}}}","name":"Carch_Alt1_F","id":13}}}

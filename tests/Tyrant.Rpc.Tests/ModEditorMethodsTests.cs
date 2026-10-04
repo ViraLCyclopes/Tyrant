@@ -36,6 +36,51 @@ public class ModEditorMethodsTests
 
     private static string Rev(JsonElement detail) => detail.GetProperty("revision").GetString()!;
 
+    /// <summary>A mod with one skin on Carcharodontosaurus' "Alt 1" (male: diffuse, normal, pattern), with the data dump and an index holding the species prefab.</summary>
+    private static async Task<(RpcHarness H, string Ws, FakeAssetReader Reader)> WithSkinAndPrefab(FakeGame game)
+    {
+        var reader = new FakeAssetReader();
+        var h = new RpcHarness(TestStudio.Options(dumperDir: TestStudio.FakeGameModsDir(), reader: reader));
+        var ws = TestStudio.TempDir();
+        await h.Call("workspace.create", new { dir = ws, gamePath = game.Root });
+        await h.Call("mods.create", new { id = "red-spot", name = "Red spot" });
+        SkinDumps.Write(Path.Combine(ws, "data"));
+        AssetFixtures.WriteIndex(ws, [.. SkinDumps.Textures, SkinDumps.Prefab],
+            Tyrant.Core.Install.GameFingerprint.Compute(new Tyrant.Core.Install.GameInstall(game.Root, null)));
+        var dir = Path.Combine(ws, "mods", "red-spot");
+        Png(Path.Combine(dir, "skins", "blue"), "male_D.png");
+        File.WriteAllText(Path.Combine(dir, "mod.json"),
+            "{\"format\":1,\"id\":\"red-spot\",\"name\":\"Red spot\",\"version\":\"1.0.0\",\"replace\":[],\"skins\":[{\"id\":\"blue\",\"species\":\"Carcharodontosaurus\",\"name\":\"Blue\",\"base\":\"1\",\"male\":{\"diffuse\":\"skins/blue/male_D.png\"}}]}");
+        return (h, ws, reader);
+    }
+
+    private static string[] BaseMaleSlots(JsonElement detail) =>
+        detail.GetProperty("skins")[0].GetProperty("baseMaleSlots").EnumerateArray().Select(s => s.GetString()!).ToArray();
+
+    [Fact]
+    public async Task Skin_slots_follow_the_species_shader()
+    {
+        using var game = new FakeGame();
+        var (h, _, reader) = await WithSkinAndPrefab(game);
+        reader.PrefabMaterials = [new Tyrant.Core.Models.MaterialModel("Carch", [new("_AdultDiffuse", null, 1), new("_AdultNormal", null, 2)])]; // no pattern
+
+        var slots = BaseMaleSlots(await h.Call("mods.get", new { id = "red-spot" }));
+
+        Assert.Equal(["diffuse", "normal"], slots);
+    }
+
+    [Fact]
+    public async Task Skin_slots_fall_back_to_the_base_skin_when_the_material_cannot_be_read()
+    {
+        using var game = new FakeGame();
+        var (h, _, reader) = await WithSkinAndPrefab(game);
+        reader.FailFor.Add(SkinDumps.Prefab.Ref);
+
+        var slots = BaseMaleSlots(await h.Call("mods.get", new { id = "red-spot" }));
+
+        Assert.Contains("pattern", slots); // the base skin's own list, as before
+    }
+
     [Fact]
     public async Task Get_returns_the_mod_its_skins_and_a_revision()
     {

@@ -8,7 +8,11 @@ namespace Tyrant.Core.Mods;
 /// <summary>A vanilla skin of a species: its index and name, and per sex the Addressables GUID of each texture slot it uses.</summary>
 public sealed record VanillaSkin(int Index, string Name, IReadOnlyDictionary<string, string> Male, IReadOnlyDictionary<string, string> Female);
 
-public sealed record SpeciesSkins(string SpeciesId, bool Vivarium, IReadOnlyList<VanillaSkin> Skins);
+public sealed record SpeciesSkins(string SpeciesId, bool Vivarium, IReadOnlyList<VanillaSkin> Skins)
+{
+    /// <summary>The species prefab's Addressables GUID (AnimalData.animalRef); null when the dump has none.</summary>
+    public string? PrefabGuid { get; init; }
+}
 
 /// <summary>Reads species and their skins from the data dump (AnimalData / VivariumAnimalData and their skin variation assets).</summary>
 public static class SpeciesSkinsReader
@@ -66,11 +70,17 @@ public static class SpeciesSkinsReader
                         index++;
                     }
                 }
-                result.Add(new SpeciesSkins(speciesId, type.FullName == VivariumType, skins));
+                result.Add(new SpeciesSkins(speciesId, type.FullName == VivariumType, skins) { PrefabGuid = PrefabGuidOf(root) });
             }
         }
         return result.OrderBy(s => s.SpeciesId, StringComparer.OrdinalIgnoreCase).ToList();
     }
+
+    private static string? PrefabGuidOf(JsonElement root) =>
+        root.TryGetProperty("animalRef", out var reference) && reference.ValueKind == JsonValueKind.Object
+        && reference.TryGetProperty("m_AssetGUID", out var guid) && guid.ValueKind == JsonValueKind.String && guid.GetString() is { Length: > 0 } value
+            ? value
+            : null;
 
     private static IReadOnlyDictionary<string, string> Textures(JsonElement skin, string field, Dictionary<long, JsonElement> variations)
     {

@@ -105,6 +105,13 @@ public sealed class BundleAssetReader : IAssetReader
         };
     }
 
+    public IReadOnlyList<MaterialModel> ReadMaterials(GameInstall install, AssetRecord prefab)
+    {
+        using var lease = Session(install, out var session);
+        var model = new ModelExporter().ReadPrefab(session, prefab);
+        return model.Renderers.SelectMany(r => r.Materials).Where(m => m.Name.Length > 0).DistinctBy(m => m.Name).ToList();
+    }
+
     public void WriteJson(GameInstall install, AssetRecord asset, string jsonPath)
     {
         using var lease = Session(install, out var session);

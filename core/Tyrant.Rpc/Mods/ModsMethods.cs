@@ -247,7 +247,7 @@ public sealed class ModsMethods(StudioSession session, JobManager jobs)
         return DetailOf(ws, mod);
     }
 
-    private static ModDetail DetailOf(Workspace ws, ModProject mod)
+    private ModDetail DetailOf(Workspace ws, ModProject mod)
     {
         var species = mod.Manifest.Skins.Count > 0 ? TrySpecies(ws) : null;
         var m = mod.Manifest;
@@ -257,10 +257,35 @@ public sealed class ModsMethods(StudioSession session, JobManager jobs)
             m.Skins.Select(s =>
             {
                 var based = BaseSkin(species, s);
+                var shader = based is null ? null : ShaderSlotsOf(ws, species, s.Species);
                 return new ModSkinDto(s.Id, s.Key(m.Id), s.Species, s.Name, s.Base, s.Thumbnail, s.Male, s.Female,
                     s.Colors is null ? null : Tyrant.Framework.Core.Json.Write(s.Colors.ToJson()),
-                    based?.Male.Keys.ToList(), based?.Female.Keys.ToList());
+                    based is null ? null : ShaderSlots.Shown(based.Male.Keys.ToList(), shader),
+                    based is null ? null : ShaderSlots.Shown(based.Female.Keys.ToList(), shader));
             }).ToList());
+    }
+
+    /// <summary>Game build + species → the slots its shader uses (null: unknown). Reading a prefab costs a bundle load, so it is cached.</summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, IReadOnlyList<string>?> ShaderSlotCache = new(StringComparer.OrdinalIgnoreCase);
+
+    private IReadOnlyList<string>? ShaderSlotsOf(Workspace ws, IReadOnlyList<SpeciesSkins>? species, string speciesId)
+    {
+        var guid = species?.FirstOrDefault(s => s.SpeciesId == speciesId)?.PrefabGuid;
+        if (guid is null || TryIndex(ws) is not { } index) return null;
+        var prefab = index.Assets.FirstOrDefault(a => a.Type == "GameObject" && string.Equals(a.Guid, guid, StringComparison.OrdinalIgnoreCase));
+        if (prefab is null) return null;
+        var key = $"{index.Fingerprint?.BuildGuid}|{ws.Dir}|{prefab.Ref}";
+        if (ShaderSlotCache.TryGetValue(key, out var known)) return known;
+        try
+        {
+            var slots = ShaderSlots.FromMaterials(Options.AssetReader.ReadMaterials(session.Current().Install, prefab));
+            ShaderSlotCache[key] = slots;
+            return slots;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return null; // the base skin's own list is shown, as before (not cached: the bundle may come back)
+        }
     }
 
     private static VanillaSkin? BaseSkin(IReadOnlyList<SpeciesSkins>? species, Tyrant.Framework.Core.SkinEntry skin)
