@@ -14,3 +14,4 @@ studio/build/
 studio/.svelte-kit/
 studio/src-tauri/gen/
 studio/src-tauri/sidecar/
+studio/portable/
