@@ -3,8 +3,11 @@ Tyrant
 
 studio/static/hero.jpg is the main-menu background of Prehistoric Kingdom. It belongs to the
 game's developer and publisher and is used only as the start-screen art of this modding tool,
-with credit. It is the only game content in this repository; Tyrant never ships other game files.
+with credit. Apart from the screenshots below, it is the only game content in this repository; Tyrant never ships game files.
 tools/hero/extract_hero.py shows how it was exported from the game.
+
+studio/static/backgrounds/bg-*.jpg are in-game screenshots of Prehistoric Kingdom taken by ViraLCyclopes, shown in
+turn with the main-menu art on the start screen. The game's art in them belongs to its developer and publisher.
 
 core/Tyrant.Core/Resources/classdata.tpk is Unity's class type database from AssetRipper/Tpk
 (https://github.com/AssetRipper/Tpk, MIT License, Copyright (c) 2022 ds5678). Tyrant uses it to read the game's

@@ -2,11 +2,14 @@
   import { getShell } from '$lib/shell/shellState.svelte';
   import { getTab } from '$lib/shell/tab.svelte';
   import { getSession } from '$lib/stores/session.svelte';
+  import Backdrop from './Backdrop.svelte';
+  import { BACKGROUNDS, rotation } from './backgrounds';
   import Dock from './Dock.svelte';
 
   const session = getSession();
   const tab = getTab();
   const shell = getShell();
+  const pictures = rotation(BACKGROUNDS, Math.random);
   const firstRun = $derived(session.workspace === null);
   const showIntro = $derived(firstRun || !shell.introHidden);
 
@@ -35,7 +38,7 @@
 </script>
 
 <div class="home">
-  <div class="art" aria-hidden="true"></div>
+  <Backdrop images={pictures} />
   <div class="scrim" aria-hidden="true"></div>
   {#if showIntro}
     <section class="intro" aria-label="About Tyrant">
@@ -66,7 +69,6 @@
 
 <style>
   .home { position: absolute; inset: 0; overflow: hidden; }
-  .art { position: absolute; inset: 0; background: url('/hero.jpg') center / cover no-repeat, var(--bg); }
   .scrim { position: absolute; inset: 0; background: linear-gradient(180deg, transparent 45%, color-mix(in srgb, var(--bg) 80%, transparent)); }
   .intro { position: absolute; left: 32px; top: 32px; max-width: 460px; background: color-mix(in srgb, var(--panel) 90%, transparent); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; display: grid; gap: 10px; }
   .intro h1 { margin: 0; color: var(--accent); }

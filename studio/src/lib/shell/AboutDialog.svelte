@@ -26,7 +26,7 @@
     <h2>Tyrant</h2>
     {#if info}<p class="hint">Version {info.version} · protocol {info.protocolVersion} · {info.runtime}</p>{/if}
     <p>A modding toolset for Prehistoric Kingdom. It never replaces game files: mods are loaded by Tyrant's own framework and can be turned off or removed.</p>
-    <p class="hint">The start-screen art is Prehistoric Kingdom's main-menu background, used with credit to its owners (see NOTICE).</p>
+    <p class="hint">The start-screen art is Prehistoric Kingdom's main-menu background and in-game screenshots by ViraLCyclopes, used with credit to the game's owners (see NOTICE).</p>
     <div class="actions"><button class="primary" onclick={onClose}>Close</button></div>
   </div>
 </div>
