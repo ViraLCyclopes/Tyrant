@@ -4,7 +4,7 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <RootNamespace>Tyrant.Framework</RootNamespace>
     <AssemblyName>Tyrant.Framework</AssemblyName>
-    <Version>0.4.0</Version> <!-- = FrameworkInfo.Version (FrameworkVersionTests) -->
+    <Version>0.5.0</Version> <!-- = FrameworkInfo.Version (FrameworkVersionTests) -->
   </PropertyGroup>
   <ItemGroup>
     <!-- Compile-only: MelonLoader (with HarmonyX) and Unity are provided by the game at runtime. -->

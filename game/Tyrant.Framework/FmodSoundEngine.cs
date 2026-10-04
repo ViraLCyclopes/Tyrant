@@ -30,6 +30,54 @@ namespace Tyrant.Framework
             return _core != IntPtr.Zero;
         }
 
+        // Runs and sounds per followed instance, counted by FMOD's event callback (main thread: FMODUnity defers callbacks).
+        private static readonly FmodNative.EventCallback Callback = OnEvent; // kept alive while FMOD holds it
+        private static readonly Dictionary<IntPtr, FollowedRun> Runs = new Dictionary<IntPtr, FollowedRun>();
+
+        public bool Follow(IntPtr instance)
+        {
+            lock (Runs) Runs[instance] = default; // a reused handle starts from zero
+            const uint mask = FmodNative.CallbackStarted | FmodNative.CallbackRestarted | FmodNative.CallbackSoundPlayed | FmodNative.CallbackDestroyed;
+            if (FmodNative.FMOD_Studio_EventInstance_SetCallback(instance, Callback, mask) == FmodNative.Ok) return true;
+            lock (Runs) Runs.Remove(instance);
+            return false;
+        }
+
+        public FollowedRun Followed(IntPtr instance)
+        {
+            lock (Runs) return Runs.TryGetValue(instance, out var run) ? run : default;
+        }
+
+        public void Unfollow(IntPtr instance)
+        {
+            lock (Runs) Runs.Remove(instance);
+            if (FmodNative.FMOD_Studio_EventInstance_IsValid(instance)) FmodNative.FMOD_Studio_EventInstance_SetCallback(instance, null, 0);
+        }
+
+        private static int OnEvent(uint type, IntPtr instance, IntPtr parameters)
+        {
+            try
+            {
+                lock (Runs)
+                {
+                    if (!Runs.TryGetValue(instance, out var run)) return FmodNative.Ok;
+                    if (type == FmodNative.CallbackStarted || type == FmodNative.CallbackRestarted) run = new FollowedRun { Starts = run.Starts + 1 };
+                    else if (type == FmodNative.CallbackSoundPlayed) run.Sounds++;
+                    else if (type == FmodNative.CallbackDestroyed)
+                    {
+                        Runs.Remove(instance);
+                        return FmodNative.Ok;
+                    }
+                    Runs[instance] = run;
+                }
+            }
+            catch (Exception)
+            {
+                // never let an exception cross into FMOD
+            }
+            return FmodNative.Ok;
+        }
+
         public bool InstanceValid(IntPtr instance) => FmodNative.FMOD_Studio_EventInstance_IsValid(instance);
 
         public bool InstanceStopped(IntPtr instance) =>

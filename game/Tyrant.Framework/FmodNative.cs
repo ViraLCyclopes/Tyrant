@@ -23,6 +23,15 @@ namespace Tyrant.Framework
         public const uint ModeCreateCompressedSample = 0x00000200;
         public const uint Mode3DLinearRolloff = 0x00200000;
 
+        // FMOD_STUDIO_EVENT_CALLBACK_TYPE
+        public const uint CallbackDestroyed = 0x2;
+        public const uint CallbackStarted = 0x8;
+        public const uint CallbackRestarted = 0x10;
+        public const uint CallbackSoundPlayed = 0x2000;
+
+        /// <summary>FMOD_STUDIO_EVENT_CALLBACK; with FMODUnity's deferred callbacks it runs on the main thread in the Studio update.</summary>
+        public delegate int EventCallback(uint type, IntPtr instance, IntPtr parameters);
+
         [StructLayout(LayoutKind.Sequential)]
         public struct Vector
         {
@@ -42,6 +51,7 @@ namespace Tyrant.Framework
         [DllImport(Dll)] public static extern int FMOD_Studio_EventInstance_Get3DAttributes(IntPtr instance, out Attributes3D attributes);
         [DllImport(Dll)] public static extern int FMOD_Studio_EventInstance_SetVolume(IntPtr instance, float volume);
         [DllImport(Dll)] public static extern int FMOD_Studio_EventInstance_GetChannelGroup(IntPtr instance, out IntPtr group);
+        [DllImport(Dll)] public static extern int FMOD_Studio_EventInstance_SetCallback(IntPtr instance, EventCallback? callback, uint mask);
         [DllImport(Dll)] public static extern int FMOD_Studio_EventDescription_GetPath(IntPtr description, IntPtr path, int size, out int retrieved);
         [DllImport(Dll)] public static extern int FMOD_Studio_EventDescription_IsOneshot(IntPtr description, out bool oneshot);
         [DllImport(Dll)] public static extern int FMOD_Studio_EventDescription_Is3D(IntPtr description, out bool is3D);
