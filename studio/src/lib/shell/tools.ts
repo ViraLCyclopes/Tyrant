@@ -60,6 +60,5 @@ export function registerTools(registry: Registry): void {
     instances: 'many',
     load: () => import('$lib/data/DataView.svelte'),
   });
-  registry.register({ id: 'models', name: 'Model replacements', blurb: "Swap an animal's model", icon: PLANNED_ICON, status: 'planned', instances: 'single' });
   registry.register({ id: 'scripts', name: 'Script mods', blurb: 'C# scripts compiled by Tyrant', icon: PLANNED_ICON, status: 'planned', instances: 'single' });
 }

@@ -67,6 +67,14 @@ describe('HomeTool', () => {
     expect(planned).toHaveTextContent('Not built yet');
   });
 
+  it('model replacements are not offered as a tool to come (they live in Assets and the mod editor)', () => {
+    const { session, store } = setup();
+    session.workspace = workspaceStatus();
+    renderHome(session, store);
+
+    expect(screen.queryByRole('button', { name: /Model replacements/ })).toBeNull();
+  });
+
   it('the status chip says how the workspace is and opens the Workspace tab', async () => {
     const { session, store } = setup();
     session.workspace = workspaceStatus({ dir: 'D:\\TestWork', stale: true });
