@@ -78,6 +78,10 @@ public sealed class ModReplaceSoundCommand : Command<ModReplaceSoundCommand.Sett
         [CommandOption("--age-pitch <0-1>")]
         [Description("How much higher babies sound (1, the default, follows the animal's age; 0 never changes).")]
         public double? AgePitch { get; set; }
+
+        [CommandOption("--chance <0-1>")]
+        [Description("How often a one-off sound plays when the game starts it (0.3 = about one time in three). Without it, it follows the game's own chances.")]
+        public double? Chance { get; set; }
     }
 
     public override int Execute(CommandContext context, Settings settings)
@@ -85,8 +89,8 @@ public sealed class ModReplaceSoundCommand : Command<ModReplaceSoundCommand.Sett
         var (ws, _) = CliServices.OpenWorkspace(settings);
         var mod = ModProject.Open(ws, settings.Id);
         var entry = mod.ReplaceSound(settings.Event, settings.Files.Select(Path.GetFullPath).ToList(), settings.Species, settings.Skin);
-        if (settings.Volume is not null || settings.AgePitch is not null)
-            mod.SetSound(entry.Event, entry.Species, entry.Skin, settings.Volume, settings.AgePitch, null, null, null);
+        if (settings.Volume is not null || settings.AgePitch is not null || settings.Chance is not null)
+            mod.SetSound(entry.Event, entry.Species, entry.Skin, settings.Volume, settings.AgePitch, null, null, null, settings.Chance);
         Console.WriteLine($"'{settings.Id}' replaces {SoundCatalog.NameOf(entry.Event).ToLowerInvariant()} {ModProject.ScopeText(entry.Species, entry.Skin)}: {string.Join(", ", entry.Files)}.");
         return ExitCodes.Ok;
     }
@@ -112,6 +116,14 @@ public sealed class ModSetSoundCommand : Command<ModSetSoundCommand.Settings>
         [Description("Move the replacement: only this skin hears it.")]
         public string? ToSkin { get; set; }
 
+        [CommandOption("--chance <0-1>")]
+        [Description("Its own chance for a one-off sound (0.3 = about one time in three).")]
+        public double? Chance { get; set; }
+
+        [CommandOption("--like-game")]
+        [Description("Drop its own chance: it plays when the game's own sound does.")]
+        public bool LikeGame { get; set; }
+
         [CommandOption("--for-everyone")]
         [Description("Move the replacement: every animal (or the whole game) hears it.")]
         public bool ForEveryone { get; set; }
@@ -122,7 +134,7 @@ public sealed class ModSetSoundCommand : Command<ModSetSoundCommand.Settings>
         var (ws, _) = CliServices.OpenWorkspace(settings);
         var mod = ModProject.Open(ws, settings.Id);
         mod.SetSound(settings.Event, settings.Species, settings.Skin, settings.Volume, settings.AgePitch, settings.ToSpecies, settings.ToSkin,
-            settings.ForEveryone ? true : null);
+            settings.ForEveryone ? true : null, settings.Chance, settings.LikeGame);
         Console.WriteLine($"Changed '{settings.Id}''s replacement of {SoundCatalog.NameOf(settings.Event).ToLowerInvariant()}.");
         return ExitCodes.Ok;
     }
@@ -144,5 +156,6 @@ internal static class SoundCli
     /// <summary>One line for 'tyrant mod show'.</summary>
     public static string Line(SoundReplacement s) =>
         $"  {SoundCatalog.NameOf(s.Event),-24} {ModProject.ScopeText(s.Species, s.Skin)}  {s.Files.Count} file(s)  volume {s.Volume.ToString("0.##", CultureInfo.InvariantCulture)}"
-        + $"  age pitch {s.AgePitch.ToString("0.##", CultureInfo.InvariantCulture)}  {s.Event}";
+        + $"  age pitch {s.AgePitch.ToString("0.##", CultureInfo.InvariantCulture)}"
+        + $"  {(s.Chance is double chance ? $"chance {Math.Round(chance * 100).ToString(CultureInfo.InvariantCulture)}%" : "like the game")}  {s.Event}";
 }

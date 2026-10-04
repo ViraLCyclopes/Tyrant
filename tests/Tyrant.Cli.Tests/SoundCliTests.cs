@@ -84,6 +84,25 @@ public class SoundCliTests
     }
 
     [Fact]
+    public void A_sound_gets_its_own_chance_and_back_to_the_games_from_the_command_line()
+    {
+        using var game = new FakeGame();
+        var ws = Setup(game);
+        var wav = Path.Combine(ws, "..", "growl.wav");
+        File.WriteAllBytes(wav, Encoding.ASCII.GetBytes("RIFF\0\0\0\0WAVEfmt growl"));
+
+        var add = Run("mod", "replace-sound", "carch-voice", SoundDumps.Roar, wav, "--chance", "0.25", "-w", ws);
+        var rare = Run("mod", "show", "carch-voice", "-w", ws);
+        var set = Run("mod", "set-sound", "carch-voice", SoundDumps.Roar, "--like-game", "-w", ws);
+        var back = Run("mod", "show", "carch-voice", "-w", ws);
+
+        Assert.True(add.Code == ExitCodes.Ok, add.Err);
+        Assert.Contains("chance 25%", rare.Out);
+        Assert.True(set.Code == ExitCodes.Ok, set.Err);
+        Assert.Contains("like the game", back.Out);
+    }
+
+    [Fact]
     public void A_file_that_is_not_audio_is_refused()
     {
         using var game = new FakeGame();

@@ -557,6 +557,8 @@ export interface ModReplaceSoundParams {
   skin?: string | null;
   volume?: number | null;
   agePitch?: number | null;
+  chance?: number | null;
+  likeGame?: boolean;
 }
 
 export interface ModReplacementDto {
@@ -646,6 +648,8 @@ export interface ModSetSoundParams {
   newSpecies?: string | null;
   newSkin?: string | null;
   forEveryone?: boolean | null;
+  chance?: number | null;
+  likeGame?: boolean;
 }
 
 export interface ModSetThumbnailParams {
@@ -690,6 +694,7 @@ export interface ModSoundDto {
   files: string[];
   volume: number;
   agePitch: number;
+  chance: number | null;
 }
 
 export interface ModSpeciesResult {

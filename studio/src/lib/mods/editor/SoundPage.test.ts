@@ -10,7 +10,7 @@ import SoundPage from './SoundPage.svelte';
 
 const EVENT = 'event:/AnimalFamily Master/Dinosaurs/Shared_TheropodLarge/_TheroLarge_Comp/Vox/TheroLarge_VoxSocialCall';
 const sound = (over: Partial<ModSoundDto> = {}): ModSoundDto => ({
-  event: EVENT, name: 'Social call', group: 'Calls', species: 'Carcharodontosaurus', skin: null, files: ['sounds/roar-1a2b3c4d.wav'], volume: 1, agePitch: 1, ...over,
+  event: EVENT, name: 'Social call', group: 'Calls', species: 'Carcharodontosaurus', skin: null, files: ['sounds/roar-1a2b3c4d.wav'], volume: 1, agePitch: 1, chance: null, ...over,
 });
 
 function setup(s = sound()) {

@@ -156,6 +156,58 @@ public class ModProjectSoundsTests
     }
 
     [Fact]
+    public void A_sound_gets_its_own_chance_and_goes_back_to_the_games()
+    {
+        var (game, mod, dir) = Setup();
+        using var _ = game;
+        mod.ReplaceSound(Roar, [Wav(dir, "a.wav")], null, null);
+
+        mod.SetSound(Roar, null, null, null, null, null, null, null, chance: 0.3);
+        Assert.Equal(0.3, Assert.Single(mod.Manifest.Sounds).Chance);
+        mod.ReplaceSound(Roar, [Wav(dir, "b.wav", "b")], null, null);
+        Assert.Equal(0.3, Assert.Single(mod.Manifest.Sounds).Chance); // re-picking files keeps it
+
+        mod.SetSound(Roar, null, null, null, null, null, null, null, likeGame: true);
+        Assert.Null(mod.Manifest.Sounds[0].Chance);
+    }
+
+    [Fact]
+    public void A_chance_out_of_range_or_with_like_the_game_is_refused()
+    {
+        var (game, mod, dir) = Setup();
+        using var _ = game;
+        mod.ReplaceSound(Roar, [Wav(dir, "a.wav")], null, null);
+
+        Assert.Equal(TyrantErrorCode.ModInvalid, Assert.Throws<TyrantException>(() => mod.SetSound(Roar, null, null, null, null, null, null, null, chance: 1.5)).Code);
+        Assert.Equal(TyrantErrorCode.ModInvalid, Assert.Throws<TyrantException>(() => mod.SetSound(Roar, null, null, null, null, null, null, null, chance: 0.5, likeGame: true)).Code);
+        Assert.Null(mod.Manifest.Sounds[0].Chance);
+    }
+
+    [Fact]
+    public void A_chance_on_a_looping_sound_is_a_warning()
+    {
+        var (game, mod, dir) = Setup();
+        using var _ = game;
+        var data = Path.Combine(Path.GetTempPath(), "tyrant-tests", Guid.NewGuid().ToString("N"), "data");
+        SoundDumps.Write(data); // its event list marks the breath as looping
+        mod.ReplaceSound(SoundDumps.Breath, [Wav(dir, "a.wav")], null, null);
+        mod.SetSound(SoundDumps.Breath, null, null, null, null, null, null, null, chance: 0.5);
+
+        Assert.Contains(Check(mod, SoundCatalog.Read(data)).Warnings, w => w.Contains("loops") && w.Contains("one-off"));
+    }
+
+    [Fact]
+    public void A_chance_of_zero_is_a_warning()
+    {
+        var (game, mod, dir) = Setup();
+        using var _ = game;
+        mod.ReplaceSound(Roar, [Wav(dir, "a.wav")], null, null);
+        mod.SetSound(Roar, null, null, null, null, null, null, null, chance: 0);
+
+        Assert.Contains(Check(mod).Warnings, w => w.Contains("never plays"));
+    }
+
+    [Fact]
     public void Setting_refuses_values_out_of_range_and_a_scope_already_taken()
     {
         var (game, mod, dir) = Setup();

@@ -68,6 +68,21 @@ public class SoundMethodsTests
     }
 
     [Fact]
+    public async Task A_sound_gets_its_own_chance_and_back_to_the_games()
+    {
+        using var game = new FakeGame();
+        var (h, ws) = await Opened(game);
+        var added = await h.Call("mods.replaceSound", new { id = "carch-voice", @event = SoundDumps.Roar, files = new[] { Wav(ws, "a.wav") } });
+        Assert.Equal(JsonValueKind.Null, added.GetProperty("sounds")[0].GetProperty("chance").ValueKind);
+
+        var rare = await h.Call("mods.setSound", new { id = "carch-voice", revision = Rev(added), @event = SoundDumps.Roar, chance = 0.3 });
+        Assert.Equal(0.3, rare.GetProperty("sounds")[0].GetProperty("chance").GetDouble());
+
+        var back = await h.Call("mods.setSound", new { id = "carch-voice", revision = Rev(rare), @event = SoundDumps.Roar, likeGame = true });
+        Assert.Equal(JsonValueKind.Null, back.GetProperty("sounds")[0].GetProperty("chance").ValueKind);
+    }
+
+    [Fact]
     public async Task A_species_lists_its_sounds_with_who_shares_them()
     {
         using var game = new FakeGame();

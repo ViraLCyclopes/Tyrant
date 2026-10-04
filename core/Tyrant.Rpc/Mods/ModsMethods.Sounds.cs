@@ -16,8 +16,8 @@ public sealed partial class ModsMethods
         var (ws, _) = session.Current();
         var mod = ModProject.Open(ws, p.Id, p.Revision);
         var entry = mod.ReplaceSound(p.Event, p.Files, p.Species, p.Skin);
-        if (p.Volume is not null || p.AgePitch is not null)
-            mod.SetSound(entry.Event, entry.Species, entry.Skin, p.Volume, p.AgePitch, null, null, null);
+        if (p.Volume is not null || p.AgePitch is not null || p.Chance is not null || p.LikeGame)
+            mod.SetSound(entry.Event, entry.Species, entry.Skin, p.Volume, p.AgePitch, null, null, null, p.Chance, p.LikeGame);
         session.Log($"'{p.Id}' replaces {SoundCatalog.NameOf(entry.Event).ToLowerInvariant()} ({entry.Event}) {ModProject.ScopeText(entry.Species, entry.Skin)} with {entry.Files.Count} file(s).");
         return DetailOf(ws, mod);
     }
@@ -29,11 +29,11 @@ public sealed partial class ModsMethods
 
     [RpcMethod("mods.setSound")]
     public ModDetail SetSound(ModSetSoundParams p) =>
-        Edit(p.Id, p.Revision, mod => mod.SetSound(p.Event, p.Species, p.Skin, p.Volume, p.AgePitch, p.NewSpecies, p.NewSkin, p.ForEveryone),
+        Edit(p.Id, p.Revision, mod => mod.SetSound(p.Event, p.Species, p.Skin, p.Volume, p.AgePitch, p.NewSpecies, p.NewSkin, p.ForEveryone, p.Chance, p.LikeGame),
             $"changed its replacement of {p.Event}");
 
     private static ModSoundDto SoundDto(Tyrant.Framework.Core.SoundReplacement s) =>
-        new(s.Event, SoundCatalog.NameOf(s.Event), SoundCatalog.GroupOf(s.Event), s.Species, s.Skin, s.Files, s.Volume, s.AgePitch);
+        new(s.Event, SoundCatalog.NameOf(s.Event), SoundCatalog.GroupOf(s.Event), s.Species, s.Skin, s.Files, s.Volume, s.AgePitch, s.Chance);
 
     private static string? Blank(string? text) => string.IsNullOrWhiteSpace(text) ? null : text.Trim();
 

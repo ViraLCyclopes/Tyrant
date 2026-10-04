@@ -48,7 +48,7 @@ public sealed partial class ModProject
         }
 
         var old = FindSound(path, species, skin);
-        var entry = new SoundReplacement { Event = path, Species = species, Skin = skin, Volume = old?.Volume ?? 1.0, AgePitch = old?.AgePitch ?? 1.0 };
+        var entry = new SoundReplacement { Event = path, Species = species, Skin = skin, Volume = old?.Volume ?? 1.0, AgePitch = old?.AgePitch ?? 1.0, Chance = old?.Chance };
         entry.Files.AddRange(files);
         var at = old is null ? Manifest.Sounds.Count : Manifest.Sounds.IndexOf(old);
         if (old is not null) Manifest.Sounds.Remove(old);
@@ -69,9 +69,14 @@ public sealed partial class ModProject
     /// Changes a sound replacement's volume (0–2), age pitch (0–1) or who hears it: <paramref name="forEveryone"/>, another
     /// species or another skin moves the entry there (refused when that scope already replaces the sound).
     /// </summary>
-    public void SetSound(string eventPath, string? species, string? skin, double? volume, double? agePitch, string? newSpecies, string? newSkin, bool? forEveryone)
+    public void SetSound(string eventPath, string? species, string? skin, double? volume, double? agePitch, string? newSpecies, string? newSkin, bool? forEveryone,
+        double? chance = null, bool likeGame = false)
     {
         var entry = Sound(eventPath, species, skin);
+        if (chance is { } c && (double.IsNaN(c) || c < 0 || c > 1))
+            throw new TyrantException(TyrantErrorCode.ModInvalid, "A chance goes from 0 to 1 (0.3 = about one time in three).");
+        if (chance is not null && likeGame)
+            throw new TyrantException(TyrantErrorCode.ModInvalid, "Choose one: your own chance, or like the game.");
         if (volume is { } v && (double.IsNaN(v) || v < 0 || v > 2))
             throw new TyrantException(TyrantErrorCode.ModInvalid, "Volume goes from 0 to 2 (1 is the file as it is).");
         if (agePitch is { } a && (double.IsNaN(a) || a < 0 || a > 1))
@@ -91,6 +96,8 @@ public sealed partial class ModProject
 
         if (volume is { } newVolume) entry.Volume = newVolume;
         if (agePitch is { } newAgePitch) entry.AgePitch = newAgePitch;
+        if (chance is { } newChance) entry.Chance = newChance;
+        if (likeGame) entry.Chance = null;
         entry.Species = targetSpecies;
         entry.Skin = targetSkin;
         Save();

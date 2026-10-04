@@ -37,8 +37,8 @@ describe('ModEditor', () => {
   it('lists sounds under Sounds with who hears them and opens their page', async () => {
     setup(modDetail({
       sounds: [
-        { event: 'event:/X/Vox/TheroLarge_VoxSocialCall', name: 'Social call', group: 'Calls', species: 'Carcharodontosaurus', skin: null, files: ['sounds/a.wav'], volume: 1, agePitch: 1 },
-        { event: 'event:/User Interface/UI_Click', name: 'Click', group: 'Interface', species: null, skin: null, files: ['sounds/b.ogg'], volume: 1, agePitch: 1 },
+        { event: 'event:/X/Vox/TheroLarge_VoxSocialCall', name: 'Social call', group: 'Calls', species: 'Carcharodontosaurus', skin: null, files: ['sounds/a.wav'], volume: 1, agePitch: 1, chance: null },
+        { event: 'event:/User Interface/UI_Click', name: 'Click', group: 'Interface', species: null, skin: null, files: ['sounds/b.ogg'], volume: 1, agePitch: 1, chance: null },
       ],
     }));
 
