@@ -29,6 +29,9 @@ public sealed record AssetRecord(string Bundle, long PathId, string Type, string
 
 public sealed record IndexFailure(string Bundle, string Error);
 
+/// <summary>A source file (bundle or built-in file) as it was when indexed: a source with the same stamp is not read again.</summary>
+public sealed record IndexedSource(string Key, long Length, long WriteTicks);
+
 /// <summary>Every object in the game's Addressables bundles, with catalog GUIDs where known.</summary>
 public sealed class AssetIndex
 {
@@ -38,8 +41,8 @@ public sealed class AssetIndex
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     private static readonly Regex GuidPattern = new("^[0-9a-f]{32}$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-    /// <summary>The index format this Tyrant writes (2: materials' archive map).</summary>
-    public const int CurrentSchemaVersion = 2;
+    /// <summary>The index format this Tyrant writes (2: materials' archive map; 3: built-in files and per-source stamps).</summary>
+    public const int CurrentSchemaVersion = 3;
 
     public int SchemaVersion { get; set; } = CurrentSchemaVersion;
 
@@ -49,6 +52,9 @@ public sealed class AssetIndex
     public GameFingerprint? Fingerprint { get; set; }
     public List<AssetRecord> Assets { get; set; } = [];
     public List<IndexFailure> Failures { get; set; } = [];
+
+    /// <summary>Each source's size and write time when it was read; Index assets re-reads only sources whose stamp changed.</summary>
+    public List<IndexedSource> Sources { get; set; } = [];
 
     /// <summary>Bundles the catalog lists that are not on disk (e.g. DLC that is not downloaded).</summary>
     public List<string> MissingBundles { get; set; } = [];
@@ -101,6 +107,7 @@ public sealed class AssetIndex
                 throw Missing($"The asset index was made by a newer Tyrant (format {index.SchemaVersion}). Update Tyrant, or index the assets again (Workspace → Index assets, or 'tyrant assets index').");
             index.Assets ??= [];
             index.Failures ??= [];
+            index.Sources ??= [];
             index.MissingBundles ??= [];
             index.Warnings ??= [];
             var archives = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);

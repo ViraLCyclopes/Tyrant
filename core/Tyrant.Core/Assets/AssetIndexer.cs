@@ -11,7 +11,14 @@ namespace Tyrant.Core.Assets;
 /// <summary>Scans every Addressables bundle and the game's built-in files into an <see cref="AssetIndex"/>.</summary>
 public sealed class AssetIndexer
 {
-    public AssetIndex Build(GameInstall install, IProgress<JobProgress>? progress, CancellationToken ct)
+    private readonly Func<AssetSession, AssetSource, Dictionary<string, string>, List<AssetRecord>> _scan;
+
+    /// <param name="scan">Reads one source into records, adding its archive names (tests pass a fake); null reads the game's files.</param>
+    public AssetIndexer(Func<AssetSession, AssetSource, Dictionary<string, string>, List<AssetRecord>>? scan = null) =>
+        _scan = scan ?? ((session, source, archives) => source.BuiltIn ? ScanBuiltIn(session, source, archives) : ScanBundle(session.Manager, source.FullPath, source.Key, archives));
+
+    /// <param name="previous">The last index: sources whose size and write time are unchanged are copied from it instead of read again.</param>
+    public AssetIndex Build(GameInstall install, IProgress<JobProgress>? progress, CancellationToken ct, AssetIndex? previous = null)
     {
         var aaDir = AssetSession.AaDirOf(install);
         var catalogPath = Path.Combine(aaDir, "catalog.json");
@@ -38,15 +45,29 @@ public sealed class AssetIndexer
         var records = new List<AssetRecord>();
         var archives = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var failures = new List<IndexFailure>();
+        var stamps = new List<IndexedSource>();
+        var reusable = previous is { IsOutdatedFormat: false } ? previous : null; // an older format is rebuilt in full
+        var known = reusable?.Sources.ToDictionary(s => s.Key, StringComparer.OrdinalIgnoreCase) ?? new Dictionary<string, IndexedSource>(StringComparer.OrdinalIgnoreCase);
+        var oldRecords = reusable?.Assets.ToLookup(a => a.Bundle, StringComparer.OrdinalIgnoreCase);
         using var session = new AssetSession(install);
         for (var i = 0; i < sources.Count; i++)
         {
             ct.ThrowIfCancellationRequested();
             var source = sources[i];
+            var info = new FileInfo(source.FullPath);
+            var stamp = new IndexedSource(source.Key, info.Length, info.LastWriteTimeUtc.Ticks);
+            if (known.TryGetValue(source.Key, out var old) && old == stamp && oldRecords is not null)
+            {
+                records.AddRange(oldRecords[source.Key]);
+                foreach (var (name, owner) in reusable!.Archives) if (string.Equals(owner, source.Key, StringComparison.OrdinalIgnoreCase)) archives.TryAdd(name, owner);
+                stamps.Add(stamp);
+                continue;
+            }
             if (i % 100 == 0 || source.BuiltIn) progress?.Report(new JobProgress((double)i / sources.Count, $"Indexing {source.Key}"));
             try
             {
-                records.AddRange(source.BuiltIn ? ScanBuiltIn(session, source, archives) : ScanBundle(session.Manager, source.FullPath, source.Key, archives));
+                records.AddRange(_scan(session, source, archives));
+                stamps.Add(stamp); // a failed source gets no stamp, so it is read again next time
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -65,6 +86,7 @@ public sealed class AssetIndexer
             Fingerprint = GameFingerprint.Compute(install),
             Assets = catalog is null ? records : AssetIndex.AttachCatalogKeys(records, catalog),
             Failures = failures,
+            Sources = stamps,
             MissingBundles = catalog is null ? [] : MissingBundles(catalog, aaDir),
             Warnings = warnings,
             Archives = archives,
@@ -73,7 +95,16 @@ public sealed class AssetIndexer
 
     public AssetIndex BuildAndSave(GameInstall install, Workspace ws, IProgress<JobProgress>? progress, CancellationToken ct)
     {
-        var index = Build(install, progress, ct);
+        AssetIndex? previous = null;
+        try
+        {
+            previous = File.Exists(AssetIndex.PathIn(ws)) ? AssetIndex.Load(AssetIndex.PathIn(ws)) : null;
+        }
+        catch (TyrantException)
+        {
+            // an unreadable or newer index is simply rebuilt in full
+        }
+        var index = Build(install, progress, ct, previous);
         index.Save(AssetIndex.PathIn(ws));
         ws.StampOutput(AssetIndex.OutputName, index.Fingerprint!);
         return index;

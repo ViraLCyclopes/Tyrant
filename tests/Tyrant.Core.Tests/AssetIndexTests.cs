@@ -134,7 +134,7 @@ public class AssetIndexTests
 
         var index = AssetIndex.Load(path);
 
-        Assert.Equal(2, index.SchemaVersion);
+        Assert.Equal(AssetIndex.CurrentSchemaVersion, index.SchemaVersion);
         Assert.Equal(Bundle, index.BundleOfArchive("archive:/CAB-abc/CAB-abc"));
         Assert.Equal(Bundle, index.BundleOfArchive("cab-ABC"));
         Assert.Null(index.BundleOfArchive("archive:/CAB-other/CAB-other"));
