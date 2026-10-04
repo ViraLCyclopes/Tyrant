@@ -19,6 +19,24 @@ public sealed class AssetSession : IDisposable
 
     internal AssetsManager Manager => _manager;
 
+    private bool _packageLoaded;
+    private readonly HashSet<string> _databases = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Files without type trees (the game's built-in files) are read with the class database of their Unity version. The
+    /// package is loaded on first need, so sessions that only read bundles never pay for it.
+    /// </summary>
+    internal void UseClassDatabase(AssetsFileInstance file)
+    {
+        if (file.file.Metadata.TypeTreeEnabled) return;
+        if (!_packageLoaded)
+        {
+            _manager.LoadClassPackage(ClassDatabase.Open());
+            _packageLoaded = true;
+        }
+        if (_databases.Add(file.file.Metadata.UnityVersion)) _manager.LoadClassDatabaseFromPackage(file.file.Metadata.UnityVersion);
+    }
+
     public static string AaDirOf(GameInstall install) => Path.Combine(install.StreamingAssetsDir, "aa");
 
     /// <summary>Full path of an indexed bundle; refuses anything outside StreamingAssets/aa.</summary>

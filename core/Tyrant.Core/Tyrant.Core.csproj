@@ -17,4 +17,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\game\Tyrant.Framework.Core\Tyrant.Framework.Core.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\classdata.tpk" LogicalName="Tyrant.Core.Resources.classdata.tpk" />
+  </ItemGroup>
 </Project>
