@@ -4,7 +4,7 @@
 
 Tyrant is a free modding toolkit for **Prehistoric Kingdom**. Browse and export the game's textures, models and data;
 make texture and skin mods (new skins appear in the Nursery); replace an animal's model with your own Blender edit;
-and share mods as zips. Mods never replace or patch game files: Tyrant adds them at runtime and **Uninstall from
+replace game sounds, for everyone or for one species; and share mods as zips. Mods never replace or patch game files: Tyrant adds them at runtime and **Uninstall from
 game** puts the game back to vanilla. Nothing from the game is redistributed; everything is read from your own install.
 
 ## Download
@@ -19,7 +19,7 @@ anyway**.
    **Refresh all** (asset index, data dump, game code).
 2. **Workspace tab → Install Tyrant in game:** adds MelonLoader and Tyrant's framework (reversible).
 3. **Make a mod:** on the Assets tab **Replace in a mod…** a texture, on the Species tab **Add a skin…**, or **Replace model
-   in a mod…** on an animal's prefab; then **Install to game** and start the game.
+   in a mod…** on an animal's prefab, or **Sounds… → Replace…** on the Species tab; then **Install to game** and start the game.
 
 To play a mod someone shared: **Mods tab → Add mod from zip…**, then **Install to game**. Without Tyrant: install
 MelonLoader 0.7.3, unzip `Tyrant-Framework-<version>.zip` (from the releases page) and the mod's zip into the game folder.
@@ -110,12 +110,14 @@ dotnet run --project cli/Tyrant.Cli -- data export AnimalData -w D:\tyrant-works
 dotnet run --project cli/Tyrant.Cli -- dump uninstall -w D:\tyrant-workspace   # removes exactly what install added
 ```
 
-Mods (texture replacements; format in [docs/mod-format.md](docs/mod-format.md)):
+Mods (texture, model and sound replacements and skins; format in [docs/mod-format.md](docs/mod-format.md)):
 
 ```powershell
 dotnet run --project cli/Tyrant.Cli -- mod new red-spot-carcharo --name "Red-spot Carcharodontosaurus" -w D:\tyrant-workspace
 dotnet run --project cli/Tyrant.Cli -- mod replace red-spot-carcharo T_carcharodontosaurus_alt1_male_D [your.png] -w D:\tyrant-workspace
 dotnet run --project cli/Tyrant.Cli -- mod add-skin red-spot-carcharo Carcharodontosaurus --name "Red spot" --base "Alt 1" -w D:\tyrant-workspace   # a new skin from a vanilla template (needs a data dump)
+dotnet run --project cli/Tyrant.Cli -- sounds list --species Carcharodontosaurus -w D:\tyrant-workspace   # its sounds by moment (needs a data dump); --search click for any game sound
+dotnet run --project cli/Tyrant.Cli -- mod replace-sound red-spot-carcharo "event:/…/TheroLarge_VoxSocialCall" call1.ogg call2.ogg --species Carcharodontosaurus -w D:\tyrant-workspace   # also: set-sound, remove-sound
 dotnet run --project cli/Tyrant.Cli -- mod check red-spot-carcharo -w D:\tyrant-workspace
 dotnet run --project cli/Tyrant.Cli -- mod restore-cutouts red-spot-carcharo -w D:\tyrant-workspace   # put back see-through feathers/hair an editor flattened
 dotnet run --project cli/Tyrant.Cli -- mod install red-spot-carcharo -w D:\tyrant-workspace   # adds MelonLoader + Tyrant's framework if needed

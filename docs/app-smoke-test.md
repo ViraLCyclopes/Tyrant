@@ -105,7 +105,7 @@ Release build: `npm run build:app`, install `studio/src-tauri/target/release/bun
     model; switching an animal back to another skin puts that skin's model (or the game's) back.
 55. Export the .glb from step 51 again from Blender: the model's page says it changed since you added it; **Re-import** brings in the
     new version (Ctrl+Z goes back).
-56. Workspace → Tyrant in the game shows "Framework: 0.3.0 in the game · 0.3.0 in this Tyrant" and MelonLoader's version.
+56. Workspace → Tyrant in the game shows "Framework: 0.4.0 in the game · 0.4.0 in this Tyrant" and MelonLoader's version.
 57. Mod editor → Mod → **Export for sharing…** on a skin mod: the zip holds `UserData\Tyrant\Mods\<id>\…` and `README.txt`;
     older model builds are not inside.
 58. In a second workspace: Mods → **Add mod from zip…** → the mod appears; doing it again asks to replace it.
@@ -117,6 +117,22 @@ Release build: `npm run build:app`, install `studio/src-tauri/target/release/bun
 62. Edit → Preferences → untick **Check for updates when Tyrant starts**, restart: no update check runs.
 63. **(after the first signed release)** An older installed Tyrant shows "Tyrant X is available"; **Update now** installs it
     and Tyrant restarts on the new version; the framework offer follows when its framework changed.
+64. **(game)** Workspace → **Run data dump** once more: `<workspace>\data\audio\events.json` appears; Species tab →
+    **All sounds…** finds "click" and music without the "only the animals' sounds" note.
+65. **(game)** Species → Carcharodontosaurus → **Sounds…** → Calls → **Replace…** on the social call (*shared with N species*),
+    pick two short OGGs, keep **Only Carcharodontosaurus**, add to a mod and install. In the game, a Carcharodontosaurus calls
+    with your files (one at random) while an Acrocanthosaurus beside it keeps the game's call, also when both call together.
+    `MelonLoader\Latest.log` has "Replaced event:/… for Carcharodontosaurus".
+66. **(game)** All sounds → a button click → **Replace…** (for everyone) → install: every click in the game's menus plays your
+    file.
+67. **(game)** Lower the game's Sounds slider: the replaced calls and clicks get quieter with it, down to silent at 0.
+68. **(game)** A baby Carcharodontosaurus calls higher than an adult; set **Baby pitch** to 0 on the sound's page, install: the
+    baby sounds like the adult.
+69. **(game)** Replace the large-theropod breathing (Breathing group, a looping sound): it loops while the animal breathes and
+    stops when it stops (or when the animal is removed).
+70. **(game)** Delete one of the mod's sound files from `<game>\UserData\Tyrant\Mods\<id>\sounds\`, start the game: that sound
+    plays the game's original and `Latest.log` says which file could not be opened; Tyrant's Check on the workspace copy is
+    still clean (the workspace file is there).
 
 **Shell (tabs, log, preferences):**
 

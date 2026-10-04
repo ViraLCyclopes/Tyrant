@@ -103,6 +103,10 @@ files that changed; again after a game update).
   Tyrant accepts the merged and quad mesh back as it is.
 - **Species**: export one animal's pack — its models, every texture of its group and `targets.json` with each asset's
   key — into `assets\species\<name>`.
+- **Sounds** (Species tab; needs a data dump): **Sounds…** on a species lists its sounds by moment (calls, growls,
+  footsteps, breathing, eating and drinking, body, combat). A sound marked *shared with N species* plays for all of them.
+  **All sounds…** searches every game sound, buttons, buildings and music included (a dump made before Tyrant 0.4 lists
+  only the animals' sounds; run the data dump again).
 
 ## Mods
 
@@ -114,6 +118,12 @@ files that changed; again after a game update).
   2. Reshape or replace the mesh; keep the armature, its bone names, the two growth shape keys and the material names. Sculpt or edit with the Basis selected in Shape Keys: the growth keys follow it, so do not repeat the change on them. Do not use Voxel Remesh (it deletes the shape keys). File → Export → glTF 2.0 (.glb).
   3. Assets tab → the prefab → **Replace model in a mod…** → pick a mod (or **New mod…**) → **Browse…** your `.glb` → **Add to mod**. Tyrant checks it, builds its levels of detail and adds it. For one skin only, use the skin's **Model** row in the mod editor.
   4. CLI: `tyrant mod replace-model <mod> <species> <file.glb> [--skin <id>]`, `tyrant mod remove-model`, `tyrant mod rebuild-models`.
+- **Replace a sound:**
+  1. Species tab → **Sounds…** on the animal (or **All sounds…**) → **Replace…** on the sound.
+  2. Pick a mod (or **New mod…**) and **Choose files…**: WAV, OGG, MP3 or FLAC; pick several and one plays at random each time.
+  3. From a species' list choose **Only <species>** (the default: other animals that share the sound keep the game's) or **For every animal that uses it**. From All sounds it is for everyone.
+  4. **Add to mod**, then **Install to game**. Babies play the new sound higher, as they do the game's.
+  5. CLI: `tyrant sounds list [--species <id>] [--search <text>]`, `tyrant mod replace-sound <mod> <event> <files…> [--species <id> | --skin <key>] [--volume 0-2] [--age-pitch 0-1]`, `tyrant mod set-sound`, `tyrant mod remove-sound`.
 - **Edit a mod:** **Open** a mod in the Mods tab (a new mod opens by itself) to edit it in its own tab.
   - The list on the left has **Mod details**, each **skin**, each **texture replacement** and **Check**; the page on the right edits what you picked.
   - Every change is saved at once. **Ctrl+Z** / **Ctrl+Y** (or **Edit ▸ Undo / Redo**) step back and forward. Replacing or deleting a file cannot be undone.
@@ -125,6 +135,7 @@ files that changed; again after a game update).
     shows another animal (the same one as the first 2D animal). It needs a data dump and an asset index (Workspace tab).
   - **Remove skin…** asks first and can delete its files; its number in the game stays reserved.
   - **Models** lists the species whose model the mod replaces. A model's page shows it in 3D with **LOD 0 / 1 / 2** (as the game draws it near and far), its vertices against the game's, its problems, and **Replace…**, **Rebuild LODs** and **Remove**. When you export your `.glb` again after adding it, the page says so and offers **Re-import**. A skin's **Model** row shows whether it wears its own model, the species replacement or the game's, with **Replace model…** and **Use species model**.
+  - **Sounds** lists the mod's sound replacements with who hears them. A sound's page sets who hears it (**Only one species**, **Only one skin** or **Everyone**, then **Apply**), its files (**Add files…**, ✕ to drop one), **Volume** (0–2) and **Baby pitch** (how much higher young animals sound; 0 = like adults), and **Remove**.
   - The **Mod** menu has Install, Check, Restore cutouts, Open folder and Remove from game.
   - If the mod's `mod.json` is changed elsewhere (another program, `tyrant mod …`), the tab reloads it when you come back.
 - **Mods tab:**
@@ -149,7 +160,7 @@ files that changed; again after a game update).
 - **Restore cutouts** appears under a Check result when a colour PNG lost the see-through feathers or hair of its vanilla texture (an editor saved it without alpha). It copies the vanilla transparency back; install again afterwards.
 - **In the game's Nursery,** a grid button next to **Design** (species with more than 5 skins) opens **All skins**: every skin with a search box (skin or mod name). Click a skin to wear it; close with the X or Esc.
 - **Update Tyrant in game** (Workspace tab) appears after a Tyrant update; installing a mod also updates the framework.
-- **Start the game.** `MelonLoader\Latest.log` lists the mods Tyrant loaded and each texture it replaced.
+- **Start the game.** `MelonLoader\Latest.log` lists the mods Tyrant loaded, each texture it replaced and each sound the first time it plays.
 - **The file format** is described in `docs/mod-format.md`.
 
 ## Data

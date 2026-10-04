@@ -140,6 +140,43 @@ and on a skin: `"model": "models/carcharodontosaurus-spiked-5e6f7a8b.glb"`.
 - `file` must lie inside the mod; a path that leads outside it is an error, and Tyrant builds nothing for it.
 - Check and Install rebuild the converted files when the `.glb` in the mod changed. Tyrant also remembers the file you added the model from; when you export it again, Check warns and the model's page offers **Re-import** (or run `tyrant mod replace-model` again).
 
+## Sounds (replacing game sounds)
+
+Needs Tyrant Framework 0.4.0 or newer (Tyrant writes `requires.tyrant` for you when it exports the mod).
+
+```json
+"sounds": [
+  { "event": "event:/AnimalFamily Master/Dinosaurs/Shared_TheropodLarge/_TheroLarge_Comp/Vox/TheroLarge_VoxSocialCall",
+    "species": "Carcharodontosaurus",
+    "files": ["sounds/carch-call-1a2b3c4d.ogg", "sounds/carch-call-2-5e6f7a8b.ogg"],
+    "volume": 0.9 },
+  { "event": "event:/User Interface/Buttons/UI_Click", "files": ["sounds/click-9a8b7c6d.wav"] }
+]
+```
+
+| Field | Meaning |
+|---|---|
+| `event` | The game sound (an FMOD event path). Copy it from a species' **Sounds…** or **All sounds…** on the Assets tab, or from `tyrant sounds list`. |
+| `species` | Only this species hears the new sound (the exact species id, e.g. `Carcharodontosaurus`). |
+| `skin` | Only animals wearing this skin hear it: `<mod id>/<skin id>` for a Tyrant skin, `<species>/<skin name>` for a game skin (`Carcharodontosaurus/Alt 1`). Use `species` or `skin`, not both. |
+| `files` | One or more audio files in the mod: WAV, OGG, MP3 or FLAC (Tyrant checks the contents, not the name). With several, one is picked at random each time, never the same one twice in a row. |
+| `volume` | 0–2; 1 (the default) plays the file as it is. |
+| `agePitch` | 0–1; how much higher babies play the sound, following the animal's age (1, the default: a newborn plays half again as high; 0: like adults). Interface sounds and music ignore it. |
+
+- **Which sound plays:** the animal's skin's replacement, else its species', else the one for everyone, else the game's
+  own. Within one level, the later mod in the load order wins. Many animals share sounds (every large theropod uses the
+  same calls): a replacement for everyone changes all of them, while a `species` one changes only that animal. When a
+  shared call plays for a Carcharodontosaurus with its own call and for an Acrocanthosaurus at the same moment, each
+  hears its own.
+- **How it plays:** the game's sound is silenced and the file plays in its place, at the animal and in the game's own
+  mixer, so the Sounds and Music sliders apply. A looping sound (breathing) loops the file until the game stops it; a
+  one-shot plays the file to its end.
+- **When a file is missing or not audio:** Check and Install say so; in the game the original sound plays and the log
+  says which file could not be opened.
+- **Big files:** the game loads each file into memory; over 20 MB is a warning. OGG keeps files small.
+- Tyrant copies your files into `sounds/` under names with a short content hash, so two files called `roar.wav` never
+  clash.
+
 ## Sharing a mod
 
 - **Export for sharing** (mod editor → Mod menu, or `tyrant mod export <id>`) runs Check first and refuses a mod with
@@ -165,7 +202,7 @@ and on a skin: `"model": "models/carcharodontosaurus-spiked-5e6f7a8b.glb"`.
 ## In the game
 
 - **Where installed mods live:** `<game>/UserData/Tyrant/Mods/<id>/`.
-- **On/off and load order:** `<game>/UserData/Tyrant/mods.json`. When two mods replace the same texture, the later one wins.
+- **On/off and load order:** `<game>/UserData/Tyrant/mods.json`. When two mods replace the same texture, model or sound, the later one wins.
 - **What the framework logs** in `<game>/MelonLoader/Latest.log`:
   - each mod it loaded;
   - each one it skipped, and why;
