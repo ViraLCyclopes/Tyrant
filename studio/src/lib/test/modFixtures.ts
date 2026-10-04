@@ -22,6 +22,7 @@ export function modDetail(over: Partial<ModDetail> = {}): ModDetail {
         male: { diffuse: 'skins/red/male_D.png' }, female: null, colorsJson: null, baseMaleSlots: null, baseFemaleSlots: null,
       },
     ],
+    models: [],
     ...over,
   };
 }
