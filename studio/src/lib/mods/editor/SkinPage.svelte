@@ -8,11 +8,17 @@
   import { checkLinesFor } from './slots';
   import Thumb from './Thumb.svelte';
 
-  let { doc, skin }: { doc: ModDoc; skin: ModSkinDto } = $props();
+  let { doc, skin, onOpenModel = () => {} }: { doc: ModDoc; skin: ModSkinDto; onOpenModel?: (target: string, skin: string | null) => void } = $props();
   const session = getSession();
   let name = $state('');
   let removing = $state(false);
   const lines = $derived(checkLinesFor(doc.check, skin.key));
+  const speciesModel = $derived(doc.detail?.models.find((m) => m.skin === null && m.target === skin.species));
+
+  async function replaceModel() {
+    const file = await session.platform.openFile(`Choose a model for ${skin.name} (.glb from Blender)`, ['glb']);
+    if (file) await doc.edit('mods.replaceModel', { file, skin: skin.id });
+  }
 
   // Follows saves, undo and outside changes.
   $effect(() => {
@@ -49,6 +55,21 @@
     <button onclick={pickThumbnail}>Pick PNG…</button>
     <button disabled={!skin.thumbnail} onclick={() => doc.edit('mods.setThumbnail', { skin: skin.id, png: null })}>Automatic</button>
     {#if !skin.thumbnail}<span class="hint">The game cuts a swatch from the diffuse.</span>{/if}
+  </div>
+</section>
+
+<section class="card">
+  <h2>Model</h2>
+  <div class="row">
+    {#if skin.model}
+      <span>Model: its own</span>
+      <button onclick={() => onOpenModel(skin.species, skin.id)}>Open</button>
+      <button onclick={replaceModel}>Replace model…</button>
+      <button onclick={() => doc.edit('mods.removeModel', { target: skin.species, skin: skin.id })}>Use species model</button>
+    {:else}
+      <span>{speciesModel ? `Model: species replacement (${speciesModel.file})` : "Model: the game's"}</span>
+      <button onclick={replaceModel}>Replace model…</button>
+    {/if}
   </div>
 </section>
 

@@ -6,6 +6,7 @@
   import { installMod, removeFromGame, restoreCutouts } from '../modActions';
   import CheckPage from './CheckPage.svelte';
   import ModDetailsPage from './ModDetailsPage.svelte';
+  import ModelPage from './ModelPage.svelte';
   import { ModDoc } from './modDoc.svelte';
   import ModSideList from './ModSideList.svelte';
   import ReplacementPage from './ReplacementPage.svelte';
@@ -77,9 +78,14 @@
     const s = selection;
     if (s.kind === 'skin' && !d.skins.some((k) => k.id === s.id)) selection = { kind: 'details' };
     if (s.kind === 'replace' && !d.replace.some((r) => r.texture === s.texture)) selection = { kind: 'details' };
+    if (s.kind === 'model' && !d.models.some((m) => m.target === s.target && m.skin === s.skin)) selection = { kind: 'details' };
   });
 
   const selectedSkin = $derived(selection.kind === 'skin' ? doc.detail?.skins.find((k) => k.id === (selection as { id: string }).id) : undefined);
+  const selectedModel = $derived.by(() => {
+    const s = selection;
+    return s.kind === 'model' ? doc.detail?.models.find((m) => m.target === s.target && m.skin === s.skin) : undefined;
+  });
   const selectedReplacement = $derived(
     selection.kind === 'replace' ? doc.detail?.replace.find((r) => r.texture === (selection as { texture: string }).texture) : undefined,
   );
@@ -96,7 +102,9 @@
       {:else if selection.kind === 'details'}
         <ModDetailsPage {doc} />
       {:else if selectedSkin}
-        <SkinPage {doc} skin={selectedSkin} />
+        <SkinPage {doc} skin={selectedSkin} onOpenModel={(target, skin) => (selection = { kind: 'model', target, skin })} />
+      {:else if selectedModel}
+        <ModelPage {doc} model={selectedModel} onRemoved={() => (selection = { kind: 'details' })} />
       {:else if selectedReplacement}
         <ReplacementPage {doc} replacement={selectedReplacement} onRemoved={() => (selection = { kind: 'details' })} />
       {:else if selection.kind === 'check'}

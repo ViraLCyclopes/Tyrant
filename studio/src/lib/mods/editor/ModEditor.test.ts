@@ -9,9 +9,9 @@ import { messages, renderWith } from '$lib/test/fixtures';
 import { modDetail } from '$lib/test/modFixtures';
 import ModEditor from './ModEditor.svelte';
 
-function setup() {
+function setup(detail = modDetail()) {
   const rpc = new FakeRpc()
-    .on('mods.get', () => modDetail())
+    .on('mods.get', () => detail)
     .on('mods.check', () => ({ errors: [], warnings: ['red-spot/blue male diffuse: small'], missingCutouts: [] }))
     .on('mods.thumbnail', () => ({ file: null }))
     .on('mods.colorPreview', () => ({ files: [] }));
@@ -26,6 +26,14 @@ function setup() {
 }
 
 describe('ModEditor', () => {
+  it('lists species models under Models and opens their page', async () => {
+    setup(modDetail({ models: [{ target: 'Carcharodontosaurus', skin: null, file: 'models/carch-1a2b.glb', lods: [], errors: [], warnings: [], stale: false }] }));
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Carcharodontosaurus' }));
+
+    expect(await screen.findByRole('heading', { name: 'Model: Carcharodontosaurus' })).toBeInTheDocument();
+  });
+
   it('lists the mod, its skins and replacements, and names the tab after the mod', async () => {
     const { titles } = setup();
     expect(await screen.findByRole('button', { name: 'Blue-green stripes' })).toBeInTheDocument();

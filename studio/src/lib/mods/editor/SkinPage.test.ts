@@ -10,9 +10,9 @@ import { modDetail } from '$lib/test/modFixtures';
 import { ModDoc } from './modDoc.svelte';
 import SkinPage from './SkinPage.svelte';
 
-async function setup() {
+async function setup(detail = modDetail()) {
   const rpc = new FakeRpc()
-    .on('mods.get', () => modDetail())
+    .on('mods.get', () => detail)
     .on('mods.check', () => ({ errors: [], warnings: ['red-spot/blue male diffuse: small'], missingCutouts: [] }))
     .on('mods.thumbnail', () => ({ file: null }))
     .on('mods.colorPreview', () => ({ files: [] }));
@@ -28,6 +28,37 @@ async function setup() {
 }
 
 describe('SkinPage', () => {
+  it('a skin without a model of its own shows the species replacement and offers Replace…', async () => {
+    const species = { target: 'Carcharodontosaurus', skin: null, file: 'models/carch-1a2b.glb', lods: [], errors: [], warnings: [], stale: false };
+    const { rpc, platform } = await setup(modDetail({ models: [species] }));
+    platform.files.push('D:\\blender\\spiked.glb');
+    rpc.on('mods.replaceModel', () => modDetail({ revision: 'r2', models: [species] }));
+
+    expect(screen.getByText('Model: species replacement (models/carch-1a2b.glb)')).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Replace model…' }));
+
+    await waitFor(() => expect(rpc.callsTo('mods.replaceModel')[0]?.params).toMatchObject({ file: 'D:\\blender\\spiked.glb', skin: 'blue', revision: 'r1' }));
+  });
+
+  it('a skin with its own model can go back to the species model', async () => {
+    const own = modDetail();
+    own.skins[0] = { ...own.skins[0], model: 'models/carch-blue-9f9f.glb' };
+    own.models = [{ target: 'Carcharodontosaurus', skin: 'blue', file: 'models/carch-blue-9f9f.glb', lods: [], errors: [], warnings: [], stale: false }];
+    const { rpc } = await setup(own);
+    rpc.on('mods.removeModel', () => modDetail({ revision: 'r2' }));
+
+    expect(screen.getByText('Model: its own')).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Use species model' }));
+
+    await waitFor(() => expect(rpc.callsTo('mods.removeModel')[0]?.params).toMatchObject({ target: 'Carcharodontosaurus', skin: 'blue' }));
+  });
+
+  it("a skin with neither keeps the game's model", async () => {
+    await setup();
+
+    expect(screen.getByText("Model: the game's")).toBeInTheDocument();
+  });
+
   it('renames the skin when the name field changes', async () => {
     const { rpc, doc } = await setup();
     rpc.on('mods.renameSkin', (p) => modDetail({ revision: 'r2', skins: modDetail().skins.map((s) => (s.id === p.skin ? { ...s, name: p.name } : s)) }));

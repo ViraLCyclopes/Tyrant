@@ -8,6 +8,8 @@
   const problems = $derived((check?.errors.length ?? 0) + (check?.warnings.length ?? 0));
   const isSkin = (id: string) => selection.kind === 'skin' && selection.id === id;
   const isReplace = (texture: string) => selection.kind === 'replace' && selection.texture === texture;
+  const isModel = (target: string) => selection.kind === 'model' && selection.skin === null && selection.target === target;
+  const speciesModels = $derived(detail.models.filter((m) => m.skin === null));
 </script>
 
 <nav class="side" aria-label="Mod contents">
@@ -26,6 +28,15 @@
   <div class="heading"><span>Texture replacements ({detail.replace.length})</span></div>
   {#each detail.replace as replacement (replacement.texture)}
     <button class:on={isReplace(replacement.texture)} onclick={() => onSelect({ kind: 'replace', texture: replacement.texture })}>{replacement.texture}</button>
+  {:else}
+    <p class="empty">None.</p>
+  {/each}
+
+  <div class="heading"><span>Models ({speciesModels.length})</span></div>
+  {#each speciesModels as model (model.target)}
+    <button class:on={isModel(model.target)} onclick={() => onSelect({ kind: 'model', target: model.target, skin: null })}>
+      {model.target}{#if model.errors.length || model.stale}<span class="count">⚠</span>{/if}
+    </button>
   {:else}
     <p class="empty">None.</p>
   {/each}

@@ -1,5 +1,6 @@
 <script lang="ts">
   import ReplaceInMod from '$lib/mods/ReplaceInMod.svelte';
+  import ReplaceModelInMod from '$lib/mods/ReplaceModelInMod.svelte';
   import JsonTree from '$lib/data/JsonTree.svelte';
   import { formatBytes } from '$lib/format';
   import type { AssetDetails } from '$lib/rpc/types.gen';
@@ -63,6 +64,7 @@
       <button onclick={() => copy('Reference', asset.ref)}>Copy reference</button>
     </div>
     {#if asset.type === 'Texture2D'}<ReplaceInMod {asset} />{/if}
+    {#if asset.type === 'GameObject'}<ReplaceModelInMod {asset} />{/if}
   </section>
 
   <AssetPreviewPanel {asset} />

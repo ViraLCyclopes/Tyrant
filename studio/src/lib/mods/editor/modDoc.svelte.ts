@@ -9,7 +9,10 @@ export type EditMethod =
   | 'mods.setColors'
   | 'mods.setSkinFile'
   | 'mods.setThumbnail'
-  | 'mods.removeReplacement';
+  | 'mods.removeReplacement'
+  | 'mods.replaceModel'
+  | 'mods.removeModel'
+  | 'mods.rebuildModels';
 
 /** Params for an edit, or a function building them from the mod as it is when the edit's turn comes (null: nothing to save). */
 export type EditParams = Record<string, unknown> | ((detail: ModDetail) => Record<string, unknown> | null);
