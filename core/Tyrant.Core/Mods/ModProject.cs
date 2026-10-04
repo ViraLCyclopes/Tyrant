@@ -9,7 +9,7 @@ namespace Tyrant.Core.Mods;
 public sealed record SkinTemplateOptions(bool Male, bool Female, bool Maps);
 
 /// <summary>A mod being made in the workspace: &lt;workspace&gt;/mods/&lt;id&gt;/ with mod.json and textures/.</summary>
-public sealed class ModProject
+public sealed partial class ModProject
 {
     public const string TexturesFolder = "textures";
 
@@ -90,10 +90,23 @@ public sealed class ModProject
         return entry;
     }
 
-    public void Save()
+    public void Save() => WriteSafely(Path.Combine(Dir, ModManifest.FileName), Manifest.ToJson());
+
+    /// <summary>Writes a temp file in the same folder, then moves it over the old one: a failure never leaves half a mod.json.</summary>
+    internal static void WriteSafely(string path, string text)
     {
-        Directory.CreateDirectory(Dir);
-        File.WriteAllText(Path.Combine(Dir, ModManifest.FileName), Manifest.ToJson());
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        var temp = path + ".tyrant-tmp";
+        try
+        {
+            File.WriteAllText(temp, text);
+            File.Move(temp, path, overwrite: true);
+        }
+        catch
+        {
+            try { File.Delete(temp); } catch (IOException) { }
+            throw;
+        }
     }
 
     private static AssetRecord FindTexture(AssetIndex index, string key)

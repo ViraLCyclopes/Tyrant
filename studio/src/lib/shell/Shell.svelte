@@ -55,8 +55,8 @@
     {
       label: 'Edit',
       items: () => [
-        { label: 'Undo', shortcut: 'Ctrl+Z', run: () => {}, enabled: () => false },
-        { label: 'Redo', shortcut: 'Ctrl+Y', run: () => {}, enabled: () => false },
+        { label: 'Undo', shortcut: 'Ctrl+Z', run: () => activeTab?.undo?.undo(), enabled: () => !!activeTab?.undo?.canUndo() },
+        { label: 'Redo', shortcut: 'Ctrl+Y', run: () => activeTab?.undo?.redo(), enabled: () => !!activeTab?.undo?.canRedo() },
         separator,
         { label: 'Preferences…', shortcut: 'Ctrl+,', run: () => (showPrefs = true) },
       ],
@@ -80,6 +80,13 @@
     },
   ]);
 
+  /** A text field keeps its own Ctrl+Z. */
+  function isTextField(target: EventTarget | null): boolean {
+    if (!(target instanceof HTMLElement)) return false;
+    if (target.isContentEditable || target.tagName === 'TEXTAREA') return true;
+    return target.tagName === 'INPUT' && !['checkbox', 'radio', 'button', 'range', 'color'].includes((target as HTMLInputElement).type);
+  }
+
   function onKey(e: KeyboardEvent) {
     if (!e.ctrlKey || e.altKey) return;
     const key = e.key.toLowerCase();
@@ -87,7 +94,11 @@
     else if (key === 'w' && shell.activeId) shell.close(shell.activeId);
     else if (key === 'l') shell.toggleLog();
     else if (e.key === ',') showPrefs = true;
-    else return;
+    else if ((key === 'z' || key === 'y') && activeTab?.undo && !isTextField(e.target)) {
+      if (e.repeat) return e.preventDefault(); // one step per press, not a burst while the key is held
+      if (key === 'y' || e.shiftKey) activeTab.undo.redo();
+      else activeTab.undo.undo();
+    } else return;
     e.preventDefault();
   }
 

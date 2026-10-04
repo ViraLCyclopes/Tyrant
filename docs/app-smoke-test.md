@@ -92,3 +92,12 @@ Release build: `npm run build:app`, install `studio/src-tauri/target/release/bun
 - **File ▸ Open workspace…** from the Data tab opens another workspace; **Help ▸ Show studio.log** reveals the log file;
   **Help ▸ About Tyrant** shows the version.
 - Narrow the window to about 700 px: the tab strip scrolls, the intro and dock still fit.
+
+**Mod editor:**
+
+- Mods tab → **Open** a mod with skins: it opens in its own tab named after the mod; the side list shows Mod details, the skins, the replacements and Check (with a ⚠ count when Check found something).
+- Rename a skin: the side list updates; **Ctrl+Z** puts the old name back, **Ctrl+Y** redoes it. Ctrl+Z inside a text field undoes the typing only.
+- Replace a skin's male normal with a PNG: its thumbnail appears; **Use base** clears it (refused for the skin's last file).
+- **Colours** on Normal: untick *From base skin* on Colour A, pick a colour: the preview strip shows six animals in it; **↻** shows six others. Switch to **Albino** and set **Eyes**.
+- Edit the mod's `mod.json` in a text editor, switch to another tab and back: the editor reloads it and the log says so.
+- **Remove skin…** with *Also delete its files*: the skin and its PNGs go; `tyrant mod show <id>` lists what is left.

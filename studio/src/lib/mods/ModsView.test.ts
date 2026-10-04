@@ -5,6 +5,7 @@ import { memoryStore } from '$lib/storage';
 import { FakePlatform } from '$lib/test/fakePlatform';
 import { FakeRpc } from '$lib/test/fakeRpc';
 import { renderWith, workspaceStatus, messages } from '$lib/test/fixtures';
+import { Tab } from '$lib/shell/tab.svelte';
 import { Session } from '$lib/stores/session.svelte';
 import ModsView from './ModsView.svelte';
 
@@ -123,5 +124,25 @@ describe('ModsView', () => {
     await waitFor(() => expect(messages(session, 'tab-test').join('\n')).toContain('1 PNG'));
     expect(rpc.callsTo('mods.restoreCutouts')[0]?.params).toEqual({ id: 'red-spot' });
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Restore cutouts for Red spot' })).toBeNull());
+  });
+
+  it('Open shows the mod in its own editor tab', async () => {
+    const { session } = setup([row()]);
+    const opened: unknown[] = [];
+    const tab = new Tab('tab-test', session.log, { retitle: () => {}, openTool: (id, options) => (opened.push([id, options]), 'tab-2') });
+    renderWith(ModsView, session, {}, tab);
+    await fireEvent.click(await screen.findByRole('button', { name: 'Open Red spot' }));
+    expect(opened).toEqual([['mod', { key: 'red-spot', title: 'Red spot' }]]);
+  });
+
+  it('a new mod opens in its editor tab', async () => {
+    const { rpc, session } = setup([]);
+    rpc.on('mods.create', (p) => ({ mods: [row({ id: p.id, name: p.name ?? p.id })], frameworkInstalled: false }));
+    const opened: unknown[] = [];
+    const tab = new Tab('tab-test', session.log, { retitle: () => {}, openTool: (id, options) => (opened.push([id, options]), 'tab-2') });
+    renderWith(ModsView, session, {}, tab);
+    await fireEvent.input(await screen.findByRole('textbox', { name: /id/i }), { target: { value: 'blue-pack' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'New mod' }));
+    await waitFor(() => expect(opened).toEqual([['mod', { key: 'blue-pack', title: 'blue-pack' }]]));
   });
 });

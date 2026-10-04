@@ -33,6 +33,16 @@ export function registerTools(registry: Registry): void {
     load: () => import('$lib/mods/ModsView.svelte'),
   });
   registry.register({
+    id: 'mod',
+    name: 'Mod',
+    blurb: 'One mod, to edit',
+    icon: MODS_ICON,
+    status: 'ready',
+    instances: 'many',
+    inDock: false,
+    load: () => import('$lib/mods/editor/ModEditor.svelte'),
+  });
+  registry.register({
     id: 'assets',
     name: 'Assets',
     blurb: 'Browse, preview and export game assets',

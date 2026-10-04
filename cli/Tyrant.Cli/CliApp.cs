@@ -85,6 +85,14 @@ public static class CliApp
                 mod.AddCommand<ModAddSkinCommand>("add-skin").WithDescription("Add a new skin to a species, starting from a vanilla skin's textures.");
                 mod.AddCommand<ModCleanSkinsCommand>("clean-skins").WithDescription("List or forget skin numbers left by removed mods.");
                 mod.AddCommand<ModListCommand>("list").WithDescription("List your mods and what is installed in the game.");
+                mod.AddCommand<ModShowCommand>("show").WithDescription("Show a mod's details, replacements and skins.");
+                mod.AddCommand<ModSetCommand>("set").WithDescription("Change a mod's name, version, author or description.");
+                mod.AddCommand<ModRenameSkinCommand>("rename-skin").WithDescription("Change a skin's shown name (its id stays).");
+                mod.AddCommand<ModRemoveSkinCommand>("remove-skin").WithDescription("Remove a skin from a mod, optionally with its files.");
+                mod.AddCommand<ModColorsCommand>("colors").WithDescription("Show, set (from a JSON file) or clear a skin's colours.");
+                mod.AddCommand<ModSkinFileCommand>("skin-file").WithDescription("Use your PNG for one slot of a skin, or the base skin's texture.");
+                mod.AddCommand<ModThumbnailCommand>("thumbnail").WithDescription("Set a skin's swatch PNG, or let the game make one.");
+                mod.AddCommand<ModUnreplaceCommand>("unreplace").WithDescription("Stop replacing a game texture.");
             });
             config.AddBranch("data", data =>
             {

@@ -201,7 +201,10 @@ export class ShellState implements TabHost {
   private syncTabs(): void {
     const active = this.store.activeId();
     for (const record of this.store.list()) {
-      if (!this.tabObjects.has(record.id)) this.tabObjects.set(record.id, new Tab(record.id, this.log, this, this.onOrphanError));
+      if (this.tabObjects.has(record.id)) continue;
+      const tab = new Tab(record.id, this.log, this, this.onOrphanError);
+      tab.key = record.key;
+      this.tabObjects.set(record.id, tab);
     }
     for (const [id, tab] of this.tabObjects) tab.active = id === active;
     if (!active) return;
