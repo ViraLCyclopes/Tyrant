@@ -1,6 +1,7 @@
 using StbImageSharp;
 using Tyrant.Core.Assets;
 using Tyrant.Core.Install;
+using Tyrant.Core.Sounds;
 using Tyrant.Framework.Core;
 
 namespace Tyrant.Core.Mods;
@@ -32,12 +33,13 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
         }
     }, Cutouts.GamePixels(install, new BundleAssetReader()), Cutouts.GamePixels(install, new BundleAssetReader(), onlyIfAlpha: false));
 
-    public ModCheckResult Check(ModProject mod, AssetIndex? index, IReadOnlyList<SpeciesSkins>? species = null)
+    public ModCheckResult Check(ModProject mod, AssetIndex? index, IReadOnlyList<SpeciesSkins>? species = null, SoundCatalog? sounds = null)
     {
         var errors = new List<string>();
         var warnings = new List<string>();
-        if (mod.Manifest.Replace.Count == 0 && mod.Manifest.Skins.Count == 0 && mod.Manifest.Models.Count == 0 && mod.Manifest.Assembly is null)
-            warnings.Add("The mod does nothing yet: add a texture replacement, a skin or a model.");
+        if (mod.Manifest.Replace.Count == 0 && mod.Manifest.Skins.Count == 0 && mod.Manifest.Models.Count == 0 && mod.Manifest.Sounds.Count == 0
+            && mod.Manifest.Assembly is null)
+            warnings.Add("The mod does nothing yet: add a texture replacement, a skin, a model or a sound.");
         if (index is null && mod.Manifest.Replace.Count > 0)
             warnings.Add("There is no asset index, so the target textures were not checked. Click Index assets on the Workspace tab.");
 
@@ -106,8 +108,70 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
         }
         ColourWarnings(mod, index, species, warnings);
         ModelProblems(mod, species, errors, warnings);
+        SoundProblems(mod, species, sounds, errors, warnings);
         var missing = index is null || pixelsOf is null ? [] : MissingCutouts(mod, index, species, warnings);
         return new ModCheckResult(errors, warnings) { MissingCutouts = missing };
+    }
+
+    public const long LargeSoundBytes = 20L * 1024 * 1024;
+
+    /// <summary>Each sound replacement's files, scope and event (against the dump's sound lists and species when there is a dump).</summary>
+    private static void SoundProblems(ModProject mod, IReadOnlyList<SpeciesSkins>? species, SoundCatalog? sounds, List<string> errors, List<string> warnings)
+    {
+        foreach (var sound in mod.Manifest.Sounds)
+        {
+            var label = $"Sound {sound.Event} {ModProject.ScopeText(sound.Species, sound.Skin)}";
+            if (sound.Species is not null && sound.Skin is not null)
+                errors.Add($"{label}: it names both a species and a skin; keep one (a skin already belongs to its species).");
+            if (sound.Files.Count == 0) errors.Add($"{label}: it has no files; pick an audio file or remove it.");
+            foreach (var file in sound.Files)
+            {
+                var path = Path.Combine(mod.Dir, file);
+                if (!mod.IsInsideMod(file)) { errors.Add($"{label}: {file} is outside the mod folder."); continue; }
+                if (!File.Exists(path)) { errors.Add($"{label}: {file} is missing; replace the sound again."); continue; }
+                byte[] head;
+                using (var stream = File.OpenRead(path))
+                {
+                    head = new byte[16];
+                    head = head[..stream.Read(head, 0, head.Length)];
+                }
+                if (AudioFormat.Sniff(head) is null) { errors.Add($"{label}: {file} is not an audio file (WAV, OGG, MP3 or FLAC)."); continue; }
+                var size = new FileInfo(path).Length;
+                if (size > LargeSoundBytes)
+                    warnings.Add($"{label}: {file} is {size / (1024 * 1024)} MB; the game loads it into memory, so a shorter or compressed (OGG) file is better.");
+            }
+
+            if (sounds is not null && sounds.Find(sound.Event) is null)
+                warnings.Add(sounds.HasEventList
+                    ? $"{label}: {sound.Event} is not one of the game's sounds, so it never plays; copy the name from a species' Sounds list or All sounds."
+                    : $"{label}: {sound.Event} is not in the species sound lists. To check every game sound, on the Workspace tab click Run data dump once more.");
+
+            if (species is null) continue;
+            if (sound.Species is { } speciesId)
+            {
+                var target = species.FirstOrDefault(s => string.Equals(s.SpeciesId, speciesId, StringComparison.OrdinalIgnoreCase));
+                if (target is null) warnings.Add($"{label}: species \"{speciesId}\" is not in the game data, so it never plays.");
+                else if (!string.Equals(target.SpeciesId, speciesId, StringComparison.Ordinal))
+                    warnings.Add($"{label}: species \"{speciesId}\" must be written \"{target.SpeciesId}\" (the game matches the exact spelling).");
+            }
+            if (sound.Skin is { } skinKey && UnknownSkin(mod, species, skinKey) is { } problem) warnings.Add($"{label}: {problem}");
+        }
+    }
+
+    /// <summary>A skin key is "&lt;mod&gt;/&lt;skin id&gt;" (a Tyrant skin) or "&lt;species&gt;/&lt;skin name&gt;" (a game skin); other mods' skins cannot be checked here.</summary>
+    private static string? UnknownSkin(ModProject mod, IReadOnlyList<SpeciesSkins> species, string key)
+    {
+        var slash = key.IndexOf('/');
+        if (slash <= 0 || slash == key.Length - 1)
+            return $"skin \"{key}\" is not a skin key; pick the skin from the list (it looks like species/skin name or mod/skin).";
+        var (owner, name) = (key[..slash], key[(slash + 1)..]);
+        if (string.Equals(owner, mod.Id, StringComparison.Ordinal))
+            return mod.Manifest.Skins.Any(s => s.Id == name) ? null : $"skin \"{key}\" is not one of this mod's skins.";
+        var target = species.FirstOrDefault(s => string.Equals(s.SpeciesId, owner, StringComparison.Ordinal));
+        if (target is null) return null;
+        return target.Skins.Any(s => string.Equals(s.Name, name, StringComparison.Ordinal))
+            ? null
+            : $"skin \"{key}\" is not one of {target.SpeciesId}'s skins ({string.Join(", ", target.Skins.Select(s => s.Name))}).";
     }
 
     /// <summary>Opaque colour PNGs whose vanilla texture is partly see-through; the vanilla one is only decoded for those.</summary>

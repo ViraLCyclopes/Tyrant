@@ -29,6 +29,7 @@ public static class ModSharing
             named.AddRange(ModelFilesOf(mod, skin.Model));
         }
         foreach (var model in m.Models) named.AddRange(ModelFilesOf(mod, model.File));
+        foreach (var sound in m.Sounds) named.AddRange(sound.Files);
         return named.Where(f => !string.IsNullOrWhiteSpace(f))
             .Select(f => f!.Replace('\\', '/'))
             .Where(f => ModPaths.IsInside(Path.Combine(mod.Dir, f), mod.Dir) && File.Exists(Path.Combine(mod.Dir, f)))
