@@ -117,6 +117,28 @@ A skin can set its own colours in a `colors` section. Every part is optional; an
 - **Blue and alpha** of both maps are unused.
 - **Diffuse alpha:** below 50% is cut away (feathers and hair).
 
+## Models (replacing an animal's mesh)
+
+```json
+"models": [
+  { "target": "Carcharodontosaurus", "key": "Assets/Prefabs/Animals/V2-MainPrefabs/Carcharodontosaurus.V2.prefab", "file": "models/carcharodontosaurus-1a2b3c4d.glb" }
+]
+```
+
+and on a skin: `"model": "models/carcharodontosaurus-spiked-5e6f7a8b.glb"`.
+
+| Field | Meaning |
+|---|---|
+| `target` | The species id the model replaces (objects such as fences come in a later update). |
+| `key` | The prefab Tyrant matched (filled in by Tyrant). |
+| `file` | Your Blender export, copied into the mod. Tyrant writes the converted files next to it: `….lod0.tmesh`, `….lod1.tmesh`, … (one per level of detail) and `….model.json` (what it found). |
+
+- **Which model an animal wears:** its skin's `model`, else its species' entry in `models`, else the game's. When two mods replace the same species, the later one in the load order wins.
+- **Making the model in Blender:** start from Tyrant's export of the prefab. Keep the armature and its bone names (new bones are not supported yet), keep the two growth shape keys (the game drives them from baby to adult; when you reshape the Basis, reshape those keys too), and keep the material names. The game's materials and textures stay; change the look with texture replacements or skin textures.
+- **Levels of detail:** name extra meshes `…_LOD1` / `…_LOD2` to use your own; otherwise Tyrant simplifies your mesh to the game's own ratios.
+- **Size:** more than 4× the game's vertices is a warning (many animals can lower the frame rate); over 65,535 vertices the mesh uses 32-bit indices.
+- Check and Install rebuild the converted files when your `.glb` changed.
+
 ## In the game
 
 - **Where installed mods live:** `<game>/UserData/Tyrant/Mods/<id>/`.

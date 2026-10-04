@@ -97,6 +97,11 @@ files that changed; again after a game update).
 - **Make a texture mod:**
   1. Open a texture in the Assets tab, click **Export selected** (or use the exported PNG under `assets\textures`) and edit it.
   2. Click **Replace in a mod…** on that texture (an animal's, or any object's: fences, buildings, scenery): pick a mod (or **New mod…**), leave **Your PNG** empty to use your edited export (or **Browse…**), then **Add to mod**.
+- **Replace a model:**
+  1. Assets tab → the animal's prefab (GameObject) → **Export selected**, and open the LOD00 `.glb` in Blender (for plain bones see the export notes in the Assets section).
+  2. Reshape or replace the mesh; keep the armature, its bone names, the two growth shape keys and the material names. File → Export → glTF 2.0 (.glb).
+  3. Assets tab → the prefab → **Replace model in a mod…** → pick a mod (or **New mod…**) → **Browse…** your `.glb` → **Add to mod**. Tyrant checks it, builds its levels of detail and adds it. For one skin only, use the skin's **Model** row in the mod editor.
+  4. CLI: `tyrant mod replace-model <mod> <species> <file.glb> [--skin <id>]`, `tyrant mod remove-model`, `tyrant mod rebuild-models`.
 - **Edit a mod:** **Open** a mod in the Mods tab (a new mod opens by itself) to edit it in its own tab.
   - The list on the left has **Mod details**, each **skin**, each **texture replacement** and **Check**; the page on the right edits what you picked.
   - Every change is saved at once. **Ctrl+Z** / **Ctrl+Y** (or **Edit ▸ Undo / Redo**) step back and forward. Replacing or deleting a file cannot be undone.
@@ -107,6 +112,7 @@ files that changed; again after a game update).
   - **Colours** also shows one animal in 3D above the six 2D animals: **Male / Female / Infant** switch its textures, **↻**
     shows another animal (the same one as the first 2D animal). It needs a data dump and an asset index (Workspace tab).
   - **Remove skin…** asks first and can delete its files; its number in the game stays reserved.
+  - **Models** lists the species whose model the mod replaces. A model's page shows it in 3D with **LOD 0 / 1 / 2** (as the game draws it near and far), its vertices against the game's, its problems, and **Replace…**, **Rebuild LODs** and **Remove**. A skin's **Model** row shows whether it wears its own model, the species replacement or the game's, with **Replace model…** and **Use species model**.
   - The **Mod** menu has Install, Check, Restore cutouts, Open folder and Remove from game.
   - If the mod's `mod.json` is changed elsewhere (another program, `tyrant mod …`), the tab reloads it when you come back.
 - **Mods tab:**
