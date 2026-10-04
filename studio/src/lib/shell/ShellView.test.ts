@@ -111,4 +111,32 @@ describe('Shell', () => {
     await fireEvent.click(status);
     expect(shell.panel(id).open).toBe(true);
   });
+
+  it('the Log button shows and hides the log of the shown tab', async () => {
+    const { shell } = setup();
+    const id = shell.openTool('assets')!;
+    const button = await screen.findByRole('button', { name: /^Log/ });
+    expect(button).toHaveAttribute('aria-expanded', 'false');
+    await fireEvent.click(button);
+    expect(shell.panel(id).open).toBe(true);
+    expect(button).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('the Log button shows a dot when the shown tab has a new warning', async () => {
+    const { shell } = setup();
+    const id = shell.openTool('assets')!;
+    shell.tab(id).warn('Careful.');
+    expect(await screen.findByRole('button', { name: 'Log (new warnings)' })).toBeInTheDocument();
+  });
+
+  it("the log's Dock button moves it between the side and the bottom", async () => {
+    const { shell } = setup();
+    const id = shell.openTool('assets')!;
+    shell.setPanel(id, { open: true });
+    expect(shell.prefs.logPosition).toBe('side');
+    await fireEvent.click(await screen.findByRole('button', { name: 'Dock at the bottom' }));
+    expect(shell.prefs.logPosition).toBe('bottom');
+    await fireEvent.click(screen.getByRole('button', { name: 'Dock at the side' }));
+    expect(shell.prefs.logPosition).toBe('side');
+  });
 });

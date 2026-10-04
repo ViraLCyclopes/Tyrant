@@ -133,7 +133,7 @@ describe('ShellState', () => {
   it('restoring survives corrupt storage', () => {
     const { s } = shell(memoryStore({ 'tyrant.shell.tabs': '{nope', 'tyrant.shell.prefs': '[1,2' }));
     expect(s.tabs.map((t) => t.toolId)).toEqual(['home']);
-    expect(s.prefs).toEqual({ reopenTabs: true, logPosition: 'bottom' });
+    expect(s.prefs).toEqual({ reopenTabs: true, logPosition: 'side' });
   });
 
   it('does not reopen tabs when the preference is off', () => {
@@ -153,11 +153,43 @@ describe('ShellState', () => {
     expect(shell(store).s.introHidden).toBe(true);
   });
 
-  it('a warning in the shown tab opens its log panel', () => {
+  it('a warning in the shown tab lights the log dot instead of opening the log', () => {
     const { s } = shell();
     const a = s.openTool('assets')!;
     s.tab(a).warn('1 PNG could not be restored.');
-    expect(s.panel(a).open).toBe(true);
+    expect(s.panel(a).open).toBe(false);
+    expect(s.logDot(a)).toBe('warn');
+  });
+
+  it('the log dot goes out once the log is opened, and stays out while it is open', () => {
+    const { s } = shell();
+    const a = s.openTool('assets')!;
+    s.tab(a).warn('Careful.');
+    s.setPanel(a, { open: true });
+    expect(s.logDot(a)).toBeNull();
+    s.tab(a).warn('Again.');
+    expect(s.logDot(a)).toBeNull();
+    s.setPanel(a, { open: false });
+    s.tab(a).info('Fine.');
+    expect(s.logDot(a)).toBeNull();
+  });
+
+  it('showing a tab that only has a warning marker leaves its log folded', () => {
+    const { s } = shell();
+    const a = s.openTool('assets')!;
+    s.activate(s.tabs[0].id);
+    s.tab(a).warn('Careful.');
+    s.activate(a);
+    expect(s.panel(a).open).toBe(false);
+    expect(s.logDot(a)).toBe('warn');
+  });
+
+  it('the log keeps one size for the side and one for the bottom', () => {
+    const { s } = shell();
+    const a = s.openTool('assets')!;
+    expect(s.panel(a)).toEqual({ open: false, side: 360, bottom: 220 });
+    s.setPanel(a, { side: 420 });
+    expect(s.panel(a).bottom).toBe(220);
   });
 
   it('showing a tab that has a marker opens its log, so the problem is seen', () => {

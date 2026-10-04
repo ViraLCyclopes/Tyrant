@@ -10,6 +10,7 @@
     onClear,
     onCopy,
     onReveal,
+    onDock,
   }: {
     records: LogRecord[];
     position: 'bottom' | 'side';
@@ -18,6 +19,7 @@
     onClear: () => void;
     onCopy: () => void;
     onReveal: (() => void) | null;
+    onDock: () => void;
   } = $props();
 
   let level = $state<'all' | 'problems'>('all');
@@ -53,7 +55,7 @@
   }
 </script>
 
-<section class="log {position}" style={position === 'bottom' ? `height: ${size}px` : `width: ${size * 2}px`} aria-label="Log">
+<section class="log {position}" style={position === 'bottom' ? `height: ${size}px` : `width: ${size}px`} aria-label="Log">
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="grip" onpointerdown={startResize} title="Drag to resize"></div>
   <header>
@@ -63,6 +65,7 @@
       <option value="problems">Warnings and errors</option>
     </select>
     <span class="spacer"></span>
+    <button class="ghost" onclick={onDock} title="Move the log to the bottom or the side">{position === 'side' ? 'Dock at the bottom' : 'Dock at the side'}</button>
     <button class="ghost" onclick={onCopy}>Copy</button>
     <button class="ghost" onclick={() => onReveal?.()} disabled={!onReveal}>Show studio.log</button>
     <button class="ghost" onclick={onClear}>Clear</button>
@@ -82,7 +85,8 @@
 
 <style>
   .log { position: relative; display: flex; flex-direction: column; background: var(--panel); border-top: 1px solid var(--border); min-height: 0; }
-  .log.side { border-top: none; border-left: 1px solid var(--border); }
+  .log.side { border-top: none; border-left: 1px solid var(--border); flex: none; }
+  .log.bottom { flex: none; }
   .grip { position: absolute; z-index: 2; }
   .bottom .grip { left: 0; right: 0; top: -3px; height: 6px; cursor: ns-resize; }
   .side .grip { top: 0; bottom: 0; left: -3px; width: 6px; cursor: ew-resize; }

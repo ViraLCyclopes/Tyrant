@@ -103,7 +103,22 @@
 
 <div class="shell">
   <TabStrip {shell} />
-  <MenuBar {menus} />
+  <div class="bar">
+    <MenuBar {menus} />
+    {#if activeTab}
+      {@const open = shell.panel(activeTab.id).open}
+      {@const dot = shell.logDot(activeTab.id)}
+      <button
+        class="log-toggle"
+        aria-expanded={open}
+        aria-label={dot ? `Log (new ${dot === 'error' ? 'errors' : 'warnings'})` : 'Log'}
+        title="Show what this tab is doing (Ctrl+L)"
+        onclick={() => shell.toggleLog()}
+      >
+        {#if dot}<span class="dot {dot}" aria-hidden="true"></span>{/if}Log
+      </button>
+    {/if}
+  </div>
   {#if session.error}
     <ErrorBanner error={session.error} onFix={(fix) => session.applyFix(fix)} onDismiss={() => (session.error = null)} />
   {/if}
@@ -118,8 +133,9 @@
       <LogPanel
         records={session.log.forTab(id)}
         position={shell.prefs.logPosition}
-        size={shell.panel(id).size}
-        onResize={(size) => shell.setPanel(id, { size })}
+        size={shell.prefs.logPosition === 'side' ? shell.panel(id).side : shell.panel(id).bottom}
+        onResize={(size) => shell.setPanel(id, shell.prefs.logPosition === 'side' ? { side: size } : { bottom: size })}
+        onDock={() => shell.setPrefs({ logPosition: shell.prefs.logPosition === 'side' ? 'bottom' : 'side' })}
         onClear={() => session.log.clear(id)}
         onCopy={() => void session.platform.copy(session.log.forTab(id).map((r) => `${r.level}\t${r.message}${r.detail ? ` (${r.detail})` : ''}`).join('\n'))}
         onReveal={logPath ? () => void session.platform.reveal(logPath!) : null}
@@ -144,4 +160,11 @@
   .body { flex: 1; display: flex; flex-direction: column; min-height: 0; }
   .body.side { flex-direction: row; }
   .tabs { flex: 1; min-height: 0; min-width: 0; position: relative; }
+  .bar { display: flex; align-items: stretch; background: var(--bg); border-bottom: 1px solid var(--border); }
+  .bar :global(.menubar) { flex: 1; border-bottom: none; }
+  .log-toggle { display: flex; align-items: center; gap: 6px; border: none; border-left: 1px solid var(--border); border-radius: 0; background: none; padding: 3px 14px; color: var(--muted); }
+  .log-toggle[aria-expanded='true'] { color: var(--text); background: var(--panel-2); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .dot.warn { background: var(--warn-text); }
+  .dot.error { background: var(--error-text); }
 </style>
