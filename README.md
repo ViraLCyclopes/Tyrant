@@ -18,7 +18,7 @@ dotnet test Tyrant.slnx
 Integration tests against your real install (optional):
 
 ```powershell
-$env:TYRANT_GAME_DIR = "E:\SteamLibrary\steamapps\common\Prehistoric Kingdom"
+$env:TYRANT_GAME_DIR = "<your Steam library>\steamapps\common\Prehistoric Kingdom"
 dotnet test tests/Tyrant.Core.Tests --filter "Category=Integration"
 ```
 
@@ -62,7 +62,7 @@ Verify output (optional, needs Node and Blender 5.2):
 ```powershell
 npm install --prefix tools/verify
 node tools/verify/validate-gltf.js (Get-ChildItem D:\tyrant-workspace\assets\species\stegosaurusstenops\models\*.glb).FullName
-& "C:\Program Files (x86)\Steam\steamapps\common\Blender\blender.exe" -b --factory-startup -P tools/verify/blender_inspect.py -- <model.glb> <render.png>
+& "<path to Blender 5.2>\blender.exe" -b --factory-startup -P tools/verify/blender_inspect.py -- <model.glb> <render.png>
 ```
 
 Game data (species stats, buildings, economy, localization):
@@ -118,3 +118,10 @@ Prerequisites: .NET 10 SDK, Node 24, Rust (stable, MSVC), Visual Studio Build To
 
 See [docs/app-guide.md](docs/app-guide.md) for how to use it and [docs/app-smoke-test.md](docs/app-smoke-test.md)
 for the release checklist.
+
+## Licence
+
+Tyrant is free software under the [GNU General Public License v3.0](LICENSE): you may use, study, share and change it;
+if you share a changed version, share its source under the same licence. See [NOTICE](NOTICE) for the third-party
+files it includes. Prehistoric Kingdom and its content belong to its developer and publisher; Tyrant is a fan-made tool
+and is not affiliated with them.
