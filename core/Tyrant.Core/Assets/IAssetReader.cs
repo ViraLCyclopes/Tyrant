@@ -53,6 +53,9 @@ public interface IAssetReader
     /// </summary>
     ModelFacts WriteModel(GameInstall install, AssetRecord asset, string outputDir, AssetIndex? index = null);
 
+    /// <summary>The prefab's hierarchy and renderers with their materials (a replacement model is fitted to it).</summary>
+    PrefabModel ReadPrefabModel(GameInstall install, AssetRecord prefab);
+
     /// <summary>The prefab's materials (each renderer's, distinct by name), for the skin page's slot list.</summary>
     IReadOnlyList<MaterialModel> ReadMaterials(GameInstall install, AssetRecord prefab);
 

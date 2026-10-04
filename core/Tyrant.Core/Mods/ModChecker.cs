@@ -36,8 +36,8 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
     {
         var errors = new List<string>();
         var warnings = new List<string>();
-        if (mod.Manifest.Replace.Count == 0 && mod.Manifest.Skins.Count == 0 && mod.Manifest.Assembly is null)
-            warnings.Add("The mod does nothing yet: add a texture replacement or a skin.");
+        if (mod.Manifest.Replace.Count == 0 && mod.Manifest.Skins.Count == 0 && mod.Manifest.Models.Count == 0 && mod.Manifest.Assembly is null)
+            warnings.Add("The mod does nothing yet: add a texture replacement, a skin or a model.");
         if (index is null && mod.Manifest.Replace.Count > 0)
             warnings.Add("There is no asset index, so the target textures were not checked. Click Index assets on the Workspace tab.");
 
@@ -105,11 +105,35 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
             }
         }
         ColourWarnings(mod, index, species, warnings);
+        ModelProblems(mod, species, errors, warnings);
         var missing = index is null || pixelsOf is null ? [] : MissingCutouts(mod, index, species, warnings);
         return new ModCheckResult(errors, warnings) { MissingCutouts = missing };
     }
 
     /// <summary>Opaque colour PNGs whose vanilla texture is partly see-through; the vanilla one is only decoded for those.</summary>
+    /// <summary>Each model's file, species and build report (built by Replace, rebuilt by Check and Install when its .glb changed).</summary>
+    private static void ModelProblems(ModProject mod, IReadOnlyList<SpeciesSkins>? species, List<string> errors, List<string> warnings)
+    {
+        foreach (var (speciesId, file) in mod.ModelEntries())
+        {
+            if (species is not null && !species.Any(s => s.SpeciesId == speciesId))
+                errors.Add($"Model of {speciesId}: species \"{speciesId}\" is not in the game data.");
+            if (!File.Exists(Path.Combine(mod.Dir, file)))
+            {
+                errors.Add($"Model of {speciesId}: {file} is missing; replace the model again (mod editor → Models, or 'tyrant mod replace-model').");
+                continue;
+            }
+            var report = Tyrant.Core.ModelReplacements.ModelBuilder.ReadReport(mod.Dir, file);
+            if (report is null || Tyrant.Core.ModelReplacements.ModelBuilder.IsStale(mod.Dir, file))
+            {
+                warnings.Add($"Model of {speciesId}: {file} changed since it was built; Check and Install rebuild it.");
+                continue;
+            }
+            errors.AddRange(report.Errors.Select(e => $"Model of {speciesId}: {e}"));
+            warnings.AddRange(report.Warnings.Select(w => $"Model of {speciesId}: {w}"));
+        }
+    }
+
     private List<string> MissingCutouts(ModProject mod, AssetIndex index, IReadOnlyList<SpeciesSkins>? species, List<string> warnings)
     {
         var missing = new List<string>();

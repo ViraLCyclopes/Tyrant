@@ -105,6 +105,12 @@ public sealed class BundleAssetReader : IAssetReader
         };
     }
 
+    public PrefabModel ReadPrefabModel(GameInstall install, AssetRecord prefab)
+    {
+        using var lease = Session(install, out var session);
+        return new ModelExporter().ReadPrefab(session, prefab);
+    }
+
     public IReadOnlyList<MaterialModel> ReadMaterials(GameInstall install, AssetRecord prefab)
     {
         using var lease = Session(install, out var session);

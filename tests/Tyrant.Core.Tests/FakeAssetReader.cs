@@ -33,6 +33,15 @@ public sealed class FakeAssetReader : IAssetReader
 
     public IReadOnlyList<string> ModelMaterialFailures { get; set; } = [];
 
+    /// <summary>What ReadPrefabModel returns (the game prefab a model is fitted to).</summary>
+    public Tyrant.Core.Models.PrefabModel? PrefabModelToReturn { get; set; }
+
+    public Tyrant.Core.Models.PrefabModel ReadPrefabModel(GameInstall install, AssetRecord prefab)
+    {
+        Fail(prefab);
+        return PrefabModelToReturn ?? throw new InvalidOperationException("This test gave the fake reader no prefab model.");
+    }
+
     /// <summary>What ReadMaterials returns; PrefabReads counts the calls.</summary>
     public IReadOnlyList<Tyrant.Core.Models.MaterialModel> PrefabMaterials { get; set; } = [];
     public int PrefabReads { get; private set; }
