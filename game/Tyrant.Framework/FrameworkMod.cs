@@ -40,7 +40,10 @@ namespace Tyrant.Framework
         public override void OnUpdate()
         {
             SkinsModule.Tick(); // adds skins once the animal database exists, before a park loads
+            MaterialTextureModule.Tick();
         }
+
+        public override void OnSceneWasLoaded(int buildIndex, string sceneName) => MaterialTextureModule.OnSceneLoaded();
 
         internal static void Safe(TyrantMod mod, Action<TyrantMod> call, string what)
         {
@@ -64,6 +67,7 @@ namespace Tyrant.Framework
             foreach (var skipped in plan.Skipped) Log.Warning($"{skipped.Id}: skipped — {skipped.Reason}");
             Replacements = ReplacementTable.Build(plan.Mods, out var messages);
             foreach (var message in messages) Log.Warning(message);
+            MaterialTextureModule.Start(); // replacements on objects other than animals
             foreach (var mod in plan.Mods)
             {
                 Log.Msg($"{mod.Manifest.Id} {mod.Manifest.Version}: {mod.Manifest.Replace.Count} texture replacement(s), {mod.Manifest.Skins.Count} skin(s){(mod.Manifest.Assembly == null ? "" : ", code")}");
