@@ -2,8 +2,7 @@ import { MaterialPluginBase, type BaseTexture, type MaterialDefines, type Nullab
 import { animalUniforms, type AnimalUniforms } from './viewerMaterials';
 
 /**
- * The game's animal shader, close but not exact (docs/superpowers/specs/2026-10-03-tyrant-skin-colors-design.md §2, and
- * ColorPreview in the core, which the 2D strip uses): extra G = ambient occlusion, extra R = smoothness (roughness = 1 − R,
+ * The game's animal shader, close but not exact (the same rules as ColorPreview in the core, which the 2D strip uses): extra G = ambient occlusion, extra R = smoothness (roughness = 1 − R,
  * never metallic), extra R above 0.9 = the eyes (eye colour); pattern R blends colour A → B (sat(R / softness)) by
  * strength, pattern G takes the secondary colour, and the hue/saturation/value tint applies where pattern R > 0.
  * Lighting, rim and fur are Babylon's own.

@@ -59,5 +59,6 @@ tyrant-workspace*/
 *.assets
 *.resS
 
-# agent scratch (plans' working files)
+# design specs, plans and their working files stay local
 .superpowers/
+docs/superpowers/

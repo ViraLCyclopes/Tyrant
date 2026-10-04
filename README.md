@@ -1,7 +1,7 @@
 # Tyrant
 
-Modding toolset for **Prehistoric Kingdom** (Unity 2022.3, Mono). Work in progress — see
-`docs/superpowers/specs/` for the design.
+Modding toolset for **Prehistoric Kingdom** (Unity 2022.3, Mono). Work in progress: see [docs/](docs/) for the mod
+format and the app guide.
 
 Principles: mods never replace or patch game files on disk; nothing from the game is redistributed —
 all extraction happens locally from your own install.
