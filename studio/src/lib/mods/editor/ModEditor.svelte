@@ -3,6 +3,9 @@
   import { getTab } from '$lib/shell/tab.svelte';
   import { getSession } from '$lib/stores/session.svelte';
   import AddSkin from '../AddSkin.svelte';
+  import type { AddedSound } from '$lib/sounds/audio';
+  import AddModel from './AddModel.svelte';
+  import AddSound from './AddSound.svelte';
   import { exportMod, installMod, removeFromGame, restoreCutouts } from '../modActions';
   import CheckPage from './CheckPage.svelte';
   import ModDetailsPage from './ModDetailsPage.svelte';
@@ -19,7 +22,8 @@
   const doc = new ModDoc(tab.key ?? '', session.rpc, tab);
   let selection = $state<Selection>({ kind: 'details' });
   let failed = $state(false);
-  let adding = $state(false);
+  /** The form shown instead of a page: + Add on Skins, Models or Sounds. */
+  let adding = $state<'skin' | 'model' | 'sound' | null>(null);
 
   onMount(() => {
     void load();
@@ -69,8 +73,20 @@
     if (await restoreCutouts(session, tab, doc.id)) await doc.reload();
   }
 
+  function modelAdded(target: string | null) {
+    adding = null;
+    if (target) selection = { kind: 'model', target, skin: null }; // the new model is selected
+  }
+
+  async function soundAdded(added: AddedSound | null) {
+    adding = null;
+    if (!added) return;
+    await doc.reload(); // added outside the editor's own edits (the sound lists call the RPC)
+    selection = { kind: 'sound', ...added };
+  }
+
   async function skinAdded() {
-    adding = false;
+    adding = null;
     const before = new Set(doc.detail?.skins.map((s) => s.id));
     await doc.reload();
     const added = doc.detail?.skins.find((s) => !before.has(s.id));
@@ -106,10 +122,15 @@
   <p class="warn">This mod could not be opened; the log says why. <button onclick={load}>Try again</button></p>
 {:else if doc.detail}
   <div class="editor">
-    <ModSideList detail={doc.detail} check={doc.check} {selection} onSelect={(s) => { adding = false; selection = s; }} onAddSkin={() => (adding = true)} />
+    <ModSideList detail={doc.detail} check={doc.check} {selection} onSelect={(s) => { adding = null; selection = s; }}
+      onAddSkin={() => (adding = 'skin')} onAddModel={() => (adding = 'model')} onAddSound={() => (adding = 'sound')} />
     <section class="page">
-      {#if adding}
+      {#if adding === 'skin'}
         <AddSkin modId={doc.id} onDone={skinAdded} />
+      {:else if adding === 'model'}
+        <AddModel {doc} onDone={modelAdded} />
+      {:else if adding === 'sound'}
+        <AddSound modId={doc.id} onDone={soundAdded} />
       {:else if selection.kind === 'details'}
         <ModDetailsPage {doc} />
       {:else if selectedSkin}
@@ -130,7 +151,7 @@
       {/if}
       <div class="actions">
         <button class="primary" onclick={install} disabled={session.busy}>Install to game</button>
-        <button onclick={() => { adding = false; selection = { kind: 'check' }; }}>Show Check</button>
+        <button onclick={() => { adding = null; selection = { kind: 'check' }; }}>Show Check</button>
       </div>
     </section>
   </div>

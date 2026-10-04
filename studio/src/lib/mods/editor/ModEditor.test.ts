@@ -34,6 +34,36 @@ describe('ModEditor', () => {
     expect(await screen.findByRole('heading', { name: 'Model: Carcharodontosaurus' })).toBeInTheDocument();
   });
 
+  it('Models and Sounds each have + Add, which opens its form', async () => {
+    const { rpc } = setup();
+    rpc.on('mods.species', () => ({ hasDump: true, species: [{ speciesId: 'Carcharodontosaurus', vivarium: false, skins: [] }] }));
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Add a model' }));
+    expect(await screen.findByRole('heading', { name: 'Add a model' })).toBeInTheDocument();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Add a sound' }));
+    expect(await screen.findByRole('heading', { name: 'Add a sound' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Add a model' })).toBeNull();
+  });
+
+  it('a sound added from + Add is reloaded and opened', async () => {
+    const added = { event: 'event:/X/Vox/TheroLarge_VoxSocialCall', name: 'Social call', group: 'Calls', species: 'Carcharodontosaurus', skin: null, files: ['sounds/a.wav'], volume: 1, agePitch: 1, chance: null };
+    const { rpc, platform } = setup();
+    rpc.on('mods.species', () => ({ hasDump: true, species: [{ speciesId: 'Carcharodontosaurus', vivarium: false, skins: [] }] }))
+      .on('sounds.forSpecies', () => ({ speciesId: 'Carcharodontosaurus', hasEventList: true, sounds: [{ event: added.event, name: 'Social call', group: 'Calls', species: ['Carcharodontosaurus'], lengthMs: null, oneShot: true, perAnimal: true }] }))
+      .on('mods.replaceSound', () => modDetail({ sounds: [added] }));
+    platform.fileLists.push(['D:\\call.ogg']);
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Add a sound' }));
+    await fireEvent.change(await screen.findByRole('combobox', { name: 'Sounds of' }), { target: { value: 'Carcharodontosaurus' } });
+    await fireEvent.click(await screen.findByRole('button', { name: 'Replace Social call' }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Choose files…' }));
+    rpc.on('mods.get', () => modDetail({ sounds: [added] })); // the editor reloads the mod after adding
+    await fireEvent.click(await screen.findByRole('button', { name: 'Add to mod' }));
+
+    expect(await screen.findByRole('heading', { name: 'Sound: Social call' })).toBeInTheDocument();
+  });
+
   it('lists sounds under Sounds with who hears them and opens their page', async () => {
     setup(modDetail({
       sounds: [

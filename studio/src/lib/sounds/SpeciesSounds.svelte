@@ -3,10 +3,12 @@
   import type { SoundDto, SoundsForSpeciesResult } from '$lib/rpc/types.gen';
   import { getTab } from '$lib/shell/tab.svelte';
   import { getSession } from '$lib/stores/session.svelte';
+  import type { AddedSound } from './audio';
   import ReplaceSoundInMod from './ReplaceSoundInMod.svelte';
 
   /** One species' sounds (its own and the ones it shares), by moment, each with Replace…. */
-  let { speciesKey, displayName }: { speciesKey: string; displayName: string } = $props();
+  let { speciesKey, displayName, modId, onAdded }: { speciesKey: string; displayName: string; modId?: string; onAdded?: (added: AddedSound) => void } =
+    $props();
 
   const session = getSession();
   const tab = getTab();
@@ -41,7 +43,7 @@
             <li>
               <span class="name" title={sound.event}>{sound.name}</span>
               {#if sound.species.length > 1}<span class="shared">shared with {sound.species.length} species</span>{/if}
-              <ReplaceSoundInMod {sound} speciesId={result.speciesId} />
+              <ReplaceSoundInMod {sound} speciesId={result.speciesId} {modId} {onAdded} />
             </li>
           {/each}
         </ul>

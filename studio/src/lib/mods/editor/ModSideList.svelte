@@ -2,8 +2,23 @@
   import type { ModCheckReport, ModDetail, ModSoundDto } from '$lib/rpc/types.gen';
   import type { Selection } from './selection';
 
-  let { detail, check, selection, onSelect, onAddSkin }:
-    { detail: ModDetail; check: ModCheckReport | null; selection: Selection; onSelect: (s: Selection) => void; onAddSkin: () => void } = $props();
+  let {
+    detail,
+    check,
+    selection,
+    onSelect,
+    onAddSkin,
+    onAddModel = () => {},
+    onAddSound = () => {},
+  }: {
+    detail: ModDetail;
+    check: ModCheckReport | null;
+    selection: Selection;
+    onSelect: (s: Selection) => void;
+    onAddSkin: () => void;
+    onAddModel?: () => void;
+    onAddSound?: () => void;
+  } = $props();
 
   const problems = $derived((check?.errors.length ?? 0) + (check?.warnings.length ?? 0));
   const isSkin = (id: string) => selection.kind === 'skin' && selection.id === id;
@@ -35,7 +50,10 @@
     <p class="empty">None.</p>
   {/each}
 
-  <div class="heading"><span>Models ({speciesModels.length})</span></div>
+  <div class="heading">
+    <span>Models ({speciesModels.length})</span>
+    <button class="add" aria-label="Add a model" onclick={onAddModel}>+ Add</button>
+  </div>
   {#each speciesModels as model (model.target)}
     <button class:on={isModel(model.target)} onclick={() => onSelect({ kind: 'model', target: model.target, skin: null })}>
       {model.target}{#if model.errors.length || model.stale}<span class="count">⚠</span>{/if}
@@ -44,13 +62,16 @@
     <p class="empty">None.</p>
   {/each}
 
-  <div class="heading"><span>Sounds ({detail.sounds.length})</span></div>
+  <div class="heading">
+    <span>Sounds ({detail.sounds.length})</span>
+    <button class="add" aria-label="Add a sound" onclick={onAddSound}>+ Add</button>
+  </div>
   {#each detail.sounds as sound (`${sound.event}|${sound.species}|${sound.skin}`)}
     <button class:on={isSound(sound)} title={sound.event} onclick={() => onSelect({ kind: 'sound', event: sound.event, species: sound.species, skin: sound.skin })}>
       {sound.name} — {whoHears(sound)}
     </button>
   {:else}
-    <p class="empty">None. Replace sounds from a species' Sounds… on the Assets tab.</p>
+    <p class="empty">None yet.</p>
   {/each}
 
   <button class="check" class:on={selection.kind === 'check'} aria-label="Check{problems ? ` (${problems} problem${problems === 1 ? '' : 's'})` : ''}" onclick={() => onSelect({ kind: 'check' })}>

@@ -3,9 +3,11 @@
   import type { SoundsSearchResult } from '$lib/rpc/types.gen';
   import { getTab } from '$lib/shell/tab.svelte';
   import { getSession } from '$lib/stores/session.svelte';
+  import type { AddedSound } from './audio';
   import ReplaceSoundInMod from './ReplaceSoundInMod.svelte';
 
   /** Every game sound (buttons, buildings, music, animals), searchable; Replace… replaces one for everyone. */
+  let { modId, onAdded }: { modId?: string; onAdded?: (added: AddedSound) => void } = $props();
   const session = getSession();
   const tab = getTab();
   const DEBOUNCE = 250;
@@ -44,7 +46,7 @@
           <span class="group">{sound.group}</span>
           <span class="name" title={sound.event}>{sound.name}</span>
           <span class="path">{sound.event}</span>
-          <ReplaceSoundInMod {sound} />
+          <ReplaceSoundInMod {sound} {modId} {onAdded} />
         </li>
       {:else}
         <li class="hint">No sounds match.</li>

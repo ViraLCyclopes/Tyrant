@@ -1,5 +1,5 @@
 import { fireEvent, screen, waitFor } from '@testing-library/svelte';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { SoundDto } from '$lib/rpc/types.gen';
 import { memoryStore } from '$lib/storage';
 import { FakePlatform } from '$lib/test/fakePlatform';
@@ -95,6 +95,20 @@ describe('ReplaceSoundInMod', () => {
 
     await waitFor(() => expect(rpc.callsTo('mods.replaceSound')[0]?.params).toMatchObject({ id: 'new-one' }));
     expect(rpc.callsTo('mods.create')[0]?.params).toMatchObject({ id: 'new-one' });
+  });
+
+  it('adds to the mod it was opened from without asking which', async () => {
+    const { rpc, session } = setup();
+    const onAdded = vi.fn();
+    renderWith(ReplaceSoundInMod, session, { sound: roar, speciesId: 'Carcharodontosaurus', modId: 'carch-voice', onAdded });
+
+    await openAndPick();
+    expect(screen.queryByRole('combobox', { name: 'Mod' })).toBeNull();
+    await fireEvent.click(screen.getByRole('button', { name: 'Add to mod' }));
+
+    await waitFor(() => expect(rpc.callsTo('mods.replaceSound')[0]?.params).toMatchObject({ id: 'carch-voice', species: 'Carcharodontosaurus' }));
+    await waitFor(() => expect(onAdded).toHaveBeenCalledWith({ event: roar.event, species: 'Carcharodontosaurus', skin: null }));
+    expect(rpc.callsTo('mods.list')).toHaveLength(0);
   });
 
   it('asks for files before adding', async () => {
