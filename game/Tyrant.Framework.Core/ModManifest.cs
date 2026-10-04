@@ -52,6 +52,28 @@ namespace Tyrant.Framework.Core
         public string File { get; set; } = "";
     }
 
+    /// <summary>
+    /// A sound replacement: the game's FMOD event plays one of Files instead — for everyone, or only for a species or a skin
+    /// (Species / Skin; a skin key is "&lt;mod&gt;/&lt;skin&gt;" or a vanilla "&lt;species&gt;/&lt;skinName&gt;").
+    /// </summary>
+    public sealed class SoundReplacement
+    {
+        public string Event { get; set; } = "";
+        public string? Species { get; set; }
+        public string? Skin { get; set; }
+
+        /// <summary>Audio files in the mod (WAV, OGG, MP3, FLAC); several = one picked at random each time.</summary>
+        public List<string> Files { get; } = new List<string>();
+
+        /// <summary>0–2.</summary>
+        public double Volume { get; set; } = 1.0;
+
+        /// <summary>0–1: how much babies play higher (animal sounds only).</summary>
+        public double AgePitch { get; set; } = 1.0;
+
+        public bool IsUnique => Species != null || Skin != null;
+    }
+
     public static class SkinSlotNames
     {
         public static readonly IReadOnlyList<string> All = new[]
@@ -137,6 +159,8 @@ namespace Tyrant.Framework.Core
 
         public List<ModelReplacement> Models { get; } = new List<ModelReplacement>();
 
+        public List<SoundReplacement> Sounds { get; } = new List<SoundReplacement>();
+
         public static ModManifest Parse(string json) => Parse(json, null);
 
         /// <summary>
@@ -201,6 +225,19 @@ namespace Tyrant.Framework.Core
                 var file = Text(entry, "file");
                 if (string.IsNullOrWhiteSpace(file)) throw new ManifestException($"\"models\" entry {n} ({target}) has no \"file\".");
                 manifest.Models.Add(new ModelReplacement { Target = target!, Key = Text(entry, "key"), File = file! });
+            }
+            n = 0;
+            foreach (var item in Array(map, "sounds"))
+            {
+                n++;
+                try
+                {
+                    manifest.Sounds.Add(ParseSound(item, n));
+                }
+                catch (ManifestException ex) when (skippedSkins != null)
+                {
+                    skippedSkins.Add($"\"sounds\" entry {n} was skipped: {ex.Message}");
+                }
             }
             n = 0;
             foreach (var item in Array(map, "skins"))
@@ -270,6 +307,17 @@ namespace Tyrant.Framework.Core
                     entry["file"] = m.File;
                     return (object?)entry;
                 }).ToList();
+            if (Sounds.Count > 0)
+                map["sounds"] = Sounds.Select(s =>
+                {
+                    var entry = new Dictionary<string, object?> { ["event"] = s.Event };
+                    if (s.Species != null) entry["species"] = s.Species;
+                    if (s.Skin != null) entry["skin"] = s.Skin;
+                    entry["files"] = s.Files.Cast<object?>().ToList();
+                    if (s.Volume != 1.0) entry["volume"] = s.Volume;
+                    if (s.AgePitch != 1.0) entry["agePitch"] = s.AgePitch;
+                    return (object?)entry;
+                }).ToList();
             if (Skins.Count > 0)
                 map["skins"] = Skins.Select(s =>
                 {
@@ -282,6 +330,22 @@ namespace Tyrant.Framework.Core
                     return (object?)entry;
                 }).ToList();
             return Json.Write(map) + "\n";
+        }
+
+        private static SoundReplacement ParseSound(object? item, int n)
+        {
+            if (!(item is Dictionary<string, object?> entry)) throw new ManifestException($"\"sounds\" entry {n} must be an object.");
+            var eventPath = Text(entry, "event");
+            if (string.IsNullOrWhiteSpace(eventPath)) throw new ManifestException($"\"sounds\" entry {n} has no \"event\".");
+            var sound = new SoundReplacement { Event = eventPath!, Species = Text(entry, "species"), Skin = Text(entry, "skin") };
+            if (sound.Species != null && sound.Skin != null)
+                throw new ManifestException($"Sound {eventPath}: give it a \"species\" or a \"skin\", not both.");
+            foreach (var file in Array(entry, "files"))
+                sound.Files.Add(file as string ?? throw new ManifestException($"Sound {eventPath}: \"files\" must list file paths."));
+            if (sound.Files.Count == 0) throw new ManifestException($"Sound {eventPath} has no files.");
+            if (entry.TryGetValue("volume", out var volume) && volume is double v) sound.Volume = Math.Max(0, Math.Min(2, v));
+            if (entry.TryGetValue("agePitch", out var agePitch) && agePitch is double a) sound.AgePitch = Math.Max(0, Math.Min(1, a));
+            return sound;
         }
 
         private static string? Text(Dictionary<string, object?> map, string key) =>
