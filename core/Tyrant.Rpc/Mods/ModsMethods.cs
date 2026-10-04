@@ -281,8 +281,9 @@ public sealed class ModsMethods(StudioSession session, JobManager jobs)
         IReadOnlyDictionary<string, string>?[] vanilla = [sex == "female" ? based?.Female : based?.Male];
         foreach (var candidate in candidates)
         {
-            if (own.Select(d => d?.GetValueOrDefault(candidate)).FirstOrDefault(f => !string.IsNullOrEmpty(f)) is { } file)
-                return Path.GetFullPath(Path.Combine(mod.Dir, file));
+            if (own.Select(d => d?.GetValueOrDefault(candidate)).FirstOrDefault(f => !string.IsNullOrEmpty(f)) is { } file
+                && OwnMapCopy(ws, mod, file) is { } copy)
+                return copy;
             if (vanilla.Select(d => d?.GetValueOrDefault(candidate)).FirstOrDefault(g => !string.IsNullOrEmpty(g)) is { } textureGuid
                 && index.Assets.FirstOrDefault(a => a.Type == "Texture2D" && string.Equals(a.Guid, textureGuid, StringComparison.OrdinalIgnoreCase)) is { } texture)
             {
@@ -296,6 +297,26 @@ public sealed class ModsMethods(StudioSession session, JobManager jobs)
             }
         }
         return null;
+    }
+
+    /// <summary>
+    /// A copy of the skin's own PNG in the preview cache: the app may only load files there (the asset protocol's scope).
+    /// Named after its path, size and write time, so a replaced file gets a new URL. Null when the file is missing or outside the mod.
+    /// </summary>
+    private static string? OwnMapCopy(Workspace ws, ModProject mod, string file)
+    {
+        var path = Path.GetFullPath(Path.Combine(mod.Dir, file));
+        if (!Tyrant.Framework.Core.ModPaths.IsInside(path, mod.Dir) || !File.Exists(path)) return null;
+        var info = new FileInfo(path);
+        var name = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+            System.Text.Encoding.UTF8.GetBytes($"{path}|{info.Length}|{info.LastWriteTimeUtc.Ticks}")))[..16].ToLowerInvariant();
+        var copy = Path.Combine(PreviewsDir(ws, "skin-model"), $"own-{name}.png");
+        if (!File.Exists(copy))
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(copy)!);
+            File.Copy(path, copy, overwrite: true);
+        }
+        return copy;
     }
 
     [RpcMethod("mods.thumbnail")]

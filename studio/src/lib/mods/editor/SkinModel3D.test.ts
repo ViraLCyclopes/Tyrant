@@ -87,6 +87,22 @@ describe('SkinModel3D', () => {
     expect(viewer.setAnimalMaps).toHaveBeenLastCalledWith({ diffuse: 'asset://D:\\m\\female_D.png' });
   });
 
+  it('a choice made while the model loads does not start a second model', async () => {
+    const { session } = setup();
+    let finish!: () => void;
+    const { showModels, ...methods } = viewer;
+    showModels.mockReturnValue(new Promise((r) => (finish = () => r({ ...methods, failures: [] }))));
+    renderWith(SkinModel3D, session, { doc, skin, colorsJson: null, variant: 'normal' });
+    await waitFor(() => expect(viewer.showModels).toHaveBeenCalledTimes(1));
+
+    await fireEvent.click(screen.getByRole('radio', { name: 'Female' }));
+    await new Promise((r) => setTimeout(r, 0));
+    finish();
+
+    await waitFor(() => expect(viewer.setAnimalMaps).toHaveBeenLastCalledWith({ diffuse: 'asset://D:\\m\\female_D.png' }));
+    expect(viewer.showModels).toHaveBeenCalledTimes(1); // one engine on the canvas
+  });
+
   it('says what is missing instead of a 3D view', async () => {
     const { rpc, session } = setup();
     rpc.on('mods.skinModel', () => {

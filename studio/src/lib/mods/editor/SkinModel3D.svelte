@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import type { ModelViewer } from '$lib/assets/viewer';
   import { asRpcError } from '$lib/rpc/client';
   import type { ModSkinDto } from '$lib/rpc/types.gen';
@@ -19,12 +20,18 @@
   let canvas = $state<HTMLCanvasElement>();
   let viewer = $state.raw<ModelViewer | null>(null);
   let shownPrefab: string | null = null;
+  let wantedPrefab: string | null = null;
+  let loading: Promise<void> | null = null;
   let generation = 0;
   let disposed = false;
+  let sexFor: string | null = null;
 
   $effect.pre(() => {
-    // A skin with only female files opens on Female.
-    sex = skin.male?.diffuse || !skin.female ? 'male' : 'female';
+    // A newly picked skin opens on its own sex (Female for a female-only skin); edits to the same skin keep the choice.
+    const id = skin.id;
+    if (id === sexFor) return;
+    sexFor = id;
+    sex = untrack(() => (skin.male?.diffuse || !skin.female ? 'male' : 'female'));
   });
 
   /** Fetches the model and maps for the current skin and sex; a newer choice wins over a late answer. */
@@ -33,8 +40,8 @@
     try {
       const model = await session.rpc.call('mods.skinModel', { id: doc.id, skin: skin.id, sex });
       if (mine !== generation || disposed) return;
-      if (shownPrefab !== model.prefabRef) await show(model.prefabRef, mine);
-      if (mine !== generation || disposed || !viewer) return;
+      await ensureModel(model.prefabRef);
+      if (mine !== generation || disposed || !viewer || shownPrefab !== model.prefabRef) return;
       viewer.setAnimalMaps(Object.fromEntries(Object.entries(model.maps).map(([slot, file]) => [slot, session.platform.fileUrl(file)])));
       reason = null;
       await colour(mine);
@@ -43,19 +50,39 @@
     }
   }
 
-  async function show(prefabRef: string, mine: number) {
+  /**
+   * One model on the canvas at a time: a load already on its way for the same prefab is shared, and a load for another
+   * prefab waits for it, disposing the old viewer first (two engines on one canvas share and corrupt its WebGL state).
+   */
+  function ensureModel(prefabRef: string): Promise<void> {
+    wantedPrefab = prefabRef;
+    if (shownPrefab === prefabRef && !loading) return Promise.resolve();
+    const before = loading;
+    const mine: Promise<void> = (async () => {
+      await before?.catch(() => {});
+      if (shownPrefab !== prefabRef && wantedPrefab === prefabRef) await show(prefabRef);
+    })().finally(() => {
+      if (loading === mine) loading = null;
+    });
+    loading = mine;
+    return mine;
+  }
+
+  async function show(prefabRef: string) {
     const preview = await session.rpc.call('assets.preview', { ref: prefabRef });
-    if (mine !== generation || disposed) return;
+    if (disposed || wantedPrefab !== prefabRef) return;
     const module = await import('$lib/assets/viewer');
+    viewer?.dispose();
+    viewer = null;
+    shownPrefab = null;
     const next = await module.showModels(canvas!, preview.files.map((file) => ({ file, url: session.platform.fileUrl(file) })), {
       fileUrl: (path) => session.platform.fileUrl(path),
       materials: preview.materials ?? [],
     });
-    if (disposed) {
+    if (disposed || wantedPrefab !== prefabRef) {
       next.dispose();
       return;
     }
-    viewer?.dispose();
     viewer = next;
     shownPrefab = prefabRef;
     if (!tab.active) next.pause();

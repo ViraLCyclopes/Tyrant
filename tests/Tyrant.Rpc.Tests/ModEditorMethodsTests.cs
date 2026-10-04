@@ -81,9 +81,35 @@ public class ModEditorMethodsTests
 
         Assert.Equal(SkinDumps.Prefab.Ref, model.GetProperty("prefabRef").GetString());
         var maps = model.GetProperty("maps");
-        Assert.Equal(Path.Combine(ws, "mods", "red-spot", "skins", "blue", "male_D.png"), maps.GetProperty("diffuse").GetString()); // the skin's own file
+        var diffuse = maps.GetProperty("diffuse").GetString()!;
+        Assert.Equal(File.ReadAllBytes(Path.Combine(ws, "mods", "red-spot", "skins", "blue", "male_D.png")), File.ReadAllBytes(diffuse)); // the skin's own file
         Assert.True(File.Exists(maps.GetProperty("normal").GetString())); // the base skin's texture, written to the cache
         Assert.False(maps.TryGetProperty("extra", out _)); // "Alt 1" has no male extra map
+    }
+
+    [Fact]
+    public async Task Skin_model_serves_every_map_from_the_preview_cache()
+    {
+        using var game = new FakeGame();
+        var (h, ws, _) = await WithSkinAndPrefab(game);
+
+        var maps = (await h.Call("mods.skinModel", new { id = "red-spot", skin = "blue", sex = "male" })).GetProperty("maps");
+
+        // The app may only load files under <workspace>\cache\previews (the asset protocol's scope).
+        var previews = Path.Combine(ws, "cache", "previews") + Path.DirectorySeparatorChar;
+        foreach (var map in maps.EnumerateObject()) Assert.StartsWith(previews, map.Value.GetString());
+    }
+
+    [Fact]
+    public async Task Skin_model_uses_the_base_skin_when_the_skins_own_file_is_missing()
+    {
+        using var game = new FakeGame();
+        var (h, ws, _) = await WithSkinAndPrefab(game);
+        File.Delete(Path.Combine(ws, "mods", "red-spot", "skins", "blue", "male_D.png"));
+
+        var diffuse = (await h.Call("mods.skinModel", new { id = "red-spot", skin = "blue", sex = "male" })).GetProperty("maps").GetProperty("diffuse").GetString()!;
+
+        Assert.EndsWith(SkinDumps.MaleDiffuse + ".png", diffuse); // "Alt 1"'s male diffuse
     }
 
     [Fact]

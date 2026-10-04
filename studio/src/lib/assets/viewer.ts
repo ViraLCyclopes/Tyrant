@@ -180,8 +180,8 @@ async function build(canvas: HTMLCanvasElement, models: ModelFile[], options: Vi
       material.bumpTexture = !texturesOn ? null : (worn?.normal ?? textures.bump);
       const plugin = plugins.get(material);
       if (plugin) {
-        plugin.extra = worn?.extra ?? textures.extra;
-        plugin.pattern = worn?.pattern ?? textures.pattern;
+        plugin.extra = !texturesOn ? null : (worn?.extra ?? textures.extra);
+        plugin.pattern = !texturesOn ? null : (worn?.pattern ?? textures.pattern);
         material.markAsDirty(Material.TextureDirtyFlag);
       }
     }

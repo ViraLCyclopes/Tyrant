@@ -22,8 +22,9 @@ export class PkAnimalPlugin extends MaterialPluginBase {
     return 'PkAnimalPlugin';
   }
 
+  /** Like PBR's own textures: a map that failed to load does not block drawing (it is simply not applied). */
   override isReadyForSubMesh(): boolean {
-    return (!this.extra || this.extra.isReady()) && (!this.pattern || this.pattern.isReady());
+    return (!this.extra || this.extra.isReadyOrNotBlocking()) && (!this.pattern || this.pattern.isReadyOrNotBlocking());
   }
 
   override prepareDefines(defines: MaterialDefines): void {
@@ -90,7 +91,7 @@ export class PkAnimalPlugin extends MaterialPluginBase {
         {
           vec3 pkColor = toGammaSpace(surfaceAlbedo);
           float pkStrength = pkFlags.w;
-          #ifdef PK_PATTERN
+          #if defined(PK_PATTERN) && defined(MAINUV1)
             vec4 pkPattern = texture2D(pkPatternSampler, vMainUV1);
             if (pkPattern.r > 0.0) {
               pkColor = pkShift(pkColor, pkShape.y, pkShape.z, pkShape.w);
@@ -98,19 +99,20 @@ export class PkAnimalPlugin extends MaterialPluginBase {
               if (pkFlags.y > 0.5 && pkPattern.g > 0.0) pkColor = mix(pkColor, pkSecondary, pkPattern.g * pkStrength);
             }
           #endif
-          #ifdef PK_EXTRA
+          #if defined(PK_EXTRA) && defined(MAINUV1)
             if (pkFlags.z > 0.5 && texture2D(pkExtraSampler, vMainUV1).r > 0.9) pkColor = mix(pkColor, pkEye, pkStrength);
           #endif
           surfaceAlbedo = toLinearSpace(pkColor);
         }
       `,
       CUSTOM_FRAGMENT_UPDATE_METALLICROUGHNESS: `
-        #ifdef PK_EXTRA
+        #if defined(PK_EXTRA) && defined(MAINUV1)
           metallicRoughness = vec2(0.0, 1.0 - texture2D(pkExtraSampler, vMainUV1).r);
         #endif
       `,
-      CUSTOM_FRAGMENT_BEFORE_LIGHTS: `
-        #ifdef PK_EXTRA
+      // After the ambient occlusion block has run (aoOut is declared just after CUSTOM_FRAGMENT_BEFORE_LIGHTS).
+      '!aoOut=ambientOcclusionBlock\\([^;]*\\);': `$0
+        #if defined(PK_EXTRA) && defined(MAINUV1)
           aoOut.ambientOcclusionColor *= texture2D(pkExtraSampler, vMainUV1).g;
         #endif
       `,
