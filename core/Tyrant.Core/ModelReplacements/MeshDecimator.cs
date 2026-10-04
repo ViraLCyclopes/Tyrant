@@ -4,9 +4,11 @@ using Tyrant.Core.Models;
 namespace Tyrant.Core.ModelReplacements;
 
 /// <summary>
-/// Quadric error half-edge collapse (Garland–Heckbert): each collapse moves one vertex onto a neighbour and keeps the
-/// neighbour as it is, so every surviving vertex keeps its own skin weights, UVs, colour and shape-key deltas exactly.
-/// Vertices on open borders and at seams (several vertices at one position: UV or normal splits) are never moved.
+/// Quadric error half-edge collapse (Garland–Heckbert) on welded positions. Vertices at one position (copies split by UV or
+/// normal seams) move together: a position collapses onto a neighbouring position only if every copy has a copy of that
+/// position next to it in its own UV island, so seams can shorten but never smear across islands. Each collapse keeps the
+/// target vertices as they are, so every surviving vertex keeps its own skin weights, UVs, colour and shape-key deltas
+/// exactly. Positions on open borders never move.
 /// </summary>
 public static class MeshDecimator
 {
@@ -18,7 +20,24 @@ public static class MeshDecimator
         var n = mesh.VertexCount;
         if (targetVertices >= n || n == 0) return mesh;
 
-        // Triangles with their sub-mesh.
+        // Position groups (welded vertices).
+        var groupOf = new int[n];
+        var groupIds = new Dictionary<Vector3, int>();
+        var groupVerts = new List<List<int>>();
+        for (var v = 0; v < n; v++)
+        {
+            if (!groupIds.TryGetValue(mesh.Positions[v], out var g))
+            {
+                g = groupVerts.Count;
+                groupIds[mesh.Positions[v]] = g;
+                groupVerts.Add([]);
+            }
+            groupOf[v] = g;
+            groupVerts[g].Add(v);
+        }
+        var groups = groupVerts.Count;
+
+        // Triangles (vertex indices) with their sub-mesh.
         var tris = new List<(int A, int B, int C, int Sub)>();
         for (var s = 0; s < mesh.SubMeshes.Length; s++)
         {
@@ -36,34 +55,35 @@ public static class MeshDecimator
             vertexTris[tris[t].C].Add(t);
         }
 
-        // Locked: seams (positions shared by several vertices) and open borders (edges used by one triangle).
-        var locked = new bool[n];
-        foreach (var group in Enumerable.Range(0, n).GroupBy(v => mesh.Positions[v]).Where(g => g.Count() > 1))
-            foreach (var v in group) locked[v] = true;
+        // Open borders of the welded surface (an edge between two positions used by one triangle) never move.
+        var locked = new bool[groups];
         var edgeUse = new Dictionary<(int, int), int>();
         foreach (var (a, b, c, _) in tris)
-            foreach (var e in new[] { Key(a, b), Key(b, c), Key(c, a) })
+            foreach (var e in new[] { Key(groupOf[a], groupOf[b]), Key(groupOf[b], groupOf[c]), Key(groupOf[c], groupOf[a]) })
                 edgeUse[e] = edgeUse.GetValueOrDefault(e) + 1;
         foreach (var ((a, b), uses) in edgeUse)
             if (uses == 1) { locked[a] = true; locked[b] = true; }
 
-        // Quadrics: the planes of each vertex's triangles, weighted by area.
-        var q = new Quadric[n];
+        // Quadrics per position: the planes of its triangles, weighted by area.
+        var q = new Quadric[groups];
+        var groupPosition = new Vector3[groups];
+        for (var g = 0; g < groups; g++) groupPosition[g] = mesh.Positions[groupVerts[g][0]];
         foreach (var (a, b, c, _) in tris)
         {
             var plane = Quadric.FromTriangle(mesh.Positions[a], mesh.Positions[b], mesh.Positions[c]);
-            q[a] += plane;
-            q[b] += plane;
-            q[c] += plane;
+            q[groupOf[a]] += plane;
+            q[groupOf[b]] += plane;
+            q[groupOf[c]] += plane;
         }
 
-        var dead = new bool[n];
-        var version = new int[n];
+        var deadVertex = new bool[n];
+        var deadGroup = new bool[groups];
+        var version = new int[groups];
         var queue = new PriorityQueue<(int U, int V, int VersionU, int VersionV), double>();
         void Push(int u, int v)
         {
-            if (locked[u] || dead[u] || dead[v]) return;
-            queue.Enqueue((u, v, version[u], version[v]), (q[u] + q[v]).Error(mesh.Positions[v]));
+            if (locked[u] || deadGroup[u] || deadGroup[v] || u == v) return;
+            queue.Enqueue((u, v, version[u], version[v]), (q[u] + q[v]).Error(groupPosition[v]));
         }
         foreach (var (a, b) in edgeUse.Keys)
         {
@@ -74,27 +94,34 @@ public static class MeshDecimator
         var alive = n - Enumerable.Range(0, n).Count(v => vertexTris[v].Count == 0); // vertices no triangle uses are dropped anyway
         while (alive > targetVertices && queue.TryDequeue(out var c, out _))
         {
-            if (dead[c.U] || dead[c.V] || version[c.U] != c.VersionU || version[c.V] != c.VersionV) continue;
-            if (!vertexTris[c.U].Overlaps(vertexTris[c.V]) || Flips(c.U, c.V)) continue; // no longer neighbours, or it would fold
-            foreach (var t in vertexTris[c.U].ToList())
+            if (deadGroup[c.U] || deadGroup[c.V] || version[c.U] != c.VersionU || version[c.V] != c.VersionV) continue;
+            var map = MapCopies(c.U, c.V);
+            if (map is null || Flips(c.U, c.V)) continue;
+
+            foreach (var (cu, cv) in map)
             {
-                var tri = tris[t];
-                if (tri.A == c.V || tri.B == c.V || tri.C == c.V)
+                foreach (var t in vertexTris[cu].ToList())
                 {
-                    aliveTri[t] = false;
-                    vertexTris[tri.A].Remove(t);
-                    vertexTris[tri.B].Remove(t);
-                    vertexTris[tri.C].Remove(t);
+                    var tri = tris[t];
+                    if (groupOf[tri.A] == c.V || groupOf[tri.B] == c.V || groupOf[tri.C] == c.V)
+                    {
+                        aliveTri[t] = false; // it spanned the collapsed edge
+                        vertexTris[tri.A].Remove(t);
+                        vertexTris[tri.B].Remove(t);
+                        vertexTris[tri.C].Remove(t);
+                    }
+                    else
+                    {
+                        tris[t] = (tri.A == cu ? cv : tri.A, tri.B == cu ? cv : tri.B, tri.C == cu ? cv : tri.C, tri.Sub);
+                        vertexTris[cv].Add(t);
+                    }
                 }
-                else
-                {
-                    tris[t] = (tri.A == c.U ? c.V : tri.A, tri.B == c.U ? c.V : tri.B, tri.C == c.U ? c.V : tri.C, tri.Sub);
-                    vertexTris[c.V].Add(t);
-                }
+                vertexTris[cu].Clear();
+                deadVertex[cu] = true;
+                alive--;
             }
-            vertexTris[c.U].Clear();
-            dead[c.U] = true;
-            alive--;
+            groupVerts[c.U].Clear();
+            deadGroup[c.U] = true;
             q[c.V] += q[c.U];
             version[c.V]++; // every queued collapse involving v is out of date now
             foreach (var w in Neighbours(c.V))
@@ -106,22 +133,47 @@ public static class MeshDecimator
 
         return Compact(mesh, tris, aliveTri);
 
+        // Each copy of position u → the copy of position v next to it (sharing a triangle); null when one copy has none,
+        // which would drag its UV island across a seam.
+        List<(int From, int To)>? MapCopies(int u, int v)
+        {
+            var map = new List<(int, int)>();
+            foreach (var cu in groupVerts[u])
+            {
+                if (vertexTris[cu].Count == 0) continue;
+                var best = -1;
+                var bestDistance = float.MaxValue;
+                foreach (var t in vertexTris[cu])
+                    foreach (var w in new[] { tris[t].A, tris[t].B, tris[t].C })
+                    {
+                        if (groupOf[w] != v) continue;
+                        var distance = mesh.Uv0.Length == n ? Vector2.DistanceSquared(mesh.Uv0[cu], mesh.Uv0[w]) : 0f;
+                        if (distance < bestDistance) (best, bestDistance) = (w, distance);
+                    }
+                if (best < 0) return null;
+                map.Add((cu, best));
+            }
+            return map.Count == 0 ? null : map;
+        }
+
         bool Flips(int u, int v)
         {
-            foreach (var t in vertexTris[u])
-            {
-                var (a, b, cc, _) = tris[t];
-                if (a == v || b == v || cc == v) continue;
-                var before = Normal(mesh.Positions[a], mesh.Positions[b], mesh.Positions[cc]);
-                Vector3 P(int i) => i == u ? mesh.Positions[v] : mesh.Positions[i];
-                var after = Normal(P(a), P(b), P(cc));
-                if (after == Vector3.Zero || Vector3.Dot(before, after) < FlipLimit) return true;
-            }
+            foreach (var cu in groupVerts[u])
+                foreach (var t in vertexTris[cu])
+                {
+                    var (a, b, cc, _) = tris[t];
+                    if (groupOf[a] == v || groupOf[b] == v || groupOf[cc] == v) continue; // removed by the collapse
+                    var before = Normal(mesh.Positions[a], mesh.Positions[b], mesh.Positions[cc]);
+                    Vector3 P(int i) => groupOf[i] == u ? groupPosition[v] : mesh.Positions[i];
+                    var after = Normal(P(a), P(b), P(cc));
+                    if (after == Vector3.Zero || Vector3.Dot(before, after) < FlipLimit) return true;
+                }
             return false;
         }
 
-        IEnumerable<int> Neighbours(int v) =>
-            vertexTris[v].SelectMany(t => new[] { tris[t].A, tris[t].B, tris[t].C }).Where(w => w != v).Distinct().ToList();
+        IEnumerable<int> Neighbours(int g) =>
+            groupVerts[g].SelectMany(v => vertexTris[v]).SelectMany(t => new[] { tris[t].A, tris[t].B, tris[t].C })
+                .Select(w => groupOf[w]).Where(w => w != g).Distinct().ToList();
     }
 
     private static (int, int) Key(int a, int b) => a < b ? (a, b) : (b, a);

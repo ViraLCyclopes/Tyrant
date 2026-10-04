@@ -64,6 +64,38 @@ public class AssetIntegrationTests(RealGameIndex real) : IClassFixture<RealGameI
     }
 
     [SkippableFact]
+    public void Carcharodontosaurus_converts_back_unchanged()
+    {
+        Skip.If(RealGameIndex.GameDir is null, "TYRANT_GAME_DIR not set");
+        var prefab = real.Index.Assets.First(a => a.Type == "GameObject" && a.ContainerPath?.EndsWith("/Carcharodontosaurus.V2.prefab") == true);
+        using var session = new AssetSession(real.Install);
+        var model = new ModelExporter().ReadPrefab(session, prefab);
+        var renderers = Tyrant.Core.ModelReplacements.ModelBuilder.GameRenderers(model);
+        var dir = Path.Combine(Path.GetTempPath(), "tyrant-tests", Guid.NewGuid().ToString("N"), "mod");
+        var glb = Path.Combine(dir, "models", "carch.glb");
+        GltfModelWriter.WriteGlb(model, renderers[0], glb, renderers[0].Materials.Select(m => new GltfMaterial(m.Name)).ToList());
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+
+        var report = Tyrant.Core.ModelReplacements.ModelBuilder.Build(dir, "models/carch.glb", model);
+
+        Assert.Empty(report.Errors);
+        // The glTF writer merges vertices whose exported attributes are identical, so a few fewer can come back.
+        Assert.InRange(report.Lods[0].Vertices, renderers[0].Mesh.VertexCount * 95 / 100, renderers[0].Mesh.VertexCount);
+        Assert.Equal(renderers.Count, report.Lods.Count);
+        using var stream = File.OpenRead(Path.Combine(dir, report.Lods[0].File));
+        var tmesh = Tyrant.Framework.Core.TMesh.Read(stream);
+        var positions = renderers[0].Mesh.Positions.Select(p => (MathF.Round(p.X, 3), MathF.Round(p.Y, 3), MathF.Round(p.Z, 3))).ToHashSet();
+        for (var v = 0; v < tmesh.VertexCount; v++)
+            Assert.Contains((MathF.Round(tmesh.Positions[v * 3], 3), MathF.Round(tmesh.Positions[v * 3 + 1], 3), MathF.Round(tmesh.Positions[v * 3 + 2], 3)), positions);
+        foreach (var lod in report.Lods.Skip(1)) // decimated to the game's own ratios, seams included
+            Assert.True(lod.Vertices <= lod.Vanilla * 5 / 4, $"{lod.File}: {lod.Vertices} vertices for the game's {lod.Vanilla}");
+        Assert.Equal(renderers[0].Bones.Count, tmesh.BoneCount);
+        Assert.Equal(renderers[0].Mesh.BlendShapes.Take(2).Select(s => s.Name), tmesh.Shapes.Take(2).Select(s => s.Name));
+        Assert.True(clock.Elapsed < TimeSpan.FromSeconds(60), $"building took {clock.Elapsed}");
+        Console.WriteLine($"Carcharodontosaurus: built in {clock.Elapsed.TotalSeconds:0.0} s; LODs {string.Join(", ", report.Lods.Select(l => $"{l.Vertices}/{l.Vanilla}"))}");
+    }
+
+    [SkippableFact]
     public void Releasing_files_keeps_the_game_assemblies_loaded()
     {
         Skip.If(RealGameIndex.GameDir is null, "TYRANT_GAME_DIR not set");

@@ -54,6 +54,64 @@ public class MeshDecimatorTests
         };
     }
 
+    /// <summary>
+    /// A bumpy grid cut into vertical UV islands every few columns (like a real animal's many seams): each island has its own
+    /// vertices along its edges; the island id is kept in the colour so a test can see triangles that mix islands.
+    /// </summary>
+    private static MeshData Islands(int n, int every)
+    {
+        var positions = new List<Vector3>();
+        var colors = new List<Vector4>();
+        var uvs = new List<Vector2>();
+        var index = new Dictionary<(int X, int Y, int Island), uint>();
+        uint V(int x, int y, int island)
+        {
+            if (index.TryGetValue((x, y, island), out var v)) return v;
+            positions.Add(new Vector3(x, MathF.Sin(x * 0.7f) * MathF.Cos(y * 0.5f) * 0.3f, y));
+            colors.Add(new Vector4(island, 0, 0, 1));
+            uvs.Add(new Vector2(island + (x - island * every) / (float)every * 0.9f, y / (float)n));
+            return index[(x, y, island)] = (uint)(positions.Count - 1);
+        }
+        var indices = new List<uint>();
+        for (var y = 0; y < n; y++)
+            for (var x = 0; x < n; x++)
+            {
+                var island = x / every;
+                indices.AddRange([V(x, y, island), V(x, y + 1, island), V(x + 1, y, island)]);
+                indices.AddRange([V(x + 1, y, island), V(x, y + 1, island), V(x + 1, y + 1, island)]);
+            }
+        var count = positions.Count;
+        return new MeshData
+        {
+            Name = "Islands", Positions = [.. positions], Normals = Enumerable.Repeat(Vector3.UnitY, count).ToArray(), Uv0 = [.. uvs], Colors = [.. colors],
+            Skin = Enumerable.Range(0, count).Select(i => new BoneWeight4(0, 0, 0, 0, 1, 0, 0, 0)).ToArray(),
+            Indices = [.. indices], SubMeshes = [new SubMesh(0, indices.Count, 0)], BindPoses = [Matrix4x4.Identity],
+            BlendShapes = [],
+        };
+    }
+
+    [Fact]
+    public void A_mesh_full_of_seams_still_reaches_its_target()
+    {
+        var mesh = Islands(24, every: 3); // 8 islands: almost every vertex sits on a seam
+
+        var lod = MeshDecimator.Decimate(mesh, mesh.VertexCount / 4);
+
+        Assert.InRange(lod.VertexCount, 1, mesh.VertexCount / 4 * 13 / 10);
+    }
+
+    [Fact]
+    public void Collapses_never_mix_two_uv_islands_in_one_triangle()
+    {
+        var lod = MeshDecimator.Decimate(Islands(24, every: 3), 150);
+
+        for (var t = 0; t < lod.Indices.Length; t += 3)
+        {
+            var islands = Enumerable.Range(0, 3).Select(k => lod.Colors[lod.Indices[t + k]].X).Distinct().Count();
+            Assert.Equal(1, islands);
+        }
+    }
+
     [Fact]
     public void It_reaches_the_target_vertex_count()
     {
@@ -85,7 +143,7 @@ public class MeshDecimatorTests
     }
 
     [Fact]
-    public void Borders_and_seams_stay_where_they_are()
+    public void Borders_stay_and_seams_keep_both_sides()
     {
         var mesh = Grid(20, seam: true);
 
@@ -93,8 +151,9 @@ public class MeshDecimatorTests
 
         for (var y = 0; y <= 20; y++)
         {
-            Assert.Contains(mesh.Positions[y * 21], lod.Positions);                        // left border
-            Assert.Equal(2, lod.Positions.Count(p => p == mesh.Positions[y * 21 + 10]));    // both copies of the seam vertex
+            Assert.Contains(mesh.Positions[y * 21], lod.Positions); // the open border never moves
+            var copies = lod.Positions.Count(p => p == mesh.Positions[y * 21 + 10]);
+            Assert.True(copies is 0 or 2, $"seam vertex {y}: {copies} copies (a seam may shorten, but both sides keep their own vertex)");
         }
     }
 
