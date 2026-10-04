@@ -87,7 +87,7 @@ A mod can add new skins next to the vanilla ones; nothing vanilla changes. Make 
 ## Skin colours
 
 A skin can set its own colours in a `colors` section. Every part is optional; anything left out comes from the base skin.
-(Tyrant's app will edit this for you after its GUI overhaul; until then this is for advanced users.)
+(The app's mod editor sets all of this for you: open the mod, pick a skin, **Colours**. `tyrant mod colors <mod> <skin> --set file.json` does the same from the command line.)
 
 ```json
 "colors": {
