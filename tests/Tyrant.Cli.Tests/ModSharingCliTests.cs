@@ -68,4 +68,26 @@ public class ModSharingCliTests
             CliServices.GameModsDir = shipped;
         }
     }
+
+    [Fact]
+    public void Game_package_framework_needs_no_workspace_with_out()
+    {
+        var output = Path.Combine(Path.GetTempPath(), "tyrant-tests", Guid.NewGuid().ToString("N"), "fw.zip");
+        var dumper = Path.Combine(Path.GetTempPath(), "tyrant-tests", Guid.NewGuid().ToString("N"), "dumper");
+        Directory.CreateDirectory(dumper);
+        File.WriteAllText(Path.Combine(dumper, "Tyrant.Framework.dll"), "framework");
+        var shipped = CliServices.GameModsDir;
+        CliServices.GameModsDir = dumper;
+        try
+        {
+            var (code, _, err) = Run("game", "package-framework", "--out", output);
+
+            Assert.True(code == ExitCodes.Ok, err);
+            Assert.True(File.Exists(output));
+        }
+        finally
+        {
+            CliServices.GameModsDir = shipped;
+        }
+    }
 }

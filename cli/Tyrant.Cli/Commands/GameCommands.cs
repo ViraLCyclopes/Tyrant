@@ -33,9 +33,11 @@ public sealed class GamePackageFrameworkCommand : Command<GamePackageFrameworkCo
 
     public override int Execute(CommandContext context, Settings settings)
     {
-        var (ws, _) = CliServices.OpenWorkspace(settings);
-        var path = FrameworkPackage.Write(CliServices.GameModsDir,
-            Path.GetFullPath(settings.Out ?? Path.Combine(ws.Dir, "exports", FrameworkPackage.FileName)));
+        // With --out no workspace is needed (the release workflow runs it without the game).
+        var target = settings.Out is not null
+            ? Path.GetFullPath(settings.Out)
+            : Path.Combine(CliServices.OpenWorkspace(settings).Workspace.Dir, "exports", FrameworkPackage.FileName);
+        var path = FrameworkPackage.Write(CliServices.GameModsDir, target);
         Console.WriteLine($"Saved the framework zip: {path}. Players unzip it into the game folder after installing MelonLoader.");
         return ExitCodes.Ok;
     }

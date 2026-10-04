@@ -1,0 +1,77 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: The tag must match the app version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $version = (Get-Content studio/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          if ("v$version" -ne "${{ github.ref_name }}") { throw "Tag ${{ github.ref_name }} does not match the app version $version (npm run set-version)." }
+
+      - name: The updater key must be set up
+        shell: pwsh
+        run: |
+          if (-not (Get-Content studio/src-tauri/updater-key.pub -Raw).Trim()) { throw "studio/src-tauri/updater-key.pub is empty: run 'npm run updater-key' (docs/making-a-release.md)." }
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: studio/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Tests
+        run: dotnet test Tyrant.slnx
+
+      - name: Studio dependencies and checks
+        working-directory: studio
+        run: |
+          npm ci
+          npm run check
+          npm test
+
+      - name: Tyrant's core (sidecar)
+        working-directory: studio
+        run: npm run sidecar
+
+      - name: Build, sign and draft the release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          projectPath: studio
+          args: --config src-tauri/tauri.release.conf.json
+          tagName: ${{ github.ref_name }}
+          releaseName: Tyrant ${{ github.ref_name }}
+          releaseBody: Write what changed here, then publish.
+          releaseDraft: true
+          includeUpdaterJson: true
+
+      - name: Framework zip
+        shell: pwsh
+        run: |
+          dotnet run --project cli/Tyrant.Cli -c Release -- game package-framework --out release-assets/framework.zip
+          $zip = Get-ChildItem release-assets/framework.zip
+          $name = "Tyrant-Framework-$((Select-String -Path game/Tyrant.Framework.Core/ModManifest.cs -Pattern 'Version = "([^"]+)"').Matches[0].Groups[1].Value).zip"
+          Rename-Item $zip.FullName $name
+          gh release upload "${{ github.ref_name }}" "release-assets/$name" --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

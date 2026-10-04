@@ -10,6 +10,7 @@
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --fail-on-warnings",
     "test": "vitest run",
     "set-version": "node scripts/set-version.mjs",
+    "updater-key": "node scripts/updater-key.mjs",
     "tauri": "tauri",
     "gen:types": "dotnet run --project ../cli/Tyrant.Cli/Tyrant.Cli.csproj -- rpc --emit-ts src/lib/rpc/types.gen.ts",
     "sidecar": "dotnet publish ../cli/Tyrant.Cli/Tyrant.Cli.csproj -c Release -r win-x64 --self-contained true -o src-tauri/sidecar",
