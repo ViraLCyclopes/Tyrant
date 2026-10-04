@@ -82,11 +82,18 @@ Release build: `npm run build:app`, install `studio/src-tauri/target/release/bun
 43. **(game)** Fence texture → **Replace in a mod…** → new mod with a recoloured PNG → **Install to game**. Start the game,
     place that fence: the new texture shows on the fence and in the build menu. `MelonLoader\Latest.log` has
     `Replaced … on game materials`.
-41. **Copy diagnostics** and paste: versions, build, workspace and log tails appear.
-42. **(game)** **Uninstall from game**: the notice says the game folder is back to vanilla; `version.dll`,
+44. **Copy diagnostics** and paste: versions, build, workspace and log tails appear.
+45. **(game)** **Uninstall from game**: the notice says the game folder is back to vanilla; `version.dll`,
     `MelonLoader\`, `Mods\`, `UserData\` and `UserLibs\` are gone from the game folder (if Tyrant installed them).
-43. Release build only: the installed app starts, finds the core next to itself (step 1 works) and installs the
+46. Release build only: the installed app starts, finds the core next to itself (step 1 works) and installs the
     dumper from its own `sidecar\dumper` folder.
+47. Assets → Acrocanthosaurus prefab → **Load 3D preview**: feather/hair edges are cut out (no solid sheets), the body is
+    not shiny metal, the eyes look wet. A fence prefab shows its own texture.
+48. Mods → open a skin mod on Stegosaurus → the skin's files show no **fur** row; on Carcharodontosaurus no **pattern** row.
+49. Colours → set Colour A red, Colour B blue: the 3D animal and the first 2D animal show the same colours; **↻** changes
+    both; **Infant** shows the infant textures; switching to another tab and back keeps the view (it paused while hidden).
+50. In a test workspace without `data\`, open the mod editor's Colours: the 3D area says to Run data dump; the 2D strip
+    still draws.
 
 **Shell (tabs, log, preferences):**
 

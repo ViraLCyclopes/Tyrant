@@ -63,6 +63,10 @@ files that changed; again after a game update).
   point at these), its size, what it **references** (click to follow) and all of its **fields**.
 - **Preview**: textures show at once, with **R/G/B/Alpha** views for packed maps. Meshes and prefabs show in 3D after
   **Load 3D preview**, textured like the game (turn **Textures** off for plain shading).
+  - Animals are drawn with the game's animal shader rules: cut-out feathers and hair, ambient occlusion and smoothness from
+    the extra map, eye colour and pattern colours. Other models use their own textures. The look is close, not exact
+    (lighting, rim and fur are approximated).
+  - If one part of a model cannot be shown, the others are, with a note.
   - **Skin** switches between the species' diffuse textures. In game, genetics tint them; the preview shows them untinted.
   - **Ground** and **Sky** use the game's own grass, dirt and sand textures and sky cubemaps. The choice is remembered.
   - Navigate as in Blender: middle-drag (or left-drag) orbits, Shift-drag pans, the wheel or Ctrl-drag zooms. Numpad
@@ -79,6 +83,10 @@ files that changed; again after a game update).
   failure; one failure never stops the rest. Models are written with their materials; their textures go to a
   `textures` folder next to the `.glb` files, which Blender picks up on import. A bare Mesh is exported without its
   bones; export its prefab (GameObject) to keep them. Very long names are shortened with a short code at the end.
+  For plain bones in Blender (no "Icosphere"): in **File → Import → glTF 2.0**, open **Bones & Skin** and tick **Disable Bone
+  Shape**, or set **Bone Dir** to **Temperance** (bones then point at their children). The Icosphere is a bone display shape
+  Blender's importer adds by default; it is not in Tyrant's files. Save the import settings as an operator preset (the
+  preset menu at the top of the import dialog) so Blender remembers them.
 - **Species**: export one animal's pack — its models, every texture of its group and `targets.json` with each asset's
   key — into `assets\species\<name>`.
 
@@ -92,6 +100,10 @@ files that changed; again after a game update).
   - Every change is saved at once. **Ctrl+Z** / **Ctrl+Y** (or **Edit ▸ Undo / Redo**) step back and forward. Replacing or deleting a file cannot be undone.
   - **A skin:** rename it (its id stays, so saved animals keep it), pick a swatch, and for each sex replace a texture with your PNG (**Replace…**) or go back to the base skin's (**Use base**).
   - **Colours** sets the pattern colours of normal animals and the colours of albino, melanistic and leucistic ones, with a 2D preview of six random animals (approximate: no lighting). Pick one colour or a gradient, and a range or a **Fixed** value; **From base skin** leaves a field to the base skin, and **Exact colours** turns off the random tint.
+  - **A skin's files** list only the slots the species' shader uses (for example no fur for Stegosaurus, no pattern for
+    Carcharodontosaurus), plus any the skin already has.
+  - **Colours** also shows one animal in 3D above the six 2D animals: **Male / Female / Infant** switch its textures, **↻**
+    shows another animal (the same one as the first 2D animal). It needs a data dump and an asset index (Workspace tab).
   - **Remove skin…** asks first and can delete its files; its number in the game stays reserved.
   - The **Mod** menu has Install, Check, Restore cutouts, Open folder and Remove from game.
   - If the mod's `mod.json` is changed elsewhere (another program, `tyrant mod …`), the tab reloads it when you come back.
