@@ -25,6 +25,7 @@ public enum TyrantErrorCode
     ModNotFound,
     ModInvalid,
     ModIdInvalid,
+    ModChanged,
     GameRunning,
     FrameworkMissing,
     TargetNotFound,
