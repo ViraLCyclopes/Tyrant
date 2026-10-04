@@ -120,7 +120,7 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
                 errors.Add($"Model of {speciesId}: species \"{speciesId}\" is not in the game data.");
             if (!File.Exists(Path.Combine(mod.Dir, file)))
             {
-                errors.Add($"Model of {speciesId}: {file} is missing; replace the model again (mod editor → Models, or 'tyrant mod replace-model').");
+                errors.Add($"Model of {speciesId}: {file} is missing; replace the model again (Mods tab → open the mod → Models, or 'tyrant mod replace-model').");
                 continue;
             }
             var report = Tyrant.Core.ModelReplacements.ModelBuilder.ReadReport(mod.Dir, file);
