@@ -45,6 +45,9 @@ internal static class CliServices
     /// <summary>Tyrant's game mods (dumper and framework) shipped next to the CLI; settable for tests, like AssetReader.</summary>
     public static string GameModsDir { get; set; } = Path.Combine(AppContext.BaseDirectory, "dumper");
 
+    /// <summary>HTTP for update checks; settable for tests.</summary>
+    public static Func<HttpClient> Http { get; set; } = () => new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+
     public static void PrintError(TyrantException ex) => Console.Error.WriteLine($"error {ex.Code.ToWire()}: {ex.Message}{FixHint(ex.Fix)}");
 
     internal static string FixHint(FixAction fix) => fix switch

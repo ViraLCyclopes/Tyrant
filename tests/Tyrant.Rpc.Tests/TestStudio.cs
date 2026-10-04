@@ -26,8 +26,10 @@ public static class TestStudio
         public void Launch(GameInstall install) { }
     }
 
-    public static StudioOptions Options(IGameLauncher? launcher = null, (string Path, string Sha)? loaderZip = null, IAssetReader? reader = null, string? dumperDir = null) => new()
+    public static StudioOptions Options(IGameLauncher? launcher = null, (string Path, string Sha)? loaderZip = null, IAssetReader? reader = null, string? dumperDir = null,
+        Func<HttpClient>? http = null) => new()
     {
+        Http = http ?? (() => throw new InvalidOperationException("This test has no network.")),
         Locator = new GameInstallLocator(new NoSteam()),
         Launcher = launcher ?? new NeverLauncher(),
         DumperDir = dumperDir ?? FakeDumperDir(),

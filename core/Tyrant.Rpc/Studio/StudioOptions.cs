@@ -21,4 +21,7 @@ public sealed class StudioOptions
 
     /// <summary>Reads the game's bundles (previews, exports, species packs); tests use a fake.</summary>
     public IAssetReader AssetReader { get; init; } = new BundleAssetReader();
+
+    /// <summary>HTTP for update checks; tests pass a fake.</summary>
+    public Func<HttpClient> Http { get; init; } = () => new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
 }

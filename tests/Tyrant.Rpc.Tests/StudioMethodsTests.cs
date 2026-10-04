@@ -142,6 +142,30 @@ public class StudioMethodsTests
         Assert.Equal("INSTALL_DUMPER", ex.Fix);
     }
 
+    private sealed class NoNetwork : HttpMessageHandler
+    {
+        public int Calls;
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            Calls++;
+            throw new HttpRequestException("offline");
+        }
+    }
+
+    [Fact]
+    public async Task The_nexus_check_does_nothing_until_tyrants_page_is_set()
+    {
+        using var game = new FakeGame();
+        var network = new NoNetwork();
+        var (harness, _) = await Opened(game, TestStudio.Options(http: () => new HttpClient(network)));
+
+        var nexus = await harness.Call("app.checkNexus");
+
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, nexus.GetProperty("version").ValueKind);
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, nexus.GetProperty("error").ValueKind);
+        Assert.Equal(0, network.Calls);
+    }
+
     [Fact]
     public async Task Status_reports_the_framework_versions()
     {

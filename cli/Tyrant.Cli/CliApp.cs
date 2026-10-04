@@ -116,6 +116,12 @@ public static class CliApp
                 data.AddCommand<DataShowCommand>("show").WithDescription("List objects of a type, or print one object's JSON.");
                 data.AddCommand<DataExportCommand>("export").WithDescription("Export all objects of a type as CSV or JSON.");
             });
+            config.AddBranch("update", update =>
+            {
+                update.SetDescription("Check for a newer Tyrant (the app installs it: Help → Check for updates).");
+                update.AddCommand<UpdateCheckCommand>("check").WithDescription("Show this version and the latest on GitHub and Nexus.");
+            });
+
             config.AddCommand<RpcCommand>("rpc")
                 .WithDescription("Serve the Tyrant app over JSON-RPC on stdin/stdout (sidecar mode).");
         });
