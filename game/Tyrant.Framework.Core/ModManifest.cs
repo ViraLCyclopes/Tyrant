@@ -41,6 +41,17 @@ namespace Tyrant.Framework.Core
     }
 
     /// <summary>The texture slots a skin can provide, as written in mod.json, with their shader properties.</summary>
+    /// <summary>A model replacement: Target is a species id (or, later, an object name); File is the user's .glb in the mod.</summary>
+    public sealed class ModelReplacement
+    {
+        public string Target { get; set; } = "";
+
+        /// <summary>The prefab Tyrant matched (Addressables path), for Check and the app.</summary>
+        public string? Key { get; set; }
+
+        public string File { get; set; } = "";
+    }
+
     public static class SkinSlotNames
     {
         public static readonly IReadOnlyList<string> All = new[]
@@ -92,6 +103,9 @@ namespace Tyrant.Framework.Core
         /// <summary>The skin's own colours (mod.json "colors"); null keeps the base skin's.</summary>
         public SkinColors? Colors { get; set; }
 
+        /// <summary>The skin's own model (a .glb in the mod), overriding the species' model.</summary>
+        public string? Model { get; set; }
+
         /// <summary>The skin's permanent key in skin-slots.json.</summary>
         public string Key(string modId) => modId + "/" + Id;
     }
@@ -120,6 +134,8 @@ namespace Tyrant.Framework.Core
         public List<TextureReplacement> Replace { get; } = new List<TextureReplacement>();
 
         public List<SkinEntry> Skins { get; } = new List<SkinEntry>();
+
+        public List<ModelReplacement> Models { get; } = new List<ModelReplacement>();
 
         public static ModManifest Parse(string json) => Parse(json, null);
 
@@ -176,6 +192,17 @@ namespace Tyrant.Framework.Core
                 manifest.Replace.Add(new TextureReplacement { Texture = texture!, File = file!, Key = Text(entry, "key"), Guid = Text(entry, "guid") });
             }
             n = 0;
+            foreach (var item in Array(map, "models"))
+            {
+                n++;
+                if (!(item is Dictionary<string, object?> entry)) throw new ManifestException($"\"models\" entry {n} must be an object.");
+                var target = Text(entry, "target");
+                if (string.IsNullOrWhiteSpace(target)) throw new ManifestException($"\"models\" entry {n} has no \"target\".");
+                var file = Text(entry, "file");
+                if (string.IsNullOrWhiteSpace(file)) throw new ManifestException($"\"models\" entry {n} ({target}) has no \"file\".");
+                manifest.Models.Add(new ModelReplacement { Target = target!, Key = Text(entry, "key"), File = file! });
+            }
+            n = 0;
             foreach (var item in Array(map, "skins"))
             {
                 n++;
@@ -211,6 +238,7 @@ namespace Tyrant.Framework.Core
                     Male = Slots(entry, "male", skinId),
                     Female = Slots(entry, "female", skinId),
                     Colors = entry.TryGetValue("colors", out var colors) && colors != null ? SkinColors.Parse(colors, skinId) : null,
+                    Model = Text(entry, "model"),
                 };
                 if ((skin.Male?.Count ?? 0) == 0 && (skin.Female?.Count ?? 0) == 0)
                     throw new ManifestException($"Skin \"{skinId}\" needs \"male\" or \"female\" textures.");
@@ -234,6 +262,14 @@ namespace Tyrant.Framework.Core
                 entry["file"] = r.File;
                 return (object?)entry;
             }).ToList();
+            if (Models.Count > 0)
+                map["models"] = Models.Select(m =>
+                {
+                    var entry = new Dictionary<string, object?> { ["target"] = m.Target };
+                    if (m.Key != null) entry["key"] = m.Key;
+                    entry["file"] = m.File;
+                    return (object?)entry;
+                }).ToList();
             if (Skins.Count > 0)
                 map["skins"] = Skins.Select(s =>
                 {
@@ -241,6 +277,7 @@ namespace Tyrant.Framework.Core
                     if (s.Thumbnail != null) entry["thumbnail"] = s.Thumbnail;
                     if (s.Male != null) entry["male"] = Ordered(s.Male);
                     if (s.Female != null) entry["female"] = Ordered(s.Female);
+                    if (s.Model != null) entry["model"] = s.Model;
                     if (s.Colors != null) entry["colors"] = s.Colors.ToJson();
                     return (object?)entry;
                 }).ToList();
