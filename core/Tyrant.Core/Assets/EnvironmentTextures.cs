@@ -62,7 +62,9 @@ public sealed class EnvironmentTextureWriter
         {
             var loose = session.Manager.LoadAssetsFile(path, false);
             var type = preset.Kind == EnvironmentKind.Sky ? AssetClassID.Cubemap : AssetClassID.Texture2D;
-            foreach (var info in loose.file.GetAssetsOfType(type))
+            var known = IndexedPathId(index, preset);
+            var infos = known is { } id && loose.file.GetAssetInfo(id) is { } one ? [one] : loose.file.GetAssetsOfType(type);
+            foreach (var info in infos)
             {
                 var field = template.MakeValue(loose.file.Reader, info.GetAbsoluteByteOffset(loose.file));
                 if (field["m_Name"].AsString != preset.ObjectName) continue;
@@ -77,6 +79,15 @@ public sealed class EnvironmentTextureWriter
         }
         throw new TyrantException(TyrantErrorCode.AssetNotFound,
             $"'{preset.ObjectName}' is not in '{preset.File}' (game updated?), so the '{preset.Label}' {what} cannot be shown.");
+    }
+
+    /// <summary>The preset texture's path id from the index (built-in files are indexed), so only that object is read.</summary>
+    internal static long? IndexedPathId(AssetIndex index, EnvironmentPreset preset)
+    {
+        var type = preset.Kind == EnvironmentKind.Sky ? "Cubemap" : "Texture2D";
+        var file = AssetRecord.BuiltInPrefix + preset.File;
+        return index.Assets.FirstOrDefault(a => a.Type == type && a.Name == preset.ObjectName
+            && string.Equals(a.Bundle, file, StringComparison.OrdinalIgnoreCase))?.PathId;
     }
 
     private static AssetTypeTemplateField BorrowTextureLayout(AssetSession session, AssetIndex index)

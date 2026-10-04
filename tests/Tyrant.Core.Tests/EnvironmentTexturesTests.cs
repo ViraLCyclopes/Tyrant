@@ -23,6 +23,34 @@ public class EnvironmentTexturesTests
     }
 
     [Fact]
+    public void The_index_names_the_one_texture_to_read()
+    {
+        var index = new AssetIndex { Assets = [
+            new AssetRecord("@data/sharedassets3.assets", 41, "Texture2D", "DryGrass_Diffuse", null, null, null),
+            new AssetRecord("@data/sharedassets3.assets", 42, "Texture2D", "LushGrass_Diffuse", null, null, null),
+        ] };
+
+        Assert.Equal(42L, EnvironmentTextureWriter.IndexedPathId(index, EnvironmentPresets.Find("lush-grass")));
+    }
+
+    [Fact]
+    public void Without_the_built_in_file_in_the_index_every_texture_is_looked_at()
+    {
+        Assert.Null(EnvironmentTextureWriter.IndexedPathId(new AssetIndex(), EnvironmentPresets.Find("noon")));
+    }
+
+    [Fact]
+    public void A_sky_is_found_among_cubemaps_only()
+    {
+        var index = new AssetIndex { Assets = [
+            new AssetRecord("@data/sharedassets3.assets", 7, "Texture2D", "Noon_Sunny", null, null, null),
+            new AssetRecord("@data/sharedassets3.assets", 8, "Cubemap", "Noon_Sunny", null, null, null),
+        ] };
+
+        Assert.Equal(8L, EnvironmentTextureWriter.IndexedPathId(index, EnvironmentPresets.Find("noon")));
+    }
+
+    [Fact]
     public void A_missing_game_file_is_reported_by_name()
     {
         using var game = new FakeGame(); // has no sharedassets files
