@@ -54,6 +54,7 @@ public static class GltfModelWriter
             if (count != 0 && count != mesh.VertexCount)
                 throw new InvalidDataException($"Mesh '{mesh.Name}' has {count} {label} for {mesh.VertexCount} vertices.");
 
+        var uvs = SnappedUvs(mesh);
         var fallback = new GltfMaterial(mesh.Name.Length > 0 ? mesh.Name : renderer.Name);
         var built = new Dictionary<GltfMaterial, MaterialBuilder>();
         MaterialBuilder MaterialFor(int subMesh)
@@ -70,7 +71,7 @@ public static class GltfModelWriter
             var builder = new MeshBuilder<VertexPositionNormal, VertexColor1Texture1, VertexJoints4>(mesh.Name);
             var jointCount = renderer.Bones.Count;
             VertexBuilder<VertexPositionNormal, VertexColor1Texture1, VertexJoints4> V(int i) =>
-                new(Geometry(mesh, i), Material(mesh, i), Joints(mesh, i, jointCount));
+                new(Geometry(mesh, i), Material(mesh, uvs, i), Joints(mesh, i, jointCount));
             ForEachTriangle(mesh, (s, a, b, c) => builder.UsePrimitive(MaterialFor(s)).AddTriangle(V(a), V(b), V(c)));
             AddMorphTargets(builder, mesh);
             var joints = renderer.Bones.Select((bone, i) => (nodes[bone], UnityToGltf.Matrix(mesh.BindPoses[i]))).ToArray();
@@ -80,7 +81,7 @@ public static class GltfModelWriter
         {
             var builder = new MeshBuilder<VertexPositionNormal, VertexColor1Texture1, VertexEmpty>(mesh.Name);
             VertexBuilder<VertexPositionNormal, VertexColor1Texture1, VertexEmpty> V(int i) =>
-                new(Geometry(mesh, i), Material(mesh, i), default(VertexEmpty));
+                new(Geometry(mesh, i), Material(mesh, uvs, i), default(VertexEmpty));
             ForEachTriangle(mesh, (s, a, b, c) => builder.UsePrimitive(MaterialFor(s)).AddTriangle(V(a), V(b), V(c)));
             AddMorphTargets(builder, mesh);
             scene.AddRigidMesh(builder, nodes[renderer.Owner]);
@@ -165,10 +166,35 @@ public static class GltfModelWriter
     private static VertexPositionNormal Geometry(MeshData mesh, int i) =>
         new(UnityToGltf.Position(mesh.Positions[i]), SafeNormal(UnityToGltf.Position(mesh.Normals[i])));
 
-    private static VertexColor1Texture1 Material(MeshData mesh, int i)
+    /// <summary>UVs closer than this (a thousandth of a texel at 4096²) are the same spot on the texture.</summary>
+    private const float SameUv = 1e-5f;
+
+    /// <summary>
+    /// The mesh's UVs with the copies of a vertex (the game splits vertices for hard edges and tangents) given one UV when
+    /// theirs differ by a hair: Blender's Seams from Islands, Tris to Quads and UV selection treat any difference as a seam.
+    /// Copies on a real UV seam keep their own UVs.
+    /// </summary>
+    private static Vector2[] SnappedUvs(MeshData mesh)
+    {
+        var uvs = mesh.Uv0.ToArray();
+        if (uvs.Length != mesh.VertexCount) return uvs;
+        foreach (var copies in Enumerable.Range(0, mesh.VertexCount).GroupBy(v => mesh.Positions[v]).Where(g => g.Skip(1).Any()))
+        {
+            var kept = new List<Vector2>();
+            foreach (var v in copies)
+            {
+                var near = kept.FindIndex(k => Vector2.Distance(k, uvs[v]) < SameUv);
+                if (near >= 0) uvs[v] = kept[near];
+                else kept.Add(uvs[v]);
+            }
+        }
+        return uvs;
+    }
+
+    private static VertexColor1Texture1 Material(MeshData mesh, Vector2[] uvs, int i)
     {
         var color = mesh.Colors.Length > 0 ? Vector4.Clamp(mesh.Colors[i], Vector4.Zero, Vector4.One) : Vector4.One;
-        var uv = mesh.Uv0.Length > 0 ? UnityToGltf.Uv(mesh.Uv0[i]) : Vector2.Zero;
+        var uv = uvs.Length > 0 ? UnityToGltf.Uv(uvs[i]) : Vector2.Zero;
         return new VertexColor1Texture1(color, uv);
     }
 

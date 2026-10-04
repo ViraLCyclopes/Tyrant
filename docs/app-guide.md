@@ -89,6 +89,10 @@ files that changed; again after a game update).
   Shape**, or set **Bone Dir** to **Temperance** (bones then point at their children). The Icosphere is a bone display shape
   Blender's importer adds by default; it is not in Tyrant's files. Save the import settings as an operator preset (the
   preset menu at the top of the import dialog) so Blender remembers them.
+  Also tick **Merge Vertices** in the same dialog: a glTF file stores a vertex once per hard edge and UV seam, and without
+  merging Blender leaves the mesh cut along every one of them (Seams from Islands, Tris to Quads and UV selection then go
+  wrong). Merged, **Seams from Islands** marks just the real UV seams and **Tris to Quads** (Alt+J) rebuilds clean quads.
+  Tyrant accepts the merged and quad mesh back as it is.
 - **Species**: export one animal's pack — its models, every texture of its group and `targets.json` with each asset's
   key — into `assets\species\<name>`.
 

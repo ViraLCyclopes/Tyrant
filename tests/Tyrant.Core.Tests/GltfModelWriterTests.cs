@@ -28,6 +28,48 @@ public class GltfModelWriterTests
         Assert.NotNull(primitive.GetVertexAccessor("COLOR_0"));
     }
 
+    /// <summary>
+    /// Two triangles sharing an edge whose vertices the game split (a hard edge: different normals): the copies' UVs differ by
+    /// a few millionths. A third triangle meets the second along a real UV seam.
+    /// </summary>
+    private static MeshData SplitEdges()
+    {
+        Vector3 a = new(0, 0, 0), b = new(1, 0, 0), c = new(0, 0, 1), d = new(1, 0, 1), e = new(2, 0, 1);
+        var tiny = new Vector2(3e-6f, -2e-6f);
+        var positions = new[] { a, b, c, b, c, d, d, b, e };
+        var uvs = new[]
+        {
+            new Vector2(0, 0), new Vector2(0.5f, 0), new Vector2(0, 0.5f),
+            new Vector2(0.5f, 0) + tiny, new Vector2(0, 0.5f) + tiny, new Vector2(0.5f, 0.5f),
+            new Vector2(0.75f, 0.75f), new Vector2(0.75f, 0.25f), new Vector2(1, 0.75f), // a real seam: far away in UV space
+        };
+        var normals = new[] { Vector3.UnitY, Vector3.UnitY, Vector3.UnitY, Vector3.UnitX, Vector3.UnitX, Vector3.UnitX, Vector3.UnitZ, Vector3.UnitZ, Vector3.UnitZ };
+        uint[] indices = [0, 2, 1, 3, 4, 5, 6, 8, 7];
+        return new MeshData
+        {
+            Name = "Split", Positions = positions, Normals = normals, Uv0 = uvs, Colors = [], Skin = [], Indices = indices,
+            SubMeshes = [new SubMesh(0, indices.Length, 0)], BindPoses = [], BlendShapes = [],
+        };
+    }
+
+    [Fact]
+    public void Copies_of_a_vertex_get_one_uv_unless_they_are_on_a_real_seam()
+    {
+        var prefab = ModelFixture.Prefab(SplitEdges(), skinned: false);
+        var path = TempGlb();
+
+        GltfModelWriter.WriteGlb(prefab, prefab.Renderers[0], path);
+        var primitive = ModelRoot.Load(path).LogicalMeshes[0].Primitives[0];
+        var p = primitive.GetVertexAccessor("POSITION").AsVector3Array();
+        var uv = primitive.GetVertexAccessor("TEXCOORD_0").AsVector2Array();
+        var uvsAt = Enumerable.Range(0, p.Count).GroupBy(i => p[i]).ToDictionary(g => g.Key, g => g.Select(i => uv[i]).Distinct().Count());
+
+        // Blender's Seams from Islands marks any UV difference at all: a hair-width one must not reach the file.
+        Assert.Equal(1, uvsAt[new Vector3(0, 0, 1)]);  // c: only the hair-width split
+        Assert.Equal(2, uvsAt[new Vector3(-1, 0, 0)]); // b (X mirrored): its hair-width pair joined, the real seam kept
+        Assert.Equal(2, uvsAt[new Vector3(-1, 0, 1)]); // d: on the real seam
+    }
+
     [Fact]
     public void Winding_is_reversed_so_faces_agree_with_normals_after_mirroring()
     {
