@@ -20,8 +20,9 @@ internal static class PrefabReader
 
         var renderers = new List<RendererModel>();
         var failures = new List<string>();
+        var materialFailures = new List<string>();
         foreach (var info in file.file.GetAssetsOfType(AssetClassID.SkinnedMeshRenderer))
-            AddRenderer(manager, file, manager.GetBaseField(file, info), skinned: true, transformByGameObject, nodes, renderers, failures, externals);
+            AddRenderer(manager, file, manager.GetBaseField(file, info), skinned: true, transformByGameObject, nodes, renderers, failures, materialFailures, externals);
         // A static mesh is a MeshFilter (the mesh) plus a MeshRenderer on the same GameObject (the materials).
         var meshRenderers = new Dictionary<long, AssetTypeValueField>();
         foreach (var info in file.file.GetAssetsOfType(AssetClassID.MeshRenderer))
@@ -30,9 +31,9 @@ internal static class PrefabReader
             meshRenderers.TryAdd(meshRenderer["m_GameObject.m_PathID"].AsLong, meshRenderer);
         }
         foreach (var info in file.file.GetAssetsOfType(AssetClassID.MeshFilter))
-            AddRenderer(manager, file, manager.GetBaseField(file, info), skinned: false, transformByGameObject, nodes, renderers, failures, externals, meshRenderers);
+            AddRenderer(manager, file, manager.GetBaseField(file, info), skinned: false, transformByGameObject, nodes, renderers, failures, materialFailures, externals, meshRenderers);
 
-        return new PrefabModel(root.Name, root, renderers, failures);
+        return new PrefabModel(root.Name, root, renderers, failures) { MaterialFailures = materialFailures };
     }
 
     private static SkeletonNode BuildNode(AssetsManager manager, AssetsFileInstance file, Dictionary<long, AssetTypeValueField> transforms,
@@ -57,7 +58,7 @@ internal static class PrefabReader
     }
 
     private static void AddRenderer(AssetsManager manager, AssetsFileInstance file, AssetTypeValueField renderer, bool skinned,
-        Dictionary<long, long> transformByGameObject, Dictionary<long, SkeletonNode> nodes, List<RendererModel> renderers, List<string> failures,
+        Dictionary<long, long> transformByGameObject, Dictionary<long, SkeletonNode> nodes, List<RendererModel> renderers, List<string> failures, List<string> materialFailures,
         IReadOnlyList<string> externals, Dictionary<long, AssetTypeValueField>? meshRenderers = null)
     {
         if (!transformByGameObject.TryGetValue(renderer["m_GameObject.m_PathID"].AsLong, out var transformId)
@@ -76,7 +77,7 @@ internal static class PrefabReader
                 : [];
             // Skinned renderers carry their own materials; a MeshFilter's are on its GameObject's MeshRenderer.
             var materialSource = skinned ? renderer : meshRenderers?.GetValueOrDefault(renderer["m_GameObject.m_PathID"].AsLong);
-            var materials = materialSource is null ? [] : ReadMaterials(manager, file, materialSource, externals);
+            var materials = materialSource is null ? [] : ReadMaterials(manager, file, materialSource, externals, owner.Name, materialFailures);
             renderers.Add(new RendererModel(owner.Name, mesh, bones, owner) { Materials = materials });
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -88,10 +89,24 @@ internal static class PrefabReader
 
     /// <summary>One material per sub-mesh slot; a material kept in another bundle is listed without textures (drawn plain).</summary>
     private static List<MaterialModel> ReadMaterials(AssetsManager manager, AssetsFileInstance file, AssetTypeValueField renderer,
-        IReadOnlyList<string> externals) =>
+        IReadOnlyList<string> externals, string owner, List<string> materialFailures) =>
         renderer["m_Materials.Array"].Children
-            .Select(m => m["m_FileID"].AsInt == 0 && file.file.GetAssetInfo(m["m_PathID"].AsLong) is { } info
-                ? MaterialReader.Read(manager.GetBaseField(file, info), externals)
+            .Select((m, i) => m["m_FileID"].AsInt == 0 && file.file.GetAssetInfo(m["m_PathID"].AsLong) is { } info
+                ? ReadMaterialSafely(() => MaterialReader.Read(manager.GetBaseField(file, info), externals), owner, i, materialFailures)
                 : new MaterialModel("", []))
             .ToList();
+
+    /// <summary>A material that cannot be read becomes a plain one, so its mesh is still shown (C12).</summary>
+    internal static MaterialModel ReadMaterialSafely(Func<MaterialModel> read, string owner, int slot, List<string> failures)
+    {
+        try
+        {
+            return read();
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            failures.Add($"{owner}: material {slot + 1} could not be read ({ex.Message}); it is drawn plain.");
+            return new MaterialModel("", []);
+        }
+    }
 }

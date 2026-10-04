@@ -32,7 +32,14 @@ public sealed class SkeletonNode(string name, Vector3 localPosition, Quaternion 
 public sealed record TextureSlot(string Slot, string? Archive, long PathId);
 
 /// <summary>A renderer's material: its name and every slot that points at a texture.</summary>
-public sealed record MaterialModel(string Name, IReadOnlyList<TextureSlot> Textures);
+public sealed record MaterialModel(string Name, IReadOnlyList<TextureSlot> Textures)
+{
+    /// <summary>The material's shader: its file (null = the material's own file) and path id; 0 when it has none.</summary>
+    public string? ShaderArchive { get; init; }
+    public long ShaderPathId { get; init; }
+    public IReadOnlyList<string> Keywords { get; init; } = [];
+    public IReadOnlyDictionary<string, float> Floats { get; init; } = new Dictionary<string, float>();
+}
 
 /// <summary>One mesh renderer of a prefab; Bones is empty for static (MeshFilter) meshes.</summary>
 public sealed record RendererModel(string Name, MeshData Mesh, IReadOnlyList<SkeletonNode> Bones, SkeletonNode Owner)
@@ -44,4 +51,8 @@ public sealed record RendererModel(string Name, MeshData Mesh, IReadOnlyList<Ske
 }
 
 /// <summary>A prefab's hierarchy and decodable renderers; Failures lists renderers that could not be decoded.</summary>
-public sealed record PrefabModel(string Name, SkeletonNode Root, IReadOnlyList<RendererModel> Renderers, IReadOnlyList<string> Failures);
+public sealed record PrefabModel(string Name, SkeletonNode Root, IReadOnlyList<RendererModel> Renderers, IReadOnlyList<string> Failures)
+{
+    /// <summary>Materials that could not be read; their meshes are kept and drawn plain.</summary>
+    public IReadOnlyList<string> MaterialFailures { get; init; } = [];
+}

@@ -57,6 +57,46 @@ public class MaterialResolverTests
         Assert.Equal((Diffuse, baseSlot, Normal), (resolved.BaseColor, resolved.BaseColorSlot, resolved.Normal));
     }
 
+    private static readonly AssetRecord Extra = new(Textures, 19, "Texture2D", "T_Acro_E", null, null, null);
+    private static readonly AssetRecord AnimalShader = new("StandaloneWindows64/shaders.bundle", 99, "Shader", "", "Assets/Art/AnimalShader.shader", null, null);
+
+    private static AssetIndex FullIndex() => new()
+    {
+        Assets = [Diffuse, Normal, Detail, Shader, Extra, AnimalShader],
+        Archives = { ["CAB-tex"] = Textures, ["CAB-shaders"] = "StandaloneWindows64/shaders.bundle" },
+    };
+
+    [Fact]
+    public void An_animal_material_lists_its_slots_and_names_its_shader()
+    {
+        var material = new MaterialModel("Acro", [
+            new TextureSlot("_AdultDiffuse", "archive:/CAB-tex/CAB-tex", 17),
+            new TextureSlot("_AdultExtraMap", "archive:/CAB-tex/CAB-tex", 19),
+        ]) { ShaderArchive = "archive:/CAB-shaders/CAB-shaders", ShaderPathId = 99 };
+
+        var resolved = MaterialResolver.Resolve(FullIndex(), Prefabs, material);
+
+        Assert.True(resolved.Animal);
+        Assert.Equal("AnimalShader", resolved.Shader);
+        Assert.Equal(0.5f, resolved.Cutoff);
+        Assert.Equal([("_AdultDiffuse", Diffuse), ("_AdultExtraMap", Extra)], resolved.Slots.Select(s => (s.Name, s.Texture)));
+    }
+
+    [Theory]
+    [InlineData("_ALPHATEST_ON", 0.3f)]
+    [InlineData("_NORMALMAP", null)]
+    public void Other_materials_cut_out_only_when_their_keywords_say_so(string keyword, float? cutoff)
+    {
+        var material = new MaterialModel("Leaves", [new TextureSlot("_MainTex", null, 5)])
+        { Keywords = [keyword], Floats = new Dictionary<string, float> { ["_Cutoff"] = 0.3f } };
+
+        var resolved = MaterialResolver.Resolve(FullIndex(), Prefabs, material);
+
+        Assert.False(resolved.Animal);
+        Assert.Equal(cutoff, resolved.Cutoff);
+        Assert.Null(resolved.Shader); // no shader reference: unknown, not an error
+    }
+
     [Fact]
     public void Textures_in_unknown_files_or_of_the_wrong_type_are_reported_missing()
     {
