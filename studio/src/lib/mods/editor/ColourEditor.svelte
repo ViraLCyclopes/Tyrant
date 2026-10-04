@@ -28,12 +28,19 @@
   const ZERO: Range = { min: 0, max: 0 };
   const NO_TINT: TintModel = { hue: null, saturation: null, value: null };
 
-  /** Applies one change to a fresh copy of the saved colours and saves the result (nothing when it is the same). */
+  /**
+   * Applies one change to the skin's colours as they are when the save's turn comes (so quick changes build on each
+   * other), and saves the result; nothing is sent when the colours stay the same.
+   */
   async function save(change: (m: ColorsModel) => void) {
-    const next = parseColors(skin.colorsJson);
-    change(next);
-    const json = toColorsJson(next);
-    if (json !== (skin.colorsJson ?? null)) await doc.edit('mods.setColors', { skin: skin.id, colors: json });
+    const id = skin.id;
+    await doc.edit('mods.setColors', (detail) => {
+      const saved = detail.skins.find((s) => s.id === id)?.colorsJson ?? null;
+      const next = parseColors(saved);
+      change(next);
+      const json = toColorsJson(next);
+      return json === saved || (json !== null && saved !== null && JSON.stringify(JSON.parse(json)) === JSON.stringify(JSON.parse(saved))) ? null : { skin: id, colors: json };
+    });
   }
 
   function setField<K extends keyof SetModel>(field: K, value: SetModel[K]) {

@@ -86,4 +86,17 @@ describe('ColourEditor', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Show 6 other animals' }));
     expect(await screen.findByText(/no male diffuse/)).toBeInTheDocument();
   });
+
+  it('two quick colour changes build on each other instead of the second undoing the first', async () => {
+    const { rpc } = await setup({ colorsJson: null });
+    rpc.on('mods.setColors', async (p) => {
+      await new Promise((r) => setTimeout(r, 5));
+      return modDetail({ revision: `r-${rpc.callsTo('mods.setColors').length}`, skins: modDetail().skins.map((s) => (s.id === 'blue' ? { ...s, colorsJson: p.colors ?? null } : s)) });
+    });
+    await fireEvent.click(screen.getByRole('radio', { name: 'Albino' }));
+    await fireEvent.click(within(screen.getByRole('group', { name: 'Eyes' })).getByRole('checkbox', { name: 'From base skin' }));
+    await fireEvent.click(within(screen.getByRole('group', { name: 'Secondary' })).getByRole('checkbox', { name: 'From base skin' }));
+    await waitFor(() => expect(rpc.callsTo('mods.setColors')).toHaveLength(2));
+    expect(JSON.parse((rpc.callsTo('mods.setColors')[1].params as { colors: string }).colors)).toEqual({ albino: { secondary: '#808080', eye: '#808080' } });
+  });
 });

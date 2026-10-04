@@ -41,7 +41,7 @@
         {@const file = own?.[slot] ?? null}
         {@const name = `${sex} ${SLOT_LABELS[slot]}`}
         <li data-slot={slot}>
-          <Thumb modId={doc.id} {file} label={name} />
+          <Thumb modId={doc.id} {file} label={name} version={doc.detail?.revision} />
           <span class="slot">{SLOT_LABELS[slot]}</span>
           <div class="buttons">
             <button aria-label="Replace {name}…" title="Copies your PNG into the skin's folder; this cannot be undone" onclick={() => replace(slot)}>Replace…</button>

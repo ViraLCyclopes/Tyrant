@@ -11,6 +11,14 @@ export type EditMethod =
   | 'mods.setThumbnail'
   | 'mods.removeReplacement';
 
+/** Params for an edit, or a function building them from the mod as it is when the edit's turn comes (null: nothing to save). */
+export type EditParams = Record<string, unknown> | ((detail: ModDetail) => Record<string, unknown> | null);
+
+export interface EditOptions {
+  /** False for a change undo cannot put back (deleted files): the history is forgotten. */
+  undoable?: boolean;
+}
+
 const CHECK_DELAY = 1000;
 const MAX_UNDO = 100;
 
@@ -23,6 +31,8 @@ export class ModDoc {
   private undoStack: string[] = [];
   private redoStack: string[] = [];
   private checkGeneration = 0;
+  /** Edits, undo and redo run one at a time, each with the revision the previous one produced. */
+  private queue: Promise<unknown> = Promise.resolve();
 
   constructor(
     readonly id: string,
@@ -39,46 +49,68 @@ export class ModDoc {
     return true;
   }
 
-  /** Saves one change at once; on success the previous mod.json becomes an undo step. */
-  async edit(method: EditMethod, params: Record<string, unknown>): Promise<boolean> {
-    const before = this.detail;
-    if (!before) return false;
-    try {
-      const next = (await this.rpc.call(method, { id: this.id, revision: before.revision, ...params } as never)) as ModDetail;
-      this.push(this.undoStack, before.manifestJson);
-      this.redoStack = [];
-      this.detail = next;
-      this.sync();
-      this.scheduleCheck(CHECK_DELAY);
-      return true;
-    } catch (e) {
-      await this.failed(asRpcError(e));
-      return false;
-    }
+  /** Saves one change (after any still running); on success the previous mod.json becomes an undo step. */
+  edit(method: EditMethod, params: EditParams, options: EditOptions = {}): Promise<boolean> {
+    return this.serial(async () => {
+      const before = this.detail;
+      if (!before) return false;
+      const values = typeof params === 'function' ? params(before) : params;
+      if (!values) return true; // nothing changed
+      try {
+        const next = (await this.rpc.call(method, { id: this.id, revision: before.revision, ...values } as never)) as ModDetail;
+        if (options.undoable === false) this.undoStack = [];
+        else this.push(this.undoStack, before.manifestJson);
+        this.redoStack = [];
+        this.detail = next;
+        this.sync();
+        this.scheduleCheck(CHECK_DELAY);
+        return true;
+      } catch (e) {
+        await this.failed(asRpcError(e));
+        return false;
+      }
+    });
   }
 
-  async undo(): Promise<void> {
-    await this.restore(this.undoStack, this.redoStack);
+  undo(): Promise<void> {
+    return this.serial(() => this.restore(this.undoStack, this.redoStack));
   }
 
-  async redo(): Promise<void> {
-    await this.restore(this.redoStack, this.undoStack);
+  redo(): Promise<void> {
+    return this.serial(() => this.restore(this.redoStack, this.undoStack));
+  }
+
+  private serial<T>(work: () => Promise<T>): Promise<T> {
+    const run = this.queue.then(work, work);
+    this.queue = run.catch(() => undefined);
+    return run;
   }
 
   /** The tab was shown again: if mod.json changed meanwhile, take the new content and forget undo (it would overwrite it). */
-  async refreshIfChanged(): Promise<void> {
-    if (!this.detail) return;
-    const latest = await this.tab.quietly(() => this.rpc.call('mods.get', { id: this.id }));
-    if (latest && latest.revision !== this.detail.revision) this.outsideChange(latest);
+  refreshIfChanged(): Promise<void> {
+    return this.serial(async () => {
+      if (!this.detail) return;
+      const latest = await this.tab.quietly(() => this.rpc.call('mods.get', { id: this.id }));
+      if (latest && latest.revision !== this.detail.revision) this.outsideChange(latest);
+    });
   }
 
-  /** Re-reads the mod after an action that changed files but not through edit() (Replace file…, Restore cutouts, Add skin). */
-  async reload(): Promise<void> {
-    const latest = await this.tab.quietly(() => this.rpc.call('mods.get', { id: this.id }));
-    if (latest) {
+  /**
+   * Re-reads the mod after an action that changed it but not through edit() (Add skin, Replace file…, Restore cutouts).
+   * If mod.json changed, undo is forgotten: it would put back a version from before that change.
+   */
+  reload(): Promise<void> {
+    return this.serial(async () => {
+      const latest = await this.tab.quietly(() => this.rpc.call('mods.get', { id: this.id }));
+      if (!latest) return;
+      if (latest.revision !== this.detail?.revision) {
+        this.undoStack = [];
+        this.redoStack = [];
+        this.sync();
+      }
       this.detail = latest;
       this.scheduleCheck(CHECK_DELAY);
-    }
+    });
   }
 
   async runCheck(): Promise<void> {

@@ -23,6 +23,7 @@
     <h2>Remove '{name}'?</h2>
     <p>Its number in the game stays reserved, so other skins keep theirs; saved animals with this skin fall back to its base skin.</p>
     <label class="row"><input type="checkbox" bind:checked={deleteFiles} /> Also delete its files (never ones another skin or replacement uses)</label>
+    {#if deleteFiles}<p class="warn">Deleted files cannot be undone: Ctrl+Z will not bring this skin back.</p>{/if}
     <div class="actions">
       <button onclick={onCancel}>Cancel</button>
       <button class="primary" onclick={() => onConfirm(deleteFiles)}>Remove skin</button>

@@ -168,4 +168,17 @@ describe('Shell', () => {
     const id = shell.openTool('assets', { key: 'k1', title: 'K' })!;
     expect(shell.tab(id).key).toBe('k1');
   });
+
+  it('holding Ctrl+Z does not repeat the undo', async () => {
+    const { shell } = setup();
+    const id = shell.openTool('assets')!;
+    const calls: string[] = [];
+    shell.tab(id).undo = { canUndo: () => true, canRedo: () => true, undo: () => calls.push('undo'), redo: () => calls.push('redo') };
+    await screen.findByRole('searchbox', { name: 'Search' });
+
+    await fireEvent.keyDown(document.body, { key: 'z', ctrlKey: true });
+    await fireEvent.keyDown(document.body, { key: 'z', ctrlKey: true, repeat: true });
+
+    expect(calls).toEqual(['undo']);
+  });
 });

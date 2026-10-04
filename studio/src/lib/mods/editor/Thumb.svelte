@@ -2,14 +2,18 @@
   import { getTab } from '$lib/shell/tab.svelte';
   import { getSession } from '$lib/stores/session.svelte';
 
-  /** A mod file's thumbnail; "Base" when the slot uses the base skin's texture (no file of its own). */
-  let { modId, file, size = 96, label }: { modId: string; file: string | null; size?: number; label: string } = $props();
+  /**
+   * A mod file's thumbnail; "Base" when the slot uses the base skin's texture (no file of its own). `version` (the mod's
+   * revision) changes when a file is replaced under the same name, so the picture is asked for again.
+   */
+  let { modId, file, size = 96, label, version = '' }: { modId: string; file: string | null; size?: number; label: string; version?: string } = $props();
   const session = getSession();
   const tab = getTab();
   let src = $state<string | null>(null);
 
   $effect(() => {
     const wanted = file;
+    void version;
     src = null;
     if (!wanted) return;
     void tab.quietly(() => session.rpc.call('mods.thumbnail', { id: modId, file: wanted, size })).then((r) => {

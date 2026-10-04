@@ -119,4 +119,92 @@ describe('ModDoc', () => {
     timers.forEach((run) => run()); // both scheduled checks fire; only the newest one asks
     await vi.waitFor(() => expect(rpc.callsTo('mods.check').length).toBe(before + 1));
   });
+
+  it('two edits fired back to back go one after the other, the second with the newest revision', async () => {
+    const { rpc, doc } = setup();
+    rpc.on('mods.get', () => modDetail());
+    let n = 1;
+    rpc.on('mods.setDetails', async () => {
+      await new Promise((r) => setTimeout(r, 5));
+      n += 1;
+      return modDetail({ revision: `r${n}`, manifestJson: `m${n}` });
+    });
+    await doc.load();
+
+    await Promise.all([doc.edit('mods.setDetails', { name: 'A', version: '1' }), doc.edit('mods.setDetails', { name: 'B', version: '1' })]);
+
+    expect(rpc.callsTo('mods.setDetails').map((c) => (c.params as { revision: string }).revision)).toEqual(['r1', 'r2']);
+    expect(doc.detail?.revision).toBe('r3');
+  });
+
+  it('pressing undo twice quickly goes back two steps', async () => {
+    const { rpc, doc } = setup();
+    rpc.on('mods.get', () => modDetail({ revision: 'r1', manifestJson: 'm1' }));
+    let n = 1;
+    rpc.on('mods.setDetails', () => {
+      n += 1;
+      return modDetail({ revision: `r${n}`, manifestJson: `m${n}` });
+    });
+    rpc.on('mods.saveManifest', async (p) => {
+      await new Promise((r) => setTimeout(r, 5));
+      n += 1;
+      return modDetail({ revision: `r${n}`, manifestJson: p.manifest });
+    });
+    await doc.load();
+    await doc.edit('mods.setDetails', { name: 'A', version: '1' });
+    await doc.edit('mods.setDetails', { name: 'B', version: '1' });
+
+    await Promise.all([doc.undo(), doc.undo()]);
+
+    expect(rpc.callsTo('mods.saveManifest').map((c) => (c.params as { manifest: string }).manifest)).toEqual(['m2', 'm1']);
+    expect(doc.detail?.manifestJson).toBe('m1');
+    expect(doc.canUndo).toBe(false);
+    expect(doc.canRedo).toBe(true);
+  });
+
+  it('an edit can build its parameters from the mod as it is when its turn comes', async () => {
+    const { rpc, doc } = setup();
+    rpc.on('mods.get', () => modDetail());
+    rpc.on('mods.setDetails', async (p) => {
+      await new Promise((r) => setTimeout(r, 5));
+      return modDetail({ name: p.name, revision: `r-${p.name}` });
+    });
+    await doc.load();
+
+    await Promise.all([
+      doc.edit('mods.setDetails', { name: 'A', version: '1' }),
+      doc.edit('mods.setDetails', (d) => ({ name: `${d.name}+B`, version: '1' })),
+    ]);
+
+    expect(doc.detail?.name).toBe('A+B');
+  });
+
+  it('a reload that finds mod.json changed forgets undo', async () => {
+    const { rpc, doc } = setup();
+    let revision = 'r1';
+    rpc.on('mods.get', () => modDetail({ revision }));
+    rpc.on('mods.setDetails', () => modDetail({ revision: 'r2' }));
+    await doc.load();
+    await doc.edit('mods.setDetails', { name: 'A', version: '1' });
+    revision = 'r7'; // e.g. Add skin or Replace file changed the files
+
+    await doc.reload();
+
+    expect(doc.detail?.revision).toBe('r7');
+    expect(doc.canUndo).toBe(false);
+  });
+
+  it('an edit that cannot be undone forgets the history', async () => {
+    const { rpc, doc } = setup();
+    rpc.on('mods.get', () => modDetail());
+    rpc.on('mods.setDetails', () => modDetail({ revision: 'r2' }));
+    rpc.on('mods.removeSkin', () => modDetail({ revision: 'r3', skins: [] }));
+    await doc.load();
+    await doc.edit('mods.setDetails', { name: 'A', version: '1' });
+
+    await doc.edit('mods.removeSkin', { skin: 'blue', deleteFiles: true }, { undoable: false });
+
+    expect(doc.canUndo).toBe(false);
+    expect(doc.canRedo).toBe(false);
+  });
 });

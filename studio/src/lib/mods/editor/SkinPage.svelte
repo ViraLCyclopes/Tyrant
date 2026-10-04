@@ -32,7 +32,8 @@
 
   async function remove(deleteFiles: boolean) {
     removing = false;
-    await doc.edit('mods.removeSkin', { skin: skin.id, deleteFiles });
+    // Deleted files cannot come back, so undo must not bring back a skin without them.
+    await doc.edit('mods.removeSkin', { skin: skin.id, deleteFiles }, { undoable: !deleteFiles });
   }
 </script>
 
@@ -44,7 +45,7 @@
 <section class="card">
   <h2>Swatch</h2>
   <div class="row">
-    <Thumb modId={doc.id} file={skin.thumbnail} size={64} label="Swatch of {skin.name}" />
+    <Thumb modId={doc.id} file={skin.thumbnail} size={64} label="Swatch of {skin.name}" version={doc.detail?.revision} />
     <button onclick={pickThumbnail}>Pick PNG…</button>
     <button disabled={!skin.thumbnail} onclick={() => doc.edit('mods.setThumbnail', { skin: skin.id, png: null })}>Automatic</button>
     {#if !skin.thumbnail}<span class="hint">The game cuts a swatch from the diffuse.</span>{/if}

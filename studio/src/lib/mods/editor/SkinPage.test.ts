@@ -70,4 +70,19 @@ describe('SkinPage', () => {
     await setup();
     expect(await screen.findByText('red-spot/blue male diffuse: small')).toBeInTheDocument();
   });
+
+  it('removing a skin with its files cannot be undone, and the dialog says so', async () => {
+    const { rpc, doc } = await setup();
+    rpc.on('mods.renameSkin', () => modDetail({ revision: 'r2' }));
+    rpc.on('mods.removeSkin', () => modDetail({ revision: 'r3', skins: [modDetail().skins[1]] }));
+    await doc.edit('mods.renameSkin', { skin: 'red', name: 'Red' });
+    expect(doc.canUndo).toBe(true);
+    await fireEvent.click(screen.getByRole('button', { name: 'Remove skin…' }));
+    const dialog = screen.getByRole('dialog', { name: /Remove/ });
+    await fireEvent.click(within(dialog).getByRole('checkbox', { name: /Also delete its files/ }));
+    expect(dialog).toHaveTextContent(/cannot be undone/);
+    await fireEvent.click(within(dialog).getByRole('button', { name: 'Remove skin' }));
+    await waitFor(() => expect(rpc.callsTo('mods.removeSkin')).toHaveLength(1));
+    expect(doc.canUndo).toBe(false);
+  });
 });

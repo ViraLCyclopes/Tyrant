@@ -27,11 +27,14 @@
     }
   }
 
-  // Redraw shortly after the colours, the animal type or the seed change.
+  // Redraw shortly after the colours, the animal type, the seed, the skin or its files (the mod's revision) change.
   $effect(() => {
     void colorsJson;
     void variant;
     void seed;
+    void skin.id;
+    void sex;
+    void doc.detail?.revision;
     const timer = setTimeout(() => void draw(), 250);
     return () => clearTimeout(timer);
   });
