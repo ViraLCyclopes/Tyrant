@@ -10,6 +10,8 @@ import { TabStore, type TabRecord } from './tabs';
 
 export interface ShellPrefs {
   reopenTabs: boolean;
+  /** Check for a newer Tyrant at start (at most once a day). */
+  checkUpdates: boolean;
   logPosition: 'bottom' | 'side';
 }
 
@@ -29,7 +31,7 @@ const TABS_KEY = 'tyrant.shell.tabs';
 const PREFS_KEY = 'tyrant.shell.prefs';
 const INTRO_KEY = 'tyrant.home.introHidden';
 export const SHELL_KEY = Symbol('tyrant-shell');
-const DEFAULT_PREFS: ShellPrefs = { reopenTabs: true, logPosition: 'side' };
+const DEFAULT_PREFS: ShellPrefs = { reopenTabs: true, logPosition: 'side', checkUpdates: true };
 const DEFAULT_PANEL: PanelState = { open: false, side: 360, bottom: 220 };
 
 /** The shell's state: which tabs are open, each tab's Tab object, log panels, markers, preferences. No DOM. */
@@ -220,6 +222,7 @@ function readPrefs(raw: string | null): ShellPrefs {
     return {
       reopenTabs: typeof value.reopenTabs === 'boolean' ? value.reopenTabs : DEFAULT_PREFS.reopenTabs,
       logPosition: value.logPosition === 'bottom' ? 'bottom' : 'side',
+      checkUpdates: typeof value.checkUpdates === 'boolean' ? value.checkUpdates : DEFAULT_PREFS.checkUpdates,
     };
   } catch {
     return { ...DEFAULT_PREFS };

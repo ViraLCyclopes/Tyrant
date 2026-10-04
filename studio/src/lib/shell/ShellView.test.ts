@@ -26,6 +26,12 @@ function setup() {
 }
 
 describe('Shell', () => {
+  it('Help ▸ Check for updates is there', async () => {
+    setup();
+    await fireEvent.click(screen.getByRole('button', { name: 'Help' }));
+    expect(screen.getByRole('menuitem', { name: 'Check for updates' })).toBeInTheDocument();
+  });
+
   it('shows Home first, without a close button', async () => {
     setup();
     expect(await screen.findByRole('tab', { name: 'Home' })).toHaveAttribute('aria-selected', 'true');

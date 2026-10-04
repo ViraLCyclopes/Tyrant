@@ -133,7 +133,7 @@ describe('ShellState', () => {
   it('restoring survives corrupt storage', () => {
     const { s } = shell(memoryStore({ 'tyrant.shell.tabs': '{nope', 'tyrant.shell.prefs': '[1,2' }));
     expect(s.tabs.map((t) => t.toolId)).toEqual(['home']);
-    expect(s.prefs).toEqual({ reopenTabs: true, logPosition: 'side' });
+    expect(s.prefs).toEqual({ reopenTabs: true, logPosition: 'side', checkUpdates: true });
   });
 
   it('does not reopen tabs when the preference is off', () => {

@@ -26,6 +26,10 @@
       <span><strong>Show the intro on Home</strong><br /><span class="hint">The short "what is Tyrant" card over the start screen.</span></span>
     </label>
     <label class="row">
+      <input type="checkbox" checked={shell.prefs.checkUpdates} onchange={(e) => shell.setPrefs({ checkUpdates: e.currentTarget.checked })} />
+      Check for updates when Tyrant starts
+    </label>
+    <label class="row">
       <input type="checkbox" checked={shell.prefs.reopenTabs} onchange={(e) => shell.setPrefs({ reopenTabs: e.currentTarget.checked })} />
       <span><strong>Reopen my tabs on start</strong><br /><span class="hint">Tyrant opens the tabs you had open last time (their filters start fresh).</span></span>
     </label>

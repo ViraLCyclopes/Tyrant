@@ -11,12 +11,21 @@
   import StatusLine from './StatusLine.svelte';
   import TabScope from './TabScope.svelte';
   import TabStrip from './TabStrip.svelte';
+  import UpdateBanner from '$lib/updates/UpdateBanner.svelte';
+  import { Updates } from '$lib/updates/updates.svelte';
 
   let { shell }: { shell: ShellState } = $props();
   const session = getSession();
   setContext(SHELL_KEY, untrack(() => shell));
   let showPrefs = $state(false);
   let showAbout = $state(false);
+  const updates = new Updates(session, session.store, () => shell.prefs.checkUpdates);
+  let startupChecked = false;
+  $effect(() => {
+    if (!session.ready || startupChecked) return;
+    startupChecked = true;
+    void updates.startup();
+  });
 
   const activeTab = $derived(shell.activeId ? shell.tab(shell.activeId) : null);
   const logPath = $derived(session.workspace ? `${session.workspace.dir}\\logs\\studio.log` : null);
@@ -73,6 +82,7 @@
     {
       label: 'Help',
       items: () => [
+        { label: 'Check for updates', run: () => void updates.check(), enabled: () => !updates.checking },
         { label: 'Show studio.log', run: () => void (logPath && session.platform.reveal(logPath)), enabled: () => logPath !== null },
         { label: 'Copy diagnostics', run: () => void session.copyDiagnostics(activeTab ?? undefined) },
         { label: 'About Tyrant', run: () => (showAbout = true) },
@@ -133,6 +143,7 @@
   {#if session.error}
     <ErrorBanner error={session.error} onFix={(fix) => session.applyFix(fix)} onDismiss={() => (session.error = null)} />
   {/if}
+  <UpdateBanner {updates} />
   <div class="body" class:side={shell.prefs.logPosition === 'side'}>
     <div class="tabs">
       {#each shell.tabs as record (record.id)}
