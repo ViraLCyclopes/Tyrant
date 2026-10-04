@@ -80,6 +80,9 @@ namespace Tyrant.Framework.Core
         /// <summary>A safety cap for one-shots only: a non-looping channel still "playing" after this many frames is stopped.</summary>
         public const int MaxFrames = 18000;
 
+        /// <summary>Followed runs of one event with no sound at all before the log says so (silence rolls never get this far).</summary>
+        public const int SilentRunsReported = 30;
+
         private sealed class Entry
         {
             public IntPtr Instance;
@@ -109,6 +112,8 @@ namespace Tyrant.Framework.Core
         private readonly List<Entry> _entries = new List<Entry>();
         private readonly Dictionary<string, IntPtr> _sounds = new Dictionary<string, IntPtr>(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> _notFollowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, int> _silentRuns = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> _played = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         public SoundReplacer(ISoundEngine engine, Action<string> log)
         {
@@ -185,7 +190,10 @@ namespace Tyrant.Framework.Core
             }
 
             if (!e.Heard && e.Following && e.Choice.Chance == null && run.Starts == e.SeenStarts && run.Sounds > 0)
+            {
                 e.Heard = true; // the game's own event played a sound in this run
+                _played.Add(e.Choice.Event);
+            }
 
             if (!e.Started)
             {
@@ -227,12 +235,28 @@ namespace Tyrant.Framework.Core
             }
 
             if (!running && (e.Loop || !e.Heard))
+            {
+                if (!e.Loop && e.Following && e.Choice.Chance == null) CountSilentRun(e.Choice.Event);
                 return Ended(e, valid, stop: true); // a loop ends with its run; an unheard run (a silence roll) is never heard
+            }
             if (e.Started && !_engine.Playing(e.Channel))
                 return Ended(e, valid, stop: false);
             if (!e.Loop && e.Started && ++e.PlayFrames > MaxFrames)
                 return Ended(e, valid, stop: true);
             return true;
+        }
+
+        /// <summary>
+        /// An event whose followed runs never play a sound (one FMOD does not report, e.g. built from nested events) would leave the
+        /// replacement silent for good: the log says so once, and the mod's own chance gets it heard.
+        /// </summary>
+        private void CountSilentRun(string eventPath)
+        {
+            if (_played.Contains(eventPath)) return;
+            _silentRuns.TryGetValue(eventPath, out var silent);
+            _silentRuns[eventPath] = ++silent;
+            if (silent == SilentRunsReported)
+                _log($"{eventPath} has played no sound in {silent} turns, so its replacement was not heard. If it never is, give it its own chance on its page (or 'tyrant mod set-sound … --chance').");
         }
 
         /// <summary>The run's replacement ended; the entry waits for the next run while the game keeps the instance.</summary>

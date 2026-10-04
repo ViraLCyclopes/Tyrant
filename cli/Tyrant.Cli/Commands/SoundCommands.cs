@@ -82,6 +82,10 @@ public sealed class ModReplaceSoundCommand : Command<ModReplaceSoundCommand.Sett
         [CommandOption("--chance <0-1>")]
         [Description("How often a one-off sound plays when the game starts it (0.3 = about one time in three). Without it, it follows the game's own chances.")]
         public double? Chance { get; set; }
+
+        [CommandOption("--like-game")]
+        [Description("Drop an earlier own chance: it plays when the game's own sound does.")]
+        public bool LikeGame { get; set; }
     }
 
     public override int Execute(CommandContext context, Settings settings)
@@ -89,8 +93,8 @@ public sealed class ModReplaceSoundCommand : Command<ModReplaceSoundCommand.Sett
         var (ws, _) = CliServices.OpenWorkspace(settings);
         var mod = ModProject.Open(ws, settings.Id);
         var entry = mod.ReplaceSound(settings.Event, settings.Files.Select(Path.GetFullPath).ToList(), settings.Species, settings.Skin);
-        if (settings.Volume is not null || settings.AgePitch is not null || settings.Chance is not null)
-            mod.SetSound(entry.Event, entry.Species, entry.Skin, settings.Volume, settings.AgePitch, null, null, null, settings.Chance);
+        if (settings.Volume is not null || settings.AgePitch is not null || settings.Chance is not null || settings.LikeGame)
+            mod.SetSound(entry.Event, entry.Species, entry.Skin, settings.Volume, settings.AgePitch, null, null, null, settings.Chance, settings.LikeGame);
         Console.WriteLine($"'{settings.Id}' replaces {SoundCatalog.NameOf(entry.Event).ToLowerInvariant()} {ModProject.ScopeText(entry.Species, entry.Skin)}: {string.Join(", ", entry.Files)}.");
         return ExitCodes.Ok;
     }

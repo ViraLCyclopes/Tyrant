@@ -249,6 +249,19 @@ public class ModSharingTests
     }
 
     [Fact]
+    public void Exporting_raises_an_older_framework_requirement_to_this_one()
+    {
+        using var game = new FakeGame();
+        var mod = ModWithFiles(NewWorkspace(game));
+        mod.Manifest.RequiresTyrant = "0.4.0"; // e.g. imported from an older zip, then given a sound chance
+        mod.Save();
+
+        var zip = ModSharing.Export(mod, TempZip(), "0.5.0");
+
+        Assert.Equal("0.5.0", ModManifest.Parse(Entry(zip, "UserData/Tyrant/Mods/red-spot/mod.json")).RequiresTyrant);
+    }
+
+    [Fact]
     public void An_existing_mod_is_kept_unless_replace_is_given()
     {
         using var game = new FakeGame();

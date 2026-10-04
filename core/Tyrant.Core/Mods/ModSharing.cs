@@ -165,7 +165,9 @@ public static class ModSharing
     private static string SharedManifest(ModProject mod, string frameworkVersion)
     {
         var copy = ModManifest.Parse(mod.Manifest.ToJson());
-        copy.RequiresTyrant ??= frameworkVersion;
+        // At least the exporting framework: an older stamp (a mod imported from an older zip) may predate fields the mod now uses.
+        if (copy.RequiresTyrant is null || Tyrant.Core.Updates.SemVer.Compare(copy.RequiresTyrant, frameworkVersion) < 0)
+            copy.RequiresTyrant = frameworkVersion;
         return copy.ToJson();
     }
 

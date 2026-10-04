@@ -466,6 +466,41 @@ public class SoundReplacerTests
     }
 
     [Fact]
+    public void A_followed_sound_that_never_plays_anything_is_reported_once()
+    {
+        var (engine, replacer, _) = Following();
+        Log.Clear();
+
+        for (var i = 0; i < SoundReplacer.SilentRunsReported + 5; i++)
+        {
+            engine.Run(I1);
+            replacer.Tick();
+            engine.Stopped.Add(I1); // every run ends without the game's event playing a sound
+            replacer.Tick();
+        }
+
+        Assert.Single(Log, l => l.Contains("event:/X") && l.Contains("no sound"));
+    }
+
+    [Fact]
+    public void A_sound_that_plays_now_and_then_is_not_reported()
+    {
+        var (engine, replacer, _) = Following();
+        Log.Clear();
+
+        for (var i = 0; i < SoundReplacer.SilentRunsReported * 2; i++)
+        {
+            engine.Run(I1);
+            if (i % 3 == 0) engine.Sound(I1); // a third of the runs play (like the game's chances)
+            replacer.Tick();
+            engine.Stopped.Add(I1);
+            replacer.Tick();
+        }
+
+        Assert.DoesNotContain(Log, l => l.Contains("no sound"));
+    }
+
+    [Fact]
     public void A_restart_while_playing_is_a_new_run()
     {
         var (engine, replacer, first) = Following();

@@ -100,6 +100,11 @@ public class SoundCliTests
         Assert.Contains("chance 25%", rare.Out);
         Assert.True(set.Code == ExitCodes.Ok, set.Err);
         Assert.Contains("like the game", back.Out);
+
+        Run("mod", "set-sound", "carch-voice", SoundDumps.Roar, "--chance", "0.4", "-w", ws);
+        var again = Run("mod", "replace-sound", "carch-voice", SoundDumps.Roar, wav, "--like-game", "-w", ws);
+        Assert.True(again.Code == ExitCodes.Ok, again.Err);
+        Assert.Contains("like the game", Run("mod", "show", "carch-voice", "-w", ws).Out);
     }
 
     [Fact]
