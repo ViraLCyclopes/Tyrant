@@ -4,7 +4,8 @@
   import { getTab } from '$lib/shell/tab.svelte';
   import { getSession } from '$lib/stores/session.svelte';
 
-  let { speciesKey = '' }: { speciesKey?: string } = $props();
+  /** modId: add to this mod (the mod editor) instead of choosing one; onDone: called after adding, or on Cancel. */
+  let { speciesKey = '', modId, onDone }: { speciesKey?: string; modId?: string; onDone?: () => void } = $props();
 
   const NEW = '__new__';
   const session = getSession();
@@ -33,7 +34,7 @@
     data = await tab.quietly(() => session.rpc.call('mods.species'));
     const list = await tab.quietly(() => session.rpc.call('mods.list'));
     mods = (list?.mods ?? []).filter((m) => m.state !== 'gameOnly');
-    target = mods[0]?.id ?? NEW;
+    target = modId ?? mods[0]?.id ?? NEW;
     // Never guess: a Species tab name that matches no species id leaves the choice to the user.
     const found = data?.species.find((s) => keyOf(s.speciesId) === speciesKey);
     unmatched = !!speciesKey && !found && !!data?.hasDump;
@@ -60,7 +61,12 @@
       session.rpc.call('mods.addSkin', { id, species, name: name.trim(), base, male, female, maps }),
     );
     if (!r) return;
-    tab.info(`Added skin '${name.trim()}' to '${id}'. Edit its PNGs in the mod's skins folder, then Check and Install to game in the Mods tab.`);
+    tab.info(
+      modId
+        ? `Added skin '${name.trim()}'. Replace its files on the skin's page, then Check and Install to game.`
+        : `Added skin '${name.trim()}' to '${id}'. Edit its PNGs in the mod's skins folder, then Check and Install to game in the Mods tab.`,
+    );
+    onDone?.();
   }
 </script>
 
@@ -88,14 +94,17 @@
       <label><input type="checkbox" bind:checked={male} disabled={baseSkin ? !baseSkin.male : false} /> Male</label>
       <label><input type="checkbox" bind:checked={female} disabled={baseSkin ? !baseSkin.female : false} /> Female</label>
       <label><input type="checkbox" bind:checked={maps} /> Also normal, extra and pattern maps</label>
-      <label>Mod
-        <select aria-label="Mod" bind:value={target}>
-          {#each mods as m (m.id)}<option value={m.id}>{m.name}</option>{/each}
-          <option value={NEW}>New mod…</option>
-        </select>
-      </label>
-      {#if target === NEW}<label>New mod id <input aria-label="New mod id" bind:value={newId} /></label>{/if}
+      {#if !modId}
+        <label>Mod
+          <select aria-label="Mod" bind:value={target}>
+            {#each mods as m (m.id)}<option value={m.id}>{m.name}</option>{/each}
+            <option value={NEW}>New mod…</option>
+          </select>
+        </label>
+        {#if target === NEW}<label>New mod id <input aria-label="New mod id" bind:value={newId} /></label>{/if}
+      {/if}
       <button class="primary" onclick={add} disabled={!name.trim() || !species || (!male && !female) || session.busy}>Add skin</button>
+      {#if onDone}<button onclick={onDone}>Cancel</button>{/if}
     </div>
     <p class="hint">
       Tyrant copies the base skin's textures into the mod as a template. Edit them, and anything you leave out (the other sex, infant

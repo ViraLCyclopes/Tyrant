@@ -16,6 +16,14 @@ export interface TabHost {
   openTool(toolId: string, options?: OpenOptions): string | null;
 }
 
+/** A tool that can step back and forward (the mod editor); the shell's Edit menu and Ctrl+Z / Ctrl+Y use it. */
+export interface UndoTarget {
+  canUndo(): boolean;
+  canRedo(): boolean;
+  undo(): void;
+  redo(): void;
+}
+
 /** One open tab, as its tool sees it: its log, its error banner, whether it is showing. */
 export class Tab {
   active = $state(false);
@@ -23,6 +31,10 @@ export class Tab {
   error = $state<RpcError | null>(null);
   /** Extra menus this tab's tool adds to the menu bar while it is showing (plan 2's Mod menu). */
   menus = $state<Menu[]>([]);
+  /** Undo/redo of this tab's tool, if it has any. */
+  undo = $state<UndoTarget | null>(null);
+  /** A keyed tab's key (the mod editor's mod id); set once by the shell. */
+  key: string | null = null;
   /** False once the tab is closed: late results of its work go to every tab instead. */
   private attached = true;
 

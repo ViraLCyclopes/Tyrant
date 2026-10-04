@@ -139,4 +139,33 @@ describe('Shell', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Dock at the side' }));
     expect(shell.prefs.logPosition).toBe('side');
   });
+
+  it('Ctrl+Z and Ctrl+Y undo and redo the shown tab, but not while typing', async () => {
+    const { shell } = setup();
+    const id = shell.openTool('assets')!;
+    const calls: string[] = [];
+    shell.tab(id).undo = { canUndo: () => true, canRedo: () => true, undo: () => calls.push('undo'), redo: () => calls.push('redo') };
+    const field = await screen.findByRole('searchbox', { name: 'Search' });
+
+    await fireEvent.keyDown(document.body, { key: 'z', ctrlKey: true });
+    await fireEvent.keyDown(document.body, { key: 'y', ctrlKey: true });
+    await fireEvent.keyDown(field, { key: 'z', ctrlKey: true });
+
+    expect(calls).toEqual(['undo', 'redo']);
+  });
+
+  it('Edit ▸ Undo is enabled only when the shown tab can undo', async () => {
+    const { shell } = setup();
+    const id = shell.openTool('assets')!;
+    shell.tab(id).undo = { canUndo: () => true, canRedo: () => false, undo: () => {}, redo: () => {} };
+    await fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    expect(screen.getByRole('menuitem', { name: /Undo/ })).toBeEnabled();
+    expect(screen.getByRole('menuitem', { name: /Redo/ })).toBeDisabled();
+  });
+
+  it('a keyed tab knows its key', () => {
+    const { shell } = setup();
+    const id = shell.openTool('assets', { key: 'k1', title: 'K' })!;
+    expect(shell.tab(id).key).toBe('k1');
+  });
 });

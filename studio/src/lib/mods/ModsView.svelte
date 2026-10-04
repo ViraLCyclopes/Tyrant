@@ -4,6 +4,7 @@
   import { getTab } from '$lib/shell/tab.svelte';
   import { getSession } from '$lib/stores/session.svelte';
   import CleanSkins from './CleanSkins.svelte';
+  import { installMod, removeFromGame, restoreCutouts as restoreModCutouts } from './modActions';
 
   const session = getSession();
   const tab = getTab();
@@ -28,11 +29,18 @@
   }
 
   async function create() {
-    const r = await tab.safely(() => session.rpc.call('mods.create', { id: newId.trim(), name: newName.trim() || null, author: null }));
+    const id = newId.trim();
+    const name = newName.trim() || null;
+    const r = await tab.safely(() => session.rpc.call('mods.create', { id, name, author: null }));
     if (!r) return;
     list = r;
     newId = '';
     newName = '';
+    open(id, name ?? id); // a new mod is made in its editor
+  }
+
+  function open(id: string, name: string) {
+    tab.openTool('mod', { key: id, title: name });
   }
 
   async function check(row: ModRow) {
@@ -41,32 +49,15 @@
   }
 
   async function restoreCutouts(row: ModRow) {
-    const r = await tab.safely(() => session.rpc.call('mods.restoreCutouts', { id: row.id }));
-    if (!r) return;
-    const done = r.restored.length
-      ? `Restored the see-through parts of ${r.restored.length} PNG${r.restored.length === 1 ? '' : 's'} in '${row.id}'. Install it again to update the game.`
-      : `Nothing to restore in '${row.id}'.`;
-    tab.info(done);
-    for (const problem of r.problems) tab.warn(problem);
-    await check(row);
+    if (await restoreModCutouts(session, tab, row.id)) await check(row);
   }
 
   async function install(row: ModRow) {
-    const message = list?.frameworkInstalled
-      ? `Copy '${row.name}' into the game (UserData\\Tyrant\\Mods\\${row.id})? No game file is replaced; Remove from game undoes it.`
-      : `Install '${row.name}' into the game? This also installs MelonLoader (if needed) and Tyrant's framework. No game file is replaced; Uninstall from game on the Workspace tab undoes everything.`;
-    if (!(await session.platform.confirm(message, 'Install to game'))) return;
-    const r = await session.runJob('mods.install', { id: row.id }, `Install ${row.id}`, tab);
-    if (!r) return;
-    tab.info(r.message);
-    for (const warning of r.warnings) tab.warn(warning);
-    await refresh();
+    if (await installMod(session, tab, row.id, row.name)) await refresh();
   }
 
   async function remove(row: ModRow) {
-    if (!(await session.platform.confirm(`Remove '${row.name}' from the game?`, 'Remove from game'))) return;
-    const r = await tab.safely(() => session.rpc.call('mods.remove', { id: row.id }));
-    if (r) list = r;
+    if (await removeFromGame(session, tab, row.id, row.name)) await refresh();
   }
 
   function summary(row: ModRow): string {
@@ -119,8 +110,9 @@
           </td>
           <td class="actions">
             {#if row.state !== 'gameOnly'}
+              <button class="primary" aria-label="Open {row.name}" onclick={() => open(row.id, row.name)}>Open</button>
               <button aria-label="Check {row.name}" onclick={() => check(row)}>Check</button>
-              <button class="primary" aria-label="Install {row.name} to the game" onclick={() => install(row)} disabled={session.busy}>Install to game</button>
+              <button aria-label="Install {row.name} to the game" onclick={() => install(row)} disabled={session.busy}>Install to game</button>
             {/if}
             {#if row.state !== 'notInstalled'}
               <button aria-label="Remove {row.name} from the game" onclick={() => remove(row)} disabled={session.busy}>Remove from game</button>
