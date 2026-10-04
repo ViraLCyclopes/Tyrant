@@ -46,6 +46,10 @@ The game folder, your workspace and its outputs.
   the mods you install from the Mods tab. **Run data dump** starts the game through Steam, reads every game database at
   the main menu and closes the game again (about a minute). **Uninstall from game** removes exactly what was installed,
   including installed mods; MelonLoader stays if other mods use it.
+  The card shows the framework's version in the game and in this Tyrant ("Framework: 0.3.0 in the game · 0.3.0 in this
+  Tyrant") and MelonLoader's version. After a Tyrant update that brings a newer framework, Tyrant offers once to
+  **Update Tyrant in game**. **Save framework zip…** saves the framework for players without Tyrant.
+  CLI: `tyrant game status|install|update|uninstall|package-framework`.
 - **Copy diagnostics** (also in the **Help** menu) puts versions, the game build and recent log lines (never game files) on the clipboard for
   bug reports.
 
@@ -124,6 +128,10 @@ files that changed; again after a game update).
   - **Install to game** copies the mod into the game. The first time, it also installs MelonLoader and Tyrant's framework, after asking.
   - **On** switches a mod for the next game start. **Remove from game** takes it out again.
   - *Changed since install* means you edited the workspace copy; install again to update the game.
+  - When the framework in the game is older than this Tyrant, the Mods tab says so with an **Update Tyrant in game** button.
+  - **Add mod from zip…** adds a shared mod to the workspace (it asks before replacing a mod with the same id).
+- **Share a mod:** in the mod editor, **Mod → Export for sharing…** saves a zip players unzip into the game folder; its
+  README says what it needs. CLI: `tyrant mod export <id>`, `tyrant mod import <zip>`.
 - **Add a skin:**
   1. On the Species tab, click **Add a skin…** for a species.
   2. Fill in the form:

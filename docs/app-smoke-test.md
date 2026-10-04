@@ -105,6 +105,13 @@ Release build: `npm run build:app`, install `studio/src-tauri/target/release/bun
     model; switching an animal back to another skin puts that skin's model (or the game's) back.
 55. Export the .glb from step 51 again from Blender: the model's page says it changed since you added it; **Re-import** brings in the
     new version (Ctrl+Z goes back).
+56. Workspace → Tyrant in the game shows "Framework: 0.3.0 in the game · 0.3.0 in this Tyrant" and MelonLoader's version.
+57. Mod editor → Mod → **Export for sharing…** on a skin mod: the zip holds `UserData\Tyrant\Mods\<id>\…` and `README.txt`;
+    older model builds are not inside.
+58. In a second workspace: Mods → **Add mod from zip…** → the mod appears; doing it again asks to replace it.
+59. Workspace → **Save framework zip…**: the zip holds `Mods\Tyrant.Framework.dll`, `UserLibs\…` and `README.txt`.
+60. **(game)** With Tyrant uninstalled from the game, install MelonLoader by hand, unzip the framework zip and the mod zip
+    into the game folder and start the game: the mod shows (MelonLoader's log lists it).
 
 **Shell (tabs, log, preferences):**
 

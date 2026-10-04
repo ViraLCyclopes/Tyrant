@@ -140,6 +140,26 @@ and on a skin: `"model": "models/carcharodontosaurus-spiked-5e6f7a8b.glb"`.
 - `file` must lie inside the mod; a path that leads outside it is an error, and Tyrant builds nothing for it.
 - Check and Install rebuild the converted files when the `.glb` in the mod changed. Tyrant also remembers the file you added the model from; when you export it again, Check warns and the model's page offers **Re-import** (or run `tyrant mod replace-model` again).
 
+## Sharing a mod
+
+- **Export for sharing** (mod editor → Mod menu, or `tyrant mod export <id>`) runs Check first and refuses a mod with
+  errors. It writes `<id>-<version>.zip`:
+  ```
+  UserData/Tyrant/Mods/<id>/mod.json
+  UserData/Tyrant/Mods/<id>/<every file mod.json uses>
+  README.txt
+  ```
+  Only mod.json and the files it names go in (with a model's `.lodN.tmesh` and `.model.json`); older model builds and
+  anything else in the folder stay out. Players unzip it into the game folder. The README says it needs MelonLoader 0.7.3
+  and Tyrant Framework (the version of the Tyrant that exported it) or newer, and how to install it.
+- **Add mod from zip** (Mods tab, or `tyrant mod import <zip>`) accepts an exported zip, a zip of a mod folder, or a zip
+  with mod.json at its root, and adds the mod to the workspace. A zip with an unsafe path (`..`), no mod, two mods, or a
+  mod.json whose id differs from its folder is refused. A mod with the same id is replaced only when you confirm
+  (`--replace`), and only after the new one has unpacked.
+- **The framework zip** (Workspace → Save framework zip…, or `tyrant game package-framework`) is
+  `Tyrant-Framework-<version>.zip`: `Mods/Tyrant.Framework.dll`, `UserLibs/Tyrant.Framework*.dll` and `README.txt`, for
+  players without Tyrant. Mods not listed in `mods.json` load after the listed ones, by id.
+
 ## In the game
 
 - **Where installed mods live:** `<game>/UserData/Tyrant/Mods/<id>/`.
