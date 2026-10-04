@@ -26,7 +26,7 @@ public class ModelTexturesTests
 
         var textures = ModelTextures.Write(session, index, Prefabs, prefab, TempDir());
 
-        Assert.Equal(new GltfMaterial("Acro"), Assert.Single(textures.For(prefab.Renderers[0])!));
+        Assert.Equal(new GltfMaterial("Acro") { Cutoff = 0.5f }, Assert.Single(textures.For(prefab.Renderers[0])!)); // an animal: cut out at 0.5
         Assert.StartsWith("T_Acro_D: ", Assert.Single(textures.Failures));
         Assert.Contains(textures.Notes, n => n.Contains("T_Acro_D"));
         Assert.Equal("T_Acro_D", Assert.Single(textures.Materials).BaseColor?.Name);
@@ -46,6 +46,19 @@ public class ModelTexturesTests
 
         Assert.Equal(["T_Acro_D", "T_Acro_E", "T_Acro_N", "T_Acro_P"], textures.Failures.Select(f => f[..f.IndexOf(':')]).Order()); // fur is not used by the viewer
         Assert.Empty(textures.TextureFiles);
+    }
+
+    [Fact]
+    public void An_animal_material_is_exported_with_its_cutout()
+    {
+        using var game = new FakeGame();
+        using var session = new AssetSession(new GameInstall(game.Root, null));
+        var prefab = WithMaterials(new MaterialModel("Acro", [new TextureSlot("_AdultDiffuse", null, 1)]));
+        var index = new AssetIndex { Assets = [new AssetRecord(Prefabs, 1, "Texture2D", "T_Acro_D", null, null, null)] };
+
+        var textures = ModelTextures.Write(session, index, Prefabs, prefab, TempDir());
+
+        Assert.Equal(0.5f, Assert.Single(textures.For(prefab.Renderers[0])!).Cutoff);
     }
 
     [Fact]

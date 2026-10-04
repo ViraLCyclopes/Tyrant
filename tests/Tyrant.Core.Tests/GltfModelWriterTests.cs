@@ -233,6 +233,38 @@ public class GltfModelWriterTests
     }
 
     [Fact]
+    public void A_cut_out_material_is_an_alpha_mask_with_its_cutoff()
+    {
+        var path = TempGlb();
+        var prefab = ModelFixture.Prefab(TwoSubMeshes(), skinned: false);
+
+        GltfModelWriter.WriteGlb(prefab, prefab.Renderers[0], path, [new("Feathers") { Cutoff = 0.3f }, new("Eyes")]);
+
+        var materials = GlbJson(path)["materials"]!.AsArray();
+        var feathers = materials.Single(m => m!["name"]!.GetValue<string>() == "Feathers")!;
+        Assert.Equal("MASK", feathers["alphaMode"]!.GetValue<string>());
+        Assert.Equal(0.3, feathers["alphaCutoff"]!.GetValue<double>(), 3); // (glTF leaves out its default, 0.5)
+        Assert.Null(materials.Single(m => m!["name"]!.GetValue<string>() == "Eyes")!["alphaMode"]); // opaque
+    }
+
+    [Fact]
+    public void An_occlusion_roughness_map_is_linked_for_both()
+    {
+        var path = TempGlb();
+        var textures = Path.Combine(Path.GetDirectoryName(path)!, GltfModelWriter.TexturesFolder);
+        var orm = Png(textures, "T_Skin_E_ORM.png");
+        var prefab = ModelFixture.Prefab(TwoSubMeshes(), skinned: false);
+
+        GltfModelWriter.WriteGlb(prefab, prefab.Renderers[0], path, [new("Skin") { OcclusionRoughnessPng = orm }, new("Eyes")]);
+
+        var json = GlbJson(path);
+        var skin = json["materials"]!.AsArray().Single(m => m!["name"]!.GetValue<string>() == "Skin")!;
+        var uri = (System.Text.Json.Nodes.JsonNode? info) => json["images"]![json["textures"]![info!["index"]!.GetValue<int>()]!["source"]!.GetValue<int>()]!["uri"]!.GetValue<string>();
+        Assert.Equal("textures/T_Skin_E_ORM.png", uri(skin["occlusionTexture"]));
+        Assert.Equal("textures/T_Skin_E_ORM.png", uri(skin["pbrMetallicRoughness"]!["metallicRoughnessTexture"]));
+    }
+
+    [Fact]
     public void Sub_meshes_without_a_material_are_kept_plain()
     {
         var path = TempGlb();

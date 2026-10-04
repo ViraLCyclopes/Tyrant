@@ -81,7 +81,9 @@ files that changed; again after a game update).
 - Tick assets and click **Export selected**: textures become PNG (`assets\textures`), meshes and prefabs .glb
   (`assets\models`), anything else JSON (`assets\json`). A report in `exports\` lists every asset, its keys and any
   failure; one failure never stops the rest. Models are written with their materials; their textures go to a
-  `textures` folder next to the `.glb` files, which Blender picks up on import. A bare Mesh is exported without its
+  `textures` folder next to the `.glb` files, which Blender picks up on import. Animals export with their cutouts (feathers,
+  hair) and with ambient occlusion and roughness from the extra map (`<extra>_ORM.png`); their pattern map is exported next
+  to them too, but pattern colours need a Blender setup (planned). A bare Mesh is exported without its
   bones; export its prefab (GameObject) to keep them. Very long names are shortened with a short code at the end.
   For plain bones in Blender (no "Icosphere"): in **File → Import → glTF 2.0**, open **Bones & Skin** and tick **Disable Bone
   Shape**, or set **Bone Dir** to **Temperance** (bones then point at their children). The Icosphere is a bone display shape

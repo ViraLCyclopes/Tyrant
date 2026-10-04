@@ -69,12 +69,25 @@ public sealed class ModelTextures
         if (material.Name.Length > 0 && !_materials.Any(m => m.Name == resolved.Name && m.BaseColor == resolved.BaseColor && m.Normal == resolved.Normal))
             _materials.Add(resolved);
         var name = material.Name.Length > 0 ? material.Name : renderer.Mesh.Name.Length > 0 ? renderer.Mesh.Name : renderer.Name;
-        var gltf = new GltfMaterial(name, Png(resolved.BaseColor), Png(resolved.Normal));
-        if (resolved.Animal)
-            foreach (var slot in resolved.Slots.Where(s => AnimalDataSlots.Contains(s.Name)))
-                Png(slot.Texture, rebuildNormals: false);
-        return gltf;
+        var gltf = new GltfMaterial(name, Png(resolved.BaseColor), Png(resolved.Normal)) { Cutoff = resolved.Cutoff };
+        if (!resolved.Animal) return gltf;
+        string? extra = null;
+        foreach (var slot in resolved.Slots.Where(s => AnimalDataSlots.Contains(s.Name)))
+        {
+            var png = Png(slot.Texture, rebuildNormals: false);
+            if (slot.Name == "_AdultExtraMap") extra = png;
+        }
+        return extra is null ? gltf : gltf with { OcclusionRoughnessPng = OcclusionRoughnessFor(extra) };
     }
+
+    /// <summary>The extra map as an occlusion/roughness PNG, made once per extra map.</summary>
+    private string? OcclusionRoughnessFor(string extraPng)
+    {
+        if (_orms.TryGetValue(extraPng, out var known)) return known;
+        return _orms[extraPng] = OcclusionRoughness.Write(extraPng);
+    }
+
+    private readonly Dictionary<string, string?> _orms = new(StringComparer.OrdinalIgnoreCase);
 
     private string? Png(AssetRecord? texture, bool rebuildNormals = true)
     {

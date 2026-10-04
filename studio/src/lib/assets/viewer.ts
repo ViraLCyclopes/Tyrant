@@ -163,6 +163,9 @@ async function build(canvas: HTMLCanvasElement, models: ModelFile[], options: Vi
     if (plan?.kind === 'animal') {
       material.metallic = 0; // metallic workflow, so the plugin can set roughness from the extra map
       material.roughness = 1;
+      // The plugin reads AO and smoothness from the extra map itself; the .glb's occlusion/roughness copy (for Blender) would apply twice.
+      material.ambientTexture = null;
+      material.metallicTexture = null;
       const plugin = new PkAnimalPlugin(material);
       plugin.extra = textures.extra = load(plan.extra && options.fileUrl(plan.extra));
       plugin.pattern = textures.pattern = load(plan.pattern && options.fileUrl(plan.pattern));

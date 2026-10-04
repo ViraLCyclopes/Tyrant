@@ -10,7 +10,14 @@ using SharpGLTF.Transforms;
 namespace Tyrant.Core.Models;
 
 /// <summary>A sub-mesh's glTF material; its PNGs are linked as textures/&lt;file name&gt; beside the .glb.</summary>
-public sealed record GltfMaterial(string Name, string? BaseColorPng = null, string? NormalPng = null);
+public sealed record GltfMaterial(string Name, string? BaseColorPng = null, string? NormalPng = null)
+{
+    /// <summary>Alpha below this is cut away (glTF alpha mask); null draws every pixel.</summary>
+    public float? Cutoff { get; init; }
+
+    /// <summary>An occlusion (R) / roughness (G) / metallic (B) map, linked as both glTF textures (see OcclusionRoughness).</summary>
+    public string? OcclusionRoughnessPng { get; init; }
+}
 
 /// <summary>Writes one renderer of a prefab (with the full node hierarchy) as a binary glTF.</summary>
 public static class GltfModelWriter
@@ -90,6 +97,13 @@ public static class GltfModelWriter
         var builder = new MaterialBuilder(material.Name).WithMetallicRoughness(0f, 0.85f);
         if (material.BaseColorPng is not null) builder.WithBaseColor(Linked(material.BaseColorPng));
         if (material.NormalPng is not null) builder.WithNormal(Linked(material.NormalPng));
+        if (material.Cutoff is { } cutoff) builder.WithAlpha(AlphaMode.MASK, cutoff);
+        if (material.OcclusionRoughnessPng is { } orm)
+        {
+            var image = Linked(orm);
+            builder.WithOcclusion(image);
+            builder.WithMetallicRoughness(image, 1f, 1f); // the map holds the values: metallic (B) 0, roughness (G)
+        }
         return builder;
     }
 
