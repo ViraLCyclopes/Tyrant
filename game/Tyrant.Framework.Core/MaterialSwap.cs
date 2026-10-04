@@ -5,7 +5,7 @@ namespace Tyrant.Framework.Core
 {
     /// <summary>
     /// Which texture properties of a material to point at a mod's texture: every property whose texture has a replaced
-    /// name. Each material is looked at once (the framework checks new materials as they load).
+    /// name. Each material is looked at once (FirstLook; the framework checks new materials as they load).
     /// </summary>
     public sealed class MaterialSwap
     {
@@ -21,11 +21,13 @@ namespace Tyrant.Framework.Core
         /// <summary>False without any texture replacement: nothing needs to be looked at.</summary>
         public bool HasWork { get; }
 
-        /// <summary>The (property, texture name) pairs of this material to swap; empty when it was seen before or nothing matches.</summary>
-        public IReadOnlyList<(string Property, string Texture)> Plan(int materialId, IEnumerable<(string Property, string? Texture)> slots)
+        /// <summary>True the first time a material is met: only then are its slots read (reading them costs Unity calls).</summary>
+        public bool FirstLook(int materialId) => _seen.Add(materialId);
+
+        /// <summary>The (property, texture name) pairs of a material to swap; empty when nothing matches.</summary>
+        public IReadOnlyList<(string Property, string Texture)> Plan(IEnumerable<(string Property, string? Texture)> slots)
         {
             var result = new List<(string, string)>();
-            if (!_seen.Add(materialId)) return result;
             foreach (var (property, texture) in slots)
                 if (!string.IsNullOrEmpty(texture) && _isReplaced(texture!)) result.Add((property, texture!));
             return result;

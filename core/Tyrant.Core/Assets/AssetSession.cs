@@ -124,7 +124,12 @@ public sealed class AssetSession : IDisposable
         }
     }
 
-    public void Release() => _manager.UnloadAll();
+    public void Release()
+    {
+        // Files only: UnloadAll would also drop the type caches and the game assemblies read for MonoBehaviours.
+        _manager.UnloadAllAssetsFiles(false);
+        _manager.UnloadAllBundleFiles();
+    }
 
     public void Dispose() => _manager.UnloadAll(true);
 }

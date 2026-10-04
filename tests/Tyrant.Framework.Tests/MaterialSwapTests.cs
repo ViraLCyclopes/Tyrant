@@ -11,30 +11,34 @@ public class MaterialSwapTests
     {
         var swap = Swap("T_Fence_D");
 
-        var plan = swap.Plan(1, [("_MainTex", "T_Fence_D"), ("_BaseMap", "t_fence_d"), ("_BumpMap", "T_Fence_N"), ("_Detail", null)]);
+        var plan = swap.Plan([("_MainTex", "T_Fence_D"), ("_BaseMap", "t_fence_d"), ("_BumpMap", "T_Fence_N"), ("_Detail", null)]);
 
         Assert.Equal([("_MainTex", "T_Fence_D"), ("_BaseMap", "t_fence_d")], plan);
     }
 
     [Fact]
-    public void Seen_materials_are_skipped()
+    public void Each_material_is_looked_at_once()
     {
         var swap = Swap("T_Fence_D");
-        swap.Plan(1, [("_MainTex", "T_Fence_D")]);
 
-        Assert.Empty(swap.Plan(1, [("_MainTex", "T_Fence_D")]));
-        Assert.Single(swap.Plan(2, [("_MainTex", "T_Fence_D")]));
+        Assert.True(swap.FirstLook(1));
+        Assert.False(swap.FirstLook(1));
+        Assert.True(swap.FirstLook(2));
     }
 
     [Fact]
-    public void A_material_without_replaced_textures_is_remembered_too()
+    public void Slots_are_not_read_for_a_material_seen_before()
     {
-        var calls = 0;
-        var swap = new MaterialSwap(_ => { calls++; return false; });
-        swap.Plan(5, [("_MainTex", "T_Rock_D")]);
-        swap.Plan(5, [("_MainTex", "T_Rock_D")]);
+        // The module reads a material's texture slots (costly Unity calls) only after FirstLook says it is new.
+        var swap = Swap("T_Fence_D");
+        swap.FirstLook(5);
+        var read = 0;
+        IEnumerable<(string, string?)> Slots() { read++; yield return ("_MainTex", "T_Fence_D"); }
 
-        Assert.Equal(1, calls);
+        var plan = swap.FirstLook(5) ? swap.Plan(Slots()) : [];
+
+        Assert.Empty(plan);
+        Assert.Equal(0, read);
     }
 
     [Fact]

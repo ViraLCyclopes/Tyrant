@@ -40,7 +40,7 @@ namespace Tyrant.Framework
             {
                 foreach (var material in Resources.FindObjectsOfTypeAll<Material>())
                 {
-                    if (material == null) continue;
+                    if (material == null || !_swap.FirstLook(material.GetInstanceID())) continue; // before any slot is read
                     var names = material.GetTexturePropertyNames();
                     var slots = new List<(string, string?)>(names.Length);
                     foreach (var name in names)
@@ -48,7 +48,7 @@ namespace Tyrant.Framework
                         var texture = material.GetTexture(name);
                         slots.Add((name, texture == null ? null : texture.name));
                     }
-                    foreach (var (property, textureName) in _swap.Plan(material.GetInstanceID(), slots))
+                    foreach (var (property, textureName) in _swap.Plan(slots))
                     {
                         if (!FrameworkMod.Replacements.TryGet(textureName, out var replacement)) continue;
                         var replaced = TextureCache.Get(replacement, MaterialSwap.KindOf(property));

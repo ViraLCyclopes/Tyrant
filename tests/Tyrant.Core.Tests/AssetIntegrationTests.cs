@@ -50,6 +50,25 @@ public class AssetIntegrationTests(RealGameIndex real) : IClassFixture<RealGameI
     }
 
     [SkippableFact]
+    public void Releasing_files_keeps_the_game_assemblies_loaded()
+    {
+        Skip.If(RealGameIndex.GameDir is null, "TYRANT_GAME_DIR not set");
+        var data = real.Index.Assets.First(a => a.Type == "MonoBehaviour" && a.Script is not null && a.IsBuiltIn); // no type tree: read through the assemblies
+        using var session = new AssetSession(real.Install);
+        session.Open(data);
+
+        session.Release();
+
+        // A batch export reuses one session: Release frees the files but must not make every MonoBehaviour re-read the assemblies.
+        var generator = session.Manager.MonoTempGenerator;
+        Assert.NotNull(generator);
+        var field = generator.GetType().GetField("loadedAssemblies", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        Assert.NotNull(field);
+        var loaded = field.GetValue(generator) as System.Collections.IDictionary;
+        Assert.True(loaded is { Count: > 0 }, "the assemblies were unloaded");
+    }
+
+    [SkippableFact]
     public void Static_prefab_renderers_get_their_materials_from_the_mesh_renderer()
     {
         Skip.If(RealGameIndex.GameDir is null, "TYRANT_GAME_DIR not set");
