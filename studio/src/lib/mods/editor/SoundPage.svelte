@@ -109,6 +109,30 @@
   </label>
   <p class="hint">Baby pitch: how much higher young animals play this sound (0 = like adults). Interface sounds and music ignore it.</p>
 
+  <fieldset>
+    <legend>How often</legend>
+    <label>
+      <input type="radio" name="sound-chance" checked={sound.chance === null}
+        onchange={() => doc.edit('mods.setSound', { ...which, likeGame: true })} /> Like the game
+    </label>
+    <label>
+      <input type="radio" name="sound-chance" checked={sound.chance !== null}
+        onchange={() => doc.edit('mods.setSound', { ...which, chance: 0.5 })} /> My own chance
+    </label>
+    {#if sound.chance !== null}
+      <label class="slider">
+        <input type="range" aria-label="Chance" min="0" max="1" step="0.05" value={sound.chance}
+          onchange={(e) => doc.edit('mods.setSound', { ...which, chance: Number(e.currentTarget.value) })} />
+        <span class="number">{Math.round(sound.chance * 100)}%</span>
+      </label>
+    {/if}
+    <p class="hint">
+      Like the game: your sound plays when the game's own sound does, so its silent turns and timing stay. My own chance: each
+      time the game starts the sound, it plays with this chance instead. Chance is for one-off sounds; looping sounds always
+      follow the game.
+    </p>
+  </fieldset>
+
   <div class="row"><button onclick={remove}>Remove</button></div>
 </section>
 

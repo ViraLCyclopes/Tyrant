@@ -96,4 +96,32 @@ describe('SoundPage', () => {
     expect(doc.edit).toHaveBeenCalledWith('mods.removeSound', { event: EVENT, species: 'Carcharodontosaurus', skin: null });
     await waitFor(() => expect(onRemoved).toHaveBeenCalled());
   });
+
+  it('follows the game until it gets its own chance', async () => {
+    const { doc } = setup();
+
+    expect(screen.getByRole('radio', { name: 'Like the game' })).toBeChecked();
+    expect(screen.queryByRole('slider', { name: 'Chance' })).toBeNull();
+    await fireEvent.click(screen.getByRole('radio', { name: 'My own chance' }));
+
+    expect(doc.edit).toHaveBeenCalledWith('mods.setSound', { event: EVENT, species: 'Carcharodontosaurus', skin: null, chance: 0.5 });
+  });
+
+  it('saves its own chance when the slider is let go', async () => {
+    const { doc } = setup(sound({ chance: 0.3 }));
+
+    expect(screen.getByRole('radio', { name: 'My own chance' })).toBeChecked();
+    expect(screen.getByText('30%')).toBeInTheDocument();
+    await fireEvent.change(screen.getByRole('slider', { name: 'Chance' }), { target: { value: '0.2' } });
+
+    expect(doc.edit).toHaveBeenCalledWith('mods.setSound', { event: EVENT, species: 'Carcharodontosaurus', skin: null, chance: 0.2 });
+  });
+
+  it('Like the game drops its own chance', async () => {
+    const { doc } = setup(sound({ chance: 0.3 }));
+
+    await fireEvent.click(screen.getByRole('radio', { name: 'Like the game' }));
+
+    expect(doc.edit).toHaveBeenCalledWith('mods.setSound', { event: EVENT, species: 'Carcharodontosaurus', skin: null, likeGame: true });
+  });
 });
