@@ -402,6 +402,7 @@ export interface ModDetail {
   manifestJson: string;
   replace: ModReplacementDto[];
   skins: ModSkinDto[];
+  models: ModModelDto[];
 }
 
 export interface ModEnableParams {
@@ -422,8 +423,54 @@ export interface ModInstallResult {
   warnings: string[];
 }
 
+export interface ModModelDto {
+  target: string;
+  skin: string | null;
+  file: string;
+  lods: ModModelLodDto[];
+  errors: string[];
+  warnings: string[];
+  stale: boolean;
+}
+
+export interface ModModelLodDto {
+  file: string;
+  vertices: number;
+  index32: boolean;
+  vanilla: number;
+}
+
+export interface ModModelPreview {
+  prefabRef: string;
+  lods: ModModelPreviewLod[];
+  materials: PreviewMaterial[];
+}
+
+export interface ModModelPreviewLod {
+  file: string;
+  vertices: number;
+}
+
+export interface ModModelPreviewParams {
+  id: string;
+  target: string;
+  skin?: string | null;
+}
+
 export interface ModPreviewFiles {
   files: string[];
+}
+
+export interface ModRebuildModelsParams {
+  id: string;
+  revision: string;
+}
+
+export interface ModRemoveModelParams {
+  id: string;
+  revision: string;
+  target: string;
+  skin?: string | null;
 }
 
 export interface ModRemoveReplacementParams {
@@ -444,6 +491,15 @@ export interface ModRenameSkinParams {
   revision: string;
   skin: string;
   name: string;
+}
+
+export interface ModReplaceModelParams {
+  id: string;
+  file: string;
+  revision?: string | null;
+  target?: string | null;
+  prefabRef?: string | null;
+  skin?: string | null;
 }
 
 export interface ModReplaceParams {
@@ -547,6 +603,7 @@ export interface ModSkinDto {
   colorsJson: string | null;
   baseMaleSlots: string[] | null;
   baseFemaleSlots: string[] | null;
+  model?: string | null;
 }
 
 export interface ModSkinModel {
@@ -739,11 +796,15 @@ export interface RpcMethods {
   "mods.get": { params: ModIdParams; result: ModDetail };
   "mods.install": { params: ModIdParams; result: JobStarted };
   "mods.list": { params: void; result: ModsListResult };
+  "mods.modelPreview": { params: ModModelPreviewParams; result: ModModelPreview };
+  "mods.rebuildModels": { params: ModRebuildModelsParams; result: ModDetail };
   "mods.remove": { params: ModIdParams; result: ModsListResult };
+  "mods.removeModel": { params: ModRemoveModelParams; result: ModDetail };
   "mods.removeReplacement": { params: ModRemoveReplacementParams; result: ModDetail };
   "mods.removeSkin": { params: ModRemoveSkinParams; result: ModDetail };
   "mods.renameSkin": { params: ModRenameSkinParams; result: ModDetail };
   "mods.replace": { params: ModReplaceParams; result: ModsListResult };
+  "mods.replaceModel": { params: ModReplaceModelParams; result: ModDetail };
   "mods.restoreCutouts": { params: ModIdParams; result: ModRestoreCutoutsResult };
   "mods.sampleColors": { params: ModSampleColorsParams; result: ModSampledColors };
   "mods.saveManifest": { params: ModSaveManifestParams; result: ModDetail };

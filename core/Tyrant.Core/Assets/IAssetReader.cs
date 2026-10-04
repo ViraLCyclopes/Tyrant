@@ -56,6 +56,12 @@ public interface IAssetReader
     /// <summary>The prefab's hierarchy and renderers with their materials (a replacement model is fitted to it).</summary>
     PrefabModel ReadPrefabModel(GameInstall install, AssetRecord prefab);
 
+    /// <summary>
+    /// The prefab with each LOD renderer wearing a replacement mesh (.tmesh, LOD order), one .glb per LOD in
+    /// <paramref name="outputDir"/> with the game's materials and textures (the mod editor's model preview).
+    /// </summary>
+    ModelFacts WriteReplacedModel(GameInstall install, AssetRecord prefab, IReadOnlyList<Tyrant.Framework.Core.TMesh> lods, string outputDir, AssetIndex index);
+
     /// <summary>The prefab's materials (each renderer's, distinct by name), for the skin page's slot list.</summary>
     IReadOnlyList<MaterialModel> ReadMaterials(GameInstall install, AssetRecord prefab);
 

@@ -111,6 +111,26 @@ public sealed class BundleAssetReader : IAssetReader
         return new ModelExporter().ReadPrefab(session, prefab);
     }
 
+    public ModelFacts WriteReplacedModel(GameInstall install, AssetRecord prefab, IReadOnlyList<Tyrant.Framework.Core.TMesh> lods, string outputDir, AssetIndex index)
+    {
+        using var lease = Session(install, out var session);
+        var model = new ModelExporter().ReadPrefab(session, prefab);
+        var renderers = Tyrant.Core.ModelReplacements.ModelBuilder.GameRenderers(model);
+        session.Release();
+        if (Directory.Exists(outputDir)) Directory.Delete(outputDir, recursive: true);
+        var textures = ModelTextures.Write(session, index, prefab.Bundle, model, outputDir);
+        var parts = new List<ModelPart>();
+        for (var i = 0; i < Math.Min(lods.Count, renderers.Count); i++)
+        {
+            var original = renderers[i];
+            var mesh = Tyrant.Core.ModelReplacements.ModelBuilder.FromTMesh(lods[i], original.Mesh.BindPoses);
+            var file = Path.Combine(outputDir, $"lod{i}.glb");
+            GltfModelWriter.WriteGlb(model, original with { Mesh = mesh }, file, textures.For(original));
+            parts.Add(new ModelPart(file, $"LOD {i}", mesh.VertexCount, mesh.TriangleCount, original.IsSkinned));
+        }
+        return new ModelFacts(parts, []) { Materials = textures.Materials, TextureFiles = textures.TextureFiles };
+    }
+
     public IReadOnlyList<MaterialModel> ReadMaterials(GameInstall install, AssetRecord prefab)
     {
         using var lease = Session(install, out var session);

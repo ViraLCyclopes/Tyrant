@@ -42,6 +42,17 @@ internal static class ModCli
         }
     }
 
+    public static IReadOnlyList<SpeciesSkins> RequireSpecies(Workspace ws) => TrySpecies(ws) ?? throw new TyrantException(TyrantErrorCode.DataMissing,
+        "Model replacements need the game's data: on the Workspace tab click Run data dump, or run 'tyrant dump run'.", FixAction.RefreshWorkspace);
+
+    /// <summary>Before Check and Install: models whose .glb changed are built again (needs the index and the data dump).</summary>
+    public static void RebuildStaleModels(Workspace ws, GameInstall install, ModProject mod)
+    {
+        if (!mod.ModelEntries().Any() || TryIndex(ws) is not { } index || TrySpecies(ws) is not { } species) return;
+        foreach (var file in mod.RebuildStaleModels(install, index, species, CliServices.AssetReader))
+            Console.WriteLine($"  rebuilt  {file} (it changed since it was built)");
+    }
+
     /// <summary>Prints a check; returns false when it has errors.</summary>
     public static bool Print(ModCheckResult result)
     {
@@ -108,6 +119,7 @@ public sealed class ModCheckCommand : Command<ModSettings>
     {
         var (ws, install) = CliServices.OpenWorkspace(settings);
         var mod = ModProject.Open(ws, settings.Id);
+        ModCli.RebuildStaleModels(ws, install, mod);
         return ModCli.Print(ModChecker.ForGame(install).Check(mod, ModCli.TryIndex(ws), mod.Manifest.Skins.Count > 0 ? ModCli.TrySpecies(ws) : null)) ? ExitCodes.Ok : ExitCodes.Error;
     }
 }
@@ -141,6 +153,7 @@ public sealed class ModInstallCommand : Command<ModInstallCommand.Settings>
     {
         var (ws, install) = CliServices.OpenWorkspace(settings);
         var mod = ModProject.Open(ws, settings.Id);
+        ModCli.RebuildStaleModels(ws, install, mod);
         if (!ModCli.Print(ModChecker.ForGame(install).Check(mod, ModCli.TryIndex(ws), mod.Manifest.Skins.Count > 0 ? ModCli.TrySpecies(ws) : null)))
         {
             Console.WriteLine("Fix the errors above, then install again.");

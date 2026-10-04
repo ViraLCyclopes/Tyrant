@@ -12,7 +12,7 @@ using Tyrant.Rpc.Studio;
 namespace Tyrant.Rpc.Mods;
 
 /// <summary>mods.* — make mods in the workspace, check them, and install, switch or remove them in the game.</summary>
-public sealed class ModsMethods(StudioSession session, JobManager jobs)
+public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
 {
     private StudioOptions Options => session.Options;
 
@@ -48,6 +48,7 @@ public sealed class ModsMethods(StudioSession session, JobManager jobs)
     {
         var (ws, install) = session.Current();
         var checkedMod = ModProject.Open(ws, p.Id);
+        RebuildStaleModels(ws, install, checkedMod);
         var result = ModChecker.ForGame(install).Check(checkedMod, TryIndex(ws), checkedMod.Manifest.Skins.Count > 0 ? TrySpecies(ws) : null);
         return new ModCheckReport(result.Errors, result.Warnings, result.MissingCutouts);
     }
@@ -71,6 +72,7 @@ public sealed class ModsMethods(StudioSession session, JobManager jobs)
         return jobs.Start($"Install {p.Id}", (progress, ct) =>
         {
             progress.Report(new JobProgress(0.05, $"Checking {p.Id}"));
+            RebuildStaleModels(ws, install, mod);
             var check = ModChecker.ForGame(install).Check(mod, TryIndex(ws), mod.Manifest.Skins.Count > 0 ? TrySpecies(ws) : null);
             if (!check.Ok)
                 throw new TyrantException(TyrantErrorCode.ModInvalid, $"'{p.Id}' has problems, so it was not installed: {string.Join(" ", check.Errors)}");
@@ -349,8 +351,11 @@ public sealed class ModsMethods(StudioSession session, JobManager jobs)
                 return new ModSkinDto(s.Id, s.Key(m.Id), s.Species, s.Name, s.Base, s.Thumbnail, s.Male, s.Female,
                     s.Colors is null ? null : Tyrant.Framework.Core.Json.Write(s.Colors.ToJson()),
                     based is null ? null : ShaderSlots.Shown(based.Male.Keys.ToList(), shader),
-                    based is null ? null : ShaderSlots.Shown(based.Female.Keys.ToList(), shader));
-            }).ToList());
+                    based is null ? null : ShaderSlots.Shown(based.Female.Keys.ToList(), shader), s.Model);
+            }).ToList(),
+            m.Models.Select(x => ModelDto(mod, x.Target, null, x.File))
+                .Concat(m.Skins.Where(s => s.Model is not null).Select(s => ModelDto(mod, s.Species, s.Id, s.Model!)))
+                .ToList());
     }
 
     /// <summary>Game build + species → the slots its shader uses (null: unknown). Reading a prefab costs a bundle load, so it is cached.</summary>

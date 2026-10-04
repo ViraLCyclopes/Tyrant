@@ -76,6 +76,9 @@ public static class CliApp
                 mod.SetDescription("Make, check and install mods: texture replacements and new skins.");
                 mod.AddCommand<ModNewCommand>("new").WithDescription("Create a mod in the workspace (mods/<id>).");
                 mod.AddCommand<ModReplaceCommand>("replace").WithDescription("Replace a game texture with your PNG in a mod.");
+                mod.AddCommand<ModReplaceModelCommand>("replace-model").WithDescription("Replace a species' model (or give a skin its own) with your .glb from Blender.");
+                mod.AddCommand<ModRemoveModelCommand>("remove-model").WithDescription("Stop replacing a species' model, or make a skin use the species model again.");
+                mod.AddCommand<ModRebuildModelsCommand>("rebuild-models").WithDescription("Rebuild a mod's models and their levels of detail.");
                 mod.AddCommand<ModCheckCommand>("check").WithDescription("Check a mod's files and targets before installing it.");
                 mod.AddCommand<ModRestoreCutoutsCommand>("restore-cutouts").WithDescription("Copy the see-through parts (feathers, hair) of the vanilla textures back into colour PNGs that lost them.");
                 mod.AddCommand<ModInstallCommand>("install").WithDescription("Install a mod into the game (and Tyrant's framework, if needed).");

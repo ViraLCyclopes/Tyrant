@@ -39,6 +39,9 @@ internal static class CliServices
     /// <summary>Starts the game and tells whether it runs; the CLI's tests replace it so they never depend on the real game.</summary>
     public static IGameLauncher Launcher { get; set; } = new SteamLauncher();
 
+    /// <summary>Reads the game's bundles (tests set a fake).</summary>
+    public static IAssetReader AssetReader { get; set; } = new BundleAssetReader();
+
     public static void PrintError(TyrantException ex) => Console.Error.WriteLine($"error {ex.Code.ToWire()}: {ex.Message}{FixHint(ex.Fix)}");
 
     internal static string FixHint(FixAction fix) => fix switch

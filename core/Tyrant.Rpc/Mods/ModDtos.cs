@@ -42,13 +42,34 @@ public sealed record ModForgetSkinsParams(IReadOnlyList<string> Keys);
 /// <summary>One added skin as the mod editor shows it. BaseMaleSlots / BaseFemaleSlots: the base skin's slots (null without a data dump).</summary>
 public sealed record ModSkinDto(string Id, string Key, string Species, string Name, string Base, string? Thumbnail,
     IReadOnlyDictionary<string, string>? Male, IReadOnlyDictionary<string, string>? Female, string? ColorsJson,
-    IReadOnlyList<string>? BaseMaleSlots, IReadOnlyList<string>? BaseFemaleSlots);
+    IReadOnlyList<string>? BaseMaleSlots, IReadOnlyList<string>? BaseFemaleSlots, string? Model = null);
+
+/// <summary>One converted level of detail: its .tmesh, its vertices, 32-bit indices, and the game LOD's vertices.</summary>
+public sealed record ModModelLodDto(string File, int Vertices, bool Index32, int Vanilla);
+
+/// <summary>A model replacement (Skin null: the species'); Stale: its .glb changed since it was built.</summary>
+public sealed record ModModelDto(string Target, string? Skin, string File, IReadOnlyList<ModModelLodDto> Lods, IReadOnlyList<string> Errors,
+    IReadOnlyList<string> Warnings, bool Stale);
+
+/// <summary>Revision is null from the Assets tab (no editor open); Target or PrefabRef names the species, Skin gives a skin its own model.</summary>
+public sealed record ModReplaceModelParams(string Id, string File, string? Revision = null, string? Target = null, string? PrefabRef = null, string? Skin = null);
+
+public sealed record ModRemoveModelParams(string Id, string Revision, string Target, string? Skin = null);
+
+public sealed record ModRebuildModelsParams(string Id, string Revision);
+
+public sealed record ModModelPreviewParams(string Id, string Target, string? Skin = null);
+
+public sealed record ModModelPreviewLod(string File, int Vertices);
+
+/// <summary>A replacement model as .glb files (one per LOD) on the game's skeleton, and the materials the viewer dresses.</summary>
+public sealed record ModModelPreview(string PrefabRef, IReadOnlyList<ModModelPreviewLod> Lods, IReadOnlyList<Tyrant.Rpc.Assets.PreviewMaterial> Materials);
 
 public sealed record ModReplacementDto(string Texture, string? Key, string? Guid, string File);
 
 /// <summary>A whole mod for the editor. Revision: SHA-256 of mod.json, sent back with every change; ManifestJson: the file itself (undo).</summary>
 public sealed record ModDetail(string Id, string Name, string Version, string? Author, string? Description, string Dir, string Revision,
-    string ManifestJson, IReadOnlyList<ModReplacementDto> Replace, IReadOnlyList<ModSkinDto> Skins);
+    string ManifestJson, IReadOnlyList<ModReplacementDto> Replace, IReadOnlyList<ModSkinDto> Skins, IReadOnlyList<ModModelDto> Models);
 
 public sealed record ModSetDetailsParams(string Id, string Revision, string Name, string Version, string? Author = null, string? Description = null);
 
