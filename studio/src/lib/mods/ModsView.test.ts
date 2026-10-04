@@ -23,6 +23,18 @@ function setup(mods: ModRow[], frameworkInstalled = false) {
 }
 
 describe('ModsView', () => {
+  it('adds a mod from a zip', async () => {
+    const { rpc, platform, session } = setup([]);
+    rpc.on('mods.import', () => ({ id: 'shared-mod', problems: [], mods: { mods: [row({ id: 'shared-mod', name: 'Shared' })], frameworkInstalled: false, frameworkOutdated: false } }));
+    platform.files.push('D:\\downloads\\shared-mod.zip');
+    renderWith(ModsView, session);
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Add mod from zip…' }));
+
+    expect(await screen.findByText('Shared')).toBeInTheDocument();
+    expect(rpc.callsTo('mods.import')[0]?.params).toEqual({ file: 'D:\\downloads\\shared-mod.zip', replace: false });
+  });
+
   it('says when the framework in the game is out of date and updates it', async () => {
     const rpc = new FakeRpc()
       .on('mods.list', () => ({ mods: [], frameworkInstalled: true, frameworkOutdated: true }))

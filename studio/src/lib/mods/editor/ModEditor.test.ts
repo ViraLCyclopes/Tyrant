@@ -65,6 +65,14 @@ describe('ModEditor', () => {
     await waitFor(() => expect(rpc.callsTo('mods.removeReplacement')[0]?.params).toMatchObject({ texture: 'T_carch_alt1_male_D' }));
   });
 
+  it('the Mod menu can export the mod for sharing', async () => {
+    const { tab } = setup();
+    await screen.findByRole('button', { name: 'Blue-green stripes' });
+
+    const items = tab.menus[0]!.items;
+    expect((typeof items === 'function' ? items() : items).map((i) => ('label' in i ? i.label : ''))).toContain('Export for sharing…');
+  });
+
   it('adds a Mod menu and an undo target to its tab', async () => {
     const { tab } = setup();
     await screen.findByRole('button', { name: 'Blue-green stripes' });

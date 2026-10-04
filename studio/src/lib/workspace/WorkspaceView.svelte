@@ -11,6 +11,14 @@
     if (result !== null) tab.info(summary(result));
   }
 
+  async function saveFrameworkZip() {
+    const bundled = session.workspace?.frameworkBundled ?? '';
+    const out = await session.platform.saveFile("Save Tyrant's framework for players without Tyrant", `Tyrant-Framework-${bundled}.zip`, 'zip');
+    if (!out) return;
+    const r = await tab.safely(() => session.rpc.call('game.packageFramework', { out }));
+    if (r) tab.info(`Saved ${r.path}. Players unzip it into the game folder after installing MelonLoader.`);
+  }
+
   async function newWorkspace() {
     const dir = await session.platform.pickFolder('Choose an empty folder for the new workspace');
     if (dir) await session.createWorkspace(dir);
@@ -117,6 +125,7 @@
             <button class="primary" onclick={() => report(session.runJob('dump.install', undefined, 'Update Tyrant in game', tab), (r) => r.message)} disabled={session.busy}>Update Tyrant in game</button>
           {/if}
           <button onclick={() => session.uninstallDumper(tab)} disabled={session.busy}>Uninstall from game</button>
+          <button onclick={saveFrameworkZip} disabled={session.busy}>Save framework zip…</button>
         {:else}
           <button class="primary" onclick={() => report(session.runJob('dump.install', undefined, 'Install Tyrant in game', tab), (r) => r.message)} disabled={session.busy}>Install Tyrant in game</button>
         {/if}

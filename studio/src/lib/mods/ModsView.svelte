@@ -4,7 +4,7 @@
   import { getTab } from '$lib/shell/tab.svelte';
   import { getSession } from '$lib/stores/session.svelte';
   import CleanSkins from './CleanSkins.svelte';
-  import { installMod, removeFromGame, restoreCutouts as restoreModCutouts } from './modActions';
+  import { importModZip, installMod, removeFromGame, restoreCutouts as restoreModCutouts } from './modActions';
 
   const session = getSession();
   const tab = getTab();
@@ -56,6 +56,11 @@
     if (await installMod(session, tab, row.id, row.name)) await refresh();
   }
 
+  async function addFromZip() {
+    const mods = await importModZip(session, tab);
+    if (mods) list = mods;
+  }
+
   async function updateFramework() {
     if (await session.runJob('dump.install', undefined, 'Update Tyrant in game', tab)) await refresh();
   }
@@ -94,6 +99,7 @@
   <p class="warn">Tyrant was updated: the framework in the game is older than this Tyrant. Update it (the game must be closed).</p>
   <button class="primary" onclick={updateFramework} disabled={session.busy}>Update Tyrant in game</button>
 {/if}
+<button class="ghost" onclick={addFromZip} disabled={session.busy}>Add mod from zip…</button>
 <button class="ghost" onclick={() => (cleaning = !cleaning)}>Clean up skin numbers…</button>
 {#if cleaning}<CleanSkins />{/if}
 

@@ -15,6 +15,18 @@ function setup() {
 }
 
 describe('WorkspaceView', () => {
+  it('saves the framework zip where the user picks', async () => {
+    const { rpc, platform, session } = setup();
+    session.workspace = workspaceStatus({ dumper: 'installed', framework: 'current', frameworkBundled: '0.3.0' });
+    rpc.on('game.packageFramework', (p) => ({ path: p.out ?? '' }));
+    platform.saves.push('D:\\out\\Tyrant-Framework-0.3.0.zip');
+    renderWith(WorkspaceView, session);
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Save framework zip…' }));
+
+    await waitFor(() => expect(rpc.callsTo('game.packageFramework')[0]?.params).toEqual({ out: 'D:\\out\\Tyrant-Framework-0.3.0.zip' }));
+  });
+
   it('names the framework version in the game and in this Tyrant', () => {
     const { session } = setup();
     session.workspace = workspaceStatus({ dumper: 'installed', framework: 'outdated', frameworkInGame: '0.3.0', frameworkBundled: '0.4.0' });

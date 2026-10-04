@@ -3,7 +3,7 @@
   import { getTab } from '$lib/shell/tab.svelte';
   import { getSession } from '$lib/stores/session.svelte';
   import AddSkin from '../AddSkin.svelte';
-  import { installMod, removeFromGame, restoreCutouts } from '../modActions';
+  import { exportMod, installMod, removeFromGame, restoreCutouts } from '../modActions';
   import CheckPage from './CheckPage.svelte';
   import ModDetailsPage from './ModDetailsPage.svelte';
   import ModelPage from './ModelPage.svelte';
@@ -48,6 +48,11 @@
       items: () => [
         { label: 'Install to game', run: () => void install(), enabled: () => !!doc.detail && !session.busy },
         { label: 'Check', run: () => void doc.runCheck(), enabled: () => !!doc.detail },
+        {
+          label: 'Export for sharing…',
+          run: () => void (doc.detail && exportMod(session, tab, doc.id, doc.detail.name, doc.detail.version)),
+          enabled: () => !!doc.detail && !session.busy,
+        },
         { label: 'Restore cutouts', run: () => void restore(), enabled: () => !!doc.check?.missingCutouts?.length },
         { label: 'Open folder', run: () => void (doc.detail && session.platform.reveal(doc.detail.dir)), enabled: () => !!doc.detail },
         { label: 'Remove from game', run: () => void (doc.detail && removeFromGame(session, tab, doc.id, doc.detail.name)), enabled: () => !!doc.detail && !session.busy },
