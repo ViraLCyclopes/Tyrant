@@ -41,6 +41,7 @@ namespace Tyrant.Framework
         {
             SkinsModule.Tick(); // adds skins once the animal database exists, before a park loads
             MaterialTextureModule.Tick();
+            SoundsModule.Tick();
         }
 
         public override void OnSceneWasLoaded(int buildIndex, string sceneName) => MaterialTextureModule.OnSceneLoaded();
@@ -70,11 +71,12 @@ namespace Tyrant.Framework
             MaterialTextureModule.Start(); // replacements on objects other than animals
             foreach (var mod in plan.Mods)
             {
-                Log.Msg($"{mod.Manifest.Id} {mod.Manifest.Version}: {mod.Manifest.Replace.Count} texture replacement(s), {mod.Manifest.Skins.Count} skin(s), {mod.Manifest.Models.Count} model(s){(mod.Manifest.Assembly == null ? "" : ", code")}");
+                Log.Msg($"{mod.Manifest.Id} {mod.Manifest.Version}: {mod.Manifest.Replace.Count} texture replacement(s), {mod.Manifest.Skins.Count} skin(s), {mod.Manifest.Models.Count} model(s), {mod.Manifest.Sounds.Count} sound(s){(mod.Manifest.Assembly == null ? "" : ", code")}");
                 if (mod.Manifest.Assembly != null) CodeModLoader.Load(mod, CodeMods); // logs and skips a broken code mod
             }
             SkinsModule.Prepare(plan.Mods);
             ModelModule.Start(plan.Mods);
+            SoundsModule.Start(plan.Mods, HarmonyInstance);
             if (Replacements.Count > 0 || CodeMods.Count > 0 || SkinsModule.HasSkins || ModelModule.HasModels) AnimalTexturePatch.Apply(HarmonyInstance);
             if (SkinsModule.HasSkins) SkinPatches.Apply(HarmonyInstance);
             Log.Msg($"Tyrant framework {FrameworkInfo.Version}: {plan.Mods.Count} mod(s) loaded, {plan.Skipped.Count} skipped.");
