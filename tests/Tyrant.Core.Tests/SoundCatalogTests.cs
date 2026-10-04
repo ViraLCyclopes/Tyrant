@@ -101,6 +101,16 @@ public class SoundCatalogTests
     }
 
     [Fact]
+    public void A_species_is_found_by_its_id_or_the_asset_key()
+    {
+        var catalog = SoundCatalog.Read(Dump());
+
+        Assert.Equal("Carcharodontosaurus", catalog.SpeciesIdFor("carcharodontosaurus"));
+        Assert.Equal("Carcharodontosaurus", catalog.SpeciesIdFor("Carcharodontosaurus"));
+        Assert.Null(catalog.SpeciesIdFor("unicorn"));
+    }
+
+    [Fact]
     public void An_unknown_species_has_no_sounds()
     {
         Assert.Empty(SoundCatalog.Read(Dump()).ForSpecies("Unicorn"));

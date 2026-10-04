@@ -12,7 +12,8 @@ public sealed partial class ModProject
 
     /// <summary>
     /// Replaces a game sound with one or more audio files (several = one picked at random each time). The files are copied into
-    /// sounds/ under content-hashed names; an entry for the same sound and scope is replaced, keeping its volume and age pitch.
+    /// sounds/ under content-hashed names (files already in the mod keep theirs, so the editor adds and removes files by sending the
+    /// new list); an entry for the same sound and scope is replaced, keeping its volume and age pitch.
     /// </summary>
     public SoundReplacement ReplaceSound(string eventPath, IReadOnlyList<string> sourceFiles, string? species, string? skin)
     {
@@ -33,6 +34,12 @@ public sealed partial class ModProject
         for (var i = 0; i < sourceFiles.Count; i++)
         {
             var source = sourceFiles[i];
+            if (ModPaths.IsInside(Path.GetFullPath(source), Dir))
+            {
+                var inside = Path.GetRelativePath(Dir, Path.GetFullPath(source)).Replace(Path.DirectorySeparatorChar, '/');
+                if (!files.Contains(inside, StringComparer.OrdinalIgnoreCase)) files.Add(inside);
+                continue;
+            }
             var hash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(source)))[..8].ToLowerInvariant();
             var file = $"{SoundsFolder}/{Slug(Path.GetFileNameWithoutExtension(source))}-{hash}.{formats[i]}";
             var destination = Path.Combine(Dir, file.Replace('/', Path.DirectorySeparatorChar));

@@ -12,7 +12,10 @@ export type EditMethod =
   | 'mods.removeReplacement'
   | 'mods.replaceModel'
   | 'mods.removeModel'
-  | 'mods.rebuildModels';
+  | 'mods.rebuildModels'
+  | 'mods.replaceSound'
+  | 'mods.removeSound'
+  | 'mods.setSound';
 
 /** Params for an edit, or a function building them from the mod as it is when the edit's turn comes (null: nothing to save). */
 export type EditParams = Record<string, unknown> | ((detail: ModDetail) => Record<string, unknown> | null);

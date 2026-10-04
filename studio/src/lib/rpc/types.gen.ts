@@ -796,6 +796,12 @@ export interface SoundsForSpeciesParams {
   species: string;
 }
 
+export interface SoundsForSpeciesResult {
+  speciesId: string | null;
+  sounds: SoundDto[];
+  hasEventList: boolean;
+}
+
 export interface SoundsSearchParams {
   text?: string | null;
   limit?: number;
@@ -931,7 +937,7 @@ export interface RpcMethods {
   "mods.skinSlots": { params: void; result: SkinSlotsResult };
   "mods.species": { params: void; result: ModSpeciesResult };
   "mods.thumbnail": { params: ModThumbnailParams; result: ModThumbnailResult };
-  "sounds.forSpecies": { params: SoundsForSpeciesParams; result: SoundDto[] };
+  "sounds.forSpecies": { params: SoundsForSpeciesParams; result: SoundsForSpeciesResult };
   "sounds.search": { params: SoundsSearchParams; result: SoundsSearchResult };
   "species.list": { params: void; result: SpeciesListResult };
   "species.pack": { params: SpeciesPackParams; result: JobStarted };

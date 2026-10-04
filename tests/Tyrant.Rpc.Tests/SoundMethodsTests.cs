@@ -73,8 +73,10 @@ public class SoundMethodsTests
         using var game = new FakeGame();
         var (h, _) = await Opened(game);
 
-        var sounds = await h.Call("sounds.forSpecies", new { species = "Carcharodontosaurus" });
+        var result = await h.Call("sounds.forSpecies", new { species = "carcharodontosaurus" }); // the Species tab's key works too
 
+        Assert.Equal("Carcharodontosaurus", result.GetProperty("speciesId").GetString());
+        var sounds = result.GetProperty("sounds");
         var roar = sounds.EnumerateArray().Single(s => s.GetProperty("event").GetString() == SoundDumps.Roar);
         Assert.Equal(["Acrocanthosaurus", "Carcharodontosaurus"], roar.GetProperty("species").EnumerateArray().Select(s => s.GetString()));
         Assert.Equal(2400, roar.GetProperty("lengthMs").GetInt32());

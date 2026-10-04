@@ -18,6 +18,8 @@ export interface Platform {
   confirm(message: string, title: string): Promise<boolean>;
   /** Asks for an existing file with one of the extensions; null when cancelled. */
   openFile(title: string, extensions: string[]): Promise<string | null>;
+  /** Asks for one or more existing files with one of the extensions; empty when cancelled. */
+  openFiles(title: string, extensions: string[]): Promise<string[]>;
   reveal(path: string): Promise<void>;
   copy(text: string): Promise<void>;
   /** URL the webview can load a local preview file from (Tauri's asset protocol). */
@@ -49,6 +51,10 @@ export const tauriPlatform: Platform = {
   async openFile(title, extensions) {
     const picked = await open({ multiple: false, directory: false, title, filters: [{ name: extensions.join(', ').toUpperCase(), extensions }] });
     return typeof picked === 'string' ? picked : null;
+  },
+  async openFiles(title, extensions) {
+    const picked = await open({ multiple: true, directory: false, title, filters: [{ name: extensions.join(', ').toUpperCase(), extensions }] });
+    return Array.isArray(picked) ? picked : typeof picked === 'string' ? [picked] : [];
   },
   reveal: (path) => revealItemInDir(path),
   copy: (text) => navigator.clipboard.writeText(text),

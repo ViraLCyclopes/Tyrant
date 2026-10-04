@@ -11,6 +11,9 @@ public sealed record SoundDto(string Event, string Name, string Group, IReadOnly
 
 public sealed record SoundsForSpeciesParams(string Species);
 
+/// <summary>SpeciesId: the dump's id for the species asked for (by id or asset key); null and no sounds when the dump does not have it.</summary>
+public sealed record SoundsForSpeciesResult(string? SpeciesId, IReadOnlyList<SoundDto> Sounds, bool HasEventList);
+
 public sealed record SoundsSearchParams(string? Text = null, int Limit = 500);
 
 /// <summary>HasEventList false: the dump predates the FMOD event list, so only the species' sounds are known (run the dump again).</summary>
@@ -31,7 +34,12 @@ public sealed class SoundsMethods
     }
 
     [RpcMethod("sounds.forSpecies")]
-    public IReadOnlyList<SoundDto> ForSpecies(SoundsForSpeciesParams p) => Catalog().ForSpecies(p.Species).Select(Dto).ToList();
+    public SoundsForSpeciesResult ForSpecies(SoundsForSpeciesParams p)
+    {
+        var catalog = Catalog();
+        var id = catalog.SpeciesIdFor(p.Species);
+        return new SoundsForSpeciesResult(id, id is null ? [] : catalog.ForSpecies(id).Select(Dto).ToList(), catalog.HasEventList);
+    }
 
     [RpcMethod("sounds.search")]
     public SoundsSearchResult Search(SoundsSearchParams p)

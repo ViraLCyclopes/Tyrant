@@ -2,6 +2,8 @@
   import { onMount } from 'svelte';
   import type { SpeciesRow } from '$lib/rpc/types.gen';
   import AddSkin from '$lib/mods/AddSkin.svelte';
+  import AllSounds from '$lib/sounds/AllSounds.svelte';
+  import SpeciesSounds from '$lib/sounds/SpeciesSounds.svelte';
   import { getTab } from '$lib/shell/tab.svelte';
   import { getSession } from '$lib/stores/session.svelte';
 
@@ -11,6 +13,10 @@
   let filter = $state('');
   let lastPack = $state<string | null>(null);
   let addingTo = $state<string | null>(null);
+  /** The species whose sounds are open, or ALL for every game sound. */
+  const ALL = '__all__';
+  let soundsOf = $state<string | null>(null);
+  const soundsRow = $derived(species.find((s) => s.key === soundsOf));
   const shown = $derived(species.filter((s) => s.displayName.toLowerCase().includes(filter.trim().toLowerCase())));
 
   onMount(async () => {
@@ -35,6 +41,7 @@
 <div class="toolbar">
   <input type="search" placeholder="Find a species…" aria-label="Find a species" bind:value={filter} />
   {#if lastPack}<button onclick={() => session.platform.reveal(lastPack!)}>Show in Explorer</button>{/if}
+  <button onclick={() => (soundsOf = soundsOf === ALL ? null : ALL)}>All sounds…</button>
 </div>
 <div class="table-wrap">
   <table class="grid">
@@ -47,6 +54,7 @@
           <td>
             <button disabled={session.busy} aria-label="Export {row.displayName} pack" onclick={() => exportPack(row)}>Export pack</button>
             <button aria-label="Add a skin to {row.displayName}" onclick={() => (addingTo = addingTo === row.key ? null : row.key)}>Add a skin…</button>
+            <button aria-label="Sounds of {row.displayName}" onclick={() => (soundsOf = soundsOf === row.key ? null : row.key)}>Sounds…</button>
           </td>
         </tr>
       {:else}
@@ -56,3 +64,8 @@
   </table>
 </div>
 {#if addingTo}{#key addingTo}<AddSkin speciesKey={addingTo} />{/key}{/if}
+{#if soundsOf === ALL}
+  <AllSounds />
+{:else if soundsRow}
+  {#key soundsRow.key}<SpeciesSounds speciesKey={soundsRow.key} displayName={soundsRow.displayName} />{/key}
+{/if}

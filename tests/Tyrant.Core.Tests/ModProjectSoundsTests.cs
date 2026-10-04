@@ -53,6 +53,23 @@ public class ModProjectSoundsTests
     }
 
     [Fact]
+    public void Files_already_in_the_mod_keep_their_names_so_files_can_be_added_and_removed()
+    {
+        var (game, mod, dir) = Setup();
+        using var _ = game;
+        var first = mod.ReplaceSound(Roar, [Wav(dir, "a.wav", "one")], null, null);
+        var kept = Path.Combine(mod.Dir, first.Files[0].Replace('/', Path.DirectorySeparatorChar));
+
+        var added = mod.ReplaceSound(Roar, [kept, Wav(dir, "b.wav", "two")], null, null);
+        var removed = mod.ReplaceSound(Roar, [Path.Combine(mod.Dir, added.Files[1])], null, null);
+
+        Assert.Equal(first.Files[0], added.Files[0]);
+        Assert.Matches(@"^sounds/b-[0-9a-f]{8}\.wav$", added.Files[1]);
+        Assert.Equal([added.Files[1]], removed.Files);
+        Assert.Equal(2, Directory.GetFiles(Path.Combine(mod.Dir, "sounds")).Length);
+    }
+
+    [Fact]
     public void A_file_that_is_not_audio_is_refused()
     {
         var (game, mod, dir) = Setup();

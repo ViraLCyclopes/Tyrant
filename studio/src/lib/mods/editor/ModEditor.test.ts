@@ -34,6 +34,21 @@ describe('ModEditor', () => {
     expect(await screen.findByRole('heading', { name: 'Model: Carcharodontosaurus' })).toBeInTheDocument();
   });
 
+  it('lists sounds under Sounds with who hears them and opens their page', async () => {
+    setup(modDetail({
+      sounds: [
+        { event: 'event:/X/Vox/TheroLarge_VoxSocialCall', name: 'Social call', group: 'Calls', species: 'Carcharodontosaurus', skin: null, files: ['sounds/a.wav'], volume: 1, agePitch: 1 },
+        { event: 'event:/User Interface/UI_Click', name: 'Click', group: 'Interface', species: null, skin: null, files: ['sounds/b.ogg'], volume: 1, agePitch: 1 },
+      ],
+    }));
+
+    expect(await screen.findByText('Sounds (2)')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Click — everyone' })).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Social call — Carcharodontosaurus' }));
+
+    expect(await screen.findByRole('heading', { name: 'Sound: Social call' })).toBeInTheDocument();
+  });
+
   it('lists the mod, its skins and replacements, and names the tab after the mod', async () => {
     const { titles } = setup();
     expect(await screen.findByRole('button', { name: 'Blue-green stripes' })).toBeInTheDocument();

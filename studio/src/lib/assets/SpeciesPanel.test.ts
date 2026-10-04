@@ -19,6 +19,11 @@ function setup() {
     directory: `D:\\ws\\assets\\species\\${p.key}`, models: 3, textures: 14, failed: 0, targetsPath: `D:\\ws\\assets\\species\\${p.key}\\targets.json`,
   }));
   rpc.on('workspace.status', () => workspaceStatus({ hasAssetIndex: true }));
+  rpc.on('sounds.forSpecies', () => ({
+    speciesId: 'Carcharodontosaurus', hasEventList: true,
+    sounds: [{ event: 'event:/X/Roar', name: 'Social call', group: 'Calls', species: ['Carcharodontosaurus'], lengthMs: null, oneShot: null }],
+  }));
+  rpc.on('sounds.search', () => ({ hasEventList: true, sounds: [] }));
   const platform = new FakePlatform();
   const session = new Session(rpc, platform, memoryStore());
   session.workspace = workspaceStatus({ hasAssetIndex: true });
@@ -82,5 +87,25 @@ describe('SpeciesPanel', () => {
     await fireEvent.click(await screen.findByRole('button', { name: 'Add a skin to Carcharodontosaurus' }));
 
     expect(await screen.findByText(/Run data dump/)).toBeInTheDocument();
+  });
+
+  it("opens a species' sounds", async () => {
+    const { rpc, session } = setup();
+    renderWith(SpeciesPanel, session);
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Sounds of Carcharodontosaurus' }));
+
+    expect(await screen.findByText('Social call')).toBeInTheDocument();
+    expect(rpc.callsTo('sounds.forSpecies')[0]?.params).toEqual({ species: 'carcharodontosaurus' });
+  });
+
+  it('opens All sounds', async () => {
+    const { rpc, session } = setup();
+    renderWith(SpeciesPanel, session);
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'All sounds…' }));
+
+    expect(await screen.findByRole('searchbox', { name: 'Find a sound' })).toBeInTheDocument();
+    await waitFor(() => expect(rpc.callsTo('sounds.search')).toHaveLength(1));
   });
 });

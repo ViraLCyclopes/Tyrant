@@ -15,6 +15,13 @@ export class FakePlatform implements Platform {
     return this.files.shift() ?? null;
   }
 
+  /** Each openFiles call takes the next list (empty: cancelled). */
+  fileLists: string[][] = [];
+
+  async openFiles(): Promise<string[]> {
+    return this.fileLists.shift() ?? [];
+  }
+
   async pickFolder(): Promise<string | null> {
     return this.folders.shift() ?? null;
   }

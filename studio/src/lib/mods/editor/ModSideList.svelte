@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { ModCheckReport, ModDetail } from '$lib/rpc/types.gen';
+  import type { ModCheckReport, ModDetail, ModSoundDto } from '$lib/rpc/types.gen';
   import type { Selection } from './selection';
 
   let { detail, check, selection, onSelect, onAddSkin }:
@@ -10,6 +10,9 @@
   const isReplace = (texture: string) => selection.kind === 'replace' && selection.texture === texture;
   const isModel = (target: string) => selection.kind === 'model' && selection.skin === null && selection.target === target;
   const speciesModels = $derived(detail.models.filter((m) => m.skin === null));
+  const isSound = (s: ModSoundDto) =>
+    selection.kind === 'sound' && selection.event === s.event && selection.species === s.species && selection.skin === s.skin;
+  const whoHears = (s: ModSoundDto) => s.species ?? (s.skin ? `skin ${s.skin}` : 'everyone');
 </script>
 
 <nav class="side" aria-label="Mod contents">
@@ -39,6 +42,15 @@
     </button>
   {:else}
     <p class="empty">None.</p>
+  {/each}
+
+  <div class="heading"><span>Sounds ({detail.sounds.length})</span></div>
+  {#each detail.sounds as sound (`${sound.event}|${sound.species}|${sound.skin}`)}
+    <button class:on={isSound(sound)} title={sound.event} onclick={() => onSelect({ kind: 'sound', event: sound.event, species: sound.species, skin: sound.skin })}>
+      {sound.name} — {whoHears(sound)}
+    </button>
+  {:else}
+    <p class="empty">None. Replace sounds from a species' Sounds… on the Assets tab.</p>
   {/each}
 
   <button class="check" class:on={selection.kind === 'check'} aria-label="Check{problems ? ` (${problems} problem${problems === 1 ? '' : 's'})` : ''}" onclick={() => onSelect({ kind: 'check' })}>

@@ -115,6 +115,16 @@ public sealed class SoundCatalog
     public IReadOnlyList<SoundInfo> ForSpecies(string speciesId) =>
         _bySpecies.TryGetValue(speciesId, out var sounds) ? sounds : [];
 
+    /// <summary>The dump's species id for an id in any case or an asset key ("carcharodontosaurus"); null when unknown.</summary>
+    public string? SpeciesIdFor(string idOrKey)
+    {
+        var key = Key(idOrKey);
+        return _bySpecies.Keys.FirstOrDefault(id => string.Equals(id, idOrKey, StringComparison.OrdinalIgnoreCase))
+            ?? _bySpecies.Keys.FirstOrDefault(id => Key(id) == key);
+    }
+
+    private static string Key(string id) => new(id.ToLowerInvariant().Where(char.IsAsciiLetterOrDigit).ToArray());
+
     /// <summary>Every known sound whose path or name contains the text (all when empty), by group then name.</summary>
     public IReadOnlyList<SoundInfo> Search(string? text, int limit = 500)
     {

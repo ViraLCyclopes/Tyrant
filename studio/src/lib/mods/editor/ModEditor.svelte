@@ -12,6 +12,7 @@
   import ReplacementPage from './ReplacementPage.svelte';
   import type { Selection } from './selection';
   import SkinPage from './SkinPage.svelte';
+  import SoundPage from './SoundPage.svelte';
 
   const session = getSession();
   const tab = getTab();
@@ -84,12 +85,17 @@
     if (s.kind === 'skin' && !d.skins.some((k) => k.id === s.id)) selection = { kind: 'details' };
     if (s.kind === 'replace' && !d.replace.some((r) => r.texture === s.texture)) selection = { kind: 'details' };
     if (s.kind === 'model' && !d.models.some((m) => m.target === s.target && m.skin === s.skin)) selection = { kind: 'details' };
+    if (s.kind === 'sound' && !d.sounds.some((x) => x.event === s.event && x.species === s.species && x.skin === s.skin)) selection = { kind: 'details' };
   });
 
   const selectedSkin = $derived(selection.kind === 'skin' ? doc.detail?.skins.find((k) => k.id === (selection as { id: string }).id) : undefined);
   const selectedModel = $derived.by(() => {
     const s = selection;
     return s.kind === 'model' ? doc.detail?.models.find((m) => m.target === s.target && m.skin === s.skin) : undefined;
+  });
+  const selectedSound = $derived.by(() => {
+    const s = selection;
+    return s.kind === 'sound' ? doc.detail?.sounds.find((x) => x.event === s.event && x.species === s.species && x.skin === s.skin) : undefined;
   });
   const selectedReplacement = $derived(
     selection.kind === 'replace' ? doc.detail?.replace.find((r) => r.texture === (selection as { texture: string }).texture) : undefined,
@@ -110,6 +116,13 @@
         <SkinPage {doc} skin={selectedSkin} onOpenModel={(target, skin) => (selection = { kind: 'model', target, skin })} />
       {:else if selectedModel}
         <ModelPage {doc} model={selectedModel} onRemoved={() => (selection = { kind: 'details' })} />
+      {:else if selectedSound}
+        <SoundPage
+          {doc}
+          sound={selectedSound}
+          onRemoved={() => (selection = { kind: 'details' })}
+          onScopeChanged={(species, skin) => (selection = { kind: 'sound', event: selectedSound.event, species, skin })}
+        />
       {:else if selectedReplacement}
         <ReplacementPage {doc} replacement={selectedReplacement} onRemoved={() => (selection = { kind: 'details' })} />
       {:else if selection.kind === 'check'}
