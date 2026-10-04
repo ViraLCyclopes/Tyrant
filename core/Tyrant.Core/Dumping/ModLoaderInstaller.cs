@@ -74,16 +74,36 @@ public sealed class ModLoaderInstaller(string expectedSha256 = ModLoaderInstalle
     public static bool HasFramework(GameInstall install) =>
         File.Exists(Path.Combine(install.RootDir, "Mods", FrameworkFile)) && File.Exists(Path.Combine(RecordDir(install), RecordFile));
 
+    /// <summary>The framework's files in componentDir and where each goes in the game: the mod in Mods/, its libraries in UserLibs/.</summary>
+    public static IReadOnlyList<(string Source, string Relative)> FrameworkLayout(string componentDir) =>
+        (Directory.Exists(componentDir) ? Directory.GetFiles(componentDir, "Tyrant.Framework*.dll") : [])
+            .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
+            .Select(f => (f, (MelonModFiles.Contains(Path.GetFileName(f)) ? "Mods/" : "UserLibs/") + Path.GetFileName(f)))
+            .ToList();
+
+    /// <summary>The framework version in the game ("0.3.0"), from its DLL's file version; null when missing or unversioned.</summary>
+    public static string? InstalledFrameworkVersion(GameInstall install) => FileVersion(Path.Combine(install.RootDir, "Mods", FrameworkFile));
+
+    /// <summary>MelonLoader's version in the game, when its DLL says.</summary>
+    public static string? LoaderVersionInGame(GameInstall install) =>
+        FileVersion(Path.Combine(install.RootDir, "MelonLoader", "net6", "MelonLoader.dll"))
+        ?? FileVersion(Path.Combine(install.RootDir, "MelonLoader", "net35", "MelonLoader.dll"));
+
+    private static string? FileVersion(string path)
+    {
+        if (!File.Exists(path)) return null;
+        var info = System.Diagnostics.FileVersionInfo.GetVersionInfo(path);
+        return info.FileVersion is null ? null : $"{info.FileMajorPart}.{info.FileMinorPart}.{info.FileBuildPart}";
+    }
+
     /// <summary>Compares the framework DLLs Tyrant ships (componentDir) with the game's, by SHA-256.</summary>
     public static FrameworkState FrameworkStatus(GameInstall install, string componentDir)
     {
         if (!HasFramework(install)) return FrameworkState.Missing;
-        var shipped = Directory.Exists(componentDir) ? Directory.GetFiles(componentDir, "Tyrant.Framework*.dll") : [];
-        foreach (var file in shipped)
+        foreach (var (source, relative) in FrameworkLayout(componentDir))
         {
-            var name = Path.GetFileName(file);
-            var installed = Path.Combine(install.RootDir, MelonModFiles.Contains(name) ? "Mods" : "UserLibs", name);
-            if (!File.Exists(installed) || HashOf(installed) != HashOf(file)) return FrameworkState.Outdated;
+            var installed = Path.Combine(install.RootDir, relative);
+            if (!File.Exists(installed) || HashOf(installed) != HashOf(source)) return FrameworkState.Outdated;
         }
         return FrameworkState.Current;
     }
