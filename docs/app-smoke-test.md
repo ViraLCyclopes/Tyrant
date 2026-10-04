@@ -133,6 +133,12 @@ Release build: `npm run build:app`, install `studio/src-tauri/target/release/bun
 70. **(game)** Delete one of the mod's sound files from `<game>\UserData\Tyrant\Mods\<id>\sounds\`, start the game: that sound
     plays the game's original and `Latest.log` says which file could not be opened; Tyrant's Check on the workspace copy is
     still clean (the workspace file is there).
+71. **(game)** The Allosaurus Anax mod with no chance set (Like the game): its replaced growls come about a third less often
+    than with framework 0.4.0, and a far-away Anax stays quiet.
+72. **(game)** The growl's page → **My own chance** at 20%: the Anax growls noticeably less; at 100% every growl the game
+    starts plays one of your files.
+73. **(game)** A chance on a looping sound (a breathing replacement): it still loops while the animal breathes, and Check warns
+    that a chance is only for one-off sounds.
 
 **Shell (tabs, log, preferences):**
 

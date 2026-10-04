@@ -162,6 +162,7 @@ Needs Tyrant Framework 0.4.0 or newer (Tyrant writes `requires.tyrant` for you w
 | `files` | One or more audio files in the mod: WAV, OGG, MP3 or FLAC (Tyrant checks the contents, not the name). With several, one is picked at random each time, never the same one twice in a row. |
 | `volume` | 0–2; 1 (the default) plays the file as it is. |
 | `agePitch` | 0–1; how much higher babies play the sound, following the animal's age (1, the default: a newborn plays half again as high; 0: like adults). Interface sounds and music ignore it. |
+| `chance` | 0–1, optional (framework 0.5.0). Left out, the sound follows the game (below). Set, each time the game starts the sound it plays with this chance instead (0.3 = about one time in three). For one-off sounds only; looping sounds always follow the game. |
 
 - **Which sound plays:** the animal's skin's replacement, else its species', else the one for everyone, else the game's
   own. Within one level, the later mod in the load order wins. Many animals share sounds (every large theropod uses the
@@ -172,6 +173,10 @@ Needs Tyrant Framework 0.4.0 or newer (Tyrant writes `requires.tyrant` for you w
 - **How it plays:** the game's sound is silenced and the file plays in its place, at the animal and in the game's own
   mixer, so the Sounds and Music sliders apply. A looping sound (breathing) loops the file until the game stops it; a
   one-shot plays the file to its end.
+- **It follows the game:** the game's own sounds have chances built in (a growl is often a silent turn, about a third of
+  the time for the large theropods) and can wait before playing. Tyrant keeps the game's sound running, silenced, and plays
+  your file at the moment it really plays a sound, so those chances and that timing stay. An animal too far away to be heard
+  stays silent too. With `chance`, your own chance replaces the game's.
 - **When a file is missing or not audio:** Check and Install say so; in the game the original sound plays and the log
   says which file could not be opened.
 - **Big files:** the game loads each file into memory; over 20 MB is a warning. OGG keeps files small.
