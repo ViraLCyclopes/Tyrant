@@ -53,6 +53,11 @@ public static class CliApp
                 assets.AddCommand<AssetsExportModelCommand>("export-model")
                     .WithDescription("Export a prefab's meshes (with skeleton and blend shapes) to <workspace>/assets/models as .glb.");
             });
+            config.AddBranch("sounds", sounds =>
+            {
+                sounds.SetDescription("The game's sounds, for sound replacements (needs the data dump).");
+                sounds.AddCommand<SoundsListCommand>("list").WithDescription("List a species' sounds, or search every game sound.");
+            });
             config.AddBranch("species", species =>
             {
                 species.SetDescription("List species and export a species pack.");
@@ -83,11 +88,14 @@ public static class CliApp
 
             config.AddBranch("mod", mod =>
             {
-                mod.SetDescription("Make, check and install mods: texture replacements and new skins.");
+                mod.SetDescription("Make, check and install mods: texture, model and sound replacements and new skins.");
                 mod.AddCommand<ModNewCommand>("new").WithDescription("Create a mod in the workspace (mods/<id>).");
                 mod.AddCommand<ModReplaceCommand>("replace").WithDescription("Replace a game texture with your PNG in a mod.");
                 mod.AddCommand<ModReplaceModelCommand>("replace-model").WithDescription("Replace a species' model (or give a skin its own) with your .glb from Blender.");
                 mod.AddCommand<ModRemoveModelCommand>("remove-model").WithDescription("Stop replacing a species' model, or make a skin use the species model again.");
+                mod.AddCommand<ModReplaceSoundCommand>("replace-sound").WithDescription("Replace a game sound (for everyone, one species or one skin) with your audio files.");
+                mod.AddCommand<ModSetSoundCommand>("set-sound").WithDescription("Change a sound replacement's volume, age pitch or who hears it.");
+                mod.AddCommand<ModRemoveSoundCommand>("remove-sound").WithDescription("Stop replacing a game sound.");
                 mod.AddCommand<ModRebuildModelsCommand>("rebuild-models").WithDescription("Rebuild a mod's models and their levels of detail.");
                 mod.AddCommand<ModCheckCommand>("check").WithDescription("Check a mod's files and targets before installing it.");
                 mod.AddCommand<ModRestoreCutoutsCommand>("restore-cutouts").WithDescription("Copy the see-through parts (feathers, hair) of the vanilla textures back into colour PNGs that lost them.");

@@ -19,7 +19,7 @@ public sealed partial class ModsMethods
         {
             progress.Report(new JobProgress(0.1, $"Checking {p.Id}"));
             RebuildStaleModels(ws, install, mod);
-            var check = ModChecker.ForGame(install).Check(mod, TryIndex(ws), mod.Manifest.Skins.Count > 0 ? TrySpecies(ws) : null);
+            var check = CheckMod(ws, install, mod);
             if (!check.Ok)
                 throw new TyrantException(TyrantErrorCode.ModInvalid, $"'{p.Id}' has problems, so it was not exported: {string.Join(" ", check.Errors)}");
             progress.Report(new JobProgress(0.6, $"Writing {p.Id}'s zip"));
@@ -34,7 +34,7 @@ public sealed partial class ModsMethods
     {
         var (ws, install) = session.Current();
         var mod = ModSharing.Import(ws, p.File, p.Replace);
-        var check = ModChecker.ForGame(install).Check(mod, TryIndex(ws), mod.Manifest.Skins.Count > 0 ? TrySpecies(ws) : null);
+        var check = CheckMod(ws, install, mod);
         session.Log($"Imported '{mod.Id}' from {Path.GetFileName(p.File)}.");
         return new ModImportResult(mod.Id, check.Errors.Concat(check.Warnings).ToList(), ListOf(ws, install));
     }

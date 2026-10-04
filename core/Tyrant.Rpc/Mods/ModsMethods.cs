@@ -49,7 +49,7 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
         var (ws, install) = session.Current();
         var checkedMod = ModProject.Open(ws, p.Id);
         RebuildStaleModels(ws, install, checkedMod);
-        var result = ModChecker.ForGame(install).Check(checkedMod, TryIndex(ws), checkedMod.Manifest.Skins.Count > 0 ? TrySpecies(ws) : null);
+        var result = CheckMod(ws, install, checkedMod);
         return new ModCheckReport(result.Errors, result.Warnings, result.MissingCutouts);
     }
 
@@ -73,7 +73,7 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
         {
             progress.Report(new JobProgress(0.05, $"Checking {p.Id}"));
             RebuildStaleModels(ws, install, mod);
-            var check = ModChecker.ForGame(install).Check(mod, TryIndex(ws), mod.Manifest.Skins.Count > 0 ? TrySpecies(ws) : null);
+            var check = CheckMod(ws, install, mod);
             if (!check.Ok)
                 throw new TyrantException(TyrantErrorCode.ModInvalid, $"'{p.Id}' has problems, so it was not installed: {string.Join(" ", check.Errors)}");
             if (ModLoaderInstaller.FrameworkStatus(install, Options.DumperDir) != FrameworkState.Current)
@@ -356,7 +356,8 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
             }).ToList(),
             m.Models.Select(x => ModelDto(mod, x.Target, null, x.File))
                 .Concat(m.Skins.Where(s => s.Model is not null).Select(s => ModelDto(mod, s.Species, s.Id, s.Model!)))
-                .ToList());
+                .ToList(),
+            m.Sounds.Select(SoundDto).ToList());
     }
 
     /// <summary>Game build + species → the slots its shader uses (null: unknown). Reading a prefab costs a bundle load, so it is cached.</summary>

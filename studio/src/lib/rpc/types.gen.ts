@@ -411,6 +411,7 @@ export interface ModDetail {
   replace: ModReplacementDto[];
   skins: ModSkinDto[];
   models: ModModelDto[];
+  sounds: ModSoundDto[];
 }
 
 export interface ModEnableParams {
@@ -517,6 +518,14 @@ export interface ModRemoveSkinParams {
   deleteFiles?: boolean;
 }
 
+export interface ModRemoveSoundParams {
+  id: string;
+  revision: string;
+  event: string;
+  species?: string | null;
+  skin?: string | null;
+}
+
 export interface ModRenameSkinParams {
   id: string;
   revision: string;
@@ -537,6 +546,17 @@ export interface ModReplaceParams {
   id: string;
   texture: string;
   png?: string | null;
+}
+
+export interface ModReplaceSoundParams {
+  id: string;
+  event: string;
+  files: string[];
+  revision?: string | null;
+  species?: string | null;
+  skin?: string | null;
+  volume?: number | null;
+  agePitch?: number | null;
 }
 
 export interface ModReplacementDto {
@@ -615,6 +635,19 @@ export interface ModSetSkinFileParams {
   png?: string | null;
 }
 
+export interface ModSetSoundParams {
+  id: string;
+  revision: string;
+  event: string;
+  species?: string | null;
+  skin?: string | null;
+  volume?: number | null;
+  agePitch?: number | null;
+  newSpecies?: string | null;
+  newSkin?: string | null;
+  forEveryone?: boolean | null;
+}
+
 export interface ModSetThumbnailParams {
   id: string;
   revision: string;
@@ -646,6 +679,17 @@ export interface ModSkinModelParams {
   id: string;
   skin: string;
   sex?: string;
+}
+
+export interface ModSoundDto {
+  event: string;
+  name: string;
+  group: string;
+  species: string | null;
+  skin: string | null;
+  files: string[];
+  volume: number;
+  agePitch: number;
 }
 
 export interface ModSpeciesResult {
@@ -737,6 +781,29 @@ export interface RpcErrorObject {
 
 export interface SkinSlotsResult {
   orphans: OrphanSkinRow[];
+}
+
+export interface SoundDto {
+  event: string;
+  name: string;
+  group: string;
+  species: string[];
+  lengthMs: number | null;
+  oneShot: boolean | null;
+}
+
+export interface SoundsForSpeciesParams {
+  species: string;
+}
+
+export interface SoundsSearchParams {
+  text?: string | null;
+  limit?: number;
+}
+
+export interface SoundsSearchResult {
+  sounds: SoundDto[];
+  hasEventList: boolean;
 }
 
 export interface SpeciesListResult {
@@ -847,20 +914,25 @@ export interface RpcMethods {
   "mods.removeModel": { params: ModRemoveModelParams; result: ModDetail };
   "mods.removeReplacement": { params: ModRemoveReplacementParams; result: ModDetail };
   "mods.removeSkin": { params: ModRemoveSkinParams; result: ModDetail };
+  "mods.removeSound": { params: ModRemoveSoundParams; result: ModDetail };
   "mods.renameSkin": { params: ModRenameSkinParams; result: ModDetail };
   "mods.replace": { params: ModReplaceParams; result: ModsListResult };
   "mods.replaceModel": { params: ModReplaceModelParams; result: ModDetail };
+  "mods.replaceSound": { params: ModReplaceSoundParams; result: ModDetail };
   "mods.restoreCutouts": { params: ModIdParams; result: ModRestoreCutoutsResult };
   "mods.sampleColors": { params: ModSampleColorsParams; result: ModSampledColors };
   "mods.saveManifest": { params: ModSaveManifestParams; result: ModDetail };
   "mods.setColors": { params: ModSetColorsParams; result: ModDetail };
   "mods.setDetails": { params: ModSetDetailsParams; result: ModDetail };
   "mods.setSkinFile": { params: ModSetSkinFileParams; result: ModDetail };
+  "mods.setSound": { params: ModSetSoundParams; result: ModDetail };
   "mods.setThumbnail": { params: ModSetThumbnailParams; result: ModDetail };
   "mods.skinModel": { params: ModSkinModelParams; result: ModSkinModel };
   "mods.skinSlots": { params: void; result: SkinSlotsResult };
   "mods.species": { params: void; result: ModSpeciesResult };
   "mods.thumbnail": { params: ModThumbnailParams; result: ModThumbnailResult };
+  "sounds.forSpecies": { params: SoundsForSpeciesParams; result: SoundDto[] };
+  "sounds.search": { params: SoundsSearchParams; result: SoundsSearchResult };
   "species.list": { params: void; result: SpeciesListResult };
   "species.pack": { params: SpeciesPackParams; result: JobStarted };
   "workspace.create": { params: WorkspaceOpenParams; result: WorkspaceStatus };

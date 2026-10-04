@@ -24,6 +24,7 @@ public static class RpcHost
         server.Register(new DataMethods(session));
         server.Register(new AssetsMethods(session, jobs));
         server.Register(new ModsMethods(session, jobs));
+        server.Register(new Sounds.SoundsMethods(session));
         return (server, jobs);
     }
 

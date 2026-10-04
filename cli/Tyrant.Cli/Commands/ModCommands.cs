@@ -54,9 +54,25 @@ internal static class ModCli
     }
 
     /// <summary>Prints a check; returns false when it has errors.</summary>
-    /// <summary>Check as 'tyrant mod check' and the app's Mods tab do it: the asset index and, for skins, the data dump when present.</summary>
-    public static ModCheckResult Check(Workspace ws, GameInstall install, ModProject mod) =>
-        ModChecker.ForGame(install).Check(mod, TryIndex(ws), mod.Manifest.Skins.Count > 0 ? TrySpecies(ws) : null);
+    /// <summary>Check as 'tyrant mod check' and the app's Mods tab do it: the asset index and, for skins and sounds, the data dump when present.</summary>
+    public static ModCheckResult Check(Workspace ws, GameInstall install, ModProject mod)
+    {
+        var m = mod.Manifest;
+        return ModChecker.ForGame(install).Check(mod, TryIndex(ws), m.Skins.Count > 0 || m.Sounds.Count > 0 ? TrySpecies(ws) : null,
+            m.Sounds.Count > 0 ? TrySounds(ws) : null);
+    }
+
+    public static Tyrant.Core.Sounds.SoundCatalog? TrySounds(Workspace ws)
+    {
+        try
+        {
+            return Tyrant.Core.Sounds.SoundCatalog.Load(ws);
+        }
+        catch (TyrantException)
+        {
+            return null;
+        }
+    }
 
     public static bool Print(ModCheckResult result)
     {
@@ -158,7 +174,7 @@ public sealed class ModInstallCommand : Command<ModInstallCommand.Settings>
         var (ws, install) = CliServices.OpenWorkspace(settings);
         var mod = ModProject.Open(ws, settings.Id);
         ModCli.RebuildStaleModels(ws, install, mod);
-        if (!ModCli.Print(ModChecker.ForGame(install).Check(mod, ModCli.TryIndex(ws), mod.Manifest.Skins.Count > 0 ? ModCli.TrySpecies(ws) : null)))
+        if (!ModCli.Print(ModCli.Check(ws, install, mod)))
         {
             Console.WriteLine("Fix the errors above, then install again.");
             return ExitCodes.Error;

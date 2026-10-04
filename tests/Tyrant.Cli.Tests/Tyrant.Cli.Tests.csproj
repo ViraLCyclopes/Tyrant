@@ -15,6 +15,7 @@
     <Compile Include="..\Tyrant.Core.Tests\ModelFixture.cs" Link="ModelFixture.cs" />
     <Compile Include="..\Tyrant.Core.Tests\FakeAssetReader.cs" Link="FakeAssetReader.cs" />
     <Compile Include="..\Tyrant.Core.Tests\SkinDumps.cs" Link="SkinDumps.cs" />
+    <Compile Include="..\Tyrant.Core.Tests\SoundDumps.cs" Link="SoundDumps.cs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />

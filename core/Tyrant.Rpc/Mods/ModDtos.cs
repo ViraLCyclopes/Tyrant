@@ -82,7 +82,21 @@ public sealed record ModReplacementDto(string Texture, string? Key, string? Guid
 
 /// <summary>A whole mod for the editor. Revision: SHA-256 of mod.json, sent back with every change; ManifestJson: the file itself (undo).</summary>
 public sealed record ModDetail(string Id, string Name, string Version, string? Author, string? Description, string Dir, string Revision,
-    string ManifestJson, IReadOnlyList<ModReplacementDto> Replace, IReadOnlyList<ModSkinDto> Skins, IReadOnlyList<ModModelDto> Models);
+    string ManifestJson, IReadOnlyList<ModReplacementDto> Replace, IReadOnlyList<ModSkinDto> Skins, IReadOnlyList<ModModelDto> Models,
+    IReadOnlyList<ModSoundDto> Sounds);
+
+/// <summary>A sound replacement: Species or Skin set = only that species or skin hears it; neither = everyone.</summary>
+public sealed record ModSoundDto(string Event, string Name, string Group, string? Species, string? Skin, IReadOnlyList<string> Files, double Volume, double AgePitch);
+
+/// <summary>Revision is null from the species panel (no editor open). Files are audio files anywhere; they are copied into the mod.</summary>
+public sealed record ModReplaceSoundParams(string Id, string Event, IReadOnlyList<string> Files, string? Revision = null, string? Species = null,
+    string? Skin = null, double? Volume = null, double? AgePitch = null);
+
+public sealed record ModRemoveSoundParams(string Id, string Revision, string Event, string? Species = null, string? Skin = null);
+
+/// <summary>Species/Skin pick the replacement; NewSpecies, NewSkin or ForEveryone move it to another scope.</summary>
+public sealed record ModSetSoundParams(string Id, string Revision, string Event, string? Species = null, string? Skin = null, double? Volume = null,
+    double? AgePitch = null, string? NewSpecies = null, string? NewSkin = null, bool? ForEveryone = null);
 
 public sealed record ModSetDetailsParams(string Id, string Revision, string Name, string Version, string? Author = null, string? Description = null);
 

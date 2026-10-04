@@ -25,6 +25,8 @@ public sealed class ModShowCommand : Command<ModSettings>
         }
         Console.WriteLine($"Models ({m.Models.Count}):");
         foreach (var model in m.Models) Console.WriteLine($"  {model.Target} <- {model.File}");
+        Console.WriteLine($"Sounds ({m.Sounds.Count}):");
+        foreach (var sound in m.Sounds) Console.WriteLine(SoundCli.Line(sound));
         return ExitCodes.Ok;
     }
 }

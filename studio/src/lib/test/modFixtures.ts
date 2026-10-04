@@ -23,6 +23,7 @@ export function modDetail(over: Partial<ModDetail> = {}): ModDetail {
       },
     ],
     models: [],
+    sounds: [],
     ...over,
   };
 }
