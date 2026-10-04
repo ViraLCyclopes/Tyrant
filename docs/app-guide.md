@@ -99,7 +99,7 @@ files that changed; again after a game update).
   2. Click **Replace in a mod…** on that texture (an animal's, or any object's: fences, buildings, scenery): pick a mod (or **New mod…**), leave **Your PNG** empty to use your edited export (or **Browse…**), then **Add to mod**.
 - **Replace a model:**
   1. Assets tab → the animal's prefab (GameObject) → **Export selected**, and open the LOD00 `.glb` in Blender (for plain bones see the export notes in the Assets section).
-  2. Reshape or replace the mesh; keep the armature, its bone names, the two growth shape keys and the material names. Reshape the Basis in Edit Mode: the growth keys follow it, so do not repeat the change on them. File → Export → glTF 2.0 (.glb).
+  2. Reshape or replace the mesh; keep the armature, its bone names, the two growth shape keys and the material names. Sculpt or edit with the Basis selected in Shape Keys: the growth keys follow it, so do not repeat the change on them. Do not use Voxel Remesh (it deletes the shape keys). File → Export → glTF 2.0 (.glb).
   3. Assets tab → the prefab → **Replace model in a mod…** → pick a mod (or **New mod…**) → **Browse…** your `.glb` → **Add to mod**. Tyrant checks it, builds its levels of detail and adds it. For one skin only, use the skin's **Model** row in the mod editor.
   4. CLI: `tyrant mod replace-model <mod> <species> <file.glb> [--skin <id>]`, `tyrant mod remove-model`, `tyrant mod rebuild-models`.
 - **Edit a mod:** **Open** a mod in the Mods tab (a new mod opens by itself) to edit it in its own tab.

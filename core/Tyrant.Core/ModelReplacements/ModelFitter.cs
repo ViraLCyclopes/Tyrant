@@ -64,9 +64,9 @@ public static class ModelFitter
             {
                 shapes.Add(shape);
                 if (s < GrowthKeys && MeanDelta(shape) > MeanDelta(game.Mesh.BlendShapes[s]) * GrowthDeltaFactor + 1e-4f)
-                    warnings.Add($"Shape key '{name}' moves the mesh much more than the game's, so the young animal will look misshapen. Reshape only the Basis, in Edit Mode: the growth keys follow it. If you also made the change on the growth keys, it was applied twice; if you reshaped outside Edit Mode, the keys did not follow.");
+                    warnings.Add($"Shape key '{name}' moves the mesh much more than the game's, so the young animal will look misshapen. Sculpt or edit (Sculpt Mode or Edit Mode) with the Basis selected in Shape Keys and the growth keys follow it; if you also made the change with a growth key selected, it was applied twice.");
             }
-            else if (s < GrowthKeys) errors.Add($"Shape key '{name}' is missing; the game uses it for growth (baby to adult). Keep the shape keys from Tyrant's export.");
+            else if (s < GrowthKeys) errors.Add($"Shape key '{name}' is missing; the game uses it for growth (baby to adult). Keep the shape keys from Tyrant's export (Blender's Voxel Remesh deletes them, so reshape without it).");
             else shapes.Add(new BlendShape(name, [], [], []));
         }
         var dropped = byName.Keys.Except(game.Mesh.BlendShapes.Select(s => s.Name), StringComparer.Ordinal).ToList();

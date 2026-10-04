@@ -94,8 +94,8 @@ Release build: `npm run build:app`, install `studio/src-tauri/target/release/bun
     both; **Infant** shows the infant textures; switching to another tab and back keeps the view (it paused while hidden).
 50. In a test workspace without `data\`, open the mod editor's Colours: the 3D area says to Run data dump; the 2D strip
     still draws.
-51. Assets → Carcharodontosaurus prefab → **Export selected** → open the LOD00 .glb in Blender 5.2 (plain bones) → scale the head up in
-    Edit Mode with the Basis selected (the growth keys follow; do not edit them) → File → Export → glTF 2.0 (.glb).
+51. Assets → Carcharodontosaurus prefab → **Export selected** → open the LOD00 .glb in Blender 5.2 (plain bones) → sculpt the head bigger in
+    Sculpt Mode with the Basis selected in Shape Keys (the growth keys follow; do not sculpt them) → File → Export → glTF 2.0 (.glb).
 52. Assets → the prefab → **Replace model in a mod…** → new mod `big-head-carch` → Browse… your .glb → **Add to mod**: the notice names
     3 LODs. Mods → open it: Models → Carcharodontosaurus shows the big head; LOD 1 and LOD 2 show simpler versions; the numbers sit near
     the game's.

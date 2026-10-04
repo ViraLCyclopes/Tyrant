@@ -66,7 +66,7 @@ public class ModelFitterTests
     {
         var fit = ModelFitter.Fit(Imported(shapes: []), Game, ["Carch"]);
 
-        Assert.Contains(fit.Errors, e => e.Contains("Infant") && e.Contains("growth"));
+        Assert.Contains(fit.Errors, e => e.Contains("Infant") && e.Contains("growth") && e.Contains("Voxel Remesh"));
     }
 
     [Fact]
@@ -89,7 +89,8 @@ public class ModelFitterTests
         var fit = ModelFitter.Fit(Imported(shapes: stale), Game, ["Carch"]);
 
         Assert.NotNull(fit.Mesh);
-        Assert.Contains(fit.Warnings, w => w.Contains("Infant") && w.Contains("applied twice") && w.Contains("Edit Mode"));
+        Assert.Contains(fit.Warnings, w => w.Contains("Infant") && w.Contains("applied twice") && w.Contains("Sculpt Mode") && w.Contains("Basis selected"));
+        Assert.DoesNotContain(fit.Warnings, w => w.Contains("outside Edit Mode"));
         Assert.DoesNotContain(fit.Warnings, w => w.Contains("reshape the growth keys too"));
     }
 

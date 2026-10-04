@@ -112,8 +112,8 @@
     <button onclick={remove}>Remove</button>
   </div>
   <p class="hint">
-    Made in Blender from Tyrant's export: keep the armature, its bone names and the growth shape keys. Reshape the Basis in Edit Mode and the
-    growth keys follow it; do not repeat the change on them. Name extra meshes …_LOD1 / …_LOD2 to use your own levels of detail; otherwise
+    Made in Blender from Tyrant's export: keep the armature, its bone names and the growth shape keys. Sculpt or edit with the Basis selected
+    in Shape Keys and the growth keys follow it; do not repeat the change on them, and do not use Voxel Remesh (it deletes them). Name extra meshes …_LOD1 / …_LOD2 to use your own levels of detail; otherwise
     Tyrant makes them.
   </p>
 </section>
