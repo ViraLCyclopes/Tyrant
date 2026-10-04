@@ -142,7 +142,7 @@ and on a skin: `"model": "models/carcharodontosaurus-spiked-5e6f7a8b.glb"`.
 
 ## Sounds (replacing game sounds)
 
-Needs Tyrant Framework 0.4.0 or newer (Tyrant writes `requires.tyrant` for you when it exports the mod).
+Needs Tyrant Framework 0.1.0 or newer (Tyrant writes `requires.tyrant` for you when it exports the mod).
 
 ```json
 "sounds": [
@@ -162,7 +162,7 @@ Needs Tyrant Framework 0.4.0 or newer (Tyrant writes `requires.tyrant` for you w
 | `files` | One or more audio files in the mod: WAV, OGG, MP3 or FLAC (Tyrant checks the contents, not the name). With several, one is picked at random each time, never the same one twice in a row. |
 | `volume` | 0–2; 1 (the default) plays the file as it is. |
 | `agePitch` | 0–1; how much higher babies play the sound, following the animal's age (1, the default: a newborn plays half again as high; 0: like adults). Interface sounds and music ignore it. |
-| `chance` | 0–1, optional (framework 0.5.0). Left out, the sound follows the game (below). Set, each time the game starts the sound it plays with this chance instead (0.3 = about one time in three). For one-off sounds only; looping sounds always follow the game. |
+| `chance` | 0–1, optional. Left out, the sound follows the game (below). Set, each time the game starts the sound it plays with this chance instead (0.3 = about one time in three). For one-off sounds only; looping sounds always follow the game. |
 
 - **Which sound plays:** the animal's skin's replacement, else its species', else the one for everyone, else the game's
   own. Within one level, the later mod in the load order wins. Many animals share sounds (every large theropod uses the

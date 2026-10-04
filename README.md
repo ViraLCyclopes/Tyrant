@@ -9,8 +9,9 @@ game** puts the game back to vanilla. Nothing from the game is redistributed; ev
 
 ## Download
 
-Get the latest **Setup** from [GitHub Releases](https://github.com/ViraLCyclopes/Tyrant/releases) and run it (no admin
-rights needed). Windows may warn that the publisher is unknown (Tyrant is not code-signed): click **More info → Run
+Get the latest **Setup** from [GitHub Releases](https://github.com/ViraLCyclopes/Tyrant/releases) or
+[Nexus Mods](https://www.nexusmods.com/prehistorickingdom/mods/24) and run it (no admin rights needed). Tyrant updates itself
+from GitHub, wherever you downloaded it. Windows may warn that the publisher is unknown (Tyrant is not code-signed): click **More info → Run
 anyway**.
 
 ## Start in three steps

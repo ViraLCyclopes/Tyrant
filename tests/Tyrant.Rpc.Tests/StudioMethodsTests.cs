@@ -153,7 +153,7 @@ public class StudioMethodsTests
     }
 
     [Fact]
-    public async Task The_nexus_check_does_nothing_until_tyrants_page_is_set()
+    public async Task The_nexus_check_asks_tyrants_page_and_reports_being_offline()
     {
         using var game = new FakeGame();
         var network = new NoNetwork();
@@ -161,9 +161,10 @@ public class StudioMethodsTests
 
         var nexus = await harness.Call("app.checkNexus");
 
+        Assert.Equal(1, network.Calls);
         Assert.Equal(System.Text.Json.JsonValueKind.Null, nexus.GetProperty("version").ValueKind);
-        Assert.Equal(System.Text.Json.JsonValueKind.Null, nexus.GetProperty("error").ValueKind);
-        Assert.Equal(0, network.Calls);
+        Assert.Equal("https://www.nexusmods.com/prehistorickingdom/mods/24", nexus.GetProperty("url").GetString());
+        Assert.NotEqual(System.Text.Json.JsonValueKind.Null, nexus.GetProperty("error").ValueKind);
     }
 
     [Fact]

@@ -105,7 +105,7 @@ Release build: `npm run build:app`, install `studio/src-tauri/target/release/bun
     model; switching an animal back to another skin puts that skin's model (or the game's) back.
 55. Export the .glb from step 51 again from Blender: the model's page says it changed since you added it; **Re-import** brings in the
     new version (Ctrl+Z goes back).
-56. Workspace → Tyrant in the game shows "Framework: 0.4.0 in the game · 0.4.0 in this Tyrant" and MelonLoader's version.
+56. Workspace → Tyrant in the game shows "Framework: 0.1.0 in the game · 0.1.0 in this Tyrant" and MelonLoader's version.
 57. Mod editor → Mod → **Export for sharing…** on a skin mod: the zip holds `UserData\Tyrant\Mods\<id>\…` and `README.txt`;
     older model builds are not inside.
 58. In a second workspace: Mods → **Add mod from zip…** → the mod appears; doing it again asks to replace it.
@@ -134,7 +134,7 @@ Release build: `npm run build:app`, install `studio/src-tauri/target/release/bun
     plays the game's original and `Latest.log` says which file could not be opened; Tyrant's Check on the workspace copy is
     still clean (the workspace file is there).
 71. **(game)** The Allosaurus Anax mod with no chance set (Like the game): its replaced growls come about a third less often
-    than with framework 0.4.0, and a far-away Anax stays quiet.
+    than if every growl the game starts played a file, and a far-away Anax stays quiet.
 72. **(game)** The growl's page → **My own chance** at 20%: the Anax growls noticeably less; at 100% every growl the game
     starts plays one of your files.
 73. **(game)** A chance on a looping sound (a breathing replacement): it still loops while the animal breathes, and Check warns

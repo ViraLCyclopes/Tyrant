@@ -6,7 +6,7 @@ using Tyrant.Core.Errors;
 
 namespace Tyrant.Core.Updates;
 
-/// <summary>Where Tyrant's releases live: GitHub installs, Nexus only notifies (its page id is set once the page exists).</summary>
+/// <summary>Where Tyrant's releases live: GitHub installs, Nexus only notifies.</summary>
 public static class UpdateSources
 {
     public const string GitHubRepo = "ViraLCyclopes/Tyrant";
@@ -14,8 +14,8 @@ public static class UpdateSources
     public const int NexusGameId = 2097;
     public const string NexusGameDomain = "prehistorickingdom";
 
-    /// <summary>Tyrant's mod id on Nexus; null until the page exists (then the Nexus check turns on).</summary>
-    public static readonly int? NexusModId = null;
+    /// <summary>Tyrant's mod id on Nexus (https://www.nexusmods.com/prehistorickingdom/mods/24); null turns the Nexus check off.</summary>
+    public static readonly int? NexusModId = 24;
 
     public static string NexusPage(int modId) => $"https://www.nexusmods.com/{NexusGameDomain}/mods/{modId}";
 }

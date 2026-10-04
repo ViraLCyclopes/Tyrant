@@ -81,9 +81,9 @@ public class SkinsManifestTests
     }
 
     [Fact]
-    public void The_framework_version_is_0_5_0()
+    public void The_framework_version_is_0_1_0()
     {
-        Assert.Equal("0.5.0", FrameworkInfo.Version);
+        Assert.Equal("0.1.0", FrameworkInfo.Version);
     }
 
     private const string OneBadSkin = """
