@@ -40,6 +40,23 @@ public class MaterialResolverTests
         Assert.Equal((Detail, "_MainTex", Normal), (resolved.BaseColor, resolved.BaseColorSlot, resolved.Normal));
     }
 
+    [Theory]
+    [InlineData("_DiffuseTex", "_NormalTex")] // fences, paths and buildings (built-in files)
+    [InlineData("_Albedo", "_Normals")]       // scenery
+    [InlineData("_DiffuseMap", "_NormalMap")]
+    public void The_games_scenery_shaders_give_the_picture_and_the_normal_map(string baseSlot, string normalSlot)
+    {
+        var material = new MaterialModel("AridClayFence_Mat", [
+            new TextureSlot("_MixTex", null, 5),
+            new TextureSlot(normalSlot, "archive:/CAB-tex/CAB-tex", 18),
+            new TextureSlot(baseSlot, "archive:/CAB-tex/CAB-tex", 17),
+        ]);
+
+        var resolved = MaterialResolver.Resolve(Index(), Prefabs, material);
+
+        Assert.Equal((Diffuse, baseSlot, Normal), (resolved.BaseColor, resolved.BaseColorSlot, resolved.Normal));
+    }
+
     [Fact]
     public void Textures_in_unknown_files_or_of_the_wrong_type_are_reported_missing()
     {

@@ -203,7 +203,7 @@ public class AssetPreviewTests
 
         var buildFolder = Path.GetFileName(Path.GetDirectoryName(Path.GetDirectoryName(file)))!;
         Assert.EndsWith($"-p{Tyrant.Rpc.Assets.PreviewCache.FormatVersion}", buildFolder);
-        Assert.True(Tyrant.Rpc.Assets.PreviewCache.FormatVersion >= 4, "models with materials (format 4) must not reuse format-3 previews");
+        Assert.True(Tyrant.Rpc.Assets.PreviewCache.FormatVersion >= 5, "scenery materials (format 5) must not reuse untextured format-4 previews");
     }
 
     private static readonly AssetRecord StegoAlt = new("animals/stego_assets_assets/textures.bundle", 7, "Texture2D", "T_Stego_alt1_D", null, null, null);

@@ -10,9 +10,10 @@ public sealed record ResolvedMaterial(string Name, AssetRecord? BaseColor, strin
 
 public static class MaterialResolver
 {
-    // The game's animal shader first (its infant slots repeat the adult files), then Unity's standard names.
-    private static readonly string[] BaseColorSlots = ["_AdultDiffuse", "_BaseColorMap", "_BaseMap", "_MainTex", "_Albedo", "_Diffuse"];
-    private static readonly string[] NormalSlots = ["_AdultNormal", "_NormalMap", "_BumpMap", "_Normal"];
+    // The game's animal shader first (its infant slots repeat the adult files), then its scenery shaders (_DiffuseTex:
+    // fences, paths and buildings; _Albedo/_Normals: scenery) and Unity's standard names.
+    private static readonly string[] BaseColorSlots = ["_AdultDiffuse", "_DiffuseTex", "_BaseColorMap", "_BaseMap", "_MainTex", "_Albedo", "_Diffuse", "_DiffuseMap"];
+    private static readonly string[] NormalSlots = ["_AdultNormal", "_NormalTex", "_Normals", "_NormalMap", "_BumpMap", "_Normal"];
 
     /// <param name="bundle">The bundle the material was read from; its own-file textures live there.</param>
     public static ResolvedMaterial Resolve(AssetIndex index, string bundle, MaterialModel material)
