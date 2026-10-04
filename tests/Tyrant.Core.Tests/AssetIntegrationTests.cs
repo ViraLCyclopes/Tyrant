@@ -100,6 +100,15 @@ public class AssetIntegrationTests(RealGameIndex real) : IClassFixture<RealGameI
             var gameTriangles = renderers[i].Mesh.Indices.Length / 3;
             Assert.True(lod.Indices.Length / 3 <= gameTriangles * 5 / 4, $"LOD {i}: {lod.Indices.Length / 3} triangles for the game's {gameTriangles}");
             Assert.True(Area(lod) >= Area(tmesh) * 0.9f, $"LOD {i} kept {Area(lod) / Area(tmesh):P0} of the surface");
+            var asMesh = new Tyrant.Core.Models.MeshData
+            {
+                Name = "lod", Positions = Enumerable.Range(0, lod.VertexCount).Select(v => new System.Numerics.Vector3(lod.Positions[v * 3], lod.Positions[v * 3 + 1], lod.Positions[v * 3 + 2])).ToArray(),
+                Normals = [], Uv0 = [], Colors = [], Skin = [], Indices = lod.Indices.Select(x => (uint)x).ToArray(),
+                SubMeshes = [new Tyrant.Core.Models.SubMesh(0, lod.Indices.Length, 0)], BindPoses = [], BlendShapes = [],
+            };
+            // Like the game's: its LOD 2 drops the eyes and teeth (separate small pieces), its LOD 1 keeps them.
+            Assert.Equal(Tyrant.Core.ModelReplacements.MeshDecimator.LooseParts(renderers[i].Mesh, 0.05) > 0,
+                Tyrant.Core.ModelReplacements.MeshDecimator.LooseParts(asMesh, 0.05) > 0);
         }
         Assert.Equal(renderers[0].Bones.Count, tmesh.BoneCount);
         Assert.Equal(renderers[0].Mesh.BlendShapes.Take(2).Select(s => s.Name), tmesh.Shapes.Take(2).Select(s => s.Name));

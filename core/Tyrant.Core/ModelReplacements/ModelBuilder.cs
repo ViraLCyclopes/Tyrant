@@ -18,6 +18,9 @@ public sealed record ModelReport(string Source, string Stamp, IReadOnlyList<stri
 /// <summary>Turns the user's .glb into one .tmesh per game LOD: their own LOD meshes when present, else LOD 0 decimated.</summary>
 public static class ModelBuilder
 {
+    /// <summary>A separate piece smaller than this share of the model's size counts as loose (an eye, a tooth, a claw).</summary>
+    public const double LoosePartShare = 0.05;
+
     private static readonly JsonSerializerOptions Json = new(DataStore.ReadableJson) { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
     /// <summary>"&lt;length&gt;|&lt;last write UTC ticks&gt;" of a file; empty when it does not exist.</summary>
@@ -93,7 +96,9 @@ public static class ModelBuilder
                 // No mesh of their own for this LOD: decimate LOD 0 to the game's own triangle ratio (seam copies make vertex
                 // counts a poor measure of detail).
                 var ratio = renderers[0].Mesh.TriangleCount == 0 ? 1.0 : (double)game0.Mesh.TriangleCount / renderers[0].Mesh.TriangleCount;
-                fitted.Add(MeshDecimator.Decimate(fitted[0], Math.Max(1, (int)Math.Round(fitted[0].TriangleCount * ratio))));
+                // Where the game's own LOD leaves out the small separate pieces (eyes, teeth), so does ours: the body gets the triangles.
+                var source = MeshDecimator.LooseParts(game0.Mesh, LoosePartShare) == 0 ? MeshDecimator.RemoveLooseParts(fitted[0], LoosePartShare) : fitted[0];
+                fitted.Add(MeshDecimator.Decimate(source, Math.Max(1, (int)Math.Round(fitted[0].TriangleCount * ratio))));
             }
             else if (lod == 0)
             {

@@ -184,6 +184,74 @@ public static class MeshDecimator
                 .Select(w => groupOf[w]).Where(w => w != g).Distinct().ToList();
     }
 
+    /// <summary>How many separate pieces (other than the largest) are smaller than <paramref name="maxShare"/> of the mesh's size.</summary>
+    public static int LooseParts(MeshData mesh, double maxShare) => SmallPieces(mesh, maxShare).Count;
+
+    /// <summary>
+    /// The mesh without its separate pieces smaller than <paramref name="maxShare"/> of its size (eyes, teeth, claws): the game's
+    /// far LODs leave them out. The largest piece always stays.
+    /// </summary>
+    public static MeshData RemoveLooseParts(MeshData mesh, double maxShare)
+    {
+        var small = SmallPieces(mesh, maxShare);
+        if (small.Count == 0) return mesh;
+        var piece = PieceOfVertex(mesh);
+        var tris = new List<(int A, int B, int C, int Sub)>();
+        for (var s = 0; s < mesh.SubMeshes.Length; s++)
+        {
+            var sub = mesh.SubMeshes[s];
+            for (var k = 0; k + 2 < sub.IndexCount; k += 3)
+                tris.Add(((int)mesh.Indices[sub.FirstIndex + k] + sub.BaseVertex, (int)mesh.Indices[sub.FirstIndex + k + 1] + sub.BaseVertex,
+                    (int)mesh.Indices[sub.FirstIndex + k + 2] + sub.BaseVertex, s));
+        }
+        var removed = small.ToHashSet();
+        return Compact(mesh, tris, tris.Select(t => !removed.Contains(piece[t.A])).ToArray());
+    }
+
+    /// <summary>The root of each vertex's piece: vertices joined by triangles or sharing a position (seam copies).</summary>
+    private static int[] PieceOfVertex(MeshData mesh)
+    {
+        var parent = Enumerable.Range(0, mesh.VertexCount).ToArray();
+        int Find(int x)
+        {
+            while (parent[x] != x) x = parent[x] = parent[parent[x]];
+            return x;
+        }
+        void Union(int a, int b)
+        {
+            var (ra, rb) = (Find(a), Find(b));
+            if (ra != rb) parent[ra] = rb;
+        }
+        var first = new Dictionary<Vector3, int>();
+        for (var v = 0; v < mesh.VertexCount; v++)
+            if (first.TryGetValue(mesh.Positions[v], out var w)) Union(v, w);
+            else first[mesh.Positions[v]] = v;
+        foreach (var sub in mesh.SubMeshes)
+            for (var k = 0; k + 2 < sub.IndexCount; k += 3)
+            {
+                var a = (int)mesh.Indices[sub.FirstIndex + k] + sub.BaseVertex;
+                Union(a, (int)mesh.Indices[sub.FirstIndex + k + 1] + sub.BaseVertex);
+                Union(a, (int)mesh.Indices[sub.FirstIndex + k + 2] + sub.BaseVertex);
+            }
+        return Enumerable.Range(0, mesh.VertexCount).Select(Find).ToArray();
+    }
+
+    /// <summary>The pieces (by root vertex) smaller than maxShare of the whole mesh's bounding box diagonal, never the largest.</summary>
+    private static List<int> SmallPieces(MeshData mesh, double maxShare)
+    {
+        if (mesh.VertexCount == 0) return [];
+        var piece = PieceOfVertex(mesh);
+        var used = new HashSet<int>();
+        foreach (var sub in mesh.SubMeshes)
+            for (var k = 0; k < sub.IndexCount; k++) used.Add((int)mesh.Indices[sub.FirstIndex + k] + sub.BaseVertex);
+        var sizes = used.GroupBy(v => piece[v]).ToDictionary(g => g.Key, g =>
+            (g.Select(v => mesh.Positions[v]).Aggregate(Vector3.Max) - g.Select(v => mesh.Positions[v]).Aggregate(Vector3.Min)).Length());
+        if (sizes.Count < 2) return [];
+        var size = (mesh.Positions.Aggregate(Vector3.Max) - mesh.Positions.Aggregate(Vector3.Min)).Length();
+        var largest = sizes.MaxBy(p => p.Value).Key;
+        return sizes.Where(p => p.Key != largest && p.Value < maxShare * size).Select(p => p.Key).ToList();
+    }
+
     private static (int, int) Key(int a, int b) => a < b ? (a, b) : (b, a);
 
     private static Vector3 Normal(Vector3 a, Vector3 b, Vector3 c)

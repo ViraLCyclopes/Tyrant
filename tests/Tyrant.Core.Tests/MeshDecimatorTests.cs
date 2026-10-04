@@ -133,6 +133,51 @@ public class MeshDecimatorTests
         Assert.True(lod.TriangleCount < sphere.TriangleCount, "it still simplifies what it can");
     }
 
+    /// <summary>The grid plus two separate pieces: a tiny tetrahedron (a tooth) and a large one (a sail joined without connecting).</summary>
+    private static MeshData WithLooseParts()
+    {
+        var grid = Grid(20);
+        var positions = grid.Positions.ToList();
+        var indices = grid.Indices.ToList();
+        void Tetra(Vector3 at, float size)
+        {
+            var first = (uint)positions.Count;
+            positions.AddRange([at, at + new Vector3(size, 0, 0), at + new Vector3(0, size, 0), at + new Vector3(0, 0, size)]);
+            indices.AddRange([first, first + 2, first + 1, first, first + 1, first + 3, first, first + 3, first + 2, first + 1, first + 2, first + 3]);
+        }
+        Tetra(new Vector3(5, 3, 5), 0.2f);  // under 5% of the ~28-unit grid
+        Tetra(new Vector3(10, 3, 10), 6f);  // over 5%
+        var count = positions.Count;
+        return new MeshData
+        {
+            Name = "Loose", Positions = [.. positions], Normals = Enumerable.Repeat(Vector3.UnitY, count).ToArray(), Uv0 = [.. grid.Uv0, .. new Vector2[8]],
+            Colors = [], Skin = [.. grid.Skin, .. Enumerable.Repeat(new BoneWeight4(0, 0, 0, 0, 1, 0, 0, 0), 8)], Indices = [.. indices],
+            SubMeshes = [new SubMesh(0, indices.Count, 0)], BindPoses = grid.BindPoses, BlendShapes = [],
+        };
+    }
+
+    [Fact]
+    public void Small_loose_parts_are_removed_and_large_ones_kept()
+    {
+        var mesh = WithLooseParts();
+
+        var lod = MeshDecimator.RemoveLooseParts(mesh, 0.05);
+
+        Assert.Equal(mesh.TriangleCount - 4, lod.TriangleCount);
+        Assert.DoesNotContain(new Vector3(5, 3, 5), lod.Positions);
+        Assert.Contains(new Vector3(10, 3, 10), lod.Positions);
+        Assert.Equal(1, MeshDecimator.LooseParts(lod, 1.0)); // only the large piece is left beside the grid
+    }
+
+    [Fact]
+    public void A_mesh_without_loose_parts_is_left_alone()
+    {
+        var mesh = Grid(8);
+
+        Assert.Same(mesh, MeshDecimator.RemoveLooseParts(mesh, 0.05));
+        Assert.Equal(0, MeshDecimator.LooseParts(mesh, 0.05));
+    }
+
     [Fact]
     public void A_mesh_full_of_seams_still_reaches_its_target()
     {
