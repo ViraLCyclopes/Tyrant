@@ -25,6 +25,30 @@ public class SoundReplacerTests
         public readonly Dictionary<IntPtr, bool> PlayedLooping = [];
         private int _next = 1000;
 
+        /// <summary>False: Follow fails (the 0.4.0 behaviour: play on start). True: runs and sounds come from Run/Sound.</summary>
+        public bool CanFollow;
+        public readonly Dictionary<IntPtr, FollowedRun> Runs = [];
+        public readonly HashSet<IntPtr> Unfollowed = [];
+
+        public bool Follow(IntPtr instance) => CanFollow;
+        public FollowedRun Followed(IntPtr instance) => Runs.TryGetValue(instance, out var run) ? run : default;
+        public void Unfollow(IntPtr instance) => Unfollowed.Add(instance);
+
+        /// <summary>The game starts (or restarts) the instance: a new run with no sound yet.</summary>
+        public void Run(IntPtr instance)
+        {
+            Stopped.Remove(instance);
+            var run = Followed(instance);
+            Runs[instance] = new FollowedRun { Starts = run.Starts + 1, Sounds = 0 };
+        }
+
+        /// <summary>The game's event plays a sound in the current run.</summary>
+        public void Sound(IntPtr instance)
+        {
+            var run = Followed(instance);
+            Runs[instance] = new FollowedRun { Starts = run.Starts, Sounds = run.Sounds + 1 };
+        }
+
         public bool InstanceValid(IntPtr instance) => !Invalid.Contains(instance);
         public bool InstanceStopped(IntPtr instance) => Stopped.Contains(instance);
         public bool InstanceLooping(IntPtr instance) => Looping.Contains(instance);
@@ -66,6 +90,18 @@ public class SoundReplacerTests
     private static readonly List<string> Log = [];
 
     private static SoundChoice Choice(params string[] files) => new("carch-voice", "event:/X", files, 0.8, 1.0, unique: true);
+
+    private static SoundChoice Chance(double chance) => new("carch-voice", "event:/X", ["a.ogg"], 1.0, 1.0, unique: true, chance);
+
+    private static (FakeSoundEngine Engine, SoundReplacer Replacer, IntPtr Channel) Following(SoundChoice? choice = null)
+    {
+        var (engine, replacer) = Setup();
+        engine.CanFollow = true;
+        engine.Stopped.Add(I1); // created; the game starts it with Run
+        engine.Buses[I1] = new IntPtr(5);
+        Assert.True(replacer.Start(I1, "event:/Growl", choice ?? Choice("a.ogg"), 1f, music: false, new Random(1)));
+        return (engine, replacer, OnlyChannel(engine));
+    }
 
     private static (FakeSoundEngine Engine, SoundReplacer Replacer) Setup()
     {
@@ -298,5 +334,154 @@ public class SoundReplacerTests
         replacer.Start(I1, "event:/X", Choice("a.ogg"), 1.5f, false, new Random(1));
         Assert.Contains("volume 0.8", engine.Calls);
         Assert.Contains("pitch 1.5", engine.Calls);
+    }
+
+    [Fact]
+    public void A_one_shot_waits_for_the_games_first_sound()
+    {
+        var (engine, replacer, channel) = Following();
+
+        engine.Run(I1);
+        replacer.Tick();
+        Assert.Empty(engine.Unpaused);
+
+        engine.Sound(I1);
+        replacer.Tick();
+        Assert.Contains(channel, engine.Unpaused);
+    }
+
+    [Fact]
+    public void A_run_where_the_game_plays_nothing_is_never_heard()
+    {
+        var (engine, replacer, first) = Following();
+        engine.Run(I1);
+        replacer.Tick();
+
+        engine.Stopped.Add(I1); // the silence roll: the run ends without a sound
+        replacer.Tick();
+        Assert.Contains(first, engine.Finished);
+        Assert.DoesNotContain(first, engine.Unpaused);
+        Assert.Equal(1, replacer.Active); // waiting for the next run
+
+        engine.Run(I1);
+        engine.Sound(I1);
+        replacer.Tick();
+        var second = Assert.Single(engine.PlayedLooping.Keys, c => c != first);
+        Assert.Contains(second, engine.Unpaused);
+    }
+
+    [Fact]
+    public void A_sound_reported_before_the_tick_still_counts()
+    {
+        var (engine, replacer, channel) = Following();
+
+        engine.Run(I1);
+        engine.Sound(I1); // both callbacks came in the Studio update before this frame's tick
+        replacer.Tick();
+
+        Assert.Contains(channel, engine.Unpaused);
+    }
+
+    [Fact]
+    public void Two_sounds_in_one_run_play_one_file()
+    {
+        var (engine, replacer, _) = Following();
+
+        engine.Run(I1);
+        engine.Sound(I1);
+        replacer.Tick();
+        engine.Sound(I1);
+        replacer.Tick();
+
+        Assert.Single(engine.PlayedLooping);
+    }
+
+    [Fact]
+    public void When_following_fails_it_plays_on_start_and_says_so_once()
+    {
+        var (engine, replacer) = Setup();
+        engine.Buses[I1] = engine.Buses[I2] = new IntPtr(5);
+        Log.Clear();
+
+        replacer.Start(I1, "event:/Growl", Choice("a.ogg"), 1f, music: false, new Random(1));
+        replacer.Start(I2, "event:/Growl", Choice("a.ogg"), 1f, music: false, new Random(1));
+        replacer.Tick();
+
+        Assert.Equal(2, engine.Unpaused.Count);
+        Assert.Single(Log, l => l.Contains("Could not follow event:/Growl"));
+    }
+
+    [Fact]
+    public void Its_own_chance_of_one_plays_at_the_start_without_waiting_for_a_sound()
+    {
+        var (engine, replacer, channel) = Following(Chance(1.0));
+
+        engine.Run(I1);
+        replacer.Tick();
+
+        Assert.Contains(channel, engine.Unpaused);
+    }
+
+    [Fact]
+    public void Its_own_chance_of_zero_never_plays_even_when_the_game_does()
+    {
+        var (engine, replacer, channel) = Following(Chance(0.0));
+
+        engine.Run(I1);
+        engine.Sound(I1);
+        replacer.Tick();
+        replacer.Tick();
+
+        Assert.DoesNotContain(channel, engine.Unpaused);
+    }
+
+    [Fact]
+    public void A_loop_ignores_chance_and_does_not_wait_for_a_sound()
+    {
+        var (engine, replacer) = Setup();
+        engine.CanFollow = true;
+        engine.Looping.Add(I1);
+        engine.Buses[I1] = new IntPtr(5);
+        replacer.Start(I1, "event:/Breathing", Chance(0.0), 1f, music: false, new Random(1));
+
+        replacer.Tick();
+
+        Assert.Contains(OnlyChannel(engine), engine.Unpaused);
+    }
+
+    [Fact]
+    public void A_dropped_entry_stops_following()
+    {
+        var (engine, replacer, channel) = Following();
+        engine.Run(I1);
+        engine.Sound(I1);
+        replacer.Tick();
+
+        engine.Invalid.Add(I1);
+        engine.Finished.Add(channel);
+        replacer.Tick();
+
+        Assert.Equal(0, replacer.Active);
+        Assert.Contains(I1, engine.Unfollowed);
+    }
+
+    [Fact]
+    public void A_restart_while_playing_is_a_new_run()
+    {
+        var (engine, replacer, first) = Following();
+        engine.Run(I1);
+        engine.Sound(I1);
+        replacer.Tick();
+        Assert.Contains(first, engine.Unpaused);
+
+        engine.Run(I1); // start() on the playing instance (FMOD's RESTARTED)
+        replacer.Tick();
+        Assert.Contains(first, engine.Finished);
+        var second = Assert.Single(engine.PlayedLooping.Keys, c => c != first);
+        Assert.DoesNotContain(second, engine.Unpaused);
+
+        engine.Sound(I1);
+        replacer.Tick();
+        Assert.Contains(second, engine.Unpaused);
     }
 }

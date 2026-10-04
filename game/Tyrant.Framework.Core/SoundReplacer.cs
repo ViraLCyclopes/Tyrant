@@ -8,6 +8,13 @@ namespace Tyrant.Framework.Core
         public float X, Y, Z;
     }
 
+    /// <summary>What FMOD reported for a followed instance: runs started so far, and sounds played in the latest run.</summary>
+    public struct FollowedRun
+    {
+        public int Starts;
+        public int Sounds;
+    }
+
     /// <summary>
     /// What the replacer needs from the sound engine (FMOD in the game, a fake in tests). Handles are opaque: the game's event
     /// instances, and the replacement's sounds and channels.
@@ -20,6 +27,12 @@ namespace Tyrant.Framework.Core
         bool InstanceStopped(IntPtr instance);
 
         bool InstanceLooping(IntPtr instance);
+
+        /// <summary>Starts counting the instance's runs and sounds (an FMOD event callback); false when it cannot.</summary>
+        bool Follow(IntPtr instance);
+
+        FollowedRun Followed(IntPtr instance);
+        void Unfollow(IntPtr instance);
 
         /// <summary>The event is positional (an animal, a building); false for interface sounds, music and ambiences.</summary>
         bool InstanceIs3D(IntPtr instance);
@@ -53,14 +66,15 @@ namespace Tyrant.Framework.Core
     }
 
     /// <summary>
-    /// Plays replacements for the game's sound instances. The instance is muted; each time the game starts it, a file plays
-    /// paused, goes into the instance's bus (so the game's volume sliders apply) and is then heard; it follows a positional
-    /// instance, loops with a looping original and lets a one-shot finish. An instance the game keeps and starts again (water
-    /// splashes, menu sounds) plays the replacement again.
+    /// Plays replacements for the game's sound instances. The instance is muted and followed: each time the game starts it (a
+    /// run), a file is made ready, paused, in the instance's bus (so the game's volume sliders apply). A one-off sound is heard
+    /// when the game's own event plays a sound in that run, which keeps its chances (silence rolls), or, with the mod's own
+    /// chance, when that roll succeeds. A loop plays while its run lasts. It follows a positional instance and lets a one-off
+    /// finish. When the instance cannot be followed, a run is heard as soon as it starts.
     /// </summary>
     public sealed class SoundReplacer
     {
-        /// <summary>Frames to wait for the instance's bus, once it started, before falling back to the Sounds/Soundtrack bus.</summary>
+        /// <summary>Frames to wait for the instance's bus, once its run started, before falling back to the Sounds/Soundtrack bus.</summary>
         public const int RouteFrames = 5;
 
         /// <summary>A safety cap for one-shots only: a non-looping channel still "playing" after this many frames is stopped.</summary>
@@ -75,10 +89,13 @@ namespace Tyrant.Framework.Core
             public bool ThreeD;
             public bool Music;
             public bool Loop;
+            public bool Following;
 
-            /// <summary>Zero between plays (the replacement ended; waiting for the game to start the instance again).</summary>
+            /// <summary>Zero between runs.</summary>
             public IntPtr Channel;
-            public bool SeenStart;
+            public bool RunActive;
+            public int SeenStarts;
+            public bool Heard;
             public bool Started;
             public IntPtr Bus;
             public bool OnFallback;
@@ -91,6 +108,7 @@ namespace Tyrant.Framework.Core
         private readonly Action<string> _log;
         private readonly List<Entry> _entries = new List<Entry>();
         private readonly Dictionary<string, IntPtr> _sounds = new Dictionary<string, IntPtr>(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> _notFollowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         public SoundReplacer(ISoundEngine engine, Action<string> log)
         {
@@ -112,7 +130,12 @@ namespace Tyrant.Framework.Core
                 ThreeD = _engine.InstanceIs3D(instance), Loop = _engine.InstanceLooping(instance),
             };
             if (!Begin(entry, eventPath)) return false;
-            entry.SeenStart = false; // the game starts it now (PlayOneShot) or later (an instance it keeps)
+            if (!entry.Loop) // a loop plays while its run lasts; only one-off sounds have chances
+            {
+                entry.Following = _engine.Follow(instance);
+                if (!entry.Following && _notFollowed.Add(eventPath))
+                    _log($"Could not follow {eventPath}; it plays every time the game starts it.");
+            }
             _engine.MuteInstance(instance);
             _entries.Add(entry);
             return true;
@@ -126,7 +149,11 @@ namespace Tyrant.Framework.Core
                 var e = _entries[i];
                 var valid = _engine.InstanceValid(e.Instance);
                 var running = valid && !_engine.InstanceStopped(e.Instance);
-                if (!Advance(e, valid, running)) _entries.RemoveAt(i);
+                if (!Advance(e, valid, running))
+                {
+                    if (e.Following) _engine.Unfollow(e.Instance);
+                    _entries.RemoveAt(i);
+                }
                 e.WasRunning = running;
             }
         }
@@ -134,23 +161,31 @@ namespace Tyrant.Framework.Core
         /// <summary>One frame of one entry; false drops it.</summary>
         private bool Advance(Entry e, bool valid, bool running)
         {
-            if (e.Channel == IntPtr.Zero)
+            var run = e.Following ? _engine.Followed(e.Instance) : default;
+            var newRun = e.Following ? run.Starts > e.SeenStarts : running && !e.WasRunning;
+            if (newRun)
             {
-                if (!valid) return false;
-                if (running && !e.WasRunning) return Begin(e, e.Choice.Event); // the game started it again
-                return true;
+                e.SeenStarts = run.Starts;
+                if (e.Channel != IntPtr.Zero && e.Started && !e.Loop)
+                {
+                    _engine.Stop(e.Channel); // the game restarted it: a new run, a new file
+                    e.Channel = IntPtr.Zero;
+                }
+                if (e.Channel == IntPtr.Zero && !Begin(e, e.Choice.Event)) return false;
+                e.RunActive = true;
+                e.Heard = e.Loop || (e.Choice.Chance is double chance ? e.Random.NextDouble() < chance : !e.Following);
             }
 
-            if (!e.SeenStart)
+            if (e.Channel == IntPtr.Zero) return valid; // between runs
+            if (!e.RunActive)
             {
-                if (running) e.SeenStart = true;
-                else if (!valid)
-                {
-                    _engine.Stop(e.Channel); // released without ever playing
-                    return false;
-                }
-                else return true; // created, not started yet: stay paused
+                if (valid) return true; // created, not started yet: stay paused
+                _engine.Stop(e.Channel); // released without ever playing
+                return false;
             }
+
+            if (!e.Heard && e.Following && e.Choice.Chance == null && run.Starts == e.SeenStarts && run.Sounds > 0)
+                e.Heard = true; // the game's own event played a sound in this run
 
             if (!e.Started)
             {
@@ -173,7 +208,7 @@ namespace Tyrant.Framework.Core
             if (e.ThreeD && running && _engine.InstancePosition(e.Instance, out var position, out var velocity))
                 _engine.SetPosition(e.Channel, position, velocity);
 
-            if (e.Bus != IntPtr.Zero && !e.Started)
+            if (e.Bus != IntPtr.Zero && e.Heard && !e.Started)
             {
                 _engine.Unpause(e.Channel);
                 e.Started = true;
@@ -191,8 +226,8 @@ namespace Tyrant.Framework.Core
                 }
             }
 
-            if (e.Loop && !running && e.SeenStart)
-                return Ended(e, valid, stop: true);
+            if (!running && (e.Loop || !e.Heard))
+                return Ended(e, valid, stop: true); // a loop ends with its run; an unheard run (a silence roll) is never heard
             if (e.Started && !_engine.Playing(e.Channel))
                 return Ended(e, valid, stop: false);
             if (!e.Loop && e.Started && ++e.PlayFrames > MaxFrames)
@@ -200,11 +235,12 @@ namespace Tyrant.Framework.Core
             return true;
         }
 
-        /// <summary>The replacement ended; the entry waits for the next start while the game keeps the instance.</summary>
+        /// <summary>The run's replacement ended; the entry waits for the next run while the game keeps the instance.</summary>
         private bool Ended(Entry e, bool valid, bool stop)
         {
             if (stop) _engine.Stop(e.Channel);
             e.Channel = IntPtr.Zero;
+            e.RunActive = false;
             return valid;
         }
 
@@ -225,7 +261,6 @@ namespace Tyrant.Framework.Core
             _engine.SetVolume(channel, (float)e.Choice.Volume);
             _engine.SetPitch(channel, e.Pitch);
             e.Channel = channel;
-            e.SeenStart = true;
             e.Started = false;
             e.Bus = IntPtr.Zero;
             e.OnFallback = false;
