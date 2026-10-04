@@ -112,6 +112,11 @@ Release build: `npm run build:app`, install `studio/src-tauri/target/release/bun
 59. Workspace → **Save framework zip…**: the zip holds `Mods\Tyrant.Framework.dll`, `UserLibs\…` and `README.txt`.
 60. **(game)** With Tyrant uninstalled from the game, install MelonLoader by hand, unzip the framework zip and the mod zip
     into the game folder and start the game: the mod shows (MelonLoader's log lists it).
+61. A build without `studio/src-tauri/updater-key.pub` content: Help → Check for updates says updates aren't set up in this
+    build; Tyrant keeps working.
+62. Edit → Preferences → untick **Check for updates when Tyrant starts**, restart: no update check runs.
+63. **(after the first signed release)** An older installed Tyrant shows "Tyrant X is available"; **Update now** installs it
+    and Tyrant restarts on the new version; the framework offer follows when its framework changed.
 
 **Shell (tabs, log, preferences):**
 

@@ -1,0 +1,43 @@
+# Making a release
+
+Releases are built, signed and drafted by GitHub (`.github/workflows/release.yml`) when you push a version tag. You
+write the notes and publish. Installed copies of Tyrant then offer the update (Help → Check for updates, or the daily
+check).
+
+## One-time setup
+
+1. **Make the signing key** (in `studio/`): `npm run updater-key`. It asks for a password and writes:
+   - the **private key** to `%USERPROFILE%\.tyrant\tyrant-updater.key` — back it up somewhere safe (a password manager,
+     a USB stick). Never commit it;
+   - the **public key** to `studio/src-tauri/updater-key.pub` — commit this file.
+2. **Add two GitHub secrets:** repository → Settings → Secrets and variables → Actions → New repository secret:
+   - `TAURI_SIGNING_PRIVATE_KEY`: the whole content of `tyrant-updater.key`;
+   - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`: the password you chose.
+3. **A screenshot for the README** (the app with a mod open) in `docs/images/`, linked under the title.
+
+Builds made before step 1 still run; their Help → Check for updates says updates aren't set up in that build.
+
+## Each release
+
+1. `cd studio` → `npm run set-version 0.2.0` (writes the version in package.json, tauri.conf.json, Cargo.toml and
+   Directory.Build.props).
+2. Commit: `git commit -am "release: 0.2.0"`.
+3. Tag and push: `git tag v0.2.0` → `git push origin main v0.2.0`.
+4. GitHub → Actions → **Release**: it checks the tag matches the version and the key is set up, runs the tests, builds
+   the Setup, signs it, writes `latest.json` and attaches the framework zip to a **draft** release.
+5. Open the draft (Releases), write what changed, **Publish**. Only published releases are offered to users.
+6. Upload the same Setup to the Nexus page.
+
+The first time, try it on a test tag (e.g. `v0.1.1-test`, then delete the draft and the tag) or with **Run workflow**.
+
+## Nexus
+
+Once Tyrant's Nexus page exists, put its mod id in `core/Tyrant.Core/Updates/UpdateChecker.cs`
+(`UpdateSources.NexusModId`) and release once: Tyrant then also shows when the Nexus page has a newer version (it only
+links to the page; updates install from GitHub).
+
+## If the private key is lost
+
+Installed copies can only accept updates signed with that key. Make a new key (delete the old files, run
+`npm run updater-key`, update the two secrets), release, and tell users to download that one Setup by hand; after that,
+updates work again.

@@ -50,6 +50,10 @@ The game folder, your workspace and its outputs.
   Tyrant") and MelonLoader's version. After a Tyrant update that brings a newer framework, Tyrant offers once to
   **Update Tyrant in game**. **Save framework zip…** saves the framework for players without Tyrant.
   CLI: `tyrant game status|install|update|uninstall|package-framework`.
+- **Updates:** Tyrant checks GitHub for a new version once a day (**Edit → Preferences → Check for updates when Tyrant
+  starts**). A banner offers **Update now** (downloads, checks the signature, installs and restarts; it waits while a job
+  runs) or **Later**, and links to the Nexus page when it has the same version; a version only on Nexus is linked, not
+  installed. **Help → Check for updates** checks any time. CLI: `tyrant update check`.
 - **Copy diagnostics** (also in the **Help** menu) puts versions, the game build and recent log lines (never game files) on the clipboard for
   bug reports.
 

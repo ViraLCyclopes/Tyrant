@@ -1,12 +1,46 @@
-# Tyrant
+<p align="center"><img src="docs/images/tyrant-logo.png" alt="Tyrant" width="160"></p>
 
-Modding toolset for **Prehistoric Kingdom** (Unity 2022.3, Mono). Work in progress: see [docs/](docs/) for the mod
-format and the app guide.
+# Tyrant: Prehistoric Kingdom Modding Toolkit
 
-Principles: mods never replace or patch game files on disk; nothing from the game is redistributed —
-all extraction happens locally from your own install.
+Tyrant is a free modding toolkit for **Prehistoric Kingdom**. Browse and export the game's textures, models and data;
+make texture and skin mods (new skins appear in the Nursery); replace an animal's model with your own Blender edit;
+and share mods as zips. Mods never replace or patch game files: Tyrant adds them at runtime and **Uninstall from
+game** puts the game back to vanilla. Nothing from the game is redistributed; everything is read from your own install.
 
-## Build
+## Download
+
+Get the latest **Setup** from [GitHub Releases](https://github.com/ViraLCyclopes/Tyrant/releases) and run it (no admin
+rights needed). Windows may warn that the publisher is unknown (Tyrant is not code-signed): click **More info → Run
+anyway**.
+
+## Start in three steps
+
+1. **Workspace tab:** pick the game folder (found through Steam on its own) and an empty folder for your workspace, then
+   **Refresh all** (asset index, data dump, game code).
+2. **Workspace tab → Install Tyrant in game:** adds MelonLoader and Tyrant's framework (reversible).
+3. **Make a mod:** on the Assets tab **Replace in a mod…** a texture, on the Species tab **Add a skin…**, or **Replace model
+   in a mod…** on an animal's prefab; then **Install to game** and start the game.
+
+To play a mod someone shared: **Mods tab → Add mod from zip…**, then **Install to game**. Without Tyrant: install
+MelonLoader 0.7.3, unzip `Tyrant-Framework-<version>.zip` (from the releases page) and the mod's zip into the game folder.
+
+## Blender tips
+
+- Export an animal's **prefab** (GameObject) from the Assets tab, not its bare mesh.
+- In Blender's glTF import tick **Merge Vertices** (clean seams, Tris to Quads works) and **Disable Bone Shape** (plain bones).
+- Sculpt or edit with the **Basis** shape key selected: the growth keys follow. Don't use Voxel Remesh (it deletes the
+  shape keys).
+
+## Updates
+
+Tyrant checks GitHub for a new version once a day and offers **Update now**; **Help → Check for updates** checks any
+time, and **Edit → Preferences** turns the daily check off.
+
+More: the [app guide](docs/app-guide.md) and the [mod format](docs/mod-format.md).
+
+## For developers
+
+### Build
 
 Requirements: Windows, .NET 10 SDK.
 
@@ -22,7 +56,7 @@ $env:TYRANT_GAME_DIR = "<your Steam library>\steamapps\common\Prehistoric Kingdo
 dotnet test tests/Tyrant.Core.Tests --filter "Category=Integration"
 ```
 
-## CLI
+### CLI
 
 ```powershell
 dotnet run --project cli/Tyrant.Cli -- install detect                 # find the game via Steam
@@ -90,6 +124,7 @@ dotnet run --project cli/Tyrant.Cli -- mod export red-spot-carcharo -w D:\tyrant
 dotnet run --project cli/Tyrant.Cli -- mod import red-spot-carcharo-1.0.0.zip -w D:\tyrant-workspace   # add a shared mod (--replace to overwrite)
 dotnet run --project cli/Tyrant.Cli -- game status -w D:\tyrant-workspace   # framework version in the game and in this Tyrant
 dotnet run --project cli/Tyrant.Cli -- game package-framework -w D:\tyrant-workspace   # the framework as a zip for players without Tyrant
+dotnet run --project cli/Tyrant.Cli -- update check   # this version and the latest on GitHub (and Nexus)
 dotnet run --project cli/Tyrant.Cli -- mod list -w D:\tyrant-workspace
 dotnet run --project cli/Tyrant.Cli -- mod clean-skins -w D:\tyrant-workspace   # list skin numbers left by removed mods; --forget <mod/skin> frees one
 ```
@@ -104,7 +139,7 @@ Every command accepts `--game <folder>` (where relevant) to skip Steam detection
 Exit codes: 0 ok, 1 usage error, 2 error (code printed, e.g. `GAME_NOT_FOUND`), 3 partial success.
 Open `source\Assembly-CSharp\*.csproj` in Visual Studio or Rider to browse the decompiled game code.
 
-## The Tyrant app
+### The Tyrant app
 
 The desktop app (Tauri 2 + SvelteKit) lives in `studio/` and runs `tyrant rpc` in the background.
 
