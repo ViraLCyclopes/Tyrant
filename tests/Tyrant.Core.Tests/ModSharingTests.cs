@@ -75,6 +75,7 @@ public class ModSharingTests
         Assert.Contains("MelonLoader 0.7.3", readme);
         Assert.Contains("Tyrant Framework 0.3.0", readme);
         Assert.Contains("UserData\\Tyrant\\Mods\\red-spot", readme);
+        Assert.Contains("https://github.com/ViraLCyclopes/Tyrant/releases", readme);
     }
 
     [Fact]
@@ -156,12 +157,95 @@ public class ModSharingTests
     }
 
     [Fact]
-    public void A_mod_json_whose_id_is_not_its_folder_is_refused()
+    public void A_zip_of_a_renamed_mod_folder_imports_under_its_mod_json_id()
     {
         using var game = new FakeGame();
-        var ex = Assert.Throws<Tyrant.Core.Errors.TyrantException>(() =>
-            ModSharing.Import(NewWorkspace(game), ZipWith(("other-name/mod.json", Manifest)), false));
-        Assert.Contains("other-name", ex.Message);
+        // e.g. GitHub's Download ZIP: <repo>-main/mod.json
+        var mod = ModSharing.Import(NewWorkspace(game), ZipWith(("Tyrant-mods-main/mod.json", Manifest), ("Tyrant-mods-main/a.png", "png")), false);
+
+        Assert.Equal("shared-mod", mod.Id);
+        Assert.True(File.Exists(Path.Combine(mod.Dir, "a.png")));
+    }
+
+    [Fact]
+    public void A_mod_json_with_an_invalid_id_is_refused()
+    {
+        using var game = new FakeGame();
+        Assert.Throws<Tyrant.Core.Errors.TyrantException>(() =>
+            ModSharing.Import(NewWorkspace(game), ZipWith(("x/mod.json", Manifest.Replace("shared-mod", "Not Valid"))), false));
+    }
+
+    // (1) damaged zips
+    [Fact]
+    public void A_file_that_is_not_a_zip_is_a_clear_error()
+    {
+        using var game = new FakeGame();
+        var path = TempZip();
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, "this is a renamed .rar, not a zip");
+
+        var ex = Assert.Throws<Tyrant.Core.Errors.TyrantException>(() => ModSharing.Import(NewWorkspace(game), path, false));
+
+        Assert.Equal(Tyrant.Core.Errors.TyrantErrorCode.ModInvalid, ex.Code);
+        Assert.Contains("damaged or not a zip", ex.Message);
+    }
+
+    // (2) no local paths, (3) not stale after import, (5) the framework it needs
+    private static ModProject ModWithBuiltModel(Workspace ws)
+    {
+        var mod = ModProject.Create(ws, "big-carch", "Big carch", null);
+        var models = Path.Combine(mod.Dir, "models");
+        Directory.CreateDirectory(models);
+        File.WriteAllText(Path.Combine(models, "carch-1111.glb"), "glb");
+        File.WriteAllText(Path.Combine(models, "carch-1111.lod0.tmesh"), "lod0");
+        var report = new Tyrant.Core.ModelReplacements.ModelReport("models/carch-1111.glb",
+            Tyrant.Core.ModelReplacements.ModelBuilder.Stamp(Path.Combine(models, "carch-1111.glb")), [], [],
+            [new Tyrant.Core.ModelReplacements.ModelLodStats("models/carch-1111.lod0.tmesh", 3, false, 3)],
+            @"C:\Users\someone\Desktop\carch.glb", "1|2");
+        File.WriteAllText(Path.Combine(models, "carch-1111.model.json"), System.Text.Json.JsonSerializer.Serialize(report,
+            new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase }));
+        mod.Manifest.Models.Add(new ModelReplacement { Target = "Carcharodontosaurus", File = "models/carch-1111.glb" });
+        mod.Save();
+        return mod;
+    }
+
+    private static string Entry(string zip, string name)
+    {
+        using var archive = ZipFile.OpenRead(zip);
+        using var reader = new StreamReader(archive.GetEntry(name)!.Open());
+        return reader.ReadToEnd();
+    }
+
+    [Fact]
+    public void A_shared_model_carries_no_local_paths()
+    {
+        using var game = new FakeGame();
+        var zip = ModSharing.Export(ModWithBuiltModel(NewWorkspace(game)), TempZip(), "0.3.0");
+
+        var report = Entry(zip, "UserData/Tyrant/Mods/big-carch/models/carch-1111.model.json");
+
+        Assert.DoesNotContain("Users", report);
+        Assert.DoesNotContain("Desktop", report);
+    }
+
+    [Fact]
+    public void An_imported_model_is_not_reported_as_changed()
+    {
+        using var game = new FakeGame();
+        var zip = ModSharing.Export(ModWithBuiltModel(NewWorkspace(game)), TempZip(), "0.3.0");
+
+        var mod = ModSharing.Import(NewWorkspace(game), zip, false);
+
+        Assert.False(Tyrant.Core.ModelReplacements.ModelBuilder.IsStale(mod.Dir, "models/carch-1111.glb"));
+    }
+
+    [Fact]
+    public void The_shared_mod_json_names_the_framework_it_needs()
+    {
+        using var game = new FakeGame();
+        var zip = ModSharing.Export(ModWithFiles(NewWorkspace(game)), TempZip(), "0.3.0");
+
+        Assert.Equal("0.3.0", ModManifest.Parse(Entry(zip, "UserData/Tyrant/Mods/red-spot/mod.json")).RequiresTyrant);
     }
 
     [Fact]
@@ -194,7 +278,8 @@ public class ModSharingTests
         for (var i = at; i < at + 64; i++) bytes[i] ^= 0x5A;
         File.WriteAllBytes(damaged, bytes);
 
-        Assert.ThrowsAny<Exception>(() => ModSharing.Import(ws, damaged, replace: true));
+        var ex = Assert.Throws<Tyrant.Core.Errors.TyrantException>(() => ModSharing.Import(ws, damaged, replace: true));
+        Assert.Equal(Tyrant.Core.Errors.TyrantErrorCode.ModInvalid, ex.Code);
 
         Assert.True(File.Exists(Path.Combine(ModProject.RootOf(ws), "shared-mod", "old.png")));
     }

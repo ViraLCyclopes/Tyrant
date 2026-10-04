@@ -115,6 +115,7 @@
     <p>{frameworkLine(ws)}{ws.loaderInGame ? ` · MelonLoader ${ws.loaderInGame}` : ''}</p>
     <p class="hint">MelonLoader plus two small Tyrant mods: the data dumper (it does nothing unless you run a dump) and the modding framework, which applies the mods you install from the Mods tab. No game file is replaced; Uninstall from game restores vanilla.</p>
     {#if ws.framework === 'outdated'}<p class="warn">Tyrant was updated: the framework in the game is older than this Tyrant. Update it (the game must be closed).</p>{/if}
+    <div class="row"><button onclick={saveFrameworkZip} disabled={session.busy}>Save framework zip…</button></div>
     {#if ws.dumper === 'conflict'}
       <p class="warn">Another mod loader (BepInEx) or an unknown version.dll is in the game folder. Remove it to use the dumper.</p>
     {:else}
@@ -125,7 +126,6 @@
             <button class="primary" onclick={() => report(session.runJob('dump.install', undefined, 'Update Tyrant in game', tab), (r) => r.message)} disabled={session.busy}>Update Tyrant in game</button>
           {/if}
           <button onclick={() => session.uninstallDumper(tab)} disabled={session.busy}>Uninstall from game</button>
-          <button onclick={saveFrameworkZip} disabled={session.busy}>Save framework zip…</button>
         {:else}
           <button class="primary" onclick={() => report(session.runJob('dump.install', undefined, 'Install Tyrant in game', tab), (r) => r.message)} disabled={session.busy}>Install Tyrant in game</button>
         {/if}

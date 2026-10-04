@@ -1,5 +1,7 @@
 using System.IO.Compression;
 using System.Text;
+using System.Text.Json.Nodes;
+using Tyrant.Core.ModelReplacements;
 using Tyrant.Core.Dumping;
 using Tyrant.Core.Errors;
 using Tyrant.Core.Workspaces;
@@ -52,7 +54,13 @@ public static class ModSharing
         using (var archive = ZipFile.Open(temp, ZipArchiveMode.Create))
         {
             foreach (var file in SharedFiles(mod))
-                archive.CreateEntryFromFile(Path.Combine(mod.Dir, file), ZipRoot + mod.Id + "/" + file, CompressionLevel.Optimal);
+            {
+                var name = ZipRoot + mod.Id + "/" + file;
+                var source = Path.Combine(mod.Dir, file);
+                if (file == ModManifest.FileName) WriteText(archive, name, SharedManifest(mod, frameworkVersion));
+                else if (file.EndsWith(".model.json", StringComparison.OrdinalIgnoreCase)) WriteText(archive, name, WithoutLocalPaths(File.ReadAllText(source)));
+                else archive.CreateEntryFromFile(source, name, CompressionLevel.Optimal);
+            }
             using var readme = new StreamWriter(archive.CreateEntry("README.txt").Open(), new UTF8Encoding(false));
             readme.Write(Readme(mod, frameworkVersion));
         }
@@ -68,6 +76,18 @@ public static class ModSharing
     public static ModProject Import(Workspace ws, string zipPath, bool replace)
     {
         var zipName = Path.GetFileName(zipPath);
+        try
+        {
+            return Unpack(ws, zipPath, zipName, replace);
+        }
+        catch (InvalidDataException ex)
+        {
+            throw new TyrantException(TyrantErrorCode.ModInvalid, $"'{zipName}' is damaged or not a zip ({ex.Message}); nothing was imported.");
+        }
+    }
+
+    private static ModProject Unpack(Workspace ws, string zipPath, string zipName, bool replace)
+    {
         using var archive = ZipFile.OpenRead(zipPath);
         var files = archive.Entries.Where(e => !string.IsNullOrEmpty(e.Name))
             .Select(e => (Entry: e, Name: e.FullName.Replace('\\', '/').TrimStart('/'))).ToList();
@@ -87,10 +107,9 @@ public static class ModSharing
             try { manifest = ModManifest.Parse(reader.ReadToEnd()); }
             catch (ManifestException ex) { throw new TyrantException(TyrantErrorCode.ModInvalid, $"The mod in '{zipName}' cannot be read: {ex.Message}"); }
         }
-        var folder = prefix.TrimEnd('/').Split('/').Last();
-        if (!ModId.IsValid(manifest.Id) || (folder.Length > 0 && folder != manifest.Id))
-            throw new TyrantException(TyrantErrorCode.ModInvalid,
-                $"The mod's id \"{manifest.Id}\" {(ModId.IsValid(manifest.Id) ? $"does not match its folder \"{folder}\"" : "is not a valid mod id")}; nothing was imported.");
+        // The mod lands under mod.json's id whatever its folder in the zip is called (a renamed folder, GitHub's <repo>-main).
+        if (!ModId.IsValid(manifest.Id))
+            throw new TyrantException(TyrantErrorCode.ModInvalid, $"The mod's id \"{manifest.Id}\" is not a valid mod id; nothing was imported.");
 
         var target = Path.Combine(ModProject.RootOf(ws), manifest.Id);
         if (Directory.Exists(target) && !replace)
@@ -127,7 +146,64 @@ public static class ModSharing
         {
             if (Directory.Exists(staging)) Directory.Delete(staging, recursive: true);
         }
-        return ModProject.Open(ws, manifest.Id);
+        var imported = ModProject.Open(ws, manifest.Id);
+        Restamp(imported);
+        return imported;
+    }
+
+    /// <summary>Where players get Tyrant and its framework zip.</summary>
+    public const string ReleasesUrl = "https://github.com/ViraLCyclopes/Tyrant/releases";
+
+    private static void WriteText(ZipArchive archive, string name, string text)
+    {
+        using var writer = new StreamWriter(archive.CreateEntry(name, CompressionLevel.Optimal).Open(), new UTF8Encoding(false));
+        writer.Write(text);
+    }
+
+    /// <summary>mod.json as shared: it names the framework it needs, so an older framework skips it with a message.</summary>
+    private static string SharedManifest(ModProject mod, string frameworkVersion)
+    {
+        var copy = ModManifest.Parse(mod.Manifest.ToJson());
+        copy.RequiresTyrant ??= frameworkVersion;
+        return copy.ToJson();
+    }
+
+    /// <summary>A model report without where the modder's own .glb lives on their PC (Tyrant's Re-import uses it; players don't).</summary>
+    private static string WithoutLocalPaths(string reportJson)
+    {
+        try
+        {
+            if (JsonNode.Parse(reportJson) is not JsonObject report) return reportJson;
+            report.Remove("origin");
+            report.Remove("originStamp");
+            return report.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return "{}"; // unreadable: Check builds it again; never ship what could not be cleaned
+        }
+    }
+
+    /// <summary>Unzipping restores rounded file times: stamp each model report against its .glb as it is now, so it is not "changed".</summary>
+    private static void Restamp(ModProject mod)
+    {
+        var glbs = mod.Manifest.Models.Select(m => m.File).Concat(mod.Manifest.Skins.Select(s => s.Model)).Where(f => !string.IsNullOrWhiteSpace(f));
+        foreach (var glb in glbs)
+        {
+            var glbPath = Path.Combine(mod.Dir, glb!);
+            var reportPath = Path.Combine(mod.Dir, ModelFiles.Report(glb!));
+            if (!File.Exists(glbPath) || !File.Exists(reportPath)) continue;
+            try
+            {
+                if (JsonNode.Parse(File.ReadAllText(reportPath)) is not JsonObject report) continue;
+                report["stamp"] = ModelBuilder.Stamp(glbPath);
+                File.WriteAllText(reportPath, report.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                // left as it is: Check reports it as out of date and Install rebuilds it
+            }
+        }
     }
 
     private static string Readme(ModProject mod, string frameworkVersion)
@@ -142,8 +218,8 @@ public static class ModSharing
 
             Install:
             1. Install MelonLoader {ModLoaderInstaller.Version} (https://github.com/LavaGang/MelonLoader/releases).
-            2. Install Tyrant Framework: unzip Tyrant-Framework-{frameworkVersion}.zip into the game folder, or use Tyrant
-               (Workspace tab -> Install Tyrant in game).
+            2. Install Tyrant Framework: unzip Tyrant-Framework-{frameworkVersion}.zip (from {ReleasesUrl})
+               into the game folder, or use Tyrant (Workspace tab -> Install Tyrant in game).
             3. Unzip this file into the game folder. The mod lands in UserData\Tyrant\Mods\{m.Id}.
 
             Remove: delete the folder UserData\Tyrant\Mods\{m.Id}.

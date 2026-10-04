@@ -153,8 +153,10 @@ and on a skin: `"model": "models/carcharodontosaurus-spiked-5e6f7a8b.glb"`.
   anything else in the folder stay out. Players unzip it into the game folder. The README says it needs MelonLoader 0.7.3
   and Tyrant Framework (the version of the Tyrant that exported it) or newer, and how to install it.
 - **Add mod from zip** (Mods tab, or `tyrant mod import <zip>`) accepts an exported zip, a zip of a mod folder, or a zip
-  with mod.json at its root, and adds the mod to the workspace. A zip with an unsafe path (`..`), no mod, two mods, or a
-  mod.json whose id differs from its folder is refused. A mod with the same id is replaced only when you confirm
+  with mod.json at its root, and adds the mod to the workspace under mod.json's id, whatever its folder in the zip is
+  called (a renamed folder, GitHub's `<repo>-main`). A damaged file, an unsafe path (`..`), no mod, two mods or an
+  invalid id is refused. The shared mod.json names the framework version it needs (`requires.tyrant`), so an older
+  framework skips it with a message; model reports in the zip carry no paths from the modder's PC. A mod with the same id is replaced only when you confirm
   (`--replace`), and only after the new one has unpacked.
 - **The framework zip** (Workspace → Save framework zip…, or `tyrant game package-framework`) is
   `Tyrant-Framework-<version>.zip`: `Mods/Tyrant.Framework.dll`, `UserLibs/Tyrant.Framework*.dll` and `README.txt`, for

@@ -15,6 +15,14 @@ function setup() {
 }
 
 describe('WorkspaceView', () => {
+  it('offers the framework zip even when Tyrant is not in the game', () => {
+    const { session } = setup();
+    session.workspace = workspaceStatus({ dumper: 'notInstalled', framework: 'missing', frameworkBundled: '0.3.0' });
+    renderWith(WorkspaceView, session);
+
+    expect(screen.getByRole('button', { name: 'Save framework zip…' })).toBeInTheDocument();
+  });
+
   it('saves the framework zip where the user picks', async () => {
     const { rpc, platform, session } = setup();
     session.workspace = workspaceStatus({ dumper: 'installed', framework: 'current', frameworkBundled: '0.3.0' });
