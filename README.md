@@ -114,7 +114,7 @@ Prerequisites: .NET 10 SDK, Node 24, Rust (stable, MSVC), Visual Studio Build To
     npm test                          # UI tests (vitest)
     npm run check                     # type and accessibility checks
     npm run gen:types                 # after changing RPC DTOs in core/Tyrant.Rpc
-    npm run build:app                 # installer: src-tauri/target/release/bundle/nsis/
+    npm run build:app                 # Setup program, copied to release/ (or double-click "Build Setup.bat")
 
 See [docs/app-guide.md](docs/app-guide.md) for how to use it and [docs/app-smoke-test.md](docs/app-smoke-test.md)
 for the release checklist.
