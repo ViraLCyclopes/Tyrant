@@ -58,6 +58,47 @@ public class ModEditorMethodsTests
         detail.GetProperty("skins")[0].GetProperty("baseMaleSlots").EnumerateArray().Select(s => s.GetString()!).ToArray();
 
     [Fact]
+    public async Task Sample_colors_give_one_animal_of_the_strip()
+    {
+        using var game = new FakeGame();
+        var (h, _, _) = await WithSkinAndPrefab(game);
+        var colors = "{\"pattern\":{\"a\":\"#ff0000\",\"b\":\"#0000ff\",\"strength\":0.8}}";
+
+        var one = await h.Call("mods.sampleColors", new { id = "red-spot", skin = "blue", colors, variant = "normal", seed = 3 });
+
+        Assert.Equal("#ff0000", one.GetProperty("a").GetString());
+        Assert.Equal(0.8, one.GetProperty("strength").GetDouble(), 3);
+        Assert.Equal(JsonValueKind.Null, one.GetProperty("eye").ValueKind);
+    }
+
+    [Fact]
+    public async Task Skin_model_names_the_species_prefab_and_the_skins_maps()
+    {
+        using var game = new FakeGame();
+        var (h, ws, _) = await WithSkinAndPrefab(game);
+
+        var model = await h.Call("mods.skinModel", new { id = "red-spot", skin = "blue", sex = "male" });
+
+        Assert.Equal(SkinDumps.Prefab.Ref, model.GetProperty("prefabRef").GetString());
+        var maps = model.GetProperty("maps");
+        Assert.Equal(Path.Combine(ws, "mods", "red-spot", "skins", "blue", "male_D.png"), maps.GetProperty("diffuse").GetString()); // the skin's own file
+        Assert.True(File.Exists(maps.GetProperty("normal").GetString())); // the base skin's texture, written to the cache
+        Assert.False(maps.TryGetProperty("extra", out _)); // "Alt 1" has no male extra map
+    }
+
+    [Fact]
+    public async Task Skin_model_without_a_data_dump_says_how_to_get_one()
+    {
+        using var game = new FakeGame();
+        var (h, ws) = await Opened(game);
+        await WithSkin(h, ws);
+
+        var ex = await Assert.ThrowsAsync<RpcCallException>(() => h.Call("mods.skinModel", new { id = "red-spot", skin = "blue", sex = "male" }));
+
+        Assert.Contains("Run data dump", ex.Message);
+    }
+
+    [Fact]
     public async Task Skin_slots_follow_the_species_shader()
     {
         using var game = new FakeGame();

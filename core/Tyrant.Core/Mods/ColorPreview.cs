@@ -5,6 +5,9 @@ namespace Tyrant.Core.Mods;
 /// <summary>A skin's maps at preview size: RGBA bytes, all the same size. Pattern and extra may be missing.</summary>
 public sealed record PreviewMaps(int Width, int Height, byte[] Diffuse, byte[]? Pattern, byte[]? Extra);
 
+/// <summary>One animal's concrete colours; null colours leave the texture alone.</summary>
+public sealed record SampledColors(Rgb? A, Rgb? B, Rgb? Secondary, Rgb? Eye, float Strength, float Softness, float Hue, float Saturation, float Value);
+
 /// <summary>
 /// An approximate 2D picture of one animal with a skin's colours, following the decoded animal shader (no lighting, normal
 /// or AO): pattern red 0 keeps the texture; higher red blends colour A towards B (softened by softness); strength sets how
@@ -24,7 +27,8 @@ public static class ColorPreview
         _ => (colors?.Pattern, colors?.Tint),
     };
 
-    public static byte[] Render(PreviewMaps maps, SkinColorSet? set, SkinTint? tint, Random random)
+    /// <summary>One animal's colours, drawn in the order the picture always used (so a seed keeps giving the same animal).</summary>
+    public static SampledColors Sample(SkinColorSet? set, SkinTint? tint, Random random)
     {
         var a = Pick(set?.A, random);
         var b = Pick(set?.B, random) ?? a;
@@ -36,6 +40,14 @@ public static class ColorPreview
         var hue = tint?.Hue?.Sample(random.NextDouble()) ?? 0f;
         var saturation = tint?.Saturation?.Sample(random.NextDouble()) ?? 0f;
         var value = tint?.Value?.Sample(random.NextDouble()) ?? 0f;
+        return new SampledColors(a, b, secondary, eye, strength, softness, hue, saturation, value);
+    }
+
+    public static byte[] Render(PreviewMaps maps, SkinColorSet? set, SkinTint? tint, Random random) => Render(maps, Sample(set, tint, random));
+
+    public static byte[] Render(PreviewMaps maps, SampledColors colors)
+    {
+        var (a, b, secondary, eye, strength, softness, hue, saturation, value) = colors;
 
         var output = (byte[])maps.Diffuse.Clone();
         for (var i = 0; i < maps.Width * maps.Height; i++)

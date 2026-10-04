@@ -21,6 +21,27 @@ public class ColorPreviewTests
     private static (byte R, byte G, byte B) Pixel(byte[] rgba, int i) => (rgba[i * 4], rgba[i * 4 + 1], rgba[i * 4 + 2]);
 
     [Fact]
+    public void Sampling_gives_the_colours_the_picture_uses()
+    {
+        var set = Set("#ff0000", "#0000ff", strength: 0.5f);
+        var maps = new PreviewMaps(1, 1, Fill(1, 128, 128, 128), Fill(1, 255, 0, 0), null);
+
+        var sampled = ColorPreview.Sample(set, null, new Random(7));
+
+        Assert.Equal(ColorPreview.Render(maps, set, null, new Random(7)), ColorPreview.Render(maps, sampled));
+        Assert.Equal(0.5f, sampled.Strength);
+        Assert.Equal(Parse("#ff0000"), sampled.A);
+    }
+
+    [Fact]
+    public void Unset_fields_sample_to_the_defaults()
+    {
+        var sampled = ColorPreview.Sample(null, null, new Random(1));
+
+        Assert.Equal((null as Rgb?, 1f, 0.25f, 0f), (sampled.A, sampled.Strength, sampled.Softness, sampled.Hue));
+    }
+
+    [Fact]
     public void Pattern_red_zero_keeps_the_texture()
     {
         var maps = new PreviewMaps(1, 1, Fill(1, 100, 110, 120), Fill(1, 0, 0, 0), null);

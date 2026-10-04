@@ -73,6 +73,17 @@ public sealed record ModColorPreviewParams(string Id, string Skin, string? Color
 
 public sealed record ModPreviewFiles(IReadOnlyList<string> Files);
 
+public sealed record ModSampleColorsParams(string Id, string Skin, string? Colors = null, string Variant = "normal", int Seed = 1);
+
+/// <summary>One animal's colours (#rrggbb, null = keep the texture), the same as the 2D strip's first animal with that seed.</summary>
+public sealed record ModSampledColors(string? A, string? B, string? Secondary, string? Eye, float Strength, float Softness, float Hue, float Saturation, float Value);
+
+/// <summary>Sex: male, female or infant.</summary>
+public sealed record ModSkinModelParams(string Id, string Skin, string Sex = "male");
+
+/// <summary>The species prefab to preview and the skin's maps (diffuse, normal, extra, pattern) as PNG files.</summary>
+public sealed record ModSkinModel(string PrefabRef, IReadOnlyDictionary<string, string> Maps);
+
 public sealed record ModThumbnailParams(string Id, string File, int Size = 96);
 
 public sealed record ModThumbnailResult(string? File);

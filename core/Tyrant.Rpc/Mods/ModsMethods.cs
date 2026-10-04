@@ -231,6 +231,73 @@ public sealed class ModsMethods(StudioSession session, JobManager jobs)
             PreviewsDir(ws, "colors"), TryIndex(ws), TrySpecies(ws)));
     }
 
+    [RpcMethod("mods.sampleColors")]
+    public ModSampledColors SampleColors(ModSampleColorsParams p)
+    {
+        var (ws, _) = session.Current();
+        var skin = ModProject.Open(ws, p.Id).Skin(p.Skin);
+        Tyrant.Framework.Core.SkinColors? colors;
+        try
+        {
+            colors = string.IsNullOrWhiteSpace(p.Colors) ? skin.Colors : Tyrant.Framework.Core.SkinColors.Parse(Tyrant.Framework.Core.Json.Parse(p.Colors), p.Skin);
+        }
+        catch (Exception ex) when (ex is Tyrant.Framework.Core.ManifestException or FormatException)
+        {
+            throw new TyrantException(TyrantErrorCode.ModInvalid, $"These colours cannot be previewed: {ex.Message}");
+        }
+        var (set, tint) = Tyrant.Core.Mods.ColorPreview.For(colors, p.Variant);
+        var s = Tyrant.Core.Mods.ColorPreview.Sample(set, tint, new Random(p.Seed * 7919)); // the strip's first animal (ModImages)
+        return new ModSampledColors(s.A?.ToString(), s.B?.ToString(), s.Secondary?.ToString(), s.Eye?.ToString(),
+            s.Strength, s.Softness, s.Hue, s.Saturation, s.Value);
+    }
+
+    [RpcMethod("mods.skinModel")]
+    public ModSkinModel SkinModel(ModSkinModelParams p)
+    {
+        var (ws, install) = session.Current();
+        var mod = ModProject.Open(ws, p.Id);
+        var skin = mod.Skin(p.Skin);
+        var species = TrySpecies(ws) ?? throw new TyrantException(TyrantErrorCode.DataMissing,
+            "The 3D view needs the game's data: on the Workspace tab click Run data dump (or run 'tyrant dump run').", FixAction.RefreshWorkspace);
+        var index = TryIndex(ws) ?? throw new TyrantException(TyrantErrorCode.AssetIndexMissing,
+            "The 3D view needs the asset index: on the Workspace tab click Index assets (or run 'tyrant assets index').", FixAction.ReindexAssets);
+        var guid = species.FirstOrDefault(s => s.SpeciesId == skin.Species)?.PrefabGuid;
+        var prefab = (guid is null ? null : index.Assets.FirstOrDefault(a => a.Type == "GameObject" && string.Equals(a.Guid, guid, StringComparison.OrdinalIgnoreCase)))
+            ?? throw new TyrantException(TyrantErrorCode.TargetNotFound,
+                $"'{skin.Species}' has no model in the asset index: on the Workspace tab click Index assets (or run 'tyrant assets index') and try again.", FixAction.ReindexAssets);
+        var based = BaseSkin(species, skin);
+        var maps = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var slot in new[] { "diffuse", "normal", "extra", "pattern" })
+            if (MapFile(ws, install, index, mod, skin, based, p.Sex, slot) is { } file) maps[slot] = file;
+        return new ModSkinModel(prefab.Ref, maps);
+    }
+
+    /// <summary>The skin's own PNG for the slot, else the base skin's texture (written once to the preview cache). Infants use the male infant slots, then the adult ones.</summary>
+    private string? MapFile(Workspace ws, GameInstall install, AssetIndex index, ModProject mod, Tyrant.Framework.Core.SkinEntry skin, VanillaSkin? based, string sex, string slot)
+    {
+        var candidates = sex == "infant" ? new[] { "infant" + char.ToUpperInvariant(slot[0]) + slot[1..], slot } : [slot];
+        // One sex only, as in the game (infants wear the male skin's infant slots).
+        IReadOnlyDictionary<string, string>?[] own = [sex == "female" ? skin.Female : skin.Male];
+        IReadOnlyDictionary<string, string>?[] vanilla = [sex == "female" ? based?.Female : based?.Male];
+        foreach (var candidate in candidates)
+        {
+            if (own.Select(d => d?.GetValueOrDefault(candidate)).FirstOrDefault(f => !string.IsNullOrEmpty(f)) is { } file)
+                return Path.GetFullPath(Path.Combine(mod.Dir, file));
+            if (vanilla.Select(d => d?.GetValueOrDefault(candidate)).FirstOrDefault(g => !string.IsNullOrEmpty(g)) is { } textureGuid
+                && index.Assets.FirstOrDefault(a => a.Type == "Texture2D" && string.Equals(a.Guid, textureGuid, StringComparison.OrdinalIgnoreCase)) is { } texture)
+            {
+                var png = Path.Combine(PreviewsDir(ws, "skin-model"), $"{texture.Guid}.png");
+                if (!File.Exists(png))
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(png)!);
+                    Options.AssetReader.WriteTexture(install, texture, png);
+                }
+                return png;
+            }
+        }
+        return null;
+    }
+
     [RpcMethod("mods.thumbnail")]
     public ModThumbnailResult Thumbnail(ModThumbnailParams p)
     {

@@ -477,6 +477,26 @@ export interface ModRow {
   error: string | null;
 }
 
+export interface ModSampleColorsParams {
+  id: string;
+  skin: string;
+  colors?: string | null;
+  variant?: string;
+  seed?: number;
+}
+
+export interface ModSampledColors {
+  a: string | null;
+  b: string | null;
+  secondary: string | null;
+  eye: string | null;
+  strength: number;
+  softness: number;
+  hue: number;
+  saturation: number;
+  value: number;
+}
+
 export interface ModSaveManifestParams {
   id: string;
   revision: string;
@@ -527,6 +547,17 @@ export interface ModSkinDto {
   colorsJson: string | null;
   baseMaleSlots: string[] | null;
   baseFemaleSlots: string[] | null;
+}
+
+export interface ModSkinModel {
+  prefabRef: string;
+  maps: Record<string, string>;
+}
+
+export interface ModSkinModelParams {
+  id: string;
+  skin: string;
+  sex?: string;
 }
 
 export interface ModSpeciesResult {
@@ -714,11 +745,13 @@ export interface RpcMethods {
   "mods.renameSkin": { params: ModRenameSkinParams; result: ModDetail };
   "mods.replace": { params: ModReplaceParams; result: ModsListResult };
   "mods.restoreCutouts": { params: ModIdParams; result: ModRestoreCutoutsResult };
+  "mods.sampleColors": { params: ModSampleColorsParams; result: ModSampledColors };
   "mods.saveManifest": { params: ModSaveManifestParams; result: ModDetail };
   "mods.setColors": { params: ModSetColorsParams; result: ModDetail };
   "mods.setDetails": { params: ModSetDetailsParams; result: ModDetail };
   "mods.setSkinFile": { params: ModSetSkinFileParams; result: ModDetail };
   "mods.setThumbnail": { params: ModSetThumbnailParams; result: ModDetail };
+  "mods.skinModel": { params: ModSkinModelParams; result: ModSkinModel };
   "mods.skinSlots": { params: void; result: SkinSlotsResult };
   "mods.species": { params: void; result: ModSpeciesResult };
   "mods.thumbnail": { params: ModThumbnailParams; result: ModThumbnailResult };
