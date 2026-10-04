@@ -33,7 +33,7 @@ namespace Tyrant.Framework
                 var method = type == null ? null : AccessTools.Method(type, MethodName);
                 if (method == null)
                 {
-                    FrameworkMod.Log.Error($"{TypeName}.{MethodName} was not found (game updated?); texture replacements, added skins' textures and animal events are off.");
+                    FrameworkMod.Log.Error($"{TypeName}.{MethodName} was not found (game updated?); texture replacements, added skins' textures, model replacements and animal events are off.");
                     return;
                 }
                 harmony.Patch(method, postfix: new HarmonyMethod(typeof(AnimalTexturePatch), nameof(Postfix)));
@@ -66,6 +66,11 @@ namespace Tyrant.Framework
         {
             var renderers = Lods(animal);
             if (renderers.Count == 0) return;
+            var addedSkin = SkinsModule.TryGet(Read(SkinDataProperty, animal, "SkinData"), out var modId, out var entry, out var directory);
+
+            // A replaced model first (the skin's, else the species'); the property block below then goes onto the new mesh.
+            ModelModule.Apply(animal, renderers, addedSkin ? entry.Key(modId) : null);
+
             renderers[0].GetPropertyBlock(Block);
             var changed = false;
 
@@ -86,7 +91,7 @@ namespace Tyrant.Framework
             }
 
             // An added skin: its PNGs for the animal's sex; slots it does not provide keep the base skin's textures.
-            if (SkinsModule.TryGet(Read(SkinDataProperty, animal, "SkinData"), out var modId, out var entry, out var directory))
+            if (addedSkin)
             {
                 var male = string.Equals(Read(SexProperty, animal, "Sex")?.ToString(), "Male", StringComparison.Ordinal);
                 var files = male ? entry.Male : entry.Female;
