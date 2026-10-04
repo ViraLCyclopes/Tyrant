@@ -27,7 +27,7 @@
 </nav>
 
 <style>
-  .dock { position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%); background: color-mix(in srgb, var(--panel) 88%, transparent); border: 1px solid var(--border); border-radius: 14px; padding: 10px 12px; backdrop-filter: blur(6px); max-width: calc(100% - 32px); }
+  .dock { background: color-mix(in srgb, var(--panel) 88%, transparent); border: 1px solid var(--border); border-radius: 14px; padding: 10px 12px; backdrop-filter: blur(6px); max-width: 100%; }
   .row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
   .tool { display: grid; justify-items: center; gap: 4px; width: 104px; padding: 10px 6px; background: var(--panel-2); }
   .tool.planned { opacity: 0.45; }

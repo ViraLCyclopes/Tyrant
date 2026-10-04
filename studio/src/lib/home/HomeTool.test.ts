@@ -29,6 +29,19 @@ function renderHome(session: Session, store: KeyValueStore, openTool: (id: strin
 }
 
 describe('HomeTool', () => {
+  it('dots above the toolbar pick a background picture', async () => {
+    const { session, store } = setup();
+    renderHome(session, store);
+
+    const dots = screen.getAllByRole('button', { name: /^Picture \d+ of 10$/ });
+    expect(dots).toHaveLength(10);
+    expect(dots[0]).toHaveAttribute('aria-current', 'true');
+    await fireEvent.click(screen.getByRole('button', { name: 'Picture 4 of 10' }));
+
+    expect(screen.getByRole('button', { name: 'Picture 4 of 10' })).toHaveAttribute('aria-current', 'true');
+    expect(dots[0]).not.toHaveAttribute('aria-current');
+  });
+
   it('first run: the intro offers to create or open a workspace and cannot be hidden', async () => {
     const { session, platform, rpc, store } = setup();
     platform.folders.push('D:\\new');

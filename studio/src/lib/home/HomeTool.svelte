@@ -4,12 +4,13 @@
   import { getSession } from '$lib/stores/session.svelte';
   import Backdrop from './Backdrop.svelte';
   import { BACKGROUNDS, rotation } from './backgrounds';
+  import { Slideshow } from './slideshow.svelte';
   import Dock from './Dock.svelte';
 
   const session = getSession();
   const tab = getTab();
   const shell = getShell();
-  const pictures = rotation(BACKGROUNDS, Math.random);
+  const slideshow = new Slideshow(rotation(BACKGROUNDS, Math.random), 1600);
   const firstRun = $derived(session.workspace === null);
   const showIntro = $derived(firstRun || !shell.introHidden);
 
@@ -38,7 +39,7 @@
 </script>
 
 <div class="home">
-  <Backdrop images={pictures} />
+  <Backdrop {slideshow} />
   <div class="scrim" aria-hidden="true"></div>
   {#if showIntro}
     <section class="intro" aria-label="About Tyrant">
@@ -64,7 +65,17 @@
   {#if chip}
     <button class="chip" onclick={() => tab.openTool('workspace')}>{chip}</button>
   {/if}
-  <Dock tools={shell.registry.dock()} onOpen={(id) => tab.openTool(id)} />
+  <div class="bottom">
+    {#if slideshow.images.length > 1}
+      <div class="dots" role="group" aria-label="Background pictures">
+        {#each slideshow.images as _, i (i)}
+          <button class="dot" class:on={slideshow.index === i} aria-label="Picture {i + 1} of {slideshow.images.length}"
+            aria-current={slideshow.index === i ? 'true' : undefined} onclick={() => slideshow.show(i)}></button>
+        {/each}
+      </div>
+    {/if}
+    <Dock tools={shell.registry.dock()} onOpen={(id) => tab.openTool(id)} />
+  </div>
 </div>
 
 <style>
@@ -77,6 +88,11 @@
   .row { display: flex; gap: 8px; flex-wrap: wrap; }
   .info { position: absolute; left: 24px; top: 24px; width: 30px; height: 30px; border-radius: 50%; padding: 0; font-weight: 700; }
   .chip { position: absolute; right: 24px; top: 24px; background: color-mix(in srgb, var(--panel) 90%, transparent); }
+  .bottom { position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 10px; max-width: calc(100% - 32px); }
+  .dots { display: flex; gap: 8px; padding: 6px 10px; border-radius: 999px; background: color-mix(in srgb, var(--panel) 55%, transparent); backdrop-filter: blur(4px); }
+  .dot { width: 10px; height: 10px; min-width: 0; padding: 0; border-radius: 50%; border: 1px solid color-mix(in srgb, var(--text) 70%, transparent); background: transparent; cursor: pointer; }
+  .dot:hover { background: color-mix(in srgb, var(--text) 40%, transparent); }
+  .dot.on { background: var(--accent); border-color: var(--accent); }
   @media (max-width: 640px) {
     .intro { left: 16px; right: 16px; top: 16px; max-width: none; }
     .chip { right: 16px; top: auto; bottom: 150px; }
