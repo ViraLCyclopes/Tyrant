@@ -16,13 +16,18 @@
   {#if tab.error}
     <ErrorBanner error={tab.error} onFix={(fix) => session.applyFix(fix, tab)} onDismiss={() => (tab.error = null)} />
   {/if}
-  {#await loading}
-    <p class="hint">Loading {def.name}…</p>
-  {:then mod}
-    <mod.default />
-  {:catch e}
-    <p class="warn">{def.name} could not be loaded: {String(e)}</p>
-  {/await}
+  {#if !session.ready}
+    <!-- Reopened tabs load their data at once: they must wait for the last workspace to be open in the core. -->
+    <p class="hint">Opening your workspace…</p>
+  {:else}
+    {#await loading}
+      <p class="hint">Loading {def.name}…</p>
+    {:then mod}
+      <mod.default />
+    {:catch e}
+      <p class="warn">{def.name} could not be loaded: {String(e)}</p>
+    {/await}
+  {/if}
 </div>
 
 <style>

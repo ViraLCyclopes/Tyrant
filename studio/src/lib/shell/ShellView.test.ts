@@ -10,10 +10,11 @@ import { Registry } from './registry';
 import { ShellState } from './shellState.svelte';
 import Shell from './Shell.svelte';
 
-function setup() {
+function setup(ready = true) {
   const rpc = new FakeRpc();
   const platform = new FakePlatform();
   const session = new Session(rpc, platform, memoryStore());
+  session.ready = ready; // the app's start (last workspace reopened) has finished
   const registry = new Registry();
   const stub = () => import('$lib/test/stubs/StubTool.svelte');
   registry.register({ id: 'home', name: 'Home', blurb: '', icon: '', status: 'ready', instances: 'single', closable: false, inDock: false, load: stub });
@@ -26,6 +27,17 @@ function setup() {
 }
 
 describe('Shell', () => {
+  it("reopened tabs wait until the last workspace is open (else a mod tab asks before it is: 'No workspace is open')", async () => {
+    const { session } = setup(false);
+
+    expect(await screen.findByText(/Opening your workspace/)).toBeInTheDocument();
+    expect(screen.queryByText(/^stub /)).toBeNull();
+
+    session.ready = true;
+
+    expect(await screen.findByText(/^stub /)).toBeInTheDocument();
+  });
+
   it('Help ▸ Check for updates is there', async () => {
     setup();
     await fireEvent.click(screen.getByRole('button', { name: 'Help' }));
