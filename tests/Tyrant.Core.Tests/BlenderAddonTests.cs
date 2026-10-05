@@ -58,6 +58,35 @@ public class BlenderAddonTests
         Assert.Contains("blender_version_min = \"5.0.0\"", manifest);
     }
 
+    [Fact]
+    public void Install_runs_blenders_extension_installer_without_the_users_addons()
+    {
+        var process = new FakeBlenderProcess();
+        var blender = new BlenderInstall(@"C:\b\blender.exe", new Version(5, 2, 2));
+
+        BlenderAddon.Install(process, blender, @"C:\t\tyrant_blender.zip");
+
+        var run = Assert.Single(process.Runs);
+        Assert.Equal(["--factory-startup", "--command", "extension", "install-file", "-r", "user_default", "-e", @"C:\t\tyrant_blender.zip"], run.Args);
+    }
+
+    [Fact]
+    public void A_failed_install_reports_blenders_output()
+    {
+        var process = new FakeBlenderProcess { OnRun = (_, _) => new BlenderRun(1, "Error: bad zip") };
+        var ex = Assert.Throws<Tyrant.Core.Errors.TyrantException>(() =>
+            BlenderAddon.Install(process, new BlenderInstall("b.exe", new Version(5, 2)), "x.zip"));
+        Assert.Contains("bad zip", ex.Message);
+    }
+
+    [Fact]
+    public void Install_refuses_blender_4()
+    {
+        var ex = Assert.Throws<Tyrant.Core.Errors.TyrantException>(() =>
+            BlenderAddon.Install(new FakeBlenderProcess(), new BlenderInstall("b.exe", new Version(4, 5)), "x.zip"));
+        Assert.Contains("Blender 5.0 or newer (found 4.5)", ex.Message);
+    }
+
     internal static string RepoRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);

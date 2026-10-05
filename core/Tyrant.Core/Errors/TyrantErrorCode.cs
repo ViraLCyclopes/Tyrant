@@ -31,6 +31,8 @@ public enum TyrantErrorCode
     TargetNotFound,
     ModExists,
     UpdateCheckFailed,
+    BlenderMissing,
+    BlenderFailed,
 }
 
 /// <summary>A suggested remedy the UI can render as a button.</summary>
