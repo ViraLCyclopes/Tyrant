@@ -119,3 +119,32 @@ class RigToolsTests(unittest.TestCase):
         rigpanel.draw(Layout(), bpy.context, arm, data, say)
         self.assertTrue(any(d[0] == "operator" and d[1] == ("tyrant.rig_apply",) for d in drawn))
         rig.cancel(arm, data)
+
+    def test_a_top_bones_rig_survives_reopening_and_sending_again(self):
+        """Bones with no parent bone convert between Blender's Z-up armature space and the game's Y-up space both ways."""
+        path = fresh_ik_project()
+        data = project.load(path)
+        data["rig"] = {"MainBone": {"move": [0, 0.1, 0]}}
+        data["rigBaked"] = False
+        project.save(path, data)
+
+        arm = importer.import_project(path)
+
+        move = rig.unity_rig(arm)["MainBone"]["move"]
+        self.assertLess(max(abs(a - b) for a, b in zip(move, [0, 0.1, 0])), 1e-5)
+        before = arm.matrix_world @ arm.data.bones["MainBone"].head_local
+        rig.clear(arm, data)
+        lifted = before - arm.matrix_world @ arm.data.bones["MainBone"].head_local
+        self.assertAlmostEqual(lifted.z, 0.1, places=4)  # Unity's up (y) is Blender's up (z)
+
+    def test_send_is_refused_when_the_models_rig_edit_could_not_be_shown(self):
+        from tyrant_blender import panel
+
+        arm, _ = open_ik(controls=False)
+        arm[rig.PROBLEM] = "The rig edit could not be shown (RuntimeError: x)."
+
+        with self.assertRaises(send.SendError) as raised:
+            panel._start_send(bpy.context, arm)
+
+        self.assertIn("rig edit", str(raised.exception))
+        self.assertIn("Start fresh", str(raised.exception))

@@ -106,6 +106,10 @@ def _matrix(trs):
     return Matrix.LocRotScale(trs[0], trs[1], trs[2])
 
 
+def _same(a, b):
+    return all(abs(x - y) < TOLERANCE for row_a, row_b in zip(a, b) for x, y in zip(row_a, row_b))
+
+
 def _identity(offset):
     m, q, s = offset
     return m.length < TOLERANCE and (s - ONE).length < TOLERANCE and abs(q.dot(Quaternion())) > 1 - TOLERANCE
@@ -345,16 +349,24 @@ def apply(arm, data):
     reference = {k: _unflat(v) for k, v in state["locals"].items()}
     now = _true_locals(arm, _sigma(arm))
     old = offsets(arm)
+    stance_game = {name: (compose_inverse(old[name], _trs(local)) if name in old else _trs(local)) for name, local in reference.items()}
     new = {}
     for name, start_local in reference.items():
         if name not in now:
             continue
-        delta = now[name] @ start_local.inverted()
-        before = _matrix(old[name]) if name in old else Matrix.Identity(4)
-        offset = _trs(delta @ before)
+        if _same(now[name], start_local):
+            if name in old:
+                new[name] = old[name]
+            continue
+        # Solved channel by channel against the game's own local, so the game's rule gives back exactly what is shown
+        # (a matrix difference would shear for an uneven scale on a bone turned in its parent).
+        p1, r1, s1 = _trs(now[name])
+        p0, r0, s0 = stance_game[name]
+        turn = r1 @ r0.inverted()
+        grow = _div(s1, s0)
+        offset = (p1 - turn @ _mul(grow, p0), turn, grow)
         if not _identity(offset):
             new[name] = offset
-    stance_game = {name: (compose_inverse(old[name], _trs(local)) if name in old else _trs(local)) for name, local in reference.items()}
     _reshape(arm, data, new, stance_game)
     del arm[START]
     _restore(arm, data, state.get("growth", 1.0), state.get("ik", False))
@@ -385,7 +397,7 @@ def clear(arm, data):
 def adopt(arm, data):
     """On import: a model that already wears a rig edit. Baked (the model was made for it): the rest pose is the edited
     skeleton, so only the offsets and the game's skeleton are worked out. Not baked (the game's mesh): the edit is applied."""
-    table = from_unity((data or {}).get("rig") or {})
+    table = from_unity((data or {}).get("rig") or {}, _root_names(arm))
     if not table:
         return
     if (data or {}).get("rigBaked"):

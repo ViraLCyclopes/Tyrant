@@ -49,7 +49,8 @@ def import_project(path):
         try:
             rig.adopt(armature, data)  # before IK: the controls are built on the skeleton the model wears in game
         except Exception as ex:  # noqa: BLE001 - the model still opens, as it came
-            armature[rig.PROBLEM] = f"The rig edit could not be shown ({type(ex).__name__}: {ex}); Clear rig edit or open the model again."
+            armature[rig.PROBLEM] = (f"The rig edit could not be shown ({type(ex).__name__}: {ex}). Send is off for this model: "
+                                     "open it again from Tyrant (Open in Blender → Options → Start fresh).")
     if data.get("ikOnOpen", True) and (data.get("ik") or {}).get("chains"):
         try:
             ik.add_controls(armature, data)

@@ -61,6 +61,10 @@ def _stop_on_problems(armature, data):
 
 
 def _start_send(context, armature, destination=None, new_mod_name=None):
+    if armature.get(rig.PROBLEM):
+        # Without the rig edit this armature would send an empty one, which clears the mod's.
+        raise send.SendError("This model's rig edit could not be shown, so sending would clear it in the mod: open the model "
+                             "again from Tyrant (Open in Blender → Options → Start fresh).")
     path = armature[project.TAG]
     data = project.load(path)
     if not send.trusted_tyrant(data.get("tyrant")):

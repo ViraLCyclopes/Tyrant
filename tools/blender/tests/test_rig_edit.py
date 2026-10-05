@@ -84,6 +84,21 @@ class RigEditTests(unittest.TestCase):
         # 0.1 in Blender under a parent grown 2x is 0.05 in that parent's own (scaled) space, as the game counts it
         self.assertAlmostEqual(table["Foot.L"][0].length, 0.05, places=3)
 
+    def test_an_uneven_scale_on_a_turned_bone_is_recorded_as_posed(self):
+        femur = self.arm.pose.bones["Femur.L"]
+        femur.rotation_mode = "QUATERNION"
+        femur.rotation_quaternion = Quaternion((1, 0, 0), 0.8) @ femur.rotation_quaternion  # turned in its parent
+        rig.start(self.arm, self.data)
+        femur.scale = Vector((1.0, 1.5, 1.0))  # longer along the bone
+        shown = head(self.arm, "Foot.L")
+
+        rig.apply(self.arm, self.data)
+
+        _, turn, scale = rig.offsets(self.arm)["Femur.L"]
+        self.assertLess((scale - Vector((1.0, 1.5, 1.0))).length, 1e-3)
+        self.assertLess(turn.angle, 1e-3)
+        self.assertLess((head(self.arm, "Foot.L") - shown).length, 1e-3)  # nothing jumps
+
     def test_cancel_puts_the_pose_back_and_records_nothing(self):
         rig.start(self.arm, self.data)
         before = head(self.arm, "Foot.L")
