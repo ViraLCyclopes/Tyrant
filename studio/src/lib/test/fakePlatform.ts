@@ -10,8 +10,11 @@ export class FakePlatform implements Platform {
   readonly copied: string[] = [];
 
   files: (string | null)[] = [];
+  /** Each openFile call's title and extensions, in order. */
+  readonly fileDialogs: { title: string; extensions: string[] }[] = [];
 
-  async openFile(): Promise<string | null> {
+  async openFile(title = '', extensions: string[] = []): Promise<string | null> {
+    this.fileDialogs.push({ title, extensions });
     return this.files.shift() ?? null;
   }
 

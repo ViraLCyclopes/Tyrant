@@ -6,6 +6,7 @@ import { FakeRpc } from '$lib/test/fakeRpc';
 import { renderWith, workspaceStatus, messages } from '$lib/test/fixtures';
 import { Session } from '$lib/stores/session.svelte';
 import SpeciesPanel from './SpeciesPanel.svelte';
+import { exportFormat } from './exportFormat.svelte';
 
 function setup() {
   const rpc = new FakeRpc();
@@ -40,6 +41,17 @@ describe('SpeciesPanel', () => {
 
     expect(screen.queryByText('Stegosaurus')).toBeNull();
     expect(screen.getByText('Carcharodontosaurus')).toBeInTheDocument();
+  });
+
+  it('exports a pack with FBX models too when chosen', async () => {
+    const { rpc, session } = setup();
+    renderWith(SpeciesPanel, session);
+
+    await fireEvent.change(await screen.findByRole('combobox', { name: 'Model format' }), { target: { value: 'both' } });
+    await fireEvent.click(await screen.findByRole('button', { name: 'Export Carcharodontosaurus pack' }));
+
+    await waitFor(() => expect(rpc.callsTo('species.pack')[0]?.params).toEqual({ key: 'carcharodontosaurus', format: 'both' }));
+    exportFormat.value = 'glb';
   });
 
   it('exports a species pack and offers to show it', async () => {

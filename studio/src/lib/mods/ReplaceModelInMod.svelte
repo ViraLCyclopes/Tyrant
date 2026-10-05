@@ -23,7 +23,7 @@
   }
 
   async function browse() {
-    const picked = await session.platform.openFile(`Choose your model for ${asset.name} (.glb from Blender)`, ['glb']);
+    const picked = await session.platform.openFile(`Choose your model for ${asset.name} (.glb or .fbx)`, ['glb', 'fbx']);
     if (picked) file = picked;
   }
 
@@ -59,11 +59,11 @@
     {#if target === NEW}
       <label>New mod id <input aria-label="New mod id" bind:value={newId} /></label>
     {/if}
-    <label>Your model <input aria-label="Your model" placeholder="a .glb exported from Blender" bind:value={file} /></label>
+    <label>Your model <input aria-label="Your model" placeholder="a .glb or .fbx" bind:value={file} /></label>
     <button onclick={browse}>Browse…</button>
     <button class="primary" disabled={!file.trim() || session.busy} onclick={add}>Add to mod</button>
     <button onclick={() => (open = false)}>Cancel</button>
-    <p class="hint">Export the prefab from Tyrant, edit it in Blender (keep the armature, its bone names and the growth shape keys), export a .glb.</p>
+    <p class="hint">Export the prefab from Tyrant, edit it in Blender (keep the armature, its bone names and the growth shape keys), export a .glb (or an .fbx: Tyrant has Blender convert it).</p>
   </div>
 {/if}
 

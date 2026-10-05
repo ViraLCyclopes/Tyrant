@@ -9,7 +9,8 @@ import { Session } from '$lib/stores/session.svelte';
 import AddModel from './AddModel.svelte';
 
 function setup(hasDump = true) {
-  const platform = new FakePlatform();
+  lastPlatform = new FakePlatform();
+  const platform = lastPlatform;
   platform.files.push('D:\\blender\\big-carch.glb');
   const rpc = new FakeRpc().on('mods.species', () => ({
     hasDump,
@@ -27,7 +28,18 @@ function setup(hasDump = true) {
   return { doc, onDone };
 }
 
+let lastPlatform: FakePlatform;
+
 describe('AddModel', () => {
+  it('lets you pick a .glb or an .fbx', async () => {
+    setup();
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Browse…' }));
+
+    await waitFor(() => expect(lastPlatform.fileDialogs[0]?.extensions).toEqual(['glb', 'fbx']));
+    expect(lastPlatform.fileDialogs[0]?.title).toContain('.fbx');
+  });
+
   it("adds the .glb as the chosen species' model in this mod and opens it", async () => {
     const { doc, onDone } = setup();
 

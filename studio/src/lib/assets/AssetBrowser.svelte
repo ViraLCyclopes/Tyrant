@@ -1,4 +1,6 @@
 <script lang="ts">
+  import ExportFormatSelect from './ExportFormatSelect.svelte';
+  import { formatParam } from './exportFormat.svelte';
   import { onMount } from 'svelte';
   import { debounce } from '$lib/debounce';
   import type { AssetCount, AssetListResult, AssetsSummary } from '$lib/rpc/types.gen';
@@ -63,7 +65,7 @@
   }
 
   async function exportRefs(refs: string[]) {
-    const r = await session.runJob('assets.export', { refs }, 'Export assets', tab);
+    const r = await session.runJob('assets.export', { refs, ...formatParam() }, 'Export assets', tab);
     if (!r) return;
     const notes = r.notes?.length ? ` ${r.notes.join(' ')}` : '';
     tab.info(`Exported ${r.exported} assets. Report: ${r.reportPath}${notes}`);
@@ -152,6 +154,7 @@
       </label>
       <button onclick={selectAll} disabled={!result?.total}>Select all</button>
       <button onclick={() => (checked = [])} disabled={checked.length === 0}>Clear</button>
+      <ExportFormatSelect />
       <button disabled={!group || session.busy} title={group ? `Export every asset in ${groupLabel(group)}` : 'Pick a group on the left first'} onclick={exportGroup}>Export group</button>
       <button class="primary" disabled={shown.length === 0 || session.busy} onclick={() => exportRefs(shown)}>Export selected ({shown.length})</button>
     </div>

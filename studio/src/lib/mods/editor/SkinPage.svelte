@@ -17,7 +17,7 @@
   const speciesModel = $derived(doc.detail?.models.find((m) => m.skin === null && m.target === skin.species));
 
   async function replaceModel() {
-    const file = await session.platform.openFile(`Choose a model for ${skin.name} (.glb from Blender)`, ['glb']);
+    const file = await session.platform.openFile(`Choose a model for ${skin.name} (.glb or .fbx)`, ['glb', 'fbx']);
     if (file) await doc.edit('mods.replaceModel', { file, skin: skin.id });
   }
 

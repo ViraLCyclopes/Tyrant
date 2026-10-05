@@ -20,7 +20,7 @@
   });
 
   async function browse() {
-    const picked = await session.platform.openFile(`Choose your model for ${species || 'the species'} (.glb from Blender)`, ['glb']);
+    const picked = await session.platform.openFile(`Choose your model for ${species || 'the species'} (.glb or .fbx)`, ['glb', 'fbx']);
     if (picked) file = picked;
   }
 
@@ -44,7 +44,7 @@
           {#each data.species as s (s.speciesId)}<option value={s.speciesId}>{s.speciesId}{s.vivarium ? ' (vivarium)' : ''}</option>{/each}
         </select>
       </label>
-      <label>Your model <input aria-label="Your model" placeholder="a .glb exported from Blender" bind:value={file} /></label>
+      <label>Your model <input aria-label="Your model" placeholder="a .glb or .fbx" bind:value={file} /></label>
       <button onclick={browse}>Browse…</button>
     </div>
     <div class="row">

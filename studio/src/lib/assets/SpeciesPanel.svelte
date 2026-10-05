@@ -1,4 +1,6 @@
 <script lang="ts">
+  import ExportFormatSelect from './ExportFormatSelect.svelte';
+  import { formatParam } from './exportFormat.svelte';
   import { onMount } from 'svelte';
   import type { SpeciesRow } from '$lib/rpc/types.gen';
   import AddSkin from '$lib/mods/AddSkin.svelte';
@@ -33,7 +35,7 @@
   });
 
   async function exportPack(row: SpeciesRow) {
-    const r = await session.runJob('species.pack', { key: row.key }, `Species pack: ${row.displayName}`, tab);
+    const r = await session.runJob('species.pack', { key: row.key, ...formatParam() }, `Species pack: ${row.displayName}`, tab);
     if (!r) return;
     lastPack = r.directory;
     const notes = r.notes?.length ? ` ${r.notes.join(' ')}` : '';
@@ -43,11 +45,12 @@
 </script>
 
 <p class="hint">
-  A species pack holds one animal's models (.glb), every texture of its asset group and a targets.json that lists each asset's
+  A species pack holds one animal's models (.glb, and FBX too when chosen), every texture of its asset group and a targets.json that lists each asset's
   Addressables key — the starting point for a reskin.
 </p>
 <div class="toolbar">
   <input type="search" placeholder="Find a species…" aria-label="Find a species" bind:value={filter} />
+  <ExportFormatSelect />
   {#if lastPack}<button onclick={() => session.platform.reveal(lastPack!)}>Show in Explorer</button>{/if}
   <button onclick={() => (soundsOf = soundsOf === ALL ? null : ALL)}>All sounds…</button>
 </div>

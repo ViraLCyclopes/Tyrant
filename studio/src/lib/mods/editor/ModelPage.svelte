@@ -73,7 +73,7 @@
   });
 
   async function replace() {
-    const file = await session.platform.openFile(`Choose your model for ${model.target} (.glb from Blender)`, ['glb']);
+    const file = await session.platform.openFile(`Choose your model for ${model.target} (.glb or .fbx)`, ['glb', 'fbx']);
     if (file) await doc.edit('mods.replaceModel', { file, target: model.skin ? null : model.target, skin: model.skin });
   }
 

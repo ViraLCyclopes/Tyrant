@@ -7,6 +7,7 @@ import { FakeRpc } from '$lib/test/fakeRpc';
 import { renderWith, workspaceStatus, messages } from '$lib/test/fixtures';
 import { Session } from '$lib/stores/session.svelte';
 import AssetBrowser from './AssetBrowser.svelte';
+import { exportFormat } from './exportFormat.svelte';
 
 const STEGO = 'animals/stego_assets_assets';
 const stegoD: AssetRow = {
@@ -71,6 +72,21 @@ describe('AssetBrowser', () => {
     await fireEvent.change(screen.getByRole('combobox', { name: 'Type' }), { target: { value: 'Texture2D' } });
 
     await waitFor(() => expect(lastList(rpc)).toMatchObject({ type: 'Texture2D' }));
+  });
+
+  it('exports models as FBX when that format is chosen', async () => {
+    const { rpc, session } = setup();
+    rpc.on('assets.export', () => ({ exported: 1, failed: 0, reportPath: 'r.json', failures: [] }));
+    rpc.on('workspace.status', () => workspaceStatus({ hasAssetIndex: true }));
+    renderWith(AssetBrowser, session);
+    await screen.findByRole('button', { name: 'T_Stego_D' });
+
+    await fireEvent.change(screen.getByRole('combobox', { name: 'Model format' }), { target: { value: 'fbx' } });
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Select T_Stego_D' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Export selected (1)' }));
+
+    await waitFor(() => expect(rpc.callsTo('assets.export')[0]?.params).toEqual({ refs: [stegoD.ref], format: 'fbx' }));
+    exportFormat.value = 'glb';
   });
 
   it('exports the selected assets in one job', async () => {
