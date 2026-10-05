@@ -5,7 +5,7 @@ import tempfile
 import unittest
 
 import bpy
-from mathutils import Quaternion, Vector
+from mathutils import Matrix, Quaternion, Vector
 
 from tyrant_blender import ik, importer, project
 
@@ -95,9 +95,13 @@ class IkBuildTests(unittest.TestCase):
         self.assertEqual(len(shape.users_scene), 0)  # never in a scene: Send and the goes/stays list never see it
 
     def test_the_foot_control_sits_on_the_games_ground_contact_point(self):
-        arm, _ = open_ik()
-        # Heel.L in Unity (0.3, 0, -0.05) + end offset (0, -0.05, 0) → glTF (-0.3, -0.05, -0.05) → Blender (x, -z, y).
-        self.assertLess((head_of(arm, "ctrl_foot.L") - Vector((-0.3, 0.05, -0.05))).length, 1e-4)
+        arm, path = open_ik()
+        # The game's end offset (0, -0.05, 0) under the heel, in the heel's frame as it rests (the bind pose; C# pins the
+        # Unity → glTF conversion of the offset).
+        offset = next(c for c in project.load(path)["ik"]["chains"] if c["name"] == "Leg L")["endOffset"]
+        expected = arm.matrix_world @ (arm.data.bones["Heel.L"].matrix_local @ Vector(offset))
+        self.assertEqual(offset, [0.0, -0.05, 0.0])
+        self.assertLess((head_of(arm, "ctrl_foot.L") - expected).length, 1e-4)
 
     def test_a_foot_control_moves_the_heel_onto_it(self):
         arm, _ = open_ik()
@@ -180,9 +184,26 @@ class IkBuildTests(unittest.TestCase):
         move(arm, "ctrl_foot.R", (0.0, -0.1, 0.15))
         self.assertLess((head_of(arm, "Heel.R") - head_of(arm, "mch_tip_foot.R")).length, 1e-3)
 
-    def test_the_fixture_opens_posed_like_a_game_rig(self):
+    def test_a_model_opens_in_its_bind_pose(self):
+        """The fixture's prefab pose differs from its bind pose, as on game rigs: Blender shows the bind (rest) pose, which
+        is what Send exports and what Clear Transform goes back to."""
         arm, _ = open_ik(controls=False)
-        self.assertGreater(arm.pose.bones["Femur.L"].matrix_basis.to_quaternion().angle, 0.2)
+        for bone in arm.pose.bones:
+            self.assertLess(bone.matrix_basis.to_quaternion().angle, 1e-6, bone.name)
+
+    def test_clearing_every_transform_keeps_the_ik_lined_up(self):
+        arm, _ = open_ik()
+        move(arm, "ctrl_foot.L", (0.0, -0.1, 0.15))
+        arm.pose.bones["Femur.R"].rotation_quaternion = Quaternion((1, 0, 0), math.radians(20))
+        ours = {n for c in ik.built(arm) for n in c["bones"] if n.startswith("mch_")}
+        for bone in arm.pose.bones:  # Alt+G, Alt+R, Alt+S on every visible bone
+            if bone.name not in ours:
+                bone.matrix_basis = Matrix.Identity(4)
+        bpy.context.view_layer.update()
+
+        for bone in arm.pose.bones:
+            if bone.name in {j for c in ik.built(arm) for j in c["joints"]}:
+                self.assertLess(max(abs(a - b) for ra, rb in zip(bone.matrix, bone.bone.matrix_local) for a, b in zip(ra, rb)), 1e-4, bone.name)
 
     def test_the_prefabs_tiny_scales_are_cleared_on_open(self):
         arm, _ = open_ik(controls=False)

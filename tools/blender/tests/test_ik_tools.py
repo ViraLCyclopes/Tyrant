@@ -115,9 +115,8 @@ class IkToolTests(unittest.TestCase):
         with self.assertRaisesRegex(ik.IkError, "No chain is on IK"):
             ik.bake(arm, bpy.context.scene, frame_range=False)
 
-    def test_reset_pose_goes_back_to_the_opened_pose_and_keeps_growth(self):
+    def test_reset_pose_goes_to_the_rest_pose_and_keeps_growth(self):
         arm, _ = open_ik()
-        opened = arm.pose.bones["Femur.L"].rotation_quaternion.copy()  # the fixture opens with its femurs posed
         arm.tyrant_growth = 0.5
         hip = arm.pose.bones["Hip"].location.copy()  # Growth's own channel
         arm.pose.bones["Femur.L"].rotation_quaternion = Quaternion((1, 0, 0), math.radians(20))
@@ -125,17 +124,13 @@ class IkToolTests(unittest.TestCase):
 
         ik.reset_pose(arm)
 
-        self.assertLess(arm.pose.bones["Femur.L"].rotation_quaternion.rotation_difference(opened).angle, 1e-6)
-        self.assertGreater(opened.angle, 0.01)
+        self.assertLess(arm.pose.bones["Femur.L"].rotation_quaternion.rotation_difference(Quaternion()).angle, 1e-6)
         self.assertLess(arm.pose.bones["ctrl_foot.L"].location.length, 1e-6)
         self.assertLess((arm.pose.bones["Hip"].location - hip).length, 1e-6)
         self.assertAlmostEqual(arm.tyrant_growth, 0.5)
 
-    def test_reset_pose_in_a_scene_from_an_older_tyrant_says_how_instead_of_jumping(self):
-        arm, _ = open_ik()
-        del arm[ik.OPEN_POSE]  # opened by a Tyrant before this one: the opened pose is not known
-        before = game_pose(arm)
-
-        with self.assertRaisesRegex(ik.IkError, "Start fresh"):
-            ik.reset_pose(arm)
-        self.assertLess(max_change(before, game_pose(arm)), 1e-9)
+    def test_adding_on_a_posed_model_suggests_reset_pose_first(self):
+        arm, _ = open_ik(controls=False)
+        self.assertIsNone(ikpanel.posed_hint(arm))
+        arm.pose.bones["Femur.L"].rotation_quaternion = Quaternion((1, 0, 0), math.radians(20))  # as a scene opened by Tyrant 0.1 builds
+        self.assertIn("Reset pose", ikpanel.posed_hint(arm))

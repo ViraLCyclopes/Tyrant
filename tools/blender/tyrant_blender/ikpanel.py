@@ -113,7 +113,7 @@ class TYRANT_OT_ik_bake(_IkOperator):
 
 
 class TYRANT_OT_ik_reset_pose(_IkOperator):
-    """Put every bone back as the model opened and clear the controls (Growth stays)"""
+    """Clear the pose of every bone and control: the rest pose (Growth stays)"""
 
     bl_idname = "tyrant.ik_reset_pose"
     bl_label = "Reset pose"
@@ -121,6 +121,14 @@ class TYRANT_OT_ik_reset_pose(_IkOperator):
     def run(self, context, armature):
         ik.reset_pose(armature)
         return None
+
+
+def posed_hint(armature):
+    """Before Add: the controls are built from the pose shown, so a posed model (or a scene opened by an earlier Tyrant, in
+    the game's prefab pose) is better reset to rest first."""
+    if any(b.matrix_basis.to_quaternion().angle > 1e-4 for b in armature.pose.bones):
+        return "The model is posed: Add IK controls builds them from this pose. For controls at rest, press Reset pose first."
+    return None
 
 
 def draw(layout, context, armature, data, say):
@@ -134,6 +142,8 @@ def draw(layout, context, armature, data, say):
         row.operator("tyrant.ik_add", icon="ADD")
         if known and not (data.get("ik") or {}).get("chains"):
             say(box, context, "This model has no IK chains in the game.", "INFO")
+        elif posed_hint(armature):
+            say(box, context, posed_hint(armature), "INFO")
     else:
         for chain in chains:
             control = armature.pose.bones.get(chain["target"])

@@ -28,7 +28,7 @@ def import_project(path):
     if armature is not None:
         armature[project.TAG] = path
         armature.data.display_type = "OCTAHEDRAL"
-        ik.remember_open_pose(armature)  # the prefab's pose, not the bind pose: Reset pose goes back to it
+        ik.to_rest(armature)  # the bind pose, not the prefab's: what Send exports and Clear Transform returns to
     for obj in created:
         if obj.type != "MESH":
             continue

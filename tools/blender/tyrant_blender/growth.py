@@ -78,28 +78,24 @@ def _stage(bone, value):
     return [a + (b - a) * t for a, b in zip(stages[first], stages[first + 1])]
 
 
-def _basis(rest, bone, value):
-    """The pose basis that turns the rest (adult) local transform into this growth's, relative to the game's adult stage."""
+def _basis(rest, bone, value, pose_bone):
+    """The pose basis (location, scale) for this growth, relative to the game's adult stage. The game moves the bone in its
+    parent's space: that move is turned into the bone's own rest frame (its bind pose, which can differ from the prefab's
+    pose the stages are written against), so it lands where the game puts it."""
     target = _stage(bone, value)
     adult = bone["adult"]
-    p = Vector(rest["position"])
-    q = Quaternion((rest["rotation"][3], rest["rotation"][0], rest["rotation"][1], rest["rotation"][2]))
-    s = Vector(rest["scale"])
-    p2, s2 = p.copy(), s.copy()
+    location, scale = Vector((0.0, 0.0, 0.0)), Vector((1.0, 1.0, 1.0))
     if bone.get("translation"):
-        p2 = p + Vector(target[0:3]) - Vector(adult[0:3])
+        move = Vector(target[0:3]) - Vector(adult[0:3])
+        b = pose_bone.bone
+        if b.parent is not None:  # Blender keeps each bone's axes as the node's: the parent bone's frame is the parent's space
+            frame = (b.parent.matrix_local.inverted() @ b.matrix_local).to_3x3().normalized()
+        else:
+            frame = Quaternion((rest["rotation"][3], rest["rotation"][0], rest["rotation"][1], rest["rotation"][2])).to_matrix()
+        location = frame.inverted() @ move
     if bone.get("scale"):
-        s2 = Vector([sv * (t / a if abs(a) > 1e-8 else 1.0) for sv, t, a in zip(s, target[3:6], adult[3:6])])
-    local = Matrix.LocRotScale(p, q, s)
-    grown = Matrix.LocRotScale(p2, q, s2)
-    # Blender's glTF importer keeps each bone's axes as the node's (bone rest = axis conversion @ node world), so the pose
-    # basis, which lives in the bone's own frame, is the change of the node's local transform as it is.
-    return local.inverted() @ grown
-
-
-def clear_pose(armature):
-    for pose_bone in armature.pose.bones:
-        pose_bone.matrix_basis = Matrix.Identity(4)
+        scale = Vector([t / a if abs(a) > 1e-8 else 1.0 for t, a in zip(target[3:6], adult[3:6])])
+    return Matrix.LocRotScale(location, None, scale)
 
 
 def set_growth(armature, value, scene_objects=None):
@@ -127,16 +123,12 @@ def set_growth(armature, value, scene_objects=None):
     from . import ik  # late: ik uses growth too
 
     rest = {r["name"]: r for r in (data or {}).get("rest", [])}
-    opened = ik.open_pose(armature)
     channels = {}
     for bone in growth.get("bones") or []:
         pose_bone = armature.pose.bones.get(bone["name"])
         if pose_bone is None or bone["name"] not in rest:
             continue
-        # The growth change is relative to the prefab's transforms, which the model opens posed in: applied on top of that
-        # pose, it lands where the game puts the bone even when the bind pose differs.
-        change = Matrix.Identity(4) if value >= 1.0 else _basis(rest[bone["name"]], bone, value)
-        basis = opened.get(bone["name"], Matrix.Identity(4)) @ change
+        basis = Matrix.Identity(4) if value >= 1.0 else _basis(rest[bone["name"]], bone, value, pose_bone)
         # Only the channels the game's growth owns: rotations are yours (poses, IK, animation).
         location, _rotation, scale = basis.decompose()
         if bone.get("translation"):

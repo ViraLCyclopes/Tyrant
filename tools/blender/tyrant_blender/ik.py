@@ -8,8 +8,8 @@ mch_tip_foot.L (the chain's last joint as it stands: the IK target, and the join
 child of the joint before the last, reaches from that joint to the last one and carries the IK constraint: Blender's IK
 reaches with a bone's tail, and the game's bones do not point at their child.
 
-Everything is built from the pose shown when the controls are added (a game model opens in its prefab's pose, not its bind
-pose), so adding them moves nothing; Growth then moves the controls by how far the chain ends move from that pose.
+Everything is built from the pose shown when the controls are added (a model opens in its bind pose, Blender's rest), so
+adding them moves nothing; Growth then moves the controls by how far the chain ends move from that pose.
 """
 import json
 import math
@@ -20,7 +20,6 @@ from mathutils import Matrix, Vector
 TAG = "tyrant_ik"  # armature: JSON list of the chains built
 SKIPPED = "tyrant_ik_skipped"  # armature: JSON list of the chains left out, with why
 REFERENCE = "tyrant_ik_reference"  # armature: the pose bases (at Growth 1) the controls were built from
-OPEN_POSE = "tyrant_open_pose"  # armature: the pose bases the model opened with (Reset pose goes back to them)
 BONE_TAG = "tyrant_ik"  # bone: one of Tyrant's IK bones
 CONTROLS = "Tyrant IK"
 MECHANISM = "Tyrant IK (mechanism)"
@@ -87,16 +86,11 @@ def clear_scale_noise(arm, names=None):
             pose_bone.scale = (1.0, 1.0, 1.0)
 
 
-def remember_open_pose(arm):
-    """Called on import: clears the scale noise, then keeps the pose the model opens with (the prefab's) for Reset pose
-    and Growth."""
-    clear_scale_noise(arm)
-    arm[OPEN_POSE] = json.dumps({b.name: flat(b.matrix_basis) for b in arm.pose.bones if posed(b.matrix_basis)})
-
-
-def open_pose(arm):
-    """Bone name → its basis as the model opened (missing = the rest pose)."""
-    return _matrices(arm, OPEN_POSE)
+def to_rest(arm):
+    """Called on import: the glTF importer poses the bones as the prefab stores them, but the bind pose is the model's rest
+    (what Send exports and Blender's Clear Transform returns to), so the model opens in it."""
+    for pose_bone in arm.pose.bones:
+        pose_bone.matrix_basis = Matrix.Identity(4)
 
 
 # --- where the bones go (armature space, in the pose shown) -----------------------------------------------------------------
@@ -557,16 +551,12 @@ def bake(arm, scene, frame_range):
 
 
 def reset_pose(arm):
-    """Puts every game bone back as the model opened and clears the controls; Growth's own channels and the mechanism
-    bones stay."""
+    """Clears the pose of every game bone and control (the rest pose, as Clear Transform); Growth's own channels and the
+    mechanism bones stay."""
     from . import growth
 
-    if OPEN_POSE not in arm:
-        raise IkError("This scene was opened by an older Tyrant, which did not keep the pose the model opened in: open it again "
-                      "with Start fresh (Open in Blender → Options in Tyrant, or 'tyrant blender open --fresh') to use Reset pose.")
-    opened = open_pose(arm)
     mechanism = {n for c in built(arm) for n in c["bones"] if n.startswith("mch_")}
     for pose_bone in arm.pose.bones:
         if pose_bone.name not in mechanism:
-            pose_bone.matrix_basis = opened.get(pose_bone.name, Matrix.Identity(4))
+            pose_bone.matrix_basis = Matrix.Identity(4)
     growth.set_growth(arm, getattr(arm, "tyrant_growth", 1.0))
