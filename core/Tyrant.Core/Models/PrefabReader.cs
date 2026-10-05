@@ -33,7 +33,13 @@ internal static class PrefabReader
         foreach (var info in file.file.GetAssetsOfType(AssetClassID.MeshFilter))
             AddRenderer(manager, file, manager.GetBaseField(file, info), skinned: false, transformByGameObject, nodes, renderers, failures, materialFailures, externals, meshRenderers);
 
-        return new PrefabModel(root.Name, root, renderers, failures) { MaterialFailures = materialFailures };
+        var (ikChains, ikFailures) = FabrikReader.ReadAll(manager, file, transformByGameObject, nodes);
+        return new PrefabModel(root.Name, root, renderers, failures)
+        {
+            MaterialFailures = materialFailures,
+            IkChains = ikChains,
+            IkFailures = ikFailures,
+        };
     }
 
     private static SkeletonNode BuildNode(AssetsManager manager, AssetsFileInstance file, Dictionary<long, AssetTypeValueField> transforms,

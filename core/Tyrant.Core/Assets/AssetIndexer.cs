@@ -184,7 +184,7 @@ public sealed class AssetIndexer
         return map;
     }
 
-    private static string? ScriptClass(AssetsManager manager, AssetsFileInstance file, AssetTypeValueField baseField)
+    internal static string? ScriptClass(AssetsManager manager, AssetsFileInstance file, AssetTypeValueField baseField)
     {
         try
         {

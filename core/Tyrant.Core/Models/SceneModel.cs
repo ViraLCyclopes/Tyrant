@@ -55,4 +55,25 @@ public sealed record PrefabModel(string Name, SkeletonNode Root, IReadOnlyList<R
 {
     /// <summary>Materials that could not be read; their meshes are kept and drawn plain.</summary>
     public IReadOnlyList<string> MaterialFailures { get; init; } = [];
+
+    /// <summary>The game's FABRIK IK chains on this prefab (empty for objects and animals without them).</summary>
+    public IReadOnlyList<IkChain> IkChains { get; init; } = [];
+
+    /// <summary>IK components that could not be read; the model is unaffected.</summary>
+    public IReadOnlyList<string> IkFailures { get; init; } = [];
 }
+
+/// <summary>A FABRIK chain's kind in the game: a leg (its foot raycasts to the ground) or the head and neck (aims at a target).</summary>
+public enum IkChainKind { Limb, Head }
+
+/// <summary>A pull on a joint, toward LocalDirection in Bone's space (FABRIKJointForce): Tyrant makes the leg's pole from it.</summary>
+public sealed record IkForce(SkeletonNode Bone, Vector3 LocalDirection, float Strength);
+
+/// <summary>One joint of a chain, root → tip; Length is the game's boneLength (0 on the tip).</summary>
+public sealed record IkJoint(SkeletonNode Node, float Length, IReadOnlyList<IkForce> Forces);
+
+/// <summary>
+/// One FABRIKComponentAnimal, in Unity space as the game stores it: the joints root → tip, the target point relative to the
+/// last joint (EndLocalOffset, e.g. the foot's ground contact), and for heads whether the head matches the target's rotation.
+/// </summary>
+public sealed record IkChain(IkChainKind Kind, float Influence, IReadOnlyList<IkJoint> Joints, Vector3 EndLocalOffset, bool MatchHeadRotation);
