@@ -178,7 +178,7 @@
 
 <style>
   /* A column, not a grid with fixed rows: the error banner comes and goes, and must not shift the rows below it. */
-  .shell { display: flex; flex-direction: column; height: 100vh; }
+  .shell { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
   .body { flex: 1; display: flex; flex-direction: column; min-height: 0; }
   .body.side { flex-direction: row; }
   .tabs { flex: 1; min-height: 0; min-width: 0; position: relative; }

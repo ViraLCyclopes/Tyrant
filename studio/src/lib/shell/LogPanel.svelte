@@ -90,7 +90,7 @@
   .grip { position: absolute; z-index: 2; }
   .bottom .grip { left: 0; right: 0; top: -3px; height: 6px; cursor: ns-resize; }
   .side .grip { top: 0; bottom: 0; left: -3px; width: 6px; cursor: ew-resize; }
-  header { display: flex; align-items: center; gap: 8px; padding: 4px 10px; border-bottom: 1px solid var(--border); }
+  header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 4px 10px; border-bottom: 1px solid var(--border); }
   .spacer { flex: 1; }
   ol { list-style: none; margin: 0; padding: 4px 10px; overflow: auto; flex: 1; font-family: var(--mono); font-size: 12px; }
   li { display: flex; gap: 10px; padding: 1px 0; }
