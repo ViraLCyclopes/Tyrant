@@ -49,4 +49,7 @@ def import_project(path):
             ik.add_controls(armature, data)
         except ik.IkError as ex:  # the model still opens; the Tyrant panel says why there are no controls
             armature[ik.SKIPPED] = json.dumps([str(ex)])
+        except Exception as ex:  # noqa: BLE001 - a fault in building the controls must not stop the model opening
+            armature[ik.SKIPPED] = json.dumps([f"The IK controls could not be built ({type(ex).__name__}: {ex}); the model "
+                                               "opened without them. Try Add IK controls in this panel."])
     return armature

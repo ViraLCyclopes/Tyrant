@@ -229,3 +229,16 @@ class IkBuildTests(unittest.TestCase):
 
         self.assertLess(abs(head_of(arm, "Heel.L").z - (heel_adult.z - 0.2)), 1e-3)
         self.assertLess((head_of(arm, "Heel.L") - head_of(arm, "mch_tip_foot.L")).length, 1e-3)
+
+    def test_an_unexpected_ik_failure_still_opens_the_model_and_says_why(self):
+        def broken(_arm, _data):
+            raise RuntimeError("something unexpected")
+
+        real = ik.add_controls
+        ik.add_controls = broken
+        try:
+            arm, _ = open_ik()
+        finally:
+            ik.add_controls = real
+        self.assertEqual(arm.type, "ARMATURE")
+        self.assertTrue(any("something unexpected" in line for line in ik.skipped(arm)), ik.skipped(arm))

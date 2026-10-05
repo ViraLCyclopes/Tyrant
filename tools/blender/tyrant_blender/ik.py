@@ -538,9 +538,11 @@ def bake(arm, scene, frame_range):
         visual[frame] = {n: pose[n].matrix.copy() for n in set(joints) | set(parents.values())}
     for chain in chains:
         control = pose[chain["target"]]
-        control[IK_FK] = 0.0
-        for frame in frames:
-            control.keyframe_insert(f'["{IK_FK}"]', frame=frame, group=chain["name"])
+        # The aim is baked too (it is in the head's visual rotation): left on, it would turn the head a second time.
+        for key in (IK_FK, AIM) if chain.get("look") and AIM in control else (IK_FK,):
+            control[key] = 0.0
+            for frame in frames:
+                control.keyframe_insert(f'["{key}"]', frame=frame, group=chain["name"])
     bones = arm.data.bones
     for frame in frames:
         scene.frame_set(frame)
@@ -559,6 +561,9 @@ def reset_pose(arm):
     bones stay."""
     from . import growth
 
+    if OPEN_POSE not in arm:
+        raise IkError("This scene was opened by an older Tyrant, which did not keep the pose the model opened in: open it again "
+                      "with Start fresh (Open in Blender → Options in Tyrant, or 'tyrant blender open --fresh') to use Reset pose.")
     opened = open_pose(arm)
     mechanism = {n for c in built(arm) for n in c["bones"] if n.startswith("mch_")}
     for pose_bone in arm.pose.bones:

@@ -76,6 +76,17 @@ class IkToolTests(unittest.TestCase):
         scene.frame_set(scene.frame_current)  # the keys put the baked pose back
         self.assertLess(max_change(posed, game_pose(arm)), 1e-4)
 
+    def test_bake_keeps_a_partly_aimed_head(self):
+        arm, _ = open_ik()
+        set_value(arm, "ctrl_head", ik.AIM, 0.5)
+        move(arm, "ctrl_look", (0.6, 0.0, 0.0))
+        posed = game_pose(arm)
+
+        ik.bake(arm, bpy.context.scene, frame_range=False)
+
+        self.assertEqual(arm.pose.bones["ctrl_head"][ik.AIM], 0.0)
+        self.assertLess(max_change(posed, game_pose(arm)), 1e-4)
+
     def test_bake_frame_range_follows_an_animated_control(self):
         arm, _ = open_ik()
         scene = bpy.context.scene
@@ -119,3 +130,12 @@ class IkToolTests(unittest.TestCase):
         self.assertLess(arm.pose.bones["ctrl_foot.L"].location.length, 1e-6)
         self.assertLess((arm.pose.bones["Hip"].location - hip).length, 1e-6)
         self.assertAlmostEqual(arm.tyrant_growth, 0.5)
+
+    def test_reset_pose_in_a_scene_from_an_older_tyrant_says_how_instead_of_jumping(self):
+        arm, _ = open_ik()
+        del arm[ik.OPEN_POSE]  # opened by a Tyrant before this one: the opened pose is not known
+        before = game_pose(arm)
+
+        with self.assertRaisesRegex(ik.IkError, "Start fresh"):
+            ik.reset_pose(arm)
+        self.assertLess(max_change(before, game_pose(arm)), 1e-9)

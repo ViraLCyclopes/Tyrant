@@ -17,6 +17,23 @@ public class IkIntegrationTests(RealGameIndex real) : IClassFixture<RealGameInde
     }
 
     [SkippableFact]
+    public void Reading_scenery_from_a_big_built_in_file_does_not_read_every_script_in_it()
+    {
+        Skip.If(RealGameIndex.GameDir is null, "TYRANT_GAME_DIR not set");
+        // sharedassets0 holds ~30,000 MonoBehaviours: only the prefab's own FABRIK components may be read in full.
+        var fence = real.Index.Assets.First(a => a.Type == "GameObject" && a.Name == "Fence_AdobeClay_Segment_1m");
+        using var session = new AssetSession(real.Install);
+        new ModelExporter().ReadPrefab(session, fence); // loads the file
+
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        var prefab = new ModelExporter().ReadPrefab(session, fence);
+        watch.Stop();
+
+        Assert.Empty(prefab.IkChains);
+        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(1.5), $"reading the fence took {watch.Elapsed.TotalSeconds:N1} s");
+    }
+
+    [SkippableFact]
     public void Every_animal_reads_three_or_five_chains_without_failures()
     {
         Skip.If(RealGameIndex.GameDir is null, "TYRANT_GAME_DIR not set");

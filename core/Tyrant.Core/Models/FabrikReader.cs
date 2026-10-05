@@ -19,21 +19,22 @@ public static class FabrikReader
         var failures = new List<string>();
         foreach (var info in file.file.GetAssetsOfType(AssetClassID.MonoBehaviour))
         {
-            AssetTypeValueField mono;
+            AssetTypeValueField header;
             try
             {
-                mono = manager.GetBaseField(file, info);
+                // Only the header first (GameObject, script): a built-in file holds tens of thousands of other MonoBehaviours.
+                header = manager.GetBaseField(file, info, AssetReadFlags.SkipMonoBehaviourFields);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 continue; // a MonoBehaviour without a readable layout is not one of ours
             }
-            if (!transformByGameObject.TryGetValue(mono["m_GameObject.m_PathID"].AsLong, out var transform) || !nodes.TryGetValue(transform, out var owner))
+            if (!transformByGameObject.TryGetValue(header["m_GameObject.m_PathID"].AsLong, out var transform) || !nodes.TryGetValue(transform, out var owner))
                 continue;
-            if (AssetIndexer.ScriptClass(manager, file, mono) is not { } script || !Scripts.Contains(script)) continue;
+            if (AssetIndexer.ScriptClass(manager, file, header) is not { } script || !Scripts.Contains(script)) continue;
             try
             {
-                using var json = JsonDocument.Parse(FieldJsonWriter.ToJson(mono));
+                using var json = JsonDocument.Parse(FieldJsonWriter.ToJson(manager.GetBaseField(file, info)));
                 chains.Add(Parse(json.RootElement, id => nodes.GetValueOrDefault(id)));
             }
             catch (Exception ex) when (ex is InvalidDataException or JsonException or KeyNotFoundException or InvalidOperationException or FormatException)
