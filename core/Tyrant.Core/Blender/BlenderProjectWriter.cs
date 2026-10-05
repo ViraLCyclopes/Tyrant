@@ -1,0 +1,142 @@
+using Tyrant.Core.Assets;
+using Tyrant.Core.Errors;
+using Tyrant.Core.Install;
+using Tyrant.Core.ModelReplacements;
+using Tyrant.Core.Models;
+using Tyrant.Core.Mods;
+using Tyrant.Core.Workspaces;
+using Tyrant.Framework.Core;
+
+namespace Tyrant.Core.Blender;
+
+/// <summary>What to open: a species (with a game skin), or with Mod a mod's skin (Skin = its id) or its species model.</summary>
+public sealed record BlenderOpenRequest(string Species, string? Skin, string? Mod, bool Fresh, bool Lods);
+
+public sealed record BlenderProjectResult(string ProjectFile, string Dir, bool GameChanged);
+
+/// <summary>Writes (or refreshes) the Blender project folder for one target: model.glb, textures/ and tyrant-blender.json.</summary>
+public static class BlenderProjectWriter
+{
+    public const string ModelFile = "model.glb";
+
+    public static BlenderProjectResult Write(BlenderOpenRequest request, Workspace ws, GameInstall install, AssetIndex index,
+        IReadOnlyList<SpeciesSkins> species, IAssetReader reader, string tyrantExe)
+    {
+        var mod = request.Mod is null ? null : ModProject.Open(ws, request.Mod);
+        var ownSkin = mod is not null && request.Skin is not null ? mod.Skin(request.Skin) : null;
+        var (speciesId, prefabRecord) = ModProject.ResolveModelTarget(index, species, ownSkin?.Species ?? request.Species, null);
+        var modReplacement = mod?.Manifest.Models.FirstOrDefault(m => string.Equals(m.Target, speciesId, StringComparison.Ordinal))?.File;
+        if (mod is not null && ownSkin is null && modReplacement is null)
+            throw new TyrantException(TyrantErrorCode.TargetNotFound,
+                $"'{mod.Id}' does not replace {speciesId}'s model; open it from the species instead (Assets → Species → Open in Blender).");
+        var vanilla = ownSkin is not null ? SkinMaps.BaseOf(species, ownSkin) : SkinMaps.Vanilla(species, speciesId, request.Skin);
+        if (mod is null && request.Skin is not null && vanilla is null)
+            throw new TyrantException(TyrantErrorCode.TargetNotFound, $"{speciesId} has no skin '{request.Skin}'.");
+
+        var kind = mod is null ? "game" : ownSkin is not null ? "skin" : "model";
+        var suffix = kind == "game" ? vanilla?.Name : ownSkin?.Id;
+        var leaf = TextureExporter.Sanitize((speciesId + (suffix is null ? "" : "-" + suffix)).ToLowerInvariant());
+        var dir = Path.Combine(ws.Dir, "blender", mod is null ? "game" : TextureExporter.Sanitize(mod.Id), leaf);
+        var projectFile = Path.Combine(dir, BlenderProjectFile.FileName);
+        var old = File.Exists(projectFile) ? TryRead(projectFile) : null;
+        var build = GameFingerprint.Compute(install).BuildGuid;
+        var gameChanged = old is not null && old.GameBuild != build;
+
+        if (request.Fresh && old?.Blend is { } oldBlend && File.Exists(oldBlend))
+        {
+            var kept = Path.Combine(Path.GetDirectoryName(oldBlend)!, Path.GetFileNameWithoutExtension(oldBlend) + ".old.blend");
+            File.Move(oldBlend, kept, overwrite: true);
+        }
+        var keepBlend = !request.Fresh && old?.Blend is { } b && File.Exists(b) ? b : null;
+
+        Directory.CreateDirectory(dir);
+        var prefab = reader.ReadPrefabModel(install, prefabRecord);
+        var renderers = ModelBuilder.GameRenderers(prefab);
+        var modelGlb = Path.Combine(dir, ModelFile);
+        if (keepBlend is null || !File.Exists(modelGlb))
+        {
+            var ownModel = ownSkin?.Model ?? modReplacement;
+            if (mod is not null && ownModel is not null)
+                File.Copy(Path.Combine(mod.Dir, ownModel.Replace('/', Path.DirectorySeparatorChar)), modelGlb, overwrite: true);
+            else
+                GltfModelWriter.WriteGlb(prefab, request.Lods ? renderers : renderers.Take(1).ToList(), modelGlb,
+                    r => r.Materials.Select(m => new GltfMaterial(m.Name)).ToList());
+        }
+
+        var materials = Materials(renderers, index, prefabRecord.Bundle, install, reader, mod, ownSkin, vanilla, dir, request.Fresh);
+        var project = new BlenderProject(BlenderProjectFile.CurrentVersion, ws.Dir, tyrantExe, build,
+            new BlenderSource(kind, speciesId, ownSkin?.Id ?? vanilla?.Name, mod?.Id),
+            old?.Destination ?? (mod is null ? null : new BlenderDestination(mod.Id, speciesId, ownSkin?.Id)),
+            materials, BlenderGrowthReader.Read(BlenderGrowthReader.TryStore(ws), speciesId), Rest(prefab.Root), keepBlend, request.Lods);
+        BlenderProjectFile.Write(projectFile, project);
+        return new BlenderProjectResult(projectFile, dir, gameChanged);
+    }
+
+    private static BlenderProject? TryRead(string path)
+    {
+        try
+        {
+            return BlenderProjectFile.Read(path);
+        }
+        catch (TyrantException)
+        {
+            return null;
+        }
+    }
+
+    private static Dictionary<string, BlenderMaterial> Materials(IReadOnlyList<RendererModel> renderers, AssetIndex index, string bundle,
+        GameInstall install, IAssetReader reader, ModProject? mod, SkinEntry? ownSkin, VanillaSkin? vanilla, string dir, bool fresh)
+    {
+        var textures = Path.Combine(dir, "textures");
+        // The skin's maps can change between opens (a new PNG in the mod): written again every time.
+        if (Directory.Exists(textures)) Directory.Delete(textures, recursive: true);
+        var colors = Colors(ownSkin);
+        var result = new Dictionary<string, BlenderMaterial>(StringComparer.Ordinal);
+        foreach (var material in renderers.SelectMany(r => r.Materials).Where(m => m.Name.Length > 0))
+        {
+            if (result.ContainsKey(material.Name)) continue;
+            var resolved = MaterialResolver.Resolve(index, bundle, material);
+            var maps = new Dictionary<string, string>(StringComparer.Ordinal);
+            if (resolved.Animal)
+            {
+                foreach (var slot in SkinMaps.Slots)
+                    if (SkinMaps.Write(SkinMaps.Source(ownSkin, mod?.Dir, vanilla, slot, "male"), install, index, reader, Path.Combine(textures, slot + ".png")) is not null)
+                        maps[slot] = $"textures/{slot}.png";
+            }
+            else
+            {
+                var stem = TextureExporter.Sanitize(material.Name);
+                foreach (var (slot, record) in new[] { ("diffuse", resolved.BaseColor), ("normal", resolved.Normal) })
+                {
+                    if (record is null) continue;
+                    var png = Path.Combine(textures, $"{stem}-{slot}.png");
+                    if (!File.Exists(png))
+                    {
+                        Directory.CreateDirectory(textures);
+                        reader.WriteTexture(install, record, png);
+                    }
+                    maps[slot] = $"textures/{stem}-{slot}.png";
+                }
+            }
+            result[material.Name] = new BlenderMaterial(resolved.Animal, resolved.Cutoff, maps, resolved.Animal ? colors : null);
+        }
+        return result;
+    }
+
+    /// <summary>The colours the 3D view shows for a mod skin (the strip's first animal, seed 1); null = textures untouched.</summary>
+    private static BlenderColors? Colors(SkinEntry? skin)
+    {
+        if (skin?.Colors is null) return null;
+        var (set, tint) = ColorPreview.For(skin.Colors, "normal");
+        var s = ColorPreview.Sample(set, tint, new Random(1 * 7919));
+        return new BlenderColors(s.A?.ToString(), s.B?.ToString(), s.Secondary?.ToString(), s.Eye?.ToString(), s.Strength, s.Softness, s.Hue, s.Saturation, s.Value);
+    }
+
+    private static List<BlenderBoneRest> Rest(SkeletonNode root) =>
+        root.DepthFirst().Skip(1).Select(n =>
+        {
+            var p = UnityToGltf.Position(n.LocalPosition);
+            var q = UnityToGltf.Rotation(n.LocalRotation);
+            return new BlenderBoneRest(n.Name, [p.X, p.Y, p.Z], [q.X, q.Y, q.Z, q.W], [n.LocalScale.X, n.LocalScale.Y, n.LocalScale.Z]);
+        }).ToList();
+}

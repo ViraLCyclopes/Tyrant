@@ -35,15 +35,18 @@ public static class GltfModelWriter
         Save(scene, path);
     }
 
-    /// <summary>Every renderer of a prefab in one .glb (tests: a file with several meshes, as Blender writes when objects are not joined).</summary>
-    internal static void WriteGlbs(PrefabModel model, string path)
+    /// <summary>Several renderers of a prefab on one armature in one .glb (Blender projects: LOD0, optionally the far LODs).</summary>
+    public static void WriteGlb(PrefabModel model, IReadOnlyList<RendererModel> renderers, string path, Func<RendererModel, IReadOnlyList<GltfMaterial>?>? materials = null)
     {
         var nodes = new Dictionary<SkeletonNode, NodeBuilder>();
         var scene = new SceneBuilder();
         scene.AddNode(BuildNodes(model.Root, null, nodes));
-        foreach (var renderer in model.Renderers) AddRenderer(scene, nodes, renderer, null);
+        foreach (var renderer in renderers) AddRenderer(scene, nodes, renderer, materials?.Invoke(renderer));
         Save(scene, path);
     }
+
+    /// <summary>Every renderer of a prefab in one .glb (tests: a file with several meshes, as Blender writes when objects are not joined).</summary>
+    internal static void WriteGlbs(PrefabModel model, string path) => WriteGlb(model, model.Renderers, path);
 
     private static void AddRenderer(SceneBuilder scene, Dictionary<SkeletonNode, NodeBuilder> nodes, RendererModel renderer, IReadOnlyList<GltfMaterial>? materials)
     {
