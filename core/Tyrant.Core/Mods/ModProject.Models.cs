@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using Tyrant.Core.Assets;
+using Tyrant.Core.Blender;
 using Tyrant.Core.Errors;
 using Tyrant.Core.Install;
 using Tyrant.Core.ModelReplacements;
@@ -13,13 +14,35 @@ public sealed partial class ModProject
 
     /// <summary>
     /// Adds (or replaces) a model: for a skin (<paramref name="skinId"/>), else for a species named by <paramref name="target"/>
-    /// or by the prefab <paramref name="prefabRef"/> (Assets tab). The .glb is copied under a content-hashed name, so an
-    /// earlier model's files stay for undo; a model with errors is refused and mod.json is left as it was.
+    /// or by the prefab <paramref name="prefabRef"/> (Assets tab). The .glb (or an .fbx, converted by Blender through
+    /// <paramref name="converter"/>) is copied under a content-hashed name, so an earlier model's files stay for undo; a
+    /// model with errors is refused and mod.json is left as it was.
     /// </summary>
     public ModelReport ReplaceModel(GameInstall install, AssetIndex index, IReadOnlyList<SpeciesSkins> species, IAssetReader reader,
-        string glbPath, string? target, string? prefabRef, string? skinId)
+        string glbPath, string? target, string? prefabRef, string? skinId, Func<IModelConverter>? converter = null)
     {
         if (!File.Exists(glbPath)) throw new TyrantException(TyrantErrorCode.ModInvalid, $"'{glbPath}' does not exist.");
+        if (!string.Equals(Path.GetExtension(glbPath), ".fbx", StringComparison.OrdinalIgnoreCase))
+            return ReplaceModelFrom(install, index, species, reader, glbPath, glbPath, target, prefabRef, skinId);
+        if (converter is null)
+            throw new TyrantException(TyrantErrorCode.BlenderMissing,
+                "FBX needs Blender: choose blender.exe on the Workspace tab (Blender card), or run 'tyrant blender set-path <blender.exe>'.");
+        // Blender turns the FBX into a glb first; the mod keeps that glb, and the FBX stays the origin ("import again").
+        var temp = Path.Combine(Path.GetTempPath(), $"tyrant-fbx-{Guid.NewGuid():N}.glb");
+        try
+        {
+            converter().FbxToGlb(glbPath, temp);
+            return ReplaceModelFrom(install, index, species, reader, temp, glbPath, target, prefabRef, skinId);
+        }
+        finally
+        {
+            File.Delete(temp);
+        }
+    }
+
+    private ModelReport ReplaceModelFrom(GameInstall install, AssetIndex index, IReadOnlyList<SpeciesSkins> species, IAssetReader reader,
+        string glbPath, string originPath, string? target, string? prefabRef, string? skinId)
+    {
         var skin = skinId is null ? null : Skin(skinId);
         var (speciesId, prefab) = ResolveModelTarget(index, species, skin?.Species ?? target, skin is null ? prefabRef : null);
 
@@ -32,7 +55,7 @@ public sealed partial class ModProject
             File.Copy(glbPath, destination, overwrite: true);
 
         var copiedFromOutside = !string.Equals(Path.GetFullPath(glbPath), Path.GetFullPath(destination), StringComparison.OrdinalIgnoreCase);
-        var report = ModelBuilder.Build(Dir, file, reader.ReadPrefabModel(install, prefab), copiedFromOutside ? Path.GetFullPath(glbPath) : null);
+        var report = ModelBuilder.Build(Dir, file, reader.ReadPrefabModel(install, prefab), copiedFromOutside ? Path.GetFullPath(originPath) : null);
         if (report.Errors.Count > 0)
             throw new TyrantException(TyrantErrorCode.ModInvalid, $"The model was not added: {string.Join(" ", report.Errors)}");
 

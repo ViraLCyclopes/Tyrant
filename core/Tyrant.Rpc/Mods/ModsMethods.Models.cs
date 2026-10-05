@@ -1,4 +1,5 @@
 using Tyrant.Core.Assets;
+using Tyrant.Core.Blender;
 using Tyrant.Core.Errors;
 using Tyrant.Core.Install;
 using Tyrant.Core.ModelReplacements;
@@ -18,7 +19,8 @@ public sealed partial class ModsMethods
     {
         var (ws, install) = session.Current();
         var mod = ModProject.Open(ws, p.Id, p.Revision);
-        var report = mod.ReplaceModel(install, RequireIndex(ws), RequireSpecies(ws), Options.AssetReader, p.File, p.Target, p.PrefabRef, p.Skin);
+        var report = mod.ReplaceModel(install, RequireIndex(ws), RequireSpecies(ws), Options.AssetReader, p.File, p.Target, p.PrefabRef, p.Skin,
+            () => new BlenderService(Options.Blender).Converter(ws));
         session.Log($"'{p.Id}' replaces a model with {Path.GetFileName(p.File)} ({report.Lods.Count} LOD(s)){(report.Warnings.Count == 0 ? "" : ": " + string.Join(" ", report.Warnings))}.");
         return DetailOf(ws, mod);
     }

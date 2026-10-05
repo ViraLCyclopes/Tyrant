@@ -189,4 +189,18 @@ public class ModModelMethodsTests
 
         Assert.Contains("Run data dump", ex.Message);
     }
+
+    [Fact]
+    public async Task An_fbx_without_blender_is_a_clear_rpc_error()
+    {
+        using var game = new FakeGame();
+        var (h, _, _, glb) = await Setup(game);
+        var fbx = Path.ChangeExtension(glb, ".fbx");
+        File.WriteAllText(fbx, "fbx");
+
+        var ex = await Assert.ThrowsAsync<RpcCallException>(() => h.Call("mods.replaceModel", new { id = "big-carch", file = fbx, target = "Carcharodontosaurus" }));
+
+        Assert.Equal("BLENDER_MISSING", ex.DataCode);
+        Assert.Contains("FBX needs Blender", ex.Message);
+    }
 }

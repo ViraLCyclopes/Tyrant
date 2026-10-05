@@ -104,7 +104,7 @@ public static class CliApp
                 mod.SetDescription("Make, check and install mods: texture, model and sound replacements and new skins.");
                 mod.AddCommand<ModNewCommand>("new").WithDescription("Create a mod in the workspace (mods/<id>).");
                 mod.AddCommand<ModReplaceCommand>("replace").WithDescription("Replace a game texture with your PNG in a mod.");
-                mod.AddCommand<ModReplaceModelCommand>("replace-model").WithDescription("Replace a species' model (or give a skin its own) with your .glb from Blender.");
+                mod.AddCommand<ModReplaceModelCommand>("replace-model").WithDescription("Replace a species' model (or give a skin its own) with your .glb or .fbx.");
                 mod.AddCommand<ModRemoveModelCommand>("remove-model").WithDescription("Stop replacing a species' model, or make a skin use the species model again.");
                 mod.AddCommand<ModReplaceSoundCommand>("replace-sound").WithDescription("Replace a game sound (for everyone, one species or one skin) with your audio files.");
                 mod.AddCommand<ModSetSoundCommand>("set-sound").WithDescription("Change a sound replacement's volume, age pitch or who hears it.");

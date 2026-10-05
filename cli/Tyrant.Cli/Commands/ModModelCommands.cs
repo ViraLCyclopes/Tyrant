@@ -16,7 +16,7 @@ public sealed class ModReplaceModelCommand : Command<ModReplaceModelCommand.Sett
         public string Target { get; set; } = "";
 
         [CommandArgument(2, "<FILE>")]
-        [Description("Your model, exported from Blender as .glb.")]
+        [Description("Your model: a .glb from Blender, or an .fbx (converted by Blender).")]
         public string File { get; set; } = "";
 
         [CommandOption("--skin <SKIN>")]
@@ -29,7 +29,8 @@ public sealed class ModReplaceModelCommand : Command<ModReplaceModelCommand.Sett
         var (ws, install) = CliServices.OpenWorkspace(settings);
         var mod = ModProject.Open(ws, settings.Id);
         var report = mod.ReplaceModel(install, CliServices.LoadIndex(ws, install), ModCli.RequireSpecies(ws), CliServices.AssetReader,
-            Path.GetFullPath(settings.File), settings.Skin is null ? settings.Target : null, null, settings.Skin);
+            Path.GetFullPath(settings.File), settings.Skin is null ? settings.Target : null, null, settings.Skin,
+            () => new Tyrant.Core.Blender.BlenderService(CliServices.Blender).Converter(ws));
         Console.WriteLine($"Added the model to '{settings.Id}': {string.Join(", ", report.Lods.Select((l, i) => $"LOD {i} {l.Vertices:N0} vertices"))}.");
         foreach (var warning in report.Warnings) Console.WriteLine($"  WARN   {warning}");
         return ExitCodes.Ok;

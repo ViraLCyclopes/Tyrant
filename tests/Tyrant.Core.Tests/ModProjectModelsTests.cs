@@ -1,4 +1,5 @@
 using Tyrant.Core.Assets;
+using Tyrant.Core.Blender;
 using Tyrant.Core.Errors;
 using Tyrant.Core.Install;
 using Tyrant.Core.Models;
@@ -225,5 +226,65 @@ public class ModProjectModelsTests
         var result = new ModChecker(_ => (2, 2)).Check(mod, Index(), SpeciesSkinsReader.Load(ws));
 
         Assert.DoesNotContain(result.Warnings, w => w.Contains("does nothing yet"));
+    }
+
+    private sealed class CopyConverter(string glb) : IModelConverter
+    {
+        public int Calls;
+        public void FbxToGlb(string fbx, string target) { Calls++; File.Copy(glb, target, overwrite: true); }
+        public IReadOnlyDictionary<string, string> GlbToFbx(IReadOnlyList<(string Glb, string Fbx)> pairs) => throw new NotSupportedException();
+    }
+
+    private sealed class FailingConverter : IModelConverter
+    {
+        public void FbxToGlb(string fbx, string target) => throw new TyrantException(TyrantErrorCode.BlenderFailed, "Blender could not convert broken.fbx: RuntimeError: the FBX has no mesh");
+        public IReadOnlyDictionary<string, string> GlbToFbx(IReadOnlyList<(string Glb, string Fbx)> pairs) => throw new NotSupportedException();
+    }
+
+    [Fact]
+    public void An_fbx_model_records_the_fbx_as_its_origin()
+    {
+        var (game, ws, install, mod, reader, glb) = Setup();
+        using var _ = game;
+        var fbx = Path.Combine(ws.Dir, "carch-edit.FBX");
+        File.WriteAllText(fbx, "fbx");
+        var converter = new CopyConverter(glb);
+
+        var report = mod.ReplaceModel(install, Index(), SpeciesSkinsReader.Load(ws), reader, fbx, "Carcharodontosaurus", null, null, () => converter);
+
+        Assert.Equal(1, converter.Calls);
+        Assert.Equal(Path.GetFullPath(fbx), report.Origin);
+        Assert.Matches(@"\.glb$", Assert.Single(mod.Manifest.Models).File); // the mod keeps a glb
+    }
+
+    [Fact]
+    public void A_broken_fbx_leaves_the_mod_unchanged_and_says_why()
+    {
+        var (game, ws, install, mod, reader, _) = Setup();
+        using var _ = game;
+        var fbx = Path.Combine(ws.Dir, "broken.fbx");
+        File.WriteAllText(fbx, "nope");
+
+        var ex = Assert.Throws<TyrantException>(() =>
+            mod.ReplaceModel(install, Index(), SpeciesSkinsReader.Load(ws), reader, fbx, "Carcharodontosaurus", null, null, () => new FailingConverter()));
+
+        Assert.Contains("the FBX has no mesh", ex.Message);
+        Assert.Empty(ModProject.Open(ws, "big-carch").Manifest.Models);
+        var models = Path.Combine(mod.Dir, ModProject.ModelsFolder);
+        Assert.False(Directory.Exists(models) && Directory.EnumerateFiles(models).Any());
+    }
+
+    [Fact]
+    public void An_fbx_without_a_converter_says_fbx_needs_blender()
+    {
+        var (game, ws, install, mod, reader, _) = Setup();
+        using var _ = game;
+        var fbx = Path.Combine(ws.Dir, "x.fbx");
+        File.WriteAllText(fbx, "fbx");
+
+        var ex = Assert.Throws<TyrantException>(() => mod.ReplaceModel(install, Index(), SpeciesSkinsReader.Load(ws), reader, fbx, "Carcharodontosaurus", null, null));
+
+        Assert.Equal(TyrantErrorCode.BlenderMissing, ex.Code);
+        Assert.StartsWith("FBX needs Blender", ex.Message);
     }
 }
