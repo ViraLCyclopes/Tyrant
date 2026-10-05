@@ -40,13 +40,15 @@ public static class BlenderProjectWriter
         var projectFile = Path.Combine(dir, BlenderProjectFile.FileName);
         var old = File.Exists(projectFile) ? TryRead(projectFile) : null;
         var build = GameFingerprint.Compute(install).BuildGuid;
-        var gameChanged = old is not null && old.GameBuild != build;
 
         var existing = ExistingBlend(old, dir);
         // Start fresh moves the project's own .blend aside, never a file outside its folder (a Save As elsewhere stays put).
         if (request.Fresh && existing is not null && ModPaths.IsInside(existing, dir))
             File.Move(existing, Path.Combine(dir, Path.GetFileNameWithoutExtension(existing) + ".old.blend"), overwrite: true);
         var keepBlend = request.Fresh ? null : existing;
+        // The kept .blend still holds the model it was made from: its build (and "game changed") last until Start fresh.
+        var modelBuild = keepBlend is not null && old is not null ? old.GameBuild : build;
+        var gameChanged = modelBuild != build;
 
         Directory.CreateDirectory(dir);
         var prefab = reader.ReadPrefabModel(install, prefabRecord);
@@ -63,10 +65,13 @@ public static class BlenderProjectWriter
         }
 
         var materials = Materials(renderers, index, prefabRecord.Bundle, install, reader, mod, ownSkin, vanilla, dir, request.Fresh);
-        var project = new BlenderProject(BlenderProjectFile.CurrentVersion, ws.Dir, tyrantExe, build,
+        var project = new BlenderProject(BlenderProjectFile.CurrentVersion, ws.Dir, tyrantExe, modelBuild,
             new BlenderSource(kind, speciesId, ownSkin?.Id ?? vanilla?.Name, mod?.Id),
             old?.Destination ?? (mod is null ? null : new BlenderDestination(mod.Id, speciesId, ownSkin?.Id)),
-            materials, BlenderGrowthReader.Read(BlenderGrowthReader.TryStore(ws), speciesId), Rest(prefab.Root), keepBlend, request.Lods);
+            materials, BlenderGrowthReader.Read(BlenderGrowthReader.TryStore(ws), speciesId), Rest(prefab.Root), keepBlend, request.Lods)
+        {
+            GameChanged = gameChanged,
+        };
         BlenderProjectFile.Write(projectFile, project);
         return new BlenderProjectResult(projectFile, dir, gameChanged);
     }

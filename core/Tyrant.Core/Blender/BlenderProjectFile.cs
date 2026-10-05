@@ -21,7 +21,11 @@ public sealed record BlenderBoneRest(string Name, float[] Position, float[] Rota
 /// <summary>tyrant-blender.json: what the add-on needs to import a model, dress it like the game and send it back.</summary>
 public sealed record BlenderProject(int Version, string Workspace, string Tyrant, string GameBuild, BlenderSource Source,
     BlenderDestination? Destination, IReadOnlyDictionary<string, BlenderMaterial> Materials, BlenderGrowth? Growth,
-    IReadOnlyList<BlenderBoneRest> Rest, string? Blend, bool Lods);
+    IReadOnlyList<BlenderBoneRest> Rest, string? Blend, bool Lods)
+{
+    /// <summary>The kept .blend holds the model of an older game build (GameBuild is that build): Start fresh takes the new one.</summary>
+    public bool GameChanged { get; init; }
+}
 
 public static class BlenderProjectFile
 {

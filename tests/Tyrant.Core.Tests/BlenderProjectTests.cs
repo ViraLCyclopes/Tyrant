@@ -188,13 +188,21 @@ public class BlenderProjectTests
     }
 
     [Fact]
-    public void A_project_from_another_game_build_says_so()
+    public void A_project_from_another_game_build_says_so_until_started_fresh()
     {
         using var c = Setup();
         var first = c.Write(new BlenderOpenRequest("Carcharodontosaurus", null, null, false, false));
+        File.WriteAllText(Path.Combine(first.Dir, "carch.blend"), "user work");
         BlenderProjectFile.Write(first.ProjectFile, BlenderProjectFile.Read(first.ProjectFile) with { GameBuild = "older" });
 
         Assert.True(c.Write(new BlenderOpenRequest("Carcharodontosaurus", null, null, false, false)).GameChanged);
+        var again = c.Write(new BlenderOpenRequest("Carcharodontosaurus", null, null, false, false));
+        Assert.True(again.GameChanged); // the kept .blend still holds the old model
+        Assert.True(BlenderProjectFile.Read(again.ProjectFile).GameChanged); // the add-on's panel says so too
+
+        var fresh = c.Write(new BlenderOpenRequest("Carcharodontosaurus", null, null, true, false));
+        Assert.False(fresh.GameChanged);
+        Assert.False(BlenderProjectFile.Read(fresh.ProjectFile).GameChanged);
     }
 
     [Fact]
