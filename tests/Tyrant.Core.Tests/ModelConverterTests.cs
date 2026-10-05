@@ -58,4 +58,19 @@ public class ModelConverterTests
         Assert.Equal(b.Glb, failed.Key);
         Assert.Equal("no armature", failed.Value);
     }
+
+    [Fact]
+    public void An_old_fbx_from_an_earlier_export_never_counts_as_converted()
+    {
+        var dir = Temp();
+        var a = (Glb: Path.Combine(dir, "a.glb"), Fbx: Path.Combine(dir, "a.fbx"));
+        var b = (Glb: Path.Combine(dir, "b.glb"), Fbx: Path.Combine(dir, "b.fbx"));
+        File.WriteAllText(b.Fbx, "old export"); // Blender is killed before it reaches b
+        var process = new FakeBlenderProcess { OnRun = (_, _) => { File.WriteAllText(a.Fbx, "fbx"); return new BlenderRun(-1, "TYRANT-FBX-OK 0\n(timed out)"); } };
+
+        var failures = new BlenderModelConverter(process, "b.exe").GlbToFbx([a, b]);
+
+        Assert.Equal([b.Glb], failures.Keys);
+        Assert.False(File.Exists(b.Fbx)); // the stale file is gone, not passed off as new
+    }
 }

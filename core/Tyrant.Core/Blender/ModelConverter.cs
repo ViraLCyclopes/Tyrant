@@ -32,13 +32,20 @@ public sealed class BlenderModelConverter(IBlenderProcess process, string blende
     {
         var failures = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         if (pairs.Count == 0) return failures;
+        // An FBX left by an earlier export must never pass for this one's (Blender killed or crashed before reaching it).
+        foreach (var (_, fbx) in pairs)
+            if (File.Exists(fbx)) File.Delete(fbx);
         var run = RunScript(Scripts.GlbToFbx, [.. pairs.SelectMany(p => new[] { Path.GetFullPath(p.Glb), Path.GetFullPath(p.Fbx) })]);
         var lines = run.Output.Split('\n', StringSplitOptions.TrimEntries);
         for (var i = 0; i < pairs.Count; i++)
         {
             var failed = lines.FirstOrDefault(l => l.StartsWith($"TYRANT-FBX-FAIL {i} ", StringComparison.Ordinal));
             if (failed is not null) failures[pairs[i].Glb] = failed[$"TYRANT-FBX-FAIL {i} ".Length..];
-            else if (!File.Exists(pairs[i].Fbx)) failures[pairs[i].Glb] = $"Blender did not write it ({Tail(run.Output)})";
+            else if (!lines.Contains($"TYRANT-FBX-OK {i}") || !File.Exists(pairs[i].Fbx))
+            {
+                if (File.Exists(pairs[i].Fbx)) File.Delete(pairs[i].Fbx); // half written when Blender stopped
+                failures[pairs[i].Glb] = $"Blender did not finish it ({Tail(run.Output)})";
+            }
         }
         return failures;
     }
