@@ -60,8 +60,13 @@ def write_png(image, path):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     non_color = image.colorspace_settings.name == "Non-Color"
     if image.is_float and not non_color:
-        # A float image holds linear colours and Blender saves them to PNG unconverted: encode them as sRGB, as shown.
-        rgb = np.clip(pixels.reshape(-1, 4)[:, :3], 0.0, 1.0)
+        # A float image holds linear, premultiplied colours and Blender saves them to PNG unconverted: make them straight
+        # (unless the alpha is a separate channel) and encode them as sRGB, as shown.
+        rgba = pixels.reshape(-1, 4)
+        if image.alpha_mode not in ("CHANNEL_PACKED", "NONE"):
+            alpha = rgba[:, 3:4]
+            rgba[:, :3] = np.where(alpha > 0.0, rgba[:, :3] / np.maximum(alpha, 1e-6), rgba[:, :3])
+        rgb = np.clip(rgba[:, :3], 0.0, 1.0)
         pixels.reshape(-1, 4)[:, :3] = np.where(rgb <= 0.0031308, rgb * 12.92, 1.055 * np.power(rgb, 1 / 2.4) - 0.055)
     save_pixels("tyrant-send", width, height, pixels, path, non_color)
 

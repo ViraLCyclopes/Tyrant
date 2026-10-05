@@ -85,6 +85,18 @@ class ImageTests(unittest.TestCase):
         value = images.read_pixels(back)[0]
         self.assertAlmostEqual(value, 0.484, delta=0.02)  # linear 0.2 shown as sRGB 0.484, as the game samples the PNG
 
+    def test_a_float_image_with_soft_alpha_keeps_its_colour(self):
+        _, node = _diffuse(self.arm)
+        hdr = bpy.data.images.new("hdr", 2, 2, alpha=True, float_buffer=True)
+        # Blender keeps float colours premultiplied: linear 0.2158 (sRGB 0.502) at alpha 0.5 is stored as 0.1079.
+        hdr.pixels.foreach_set(np.tile(np.array([0.1079, 0.1079, 0.1079, 0.5], dtype=np.float32), 4))
+        node.image = hdr
+        changed, _ = images.collect(self.meshes, self.dir)
+        back = bpy.data.images.load(changed[0][1], check_existing=False)
+        pixel = images.read_pixels(back)[:4]
+        self.assertAlmostEqual(float(pixel[0]), 0.502, delta=0.02)  # the PNG holds straight colour, as the game reads it
+        self.assertAlmostEqual(float(pixel[3]), 0.5, delta=0.01)
+
     def test_command_passes_images_and_sex(self):
         data = {"tyrant": "C:/t/tyrant.exe", "workspace": "C:/ws"}
         args = send.command(data, "p.json", "s.glb", None, None, images=[("diffuse", "C:/x/diffuse.png", "H")], sex="female")
