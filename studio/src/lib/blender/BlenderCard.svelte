@@ -38,6 +38,9 @@
     <div class="row">
       {#if status.found && status.supported && (status.addon === 'missing' || status.addon === 'older')}
         <button class="primary" onclick={() => blender.install(tab)} disabled={session.busy}>{status.addon === 'missing' ? 'Install add-on' : 'Update add-on'}</button>
+      {:else if status.found && status.supported}
+        <!-- Same version number, maybe a fixed build: put this Tyrant's copy in again. -->
+        <button onclick={() => blender.install(tab)} disabled={session.busy}>Reinstall add-on</button>
       {/if}
       <button onclick={choose} disabled={session.busy}>Choose blender.exe…</button>
       {#if status.found || status.missingConfigured}

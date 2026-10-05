@@ -40,6 +40,16 @@ describe('BlenderCard', () => {
     expect(await screen.findByRole('button', { name: 'Update add-on' })).toBeInTheDocument();
   });
 
+  it('offers Reinstall add-on when this Tyrant has the same version (a fixed build with the same number)', async () => {
+    const { rpc, session } = setup({ ...found, addon: 'current', addonInstalled: '0.1.0' });
+    rpc.on('blender.installAddon', () => ({ ...found, addon: 'current', addonInstalled: '0.1.0' }));
+    renderWith(BlenderCard, session);
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Reinstall add-on' }));
+
+    await waitFor(() => expect(rpc.callsTo('blender.installAddon')).toHaveLength(1));
+  });
+
   it('without Blender lets the user choose blender.exe', async () => {
     const { rpc, platform, session } = setup({ ...found, found: false, exe: null, version: null, supported: false, addon: 'unknown', problem: 'Blender was not found.' });
     rpc.on('blender.setPath', (p) => ({ ...found, exe: p.path ?? null }));

@@ -100,3 +100,14 @@ class TooltipTests(unittest.TestCase):
         text = bpy.types.Object.bl_rna.properties["tyrant_growth"].description
         self.assertIn("1 is your model as you edit and send it", text)
         self.assertIn("sex", text)
+
+
+class WrapTests(unittest.TestCase):
+    def test_long_panel_messages_wrap_to_the_sidebar_width(self):
+        text = "This scene was not opened from Tyrant; use Open in Blender in Tyrant."
+        lines = panel.wrap_lines(text, width=220, ui_scale=1.0)
+        self.assertGreater(len(lines), 1)
+        self.assertEqual(" ".join(lines), text)
+        self.assertTrue(all(len(line) <= panel.chars_per_line(220, 1.0) for line in lines))
+        self.assertEqual(panel.wrap_lines("Short.", width=400, ui_scale=1.0), ["Short."])
+        self.assertGreater(len(panel.wrap_lines(text, width=220, ui_scale=2.0)), len(lines))  # bigger UI, fewer characters fit

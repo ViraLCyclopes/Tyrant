@@ -2,6 +2,7 @@
 import json
 import os
 import subprocess
+import textwrap
 
 import bpy
 
@@ -182,6 +183,23 @@ class TYRANT_OT_choose_destination(bpy.types.Operator):
         return {"FINISHED"}
 
 
+def chars_per_line(width, ui_scale):
+    """How many characters of Blender's UI font fit a sidebar this wide (its labels never wrap by themselves)."""
+    return max(12, int((width - 40 * ui_scale) / (6.5 * ui_scale)))
+
+
+def wrap_lines(text, width, ui_scale):
+    return textwrap.wrap(text, chars_per_line(width, ui_scale)) or [text]
+
+
+def say(layout, context, text, icon="NONE"):
+    """A message on as many lines as the sidebar needs (one label is cut in the middle with '...')."""
+    width = context.region.width if context.region else 300
+    column = layout.column(align=True)
+    for i, line in enumerate(wrap_lines(text, width, context.preferences.view.ui_scale)):
+        column.label(text=line, icon=icon if i == 0 else ("BLANK1" if icon != "NONE" else "NONE"))
+
+
 class VIEW3D_PT_tyrant(bpy.types.Panel):
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
@@ -192,36 +210,36 @@ class VIEW3D_PT_tyrant(bpy.types.Panel):
         layout = self.layout
         reason = send.why_not_sendable(context)
         if reason:
-            layout.label(text=reason, icon="INFO")
+            say(layout, context, reason, "INFO")
             return
         armature = project.armature_of(context)
         data, error = project_data(armature)
         if error:
-            layout.label(text=error, icon="ERROR")
+            say(layout, context, error, "ERROR")
             return
         if data.get("gameChanged"):
-            layout.label(text="The game was updated since this was made: Start fresh in Tyrant for the new model.", icon="ERROR")
+            say(layout, context, "The game was updated since this was made: Start fresh in Tyrant for the new model.", "ERROR")
         source = data.get("source") or {}
-        layout.label(text=f"From: {source.get('species', '?')} {source.get('skin') or ''}".strip() + (f" ({source['mod']})" if source.get("mod") else ""))
+        say(layout, context, f"From: {source.get('species', '?')} {source.get('skin') or ''}".strip() + (f" ({source['mod']})" if source.get("mod") else ""))
         destination = data.get("destination")
         if destination:
             what = f"skin {destination['skin']}" if destination.get("skin") else f"{destination['species']} model"
-            layout.label(text=f"To: {destination['mod']} → {what}")
+            say(layout, context, f"To: {destination['mod']} → {what}")
         else:
-            layout.label(text="To: chosen on the first send")
+            say(layout, context, "To: chosen on the first send")
 
         layout.prop(armature, "tyrant_sex", expand=True)
         layout.prop(armature, "tyrant_growth", slider=True)
         sexes = data.get("sexes")
         if sexes:
-            layout.label(text=f"In game: male {sexes['male']['size']:g}x, female {sexes['female']['size']:g}x size (not shown)")
+            say(layout, context, f"In game: male {sexes['male']['size']:g}x, female {sexes['female']['size']:g}x size (not shown)")
         if armature.tyrant_growth < 1.0:
-            layout.label(text="Set Growth to 1 before sculpting or editing.", icon="ERROR")
+            say(layout, context, "Set Growth to 1 before sculpting or editing.", "ERROR")
         if not data.get("growth"):
-            layout.label(text="Dump the game's data (Workspace tab) for its growth.", icon="INFO")
+            say(layout, context, "Dump the game's data (Workspace tab) for its growth.", "INFO")
 
         for warning in send.modifier_warnings(send.sendable(armature)[1:]):
-            layout.label(text=warning, icon="ERROR")
+            say(layout, context, warning, "ERROR")
         row = layout.row()
         row.enabled = not is_busy(armature)
         row.operator("tyrant.send", icon="EXPORT")
@@ -231,15 +249,15 @@ class VIEW3D_PT_tyrant(bpy.types.Panel):
             result = json.loads(report)
             box = layout.box()
             if result.get("busy"):
-                box.label(text="Tyrant is building the model…", icon="TIME")
+                say(box, context, "Tyrant is building the model…", "TIME")
                 return
             if result.get("ok"):
                 lods = ", ".join(f"LOD {i}: {v:,} vertices" for i, v in enumerate(result.get("lodVertices") or []))
-                box.label(text=f"Sent. {lods}", icon="CHECKMARK")
+                say(box, context, f"Sent. {lods}", "CHECKMARK")
             for error in result.get("errors") or []:
-                box.label(text=error, icon="CANCEL")
+                say(box, context, error, "CANCEL")
             for warning in result.get("warnings") or []:
-                box.label(text=warning, icon="ERROR")
+                say(box, context, warning, "ERROR")
 
 
 CLASSES = (TYRANT_OT_send, TYRANT_OT_choose_destination, VIEW3D_PT_tyrant)
