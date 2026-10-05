@@ -174,6 +174,10 @@ Release build: `npm run build:app`, install `studio/src-tauri/target/release/bun
     you replace".
 85. **Checks.** Remove the ported mesh's Armature modifier: the panel lists it under "not deformed by the Tyrant rig" and
     Send says how to add the modifier.
+86. **FBX in.** Export a species from Blender as FBX (File -> Export -> FBX, Armature + Mesh) and add it to a skin with
+    **Add model** (pick the .fbx): it builds like a glb; edit and re-export the FBX: the model page offers to import it again.
+87. **FBX out.** Assets -> pick a prefab -> Model format **FBX** -> Export selected: an .fbx (no .glb) with its textures/
+    folder; it opens in Blender with plain bones and the growth shape keys. Species pack with **glb + FBX**: both.
 
 **Shell (tabs, log, preferences):**
 

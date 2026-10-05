@@ -49,6 +49,9 @@ Tyrant works with **Blender 5.0 or newer** through its own Blender add-on.
    Roughness become the game's material (the baby uses the same images; pattern and fur masks start blank). The game gives
    an animal one texture set, so bake several materials onto one first. Weights and growth keys are yours to make in
    Blender.
+7. **FBX:** wherever a model goes in (Add model, a skin's model, `tyrant mod replace-model`) you can pick an `.fbx`; Tyrant
+   has Blender convert it in the background. Assets export and species packs can write **FBX** or **glb + FBX** (the
+   Model format box; `--format fbx|both` in the CLI). glb needs no Blender; FBX does.
 
 Each model opens as **its own scene in the file you have open** (e.g. *Tyrant · my-mod · Allosaurus Anax Red*); your other
 scenes and objects are never touched, and saving the file is up to you. **Open in Blender** again switches back to that
