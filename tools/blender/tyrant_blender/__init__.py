@@ -29,7 +29,10 @@ def register():
     for cls in ui.CLASSES + panel.CLASSES:
         bpy.utils.register_class(cls)
     bpy.types.Object.tyrant_growth = bpy.props.FloatProperty(
-        name="Growth", description="Baby (0) to adult (1), as the game grows this animal", min=0.0, max=1.0, default=1.0,
+        name="Growth",
+        description=("Baby (0) to adult (1), as the game grows this animal. Baby and juvenile proportions are shown relative to "
+                     "the adult, so 1 is your model as you edit and send it. The game's limit per sex and skin is not applied"),
+        min=0.0, max=1.0, default=1.0,
         update=_growth_changed)
     if not bpy.app.timers.is_registered(send.drain_finished):
         bpy.app.timers.register(send.drain_finished, first_interval=0.25, persistent=True)

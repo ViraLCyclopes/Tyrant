@@ -93,3 +93,10 @@ class TrustTests(unittest.TestCase):
         self.assertIsNone(path)
         self.assertFalse(project.is_local(r"\\server\share\tyrant-blender.json"))
         self.assertTrue(project.is_local(r"C:\ws\blender\game\x\tyrant-blender.json"))
+
+
+class TooltipTests(unittest.TestCase):
+    def test_the_growth_slider_says_what_1_shows(self):
+        text = bpy.types.Object.bl_rna.properties["tyrant_growth"].description
+        self.assertIn("1 is your model as you edit and send it", text)
+        self.assertIn("sex", text)

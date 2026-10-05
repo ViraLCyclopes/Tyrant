@@ -31,7 +31,7 @@ Tyrant works with **Blender 5.0 or newer** through its own Blender add-on.
 
 1. **Install the add-on:** Workspace tab → **Blender** card → **Install add-on** (Tyrant finds Blender from Steam or
    Program Files; **Choose blender.exe…** if it doesn't). By hand: drag `Tyrant-Blender-Addon-<version>.zip` (from the
-   releases page, or `sidecarlender	yrant_blender.zip` in Tyrant's folder) onto Blender, or Edit → Preferences →
+   releases page, or `sidecar\blender\tyrant_blender.zip` in Tyrant's folder) onto Blender, or Edit → Preferences →
    Get Extensions → Install from Disk.
 2. **Open in Blender** on a species (Species tab, pick a game skin), a skin page or a model page of the mod editor. The
    model opens looking like the game: plain bones, merged vertices with UV seams marked, the game's materials (skin
@@ -42,7 +42,7 @@ Tyrant works with **Blender 5.0 or newer** through its own Blender add-on.
    mesh counts once you add that modifier; reference meshes, physics boxes and other rigs stay out. The first send asks
    which mod and which model (species or a skin); Tyrant's report (errors, warnings, sizes) shows in the panel.
 
-Your work is kept as a `.blend` in `<workspace>lender\…`; **Open in Blender** reopens it. **Start fresh** (Options)
+Your work is kept as a `.blend` in `<workspace>\blender\…`; **Open in Blender** reopens it. **Start fresh** (Options)
 rebuilds it from the current model and keeps the old file as `.old.blend`.
 
 ## Updates
