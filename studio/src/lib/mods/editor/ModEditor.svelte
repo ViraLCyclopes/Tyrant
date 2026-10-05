@@ -5,6 +5,7 @@
   import AddSkin from '../AddSkin.svelte';
   import type { AddedSound } from '$lib/sounds/audio';
   import AddModel from './AddModel.svelte';
+  import AddReplacement from './AddReplacement.svelte';
   import AddSound from './AddSound.svelte';
   import { exportMod, installMod, removeFromGame, restoreCutouts } from '../modActions';
   import CheckPage from './CheckPage.svelte';
@@ -23,7 +24,7 @@
   let selection = $state<Selection>({ kind: 'details' });
   let failed = $state(false);
   /** The form shown instead of a page: + Add on Skins, Models or Sounds. */
-  let adding = $state<'skin' | 'model' | 'sound' | null>(null);
+  let adding = $state<'skin' | 'model' | 'sound' | 'texture' | null>(null);
 
   onMount(() => {
     void load();
@@ -78,6 +79,13 @@
     if (target) selection = { kind: 'model', target, skin: null }; // the new model is selected
   }
 
+  async function replacementAdded(texture: string | null) {
+    adding = null;
+    if (!texture) return;
+    await doc.reload(); // added outside the editor's own edits (mods.replace)
+    selection = { kind: 'replace', texture };
+  }
+
   async function soundAdded(added: AddedSound | null) {
     adding = null;
     if (!added) return;
@@ -123,7 +131,8 @@
 {:else if doc.detail}
   <div class="editor">
     <ModSideList detail={doc.detail} check={doc.check} {selection} onSelect={(s) => { adding = null; selection = s; }}
-      onAddSkin={() => (adding = 'skin')} onAddModel={() => (adding = 'model')} onAddSound={() => (adding = 'sound')} />
+      onAddSkin={() => (adding = 'skin')} onAddModel={() => (adding = 'model')} onAddSound={() => (adding = 'sound')}
+      onAddReplacement={() => (adding = 'texture')} />
     <section class="page">
       {#if adding === 'skin'}
         <AddSkin modId={doc.id} onDone={skinAdded} />
@@ -131,6 +140,8 @@
         <AddModel {doc} onDone={modelAdded} />
       {:else if adding === 'sound'}
         <AddSound modId={doc.id} onDone={soundAdded} />
+      {:else if adding === 'texture'}
+        <AddReplacement modId={doc.id} onDone={replacementAdded} />
       {:else if selection.kind === 'details'}
         <ModDetailsPage {doc} />
       {:else if selectedSkin}

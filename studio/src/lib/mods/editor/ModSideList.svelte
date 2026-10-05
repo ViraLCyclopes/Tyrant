@@ -10,6 +10,7 @@
     onAddSkin,
     onAddModel = () => {},
     onAddSound = () => {},
+    onAddReplacement = () => {},
   }: {
     detail: ModDetail;
     check: ModCheckReport | null;
@@ -18,6 +19,7 @@
     onAddSkin: () => void;
     onAddModel?: () => void;
     onAddSound?: () => void;
+    onAddReplacement?: () => void;
   } = $props();
 
   const problems = $derived((check?.errors.length ?? 0) + (check?.warnings.length ?? 0));
@@ -43,7 +45,10 @@
     <p class="empty">No skins yet.</p>
   {/each}
 
-  <div class="heading"><span>Texture replacements ({detail.replace.length})</span></div>
+  <div class="heading">
+    <span>Texture replacements ({detail.replace.length})</span>
+    <button class="add" aria-label="Add a texture replacement" onclick={onAddReplacement}>+ Add</button>
+  </div>
   {#each detail.replace as replacement (replacement.texture)}
     <button class:on={isReplace(replacement.texture)} onclick={() => onSelect({ kind: 'replace', texture: replacement.texture })}>{replacement.texture}</button>
   {:else}

@@ -46,6 +46,23 @@ describe('ModEditor', () => {
     expect(screen.queryByRole('heading', { name: 'Add a model' })).toBeNull();
   });
 
+  it('Texture replacements has + Add, and the replacement it adds is opened', async () => {
+    const { rpc, platform } = setup();
+    rpc.on('mods.species', () => ({ hasDump: true, species: [{ speciesId: 'Carcharodontosaurus', vivarium: false, skins: [] }] }))
+      .on('mods.speciesTextures', () => ({ speciesId: 'Carcharodontosaurus', textures: [{ texture: 'T_carch_new_D', slot: 'adult colour', skins: ['Base'], sharedWith: [] }] }))
+      .on('mods.replace', () => ({ mods: [] }));
+    platform.files.push('D:\\paint\\new_D.png');
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Add a texture replacement' }));
+    expect(await screen.findByRole('heading', { name: 'Replace a texture' })).toBeInTheDocument();
+    await fireEvent.change(screen.getByRole('combobox', { name: 'Textures of' }), { target: { value: 'Carcharodontosaurus' } });
+    rpc.on('mods.get', () => modDetail({ replace: [{ texture: 'T_carch_new_D', key: null, guid: null, file: 'textures/T_carch_new_D.png' }] }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Replace T_carch_new_D' }));
+
+    await waitFor(() => expect(screen.queryByRole('heading', { name: 'Replace a texture' })).toBeNull());
+    expect(await screen.findByRole('button', { name: 'T_carch_new_D' })).toHaveClass('on');
+  });
+
   it('a sound added from + Add is reloaded and opened', async () => {
     const added = { event: 'event:/X/Vox/TheroLarge_VoxSocialCall', name: 'Social call', group: 'Calls', species: 'Carcharodontosaurus', skin: null, files: ['sounds/a.wav'], volume: 1, agePitch: 1, chance: null };
     const { rpc, platform } = setup();

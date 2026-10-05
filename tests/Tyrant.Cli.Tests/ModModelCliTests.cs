@@ -36,6 +36,26 @@ public class ModModelCliTests
     }
 
     [Fact]
+    public void Species_textures_lists_a_species_skin_textures()
+    {
+        using var game = new FakeGame();
+        var (ws, _) = Setup(game);
+        try
+        {
+            var list = Run("species", "textures", "Carcharodontosaurus", "-w", ws);
+
+            Assert.True(list.Code == ExitCodes.Ok, list.Err);
+            Assert.Contains("T_carch_alt1_male_D", list.Out);
+            Assert.Contains("adult colour", list.Out);
+            Assert.Contains("Alt 1", list.Out);
+        }
+        finally
+        {
+            CliServices.AssetReader = new BundleAssetReader();
+        }
+    }
+
+    [Fact]
     public void Replace_model_and_remove_model_work_from_the_command_line()
     {
         using var game = new FakeGame();

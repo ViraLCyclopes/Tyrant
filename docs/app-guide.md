@@ -125,7 +125,8 @@ files that changed; again after a game update).
   4. **Add to mod**, then **Install to game**. Babies play the new sound higher, as they do the game's.
   5. CLI: `tyrant sounds list [--species <id>] [--search <text>]`, `tyrant mod replace-sound <mod> <event> <files…> [--species <id> | --skin <key>] [--volume 0-2] [--age-pitch 0-1]`, `tyrant mod set-sound`, `tyrant mod remove-sound`.
 - **Edit a mod:** **Open** a mod in the Mods tab (a new mod opens by itself) to edit it in its own tab.
-  - The list on the left has **Mod details**, each **skin**, each **texture replacement** and **Check**; the page on the right edits what you picked.
+  - The list on the left has **Mod details**, each **skin**, each **texture replacement**, models, sounds and **Check**; the page on the right edits what you picked.
+  - **Texture replacements → + Add:** pick a species to list its skins' textures (adult and baby colour, normal, extra, pattern, fur maps; ones other species use too are marked), or search any game texture; **Replace…** picks your PNG. CLI: `tyrant species textures <species>`, then `tyrant mod replace <mod> <texture> <png>`.
   - Every change is saved at once. **Ctrl+Z** / **Ctrl+Y** (or **Edit ▸ Undo / Redo**) step back and forward. Replacing or deleting a file cannot be undone.
   - **A skin:** rename it (its id stays, so saved animals keep it), pick a swatch, and for each sex replace a texture with your PNG (**Replace…**) or go back to the base skin's (**Use base**).
   - **Colours** sets the pattern colours of normal animals and the colours of albino, melanistic and leucistic ones, with a 2D preview of six random animals (approximate: no lighting). Pick one colour or a gradient, and a range or a **Fixed** value; **From base skin** leaves a field to the base skin, and **Exact colours** turns off the random tint.

@@ -83,6 +83,7 @@ Models and species packs:
 ```powershell
 dotnet run --project cli/Tyrant.Cli -- species list -w D:\tyrant-workspace
 dotnet run --project cli/Tyrant.Cli -- species pack "Stegosaurus Stenops" -w D:\tyrant-workspace   # models + textures + targets.json
+dotnet run --project cli/Tyrant.Cli -- species textures "Allosaurus Anax" -w D:\tyrant-workspace    # its skins' textures, to replace in a mod
 dotnet run --project cli/Tyrant.Cli -- assets export-model <prefab guid|path|bundle#pathId> -w D:\tyrant-workspace
 ```
 
