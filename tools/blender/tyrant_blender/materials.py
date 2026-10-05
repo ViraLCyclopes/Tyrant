@@ -226,6 +226,10 @@ def build(material, spec, folder):
             if target == "Diffuse":
                 tree.links.new(only.outputs["Alpha"], group.inputs["Diffuse Alpha"])
 
+    for slot in ("fur", "infantFur"):  # not drawn in Blender, but a node to paint on and for Send to take
+        if slot in maps:
+            _image(tree, folder, slot, maps[slot])
+
     colors = spec.get("colors")
     if colors:
         for key, name, flag in (("a", "Colour A", "Has AB"), ("b", "Colour B", None), ("secondary", "Secondary", "Has Secondary"), ("eye", "Eye", "Has Eye")):
@@ -270,6 +274,8 @@ def apply_sex(objects, data, folder, sex):
             continue
         for slot in obj.material_slots:
             material = slot.material
+            if material is not None and material.get("tyrant_ported"):
+                continue  # Use game material's images are the user's own, for both sexes
             spec = specs.get(_base_name(material.name)) if material is not None else None
             if spec is None or material.node_tree is None:
                 continue
@@ -297,7 +303,7 @@ def apply_all(objects, data, folder):
             continue
         for slot in obj.material_slots:
             material = slot.material
-            if material is None or material.name in done:
+            if material is None or material.name in done or material.get("tyrant_ported"):
                 continue
             spec = specs.get(_base_name(material.name))
             if spec is not None:

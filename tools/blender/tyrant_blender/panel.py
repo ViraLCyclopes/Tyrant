@@ -6,7 +6,7 @@ import textwrap
 
 import bpy
 
-from . import checks, growth, images, project, send, ui
+from . import checks, gamematerial, growth, images, project, send, ui
 
 REPORT = "tyrant_report"
 NEW_MOD = "__new__"
@@ -203,6 +203,31 @@ class TYRANT_OT_choose_destination(bpy.types.Operator):
         return {"FINISHED"}
 
 
+class TYRANT_OT_use_game_material(bpy.types.Operator):
+    """Give the selected meshes the game's animal material with their own images (the game draws an animal with one texture set)"""
+
+    bl_idname = "tyrant.use_game_material"
+    bl_label = "Use game material"
+
+    def execute(self, context):
+        armature = project.armature_of(context)
+        if armature is None:
+            self.report({"ERROR"}, send.why_not_sendable(context) or "Open the model from Tyrant first.")
+            return {"CANCELLED"}
+        meshes = [o for o in context.selected_objects if o.type == "MESH"]
+        if not meshes:
+            self.report({"ERROR"}, "Select the mesh(es) to give the game material.")
+            return {"CANCELLED"}
+        try:
+            _material, note = gamematerial.use_game_material(armature, meshes)
+        except (gamematerial.GameMaterialError, project.ProjectError, ValueError) as ex:
+            self.report({"ERROR"}, str(ex))
+            return {"CANCELLED"}
+        self.report({"INFO"}, note[0])
+        _redraw()
+        return {"FINISHED"}
+
+
 def chars_per_line(width, ui_scale):
     """How many characters of Blender's UI font fit a sidebar this wide (its labels never wrap by themselves)."""
     return max(12, int((width - 40 * ui_scale) / (6.5 * ui_scale)))
@@ -258,6 +283,13 @@ class VIEW3D_PT_tyrant(bpy.types.Panel):
         if not data.get("growth"):
             say(layout, context, "Dump the game's data (Workspace tab) for its growth.", "INFO")
 
+        layout.operator("tyrant.use_game_material", icon="MATERIAL")
+        active = context.active_object
+        if active is not None and active.get(gamematerial.NOTE):
+            note_box = layout.box()
+            for line in json.loads(active[gamematerial.NOTE]):
+                say(note_box, context, line, "INFO")
+
         for warning in send.modifier_warnings(send.sendable(armature)[1:]):
             say(layout, context, warning, "ERROR")
         goes, stays = checks.preview(armature, context.scene)
@@ -289,4 +321,4 @@ class VIEW3D_PT_tyrant(bpy.types.Panel):
                 say(box, context, warning, "ERROR")
 
 
-CLASSES = (TYRANT_OT_send, TYRANT_OT_choose_destination, VIEW3D_PT_tyrant)
+CLASSES = (TYRANT_OT_send, TYRANT_OT_choose_destination, TYRANT_OT_use_game_material, VIEW3D_PT_tyrant)
