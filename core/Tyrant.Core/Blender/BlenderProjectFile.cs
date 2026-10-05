@@ -35,6 +35,9 @@ public sealed record BlenderProject(int Version, string Workspace, string Tyrant
     /// <summary>The kept .blend holds the model of an older game build (GameBuild is that build): Start fresh takes the new one.</summary>
     public bool GameChanged { get; init; }
 
+    /// <summary>Start fresh was asked: the add-on keeps the model's scene as "(old)", imports into a new one, then clears this.</summary>
+    public bool Fresh { get; init; }
+
     /// <summary>The sex Blender shows first ("male" or "female"; the Tyrant panel switches it).</summary>
     public string Sex { get; init; } = "male";
 

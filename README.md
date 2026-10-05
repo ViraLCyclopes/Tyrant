@@ -42,8 +42,10 @@ Tyrant works with **Blender 5.0 or newer** through its own Blender add-on.
    mesh counts once you add that modifier; reference meshes, physics boxes and other rigs stay out. The first send asks
    which mod and which model (species or a skin); Tyrant's report (errors, warnings, sizes) shows in the panel.
 
-Your work is kept as a `.blend` in `<workspace>\blender\…`; **Open in Blender** reopens it. **Start fresh** (Options)
-rebuilds it from the current model and keeps the old file as `.old.blend`.
+Each model opens as **its own scene in the file you have open** (e.g. *Tyrant · my-mod · Allosaurus Anax Red*); your other
+scenes and objects are never touched, and saving the file is up to you. **Open in Blender** again switches back to that
+scene. **Start fresh** (Options) keeps the old scene as *… (old)* and imports the model anew. To port a model, open the
+Tyrant model in the file that holds your mesh, then bring the mesh into the Tyrant scene (Link to Scene, or Append).
 
 ## Updates
 

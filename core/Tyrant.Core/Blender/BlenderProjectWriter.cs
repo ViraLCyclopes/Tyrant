@@ -43,19 +43,17 @@ public static class BlenderProjectWriter
         var build = GameFingerprint.Compute(install).BuildGuid;
 
         var existing = ExistingBlend(old, dir);
-        // Start fresh moves the project's own .blend aside, never a file outside its folder (a Save As elsewhere stays put).
-        if (request.Fresh && existing is not null && ModPaths.IsInside(existing, dir))
-            File.Move(existing, Path.Combine(dir, Path.GetFileNameWithoutExtension(existing) + ".old.blend"), overwrite: true);
-        var keepBlend = request.Fresh ? null : existing;
-        // The kept .blend still holds the model it was made from: its build (and "game changed") last until Start fresh.
-        var modelBuild = keepBlend is not null && old is not null ? old.GameBuild : build;
+        // The .blend is the user's own file (the model is one scene in it): Start fresh never moves it. The add-on keeps the
+        // model's scene as "(old)" and imports into a new one; the model the scene holds stays as long as Start fresh is not used.
+        var keepModel = !request.Fresh && existing is not null;
+        var modelBuild = keepModel && old is not null ? old.GameBuild : build;
         var gameChanged = modelBuild != build;
 
         Directory.CreateDirectory(dir);
         var prefab = reader.ReadPrefabModel(install, prefabRecord);
         var renderers = ModelBuilder.GameRenderers(prefab);
         var modelGlb = Path.Combine(dir, ModelFile);
-        if (keepBlend is null || !File.Exists(modelGlb))
+        if (!keepModel || !File.Exists(modelGlb))
         {
             var ownModel = ownSkin?.Model ?? modReplacement;
             if (mod is not null && ownModel is not null)
@@ -69,9 +67,10 @@ public static class BlenderProjectWriter
         var project = new BlenderProject(BlenderProjectFile.CurrentVersion, ws.Dir, tyrantExe, modelBuild,
             new BlenderSource(kind, speciesId, ownSkin?.Id ?? vanilla?.Name, mod?.Id),
             old?.Destination ?? (mod is null ? null : new BlenderDestination(mod.Id, speciesId, ownSkin?.Id)),
-            materials, BlenderGrowthReader.Read(BlenderGrowthReader.TryStore(ws), speciesId), Rest(prefab.Root), keepBlend, request.Lods)
+            materials, BlenderGrowthReader.Read(BlenderGrowthReader.TryStore(ws), speciesId), Rest(prefab.Root), existing, request.Lods)
         {
             GameChanged = gameChanged,
+            Fresh = request.Fresh,
             Sex = request.Sex == "female" ? "female" : "male",
             Sexes = BlenderGrowthReader.ReadSexes(BlenderGrowthReader.TryStore(ws), speciesId, vanilla?.Index ?? 0),
         };

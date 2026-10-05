@@ -43,43 +43,64 @@ class ListenerTests(unittest.TestCase):
             server.stop()
 
 
-class OpenProjectTests(unittest.TestCase):
+class SceneTests(unittest.TestCase):
+    """Open in Blender puts the model in a scene of its own in the file that is open; it never replaces or saves the file."""
+
     def setUp(self):
         bpy.ops.wm.read_factory_settings(use_empty=True)
 
-    def test_a_new_project_is_imported_and_saved_as_its_blend(self):
+    def window_scene(self):
+        return bpy.context.window_manager.windows[0].scene
+
+    def test_opening_adds_a_tagged_scene_and_leaves_the_rest_of_the_file_alone(self):
+        first = self.window_scene()
+        mine = bpy.data.objects.new("my JWE mesh", None)
+        first.collection.objects.link(mine)
         path = fresh_project()
-        ui.import_and_save(path)
+
+        ui.show_project(path)
+
+        scene = self.window_scene()
+        self.assertNotEqual(scene, first)
+        self.assertEqual(scene[project.TAG], path)
+        self.assertTrue(scene.name.startswith("Tyrant · game · Carcharodontosaurus"))
+        self.assertTrue(any(o.type == "ARMATURE" for o in scene.objects))
+        self.assertEqual([o.name for o in first.objects], ["my JWE mesh"])  # nothing was added to the other scene
+        self.assertEqual(bpy.data.filepath, "")  # nothing was saved for you
+
+    def test_opening_again_switches_back_without_importing_again(self):
+        path = fresh_project()
+        ui.show_project(path)
+        scene = self.window_scene()
+        self.window_scene_set(bpy.data.scenes[0] if bpy.data.scenes[0] != scene else bpy.data.scenes[1])
+
+        ui.show_project(path)
+
+        self.assertEqual(self.window_scene(), scene)
+        self.assertEqual(len([o for o in bpy.data.objects if o.type == "ARMATURE"]), 1)
+
+    def window_scene_set(self, scene):
+        bpy.context.window_manager.windows[0].scene = scene
+
+    def test_start_fresh_keeps_the_old_scene_and_imports_into_a_new_one(self):
+        path = fresh_project()
+        ui.show_project(path)
+        old = self.window_scene()
         data = project.load(path)
-        self.assertTrue(data["blend"].endswith(".blend"))
-        self.assertTrue(os.path.isfile(data["blend"]))
-        self.assertEqual(os.path.dirname(data["blend"]), os.path.dirname(path))
-        self.assertEqual(bpy.data.filepath, data["blend"])
+        data["fresh"] = True
+        project.save(path, data)
+
+        ui.show_project(path)
+
+        new = self.window_scene()
+        self.assertNotEqual(new, old)
+        self.assertTrue(old.name.endswith("(old)"))
+        self.assertEqual(new[project.TAG], path)
+        self.assertNotIn(project.TAG, old)
+        self.assertFalse(project.load(path).get("fresh"))  # once
 
 
-class NoOverwriteTests(unittest.TestCase):
-    def setUp(self):
-        bpy.ops.wm.read_factory_settings(use_empty=True)
-
-    def test_an_existing_blend_is_kept_as_old_blend_not_overwritten(self):
-        path = fresh_project()
-        target = ui.project_blend(path, project.load(path))
-        with open(target, "wb") as f:
-            f.write(b"older work")
-        ui.import_and_save(path)
-        with open(target[:-len(".blend")] + ".old.blend", "rb") as f:
-            self.assertEqual(f.read(), b"older work")
-        self.assertEqual(bpy.data.filepath, target)
-
-
-class DirtyOpenTests(unittest.TestCase):
-    def setUp(self):
-        bpy.ops.wm.read_factory_settings(use_empty=True)
-
-    def test_asking_before_opening_over_unsaved_changes_does_not_fail(self):
-        # In the background there is no window to ask in: it must report, not throw (it threw a TypeError before).
-        ui.ask_then_open(fresh_project())
-
+class QueueTests(unittest.TestCase):
     def test_the_open_queue_survives_bad_requests_one_per_tick(self):
         import tyrant_blender
 

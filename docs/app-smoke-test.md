@@ -144,7 +144,8 @@ Release build: `npm run build:app`, install `studio/src-tauri/target/release/bun
 
 74. Workspace → **Blender** card shows *Blender 5.2.2* and its path; **Install add-on** → "Add-on 0.1.0 installed". Restart
     Blender: Edit → Preferences → Add-ons lists **Tyrant**, enabled.
-75. Species → Allosaurus Anax → **Open in Blender** (skin Base): Blender opens it. Bones are plain (no spheres), the model is
+75. Species → Allosaurus Anax → **Open in Blender** (skin Base): it lands as a new scene *Tyrant · game · Allosaurus Anax
+    Base* in the open file (your other scenes untouched). Bones are plain (no spheres), the model is
     smooth (no cracks at hard edges), Edit Mode shows UV seams, Material Preview looks like the game.
 76. Tyrant panel (N → Tyrant) → **Growth** 0: baby shape, infant textures, baby proportions. Compare with a baby in the
     Nursery. Growth back to 1.
@@ -152,11 +153,14 @@ Release build: `npm run build:app`, install `studio/src-tauri/target/release/bun
     Switch to Tyrant: the mod editor's model page shows the sculpt (no restart, no manual refresh).
 77b. Tyrant panel -> **Sex** Female: her maps show and (Allosaurus Anax) her adult keeps part of the Adolescent shape,
     like a female in the Nursery; Male puts it back. Open in Blender -> Options -> Sex starts as the female.
-78. Close Blender. From the mod's model page → **Open in Blender**: the saved .blend opens with the sculpt.
-79. With Blender open (unsaved change): **Open in Blender** on another species → Blender asks *Save and open / Open without
-    saving / Cancel*; no second Blender window opens.
+78. Save the file (Ctrl+S), close Blender. From the mod's model page → **Open in Blender**: Blender starts with that file and
+    the model's scene, with the sculpt.
+79. With Blender open: **Open in Blender** on another species → a second Tyrant scene is added to the same file, no dialog,
+    no second Blender window; **Open in Blender** on the first one again switches back to its scene. **Start fresh** keeps
+    the old scene as *… (old)*.
 80. **(game, ask first)** Install the mod: the sculpt shows in game.
-81. Ultimasaurus: open `ultimasaurus-allo`'s skin in Blender, import the JWE mesh into that scene, give it an Armature
+81. Ultimasaurus: in the file with the JWE mesh, open `ultimasaurus-allo`'s skin from Tyrant (a new scene), bring the JWE
+    mesh into that scene (Object → Link/Transfer Data → Link Objects to Scene, or Append), give it an Armature
     modifier on the Tyrant armature, **Send to Tyrant**: only the Tyrant rig and its meshes went (no physics boxes, no
     airlift straps); the report names any bones it dropped.
 

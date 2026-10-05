@@ -58,11 +58,9 @@ def _start_send(context, armature, destination=None, new_mod_name=None):
         raise send.SendError(f"This project names {data.get('tyrant')!r} as Tyrant; open it again from Tyrant on this PC.")
     glb = os.path.join(os.path.dirname(path), "send.glb")
     send.export(armature, glb)
-    if bpy.data.filepath:
+    if bpy.data.filepath:  # an untitled file is the user's to name and save
         bpy.ops.wm.save_mainfile()
-    else:
-        bpy.ops.wm.save_as_mainfile(filepath=ui.project_blend(path, data))
-    ui.record_blend(path, bpy.data.filepath)
+        ui.record_blend(path, bpy.data.filepath)  # a Blender Tyrant starts later opens this file at the model's scene
     armature[REPORT] = json.dumps({"busy": True})
     name = armature.name
 

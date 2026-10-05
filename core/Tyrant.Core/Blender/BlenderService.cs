@@ -101,7 +101,7 @@ public sealed class BlenderService(BlenderEnvironment env)
             "import addon_utils, bpy, importlib",
             $"addon_utils.enable('{BlenderAddon.ModuleName}', default_set=True)",
             "def _tyrant_open():",
-            $"    importlib.import_module('{BlenderAddon.ModuleName}.ui').open_project(r'{projectFile}')",
+            $"    importlib.import_module('{BlenderAddon.ModuleName}.ui').open_project(r'{projectFile}', started=True)",
             "bpy.app.timers.register(_tyrant_open, first_interval=1.0)");
     }
 

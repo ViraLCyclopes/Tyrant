@@ -161,19 +161,21 @@ public class BlenderProjectTests
     }
 
     [Fact]
-    public void Start_fresh_keeps_the_old_blend_as_old_blend()
+    public void Start_fresh_leaves_the_users_blend_alone_and_marks_the_project_fresh_once()
     {
         using var c = Setup();
         var first = c.Write(new BlenderOpenRequest("Carcharodontosaurus", null, null, false, false));
         var blend = Path.Combine(first.Dir, "carch.blend");
-        File.WriteAllText(blend, "user work");
+        File.WriteAllText(blend, "user work, other scenes too");
         BlenderProjectFile.Write(first.ProjectFile, BlenderProjectFile.Read(first.ProjectFile) with { Blend = blend });
 
         var fresh = c.Write(new BlenderOpenRequest("Carcharodontosaurus", null, null, true, false));
 
-        Assert.Null(BlenderProjectFile.Read(fresh.ProjectFile).Blend);
-        Assert.False(File.Exists(blend));
-        Assert.Equal("user work", File.ReadAllText(Path.Combine(first.Dir, "carch.old.blend")));
+        Assert.Equal("user work, other scenes too", File.ReadAllText(blend)); // the .blend is the user's file now
+        var project = BlenderProjectFile.Read(fresh.ProjectFile);
+        Assert.True(project.Fresh); // the add-on keeps the old scene as "(old)" and imports anew
+        Assert.Equal(blend, project.Blend); // a fresh Blender still opens the user's file
+        Assert.False(BlenderProjectFile.Read(c.Write(new BlenderOpenRequest("Carcharodontosaurus", null, null, false, false)).ProjectFile).Fresh);
     }
 
     [Fact]

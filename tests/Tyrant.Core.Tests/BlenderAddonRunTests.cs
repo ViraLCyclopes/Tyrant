@@ -109,12 +109,19 @@ public class BlenderAddonRunTests
         var before = System.Diagnostics.Process.GetProcessesByName("blender").Select(p => p.Id).ToHashSet();
         try
         {
-            new BlenderProcess().Start(blender!.Exe, ["--python-expr", BlenderService.StartScript(projectFile)]);
+            // A second script writes the scenes Blender has once the open had time to run (the add-on itself saves nothing).
+            var scenes = Path.Combine(Path.GetDirectoryName(projectFile)!, "scenes.txt");
+            var probe = string.Join("\n",
+                "import bpy",
+                "def _probe():",
+                $"    open(r'{scenes}', 'w', encoding='utf-8').write('\\n'.join(f\"{{s.name}}|{{s.get('tyrant_project', '')}}\" for s in bpy.data.scenes))",
+                "bpy.app.timers.register(_probe, first_interval=8.0)");
+            new BlenderProcess().Start(blender!.Exe, ["--python-expr", BlenderService.StartScript(projectFile), "--python-expr", probe]);
             var deadline = DateTime.UtcNow.AddMinutes(2);
-            while (DateTime.UtcNow < deadline && BlenderProjectFile.Read(projectFile).Blend is null) Thread.Sleep(500);
-            var blend = BlenderProjectFile.Read(projectFile).Blend;
-            Assert.NotNull(blend);
-            Assert.True(File.Exists(blend));
+            while (DateTime.UtcNow < deadline && !File.Exists(scenes)) Thread.Sleep(500);
+            Thread.Sleep(300);
+            var lines = File.ReadAllLines(scenes);
+            Assert.Contains(lines, l => l.StartsWith("Tyrant · game · Carcharodontosaurus", StringComparison.Ordinal) && l.EndsWith("|" + projectFile, StringComparison.Ordinal));
         }
         finally
         {
