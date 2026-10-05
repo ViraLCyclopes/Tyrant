@@ -157,6 +157,14 @@ public sealed class BlenderSendCommand : Command<BlenderSendCommand.Settings>
         [CommandOption("--new-mod-name <NAME>")]
         [Description("With --mod: create the mod with this name when it does not exist.")]
         public string? NewModName { get; set; }
+
+        [CommandOption("--image <SLOT=PNG>")]
+        [Description("A changed image for a skin slot (diffuse, normal, extra, pattern, fur, infantDiffuse, …); repeatable.")]
+        public string[] Image { get; set; } = [];
+
+        [CommandOption("--sex <SEX>")]
+        [Description("The sex shown in Blender (male or female): whose maps the images go to.")]
+        public string Sex { get; set; } = "male";
     }
 
     public override int Execute(CommandContext context, Settings settings)
@@ -168,8 +176,16 @@ public sealed class BlenderSendCommand : Command<BlenderSendCommand.Settings>
             var (ws, install) = CliServices.OpenWorkspace(settings);
             var project = BlenderProjectFile.Read(settings.Project);
             var choose = settings.Mod is null ? null : new BlenderDestination(settings.Mod, project.Source.Species, settings.Skin);
+            if (settings.Sex is not ("male" or "female"))
+                throw new TyrantException(TyrantErrorCode.ModInvalid, $"--sex must be male or female (got '{settings.Sex}').");
+            var images = settings.Image.Select(i =>
+            {
+                var at = i.IndexOf('=');
+                return at > 0 && at < i.Length - 1 ? new BlenderImage(i[..at], Path.GetFullPath(i[(at + 1)..]))
+                    : throw new TyrantException(TyrantErrorCode.ModInvalid, $"--image takes <slot>=<png> (got '{i}').");
+            }).ToList();
             result = BlenderService.Send(ws, install, CliServices.LoadIndex(ws, install), ModCli.RequireSpecies(ws), CliServices.AssetReader,
-                settings.Project, Path.GetFullPath(settings.Glb), choose, settings.NewModName);
+                settings.Project, Path.GetFullPath(settings.Glb), choose, settings.NewModName, images, settings.Sex);
         }
         catch (TyrantException ex)
         {

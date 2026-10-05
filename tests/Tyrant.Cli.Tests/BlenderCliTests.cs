@@ -98,4 +98,44 @@ public class BlenderCliTests
         Assert.Equal("Carcharodontosaurus", doc.RootElement.GetProperty("species").GetString());
         Assert.Equal("my-mod", doc.RootElement.GetProperty("mods")[0].GetProperty("id").GetString());
     }
+
+    [Theory]
+    [InlineData("--image", "diffuse")]
+    [InlineData("--sex", "other")]
+    public void Send_reports_a_bad_image_or_sex_as_its_json_line(string option, string value)
+    {
+        using var game = new FakeGame();
+        var ws = Workspace(game);
+        var dir = Path.Combine(ws, "blender", "game", "x");
+        Directory.CreateDirectory(dir);
+        var project = Path.Combine(dir, BlenderProjectFile.FileName);
+        BlenderProjectFile.Write(project, new BlenderProject(1, ws, "t.exe", "b", new BlenderSource("game", "Carcharodontosaurus", null, null),
+            null, new Dictionary<string, BlenderMaterial>(), null, [], null, false));
+
+        var (code, output, _) = Run("blender", "send", "-w", ws, project, Path.Combine(dir, "send.glb"), option, value);
+
+        Assert.Equal(ExitCodes.Error, code);
+        using var doc = System.Text.Json.JsonDocument.Parse(Assert.Single(output.Split('\n', StringSplitOptions.RemoveEmptyEntries)));
+        Assert.Contains(option == "--image" ? "<slot>=<png>" : "male or female", doc.RootElement.GetProperty("errors")[0].GetString());
+    }
+
+    [Fact]
+    public void Send_accepts_images_and_a_sex()
+    {
+        using var game = new FakeGame();
+        var ws = Workspace(game);
+        var dir = Path.Combine(ws, "blender", "game", "x");
+        Directory.CreateDirectory(dir);
+        var project = Path.Combine(dir, BlenderProjectFile.FileName);
+        BlenderProjectFile.Write(project, new BlenderProject(1, ws, "t.exe", "b", new BlenderSource("game", "Carcharodontosaurus", null, null),
+            null, new Dictionary<string, BlenderMaterial>(), null, [], null, false));
+
+        var (_, output, _) = Run("blender", "send", "-w", ws, project, Path.Combine(dir, "send.glb"),
+            "--image", "diffuse=" + Path.Combine(dir, "d.png"), "--image", "extra=" + Path.Combine(dir, "e.png"), "--sex", "female");
+
+        using var doc = System.Text.Json.JsonDocument.Parse(Assert.Single(output.Split('\n', StringSplitOptions.RemoveEmptyEntries)));
+        var error = doc.RootElement.GetProperty("errors")[0].GetString()!; // parsed; it fails later (this workspace has no asset index)
+        Assert.DoesNotContain("<slot>=<png>", error);
+        Assert.DoesNotContain("male or female", error);
+    }
 }
