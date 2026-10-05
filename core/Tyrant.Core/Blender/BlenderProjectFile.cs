@@ -43,6 +43,9 @@ public sealed record BlenderProject(int Version, string Workspace, string Tyrant
 
     /// <summary>The skin's growth limits and sizes; null without a data dump (both grow fully).</summary>
     public BlenderSexes? Sexes { get; init; }
+
+    /// <summary>The game's growth shape keys (the first two of LOD 0: baby, juvenile), so the add-on can check them before Send.</summary>
+    public IReadOnlyList<string> GrowthKeys { get; init; } = [];
 }
 
 public static class BlenderProjectFile

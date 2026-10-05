@@ -287,4 +287,16 @@ public class BlenderProjectTests
         var ex = Assert.Throws<Tyrant.Core.Errors.TyrantException>(() => BlenderProjectFile.Read(path));
         Assert.Contains("open it again from Tyrant", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public void The_project_names_the_games_growth_keys()
+    {
+        var (projectFile, _, _, _, game) = BlenderAddonRunTests.Fixture();
+        using var _ = game;
+
+        var project = BlenderProjectFile.Read(projectFile);
+
+        Assert.Equal(["Infant"], project.GrowthKeys); // the fixture's LOD 0 has one shape key; the game's first two are growth
+        Assert.Contains("\"growthKeys\"", File.ReadAllText(projectFile));
+    }
 }

@@ -40,6 +40,9 @@ def _valid(data):
     if sexes is not None and not (isinstance(sexes, dict) and all(
             isinstance(sexes.get(k), dict) and isinstance(sexes[k].get("growthClamp"), (int, float)) for k in ("male", "female"))):
         return False
+    keys = data.get("growthKeys")
+    if keys is not None and not (isinstance(keys, list) and all(isinstance(k, str) for k in keys)):
+        return False
     growth = data.get("growth")
     if growth is None:
         return True

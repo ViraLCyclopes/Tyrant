@@ -84,6 +84,9 @@ public static class BlenderProjectWriter
             Fresh = request.Fresh,
             Sex = request.Sex == "female" ? "female" : "male",
             Sexes = BlenderGrowthReader.ReadSexes(BlenderGrowthReader.TryStore(ws), speciesId, vanilla?.Index ?? 0),
+            GrowthKeys = renderers.Count > 0
+                ? renderers[0].Mesh.BlendShapes.Take(ModelFitter.GrowthKeys).Select(s => s.Name).ToList()
+                : [],
         };
         BlenderProjectFile.Write(projectFile, project);
         return new BlenderProjectResult(projectFile, dir, gameChanged);
