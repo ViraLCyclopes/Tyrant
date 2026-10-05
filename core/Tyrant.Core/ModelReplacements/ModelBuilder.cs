@@ -11,9 +11,12 @@ namespace Tyrant.Core.ModelReplacements;
 public sealed record ModelLodStats(string File, int Vertices, bool Index32, int Vanilla);
 
 /// <summary>What building a model found: errors (then no .tmesh is written), warnings, and each LOD written; saved next to the .glb.</summary>
-/// <remarks>Origin: the user's own .glb the model was added from (outside the mod), with its stamp then, to notice a re-export.</remarks>
+/// <remarks>
+/// Origin: the user's own .glb the model was added from (outside the mod), with its stamp then, to notice a re-export.
+/// RigHash: the rig edit the bind poses were built for ("" for none), to notice a changed rig.
+/// </remarks>
 public sealed record ModelReport(string Source, string Stamp, IReadOnlyList<string> Errors, IReadOnlyList<string> Warnings, IReadOnlyList<ModelLodStats> Lods,
-    string? Origin = null, string? OriginStamp = null);
+    string? Origin = null, string? OriginStamp = null, string RigHash = "");
 
 /// <summary>Turns the user's .glb into one .tmesh per game LOD: their own LOD meshes when present, else LOD 0 decimated.</summary>
 public static class ModelBuilder
@@ -43,11 +46,12 @@ public static class ModelBuilder
         }
     }
 
-    /// <summary>True when the model was never built, its .glb changed since, or a built .tmesh is gone.</summary>
-    public static bool IsStale(string modDir, string glbFile)
+    /// <summary>True when the model was never built, its .glb or its rig edit changed since, or a built .tmesh is gone.</summary>
+    public static bool IsStale(string modDir, string glbFile, IReadOnlyDictionary<string, RigOffset>? rig = null)
     {
         var report = ReadReport(modDir, glbFile);
         if (report is null || report.Stamp != Stamp(Path.Combine(modDir, glbFile))) return true;
+        if ((report.RigHash ?? "") != RigEdit.Hash(rig)) return true;
         return report.Errors.Count == 0 && report.Lods.Any(l => !File.Exists(Path.Combine(modDir, l.File)));
     }
 
@@ -56,14 +60,15 @@ public static class ModelBuilder
         report.Origin is { } origin && File.Exists(origin) && Stamp(origin) != report.OriginStamp;
 
     /// <param name="origin">The user's .glb the model is added from; a rebuild keeps the one recorded before.</param>
-    public static ModelReport Build(string modDir, string glbFile, PrefabModel game, string? origin = null)
+    /// <param name="rig">The rig edit the model is made for: its bind poses are the edited skeleton's.</param>
+    public static ModelReport Build(string modDir, string glbFile, PrefabModel game, string? origin = null, IReadOnlyDictionary<string, RigOffset>? rig = null)
     {
         var glbPath = Path.Combine(modDir, glbFile);
         var stamp = Stamp(glbPath);
         var previous = origin is null ? ReadReport(modDir, glbFile) : null;
         var (from, fromStamp) = origin is not null ? (origin, Stamp(origin)) : (previous?.Origin, previous?.OriginStamp);
         ModelReport Report(IReadOnlyList<string> errors, IReadOnlyList<string> warnings, IReadOnlyList<ModelLodStats> lods) =>
-            new(glbFile, stamp, errors, warnings, lods, from, fromStamp);
+            new(glbFile, stamp, errors, warnings, lods, from, fromStamp, RigEdit.Hash(rig));
         var renderers = GameRenderers(game);
         IReadOnlyList<ImportedMesh> imported;
         try
@@ -82,13 +87,14 @@ public static class ModelBuilder
         imported = PickMeshes(imported, renderers[0].Bones.Select(b => b.Name).ToHashSet(StringComparer.Ordinal), warnings, errors);
         if (errors.Count > 0) return Save(modDir, glbFile, Report(errors, warnings, []));
         var fitted = new List<MeshData>();
+        var binds = renderers.Select(r => rig is { Count: > 0 } ? RigBinds.Edited(game, r, rig) : null).ToList();
         for (var lod = 0; lod < renderers.Count; lod++)
         {
             var game0 = renderers[lod];
             var own = imported.FirstOrDefault(m => m.Lod == lod);
             if (own is not null)
             {
-                var fit = ModelFitter.Fit(own, game0, game0.Materials.Select(m => m.Name).ToList());
+                var fit = ModelFitter.Fit(own, game0, game0.Materials.Select(m => m.Name).ToList(), binds[lod]);
                 errors.AddRange(fit.Errors.Select(e => lod == 0 ? e : $"LOD {lod}: {e}"));
                 warnings.AddRange(fit.Warnings.Select(w => lod == 0 ? w : $"LOD {lod}: {w}"));
                 if (fit.Mesh is not null) fitted.Add(fit.Mesh);
@@ -115,7 +121,7 @@ public static class ModelBuilder
         for (var lod = 0; lod < fitted.Count; lod++)
         {
             var file = ModelFiles.Lod(glbFile, lod);
-            var tmesh = ToTMesh(fitted[lod], renderers[lod].Bones.Count, stamp);
+            var tmesh = ToTMesh(fitted[lod], renderers[lod].Bones.Count, stamp, binds[lod]);
             var path = Path.Combine(modDir, file);
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             using (var stream = File.Create(path)) tmesh.Write(stream);
@@ -139,7 +145,8 @@ public static class ModelBuilder
         return report;
     }
 
-    internal static TMesh ToTMesh(MeshData mesh, int boneCount, string stamp)
+    /// <param name="bindPoses">A rig edit's bind poses (stored, format 2); null keeps the game's (not stored).</param>
+    internal static TMesh ToTMesh(MeshData mesh, int boneCount, string stamp, Matrix4x4[]? bindPoses = null)
     {
         var n = mesh.VertexCount;
         var min = new[] { float.MaxValue, float.MaxValue, float.MaxValue };
@@ -177,6 +184,7 @@ public static class ModelBuilder
             }).ToArray(),
             BoundsMin = n == 0 ? new float[3] : min,
             BoundsMax = n == 0 ? new float[3] : max,
+            BindPoses = bindPoses is null ? [] : UnityBinds(bindPoses),
         };
     }
 
@@ -214,8 +222,27 @@ public static class ModelBuilder
     }
 
     /// <summary>A .tmesh back as a mesh (for previews), with the game renderer's bind poses.</summary>
+    /// <summary>System.Numerics bind poses (row vectors) → Unity's m[row, col] row by row (Unity's matrix is their transpose).</summary>
+    internal static float[] UnityBinds(Matrix4x4[] binds)
+    {
+        var values = new float[binds.Length * 16];
+        for (var b = 0; b < binds.Length; b++)
+            for (var row = 0; row < 4; row++)
+                for (var col = 0; col < 4; col++) values[b * 16 + row * 4 + col] = binds[b][col, row];
+        return values;
+    }
+
+    /// <param name="bindPoses">The game's bind poses, used unless the .tmesh carries its own (a rig edit).</param>
     internal static MeshData FromTMesh(TMesh t, Matrix4x4[] bindPoses)
     {
+        if (t.BindPoses.Length == bindPoses.Length * 16 && t.BindPoses.Length > 0)
+        {
+            var own = new Matrix4x4[bindPoses.Length];
+            for (var b = 0; b < own.Length; b++)
+                for (var row = 0; row < 4; row++)
+                    for (var col = 0; col < 4; col++) own[b][col, row] = t.BindPoses[b * 16 + row * 4 + col];
+            bindPoses = own;
+        }
         var n = t.VertexCount;
         Vector3 V3(float[] a, int i) => new(a[i * 3], a[i * 3 + 1], a[i * 3 + 2]);
         var shapes = t.Shapes.Select(shape =>

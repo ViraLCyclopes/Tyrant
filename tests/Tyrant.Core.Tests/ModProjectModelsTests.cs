@@ -287,4 +287,98 @@ public class ModProjectModelsTests
         Assert.Equal(TyrantErrorCode.BlenderMissing, ex.Code);
         Assert.StartsWith("FBX needs Blender", ex.Message);
     }
+
+    private static Dictionary<string, RigOffset> TailRig() => new()
+    {
+        ["Tail"] = new RigOffset { Move = new RigVector3(0, 0, -0.5f), Rotate = RigQuaternion.Identity, Scale = RigVector3.One },
+    };
+
+    private static string AddSkin(Workspace ws, GameInstall install, ModProject mod, FakeAssetReader reader)
+    {
+        mod.AddSkin(ws, install, Index(), reader, SpeciesSkinsReader.Load(ws), "Carcharodontosaurus", "Long", "1",
+            new SkinTemplateOptions(Male: true, Female: false, Maps: false));
+        return mod.Manifest.Skins[0].Id;
+    }
+
+    [Fact]
+    public void A_model_sent_with_a_rig_records_it_and_builds_for_it()
+    {
+        var (game, ws, install, mod, reader, glb) = Setup();
+        using var _ = game;
+        var skinId = AddSkin(ws, install, mod, reader);
+
+        var report = mod.ReplaceModel(install, Index(), SpeciesSkinsReader.Load(ws), reader, glb, null, null, skinId, rig: TailRig());
+
+        Assert.Equal(RigEdit.Hash(TailRig()), report.RigHash);
+        Assert.Equal(-0.5f, ModProject.Open(ws, "big-carch").Manifest.Skins[0].Rig!["Tail"].Move.Z);
+        Assert.Equal(RigEdit.Hash(TailRig()), RigEdit.Hash(mod.RigOfFile(mod.Manifest.Skins[0].Model!)));
+    }
+
+    [Fact]
+    public void Replacing_a_model_with_no_rig_given_keeps_the_rig_and_an_empty_one_clears_it()
+    {
+        var (game, ws, install, mod, reader, glb) = Setup();
+        using var _ = game;
+        var skinId = AddSkin(ws, install, mod, reader);
+        mod.ReplaceModel(install, Index(), SpeciesSkinsReader.Load(ws), reader, glb, null, null, skinId, rig: TailRig());
+
+        var kept = mod.ReplaceModel(install, Index(), SpeciesSkinsReader.Load(ws), reader, glb, null, null, skinId);
+        Assert.NotNull(mod.Manifest.Skins[0].Rig);
+        Assert.Equal(RigEdit.Hash(TailRig()), kept.RigHash);
+
+        var cleared = mod.ReplaceModel(install, Index(), SpeciesSkinsReader.Load(ws), reader, glb, null, null, skinId, rig: new Dictionary<string, RigOffset>());
+        Assert.Null(mod.Manifest.Skins[0].Rig);
+        Assert.Equal("", cleared.RigHash);
+    }
+
+    [Fact]
+    public void A_species_rig_without_a_model_is_its_own_entry_with_no_model_file()
+    {
+        var (game, ws, install, mod, reader, _) = Setup();
+        using var _1 = game;
+
+        var report = mod.SetRig(install, Index(), SpeciesSkinsReader.Load(ws), reader, "Carcharodontosaurus", null, TailRig());
+
+        Assert.Null(report);
+        var entry = Assert.Single(ModProject.Open(ws, "big-carch").Manifest.Models);
+        Assert.Equal(("Carcharodontosaurus", ""), (entry.Target, entry.File));
+        Assert.Empty(mod.ModelEntries());
+        Assert.Empty(mod.AllModelEntries());
+        Assert.NotNull(mod.RigOf("Carcharodontosaurus", null));
+
+        mod.SetRig(install, Index(), SpeciesSkinsReader.Load(ws), reader, "Carcharodontosaurus", null, null);
+        Assert.Empty(ModProject.Open(ws, "big-carch").Manifest.Models);
+    }
+
+    [Fact]
+    public void Setting_the_rig_of_a_model_rebuilds_it_and_removing_the_model_keeps_the_rig()
+    {
+        var (game, ws, install, mod, reader, glb) = Setup();
+        using var _ = game;
+        mod.ReplaceModel(install, Index(), SpeciesSkinsReader.Load(ws), reader, glb, "Carcharodontosaurus", null, null);
+
+        var report = mod.SetRig(install, Index(), SpeciesSkinsReader.Load(ws), reader, "Carcharodontosaurus", null, TailRig());
+
+        Assert.Equal(RigEdit.Hash(TailRig()), report!.RigHash);
+        Assert.False(ModelBuilder.IsStale(mod.Dir, mod.Manifest.Models[0].File, mod.RigOfFile(mod.Manifest.Models[0].File)));
+
+        mod.RemoveModel("Carcharodontosaurus", null);
+        var entry = Assert.Single(mod.Manifest.Models);
+        Assert.Equal("", entry.File);
+        Assert.NotNull(entry.Rig);
+    }
+
+    [Fact]
+    public void A_skin_rig_without_its_own_model_needs_no_model()
+    {
+        var (game, ws, install, mod, reader, _) = Setup();
+        using var _1 = game;
+        var skinId = AddSkin(ws, install, mod, reader);
+
+        Assert.Null(mod.SetRig(install, Index(), SpeciesSkinsReader.Load(ws), reader, "Carcharodontosaurus", skinId, TailRig()));
+
+        Assert.Null(mod.Manifest.Skins[0].Model);
+        Assert.NotNull(ModProject.Open(ws, "big-carch").Manifest.Skins[0].Rig);
+        Assert.NotNull(mod.RigOf("Carcharodontosaurus", skinId));
+    }
 }

@@ -36,7 +36,8 @@ public sealed class FakeAssetReader : IAssetReader
     /// <summary>Writes a placeholder .glb per LOD (WriteReplacedModel), with ModelMaterials as the materials.</summary>
     public int ReplacedModelWrites { get; private set; }
 
-    public ModelFacts WriteReplacedModel(GameInstall install, AssetRecord prefab, IReadOnlyList<Tyrant.Framework.Core.TMesh> lods, string outputDir, AssetIndex index)
+    public ModelFacts WriteReplacedModel(GameInstall install, AssetRecord prefab, IReadOnlyList<Tyrant.Framework.Core.TMesh> lods, string outputDir, AssetIndex index,
+        IReadOnlyDictionary<string, Tyrant.Framework.Core.RigOffset>? rig = null)
     {
         ReplacedModelWrites++;
         Fail(prefab);

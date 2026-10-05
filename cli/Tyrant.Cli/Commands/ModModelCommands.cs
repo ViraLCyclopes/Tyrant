@@ -70,7 +70,7 @@ public sealed class ModRebuildModelsCommand : Command<ModSettings>
         var failed = false;
         foreach (var (speciesId, file) in mod.ModelEntries())
         {
-            var report = ModelBuilder.Build(mod.Dir, file, CliServices.AssetReader.ReadPrefabModel(install, ModProject.ResolveModelTarget(index, species, speciesId, null).Prefab));
+            var report = ModelBuilder.Build(mod.Dir, file, CliServices.AssetReader.ReadPrefabModel(install, ModProject.ResolveModelTarget(index, species, speciesId, null).Prefab), null, mod.RigOfFile(file));
             failed |= report.Errors.Count > 0;
             Console.WriteLine($"  {speciesId}: {(report.Errors.Count == 0 ? $"{report.Lods.Count} LOD(s)" : string.Join(" ", report.Errors))}");
         }

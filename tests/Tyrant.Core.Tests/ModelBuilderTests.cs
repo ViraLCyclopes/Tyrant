@@ -116,4 +116,77 @@ public class ModelBuilderTests
 
         Assert.True(ModelBuilder.IsStale(dir, glb));
     }
+
+    private static readonly Dictionary<string, RigOffset> TailRig = new()
+    {
+        ["Tail"] = new RigOffset { Move = new RigVector3(0, 0, -0.5f), Rotate = RigQuaternion.Identity, Scale = RigVector3.One },
+    };
+
+    /// <summary>Like Setup, but the .glb's skeleton carries the rig edit (as Blender exports it after Apply rig edit).</summary>
+    private static (string ModDir, string Glb, PrefabModel Game) SetupEdited()
+    {
+        var (dir, glb, game) = Setup();
+        var renderer = game.Renderers[0];
+        var m = renderer.Mesh;
+        var edited = new MeshData
+        {
+            Name = m.Name, Positions = m.Positions, Normals = m.Normals, Uv0 = m.Uv0, Colors = m.Colors, Skin = m.Skin, Indices = m.Indices,
+            SubMeshes = m.SubMeshes, BindPoses = RigBinds.Edited(game, renderer, TailRig), BlendShapes = m.BlendShapes,
+        };
+        GltfModelWriter.WriteGlb(game, renderer with { Mesh = edited }, Path.Combine(dir, glb), [new GltfMaterial("Carch")]);
+        return (dir, glb, game);
+    }
+
+    [Fact]
+    public void A_rig_puts_edited_bind_poses_into_the_tmesh_and_its_hash_into_the_report()
+    {
+        var (dir, glb, game) = SetupEdited();
+        var expected = RigBinds.Edited(game, game.Renderers[0], TailRig);
+
+        var report = ModelBuilder.Build(dir, glb, game, rig: TailRig);
+
+        Assert.Empty(report.Errors);
+        Assert.DoesNotContain(report.Warnings, w => w.Contains("rest pose"));
+        Assert.Equal(RigEdit.Hash(TailRig), report.RigHash);
+        using (var stream = File.OpenRead(Path.Combine(dir, ModelFiles.Lod(glb, 0))))
+        {
+            var tmesh = TMesh.Read(stream);
+            Assert.Equal(2 * 16, tmesh.BindPoses.Length);
+            var back = ModelBuilder.FromTMesh(tmesh, game.Renderers[0].Mesh.BindPoses).BindPoses;
+            for (var b = 0; b < 2; b++) Assert.True(Near(expected[b], back[b]), $"bone {b}");
+        }
+        Assert.False(ModelBuilder.IsStale(dir, glb, TailRig));
+        Assert.True(ModelBuilder.IsStale(dir, glb, null));
+    }
+
+    [Fact]
+    public void Without_a_rig_the_tmesh_stays_format_1_with_the_games_bind_poses()
+    {
+        var (dir, glb, game) = Setup();
+
+        var report = ModelBuilder.Build(dir, glb, game);
+
+        Assert.Equal("", report.RigHash);
+        using var stream = File.OpenRead(Path.Combine(dir, ModelFiles.Lod(glb, 0)));
+        Assert.Empty(TMesh.Read(stream).BindPoses);
+        Assert.False(ModelBuilder.IsStale(dir, glb, null));
+    }
+
+    [Fact]
+    public void A_glb_on_the_games_skeleton_built_with_a_rig_warns_about_the_edited_skeleton()
+    {
+        var (dir, glb, game) = Setup();
+
+        var report = ModelBuilder.Build(dir, glb, game, rig: TailRig);
+
+        Assert.Contains(report.Warnings, w => w.Contains("edited skeleton"));
+    }
+
+    private static bool Near(System.Numerics.Matrix4x4 a, System.Numerics.Matrix4x4 b)
+    {
+        for (var r = 0; r < 4; r++)
+            for (var c = 0; c < 4; c++)
+                if (MathF.Abs(a[r, c] - b[r, c]) > 1e-4f) return false;
+        return true;
+    }
 }

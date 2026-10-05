@@ -199,7 +199,7 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
                 continue;
             }
             var report = Tyrant.Core.ModelReplacements.ModelBuilder.ReadReport(mod.Dir, file);
-            if (report is null || Tyrant.Core.ModelReplacements.ModelBuilder.IsStale(mod.Dir, file))
+            if (report is null || Tyrant.Core.ModelReplacements.ModelBuilder.IsStale(mod.Dir, file, mod.RigOfFile(file)))
             {
                 warnings.Add($"Model of {speciesId}: {file} changed since it was built; Check and Install rebuild it.");
                 continue;

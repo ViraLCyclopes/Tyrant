@@ -111,10 +111,12 @@ public sealed class BundleAssetReader : IAssetReader
         return new ModelExporter().ReadPrefab(session, prefab);
     }
 
-    public ModelFacts WriteReplacedModel(GameInstall install, AssetRecord prefab, IReadOnlyList<Tyrant.Framework.Core.TMesh> lods, string outputDir, AssetIndex index)
+    /// <param name="rig">The model's rig edit: the preview shows the edited skeleton (the .tmesh carries its bind poses).</param>
+    public ModelFacts WriteReplacedModel(GameInstall install, AssetRecord prefab, IReadOnlyList<Tyrant.Framework.Core.TMesh> lods, string outputDir, AssetIndex index,
+        IReadOnlyDictionary<string, Tyrant.Framework.Core.RigOffset>? rig = null)
     {
         using var lease = Session(install, out var session);
-        var model = new ModelExporter().ReadPrefab(session, prefab);
+        var model = Tyrant.Core.ModelReplacements.RigBinds.Apply(new ModelExporter().ReadPrefab(session, prefab), rig);
         var renderers = Tyrant.Core.ModelReplacements.ModelBuilder.GameRenderers(model);
         session.Release();
         if (Directory.Exists(outputDir)) Directory.Delete(outputDir, recursive: true);

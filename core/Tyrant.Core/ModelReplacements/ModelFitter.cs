@@ -22,8 +22,10 @@ public static class ModelFitter
 
     private const float RestPoseTolerance = 0.01f;
 
-    public static FitResult Fit(ImportedMesh imported, RendererModel game, IReadOnlyList<string> gameMaterialNames)
+    /// <param name="bindPoses">The edited skeleton's bind poses when the model has a rig edit; null keeps the game's.</param>
+    public static FitResult Fit(ImportedMesh imported, RendererModel game, IReadOnlyList<string> gameMaterialNames, Matrix4x4[]? bindPoses = null)
     {
+        var binds = bindPoses ?? game.Mesh.BindPoses;
         var errors = new List<string>();
         var warnings = new List<string>();
         var mesh = imported.Mesh;
@@ -38,10 +40,16 @@ public static class ModelFitter
         var skin = KeepGameBones(imported, mesh, map, used, errors, warnings);
         for (var j = 0; j < map.Length; j++)
         {
-            if (map[j] < 0 || !used.Contains(j) || map[j] >= game.Mesh.BindPoses.Length) continue;
-            if (!Near(imported.InverseBinds[j], game.Mesh.BindPoses[map[j]]))
+            if (map[j] < 0 || !used.Contains(j) || map[j] >= binds.Length) continue;
+            if (bindPoses is null && !Near(imported.InverseBinds[j], binds[map[j]]))
             {
                 warnings.Add($"The rest pose of bone '{imported.JointNames[j]}' differs from the game's; the game's animations may bend this mesh oddly (keep the armature as exported).");
+                break;
+            }
+            // Blender's rest pose cannot hold a bone's scale, so against a rig edit only places and directions are compared.
+            if (bindPoses is not null && !NearIgnoringScale(imported.InverseBinds[j], binds[map[j]]))
+            {
+                warnings.Add($"The rest pose of bone '{imported.JointNames[j]}' differs from the edited skeleton (rig edit); the game's animations may bend this mesh oddly.");
                 break;
             }
         }
@@ -98,9 +106,19 @@ public static class ModelFitter
         {
             Name = mesh.Name, Positions = mesh.Positions, Normals = mesh.Normals, Uv0 = mesh.Uv0, Colors = mesh.Colors,
             Skin = skin, Indices = [.. indices], SubMeshes = [.. ordered],
-            BindPoses = game.Mesh.BindPoses, BlendShapes = [.. shapes],
+            BindPoses = binds, BlendShapes = [.. shapes],
         };
         return new FitResult(fitted, errors, warnings);
+    }
+
+    private static bool NearIgnoringScale(Matrix4x4 a, Matrix4x4 b)
+    {
+        if (!Matrix4x4.Invert(a, out var wa) || !Matrix4x4.Invert(b, out var wb)) return false;
+        if (Vector3.Distance(wa.Translation, wb.Translation) > RestPoseTolerance) return false;
+        static Vector3 Axis(Matrix4x4 m, int i) => Vector3.Normalize(i == 0 ? new(m.M11, m.M12, m.M13) : i == 1 ? new(m.M21, m.M22, m.M23) : new(m.M31, m.M32, m.M33));
+        for (var i = 0; i < 3; i++)
+            if (Vector3.Distance(Axis(wa, i), Axis(wb, i)) > RestPoseTolerance) return false;
+        return true;
     }
 
     private static int IndexOf(IReadOnlyList<string> names, string name)

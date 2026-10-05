@@ -39,7 +39,7 @@ public sealed partial class ModsMethods
         var index = RequireIndex(ws);
         var species = RequireSpecies(ws);
         foreach (var (speciesId, file) in mod.ModelEntries()) // only files inside the mod
-            ModelBuilder.Build(mod.Dir, file, Options.AssetReader.ReadPrefabModel(install, ModProject.ResolveModelTarget(index, species, speciesId, null).Prefab));
+            ModelBuilder.Build(mod.Dir, file, Options.AssetReader.ReadPrefabModel(install, ModProject.ResolveModelTarget(index, species, speciesId, null).Prefab), null, mod.RigOfFile(file));
         session.Log($"'{p.Id}': rebuilt its models and their levels of detail.");
         return DetailOf(ws, mod);
     }
@@ -87,7 +87,7 @@ public sealed partial class ModsMethods
                 using var stream = File.OpenRead(Path.Combine(mod.Dir, l.File));
                 return TMesh.Read(stream);
             }).ToList();
-            var facts = Options.AssetReader.WriteReplacedModel(install, prefab, lods, dir, index);
+            var facts = Options.AssetReader.WriteReplacedModel(install, prefab, lods, dir, index, mod.RigOfFile(file));
             var preview = new ModModelPreview(prefab.Ref,
                 facts.Parts.Select((part, i) => new ModModelPreviewLod(part.File, i < lods.Count ? lods[i].VertexCount : part.Vertices)).ToList(),
                 facts.Materials.Select(m => new PreviewMaterial(m.Name, m.BaseColor?.Name, m.Normal?.Name, false, m.Shader, m.Animal, m.Cutoff,
@@ -102,7 +102,7 @@ public sealed partial class ModsMethods
         var report = ModelBuilder.ReadReport(mod.Dir, file);
         return new ModModelDto(target, skin, file,
             report?.Lods.Select(l => new ModModelLodDto(l.File, l.Vertices, l.Index32, l.Vanilla)).ToList() ?? [],
-            report?.Errors ?? [], report?.Warnings ?? [], ModelBuilder.IsStale(mod.Dir, file),
+            report?.Errors ?? [], report?.Warnings ?? [], ModelBuilder.IsStale(mod.Dir, file, mod.RigOfFile(file)),
             report?.Origin, report is not null && ModelBuilder.OriginChanged(report));
     }
 
