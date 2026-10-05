@@ -35,7 +35,13 @@ public sealed record BlenderSkinChoice(string Id, string Name);
 public sealed record BlenderDestinationChoice(string Id, string Name, IReadOnlyList<BlenderSkinChoice> Skins);
 
 /// <summary>Send to Tyrant's answer, shown in Blender's Tyrant panel.</summary>
-public sealed record BlenderSendResult(bool Ok, IReadOnlyList<string> Errors, IReadOnlyList<string> Warnings, IReadOnlyList<int> LodVertices, BlenderDestination? Destination);
+public sealed record BlenderSendResult(bool Ok, IReadOnlyList<string> Errors, IReadOnlyList<string> Warnings, IReadOnlyList<int> LodVertices, BlenderDestination? Destination)
+{
+    /// <summary>The image slots Send put into the mod, and where ("skin maps (male)", "texture replacements").</summary>
+    public IReadOnlyList<string> Images { get; init; } = [];
+
+    public string? ImagesTo { get; init; }
+}
 
 /// <summary>What the app's Blender card and Open in Blender buttons, and 'tyrant blender', do.</summary>
 public sealed class BlenderService(BlenderEnvironment env)
@@ -120,7 +126,7 @@ public sealed class BlenderService(BlenderEnvironment env)
     /// when newModName is given. Never throws for Tyrant's own errors: they come back in the result for Blender's panel.
     /// </summary>
     public static BlenderSendResult Send(Workspace ws, GameInstall install, AssetIndex index, IReadOnlyList<SpeciesSkins> species, IAssetReader reader,
-        string projectFile, string glb, BlenderDestination? choose, string? newModName)
+        string projectFile, string glb, BlenderDestination? choose, string? newModName, IReadOnlyList<BlenderImage>? images = null, string sex = "male")
     {
         BlenderDestination? destination = null;
         try
@@ -134,7 +140,13 @@ public sealed class BlenderService(BlenderEnvironment env)
                 : throw new TyrantException(TyrantErrorCode.ModNotFound, $"There is no mod '{destination.Mod}' in this workspace.");
             var report = mod.ReplaceModel(install, index, species, reader, glb, destination.Skin is null ? destination.Species : null, null, destination.Skin);
             BlenderProjectFile.Write(projectFile, project with { Destination = destination });
-            return new BlenderSendResult(true, [], report.Warnings, report.Lods.Select(l => l.Vertices).ToList(), destination);
+            // Only after the model went in: a refused model leaves the mod as it was.
+            var pictures = BlenderImages.Apply(mod, ws, index, species, destination, images ?? [], sex, project.Source.Kind == "game" ? project.Source.Skin : null);
+            return new BlenderSendResult(true, [], [.. report.Warnings, .. pictures.Warnings], report.Lods.Select(l => l.Vertices).ToList(), destination)
+            {
+                Images = pictures.Written,
+                ImagesTo = pictures.To,
+            };
         }
         catch (TyrantException ex)
         {

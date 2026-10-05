@@ -219,4 +219,98 @@ public class BlenderServiceTests
         Assert.Equal("Mod A", a.Name);
         Assert.Empty(a.Skins);
     }
+
+    private static string Png(string path)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        using var stream = File.Create(path);
+        new StbImageWriteSharp.ImageWriter().WritePng(new byte[4 * 4 * 4], 4, 4, StbImageWriteSharp.ColorComponents.RedGreenBlueAlpha, stream);
+        return path;
+    }
+
+    private static (Workspace Ws, GameInstall Install, AssetIndex Index, IReadOnlyList<SpeciesSkins> Species, FakeAssetReader Reader, string Project, string Glb, FakeGame Game) SendSetup(string? skin = null)
+    {
+        var ws = Ws(out var game);
+        var (install, index, species, reader, prefab) = Game(ws, game);
+        var project = BlenderProjectWriter.Write(new BlenderOpenRequest("Carcharodontosaurus", skin, null, false, false), ws, install, index, species, reader, "t.exe");
+        var glb = Path.Combine(project.Dir, "send.glb");
+        GltfModelWriter.WriteGlb(prefab, prefab.Renderers[0], glb, [new GltfMaterial("Carch")]);
+        return (ws, install, index, species, reader, project.ProjectFile, glb, game);
+    }
+
+    [Fact]
+    public void Send_puts_images_into_the_skins_maps_and_a_female_without_her_own_maps_uses_the_shared_ones()
+    {
+        var s = SendSetup();
+        using var _ = s.Game;
+        var mod = ModProject.Create(s.Ws, "img-mod", "M", null);
+        var skin = mod.AddSkin(s.Ws, s.Install, s.Index, s.Reader, s.Species, "Carcharodontosaurus", "Red", "1", new SkinTemplateOptions(true, false, false));
+        var png = Png(Path.Combine(Path.GetDirectoryName(s.Project)!, "send-images", "diffuse.png"));
+
+        var sent = BlenderService.Send(s.Ws, s.Install, s.Index, s.Species, s.Reader, s.Project, s.Glb,
+            new BlenderDestination("img-mod", "Carcharodontosaurus", skin.Id), null, [new BlenderImage("diffuse", png)], "female");
+
+        Assert.True(sent.Ok, string.Join(" ", sent.Errors));
+        Assert.Equal(["diffuse"], sent.Images);
+        Assert.Equal("skin maps (male)", sent.ImagesTo);
+        var file = ModProject.Open(s.Ws, "img-mod").Skin(skin.Id).Male!["diffuse"];
+        Assert.True(File.Exists(Path.Combine(ModProject.Open(s.Ws, "img-mod").Dir, file)));
+    }
+
+    [Fact]
+    public void A_skin_with_her_own_maps_gets_the_females_images()
+    {
+        var s = SendSetup();
+        using var _ = s.Game;
+        var mod = ModProject.Create(s.Ws, "img-mod", "M", null);
+        var skin = mod.AddSkin(s.Ws, s.Install, s.Index, s.Reader, s.Species, "Carcharodontosaurus", "Red", "1", new SkinTemplateOptions(true, true, false));
+        var own = Png(Path.Combine(Path.GetDirectoryName(s.Project)!, "own.png"));
+        mod.SetSkinFile(skin.Id, "female", "diffuse", own);
+        var png = Png(Path.Combine(Path.GetDirectoryName(s.Project)!, "send-images", "extra.png"));
+
+        var sent = BlenderService.Send(s.Ws, s.Install, s.Index, s.Species, s.Reader, s.Project, s.Glb,
+            new BlenderDestination("img-mod", "Carcharodontosaurus", skin.Id), null, [new BlenderImage("extra", png)], "female");
+
+        Assert.True(sent.Ok, string.Join(" ", sent.Errors));
+        Assert.Equal("skin maps (female)", sent.ImagesTo);
+        Assert.True(ModProject.Open(s.Ws, "img-mod").Skin(skin.Id).Female!.ContainsKey("extra"));
+    }
+
+    [Fact]
+    public void A_species_model_destination_turns_images_into_texture_replacements_of_the_skin_it_was_opened_from()
+    {
+        var s = SendSetup("Alt 1");
+        using var _ = s.Game;
+        var dir = Path.Combine(Path.GetDirectoryName(s.Project)!, "send-images");
+        BlenderImage[] images = [new("diffuse", Png(Path.Combine(dir, "diffuse.png"))), new("normal", Png(Path.Combine(dir, "normal.png"))),
+            new("fur", Png(Path.Combine(dir, "fur.png")))];
+
+        var sent = BlenderService.Send(s.Ws, s.Install, s.Index, s.Species, s.Reader, s.Project, s.Glb,
+            new BlenderDestination("img-mod", "Carcharodontosaurus", null), "M", images, "female");
+
+        Assert.True(sent.Ok, string.Join(" ", sent.Errors));
+        Assert.Equal(["diffuse", "normal"], sent.Images);
+        Assert.Equal("texture replacements", sent.ImagesTo);
+        Assert.Equal(["T_carch_alt1_female_D", "T_carch_N"], ModProject.Open(s.Ws, "img-mod").Manifest.Replace.Select(r => r.Texture).Order().ToArray());
+        Assert.Contains(sent.Warnings, w => w.Contains("normal") && w.Contains("both sexes"));
+        Assert.Contains(sent.Warnings, w => w.Contains("'fur'") && w.Contains("no game texture"));
+    }
+
+    [Fact]
+    public void A_refused_model_writes_no_images()
+    {
+        var s = SendSetup();
+        using var _ = s.Game;
+        ModProject.Create(s.Ws, "img-mod", "M", null);
+        var bad = Path.Combine(Path.GetDirectoryName(s.Project)!, "bad.glb");
+        File.WriteAllText(bad, "not a glb");
+        var png = Png(Path.Combine(Path.GetDirectoryName(s.Project)!, "send-images", "diffuse.png"));
+
+        var sent = BlenderService.Send(s.Ws, s.Install, s.Index, s.Species, s.Reader, s.Project, bad,
+            new BlenderDestination("img-mod", "Carcharodontosaurus", null), null, [new BlenderImage("diffuse", png)], "male");
+
+        Assert.False(sent.Ok);
+        Assert.Empty(ModProject.Open(s.Ws, "img-mod").Manifest.Replace);
+        Assert.Empty(sent.Images);
+    }
 }
