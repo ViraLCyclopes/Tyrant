@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Tyrant.Core.Assets;
+using Tyrant.Core.Blender;
 using Tyrant.Core.Install;
 using Tyrant.Core.Workspaces;
 
@@ -170,6 +171,28 @@ public class AssetExportTests
 
         Assert.Contains(report.Items[0].Outputs, o => o.EndsWith(Path.Combine("textures", "T_Stego_D.png")));
         Assert.Contains(report.Items[0].Outputs, o => o.EndsWith(".glb"));
+    }
+
+    [Fact]
+    public void A_model_export_as_fbx_lists_the_fbx_files_in_one_conversion()
+    {
+        var (game, install, ws) = Setup();
+        using var _ = game;
+        var reader = new FakeAssetReader { ModelTextureFiles = ["T_Stego_D.png"] };
+        var converter = new FakeModelConverter();
+
+        var (report, _) = new AssetExport(reader, null, ModelFormat.Fbx, converter).Run(install, ws,
+            [Asset("GameObject", "Stegosaurus", 2), Asset("GameObject", "Rex", 3), Asset("Texture2D", "T", 4)], null, CancellationToken.None);
+
+        Assert.Single(converter.Batches);
+        foreach (var model in report.Items.Take(2))
+        {
+            Assert.NotEmpty(model.Outputs.Where(o => o.EndsWith(".fbx")));
+            Assert.All(model.Outputs.Where(o => o.EndsWith(".fbx")), o => Assert.True(File.Exists(o)));
+            Assert.DoesNotContain(model.Outputs, o => o.EndsWith(".glb"));
+            Assert.Contains(model.Outputs, o => o.EndsWith("T_Stego_D.png"));
+        }
+        Assert.EndsWith(".png", Assert.Single(report.Items[2].Outputs)); // a texture is untouched
     }
 
     [Fact]

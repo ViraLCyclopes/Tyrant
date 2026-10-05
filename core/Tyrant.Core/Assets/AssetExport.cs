@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Tyrant.Core.Blender;
 using Tyrant.Core.Data;
 using Tyrant.Core.Errors;
 using Tyrant.Core.Install;
@@ -14,9 +15,10 @@ public sealed record AssetExportReport(DateTimeOffset CreatedUtc, string BuildGu
 
 /// <summary>
 /// Exports chosen assets by type — Texture2D → PNG, Mesh/GameObject → .glb, anything else → JSON — and writes a report
-/// with every asset's keys. One failure never stops the rest (spec §5). Models are written with their textures when an index is given.
+/// with every asset's keys. One failure never stops the rest (spec §5). Models are written with their textures when an index is given,
+/// and as FBX (or both) when a format and a converter are given.
 /// </summary>
-public sealed class AssetExport(IAssetReader reader, AssetIndex? index = null)
+public sealed class AssetExport(IAssetReader reader, AssetIndex? index = null, ModelFormat format = ModelFormat.Glb, IModelConverter? converter = null)
 {
     private static readonly JsonSerializerOptions ReportJson = new(DataStore.ReadableJson) { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
@@ -32,12 +34,38 @@ public sealed class AssetExport(IAssetReader reader, AssetIndex? index = null)
                 progress?.Report(new JobProgress((double)i / assets.Count, $"Exporting {assets[i].Name}"));
                 items.Add(ExportOne(install, ws, assets[i], used));
             }
+        if (format != ModelFormat.Glb && converter is not null)
+        {
+            progress?.Report(new JobProgress(0.99, "Converting models to FBX"));
+            ConvertModels(items);
+        }
         var report = new AssetExportReport(DateTimeOffset.UtcNow, GameFingerprint.Compute(install).BuildGuid, items);
         var reportPath = ReportPath(ws);
         Directory.CreateDirectory(Path.GetDirectoryName(reportPath)!);
         File.WriteAllText(reportPath, JsonSerializer.Serialize(report, ReportJson));
         progress?.Report(new JobProgress(1, "Done"));
         return (report, reportPath);
+    }
+
+    /// <summary>One Blender run for every model of the export: each model item's glb outputs become FBX (or both).</summary>
+    private void ConvertModels(List<AssetExportItem> items)
+    {
+        var models = Enumerable.Range(0, items.Count).Where(k => items[k].Success && items[k].Type is "Mesh" or "GameObject").ToList();
+        var (files, notes) = ModelFormats.Apply(converter!, [.. models.SelectMany(k => items[k].Outputs)], format);
+        var produced = files.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var k in models)
+        {
+            var outputs = new List<string>();
+            foreach (var output in items[k].Outputs)
+            {
+                if (produced.Contains(output)) outputs.Add(output); // not a glb, kept (both), or a glb that failed
+                var fbx = Path.ChangeExtension(output, ".fbx");
+                if (output.EndsWith(".glb", StringComparison.OrdinalIgnoreCase) && produced.Contains(fbx)) outputs.Add(fbx);
+            }
+            var mine = notes.Where(n => items[k].Outputs.Any(o => n.StartsWith(Path.GetFileName(o) + " ", StringComparison.OrdinalIgnoreCase))).ToList();
+            List<string> all = [.. items[k].Notes ?? [], .. mine];
+            items[k] = items[k] with { Outputs = outputs, Notes = all.Count == 0 ? null : all };
+        }
     }
 
     private AssetExportItem ExportOne(GameInstall install, Workspace ws, AssetRecord asset, HashSet<string> used)
