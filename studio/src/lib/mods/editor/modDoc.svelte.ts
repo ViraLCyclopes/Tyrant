@@ -93,12 +93,17 @@ export class ModDoc {
     return run;
   }
 
-  /** The tab was shown again: if mod.json changed meanwhile, take the new content and forget undo (it would overwrite it). */
+  /**
+   * The tab (or the app window) was shown again: if mod.json changed meanwhile, take the new content and forget undo (it would
+   * overwrite it); if only the mod's files changed (a model sent from Blender), take the new files and keep undo.
+   */
   refreshIfChanged(): Promise<void> {
     return this.serial(async () => {
       if (!this.detail) return;
       const latest = await this.tab.quietly(() => this.rpc.call('mods.get', { id: this.id }));
-      if (latest && latest.revision !== this.detail.revision) this.outsideChange(latest);
+      if (!latest) return;
+      if (latest.revision !== this.detail.revision) this.outsideChange(latest);
+      else if (latest.filesStamp !== this.detail.filesStamp) this.detail = latest; // files only (a model sent from Blender): undo still fits
     });
   }
 

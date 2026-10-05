@@ -106,6 +106,22 @@ describe('ModDoc', () => {
     expect(doc.detail?.revision).toBe('r2');
   });
 
+  it('takes files changed outside (a model sent from Blender) and keeps undo when mod.json is the same', async () => {
+    const { rpc, doc } = setup();
+    let filesStamp = 'f1';
+    rpc.on('mods.get', () => modDetail({ revision: 'r1', filesStamp }));
+    rpc.on('mods.setDetails', () => modDetail({ revision: 'r2', filesStamp }));
+    await doc.load();
+    await doc.edit('mods.setDetails', { name: 'A', version: '1' });
+    rpc.on('mods.get', () => modDetail({ revision: 'r2', filesStamp }));
+    filesStamp = 'f2';
+
+    await doc.refreshIfChanged();
+
+    expect(doc.detail?.filesStamp).toBe('f2');
+    expect(doc.canUndo).toBe(true);
+  });
+
   it('checks once about a second after edits stop, dropping older results', async () => {
     const { rpc, doc, timers } = setup();
     rpc.on('mods.get', () => modDetail());

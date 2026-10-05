@@ -1,4 +1,5 @@
 <script lang="ts">
+  import BlenderCard from '$lib/blender/BlenderCard.svelte';
   import { getTab } from '$lib/shell/tab.svelte';
   import { getSession } from '$lib/stores/session.svelte';
   import { dumperLabel, formatDate, frameworkLine, outputLabel, summarizeDecompile, summarizeDump, summarizeIndex, summarizeRefresh } from '$lib/format';
@@ -133,6 +134,8 @@
     {/if}
   </section>
 {/if}
+
+{#if session.workspace}<BlenderCard />{/if}
 
 <section class="card" aria-labelledby="support-heading">
   <h2 id="support-heading">Support</h2>

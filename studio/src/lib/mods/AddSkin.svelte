@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { keyOf } from './species';
   import { onMount } from 'svelte';
   import type { ModRow, ModSpeciesResult } from '$lib/rpc/types.gen';
   import { getTab } from '$lib/shell/tab.svelte';
@@ -28,7 +29,6 @@
     if (baseSkin && !baseSkin.male) male = false;
     if (baseSkin && !baseSkin.female) female = false;
   });
-  const keyOf = (id: string) => id.toLowerCase().replace(/[^a-z0-9]/g, '');
 
   onMount(async () => {
     data = await tab.quietly(() => session.rpc.call('mods.species'));

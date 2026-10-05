@@ -47,6 +47,15 @@
     wasActive = active;
   });
 
+  // Coming back to the app window (from Blender after Send to Tyrant): the same refresh, for the tab on show.
+  $effect(() => {
+    const onFocus = () => {
+      if (tab.active) void doc.refreshIfChanged();
+    };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  });
+
   tab.undo = { canUndo: () => doc.canUndo, canRedo: () => doc.canRedo, undo: () => void doc.undo(), redo: () => void doc.redo() };
   tab.menus = [
     {

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import OpenInBlender from '$lib/blender/OpenInBlender.svelte';
   import type { ModSkinDto } from '$lib/rpc/types.gen';
   import { getSession } from '$lib/stores/session.svelte';
   import ColourEditor from './ColourEditor.svelte';
@@ -70,6 +71,7 @@
       <span>{speciesModel ? `Model: species replacement (${speciesModel.file})` : "Model: the game's"}</span>
       <button onclick={replaceModel}>Replace model…</button>
     {/if}
+    <OpenInBlender species={skin.species} mod={doc.id} skin={skin.id} />
   </div>
 </section>
 

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import OpenInBlender from '$lib/blender/OpenInBlender.svelte';
   import type { ModelViewer } from '$lib/assets/viewer';
   import { asRpcError } from '$lib/rpc/client';
   import type { ModModelDto, ModModelPreview } from '$lib/rpc/types.gen';
@@ -110,6 +111,7 @@
     <button onclick={replace}>Replace…</button>
     <button onclick={() => doc.edit('mods.rebuildModels', {})}>Rebuild LODs</button>
     <button onclick={remove}>Remove</button>
+    <OpenInBlender species={model.target} mod={doc.id} skin={model.skin ?? undefined} />
   </div>
   <p class="hint">
     Made in Blender from Tyrant's export: keep the armature, its bone names and the growth shape keys. Sculpt or edit with the Basis selected

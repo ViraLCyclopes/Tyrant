@@ -2,6 +2,9 @@
   import { onMount } from 'svelte';
   import type { SpeciesRow } from '$lib/rpc/types.gen';
   import AddSkin from '$lib/mods/AddSkin.svelte';
+  import OpenInBlender from '$lib/blender/OpenInBlender.svelte';
+  import { keyOf } from '$lib/mods/species';
+  import type { SpeciesSkinsRow } from '$lib/rpc/types.gen';
   import AllSounds from '$lib/sounds/AllSounds.svelte';
   import SpeciesSounds from '$lib/sounds/SpeciesSounds.svelte';
   import { getTab } from '$lib/shell/tab.svelte';
@@ -19,9 +22,14 @@
   const soundsRow = $derived(species.find((s) => s.key === soundsOf));
   const shown = $derived(species.filter((s) => s.displayName.toLowerCase().includes(filter.trim().toLowerCase())));
 
+  /** The dump's species (ids and game skins) by Species tab key, for Open in Blender. */
+  let dumped = $state<Map<string, SpeciesSkinsRow>>(new Map());
+
   onMount(async () => {
     const r = await tab.quietly(() => session.rpc.call('species.list'));
     if (r) species = r.species;
+    const d = await tab.quietly(() => session.rpc.call('mods.species'));
+    if (d) dumped = new Map(d.species.map((s) => [keyOf(s.speciesId), s]));
   });
 
   async function exportPack(row: SpeciesRow) {
@@ -55,6 +63,10 @@
             <button disabled={session.busy} aria-label="Export {row.displayName} pack" onclick={() => exportPack(row)}>Export pack</button>
             <button aria-label="Add a skin to {row.displayName}" onclick={() => (addingTo = addingTo === row.key ? null : row.key)}>Add a skin…</button>
             <button aria-label="Sounds of {row.displayName}" onclick={() => (soundsOf = soundsOf === row.key ? null : row.key)}>Sounds…</button>
+            {#if dumped.get(row.key)}
+              {@const d = dumped.get(row.key)!}
+              <OpenInBlender species={d.speciesId} skins={d.skins.map((k) => k.name)} />
+            {/if}
           </td>
         </tr>
       {:else}
