@@ -412,6 +412,7 @@ export interface ModDetail {
   skins: ModSkinDto[];
   models: ModModelDto[];
   sounds: ModSoundDto[];
+  filesStamp?: string;
 }
 
 export interface ModEnableParams {

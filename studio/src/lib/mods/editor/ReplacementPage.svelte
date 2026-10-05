@@ -34,7 +34,7 @@
   {#if replacement.key}<p class="hint">Addressables path: <code>{replacement.key}</code></p>{/if}
   {#if replacement.guid}<p class="hint">GUID: <code>{replacement.guid}</code></p>{/if}
   <div class="row">
-    <Thumb modId={doc.id} file={replacement.file} size={160} label={replacement.texture} version={doc.detail?.revision} />
+    <Thumb modId={doc.id} file={replacement.file} size={160} label={replacement.texture} version="{doc.detail?.revision}|{doc.detail?.filesStamp}" />
     <div class="buttons">
       <p class="path">{replacement.file}</p>
       <button onclick={replaceFile} title="Overwrites the PNG in the mod; this cannot be undone">Replace file…</button>

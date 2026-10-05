@@ -51,7 +51,7 @@
 <section class="card">
   <h2>Swatch</h2>
   <div class="row">
-    <Thumb modId={doc.id} file={skin.thumbnail} size={64} label="Swatch of {skin.name}" version={doc.detail?.revision} />
+    <Thumb modId={doc.id} file={skin.thumbnail} size={64} label="Swatch of {skin.name}" version="{doc.detail?.revision}|{doc.detail?.filesStamp}" />
     <button onclick={pickThumbnail}>Pick PNG…</button>
     <button disabled={!skin.thumbnail} onclick={() => doc.edit('mods.setThumbnail', { skin: skin.id, png: null })}>Automatic</button>
     {#if !skin.thumbnail}<span class="hint">The game cuts a swatch from the diffuse.</span>{/if}

@@ -206,6 +206,27 @@ public class ModEditTests
     }
 
     [Fact]
+    public void Replacing_a_skin_file_under_the_same_name_changes_the_files_stamp()
+    {
+        var (game, ws, mod) = Setup();
+        using var _ = game;
+        mod = WithSkins(ws, mod);
+        var first = Png(Path.Combine(ws.Dir, "art"), "first.png");
+        mod.SetSkinFile("blue", "female", "diffuse", first);
+        var before = mod.FilesStamp();
+        var second = Path.Combine(ws.Dir, "art", "second.png");
+        File.Copy(first, second);
+        File.AppendAllText(second, "x"); // other content
+        File.SetLastWriteTimeUtc(second, new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc)); // copies keep their source's date
+
+        var file = mod.SetSkinFile("blue", "female", "diffuse", second);
+
+        Assert.Equal("skins/blue/female_D.png", file);
+        Assert.True(File.GetLastWriteTimeUtc(Path.Combine(mod.Dir, "skins", "blue", "female_D.png")).Year > 2020); // stamped now
+        Assert.NotEqual(before, mod.FilesStamp());
+    }
+
+    [Fact]
     public void Clearing_the_last_file_of_a_skin_is_refused()
     {
         var (game, ws, mod) = Setup();

@@ -373,7 +373,7 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
             m.Models.Select(x => ModelDto(mod, x.Target, null, x.File))
                 .Concat(m.Skins.Where(s => s.Model is not null).Select(s => ModelDto(mod, s.Species, s.Id, s.Model!)))
                 .ToList(),
-            m.Sounds.Select(SoundDto).ToList());
+            m.Sounds.Select(SoundDto).ToList(), mod.FilesStamp());
     }
 
     /// <summary>Game build + species → the slots its shader uses (null: unknown). Reading a prefab costs a bundle load, so it is cached.</summary>

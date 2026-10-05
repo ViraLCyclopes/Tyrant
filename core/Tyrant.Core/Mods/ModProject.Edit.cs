@@ -200,7 +200,28 @@ public sealed partial class ModProject
         var destination = Path.Combine(Dir, file.Replace('/', Path.DirectorySeparatorChar));
         Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
         if (!string.Equals(Path.GetFullPath(source), Path.GetFullPath(destination), StringComparison.OrdinalIgnoreCase))
+        {
             File.Copy(source, destination, overwrite: true);
+            File.SetLastWriteTimeUtc(destination, DateTime.UtcNow); // a copy keeps its source's date: previews keyed by it would not notice
+        }
+    }
+
+    /// <summary>
+    /// Changes when any file mod.json names changes (size or write time), even under the same name: the editor reloads its
+    /// thumbnails and 3D view on it (the revision only follows mod.json).
+    /// </summary>
+    public string FilesStamp()
+    {
+        var files = Manifest.Replace.Select(r => r.File).Concat(Manifest.Skins.SelectMany(FilesOf)).Concat(Manifest.Skins.Select(s => s.Model))
+            .Concat(Manifest.Models.Select(m => m.File)).Concat(Manifest.Sounds.SelectMany(s => s.Files)).OfType<string>()
+            .Select(Normal).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(f => f, StringComparer.Ordinal);
+        var text = new System.Text.StringBuilder();
+        foreach (var file in files)
+        {
+            var info = new FileInfo(Path.Combine(Dir, file.Replace('/', Path.DirectorySeparatorChar)));
+            text.Append(file).Append('|').Append(info.Exists ? info.Length : -1).Append('|').Append(info.Exists ? info.LastWriteTimeUtc.Ticks : 0).Append('\n');
+        }
+        return Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(text.ToString())))[..16];
     }
 
     private static IEnumerable<string> FilesOf(SkinEntry skin) =>

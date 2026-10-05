@@ -209,6 +209,22 @@ public class ModEditorMethodsTests
     }
 
     [Fact]
+    public async Task A_file_replaced_under_the_same_name_changes_the_files_stamp_not_the_revision()
+    {
+        using var game = new FakeGame();
+        var (h, ws) = await Opened(game);
+        var detail = await WithSkin(h, ws);
+        var art = Png(Path.Combine(ws, "art"), "diffuse.png");
+        var first = await h.Call("mods.setSkinFile", new { id = "red-spot", revision = Rev(detail), skin = "blue", sex = "male", slot = "diffuse", png = art });
+        File.AppendAllText(art, "new"); // other bytes, same name in the skin
+
+        var second = await h.Call("mods.setSkinFile", new { id = "red-spot", revision = Rev(first), skin = "blue", sex = "male", slot = "diffuse", png = art });
+
+        Assert.Equal(Rev(first), Rev(second)); // mod.json still names skins/blue/male_D.png
+        Assert.NotEqual(first.GetProperty("filesStamp").GetString(), second.GetProperty("filesStamp").GetString());
+    }
+
+    [Fact]
     public async Task Skin_files_thumbnail_removal_and_replacements()
     {
         using var game = new FakeGame();

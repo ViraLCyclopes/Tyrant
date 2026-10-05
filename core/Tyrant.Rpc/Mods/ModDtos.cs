@@ -83,7 +83,7 @@ public sealed record ModReplacementDto(string Texture, string? Key, string? Guid
 /// <summary>A whole mod for the editor. Revision: SHA-256 of mod.json, sent back with every change; ManifestJson: the file itself (undo).</summary>
 public sealed record ModDetail(string Id, string Name, string Version, string? Author, string? Description, string Dir, string Revision,
     string ManifestJson, IReadOnlyList<ModReplacementDto> Replace, IReadOnlyList<ModSkinDto> Skins, IReadOnlyList<ModModelDto> Models,
-    IReadOnlyList<ModSoundDto> Sounds);
+    IReadOnlyList<ModSoundDto> Sounds, string FilesStamp = "");
 
 /// <summary>A sound replacement: Species or Skin set = only that species or skin hears it; neither = everyone.</summary>
 public sealed record ModSoundDto(string Event, string Name, string Group, string? Species, string? Skin, IReadOnlyList<string> Files, double Volume, double AgePitch,

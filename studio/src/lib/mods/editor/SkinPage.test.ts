@@ -87,6 +87,18 @@ describe('SkinPage', () => {
     );
   });
 
+  it('a file replaced under the same name gets a new thumbnail', async () => {
+    const { rpc, platform, doc } = await setup(modDetail({ filesStamp: 'A' }));
+    await waitFor(() => expect(rpc.callsTo('mods.thumbnail').some((c) => (c.params as { file: string }).file === 'skins/blue/male_D.png')).toBe(true));
+    const before = rpc.callsTo('mods.thumbnail').length;
+    platform.files.push('D:\\art\\new_D.png');
+    rpc.on('mods.setSkinFile', () => modDetail({ revision: doc.detail!.revision, filesStamp: 'B' })); // same mod.json, new file
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Replace male diffuse…' }));
+
+    await waitFor(() => expect(rpc.callsTo('mods.thumbnail').length).toBeGreaterThan(before));
+  });
+
   it('Remove skin asks, can delete the files, and sends it', async () => {
     const { rpc } = await setup();
     rpc.on('mods.removeSkin', () => modDetail({ revision: 'r2', skins: [modDetail().skins[1]] }));

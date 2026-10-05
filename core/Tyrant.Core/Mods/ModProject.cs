@@ -81,7 +81,10 @@ public sealed partial class ModProject
         Directory.CreateDirectory(Path.Combine(Dir, TexturesFolder));
         var destination = Path.Combine(Dir, file.Replace('/', Path.DirectorySeparatorChar));
         if (!string.Equals(Path.GetFullPath(source), Path.GetFullPath(destination), StringComparison.OrdinalIgnoreCase))
+        {
             File.Copy(source, destination, overwrite: true);
+            File.SetLastWriteTimeUtc(destination, DateTime.UtcNow); // a copy keeps its source's date: previews keyed by it would not notice
+        }
 
         Manifest.Replace.RemoveAll(r => string.Equals(r.Texture, target.Name, StringComparison.OrdinalIgnoreCase));
         var entry = new TextureReplacement { Texture = target.Name, Key = target.ContainerPath, Guid = target.Guid, File = file };
