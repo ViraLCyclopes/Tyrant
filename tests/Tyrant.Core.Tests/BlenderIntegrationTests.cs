@@ -45,4 +45,22 @@ public class BlenderIntegrationTests
 
         Assert.Contains("ENABLED", check.Output);
     }
+
+    [SkippableFact]
+    public void Installing_keeps_the_users_own_preferences()
+    {
+        var blender = Blender();
+        Skip.If(blender is null, "Blender 5.x not found");
+        var env = ThrowawayUser(out _);
+        var process = new BlenderProcess();
+        var seed = process.Run(blender!.Exe, ["-b", "--factory-startup", "--python-expr",
+            "import bpy; p = bpy.context.preferences; p.view.ui_scale = 1.37; p.filepaths.use_relative_paths = False; p.use_preferences_save = True; bpy.ops.wm.save_userpref()"], env);
+        Assert.True(seed.ExitCode == 0, seed.Output);
+
+        BlenderAddon.Install(process, blender!, AddonZip(), env);
+        var check = process.Run(blender!.Exe, ["-b", "--python-expr",
+            "import bpy, addon_utils; p = bpy.context.preferences; print('PREFS', round(p.view.ui_scale, 2), p.filepaths.use_relative_paths, addon_utils.check('bl_ext.user_default.tyrant_blender')[1])"], env);
+
+        Assert.Contains("PREFS 1.37 False True", check.Output);
+    }
 }

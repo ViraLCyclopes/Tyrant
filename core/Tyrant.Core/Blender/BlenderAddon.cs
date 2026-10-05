@@ -57,16 +57,37 @@ public static partial class BlenderAddon
     public static string TooOld(BlenderInstall blender) => $"Tyrant's Blender tools need Blender 5.0 or newer (found {blender.MajorMinor}).";
 
     /// <summary>
-    /// Installs and enables the zip with Blender's own extension installer. --factory-startup keeps the user's other add-ons
-    /// from starting during the run (one of them may listen on a port, as a bridge add-on does).
+    /// Installs the zip with Blender's own extension installer, then enables it. The install runs with --factory-startup (the
+    /// user's other add-ons stay asleep; one may listen on a port) and --no-prefs: Blender's installer saves the preferences,
+    /// and under --factory-startup those are the factory ones, which would wipe the user's settings and add-ons. Enabling then
+    /// runs with the user's own preferences and saves them back with Tyrant's add-on turned on.
     /// </summary>
     public static void Install(IBlenderProcess process, BlenderInstall blender, string zip, IReadOnlyDictionary<string, string>? env = null)
     {
         if (!blender.Supported) throw new TyrantException(TyrantErrorCode.BlenderMissing, TooOld(blender));
-        var run = process.Run(blender.Exe, ["--factory-startup", "--command", "extension", "install-file", "-r", Repo, "-e", zip], env, TimeSpan.FromMinutes(2));
-        if (run.ExitCode != 0)
-            throw new TyrantException(TyrantErrorCode.BlenderFailed, $"Blender could not install Tyrant's add-on: {Tail(run.Output)}");
+        var install = process.Run(blender.Exe, ["--factory-startup", "--command", "extension", "install-file", "-r", Repo, "--no-prefs", zip], env, TimeSpan.FromMinutes(2));
+        if (install.ExitCode != 0)
+            throw new TyrantException(TyrantErrorCode.BlenderFailed, $"Blender could not install Tyrant's add-on: {Tail(install.Output)}");
+        var enable = process.Run(blender.Exe, ["-b", "--python-expr", EnableScript], env, TimeSpan.FromMinutes(2));
+        if (enable.ExitCode != 0 || !enable.Output.Contains(EnabledMark, StringComparison.Ordinal))
+            throw new TyrantException(TyrantErrorCode.BlenderFailed, $"Blender installed Tyrant's add-on but could not turn it on: {Tail(enable.Output)}");
     }
+
+    private const string EnabledMark = "TYRANT-ADDON-ENABLED";
+
+    /// <summary>Turns the add-on on in the user's own preferences and saves them (os._exit: Blender ignores sys.exit in --python-expr).</summary>
+    internal static readonly string EnableScript = string.Join("\n",
+        "import addon_utils, bpy, os, sys",
+        "try:",
+        $"    addon_utils.enable('{ModuleName}', default_set=True, persistent=True)",
+        "    bpy.ops.wm.save_userpref()",
+        $"    print('{EnabledMark}')",
+        "    sys.stdout.flush()",
+        "    os._exit(0)",
+        "except Exception as ex:",
+        "    print('error:', ex)",
+        "    sys.stdout.flush()",
+        "    os._exit(1)");
 
     private static string Tail(string output)
     {

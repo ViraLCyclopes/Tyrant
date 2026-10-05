@@ -61,13 +61,25 @@ public class BlenderAddonTests
     [Fact]
     public void Install_runs_blenders_extension_installer_without_the_users_addons()
     {
-        var process = new FakeBlenderProcess();
+        var process = new FakeBlenderProcess { OnRun = (_, args) => new BlenderRun(0, args[0] == "-b" ? "TYRANT-ADDON-ENABLED" : "") };
         var blender = new BlenderInstall(@"C:\b\blender.exe", new Version(5, 2, 2));
 
         BlenderAddon.Install(process, blender, @"C:\t\tyrant_blender.zip");
 
-        var run = Assert.Single(process.Runs);
-        Assert.Equal(["--factory-startup", "--command", "extension", "install-file", "-r", "user_default", "-e", @"C:\t\tyrant_blender.zip"], run.Args);
+        Assert.Equal(2, process.Runs.Count);
+        // Files only: Blender's installer would save the factory preferences over the user's.
+        Assert.Equal(["--factory-startup", "--command", "extension", "install-file", "-r", "user_default", "--no-prefs", @"C:\t\tyrant_blender.zip"], process.Runs[0].Args);
+        // Enabling loads the user's own preferences (no --factory-startup) and saves them with the add-on on.
+        Assert.Equal("-b", process.Runs[1].Args[0]);
+        Assert.DoesNotContain("--factory-startup", process.Runs[1].Args);
+    }
+
+    [Fact]
+    public void An_enable_that_does_not_confirm_is_an_error()
+    {
+        var ex = Assert.Throws<Tyrant.Core.Errors.TyrantException>(() =>
+            BlenderAddon.Install(new FakeBlenderProcess { OnRun = (_, _) => new BlenderRun(0, "") }, new BlenderInstall("b.exe", new Version(5, 2)), "x.zip"));
+        Assert.Contains("could not turn it on", ex.Message);
     }
 
     [Fact]

@@ -14,7 +14,8 @@ public sealed class FakeBlenderProcess : IBlenderProcess
     {
         Runs.Add((exe, args, env));
         if (args is ["--version"]) return Versions.TryGetValue(exe, out var v) ? new BlenderRun(0, v) : new BlenderRun(1, "");
-        return OnRun?.Invoke(exe, args) ?? new BlenderRun(0, "");
+        // Like Blender: the add-on's enable script confirms it turned the add-on on.
+        return OnRun?.Invoke(exe, args) ?? new BlenderRun(0, args.Contains("--python-expr") ? "TYRANT-ADDON-ENABLED" : "");
     }
 
     public void Start(string exe, IReadOnlyList<string> args) => Starts.Add((exe, args));
