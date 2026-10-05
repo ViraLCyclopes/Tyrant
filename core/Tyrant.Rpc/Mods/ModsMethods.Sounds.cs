@@ -54,7 +54,20 @@ public sealed partial class ModsMethods
     private ModCheckResult CheckMod(Workspace ws, Tyrant.Core.Install.GameInstall install, ModProject mod)
     {
         var m = mod.Manifest;
-        return ModChecker.ForGame(install).Check(mod, TryIndex(ws), m.Skins.Count > 0 || m.Sounds.Count > 0 ? TrySpecies(ws) : null,
-            m.Sounds.Count > 0 ? TrySounds(ws) : null);
+        var index = TryIndex(ws);
+        var species = TrySpecies(ws);
+        Func<string, Tyrant.Core.Rigging.RigInfo?>? rigInfo = index is null || species is null ? null : id =>
+        {
+            try
+            {
+                return Tyrant.Core.Rigging.RigInfoService.For(ws, install, index, species, Options.AssetReader, id);
+            }
+            catch (TyrantException)
+            {
+                return null;
+            }
+        };
+        return ModChecker.ForGame(install).Check(mod, index, m.Skins.Count > 0 || m.Sounds.Count > 0 ? species : null,
+            m.Sounds.Count > 0 ? TrySounds(ws) : null, rigInfo);
     }
 }

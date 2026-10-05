@@ -243,4 +243,51 @@ public class ModCheckerTests
 
         Assert.Contains(result.Errors, e => e.Contains("\"Carcharodontosaurus\""));
     }
+
+    private static void RigOnly(ModProject mod, string bone)
+    {
+        mod.Manifest.Models.Add(new ModelReplacement
+        {
+            Target = "Carcharodontosaurus", File = "",
+            Rig = new Dictionary<string, RigOffset> { [bone] = RigOffset.Identity },
+        });
+        mod.Save();
+    }
+
+    [Fact]
+    public void A_rig_edit_is_checked_against_the_species_skeleton()
+    {
+        var (game, _, mod) = Setup();
+        using var _ = game;
+        RigOnly(mod, "Tail.099");
+        var info = new Tyrant.Core.Rigging.RigInfo(["Jaw", "Pelvis"], ["Pelvis"], [], [], []);
+
+        var result = Checker.Check(mod, Index, rigInfo: species => species == "Carcharodontosaurus" ? info : null);
+
+        Assert.Contains(result.Errors, e => e.Contains("Tail.099"));
+        Assert.Contains(result.Warnings, w => w.Contains("no model of its own"));
+    }
+
+    [Fact]
+    public void Without_the_games_skeleton_a_rig_edit_is_noted_as_unchecked()
+    {
+        var (game, _, mod) = Setup();
+        using var _ = game;
+        RigOnly(mod, "Jaw");
+
+        var result = Checker.Check(mod, Index);
+
+        Assert.True(result.Ok);
+        Assert.Contains(result.Warnings, w => w.Contains("not checked") && w.Contains("Run data dump"));
+    }
+
+    [Fact]
+    public void A_mod_with_only_a_rig_edit_is_not_empty()
+    {
+        var (game, _, mod) = Setup();
+        using var _ = game;
+        RigOnly(mod, "Jaw");
+
+        Assert.DoesNotContain(Checker.Check(mod, Index).Warnings, w => w.Contains("does nothing"));
+    }
 }

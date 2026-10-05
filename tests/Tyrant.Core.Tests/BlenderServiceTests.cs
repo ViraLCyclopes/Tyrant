@@ -4,6 +4,7 @@ using Tyrant.Core.Install;
 using Tyrant.Core.Models;
 using Tyrant.Core.Mods;
 using Tyrant.Core.Workspaces;
+using Tyrant.Framework.Core;
 
 namespace Tyrant.Core.Tests;
 
@@ -366,5 +367,107 @@ public class BlenderServiceTests
         Assert.Equal(Tyrant.Core.Errors.TyrantErrorCode.BlenderMissing, ex.Code);
         Assert.StartsWith("FBX needs Blender", ex.Message);
         Assert.Contains("tyrant blender set-path", ex.Message);
+    }
+
+    private static Dictionary<string, Tyrant.Framework.Core.RigOffset> RigOn(string bone) => new()
+    {
+        [bone] = new Tyrant.Framework.Core.RigOffset
+        {
+            Move = new Tyrant.Framework.Core.RigVector3(0, 0, -0.5f), Rotate = Tyrant.Framework.Core.RigQuaternion.Identity, Scale = Tyrant.Framework.Core.RigVector3.One,
+        },
+    };
+
+    private static (ModProject Mod, string Skin) RigMod((Workspace Ws, GameInstall Install, AssetIndex Index, IReadOnlyList<SpeciesSkins> Species, FakeAssetReader Reader, string Project, string Glb, FakeGame Game) s)
+    {
+        var mod = ModProject.Create(s.Ws, "rig-mod", "R", null);
+        var skin = mod.AddSkin(s.Ws, s.Install, s.Index, s.Reader, s.Species, "Carcharodontosaurus", "Long", "1", new SkinTemplateOptions(true, false, false));
+        return (mod, skin.Id);
+    }
+
+    [Fact]
+    public void Send_with_a_rig_records_it_on_the_skin_and_builds_the_model_for_it()
+    {
+        var s = SendSetup();
+        using var _ = s.Game;
+        var (_, skin) = RigMod(s);
+
+        var sent = BlenderService.Send(s.Ws, s.Install, s.Index, s.Species, s.Reader, s.Project, s.Glb,
+            new BlenderDestination("rig-mod", "Carcharodontosaurus", skin), null, rig: RigOn("Tail"));
+
+        Assert.True(sent.Ok, string.Join(" ", sent.Errors));
+        var saved = ModProject.Open(s.Ws, "rig-mod");
+        Assert.Equal(-0.5f, saved.Skin(skin).Rig!["Tail"].Move.Z);
+        using var stream = File.OpenRead(Path.Combine(saved.Dir, ModelFiles.Lod(saved.Skin(skin).Model!, 0)));
+        Assert.NotEmpty(TMesh.Read(stream).BindPoses);
+    }
+
+    [Fact]
+    public void Send_with_an_empty_rig_clears_the_destinations_rig()
+    {
+        var s = SendSetup();
+        using var _ = s.Game;
+        var (_, skin) = RigMod(s);
+        var destination = new BlenderDestination("rig-mod", "Carcharodontosaurus", skin);
+        BlenderService.Send(s.Ws, s.Install, s.Index, s.Species, s.Reader, s.Project, s.Glb, destination, null, rig: RigOn("Tail"));
+
+        var sent = BlenderService.Send(s.Ws, s.Install, s.Index, s.Species, s.Reader, s.Project, s.Glb, destination, null,
+            rig: new Dictionary<string, Tyrant.Framework.Core.RigOffset>());
+
+        Assert.True(sent.Ok, string.Join(" ", sent.Errors));
+        Assert.Null(ModProject.Open(s.Ws, "rig-mod").Skin(skin).Rig);
+    }
+
+    [Fact]
+    public void Send_rig_only_keeps_the_games_mesh_and_says_it_stretches()
+    {
+        var s = SendSetup();
+        using var _ = s.Game;
+        var (_, skin) = RigMod(s);
+        var destination = new BlenderDestination("rig-mod", "Carcharodontosaurus", skin);
+        BlenderService.Send(s.Ws, s.Install, s.Index, s.Species, s.Reader, s.Project, s.Glb, destination, null, rig: RigOn("Tail"));
+
+        var sent = BlenderService.Send(s.Ws, s.Install, s.Index, s.Species, s.Reader, s.Project, s.Glb, destination, null, rig: RigOn("Tail"), rigOnly: true);
+
+        Assert.True(sent.Ok, string.Join(" ", sent.Errors));
+        Assert.Empty(sent.LodVertices);
+        Assert.Contains(sent.Warnings, w => w.Contains("no model of its own"));
+        var saved = ModProject.Open(s.Ws, "rig-mod").Skin(skin);
+        Assert.Null(saved.Model);
+        Assert.NotNull(saved.Rig);
+    }
+
+    [Fact]
+    public void Send_rig_only_to_the_species_makes_a_rig_entry_without_a_model()
+    {
+        var s = SendSetup();
+        using var _ = s.Game;
+        RigMod(s);
+
+        var sent = BlenderService.Send(s.Ws, s.Install, s.Index, s.Species, s.Reader, s.Project, s.Glb,
+            new BlenderDestination("rig-mod", "Carcharodontosaurus", null), null, rig: RigOn("Tail"), rigOnly: true);
+
+        Assert.True(sent.Ok, string.Join(" ", sent.Errors));
+        var entry = Assert.Single(ModProject.Open(s.Ws, "rig-mod").Manifest.Models);
+        Assert.Equal("", entry.File);
+        Assert.NotNull(entry.Rig);
+    }
+
+    [SkippableTheory]
+    [InlineData("Tail.099", "not in the species' skeleton")]
+    [InlineData("Hip", "growth")]
+    public void Send_refuses_a_rig_the_game_cannot_wear_and_leaves_the_mod_alone(string bone, string reason)
+    {
+        Skip.If(bone == "Hip" && Tyrant.Core.Rigging.RigLimits.GrowthBonesSupported, "growth bones are supported");
+        var s = SendSetup();
+        using var _ = s.Game;
+        var (mod, skin) = RigMod(s);
+        var before = File.ReadAllText(Path.Combine(mod.Dir, ModManifest.FileName));
+
+        var sent = BlenderService.Send(s.Ws, s.Install, s.Index, s.Species, s.Reader, s.Project, s.Glb,
+            new BlenderDestination("rig-mod", "Carcharodontosaurus", skin), null, rig: RigOn(bone));
+
+        Assert.False(sent.Ok);
+        Assert.Contains(sent.Errors, e => e.Contains(bone) && e.Contains(reason));
+        Assert.Equal(before, File.ReadAllText(Path.Combine(mod.Dir, ModManifest.FileName)));
     }
 }

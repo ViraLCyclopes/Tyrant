@@ -103,7 +103,7 @@ public sealed partial class ModsMethods
         return new ModModelDto(target, skin, file,
             report?.Lods.Select(l => new ModModelLodDto(l.File, l.Vertices, l.Index32, l.Vanilla)).ToList() ?? [],
             report?.Errors ?? [], report?.Warnings ?? [], ModelBuilder.IsStale(mod.Dir, file, mod.RigOfFile(file)),
-            report?.Origin, report is not null && ModelBuilder.OriginChanged(report));
+            report?.Origin, report is not null && ModelBuilder.OriginChanged(report), ModRigBone.Of(mod.RigOfFile(file)));
     }
 
     /// <summary>Before Check and Install: models whose .glb changed are built again (needs the index and the data dump).</summary>

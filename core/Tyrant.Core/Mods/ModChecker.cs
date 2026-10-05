@@ -33,7 +33,9 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
         }
     }, Cutouts.GamePixels(install, new BundleAssetReader()), Cutouts.GamePixels(install, new BundleAssetReader(), onlyIfAlpha: false));
 
-    public ModCheckResult Check(ModProject mod, AssetIndex? index, IReadOnlyList<SpeciesSkins>? species = null, SoundCatalog? sounds = null)
+    /// <param name="rigInfo">A species' rig info (its skeleton, bones its animations and growth move); null without the index or dump.</param>
+    public ModCheckResult Check(ModProject mod, AssetIndex? index, IReadOnlyList<SpeciesSkins>? species = null, SoundCatalog? sounds = null,
+        Func<string, Rigging.RigInfo?>? rigInfo = null)
     {
         var errors = new List<string>();
         var warnings = new List<string>();
@@ -108,6 +110,7 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
         }
         ColourWarnings(mod, index, species, warnings);
         ModelProblems(mod, species, errors, warnings);
+        RigProblems(mod, rigInfo, errors, warnings);
         SoundProblems(mod, species, sounds, errors, warnings);
         var missing = index is null || pixelsOf is null ? [] : MissingCutouts(mod, index, species, warnings);
         return new ModCheckResult(errors, warnings) { MissingCutouts = missing };
@@ -181,6 +184,31 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
     }
 
     /// <summary>Opaque colour PNGs whose vanilla texture is partly see-through; the vanilla one is only decoded for those.</summary>
+    /// <summary>Each rig edit (species and skins) against its species' skeleton: unknown bones, bones the game moves, no model of its own.</summary>
+    private static void RigProblems(ModProject mod, Func<string, Rigging.RigInfo?>? rigInfo, List<string> errors, List<string> warnings)
+    {
+        var rigs = mod.Manifest.Models.Where(m => m.Rig is { Count: > 0 })
+            .Select(m => (Species: m.Target, Where: $"Rig edit of {m.Target}", Rig: m.Rig!, HasModel: m.File.Length > 0))
+            .Concat(mod.Manifest.Skins.Where(s => s.Rig is { Count: > 0 })
+                .Select(s => (Species: s.Species, Where: $"Skin '{s.Id}'", Rig: s.Rig!, HasModel: s.Model is not null)))
+            .ToList();
+        var notChecked = false;
+        foreach (var (speciesId, where, rig, hasModel) in rigs)
+        {
+            if (rigInfo?.Invoke(speciesId) is not { } info)
+            {
+                notChecked = true;
+                if (!hasModel) warnings.Add($"{where}: the rig edit has no model of its own: the game's mesh stretches with the moved bones.");
+                continue;
+            }
+            var (rigErrors, rigWarnings) = Rigging.RigRules.Problems(rig, info, hasModel, where);
+            errors.AddRange(rigErrors);
+            warnings.AddRange(rigWarnings);
+        }
+        if (notChecked)
+            warnings.Add("Rig edits were not checked against the game's skeleton: on the Workspace tab click Index assets and Run data dump (or 'tyrant assets index' and 'tyrant dump run').");
+    }
+
     /// <summary>Each model's file, species and build report (built by Replace, rebuilt by Check and Install when its .glb changed).</summary>
     private static void ModelProblems(ModProject mod, IReadOnlyList<SpeciesSkins>? species, List<string> errors, List<string> warnings)
     {

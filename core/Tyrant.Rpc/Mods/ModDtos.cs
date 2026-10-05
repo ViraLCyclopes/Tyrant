@@ -4,7 +4,9 @@ namespace Tyrant.Rpc.Mods;
 /// A mod in the workspace or the game. State: notInstalled, installed, changed (edited since install) or gameOnly
 /// (installed, but not in this workspace). Enabled is null when the mod is not installed.
 /// </summary>
-public sealed record ModRow(string Id, string Name, string Version, string? Author, int Replacements, int Skins, string State, bool? Enabled, string? Dir, string? Error);
+/// <summary>Clashes: species whose model or rig edit a later enabled mod in the load order overrides (the game uses the later one).</summary>
+public sealed record ModRow(string Id, string Name, string Version, string? Author, int Replacements, int Skins, string State, bool? Enabled, string? Dir, string? Error,
+    IReadOnlyList<string>? Clashes = null);
 
 public sealed record ModsListResult(IReadOnlyList<ModRow> Mods, bool FrameworkInstalled, bool FrameworkOutdated = false);
 
@@ -53,17 +55,35 @@ public sealed record ModForgetSkinsParams(IReadOnlyList<string> Keys);
 /// <summary>One added skin as the mod editor shows it. BaseMaleSlots / BaseFemaleSlots: the base skin's slots (null without a data dump).</summary>
 public sealed record ModSkinDto(string Id, string Key, string Species, string Name, string Base, string? Thumbnail,
     IReadOnlyDictionary<string, string>? Male, IReadOnlyDictionary<string, string>? Female, string? ColorsJson,
-    IReadOnlyList<string>? BaseMaleSlots, IReadOnlyList<string>? BaseFemaleSlots, string? Model = null);
+    IReadOnlyList<string>? BaseMaleSlots, IReadOnlyList<string>? BaseFemaleSlots, string? Model = null, IReadOnlyList<ModRigBone>? Rig = null);
+
+/// <summary>One bone of a rig edit (Unity space, parent-relative): move x,y,z; rotate x,y,z,w; scale x,y,z.</summary>
+public sealed record ModRigBone(string Bone, float[] Move, float[] Rotate, float[] Scale)
+{
+    public static IReadOnlyList<ModRigBone>? Of(IReadOnlyDictionary<string, Tyrant.Framework.Core.RigOffset>? rig) =>
+        rig is not { Count: > 0 } ? null : rig.OrderBy(p => p.Key, StringComparer.Ordinal).Select(p => new ModRigBone(p.Key,
+            [p.Value.Move.X, p.Value.Move.Y, p.Value.Move.Z], [p.Value.Rotate.X, p.Value.Rotate.Y, p.Value.Rotate.Z, p.Value.Rotate.W],
+            [p.Value.Scale.X, p.Value.Scale.Y, p.Value.Scale.Z])).ToList();
+}
+
+/// <summary>mods.rig: a species' rig edit (Skin null) or a skin's.</summary>
+public sealed record ModRigParams(string Id, string Target, string? Skin = null);
+
+/// <summary>A rig edit as the model and skin pages show it: its bones, whether it has a model of its own, and Check's findings.</summary>
+public sealed record ModRigView(IReadOnlyList<ModRigBone> Bones, bool HasModel, IReadOnlyList<string> Errors, IReadOnlyList<string> Warnings);
+
+public sealed record ModClearRigParams(string Id, string Revision, string Target, string? Skin = null);
 
 /// <summary>One converted level of detail: its .tmesh, its vertices, 32-bit indices, and the game LOD's vertices.</summary>
 public sealed record ModModelLodDto(string File, int Vertices, bool Index32, int Vanilla);
 
 /// <summary>
-/// A model replacement (Skin null: the species'); Stale: its .glb changed since it was built; Origin: the user's own .glb it was
-/// added from, OriginChanged: that file changed since (a re-export to import again).
+/// A model replacement (Skin null: the species'); Stale: its .glb or rig edit changed since it was built; Origin: the user's own
+/// .glb it was added from, OriginChanged: that file changed since (a re-export to import again). File "" is a rig edit on the
+/// game's own mesh (no model); Rig: the rig edit, if any.
 /// </summary>
 public sealed record ModModelDto(string Target, string? Skin, string File, IReadOnlyList<ModModelLodDto> Lods, IReadOnlyList<string> Errors,
-    IReadOnlyList<string> Warnings, bool Stale, string? Origin, bool OriginChanged);
+    IReadOnlyList<string> Warnings, bool Stale, string? Origin, bool OriginChanged, IReadOnlyList<ModRigBone>? Rig = null);
 
 /// <summary>Revision is null from the Assets tab (no editor open); Target or PrefabRef names the species, Skin gives a skin its own model.</summary>
 public sealed record ModReplaceModelParams(string Id, string File, string? Revision = null, string? Target = null, string? PrefabRef = null, string? Skin = null);

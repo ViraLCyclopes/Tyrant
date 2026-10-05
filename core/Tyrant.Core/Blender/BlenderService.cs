@@ -2,7 +2,9 @@ using Tyrant.Core.Assets;
 using Tyrant.Core.Errors;
 using Tyrant.Core.Install;
 using Tyrant.Core.Mods;
+using Tyrant.Core.ModelReplacements;
 using Tyrant.Core.Workspaces;
+using Tyrant.Framework.Core;
 
 namespace Tyrant.Core.Blender;
 
@@ -141,9 +143,12 @@ public sealed class BlenderService(BlenderEnvironment env)
     /// <summary>
     /// Adds the exported .glb to the project's destination (or the one chosen now, saved into the project), creating the mod
     /// when newModName is given. Never throws for Tyrant's own errors: they come back in the result for Blender's panel.
+    /// <paramref name="rig"/>: the armature's rig edit (an empty one clears the destination's; null keeps it). With
+    /// <paramref name="rigOnly"/> only the rig edit goes in and the destination wears the game's mesh.
     /// </summary>
     public static BlenderSendResult Send(Workspace ws, GameInstall install, AssetIndex index, IReadOnlyList<SpeciesSkins> species, IAssetReader reader,
-        string projectFile, string glb, BlenderDestination? choose, string? newModName, IReadOnlyList<BlenderImage>? images = null, string sex = "male")
+        string projectFile, string glb, BlenderDestination? choose, string? newModName, IReadOnlyList<BlenderImage>? images = null, string sex = "male",
+        IReadOnlyDictionary<string, RigOffset>? rig = null, bool rigOnly = false)
     {
         BlenderDestination? destination = null;
         try
@@ -152,14 +157,35 @@ public sealed class BlenderService(BlenderEnvironment env)
             destination = choose ?? project.Destination;
             if (destination is null)
                 return new BlenderSendResult(false, ["Choose where to send it first: a mod, and the species model or one of its skins."], [], [], null);
+            var rigWarnings = new List<string>();
+            if (rigOnly && rig is not { Count: > 0 })
+                return new BlenderSendResult(false, ["Rig edit only sends a rig edit, and this armature has none: make one with Start rig edit and Apply rig edit, or untick Rig edit only."], [], [], destination);
+            if (rig is { Count: > 0 })
+            {
+                // Checked before anything is written (or a new mod made): a refused rig edit leaves everything as it was.
+                var info = Rigging.RigInfoService.For(ws, install, index, species, reader, destination.Species);
+                var where = destination.Skin is null ? $"Rig edit of {destination.Species}" : $"Skin '{destination.Skin}'";
+                var (rigErrors, warnings) = Rigging.RigRules.Problems(rig, info, hasModel: !rigOnly, where);
+                if (rigErrors.Count > 0) return new BlenderSendResult(false, rigErrors, warnings, [], destination);
+                rigWarnings.AddRange(warnings);
+            }
             var mod = ModProject.Ids(ws).Contains(destination.Mod, StringComparer.Ordinal) ? ModProject.Open(ws, destination.Mod)
                 : newModName is not null ? ModProject.Create(ws, destination.Mod, newModName, null)
                 : throw new TyrantException(TyrantErrorCode.ModNotFound, $"There is no mod '{destination.Mod}' in this workspace.");
-            var report = mod.ReplaceModel(install, index, species, reader, glb, destination.Skin is null ? destination.Species : null, null, destination.Skin);
+            ModelReport? report;
+            if (rigOnly)
+            {
+                // The game's mesh with the rig edit: the destination's own model (if any) is no longer used.
+                if (destination.Skin is not null) mod.Skin(destination.Skin).Model = null;
+                else if (mod.Manifest.Models.FirstOrDefault(m => string.Equals(m.Target, destination.Species, StringComparison.Ordinal)) is { } entry) entry.File = "";
+                mod.SetRig(install, index, species, reader, destination.Species, destination.Skin, rig);
+                report = null;
+            }
+            else report = mod.ReplaceModel(install, index, species, reader, glb, destination.Skin is null ? destination.Species : null, null, destination.Skin, rig: rig);
             BlenderProjectFile.Write(projectFile, project with { Destination = destination });
             // Only after the model went in: a refused model leaves the mod as it was.
             var pictures = BlenderImages.Apply(mod, ws, index, species, destination, images ?? [], sex, project.Source.Kind == "game" ? project.Source.Skin : null);
-            return new BlenderSendResult(true, [], [.. report.Warnings, .. pictures.Warnings], report.Lods.Select(l => l.Vertices).ToList(), destination)
+            return new BlenderSendResult(true, [], [.. report?.Warnings ?? [], .. rigWarnings, .. pictures.Warnings], report?.Lods.Select(l => l.Vertices).ToList() ?? [], destination)
             {
                 Images = pictures.Written,
                 ImagesTo = pictures.To,

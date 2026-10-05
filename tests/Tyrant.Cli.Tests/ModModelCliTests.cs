@@ -103,4 +103,36 @@ public class ModModelCliTests
             CliServices.AssetReader = new BundleAssetReader();
         }
     }
+
+    private static void WriteRigOnly(string ws) => File.WriteAllText(Path.Combine(ws, "mods", "big-carch", "mod.json"),
+        """{"format":1,"id":"big-carch","name":"Big Carch","version":"1.0.0","replace":[],"models":[{"target":"Carcharodontosaurus","rig":{"Tail":{"move":[0,0.1,0]}}}]}""");
+
+    [Fact]
+    public void Mod_rig_shows_the_bones_and_clear_removes_the_rig_edit()
+    {
+        using var game = new FakeGame();
+        var (ws, _) = Setup(game);
+        try
+        {
+            WriteRigOnly(ws);
+
+            var shown = Run("mod", "rig", "big-carch", "Carcharodontosaurus", "-w", ws);
+            Assert.True(shown.Code == ExitCodes.Ok, shown.Err);
+            Assert.Contains("Tail", shown.Out);
+            Assert.Contains("move 0, 0.1, 0", shown.Out);
+            Assert.DoesNotContain("rotate", shown.Out); // identity parts are left out
+            Assert.Contains("no model of its own", shown.Out);
+
+            var cleared = Run("mod", "rig", "big-carch", "Carcharodontosaurus", "--clear", "-w", ws);
+            Assert.True(cleared.Code == ExitCodes.Ok, cleared.Err);
+            Assert.Contains("Cleared the rig edit", cleared.Out);
+            Assert.DoesNotContain("\"rig\"", File.ReadAllText(Path.Combine(ws, "mods", "big-carch", "mod.json")));
+
+            Assert.Contains("No rig edit", Run("mod", "rig", "big-carch", "Carcharodontosaurus", "-w", ws).Out);
+        }
+        finally
+        {
+            CliServices.AssetReader = new BundleAssetReader();
+        }
+    }
 }

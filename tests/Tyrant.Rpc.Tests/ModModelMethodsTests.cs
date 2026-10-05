@@ -203,4 +203,27 @@ public class ModModelMethodsTests
         Assert.Equal("BLENDER_MISSING", ex.DataCode);
         Assert.Contains("FBX needs Blender", ex.Message);
     }
+
+    [Fact]
+    public async Task A_rig_only_species_entry_is_listed_and_its_rig_can_be_shown_and_cleared()
+    {
+        using var game = new FakeGame();
+        var (h, ws, _, _) = await Setup(game);
+        File.WriteAllText(Path.Combine(ws, "mods", "big-carch", "mod.json"),
+            """{"format":1,"id":"big-carch","name":"Big Carch","version":"1.0.0","replace":[],"models":[{"target":"Carcharodontosaurus","rig":{"Tail":{"move":[0,0.1,0]}}}]}""");
+
+        var detail = await h.Call("mods.get", new { id = "big-carch" });
+        var model = detail.GetProperty("models")[0];
+        Assert.Equal("", model.GetProperty("file").GetString());
+        Assert.Equal("Tail", model.GetProperty("rig")[0].GetProperty("bone").GetString());
+        Assert.Equal(0, model.GetProperty("lods").GetArrayLength());
+
+        var rig = await h.Call("mods.rig", new { id = "big-carch", target = "Carcharodontosaurus" });
+        Assert.False(rig.GetProperty("hasModel").GetBoolean());
+        Assert.Equal(0.1f, rig.GetProperty("bones")[0].GetProperty("move")[1].GetSingle());
+        Assert.Contains(rig.GetProperty("warnings").EnumerateArray(), w => w.GetString()!.Contains("no model of its own"));
+
+        var cleared = await h.Call("mods.clearRig", new { id = "big-carch", revision = detail.GetProperty("revision").GetString(), target = "Carcharodontosaurus" });
+        Assert.Equal(0, cleared.GetProperty("models").GetArrayLength());
+    }
 }

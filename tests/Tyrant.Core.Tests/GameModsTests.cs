@@ -234,4 +234,29 @@ public class GameModsTests
         Assert.True(File.Exists(Path.Combine(installed, "T_C_D.png")));
         Assert.Equal(new[] { "red-spot" }, new GameMods().List(install).Select(m => m.Id)); // no stray backup folder listed
     }
+
+    private static ModProject RigMod(Workspace ws, string id)
+    {
+        var mod = Mod(ws, id, "T_A_D.png");
+        mod.Manifest.Models.Add(new ModelReplacement { Target = "Carcharodontosaurus", File = "", Rig = new Dictionary<string, RigOffset> { ["Jaw"] = RigOffset.Identity } });
+        mod.Save();
+        return mod;
+    }
+
+    [Fact]
+    public void An_installed_mod_whose_species_rig_a_later_one_overrides_says_so()
+    {
+        var (game, install, ws) = Setup();
+        using var _ = game;
+        new GameMods().Install(install, RigMod(ws, "aaa-long"));
+        new GameMods().Install(install, RigMod(ws, "bbb-short"));
+
+        var list = new GameMods().List(install).ToDictionary(m => m.Id);
+
+        Assert.Contains(list["aaa-long"].Clashes, c => c.Contains("Carcharodontosaurus") && c.Contains("bbb-short"));
+        Assert.Empty(list["bbb-short"].Clashes);
+
+        new GameMods().SetEnabled(install, "bbb-short", false);
+        Assert.Empty(new GameMods().List(install).Single(m => m.Id == "aaa-long").Clashes);
+    }
 }

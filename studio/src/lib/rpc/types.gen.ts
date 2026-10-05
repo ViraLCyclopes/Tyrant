@@ -424,6 +424,13 @@ export interface ModCheckReport {
   missingCutouts?: string[] | null;
 }
 
+export interface ModClearRigParams {
+  id: string;
+  revision: string;
+  target: string;
+  skin?: string | null;
+}
+
 export interface ModColorPreviewParams {
   id: string;
   skin: string;
@@ -514,6 +521,7 @@ export interface ModModelDto {
   stale: boolean;
   origin: string | null;
   originChanged: boolean;
+  rig?: ModRigBone[] | null;
 }
 
 export interface ModModelLodDto {
@@ -624,6 +632,26 @@ export interface ModRestoreCutoutsResult {
   problems: string[];
 }
 
+export interface ModRigBone {
+  bone: string;
+  move: number[];
+  rotate: number[];
+  scale: number[];
+}
+
+export interface ModRigParams {
+  id: string;
+  target: string;
+  skin?: string | null;
+}
+
+export interface ModRigView {
+  bones: ModRigBone[];
+  hasModel: boolean;
+  errors: string[];
+  warnings: string[];
+}
+
 export interface ModRow {
   id: string;
   name: string;
@@ -635,6 +663,7 @@ export interface ModRow {
   enabled: boolean | null;
   dir: string | null;
   error: string | null;
+  clashes?: string[] | null;
 }
 
 export interface ModSampleColorsParams {
@@ -723,6 +752,7 @@ export interface ModSkinDto {
   baseMaleSlots: string[] | null;
   baseFemaleSlots: string[] | null;
   model?: string | null;
+  rig?: ModRigBone[] | null;
 }
 
 export interface ModSkinModel {
@@ -1012,6 +1042,7 @@ export interface RpcMethods {
   "job.current": { params: void; result: JobCurrentResult };
   "mods.addSkin": { params: ModAddSkinParams; result: ModsListResult };
   "mods.check": { params: ModIdParams; result: ModCheckReport };
+  "mods.clearRig": { params: ModClearRigParams; result: ModDetail };
   "mods.colorPreview": { params: ModColorPreviewParams; result: ModPreviewFiles };
   "mods.copyBaseFile": { params: ModCopyBaseFileParams; result: ModDetail };
   "mods.create": { params: ModCreateParams; result: ModsListResult };
@@ -1034,6 +1065,7 @@ export interface RpcMethods {
   "mods.replaceModel": { params: ModReplaceModelParams; result: ModDetail };
   "mods.replaceSound": { params: ModReplaceSoundParams; result: ModDetail };
   "mods.restoreCutouts": { params: ModIdParams; result: ModRestoreCutoutsResult };
+  "mods.rig": { params: ModRigParams; result: ModRigView };
   "mods.sampleColors": { params: ModSampleColorsParams; result: ModSampledColors };
   "mods.saveManifest": { params: ModSaveManifestParams; result: ModDetail };
   "mods.setColors": { params: ModSetColorsParams; result: ModDetail };

@@ -140,6 +140,28 @@ public class BlenderCliTests
         Assert.DoesNotContain("male or female", error);
     }
 
+    [Theory]
+    [InlineData("""{"Jaw":{"scale":[0,1,1]}}""", "scale")]
+    [InlineData("not json", "could not be read")]
+    public void Send_reports_a_bad_rig_edit_as_its_json_line(string rig, string message)
+    {
+        using var game = new FakeGame();
+        var ws = Workspace(game);
+        var dir = Path.Combine(ws, "blender", "game", "x");
+        Directory.CreateDirectory(dir);
+        var project = Path.Combine(dir, BlenderProjectFile.FileName);
+        BlenderProjectFile.Write(project, new BlenderProject(1, ws, "t.exe", "b", new BlenderSource("game", "Carcharodontosaurus", null, null),
+            null, new Dictionary<string, BlenderMaterial>(), null, [], null, false));
+        var rigFile = Path.Combine(dir, "rig.json");
+        File.WriteAllText(rigFile, rig);
+
+        var (code, output, _) = Run("blender", "send", "-w", ws, project, Path.Combine(dir, "send.glb"), "--rig", rigFile, "--rig-only");
+
+        Assert.Equal(ExitCodes.Error, code);
+        using var doc = System.Text.Json.JsonDocument.Parse(Assert.Single(output.Split('\n', StringSplitOptions.RemoveEmptyEntries)));
+        Assert.Contains(message, doc.RootElement.GetProperty("errors")[0].GetString());
+    }
+
     [Fact]
     public void Ik_data_without_the_game_data_answers_one_json_line()
     {

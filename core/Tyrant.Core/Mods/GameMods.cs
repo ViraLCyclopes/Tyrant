@@ -17,7 +17,11 @@ public enum ModInstallState
 }
 
 /// <summary>An installed mod as found in &lt;game&gt;/UserData/Tyrant/Mods; Error is set when its mod.json cannot be read.</summary>
-public sealed record InstalledMod(string Id, string Name, string Version, int Replacements, int Skins, bool Enabled, string Dir, string? Error);
+public sealed record InstalledMod(string Id, string Name, string Version, int Replacements, int Skins, bool Enabled, string Dir, string? Error)
+{
+    /// <summary>Species whose model or rig edit a later enabled mod in the load order overrides (the framework uses the later one).</summary>
+    public IReadOnlyList<string> Clashes { get; init; } = [];
+}
 
 /// <summary>
 /// Installs mods into UserData/Tyrant/Mods (owned by Tyrant: the game uninstall removes it whole) and keeps
@@ -101,6 +105,7 @@ public sealed class GameMods(Func<GameInstall, bool>? isGameRunning = null)
         if (!Directory.Exists(root)) return [];
         var entries = ReadList(install);
         var result = new List<InstalledMod>();
+        var manifests = new Dictionary<string, ModManifest>(StringComparer.Ordinal);
         foreach (var dir in Directory.GetDirectories(root).Where(d => !d.EndsWith(Staging, StringComparison.Ordinal) && !d.EndsWith(Previous, StringComparison.Ordinal)).Order(StringComparer.Ordinal))
         {
             var folder = Path.GetFileName(dir);
@@ -110,6 +115,7 @@ public sealed class GameMods(Func<GameInstall, bool>? isGameRunning = null)
                 var path = Path.Combine(dir, ModManifest.FileName);
                 if (!File.Exists(path)) throw new ManifestException("mod.json is missing.");
                 var manifest = ModManifest.Parse(File.ReadAllText(path));
+                if (enabled) manifests[folder] = manifest;
                 result.Add(new InstalledMod(folder, manifest.Name, manifest.Version, manifest.Replace.Count, manifest.Skins.Count, enabled, dir, null));
             }
             catch (Exception ex) when (ex is ManifestException or IOException or UnauthorizedAccessException)
@@ -117,7 +123,13 @@ public sealed class GameMods(Func<GameInstall, bool>? isGameRunning = null)
                 result.Add(new InstalledMod(folder, folder, "", 0, 0, enabled, dir, ex.Message));
             }
         }
-        return result;
+        // The framework's load order: mods.json's order, then mods it does not list by name.
+        var order = entries.Select(e => e.Id).Where(manifests.ContainsKey)
+            .Concat(manifests.Keys.Where(id => entries.All(e => e.Id != id)).Order(StringComparer.Ordinal))
+            .Select(id => (id, manifests[id])).ToList();
+        var clashes = ModelTable.Clashes(order);
+        return result.Select(m => clashes.Any(c => c.Loser == m.Id)
+            ? m with { Clashes = clashes.Where(c => c.Loser == m.Id).Select(c => c.Message).ToList() } : m).ToList();
     }
 
     public ModInstallState StateOf(GameInstall install, ModProject mod)

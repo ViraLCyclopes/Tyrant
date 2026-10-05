@@ -114,6 +114,7 @@ public static class CliApp
                 mod.AddCommand<ModReplaceSoundCommand>("replace-sound").WithDescription("Replace a game sound (for everyone, one species or one skin) with your audio files.");
                 mod.AddCommand<ModSetSoundCommand>("set-sound").WithDescription("Change a sound replacement's volume, age pitch or who hears it.");
                 mod.AddCommand<ModRemoveSoundCommand>("remove-sound").WithDescription("Stop replacing a game sound.");
+                mod.AddCommand<ModRigCommand>("rig").WithDescription("Show or clear a species' or a skin's rig edit (made in Blender).");
                 mod.AddCommand<ModRebuildModelsCommand>("rebuild-models").WithDescription("Rebuild a mod's models and their levels of detail.");
                 mod.AddCommand<ModCheckCommand>("check").WithDescription("Check a mod's files and targets before installing it.");
                 mod.AddCommand<ModRestoreCutoutsCommand>("restore-cutouts").WithDescription("Copy the see-through parts (feathers, hair) of the vanilla textures back into colour PNGs that lost them.");

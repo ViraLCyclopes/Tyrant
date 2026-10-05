@@ -196,6 +196,14 @@ public sealed class BlenderSendCommand : Command<BlenderSendCommand.Settings>
         [CommandOption("--sex <SEX>")]
         [Description("The sex shown in Blender (male or female): whose maps the images go to.")]
         public string Sex { get; set; } = "male";
+
+        [CommandOption("--rig <FILE>")]
+        [Description("The armature's rig edit (a JSON object of bones, as mod.json's \"rig\"); {} clears the destination's. Without it the destination keeps its rig edit.")]
+        public string? Rig { get; set; }
+
+        [CommandOption("--rig-only")]
+        [Description("With --rig: send only the rig edit; the destination wears the game's mesh.")]
+        public bool RigOnly { get; set; }
     }
 
     public override int Execute(CommandContext context, Settings settings)
@@ -215,8 +223,20 @@ public sealed class BlenderSendCommand : Command<BlenderSendCommand.Settings>
                 return at > 0 && at < i.Length - 1 ? new BlenderImage(i[..at], Path.GetFullPath(i[(at + 1)..]))
                     : throw new TyrantException(TyrantErrorCode.ModInvalid, $"--image takes <slot>=<png> (got '{i}').");
             }).ToList();
+            IReadOnlyDictionary<string, Tyrant.Framework.Core.RigOffset>? rig = null;
+            if (settings.Rig is not null)
+            {
+                try
+                {
+                    rig = Tyrant.Framework.Core.RigEdit.Parse(Tyrant.Framework.Core.Json.Parse(File.ReadAllText(settings.Rig)), "The rig edit");
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FormatException or Tyrant.Framework.Core.ManifestException)
+                {
+                    throw new TyrantException(TyrantErrorCode.ModInvalid, $"The rig edit could not be read ({ex.Message}).");
+                }
+            }
             result = BlenderService.Send(ws, install, CliServices.LoadIndex(ws, install), ModCli.RequireSpecies(ws), CliServices.AssetReader,
-                settings.Project, Path.GetFullPath(settings.Glb), choose, settings.NewModName, images, settings.Sex);
+                settings.Project, Path.GetFullPath(settings.Glb), choose, settings.NewModName, images, settings.Sex, rig, settings.RigOnly);
         }
         catch (TyrantException ex)
         {

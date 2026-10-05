@@ -59,7 +59,24 @@ internal static class ModCli
     {
         var m = mod.Manifest;
         return ModChecker.ForGame(install).Check(mod, TryIndex(ws), m.Skins.Count > 0 || m.Sounds.Count > 0 ? TrySpecies(ws) : null,
-            m.Sounds.Count > 0 ? TrySounds(ws) : null);
+            m.Sounds.Count > 0 ? TrySounds(ws) : null, RigInfoProvider(ws, install));
+    }
+
+    /// <summary>Rig edits' species skeletons for Check (null without the asset index or the data dump).</summary>
+    public static Func<string, Tyrant.Core.Rigging.RigInfo?>? RigInfoProvider(Workspace ws, GameInstall install)
+    {
+        if (TryIndex(ws) is not { } index || TrySpecies(ws) is not { } species) return null;
+        return id =>
+        {
+            try
+            {
+                return Tyrant.Core.Rigging.RigInfoService.For(ws, install, index, species, CliServices.AssetReader, id);
+            }
+            catch (TyrantException)
+            {
+                return null;
+            }
+        };
     }
 
     public static Tyrant.Core.Sounds.SoundCatalog? TrySounds(Workspace ws)
@@ -248,6 +265,7 @@ public sealed class ModListCommand : Command<WorkspaceSettings>
                 var state = mods.StateOf(install, mod);
                 var onOff = installed.TryGetValue(id, out var inGame) ? (inGame.Enabled ? " (on)" : " (off)") : "";
                 Console.WriteLine($"  {id,-28} {mod.Manifest.Version,-8} {ModCli.Label(state)}{onOff}  {mod.Manifest.Replace.Count} replacement(s), {mod.Manifest.Skins.Count} skin(s)");
+                foreach (var clash in inGame?.Clashes ?? []) Console.WriteLine($"      NOTE   {clash}");
             }
             catch (TyrantException ex)
             {
@@ -256,7 +274,10 @@ public sealed class ModListCommand : Command<WorkspaceSettings>
             installed.Remove(id);
         }
         foreach (var other in installed.Values)
+        {
             Console.WriteLine($"  {other.Id,-28} {other.Version,-8} in the game only{(other.Enabled ? " (on)" : " (off)")}{(other.Error is null ? "" : "  " + other.Error)}");
+            foreach (var clash in other.Clashes) Console.WriteLine($"      NOTE   {clash}");
+        }
         return ExitCodes.Ok;
     }
 }

@@ -123,7 +123,7 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
             {
                 var mod = ModProject.Open(ws, id);
                 rows.Add(new ModRow(id, mod.Manifest.Name, mod.Manifest.Version, mod.Manifest.Author, mod.Manifest.Replace.Count, mod.Manifest.Skins.Count,
-                    Wire(game.StateOf(install, mod)), inGame?.Enabled, mod.Dir, null));
+                    Wire(game.StateOf(install, mod)), inGame?.Enabled, mod.Dir, null, inGame?.Clashes));
             }
             catch (TyrantException ex)
             {
@@ -131,7 +131,7 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
             }
             installed.Remove(id);
         }
-        rows.AddRange(installed.Values.Select(m => new ModRow(m.Id, m.Name, m.Version, null, m.Replacements, m.Skins, "gameOnly", m.Enabled, m.Dir, m.Error)));
+        rows.AddRange(installed.Values.Select(m => new ModRow(m.Id, m.Name, m.Version, null, m.Replacements, m.Skins, "gameOnly", m.Enabled, m.Dir, m.Error, m.Clashes)));
         return new ModsListResult(rows, ModLoaderInstaller.HasFramework(install),
             ModLoaderInstaller.FrameworkStatus(install, Options.DumperDir) == FrameworkState.Outdated);
     }
@@ -364,9 +364,11 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
                 return new ModSkinDto(s.Id, s.Key(m.Id), s.Species, s.Name, s.Base, s.Thumbnail, s.Male, s.Female,
                     s.Colors is null ? null : Tyrant.Framework.Core.Json.Write(s.Colors.ToJson()),
                     based is null ? null : ShaderSlots.Shown(based.Male.Keys.ToList(), shader),
-                    based is null ? null : ShaderSlots.Shown(based.Female.Keys.ToList(), shader), s.Model);
+                    based is null ? null : ShaderSlots.Shown(based.Female.Keys.ToList(), shader), s.Model, ModRigBone.Of(s.Rig));
             }).ToList(),
-            m.Models.Select(x => ModelDto(mod, x.Target, null, x.File))
+            m.Models.Select(x => x.File.Length == 0
+                    ? new ModModelDto(x.Target, null, "", [], [], [], false, null, false, ModRigBone.Of(x.Rig))
+                    : ModelDto(mod, x.Target, null, x.File))
                 .Concat(m.Skins.Where(s => s.Model is not null).Select(s => ModelDto(mod, s.Species, s.Id, s.Model!)))
                 .ToList(),
             m.Sounds.Select(SoundDto).ToList(), mod.FilesStamp());
