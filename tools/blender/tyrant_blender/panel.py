@@ -6,7 +6,7 @@ import textwrap
 
 import bpy
 
-from . import growth, project, send, ui
+from . import growth, images, project, send, ui
 
 REPORT = "tyrant_report"
 NEW_MOD = "__new__"
@@ -56,8 +56,14 @@ def _start_send(context, armature, destination=None, new_mod_name=None):
     data = project.load(path)
     if not send.trusted_tyrant(data.get("tyrant")):
         raise send.SendError(f"This project names {data.get('tyrant')!r} as Tyrant; open it again from Tyrant on this PC.")
-    glb = os.path.join(os.path.dirname(path), "send.glb")
+    folder = os.path.dirname(path)
+    glb = os.path.join(folder, "send.glb")
     send.export(armature, glb)
+    target = destination or data.get("destination") or {}
+    sex = armature.tyrant_sex.lower()
+    key = images.destination_key(target, sex)
+    changed, notes = images.collect(send.sendable(armature)[1:], folder)
+    changed = images.not_sent_yet(armature, changed, key)
     if bpy.data.filepath:  # an untitled file is the user's to name and save
         bpy.ops.wm.save_mainfile()
         ui.record_blend(path, bpy.data.filepath)  # a Blender Tyrant starts later opens this file at the model's scene
@@ -65,13 +71,17 @@ def _start_send(context, armature, destination=None, new_mod_name=None):
     name = armature.name
 
     def done(result):
-        target = bpy.data.objects.get(name)
-        if target is not None:
-            target[REPORT] = json.dumps(result)
+        target_object = bpy.data.objects.get(name)
+        if target_object is not None:
+            result["warnings"] = notes + list(result.get("warnings") or [])
+            target_object[REPORT] = json.dumps(result)
+            if result.get("ok"):
+                written = set(result.get("images") or [])
+                images.record_sent(target_object, [c for c in changed if c[0] in written], key)
         _redraw()
         return None
 
-    send.run_async(send.command(data, path, glb, destination, new_mod_name), done)
+    send.run_async(send.command(data, path, glb, destination, new_mod_name, changed, sex), done)
 
 
 class TYRANT_OT_send(bpy.types.Operator):
@@ -253,6 +263,8 @@ class VIEW3D_PT_tyrant(bpy.types.Panel):
             if result.get("ok"):
                 lods = ", ".join(f"LOD {i}: {v:,} vertices" for i, v in enumerate(result.get("lodVertices") or []))
                 say(box, context, f"Sent. {lods}", "CHECKMARK")
+            if result.get("ok") and result.get("images"):
+                say(box, context, f"Images: {', '.join(result['images'])} ({result.get('imagesTo') or 'the mod'})", "IMAGE_DATA")
             for error in result.get("errors") or []:
                 say(box, context, error, "CANCEL")
             for warning in result.get("warnings") or []:

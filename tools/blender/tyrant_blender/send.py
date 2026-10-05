@@ -74,8 +74,9 @@ def export(armature, path):
             obj.matrix_parent_inverse = inverse
 
 
-def command(data, project_path, glb, destination, new_mod_name):
-    """tyrant.exe's arguments for sending this project's export (with a destination chosen now, or the saved one)."""
+def command(data, project_path, glb, destination, new_mod_name, images=(), sex="male"):
+    """tyrant.exe's arguments for sending this project's export (with a destination chosen now, or the saved one), plus the
+    changed images ((slot, png, hash)) and the sex shown, whose maps they go to."""
     args = [data["tyrant"], "blender", "send", "-w", data["workspace"], project_path, glb]
     if destination:
         args += ["--mod", destination["mod"]]
@@ -83,6 +84,10 @@ def command(data, project_path, glb, destination, new_mod_name):
             args += ["--skin", destination["skin"]]
         if new_mod_name:
             args += ["--new-mod-name", new_mod_name]
+    for slot, path, *_ in images:
+        args += ["--image", f"{slot}={path}"]
+    if images:
+        args += ["--sex", sex]
     return args
 
 

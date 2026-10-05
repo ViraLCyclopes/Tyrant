@@ -104,7 +104,14 @@ public sealed class FakeAssetReader : IAssetReader
         Interlocked.Increment(ref _textures);
         Count();
         Fail(texture);
-        Write(pngPath, "png");
+        if (RealPngs)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(pngPath))!);
+            using var stream = File.Create(pngPath);
+            new StbImageWriteSharp.ImageWriter().WritePng(Enumerable.Repeat((byte)128, 4 * 4 * 4).ToArray(), 4, 4, StbImageWriteSharp.ColorComponents.RedGreenBlueAlpha, stream);
+        }
+        else
+            Write(pngPath, "png");
         return new TextureFacts(64, 32, "DXT5", 7, NormalMap.IsCandidate(texture.Name));
     }
 
@@ -159,6 +166,9 @@ public sealed class FakeAssetReader : IAssetReader
         if (FailFor.Contains(asset.Ref))
             throw FailWith?.Invoke(asset) ?? new TyrantException(TyrantErrorCode.AssetUnreadable, $"Bundle '{asset.Bundle}' could not be read (fake).", FixAction.RefreshWorkspace);
     }
+
+    /// <summary>Textures are written as real 4×4 grey PNGs (Blender tests paint them), not placeholder text.</summary>
+    public bool RealPngs { get; init; }
 
     private static void Write(string path, string content)
     {

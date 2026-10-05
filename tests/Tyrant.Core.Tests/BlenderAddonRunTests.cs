@@ -52,7 +52,7 @@ public class BlenderAddonRunTests
             Materials = [new MaterialModel("Carch", [new TextureSlot("_AdultDiffuse", null, 1), new TextureSlot("_AdultPatternMask", null, 4)])],
         };
         var prefab = new PrefabModel("Animal", root, [renderer], []);
-        var reader = new FakeAssetReader { PrefabModelToReturn = prefab };
+        var reader = new FakeAssetReader { PrefabModelToReturn = prefab, RealPngs = true };
         var index = new AssetIndex { Assets = [.. SkinDumps.Textures, SkinDumps.Prefab] };
         var result = BlenderProjectWriter.Write(new BlenderOpenRequest("Carcharodontosaurus", "Alt 1", null, false, false), ws, install, index,
             SpeciesSkinsReader.Load(ws), reader, "tyrant.exe");
@@ -153,7 +153,9 @@ public class BlenderAddonRunTests
         var (projectFile, _, ws, install, game) = Fixture();
         using var _ = game;
 
-        var run = RunPythonWith("run.py", ObjectProject(ws, install), projectFile);
+        // TYRANT_PY_PATTERN=test_images.py runs one test file (run.py's second argument); unset runs them all.
+        var pattern = Environment.GetEnvironmentVariable("TYRANT_PY_PATTERN");
+        var run = RunPythonWith("run.py", ObjectProject(ws, install), string.IsNullOrEmpty(pattern) ? [projectFile] : [projectFile, pattern]);
 
         Assert.True(run.ExitCode == 0, run.Output);
         Assert.Matches(@"TYRANT-TESTS ran [1-9]", run.Output);
