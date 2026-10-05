@@ -6,7 +6,7 @@ import textwrap
 
 import bpy
 
-from . import growth, images, project, send, ui
+from . import checks, growth, images, project, send, ui
 
 REPORT = "tyrant_report"
 NEW_MOD = "__new__"
@@ -51,11 +51,21 @@ def clear_stale_busy(*_args):
             obj[REPORT] = json.dumps({"ok": False, "errors": ["The last send did not finish (Blender was closed meanwhile); send again."]})
 
 
+def _stop_on_problems(armature, data):
+    """Refuses Send with its problems in the panel's report box (the first also as Blender's error)."""
+    found = checks.problems(armature, data)
+    if found:
+        armature[REPORT] = json.dumps({"ok": False, "errors": found})
+        _redraw()
+        raise send.SendError(found[0])
+
+
 def _start_send(context, armature, destination=None, new_mod_name=None):
     path = armature[project.TAG]
     data = project.load(path)
     if not send.trusted_tyrant(data.get("tyrant")):
         raise send.SendError(f"This project names {data.get('tyrant')!r} as Tyrant; open it again from Tyrant on this PC.")
+    _stop_on_problems(armature, data)
     folder = os.path.dirname(path)
     glb = os.path.join(folder, "send.glb")
     send.export(armature, glb)
@@ -104,6 +114,7 @@ class TYRANT_OT_send(bpy.types.Operator):
             self.report({"ERROR"}, error)
             return {"CANCELLED"}
         try:
+            _stop_on_problems(armature, data)
             if not data.get("destination"):
                 bpy.ops.tyrant.choose_destination("INVOKE_DEFAULT", armature=armature.name)
                 return {"FINISHED"}
@@ -249,6 +260,13 @@ class VIEW3D_PT_tyrant(bpy.types.Panel):
 
         for warning in send.modifier_warnings(send.sendable(armature)[1:]):
             say(layout, context, warning, "ERROR")
+        goes, stays = checks.preview(armature, context.scene)
+        preview = layout.box()
+        say(preview, context, "Sends: " + ", ".join(goes), "EXPORT")
+        for name, why in stays[:6]:
+            say(preview, context, f"{name}: {why}", "BLANK1")
+        if len(stays) > 6:
+            say(preview, context, f"…and {len(stays) - 6} more left out", "BLANK1")
         row = layout.row()
         row.enabled = not is_busy(armature)
         row.operator("tyrant.send", icon="EXPORT")
