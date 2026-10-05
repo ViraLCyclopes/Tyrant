@@ -45,6 +45,20 @@ describe('OpenInBlender', () => {
     await waitFor(() => expect(rpc.callsTo('blender.open')[0]?.params).toEqual({ species: 'Carcharodontosaurus', skin: 'red', mod: 'reds', fresh: true, lods: false }));
   });
 
+  it('Start fresh is used once, then unticked (a second open must not replace the .blend again)', async () => {
+    const { rpc, session } = setup();
+    renderWith(OpenInBlender, session, { species: 'Carcharodontosaurus', mod: 'reds', skin: 'red' });
+
+    await fireEvent.click(await screen.findByLabelText('Start fresh'));
+    await fireEvent.click(screen.getByRole('button', { name: 'Open in Blender' }));
+    await waitFor(() => expect(rpc.callsTo('blender.open')).toHaveLength(1));
+    await fireEvent.click(screen.getByRole('button', { name: 'Open in Blender' }));
+
+    await waitFor(() => expect(rpc.callsTo('blender.open')).toHaveLength(2));
+    expect(rpc.callsTo('blender.open')[1]?.params).toMatchObject({ fresh: false });
+    expect(screen.getByLabelText('Start fresh')).not.toBeChecked();
+  });
+
   it('is disabled with the reason when Blender is missing', async () => {
     const { session } = setup({ ...ready, found: false, supported: false, addon: 'unknown', problem: 'Blender was not found.' });
     renderWith(OpenInBlender, session, { species: 'Carcharodontosaurus', mod: 'm', skin: 's' });

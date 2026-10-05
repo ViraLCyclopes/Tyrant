@@ -22,6 +22,7 @@
   function open() {
     const gameSkin = skins ? (chosen ?? skins[0] ?? null) : null;
     void blender.open(tab, { species, skin: mod ? (skin ?? null) : gameSkin, mod: mod ?? null, fresh, lods });
+    fresh = false; // once: the next open must not set the .blend aside again
   }
 </script>
 
