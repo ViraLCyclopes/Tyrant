@@ -1,9 +1,10 @@
 """Imports a Tyrant project's model.glb looking like the game."""
+import json
 import os
 
 import bpy
 
-from . import growth, materials, meshops, project
+from . import growth, ik, materials, meshops, project
 
 
 def import_project(path):
@@ -42,4 +43,9 @@ def import_project(path):
         armature.tyrant_sex = "FEMALE" if data.get("sex") == "female" else "MALE"  # swaps the maps and the growth limit
     if hasattr(growth, "set_growth"):
         growth.set_growth(armature, 1.0)
+    if data.get("ikOnOpen", True) and (data.get("ik") or {}).get("chains"):
+        try:
+            ik.add_controls(armature, data)
+        except ik.IkError as ex:  # the model still opens; the Tyrant panel says why there are no controls
+            armature[ik.SKIPPED] = json.dumps([str(ex)])
     return armature

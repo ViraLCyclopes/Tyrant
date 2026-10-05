@@ -43,6 +43,8 @@ def _valid(data):
     keys = data.get("growthKeys")
     if keys is not None and not (isinstance(keys, list) and all(isinstance(k, str) for k in keys)):
         return False
+    if data.get("ik") is not None and not _valid_ik(data["ik"]):
+        return False
     growth = data.get("growth")
     if growth is None:
         return True
@@ -50,6 +52,26 @@ def _valid(data):
         return False
     return all(isinstance(b, dict) and isinstance(b.get("name"), str) and all(_numbers(b.get(k), 6) for k in ("baby", "adolescent", "adult"))
                for b in growth.get("bones") or [])
+
+
+def _valid_ik(ik):
+    chains = ik.get("chains") if isinstance(ik, dict) else None
+    if not isinstance(chains, list):
+        return False
+    for chain in chains:
+        if not isinstance(chain, dict) or chain.get("kind") not in ("limb", "head") or not isinstance(chain.get("name"), str):
+            return False
+        joints = chain.get("joints")
+        if not isinstance(joints, list) or not all(isinstance(j, dict) and isinstance(j.get("name"), str) for j in joints):
+            return False
+        controls = chain.get("controls")
+        if not _numbers(chain.get("endOffset"), 3) or not isinstance(controls, dict) or not isinstance(controls.get("target"), str):
+            return False
+        for force in chain.get("forces") or []:
+            if not (isinstance(force, dict) and isinstance(force.get("joint"), str) and isinstance(force.get("bone"), str)
+                    and _numbers(force.get("direction"), 3) and isinstance(force.get("strength"), (int, float))):
+                return False
+    return True
 
 
 def load(path):

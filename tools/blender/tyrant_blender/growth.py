@@ -2,7 +2,8 @@
 The Growth slider (0 baby – 1 adult), as AnimalGrowthManager grows an animal: the growth shape keys from the
 blend-shape curve, the infant → adult maps from the skin curve, and the bone proportions (GrowthData) — those relative to
 the adult, so Growth 1 is exactly the rest pose that is edited and sent. The curves come sampled from Tyrant; without a
-data dump they are straight lines and bones keep their proportions.
+data dump they are straight lines and bones keep their proportions. Growth sets only the location and scale the game's
+growth data owns, never rotations, so poses and IK survive it.
 """
 import os
 
@@ -124,9 +125,20 @@ def set_growth(armature, value, scene_objects=None):
                 node.outputs[0].default_value = maturity
 
     rest = {r["name"]: r for r in (data or {}).get("rest", [])}
+    bases = {}
     for bone in growth.get("bones") or []:
         pose_bone = armature.pose.bones.get(bone["name"])
         if pose_bone is None or bone["name"] not in rest:
             continue
-        pose_bone.matrix_basis = Matrix.Identity(4) if value >= 1.0 else _basis(rest[bone["name"]], bone, value)
+        basis = Matrix.Identity(4) if value >= 1.0 else _basis(rest[bone["name"]], bone, value)
+        bases[bone["name"]] = basis
+        # Only the channels the game's growth owns: rotations are yours (poses, IK, animation).
+        location, _rotation, scale = basis.decompose()
+        if bone.get("translation"):
+            pose_bone.location = location
+        if bone.get("scale"):
+            pose_bone.scale = scale
     armature["tyrant_growth_shown"] = value
+    from . import ik  # late: ik uses growth too
+
+    ik.follow_growth(armature, bases)

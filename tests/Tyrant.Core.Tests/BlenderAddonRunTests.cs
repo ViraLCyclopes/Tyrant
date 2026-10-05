@@ -58,13 +58,21 @@ public class BlenderAddonRunTests
             SpeciesSkinsReader.Load(ws), new FakeAssetReader { PrefabModelToReturn = post }, "tyrant.exe").ProjectFile;
     }
 
-    internal static BlenderRun RunPython(string script, params string[] args) => RunPythonWith(script, null, args);
+    /// <summary>The IK fixture (two legs and a neck with the game's chains, IkFixture) as a project in the same workspace.</summary>
+    internal static string IkProject(Workspace ws, GameInstall install)
+    {
+        var index = new AssetIndex { Assets = [.. SkinDumps.Textures, SkinDumps.Prefab] };
+        return BlenderProjectWriter.Write(new BlenderOpenRequest("Carcharodontosaurus", null, null, false, false), ws, install, index,
+            SpeciesSkinsReader.Load(ws), new FakeAssetReader { PrefabModelToReturn = IkFixture.Prefab(), RealPngs = true }, "tyrant.exe").ProjectFile;
+    }
 
-    internal static BlenderRun RunPythonWith(string script, string? objectProject, params string[] args)
+    internal static BlenderRun RunPython(string script, params string[] args) => RunPythonWith(script, new Dictionary<string, string>(), args);
+
+    internal static BlenderRun RunPythonWith(string script, IReadOnlyDictionary<string, string> extraEnv, params string[] args)
     {
         var blender = BlenderIntegrationTests.Blender()!;
         var env = BlenderIntegrationTests.ThrowawayUser(out _);
-        if (objectProject is not null) env["TYRANT_TEST_OBJECT_PROJECT"] = objectProject;
+        foreach (var (key, value) in extraEnv) env[key] = value;
         return new BlenderProcess().Run(blender.Exe,
             ["-b", "--factory-startup", "--python", Path.Combine(BlenderAddonTests.RepoRoot(), "tools", "blender", "tests", script), "--", .. args],
             env, TimeSpan.FromMinutes(5));
@@ -142,7 +150,12 @@ public class BlenderAddonRunTests
 
         // TYRANT_PY_PATTERN=test_images.py runs one test file (run.py's second argument); unset runs them all.
         var pattern = Environment.GetEnvironmentVariable("TYRANT_PY_PATTERN");
-        var run = RunPythonWith("run.py", ObjectProject(ws, install), string.IsNullOrEmpty(pattern) ? [projectFile] : [projectFile, pattern]);
+        var env = new Dictionary<string, string>
+        {
+            ["TYRANT_TEST_OBJECT_PROJECT"] = ObjectProject(ws, install),
+            ["TYRANT_TEST_IK_PROJECT"] = IkProject(ws, install),
+        };
+        var run = RunPythonWith("run.py", env, string.IsNullOrEmpty(pattern) ? [projectFile] : [projectFile, pattern]);
 
         Assert.True(run.ExitCode == 0, run.Output);
         Assert.Matches(@"TYRANT-TESTS ran [1-9]", run.Output);

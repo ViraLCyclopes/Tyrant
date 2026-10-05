@@ -3,7 +3,7 @@ import os
 
 import bpy
 
-from . import growth, importer, listener, materials, meshops, panel, project, send, ui  # noqa: F401
+from . import growth, ik, importer, listener, materials, meshops, panel, project, send, ui  # noqa: F401
 
 _server = None
 
