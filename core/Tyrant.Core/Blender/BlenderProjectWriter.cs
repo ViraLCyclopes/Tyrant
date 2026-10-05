@@ -40,8 +40,9 @@ public static class BlenderProjectWriter
         var mod = request.Mod is null ? null : ModProject.Open(ws, request.Mod);
         var ownSkin = mod is not null && request.Skin is not null ? mod.Skin(request.Skin) : null;
         var (speciesId, prefabRecord) = ModProject.ResolveModelTarget(index, species, ownSkin?.Species ?? request.Species, null);
-        var modReplacement = mod?.Manifest.Models.FirstOrDefault(m => string.Equals(m.Target, speciesId, StringComparison.Ordinal))?.File;
-        if (mod is not null && ownSkin is null && modReplacement is null)
+        var speciesEntry = mod?.Manifest.Models.FirstOrDefault(m => string.Equals(m.Target, speciesId, StringComparison.Ordinal));
+        var modReplacement = speciesEntry is { File.Length: > 0 } ? speciesEntry.File : null;
+        if (mod is not null && ownSkin is null && speciesEntry is null)
             throw new TyrantException(TyrantErrorCode.TargetNotFound,
                 $"'{mod.Id}' does not replace {speciesId}'s model; open it from the species instead (Assets → Species → Open in Blender).");
         var vanilla = ownSkin is not null ? SkinMaps.BaseOf(species, ownSkin) : SkinMaps.Vanilla(species, speciesId, request.Skin);
@@ -69,7 +70,7 @@ public static class BlenderProjectWriter
         var modelGlb = Path.Combine(dir, ModelFile);
         if (!keepModel || !File.Exists(modelGlb))
         {
-            var ownModel = ownSkin?.Model ?? modReplacement;
+            var ownModel = SkinDecides(ownSkin) ? ownSkin!.Model : modReplacement;
             if (mod is not null && ownModel is not null)
                 File.Copy(Path.Combine(mod.Dir, ownModel.Replace('/', Path.DirectorySeparatorChar)), modelGlb, overwrite: true);
             else
@@ -77,6 +78,9 @@ public static class BlenderProjectWriter
                     r => r.Materials.Select(m => new GltfMaterial(m.Name)).ToList());
         }
 
+        // The model and rig edit the animal wears in game: the skin's entry (a model or a rig edit) wins, else the species'.
+        var (rig, rigBaked) = SkinDecides(ownSkin) ? (ownSkin!.Rig, ownSkin.Model is not null && ownSkin.Rig is not null)
+            : (speciesEntry?.Rig, modReplacement is not null && speciesEntry?.Rig is not null);
         var materials = Materials(renderers, index, prefabRecord.Bundle, install, reader, mod, ownSkin, vanilla, dir, request.Fresh);
         var project = new BlenderProject(BlenderProjectFile.CurrentVersion, ws.Dir, tyrantExe, modelBuild,
             new BlenderSource(kind, speciesId, ownSkin?.Id ?? vanilla?.Name, mod?.Id),
@@ -92,6 +96,9 @@ public static class BlenderProjectWriter
                 : [],
             Ik = BlenderIkReader.From(prefab),
             IkOnOpen = request.Ik,
+            Rig = rig?.ToDictionary(p => p.Key, p => BlenderRigOffset.From(p.Value)),
+            RigBaked = rigBaked,
+            RigInfo = RigInfoOf(ws, install, index, species, reader, speciesId),
         };
         BlenderProjectFile.Write(projectFile, project);
         return new BlenderProjectResult(projectFile, dir, gameChanged);
@@ -227,4 +234,20 @@ public static class BlenderProjectWriter
             var q = UnityToGltf.Rotation(n.LocalRotation);
             return new BlenderBoneRest(n.Name, [p.X, p.Y, p.Z], [q.X, q.Y, q.Z, q.W], [n.LocalScale.X, n.LocalScale.Y, n.LocalScale.Z]);
         }).ToList();
+
+    private static bool SkinDecides(SkinEntry? skin) => skin is not null && (skin.Model is not null || skin.Rig is not null);
+
+    /// <summary>The species' rig info for the add-on's warnings; null when it cannot be worked out (opening goes on).</summary>
+    private static BlenderRigInfo? RigInfoOf(Workspace ws, GameInstall install, AssetIndex index, IReadOnlyList<SpeciesSkins> species, IAssetReader reader, string speciesId)
+    {
+        try
+        {
+            var info = Rigging.RigInfoService.For(ws, install, index, species, reader, speciesId);
+            return new BlenderRigInfo(info.ClipMoved, info.GrowthMoved, info.GrowthScaled, Rigging.RigLimits.GrowthBonesSupported, info.Failures);
+        }
+        catch (TyrantException)
+        {
+            return null;
+        }
+    }
 }

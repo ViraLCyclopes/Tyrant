@@ -86,6 +86,13 @@ public sealed record IkChainRow(string Name, string Kind, IReadOnlyList<string> 
 
 public sealed record SpeciesIkResult(IReadOnlyList<IkChainRow> Chains);
 
+/// <summary>species.rigInfo: a species by its data id (or catalog key/name).</summary>
+public sealed record SpeciesRigInfoParams(string Species);
+
+/// <summary>Bones the species' animations move and its growth positions or scales; GrowthSupported: whether rig edits on growth bones work.</summary>
+public sealed record SpeciesRigInfoResult(string Species, int Bones, IReadOnlyList<string> ClipMoved, IReadOnlyList<string> GrowthMoved,
+    IReadOnlyList<string> GrowthScaled, bool GrowthSupported, IReadOnlyList<string> Failures);
+
 public sealed record SpeciesPackRunResult(string Directory, int Models, int Textures, int Failed, string TargetsPath, IReadOnlyList<string>? Notes = null);
 
 public sealed record EnvironmentOption(string Id, string Label);

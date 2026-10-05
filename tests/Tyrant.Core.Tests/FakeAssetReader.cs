@@ -46,6 +46,16 @@ public sealed class FakeAssetReader : IAssetReader
         return new ModelFacts(parts, []) { Materials = ModelMaterials };
     }
 
+    /// <summary>What ReadClips returns (whatever clips are asked for), and the clips asked for last.</summary>
+    public IReadOnlyList<ClipChannels> ClipsToReturn { get; set; } = [];
+    public IReadOnlyList<AssetRecord> LastClipsAsked { get; private set; } = [];
+
+    public (IReadOnlyList<ClipChannels> Clips, IReadOnlyList<string> Failures) ReadClips(GameInstall install, IReadOnlyList<AssetRecord> clips)
+    {
+        LastClipsAsked = clips;
+        return (ClipsToReturn, []);
+    }
+
     /// <summary>What ReadPrefabModel returns (the game prefab a model is fitted to).</summary>
     public Tyrant.Core.Models.PrefabModel? PrefabModelToReturn { get; set; }
 

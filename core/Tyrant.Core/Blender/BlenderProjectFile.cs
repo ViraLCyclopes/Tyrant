@@ -27,6 +27,20 @@ public sealed record BlenderSexes(BlenderSex Male, BlenderSex Female);
 /// <summary>A skeleton node's rest transform in glTF space (rotation x, y, z, w), for the growth slider's bone proportions.</summary>
 public sealed record BlenderBoneRest(string Name, float[] Position, float[] Rotation, float[] Scale);
 
+/// <summary>A rig edit on one bone as mod.json writes it (Unity space, parent-relative): move x,y,z; rotate x,y,z,w; scale x,y,z.</summary>
+public sealed record BlenderRigOffset(float[] Move, float[] Rotate, float[] Scale)
+{
+    public static BlenderRigOffset From(Tyrant.Framework.Core.RigOffset o) =>
+        new([o.Move.X, o.Move.Y, o.Move.Z], [o.Rotate.X, o.Rotate.Y, o.Rotate.Z, o.Rotate.W], [o.Scale.X, o.Scale.Y, o.Scale.Z]);
+}
+
+/// <summary>
+/// For the add-on's rig edit warnings: bones the species' animations move and its growth positions or scales; GrowthSupported:
+/// whether edits on growth bones work in game (else Send refuses them).
+/// </summary>
+public sealed record BlenderRigInfo(IReadOnlyList<string> ClipMoved, IReadOnlyList<string> GrowthMoved, IReadOnlyList<string> GrowthScaled,
+    bool GrowthSupported, IReadOnlyList<string> Failures);
+
 /// <summary>tyrant-blender.json: what the add-on needs to import a model, dress it like the game and send it back.</summary>
 public sealed record BlenderProject(int Version, string Workspace, string Tyrant, string GameBuild, BlenderSource Source,
     BlenderDestination? Destination, IReadOnlyDictionary<string, BlenderMaterial> Materials, BlenderGrowth? Growth,
@@ -52,6 +66,15 @@ public sealed record BlenderProject(int Version, string Workspace, string Tyrant
 
     /// <summary>Whether Open in Blender builds the IK controls (the app's IK controls option, 'blender open --no-ik').</summary>
     public bool IkOnOpen { get; init; } = true;
+
+    /// <summary>The rig edit the opened model wears in game (null for none).</summary>
+    public IReadOnlyDictionary<string, BlenderRigOffset>? Rig { get; init; }
+
+    /// <summary>True when the model's own skeleton already has the rig edit (a model made for it); false: the add-on applies it.</summary>
+    public bool RigBaked { get; init; }
+
+    /// <summary>The species' rig info for the warnings (null for objects, or when it could not be worked out).</summary>
+    public BlenderRigInfo? RigInfo { get; init; }
 }
 
 public static class BlenderProjectFile

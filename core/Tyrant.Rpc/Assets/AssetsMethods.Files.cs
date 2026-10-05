@@ -116,6 +116,18 @@ public sealed partial class AssetsMethods
         return new SpeciesIkResult(chains.Select(c => new IkChainRow(c.Name, c.Kind, c.Joints.Select(j => j.Name).ToList(), BlenderIkReader.PoleFrom(c), c.Influence)).ToList());
     }
 
+    /// <summary>What a species' skeleton does in game, for rig edits (the species page's Rig info).</summary>
+    [RpcMethod("species.rigInfo")]
+    public SpeciesRigInfoResult RigInfo(SpeciesRigInfoParams p)
+    {
+        var (ws, install, index) = Open();
+        var species = Tyrant.Core.Mods.SpeciesSkinsReader.Load(ws);
+        var id = Tyrant.Core.Rigging.RigInfoService.SpeciesIdOf(p.Species, species, SpeciesCatalog.FromIndex(index));
+        var info = Tyrant.Core.Rigging.RigInfoService.For(ws, install, index, species, Reader, id);
+        return new SpeciesRigInfoResult(id, info.Bones.Count, info.ClipMoved, info.GrowthMoved, info.GrowthScaled,
+            Tyrant.Core.Rigging.RigLimits.GrowthBonesSupported, info.Failures);
+    }
+
     /// <summary>The export format, and for FBX the user's Blender: found (or refused) before a job starts, so nothing is half exported.</summary>
     private (ModelFormat Format, IModelConverter? Converter) FormatOf(Tyrant.Core.Workspaces.Workspace ws, string? text)
     {

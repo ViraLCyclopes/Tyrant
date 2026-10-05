@@ -67,6 +67,8 @@ public static class CliApp
                     .WithDescription("List a species' skin textures (to replace them in a mod with 'tyrant mod replace').");
                 species.AddCommand<SpeciesIkCommand>("ik")
                     .WithDescription("List a species' IK chains (Open in Blender builds them as IK controls).");
+                species.AddCommand<SpeciesRigInfoCommand>("rig-info")
+                    .WithDescription("List the bones a species' animations move and the bones its growth positions or scales (for rig edits).");
                 species.AddCommand<SpeciesPackCommand>("pack")
                     .WithDescription("Export one species' models, textures and targets.json to <workspace>/assets/species/<key>.");
             });

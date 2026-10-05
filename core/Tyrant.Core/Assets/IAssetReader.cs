@@ -63,6 +63,9 @@ public interface IAssetReader
     ModelFacts WriteReplacedModel(GameInstall install, AssetRecord prefab, IReadOnlyList<Tyrant.Framework.Core.TMesh> lods, string outputDir, AssetIndex index,
         IReadOnlyDictionary<string, Tyrant.Framework.Core.RigOffset>? rig = null);
 
+    /// <summary>Each animation clip's bound channels and how far they move (rig editing's analysis); unreadable clips are named in Failures.</summary>
+    (IReadOnlyList<ClipChannels> Clips, IReadOnlyList<string> Failures) ReadClips(GameInstall install, IReadOnlyList<AssetRecord> clips);
+
     /// <summary>The prefab's materials (each renderer's, distinct by name), for the skin page's slot list.</summary>
     IReadOnlyList<MaterialModel> ReadMaterials(GameInstall install, AssetRecord prefab);
 

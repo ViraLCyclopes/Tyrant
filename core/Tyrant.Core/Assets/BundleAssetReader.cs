@@ -111,6 +111,26 @@ public sealed class BundleAssetReader : IAssetReader
         return new ModelExporter().ReadPrefab(session, prefab);
     }
 
+    public (IReadOnlyList<ClipChannels> Clips, IReadOnlyList<string> Failures) ReadClips(GameInstall install, IReadOnlyList<AssetRecord> clips)
+    {
+        using var lease = Session(install, out var session);
+        var read = new List<ClipChannels>();
+        var failures = new List<string>();
+        foreach (var clip in clips)
+        {
+            try
+            {
+                var (_, root) = session.Open(clip);
+                read.Add(ClipReader.Decode(root));
+            }
+            catch (Exception ex) when (ex is TyrantException or InvalidDataException or IndexOutOfRangeException or NullReferenceException or ArgumentException)
+            {
+                failures.Add($"Animation '{clip.Name}' could not be read: {ex.Message}");
+            }
+        }
+        return (read, failures);
+    }
+
     /// <param name="rig">The model's rig edit: the preview shows the edited skeleton (the .tmesh carries its bind poses).</param>
     public ModelFacts WriteReplacedModel(GameInstall install, AssetRecord prefab, IReadOnlyList<Tyrant.Framework.Core.TMesh> lods, string outputDir, AssetIndex index,
         IReadOnlyDictionary<string, Tyrant.Framework.Core.RigOffset>? rig = null)

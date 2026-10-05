@@ -93,4 +93,18 @@ public class SpeciesCliTests
         Assert.Contains("Femur.L -> Calve.L -> Heel.L, pole from Pelvis", line);
         Assert.All(line, c => Assert.True(c < 128, $"non-ASCII '{c}' in: {line}"));
     }
+
+    [Fact]
+    public void Species_rig_info_lists_moved_and_growth_bones_in_ascii()
+    {
+        var info = new Tyrant.Core.Rigging.RigInfo(["MainBone", "Pelvis", "Neck.002"], ["Pelvis"], ["Neck.002"], [], ["The game's animations for this species were not found"]);
+
+        var lines = Tyrant.Cli.Commands.SpeciesRigInfoCommand.Lines(info).ToList();
+
+        Assert.Contains("Moved by the game's animations: Pelvis", lines);
+        Assert.Contains("Positioned by growth: Neck.002", lines);
+        Assert.Contains("Scaled by growth: (none)", lines);
+        Assert.Contains(lines, l => l.StartsWith("  WARN", StringComparison.Ordinal));
+        Assert.All(string.Join("", lines), c => Assert.True(c < 128, $"non-ASCII '{c}'"));
+    }
 }

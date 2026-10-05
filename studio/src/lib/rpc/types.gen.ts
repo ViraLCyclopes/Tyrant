@@ -910,6 +910,20 @@ export interface SpeciesPackRunResult {
   notes?: string[] | null;
 }
 
+export interface SpeciesRigInfoParams {
+  species: string;
+}
+
+export interface SpeciesRigInfoResult {
+  species: string;
+  bones: number;
+  clipMoved: string[];
+  growthMoved: string[];
+  growthScaled: string[];
+  growthSupported: boolean;
+  failures: string[];
+}
+
 export interface SpeciesRow {
   key: string;
   displayName: string;
@@ -1037,6 +1051,7 @@ export interface RpcMethods {
   "species.ik": { params: SpeciesIkParams; result: SpeciesIkResult };
   "species.list": { params: void; result: SpeciesListResult };
   "species.pack": { params: SpeciesPackParams; result: JobStarted };
+  "species.rigInfo": { params: SpeciesRigInfoParams; result: SpeciesRigInfoResult };
   "workspace.create": { params: WorkspaceOpenParams; result: WorkspaceStatus };
   "workspace.open": { params: WorkspaceOpenParams; result: WorkspaceStatus };
   "workspace.refreshAll": { params: void; result: JobStarted };

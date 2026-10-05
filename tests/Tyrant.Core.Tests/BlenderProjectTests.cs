@@ -299,4 +299,53 @@ public class BlenderProjectTests
         Assert.Equal(["Infant"], project.GrowthKeys); // the fixture's LOD 0 has one shape key; the game's first two are growth
         Assert.Contains("\"growthKeys\"", File.ReadAllText(projectFile));
     }
+
+    private static Dictionary<string, Tyrant.Framework.Core.RigOffset> JawRig() => new()
+    {
+        ["Tail"] = new Tyrant.Framework.Core.RigOffset
+        {
+            Move = new Tyrant.Framework.Core.RigVector3(0, 0.1f, 0), Rotate = Tyrant.Framework.Core.RigQuaternion.Identity, Scale = Tyrant.Framework.Core.RigVector3.One,
+        },
+    };
+
+    [Fact]
+    public void A_species_rig_edit_without_a_model_opens_the_games_model_with_the_rig_to_apply()
+    {
+        using var c = Setup();
+        var mod = ModProject.Create(c.Ws, "long", null, null);
+        mod.SetRig(c.Install, c.Index, c.Species, c.Reader, "Carcharodontosaurus", null, JawRig());
+
+        var project = BlenderProjectFile.Read(c.Write(new BlenderOpenRequest("Carcharodontosaurus", null, "long", false, false)).ProjectFile);
+
+        Assert.Equal("model", project.Source.Kind);
+        Assert.Equal(0.1f, project.Rig!["Tail"].Move[1]);
+        Assert.False(project.RigBaked); // the game's mesh: the add-on applies the rig on open
+        Assert.NotNull(project.RigInfo);
+        Assert.Equal(Tyrant.Core.Rigging.RigLimits.GrowthBonesSupported, project.RigInfo!.GrowthSupported);
+    }
+
+    [Fact]
+    public void A_skin_with_only_a_rig_edit_opens_the_games_model_with_the_skins_rig()
+    {
+        using var c = Setup();
+        var mod = ModProject.Create(c.Ws, "long", null, null);
+        var skin = mod.AddSkin(c.Ws, c.Install, c.Index, c.Reader, c.Species, "Carcharodontosaurus", "Long", "1", new SkinTemplateOptions(true, false, false));
+        mod.SetRig(c.Install, c.Index, c.Species, c.Reader, "Carcharodontosaurus", skin.Id, JawRig());
+
+        var project = BlenderProjectFile.Read(c.Write(new BlenderOpenRequest("Carcharodontosaurus", skin.Id, "long", false, false)).ProjectFile);
+
+        Assert.NotNull(project.Rig);
+        Assert.False(project.RigBaked);
+    }
+
+    [Fact]
+    public void A_game_species_has_no_rig_but_its_rig_info()
+    {
+        using var c = Setup();
+
+        var project = BlenderProjectFile.Read(c.Write(new BlenderOpenRequest("Carcharodontosaurus", null, null, false, false)).ProjectFile);
+
+        Assert.Null(project.Rig);
+        Assert.Contains("Hip", project.RigInfo!.GrowthMoved);
+    }
 }
