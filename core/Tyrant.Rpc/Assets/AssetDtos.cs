@@ -67,7 +67,8 @@ public sealed record AssetPreview(PreviewKind Kind, IReadOnlyList<string> Files,
     int? MipCount = null, int? Vertices = null, int? Triangles = null, bool? Skinned = null, string? Message = null,
     IReadOnlyList<PreviewMaterial>? Materials = null, IReadOnlyList<PreviewSkin>? Skins = null, IReadOnlyList<string>? Textures = null) : IPreviewFiles;
 
-public sealed record AssetExportParams(IReadOnlyList<string> Refs);
+/// <summary>Format: "glb" (default), "fbx" or "both"; FBX is converted by Blender.</summary>
+public sealed record AssetExportParams(IReadOnlyList<string> Refs, string? Format = null);
 
 public sealed record AssetExportFailure(string Name, string Type, string Error);
 
@@ -75,7 +76,8 @@ public sealed record AssetExportFailure(string Name, string Type, string Error);
 public sealed record AssetExportRunResult(int Exported, int Failed, string ReportPath, IReadOnlyList<AssetExportFailure> Failures,
     IReadOnlyList<string>? Notes = null);
 
-public sealed record SpeciesPackParams(string Key);
+/// <summary>Format: "glb" (default), "fbx" or "both" (a pack keeps its glb files; FBX is added next to them).</summary>
+public sealed record SpeciesPackParams(string Key, string? Format = null);
 
 public sealed record SpeciesPackRunResult(string Directory, int Models, int Textures, int Failed, string TargetsPath, IReadOnlyList<string>? Notes = null);
 

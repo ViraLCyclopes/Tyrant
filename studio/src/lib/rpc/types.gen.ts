@@ -36,6 +36,7 @@ export interface AssetExportFailure {
 
 export interface AssetExportParams {
   refs: string[];
+  format?: string | null;
 }
 
 export interface AssetExportRunResult {
@@ -880,6 +881,7 @@ export interface SpeciesListResult {
 
 export interface SpeciesPackParams {
   key: string;
+  format?: string | null;
 }
 
 export interface SpeciesPackRunResult {

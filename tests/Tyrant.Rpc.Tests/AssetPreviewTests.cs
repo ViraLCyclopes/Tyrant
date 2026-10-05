@@ -156,6 +156,41 @@ public class AssetPreviewTests
     }
 
     [Fact]
+    public async Task Export_as_fbx_without_blender_fails_before_starting()
+    {
+        using var game = new FakeGame();
+        var (h, _, _) = await Opened(game);
+
+        // A failed call starts no job: assets.export answers with the started job only after Blender was found.
+        var ex = await Assert.ThrowsAsync<RpcCallException>(() => h.Call("assets.export", new { refs = new[] { StegoD.Ref }, format = "fbx" }));
+
+        Assert.Equal("BLENDER_MISSING", ex.DataCode);
+        Assert.Contains("FBX needs Blender", ex.Message);
+    }
+
+    [Fact]
+    public async Task An_unknown_export_format_is_refused()
+    {
+        using var game = new FakeGame();
+        var (h, _, _) = await Opened(game);
+
+        var ex = await Assert.ThrowsAsync<RpcCallException>(() => h.Call("assets.export", new { refs = new[] { StegoD.Ref }, format = "obj" }));
+
+        Assert.Contains("glb, fbx or both", ex.Message);
+    }
+
+    [Fact]
+    public async Task A_species_pack_as_fbx_without_blender_fails_before_starting()
+    {
+        using var game = new FakeGame();
+        var (h, _, _) = await Opened(game);
+
+        var ex = await Assert.ThrowsAsync<RpcCallException>(() => h.Call("species.pack", new { key = "stegosaurus", format = "both" }));
+
+        Assert.Equal("BLENDER_MISSING", ex.DataCode);
+    }
+
+    [Fact]
     public async Task Export_needs_at_least_one_asset()
     {
         using var game = new FakeGame();

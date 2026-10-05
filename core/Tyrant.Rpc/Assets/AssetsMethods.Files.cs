@@ -1,4 +1,5 @@
 using Tyrant.Core.Assets;
+using Tyrant.Core.Blender;
 using Tyrant.Core.Install;
 using Tyrant.Core.Models;
 using Tyrant.Core.Species;
@@ -76,9 +77,10 @@ public sealed partial class AssetsMethods
         if (p.Refs.Count == 0) throw new ArgumentException("Pick at least one asset to export.");
         var (ws, install, index) = Open();
         var assets = p.Refs.Distinct(StringComparer.Ordinal).Select(r => index.Resolve(r)).ToList(); // an unknown ref fails before the job starts
+        var (format, converter) = FormatOf(ws, p.Format);
         return _jobs.Start("Export assets", (progress, ct) =>
         {
-            var (report, reportPath) = new AssetExport(Reader, index).Run(install, ws, assets, progress, ct);
+            var (report, reportPath) = new AssetExport(Reader, index, format, converter).Run(install, ws, assets, progress, ct);
             var failed = report.Items.Where(i => !i.Success).ToList();
             return new AssetExportRunResult(report.Items.Count - failed.Count, failed.Count, reportPath,
                 failed.Take(20).Select(i => new AssetExportFailure(i.Name, i.Type, i.Error ?? "")).ToList(),
@@ -90,12 +92,23 @@ public sealed partial class AssetsMethods
     public JobStarted Pack(SpeciesPackParams p)
     {
         var (ws, install, index) = Open();
+        var (format, converter) = FormatOf(ws, p.Format);
         var species = SpeciesCatalog.Find(SpeciesCatalog.FromIndex(index), p.Key);
         return _jobs.Start($"Species pack: {species.DisplayName}", (progress, ct) =>
         {
             var result = Reader.WriteSpeciesPack(install, ws, index, species, progress, ct);
+            var notes = result.Notes.ToList();
+            if (converter is not null)
+                notes.AddRange(ModelFormats.Apply(converter, [.. result.Models.Where(m => m.Success).Select(m => m.OutputPath)], format, keepGlb: true).Notes);
             return new SpeciesPackRunResult(result.Directory, result.Models.Count(m => m.Success), result.Textures.Count(t => t.Success),
-                result.Models.Count(m => !m.Success) + result.Textures.Count(t => !t.Success), result.TargetsPath, result.Notes);
+                result.Models.Count(m => !m.Success) + result.Textures.Count(t => !t.Success), result.TargetsPath, notes);
         });
+    }
+
+    /// <summary>The export format, and for FBX the user's Blender: found (or refused) before a job starts, so nothing is half exported.</summary>
+    private (ModelFormat Format, IModelConverter? Converter) FormatOf(Tyrant.Core.Workspaces.Workspace ws, string? text)
+    {
+        var format = ModelFormats.Parse(text);
+        return (format, format == ModelFormat.Glb ? null : new BlenderService(session.Options.Blender).Converter(ws));
     }
 }

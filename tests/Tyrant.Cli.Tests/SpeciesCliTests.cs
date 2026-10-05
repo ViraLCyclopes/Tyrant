@@ -49,4 +49,25 @@ public class SpeciesCliTests
         Assert.Equal(ExitCodes.Error, code);
         Assert.Contains("ASSET_NOT_FOUND", err);
     }
+
+    [Theory]
+    [InlineData("species", "pack", "stegosaurus")]
+    [InlineData("assets", "export-model", "nope")]
+    public void Fbx_without_blender_says_fbx_needs_blender_before_anything_else(string group, string command, string key)
+    {
+        using var game = new FakeGame();
+        var (code, _, err) = Run(group, command, key, "-w", IndexedWorkspace(game), "--format", "fbx");
+        Assert.Equal(ExitCodes.Error, code);
+        Assert.Contains("BLENDER_MISSING", err);
+        Assert.Contains("FBX needs Blender", err);
+    }
+
+    [Fact]
+    public void An_unknown_format_is_refused()
+    {
+        using var game = new FakeGame();
+        var (code, _, err) = Run("assets", "export-model", "nope", "-w", IndexedWorkspace(game), "--format", "obj");
+        Assert.Equal(ExitCodes.Error, code);
+        Assert.Contains("glb, fbx or both", err);
+    }
 }
