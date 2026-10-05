@@ -12,8 +12,17 @@ public sealed record BlenderDestination(string Mod, string Species, string? Skin
 /// <summary>One animal's colours as the PK Animal node group takes them (#rrggbb sRGB, null = none); Strength 0 leaves the textures as they are.</summary>
 public sealed record BlenderColors(string? A, string? B, string? Secondary, string? Eye, float Strength, float Softness, float Hue, float Saturation, float Value);
 
-/// <summary>A material's maps (slot → "textures/&lt;file&gt;.png", relative to the project) and how it is drawn.</summary>
-public sealed record BlenderMaterial(bool Animal, float? Cutoff, IReadOnlyDictionary<string, string> Maps, BlenderColors? Colors);
+/// <summary>A material's maps (slot → "textures/&lt;file&gt;.png", relative to the project) and how it is drawn. Maps are the male's.</summary>
+public sealed record BlenderMaterial(bool Animal, float? Cutoff, IReadOnlyDictionary<string, string> Maps, BlenderColors? Colors)
+{
+    /// <summary>The female's maps (each slot falls back to the male's), in textures/female/.</summary>
+    public IReadOnlyDictionary<string, string> FemaleMaps { get; init; } = new Dictionary<string, string>();
+}
+
+/// <summary>One sex in the game (AnimalSkinData): how far its shape grows (1 = fully; a female Anax stops at 0.8) and its size.</summary>
+public sealed record BlenderSex(float GrowthClamp, float Size);
+
+public sealed record BlenderSexes(BlenderSex Male, BlenderSex Female);
 
 /// <summary>A skeleton node's rest transform in glTF space (rotation x, y, z, w), for the growth slider's bone proportions.</summary>
 public sealed record BlenderBoneRest(string Name, float[] Position, float[] Rotation, float[] Scale);
@@ -25,6 +34,12 @@ public sealed record BlenderProject(int Version, string Workspace, string Tyrant
 {
     /// <summary>The kept .blend holds the model of an older game build (GameBuild is that build): Start fresh takes the new one.</summary>
     public bool GameChanged { get; init; }
+
+    /// <summary>The sex Blender shows first ("male" or "female"; the Tyrant panel switches it).</summary>
+    public string Sex { get; init; } = "male";
+
+    /// <summary>The skin's growth limits and sizes; null without a data dump (both grow fully).</summary>
+    public BlenderSexes? Sexes { get; init; }
 }
 
 public static class BlenderProjectFile

@@ -80,6 +80,10 @@ public sealed class BlenderOpenCommand : Command<BlenderOpenCommand.Settings>
         [Description("Also bring the far levels of detail.")]
         public bool Lods { get; set; }
 
+        [CommandOption("--sex <SEX>")]
+        [Description("male (default) or female: the sex Blender shows first (its maps and growth; the Tyrant panel switches it).")]
+        public string Sex { get; set; } = "male";
+
         [CommandOption("--no-launch")]
         [Description("Only write the project and print its path.")]
         public bool NoLaunch { get; set; }
@@ -89,7 +93,8 @@ public sealed class BlenderOpenCommand : Command<BlenderOpenCommand.Settings>
     {
         var (ws, install) = CliServices.OpenWorkspace(settings);
         var service = new BlenderService(CliServices.Blender);
-        var request = new BlenderOpenRequest(settings.Species, settings.Skin, settings.Mod, settings.Fresh, settings.Lods);
+        var request = new BlenderOpenRequest(settings.Species, settings.Skin, settings.Mod, settings.Fresh, settings.Lods,
+            string.Equals(settings.Sex, "female", StringComparison.OrdinalIgnoreCase) ? "female" : "male");
         if (!settings.NoLaunch) service.CheckReady(ws); // before the index and data, so a missing Blender is said first
         var index = CliServices.LoadIndex(ws, install);
         var species = ModCli.RequireSpecies(ws);

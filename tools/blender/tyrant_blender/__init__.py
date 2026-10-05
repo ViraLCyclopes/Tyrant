@@ -1,4 +1,6 @@
 """Tyrant's Blender add-on: open Prehistoric Kingdom models from Tyrant and send them back."""
+import os
+
 import bpy
 
 from . import growth, importer, listener, materials, meshops, panel, project, send, ui  # noqa: F401
@@ -12,6 +14,16 @@ def _growth_changed(obj, _context):
             growth.set_growth(obj, obj.tyrant_growth)
         except (project.ProjectError, KeyError, TypeError, ValueError) as ex:
             print("Tyrant: the Growth slider cannot read this project:", ex)
+
+
+def _sex_changed(obj, _context):
+    if obj.type == "ARMATURE" and obj.get(project.TAG):
+        try:
+            path = obj[project.TAG]
+            materials.apply_sex(growth.deformed_meshes(obj, bpy.context.scene.objects), project.load(path), os.path.dirname(path), growth.sex_of(obj))
+            growth.set_growth(obj, obj.tyrant_growth)
+        except (project.ProjectError, KeyError, TypeError, ValueError) as ex:
+            print("Tyrant: the Sex switch cannot read this project:", ex)
 
 
 def _drain():
@@ -34,6 +46,10 @@ def register():
                      "the adult, so 1 is your model as you edit and send it. The game's limit per sex and skin is not applied"),
         min=0.0, max=1.0, default=1.0,
         update=_growth_changed)
+    bpy.types.Object.tyrant_sex = bpy.props.EnumProperty(
+        name="Sex", description="Show the animal as the game's male or female: their maps and how far their shape grows",
+        items=(("MALE", "Male", "The male's maps and growth"), ("FEMALE", "Female", "The female's maps and growth")),
+        default="MALE", update=_sex_changed)
     if not bpy.app.timers.is_registered(send.drain_finished):
         bpy.app.timers.register(send.drain_finished, first_interval=0.25, persistent=True)
     if panel.clear_stale_busy not in bpy.app.handlers.load_post:
@@ -62,5 +78,6 @@ def unregister():
         _server.stop()
         _server = None
     del bpy.types.Object.tyrant_growth
+    del bpy.types.Object.tyrant_sex
     for cls in reversed(ui.CLASSES + panel.CLASSES):
         bpy.utils.unregister_class(cls)

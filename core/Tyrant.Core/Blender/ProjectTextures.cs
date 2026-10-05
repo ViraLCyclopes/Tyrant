@@ -25,11 +25,11 @@ internal sealed class ProjectTextures(string dir, bool fresh)
         if (File.Exists(path))
         {
             if (known is null || Hash(path) != known.Hash)
-                File.Move(path, Path.Combine(dir, Path.GetFileNameWithoutExtension(file) + ".old" + Path.GetExtension(file)), overwrite: true);
+                File.Move(path, Path.ChangeExtension(path, null) + ".old" + Path.GetExtension(path), overwrite: true);
             else
                 File.Delete(path);
         }
-        Directory.CreateDirectory(dir);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         if (!write(path) || !File.Exists(path))
         {
             _entries.Remove(file);

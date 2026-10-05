@@ -32,7 +32,7 @@ describe('OpenInBlender', () => {
     await fireEvent.click(screen.getByLabelText('Include far LODs'));
     await fireEvent.click(screen.getByRole('button', { name: 'Open in Blender' }));
 
-    await waitFor(() => expect(rpc.callsTo('blender.open')[0]?.params).toEqual({ species: 'Carcharodontosaurus', skin: 'Alt 1', mod: null, fresh: false, lods: true }));
+    await waitFor(() => expect(rpc.callsTo('blender.open')[0]?.params).toEqual({ species: 'Carcharodontosaurus', skin: 'Alt 1', mod: null, fresh: false, lods: true, sex: 'male' }));
   });
 
   it('opens a mod skin', async () => {
@@ -42,7 +42,7 @@ describe('OpenInBlender', () => {
     await fireEvent.click(await screen.findByLabelText('Start fresh'));
     await fireEvent.click(screen.getByRole('button', { name: 'Open in Blender' }));
 
-    await waitFor(() => expect(rpc.callsTo('blender.open')[0]?.params).toEqual({ species: 'Carcharodontosaurus', skin: 'red', mod: 'reds', fresh: true, lods: false }));
+    await waitFor(() => expect(rpc.callsTo('blender.open')[0]?.params).toEqual({ species: 'Carcharodontosaurus', skin: 'red', mod: 'reds', fresh: true, lods: false, sex: 'male' }));
   });
 
   it('Start fresh is used once, then unticked (a second open must not replace the .blend again)', async () => {
@@ -57,6 +57,16 @@ describe('OpenInBlender', () => {
     await waitFor(() => expect(rpc.callsTo('blender.open')).toHaveLength(2));
     expect(rpc.callsTo('blender.open')[1]?.params).toMatchObject({ fresh: false });
     expect(screen.getByLabelText('Start fresh')).not.toBeChecked();
+  });
+
+  it('can start as the female', async () => {
+    const { rpc, session } = setup();
+    renderWith(OpenInBlender, session, { species: 'Carcharodontosaurus', mod: 'reds', skin: 'red' });
+
+    await fireEvent.change(await screen.findByLabelText('Sex'), { target: { value: 'female' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Open in Blender' }));
+
+    await waitFor(() => expect(rpc.callsTo('blender.open')[0]?.params).toMatchObject({ sex: 'female' }));
   });
 
   it('is disabled with the reason when Blender is missing', async () => {

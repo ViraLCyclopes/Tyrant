@@ -210,7 +210,11 @@ class VIEW3D_PT_tyrant(bpy.types.Panel):
         else:
             layout.label(text="To: chosen on the first send")
 
+        layout.prop(armature, "tyrant_sex", expand=True)
         layout.prop(armature, "tyrant_growth", slider=True)
+        sexes = data.get("sexes")
+        if sexes:
+            layout.label(text=f"In game: male {sexes['male']['size']:g}x, female {sexes['female']['size']:g}x size (not shown)")
         if armature.tyrant_growth < 1.0:
             layout.label(text="Set Growth to 1 before sculpting or editing.", icon="ERROR")
         if not data.get("growth"):

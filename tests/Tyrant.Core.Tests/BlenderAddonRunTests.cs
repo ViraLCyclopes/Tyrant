@@ -67,8 +67,10 @@ public class BlenderAddonRunTests
             BlenderIntegrationTests.ThrowawayUser(out _), TimeSpan.FromMinutes(5));
     }
 
-    [SkippableFact]
-    public void A_model_opened_and_sent_back_unchanged_builds_without_warnings()
+    [SkippableTheory]
+    [InlineData("male")]
+    [InlineData("female")]
+    public void A_model_opened_and_sent_back_unchanged_builds_without_warnings(string sex)
     {
         Skip.If(BlenderIntegrationTests.Blender() is null, "Blender 5.x not found");
         var (projectFile, prefab, _, _, game) = Fixture();
@@ -76,7 +78,7 @@ public class BlenderAddonRunTests
         var modDir = Directory.CreateDirectory(Path.Combine(Path.GetDirectoryName(projectFile)!, "mod")).FullName;
         var glb = Path.Combine(modDir, "send.glb");
 
-        var run = RunPython("roundtrip.py", projectFile, glb);
+        var run = RunPython("roundtrip.py", projectFile, glb, sex);
         Assert.True(run.ExitCode == 0 && run.Output.Contains("ROUNDTRIP"), run.Output);
 
         var report = Tyrant.Core.ModelReplacements.ModelBuilder.Build(modDir, "send.glb", prefab);
@@ -86,6 +88,8 @@ public class BlenderAddonRunTests
         Assert.DoesNotContain(report.Warnings, w => w.Contains("Shape key", StringComparison.Ordinal));
         Assert.DoesNotContain(report.Warnings, w => w.Contains("neutral_bone", StringComparison.Ordinal));
         Assert.Single(report.Lods);
+        // The Basis went, not the female's shape mix: the growth key moves the mesh as much as the game's.
+        Assert.DoesNotContain(report.Warnings, w => w.Contains("misshapen", StringComparison.Ordinal));
     }
 
     /// <summary>

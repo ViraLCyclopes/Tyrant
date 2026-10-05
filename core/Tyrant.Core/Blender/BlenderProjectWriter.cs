@@ -10,7 +10,8 @@ using Tyrant.Framework.Core;
 namespace Tyrant.Core.Blender;
 
 /// <summary>What to open: a species (with a game skin), or with Mod a mod's skin (Skin = its id) or its species model.</summary>
-public sealed record BlenderOpenRequest(string Species, string? Skin, string? Mod, bool Fresh, bool Lods);
+/// <summary>Sex: which sex Blender shows first ("male" or "female").</summary>
+public sealed record BlenderOpenRequest(string Species, string? Skin, string? Mod, bool Fresh, bool Lods, string Sex = "male");
 
 public sealed record BlenderProjectResult(string ProjectFile, string Dir, bool GameChanged);
 
@@ -71,6 +72,8 @@ public static class BlenderProjectWriter
             materials, BlenderGrowthReader.Read(BlenderGrowthReader.TryStore(ws), speciesId), Rest(prefab.Root), keepBlend, request.Lods)
         {
             GameChanged = gameChanged,
+            Sex = request.Sex == "female" ? "female" : "male",
+            Sexes = BlenderGrowthReader.ReadSexes(BlenderGrowthReader.TryStore(ws), speciesId, vanilla?.Index ?? 0),
         };
         BlenderProjectFile.Write(projectFile, project);
         return new BlenderProjectResult(projectFile, dir, gameChanged);
@@ -113,6 +116,7 @@ public static class BlenderProjectWriter
             if (result.ContainsKey(material.Name)) continue;
             var resolved = MaterialResolver.Resolve(index, bundle, material);
             var maps = new Dictionary<string, string>(StringComparer.Ordinal);
+            var femaleMaps = new Dictionary<string, string>(StringComparer.Ordinal);
             if (resolved.Animal)
             {
                 foreach (var slot in SkinMaps.Slots)
@@ -120,6 +124,10 @@ public static class BlenderProjectWriter
                     var source = SkinMaps.Source(ownSkin, mod?.Dir, vanilla, slot, "male");
                     if (source is not null && store.Put(slot + ".png", SourceKey(source), png => SkinMaps.Write(source, install, index, reader, png) is not null))
                         maps[slot] = $"textures/{slot}.png";
+                    // The female's own map, else the male's (as the male borrows hers).
+                    var female = SkinMaps.Source(ownSkin, mod?.Dir, vanilla, slot, "female") ?? source;
+                    if (female is not null && store.Put($"female/{slot}.png", SourceKey(female), png => SkinMaps.Write(female, install, index, reader, png) is not null))
+                        femaleMaps[slot] = $"textures/female/{slot}.png";
                 }
             }
             else
@@ -133,7 +141,7 @@ public static class BlenderProjectWriter
                         maps[slot] = $"textures/{file}";
                 }
             }
-            result[material.Name] = new BlenderMaterial(resolved.Animal, resolved.Cutoff, maps, resolved.Animal ? colors : null);
+            result[material.Name] = new BlenderMaterial(resolved.Animal, resolved.Cutoff, maps, resolved.Animal ? colors : null) { FemaleMaps = femaleMaps };
         }
         store.Save();
         return result;

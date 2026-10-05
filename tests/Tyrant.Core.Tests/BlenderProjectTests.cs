@@ -56,6 +56,33 @@ public class BlenderProjectTests
     }
 
     [Fact]
+    public void Both_sexes_get_their_maps_growth_limit_and_size_and_the_project_starts_as_asked()
+    {
+        using var c = Setup();
+
+        var result = c.Write(new BlenderOpenRequest("Carcharodontosaurus", "Alt 1", null, false, false, "female"));
+
+        var project = BlenderProjectFile.Read(result.ProjectFile);
+        Assert.Equal("female", project.Sex);
+        Assert.Equal(new BlenderSex(1f, 1.2f), project.Sexes!.Male);
+        Assert.Equal(new BlenderSex(0.7f, 1.25f), project.Sexes.Female);
+        var carch = project.Materials["Carch"];
+        Assert.Equal("textures/female/diffuse.png", carch.FemaleMaps["diffuse"]); // Alt 1's female diffuse
+        Assert.Equal("textures/female/normal.png", carch.FemaleMaps["normal"]);   // she has none: the male's
+        Assert.True(File.Exists(Path.Combine(result.Dir, "textures", "female", "diffuse.png")));
+    }
+
+    [Fact]
+    public void Without_skin_data_both_sexes_grow_fully()
+    {
+        using var c = Setup();
+        var result = c.Write(new BlenderOpenRequest("Carcharodontosaurus", null, null, false, false));
+        var project = BlenderProjectFile.Read(result.ProjectFile);
+        Assert.Equal("male", project.Sex);
+        Assert.Equal(new BlenderSex(1f, 1.3f), project.Sexes!.Male); // the first skin (Base)
+    }
+
+    [Fact]
     public void Far_lods_come_along_when_asked()
     {
         using var c = Setup();

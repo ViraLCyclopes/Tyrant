@@ -150,6 +150,8 @@ Release build: `npm run build:app`, install `studio/src-tauri/target/release/bun
     Nursery. Growth back to 1.
 77. Sculpt a change; **Send to Tyrant** → choose a mod and the species model (or a skin) → the panel shows the LODs built.
     Switch to Tyrant: the mod editor's model page shows the sculpt (no restart, no manual refresh).
+77b. Tyrant panel -> **Sex** Female: her maps show and (Allosaurus Anax) her adult keeps part of the Adolescent shape,
+    like a female in the Nursery; Male puts it back. Open in Blender -> Options -> Sex starts as the female.
 78. Close Blender. From the mod's model page → **Open in Blender**: the saved .blend opens with the sculpt.
 79. With Blender open (unsaved change): **Open in Blender** on another species → Blender asks *Save and open / Open without
     saving / Cancel*; no second Blender window opens.

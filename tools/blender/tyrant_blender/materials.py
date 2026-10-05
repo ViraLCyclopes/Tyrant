@@ -216,6 +216,27 @@ def _build_plain(tree, output, maps, cutoff, folder):
         tree.links.new(normal_map.outputs["Normal"], bsdf.inputs["Normal"])
 
 
+def apply_sex(objects, data, folder, sex):
+    """Points the image nodes at this sex's maps (the female's are in textures/female/, each falling back to the male's)."""
+    specs = data.get("materials") or {}
+    for obj in objects:
+        if obj.type != "MESH":
+            continue
+        for slot in obj.material_slots:
+            material = slot.material
+            spec = specs.get(_base_name(material.name)) if material is not None else None
+            if spec is None or material.node_tree is None:
+                continue
+            maps = spec.get("femaleMaps") if sex == "female" and spec.get("femaleMaps") else spec.get("maps") or {}
+            for node in material.node_tree.nodes:
+                if node.type != "TEX_IMAGE" or node.name not in maps:
+                    continue
+                path = os.path.join(folder, maps[node.name])
+                if os.path.isfile(path):
+                    node.image = bpy.data.images.load(path, check_existing=True)
+                    node.image.colorspace_settings.name = "sRGB" if node.name in COLOR_SLOTS else "Non-Color"
+
+
 def _base_name(name):
     head, dot, tail = name.rpartition(".")
     return head if dot and tail.isdigit() and len(tail) == 3 else name

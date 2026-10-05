@@ -32,6 +32,14 @@ public class BlenderCliTests
     }
 
     [Fact]
+    public void Open_offers_the_sex_to_show_first()
+    {
+        var (code, output, _) = Run("blender", "open", "--help");
+        Assert.Equal(ExitCodes.Ok, code);
+        Assert.Contains("--sex", output);
+    }
+
+    [Fact]
     public void Status_without_blender_says_how_to_choose_it()
     {
         using var game = new FakeGame();

@@ -142,6 +142,7 @@ export interface BlenderOpenParams {
   mod?: string | null;
   fresh?: boolean;
   lods?: boolean;
+  sex?: string;
 }
 
 export interface BlenderSetPathParams {

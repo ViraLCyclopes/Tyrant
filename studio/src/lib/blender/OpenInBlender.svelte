@@ -14,6 +14,7 @@
   const blender = getBlender(session);
   let fresh = $state(false);
   let lods = $state(false);
+  let sex = $state<'male' | 'female'>('male');
   let chosen = $state<string | null>(null);
   const reason = $derived(blockedReason(blender.status));
 
@@ -21,7 +22,7 @@
 
   function open() {
     const gameSkin = skins ? (chosen ?? skins[0] ?? null) : null;
-    void blender.open(tab, { species, skin: mod ? (skin ?? null) : gameSkin, mod: mod ?? null, fresh, lods });
+    void blender.open(tab, { species, skin: mod ? (skin ?? null) : gameSkin, mod: mod ?? null, fresh, lods, sex });
     fresh = false; // once: the next open must not set the .blend aside again
   }
 </script>
@@ -39,6 +40,12 @@
     <summary>Options</summary>
     <label><input type="checkbox" bind:checked={fresh} /> Start fresh</label>
     <label><input type="checkbox" bind:checked={lods} /> Include far LODs</label>
+    <label>Sex
+      <select bind:value={sex}>
+        <option value="male">Male</option>
+        <option value="female">Female</option>
+      </select>
+    </label>
   </details>
 </div>
 

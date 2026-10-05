@@ -90,4 +90,16 @@ public class BlenderMethodsTests
         Assert.True(File.Exists(result.GetProperty("projectFile").GetString()));
         Assert.Single(link.Opened);
     }
+
+    [Fact]
+    public async Task Open_can_start_as_female()
+    {
+        using var game = new FakeGame();
+        var (programFiles, appData, _, process) = Blender52(addon: true);
+        var (h, _) = await Setup(game, TestStudio.NoBlender(process, new TestStudio.SilentLink(answers: true), programFiles, appData));
+
+        var result = await h.Call("blender.open", new { species = "Carcharodontosaurus", sex = "female" });
+
+        Assert.Equal("female", Tyrant.Core.Blender.BlenderProjectFile.Read(result.GetProperty("projectFile").GetString()!).Sex);
+    }
 }

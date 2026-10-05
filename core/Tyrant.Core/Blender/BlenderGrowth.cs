@@ -33,6 +33,22 @@ public static class BlenderGrowthReader
         return null;
     }
 
+    /// <summary>A skin's sexes (AnimalData.skinsData[skinIndex]: maleGrowthClamp, femaleGrowthClamp, male/femaleSizeMultiplier).</summary>
+    public static BlenderSexes? ReadSexes(DataStore? store, string speciesId, int skinIndex)
+    {
+        if (store?.Types().FirstOrDefault(t => t.FullName == AnimalType) is not { } type) return null;
+        foreach (var (_, root) in store.LoadAll(type))
+        {
+            if (!root.TryGetProperty("speciesID", out var id) || !string.Equals(id.GetString(), speciesId, StringComparison.OrdinalIgnoreCase)) continue;
+            if (!root.TryGetProperty("skinsData", out var skins) || skins.ValueKind != JsonValueKind.Array || skins.GetArrayLength() == 0) return null;
+            var skin = skins[Math.Clamp(skinIndex, 0, skins.GetArrayLength() - 1)];
+            float Get(string name, float fallback) => skin.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetSingle() : fallback;
+            return new BlenderSexes(new BlenderSex(Get("maleGrowthClamp", 1), Get("maleSizeMultiplier", 1)),
+                new BlenderSex(Get("femaleGrowthClamp", 1), Get("femaleSizeMultiplier", 1)));
+        }
+        return null;
+    }
+
     /// <summary>The workspace's data dump, or null when there is none (growth then follows a straight line).</summary>
     public static DataStore? TryStore(Tyrant.Core.Workspaces.Workspace ws)
     {

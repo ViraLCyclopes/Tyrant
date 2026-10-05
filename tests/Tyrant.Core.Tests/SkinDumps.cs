@@ -47,8 +47,8 @@ public static class SkinDumps
                 "localAdolescentTransformation":{"position":{"x":0,"y":0.9,"z":0},"scale":{"x":1,"y":1,"z":1}},
                 "localAdultTransformation":{"position":{"x":0,"y":1,"z":0},"scale":{"x":1,"y":1,"z":1}}}]},
              "skinsData":[
-               {"skinName":"Base","maleVariationData":{"$ref":{"type":"{{{{Var}}}}","name":"Carch_Base_M","id":10}},"femaleVariationData":{"$ref":{"type":"{{{{Var}}}}","name":"Carch_Base_F","id":11}}},
-               {"skinName":"Alt 1","maleVariationData":{"$ref":{"type":"{{{{Var}}}}","name":"Carch_Alt1_M","id":12}},"femaleVariationData":{"$ref":{"type":"{{{{Var}}}}","name":"Carch_Alt1_F","id":13}}}
+               {"skinName":"Base","maleGrowthClamp":1,"femaleGrowthClamp":0.8,"maleSizeMultiplier":1.3,"femaleSizeMultiplier":1.35,"maleVariationData":{"$ref":{"type":"{{{{Var}}}}","name":"Carch_Base_M","id":10}},"femaleVariationData":{"$ref":{"type":"{{{{Var}}}}","name":"Carch_Base_F","id":11}}},
+               {"skinName":"Alt 1","maleGrowthClamp":1,"femaleGrowthClamp":0.7,"maleSizeMultiplier":1.2,"femaleSizeMultiplier":1.25,"maleVariationData":{"$ref":{"type":"{{{{Var}}}}","name":"Carch_Alt1_M","id":12}},"femaleVariationData":{"$ref":{"type":"{{{{Var}}}}","name":"Carch_Alt1_F","id":13}}}
              ]}
             """);
         Add(Var, "Carch_Base_M", 10, """{"$type":"x","$name":"Carch_Base_M","$id":10,"adultDiffuseMap":{"m_AssetGUID":"aaaa"}}""");

@@ -34,6 +34,8 @@ def import_project(path):
 
     if hasattr(materials, "apply_all"):
         materials.apply_all(created, data, folder)
+    if hasattr(type(armature), "tyrant_sex"):
+        armature.tyrant_sex = "FEMALE" if data.get("sex") == "female" else "MALE"  # swaps the maps and the growth limit
     if hasattr(growth, "set_growth"):
         growth.set_growth(armature, 1.0)
     return armature

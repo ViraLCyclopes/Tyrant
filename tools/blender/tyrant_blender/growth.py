@@ -27,6 +27,17 @@ def _remap(a, b, c, d, x):
     return c + (x - a) * (d - c) / (b - a)
 
 
+def blend_maturity(table, value, clamp):
+    """The blend-shape maturity at this growth: past 0.5 the game squeezes the rest of growth into 0.5..clamp (per sex)."""
+    if value < 0.5:
+        return sample(table, value)
+    return sample(table, _remap(0.5, 1.0, 0.5, clamp, value))
+
+
+def sex_of(armature):
+    return "female" if getattr(armature, "tyrant_sex", "MALE") == "FEMALE" else "male"
+
+
 def shape_values(m, relative):
     """The game's weights for its shape keys 0 and 1 at blend maturity m, as 0–1 (the game's weights stay within 0–100)."""
     key1 = _remap(0.0, 0.5, 100.0, 0.0, m)
@@ -96,7 +107,9 @@ def set_growth(armature, value, scene_objects=None):
 
     data = _project(armature)
     growth = (data or {}).get("growth") or {}
-    m = sample(growth.get("blend"), value)
+    sexes = (data or {}).get("sexes") or {}
+    clamp = float((sexes.get(sex_of(armature)) or {}).get("growthClamp", 1.0))
+    m = blend_maturity(growth.get("blend"), value, clamp)
     key0, key1 = shape_values(m, growth.get("relative", True))
     maturity = sample(growth.get("skin"), value)
     meshes = deformed_meshes(armature, scene_objects if scene_objects is not None else bpy.context.scene.objects)
