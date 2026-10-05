@@ -16,6 +16,23 @@
   let fresh = $state(false);
   let lods = $state(false);
   let sex = $state<'male' | 'female'>('male');
+  /** Build IK controls from the game's chains on open; remembered on this PC (Blender's panel can add or remove them later). */
+  const IK_KEY = 'tyrant.blenderIk';
+  function loadIk(): boolean {
+    try {
+      return localStorage.getItem(IK_KEY) !== '0';
+    } catch {
+      return true;
+    }
+  }
+  let ik = $state(loadIk());
+  function rememberIk() {
+    try {
+      localStorage.setItem(IK_KEY, ik ? '1' : '0');
+    } catch {
+      /* storage blocked: the choice lasts this session */
+    }
+  }
   let chosen = $state<string | null>(null);
   const reason = $derived(blockedReason(blender.status));
 
@@ -23,7 +40,7 @@
 
   function open() {
     const gameSkin = skins ? (chosen ?? skins[0] ?? null) : null;
-    void blender.open(tab, { species, skin: mod ? (skin ?? null) : gameSkin, mod: mod ?? null, fresh, lods, sex, prefabRef: prefabRef ?? null });
+    void blender.open(tab, { species, skin: mod ? (skin ?? null) : gameSkin, mod: mod ?? null, fresh, lods, sex, prefabRef: prefabRef ?? null, ik });
     fresh = false; // once: the next open must not set the .blend aside again
   }
 </script>
@@ -41,6 +58,9 @@
     <summary>Options</summary>
     <label><input type="checkbox" bind:checked={fresh} /> Start fresh</label>
     <label><input type="checkbox" bind:checked={lods} /> Include far LODs</label>
+    <label title="Foot, hand and head controls built from the game's IK chains (Blender's IK is close to the game's, not identical)">
+      <input type="checkbox" bind:checked={ik} onchange={rememberIk} /> IK controls
+    </label>
     <label>Sex
       <select bind:value={sex}>
         <option value="male">Male</option>

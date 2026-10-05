@@ -25,6 +25,7 @@ function setup() {
     sounds: [{ event: 'event:/X/Roar', name: 'Social call', group: 'Calls', species: ['Carcharodontosaurus'], lengthMs: null, oneShot: null, perAnimal: true }],
   }));
   rpc.on('sounds.search', () => ({ hasEventList: true, sounds: [] }));
+  rpc.on('species.ik', () => ({ chains: [{ name: 'Head', kind: 'head', joints: ['Neck', 'Head'], poleFrom: null, influence: 1 }] }));
   const platform = new FakePlatform();
   const session = new Session(rpc, platform, memoryStore());
   session.workspace = workspaceStatus({ hasAssetIndex: true });
@@ -119,5 +120,14 @@ describe('SpeciesPanel', () => {
 
     expect(await screen.findByRole('searchbox', { name: 'Find a sound' })).toBeInTheDocument();
     await waitFor(() => expect(rpc.callsTo('sounds.search')).toHaveLength(1));
+  });
+
+  it('shows a species IK chains', async () => {
+    const { session } = setup();
+    renderWith(SpeciesPanel, session);
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'IK chains of Stegosaurus' }));
+
+    expect(await screen.findByText('Neck → Head', { exact: false })).toBeInTheDocument();
   });
 });

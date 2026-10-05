@@ -52,6 +52,13 @@ Tyrant works with **Blender 5.0 or newer** through its own Blender add-on.
 7. **FBX:** wherever a model goes in (Add model, a skin's model, `tyrant mod replace-model`) you can pick an `.fbx`; Tyrant
    has Blender convert it in the background. Assets export and species packs can write **FBX** or **glb + FBX** (the
    Model format box; `--format fbx|both` in the CLI). glb needs no Blender; FBX does.
+8. **IK controls:** animals open with controls built from the game's own IK chains (Tyrant panel → IK controls): a foot or
+   hand control with a knee or elbow pole per leg, a head control and an aim target. Each chain has an **IK** slider (key it
+   to switch IK/FK in an animation) and the head an **Aim** slider. **Snap controls to pose** lines them up with a pose you
+   made by rotating bones; **Bake this frame / Bake frame range** turns IK into plain bone keys; **Reset pose** clears the
+   pose (Growth stays). Send never takes the controls and keeps your pose. Blender's IK is close to the game's, not
+   identical. Don't want them? Untick **IK controls** in Open in Blender's Options (`--no-ik` in the CLI), or **Remove IK
+   controls** in the panel. `tyrant species ik <species>` (Species tab → **IK chains…**) lists a species' chains.
 
 Each model opens as **its own scene in the file you have open** (e.g. *Tyrant · my-mod · Allosaurus Anax Red*); your other
 scenes and objects are never touched, and saving the file is up to you. **Open in Blender** again switches back to that

@@ -1,5 +1,5 @@
 import { fireEvent, screen, waitFor } from '@testing-library/svelte';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { memoryStore } from '$lib/storage';
 import { FakePlatform } from '$lib/test/fakePlatform';
 import { FakeRpc } from '$lib/test/fakeRpc';
@@ -24,6 +24,8 @@ function setup(status: BlenderStatusDto = ready, gameChanged = false) {
 }
 
 describe('OpenInBlender', () => {
+  beforeEach(() => localStorage.clear());
+
   it('opens a game species with the chosen skin and options', async () => {
     const { rpc, session } = setup();
     renderWith(OpenInBlender, session, { species: 'Carcharodontosaurus', skins: ['Base', 'Alt 1'] });
@@ -32,7 +34,7 @@ describe('OpenInBlender', () => {
     await fireEvent.click(screen.getByLabelText('Include far LODs'));
     await fireEvent.click(screen.getByRole('button', { name: 'Open in Blender' }));
 
-    await waitFor(() => expect(rpc.callsTo('blender.open')[0]?.params).toEqual({ species: 'Carcharodontosaurus', skin: 'Alt 1', mod: null, fresh: false, lods: true, sex: 'male', prefabRef: null }));
+    await waitFor(() => expect(rpc.callsTo('blender.open')[0]?.params).toEqual({ species: 'Carcharodontosaurus', skin: 'Alt 1', mod: null, fresh: false, lods: true, sex: 'male', prefabRef: null, ik: true }));
   });
 
   it('opens a mod skin', async () => {
@@ -42,7 +44,7 @@ describe('OpenInBlender', () => {
     await fireEvent.click(await screen.findByLabelText('Start fresh'));
     await fireEvent.click(screen.getByRole('button', { name: 'Open in Blender' }));
 
-    await waitFor(() => expect(rpc.callsTo('blender.open')[0]?.params).toEqual({ species: 'Carcharodontosaurus', skin: 'red', mod: 'reds', fresh: true, lods: false, sex: 'male', prefabRef: null }));
+    await waitFor(() => expect(rpc.callsTo('blender.open')[0]?.params).toEqual({ species: 'Carcharodontosaurus', skin: 'red', mod: 'reds', fresh: true, lods: false, sex: 'male', prefabRef: null, ik: true }));
   });
 
   it('Start fresh is used once, then unticked (a second open must not replace the .blend again)', async () => {
@@ -114,5 +116,18 @@ describe('OpenInBlender', () => {
 
     await waitFor(() => expect(platform.confirms).toHaveLength(1));
     expect(rpc.callsTo('blender.open')).toHaveLength(0);
+  });
+
+  it('can open without IK controls, and remembers it', async () => {
+    const { rpc, session } = setup();
+    const first = renderWith(OpenInBlender, session, { species: 'Carcharodontosaurus', mod: 'reds', skin: 'red' });
+
+    await fireEvent.click(await screen.findByLabelText('IK controls'));
+    await fireEvent.click(screen.getByRole('button', { name: 'Open in Blender' }));
+    await waitFor(() => expect(rpc.callsTo('blender.open')[0]?.params).toMatchObject({ ik: false }));
+    first.unmount();
+
+    renderWith(OpenInBlender, session, { species: 'Carcharodontosaurus', mod: 'reds', skin: 'red' });
+    expect(await screen.findByLabelText('IK controls')).not.toBeChecked();
   });
 });

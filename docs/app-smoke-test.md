@@ -178,6 +178,20 @@ Release build: `npm run build:app`, install `studio/src-tauri/target/release/bun
     **Add model** (pick the .fbx): it builds like a glb; edit and re-export the FBX: the model page offers to import it again.
 87. **FBX out.** Assets -> pick a prefab -> Model format **FBX** -> Export selected: an .fbx (no .glb) with its textures/
     folder; it opens in Blender with plain bones and the growth shape keys. Species pack with **glb + FBX**: both.
+88. **IK controls.** Species → Carcharodontosaurus → Open in Blender (Options: *IK controls* ticked): the armature shows a
+    yellow box at the head, a cross in front of the face, blue/red circles under the feet and spheres in front of the knees.
+    Nothing moved compared with opening it without IK.
+89. Pose mode: drag `ctrl_foot.L` up and forward: the leg bends, the knee points toward its sphere, the heel stays on the
+    circle; rotate the circle: the foot rolls around the ground point. Drag `ctrl_head`: the neck follows; raise **Aim**
+    and move `ctrl_look`: the head turns to it.
+90. Set **Leg L: IK** to 0, rotate the femur by hand, **Snap controls to pose**, set IK back to 1: the leg does not jump.
+91. Key `ctrl_foot.L` at frames 1 and 20, **Bake frame range**: the leg plays the same with IK at 0; **Reset pose** clears
+    the pose and leaves Growth.
+92. Growth to 0: the controls stay on the feet and head; your rotations stay. **Send to Tyrant** with the leg posed: the
+    pose and the Growth are the same afterwards and the model builds as before (no IK bones in the report).
+93. Open a model with *IK controls* unticked: no controls; **Add IK controls** in the panel builds them; **Remove IK
+    controls** takes them away. Species tab → Carcharodontosaurus → **IK chains…** lists Head, Leg L, Leg R;
+    `tyrant species ik carcharodontosaurus` prints the same.
 
 **Shell (tabs, log, preferences):**
 
