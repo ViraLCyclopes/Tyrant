@@ -88,7 +88,7 @@ public class ModProjectModelsTests
         var (game, ws, install, mod, reader, glb) = Setup();
         using var _ = game;
         reader.PrefabModelToReturn = reader.PrefabModelToReturn! with
-        { Renderers = [reader.PrefabModelToReturn.Renderers[0] with { Materials = [new MaterialModel("Stego", [])] }] };
+        { Renderers = [reader.PrefabModelToReturn.Renderers[0] with { Materials = [new MaterialModel("Stego", []), new MaterialModel("Eyes", [])] }] };
         var before = File.ReadAllText(Path.Combine(mod.Dir, "mod.json"));
 
         var ex = Assert.Throws<TyrantException>(() => mod.ReplaceModel(install, Index(), SpeciesSkinsReader.Load(ws), reader, glb, "Carcharodontosaurus", null, null));
@@ -161,7 +161,7 @@ public class ModProjectModelsTests
         using var _ = game;
         mod.ReplaceModel(install, Index(), SpeciesSkinsReader.Load(ws), reader, glb, "Carcharodontosaurus", null, null);
         var file = mod.Manifest.Models[0].File;
-        var broken = reader.PrefabModelToReturn! with { Renderers = [reader.PrefabModelToReturn.Renderers[0] with { Materials = [new MaterialModel("Stego", [])] }] };
+        var broken = reader.PrefabModelToReturn! with { Renderers = [reader.PrefabModelToReturn.Renderers[0] with { Materials = [new MaterialModel("Stego", []), new MaterialModel("Eyes", [])] }] };
         ModelBuilder.Build(mod.Dir, file, broken); // as a rebuild after a game update would
 
         var result = new ModChecker(_ => (2, 2)).Check(mod, Index(), SpeciesSkinsReader.Load(ws));

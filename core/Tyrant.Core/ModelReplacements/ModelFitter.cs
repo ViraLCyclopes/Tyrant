@@ -64,13 +64,14 @@ public static class ModelFitter
         var dropped = byName.Keys.Except(game.Mesh.BlendShapes.Select(s => s.Name), StringComparer.Ordinal).ToList();
         if (dropped.Count > 0) warnings.Add($"Shape keys {string.Join(", ", dropped.Select(d => $"'{d}'"))} are not the game's and were left out.");
 
-        // Materials: the game's order.
+        // Materials: the game's order. Blender adds ".001" to a taken name; an animal has one material, so any name is it.
         var order = new List<int>();
         for (var m = 0; m < imported.MaterialNames.Length; m++)
         {
-            var at = IndexOf(gameMaterialNames, imported.MaterialNames[m]);
+            var name = GlbModelReader.BaseName(imported.MaterialNames[m]);
+            var at = gameMaterialNames.Count == 1 ? 0 : IndexOf(gameMaterialNames, name);
             if (at < 0)
-                errors.Add($"Material '{imported.MaterialNames[m]}' is not one of the game's ({string.Join(", ", gameMaterialNames)}); keep the materials from Tyrant's export.");
+                errors.Add($"Material '{imported.MaterialNames[m]}' is not one of the game's ({string.Join(", ", gameMaterialNames)}): in Blender, select the mesh and press Use game material in the Tyrant panel, or name the material like the game's.");
             order.Add(at);
         }
 

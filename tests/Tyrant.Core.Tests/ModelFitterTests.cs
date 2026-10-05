@@ -127,7 +127,7 @@ public class ModelFitterTests
     [Fact]
     public void A_material_the_game_does_not_have_is_an_error()
     {
-        var fit = ModelFitter.Fit(Imported(materials: ["Gold"]), Game, ["Carch"]);
+        var fit = ModelFitter.Fit(Imported(materials: ["Gold"]), Game, ["Carch", "Eyes"]); // one game material would take any name
 
         Assert.Contains(fit.Errors, e => e.Contains("Gold") && e.Contains("Carch"));
     }
@@ -163,5 +163,32 @@ public class ModelFitterTests
         var fit = ModelFitter.Fit(Imported(extraVertices: 2), tiny, ["Carch"]); // 5 vertices against the game's 1
 
         Assert.Contains(fit.Warnings, w => w.Contains("vertices") && w.Contains("frame rate"));
+    }
+
+    [Fact]
+    public void A_material_with_blenders_copy_suffix_is_the_games()
+    {
+        var fit = ModelFitter.Fit(Imported(materials: ["Eyes.001"]), Game, ["Carch", "Eyes"]);
+
+        Assert.Empty(fit.Errors);
+        Assert.Equal([new SubMesh(0, 0, 0), new SubMesh(0, 3, 0)], fit.Mesh!.SubMeshes); // the part went to "Eyes"
+    }
+
+    [Fact]
+    public void With_one_game_material_any_name_is_taken()
+    {
+        var fit = ModelFitter.Fit(Imported(materials: ["JWE_Body"]), Game, ["Carch"]);
+
+        Assert.Empty(fit.Errors);
+    }
+
+    [Fact]
+    public void With_several_game_materials_a_foreign_name_is_still_an_error_naming_the_fix()
+    {
+        var fit = ModelFitter.Fit(Imported(materials: ["JWE_Body"]), Game, ["Carch", "Eyes"]);
+
+        var error = Assert.Single(fit.Errors);
+        Assert.Contains("JWE_Body", error);
+        Assert.Contains("Use game material", error);
     }
 }

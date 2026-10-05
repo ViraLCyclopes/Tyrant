@@ -66,7 +66,7 @@ public class ModelBuilderTests
     public void A_model_with_errors_writes_no_tmesh()
     {
         var (dir, glb, game) = Setup();
-        var other = game with { Renderers = [game.Renderers[0] with { Materials = [new MaterialModel("Stego", [])] }] };
+        var other = game with { Renderers = [game.Renderers[0] with { Materials = [new MaterialModel("Stego", []), new MaterialModel("Eyes", [])] }] };
 
         var report = ModelBuilder.Build(dir, glb, other);
 
