@@ -114,4 +114,16 @@ public class BlenderMethodsTests
 
         Assert.Equal("female", Tyrant.Core.Blender.BlenderProjectFile.Read(result.GetProperty("projectFile").GetString()!).Sex);
     }
+
+    [Fact]
+    public async Task Open_can_skip_the_ik_controls()
+    {
+        using var game = new FakeGame();
+        var (programFiles, appData, _, process) = Blender52(addon: true);
+        var (h, _) = await Setup(game, TestStudio.NoBlender(process, new TestStudio.SilentLink(answers: true), programFiles, appData));
+
+        var result = await h.Call("blender.open", new { species = "Carcharodontosaurus", ik = false });
+
+        Assert.False(Tyrant.Core.Blender.BlenderProjectFile.Read(result.GetProperty("projectFile").GetString()!).IkOnOpen);
+    }
 }

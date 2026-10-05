@@ -79,6 +79,13 @@ public sealed record AssetExportRunResult(int Exported, int Failed, string Repor
 /// <summary>Format: "glb" (default), "fbx" or "both" (a pack keeps its glb files; FBX is added next to them).</summary>
 public sealed record SpeciesPackParams(string Key, string? Format = null);
 
+public sealed record SpeciesIkParams(string Key);
+
+/// <summary>One of the game's IK chains: Kind "limb" or "head"; PoleFrom the bones the knee's forces pull from, "the leg's bend", or null for heads.</summary>
+public sealed record IkChainRow(string Name, string Kind, IReadOnlyList<string> Joints, string? PoleFrom, float Influence);
+
+public sealed record SpeciesIkResult(IReadOnlyList<IkChainRow> Chains);
+
 public sealed record SpeciesPackRunResult(string Directory, int Models, int Textures, int Failed, string TargetsPath, IReadOnlyList<string>? Notes = null);
 
 public sealed record EnvironmentOption(string Id, string Label);

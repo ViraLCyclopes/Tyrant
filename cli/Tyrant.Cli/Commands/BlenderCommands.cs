@@ -88,6 +88,10 @@ public sealed class BlenderOpenCommand : Command<BlenderOpenCommand.Settings>
         [Description("male (default) or female: the sex Blender shows first (its maps and growth; the Tyrant panel switches it).")]
         public string Sex { get; set; } = "male";
 
+        [CommandOption("--no-ik")]
+        [Description("Build no IK controls (the add-on's Add IK controls can still add them later).")]
+        public bool NoIk { get; set; }
+
         [CommandOption("--no-launch")]
         [Description("Only write the project and print its path.")]
         public bool NoLaunch { get; set; }
@@ -98,7 +102,7 @@ public sealed class BlenderOpenCommand : Command<BlenderOpenCommand.Settings>
         var (ws, install) = CliServices.OpenWorkspace(settings);
         var service = new BlenderService(CliServices.Blender);
         var request = new BlenderOpenRequest(settings.Species, settings.Skin, settings.Mod, settings.Fresh, settings.Lods,
-            string.Equals(settings.Sex, "female", StringComparison.OrdinalIgnoreCase) ? "female" : "male") { PrefabRef = settings.Prefab };
+            string.Equals(settings.Sex, "female", StringComparison.OrdinalIgnoreCase) ? "female" : "male") { PrefabRef = settings.Prefab, Ik = !settings.NoIk };
         if (!settings.NoLaunch) service.CheckReady(ws); // before the index and data, so a missing Blender is said first
         var index = CliServices.LoadIndex(ws, install);
         var species = ModCli.RequireSpecies(ws);
@@ -131,6 +135,33 @@ public sealed class BlenderDestinationsCommand : Command<BlenderDestinationsComm
         var project = BlenderProjectFile.Read(settings.Project);
         Console.WriteLine(JsonSerializer.Serialize(new { species = project.Source.Species, mods = BlenderService.Destinations(ws, project.Source.Species) }, BlenderCli.Json));
         return ExitCodes.Ok;
+    }
+}
+
+/// <summary>For the add-on's Add IK controls on a project written before Tyrant read the game's IK chains: writes them into it.</summary>
+public sealed class BlenderIkDataCommand : Command<BlenderIkDataCommand.Settings>
+{
+    public sealed class Settings : WorkspaceSettings
+    {
+        [CommandArgument(0, "<PROJECT>")]
+        [Description("The project's tyrant-blender.json.")]
+        public string Project { get; set; } = "";
+    }
+
+    public override int Execute(CommandContext context, Settings settings)
+    {
+        try
+        {
+            var (ws, install) = CliServices.OpenWorkspace(settings);
+            var chains = BlenderService.RefreshIk(install, CliServices.LoadIndex(ws, install), ModCli.RequireSpecies(ws), CliServices.AssetReader, settings.Project);
+            Console.WriteLine(JsonSerializer.Serialize(new { ok = true, chains }, BlenderCli.Json));
+            return ExitCodes.Ok;
+        }
+        catch (TyrantException ex)
+        {
+            Console.WriteLine(JsonSerializer.Serialize(new { ok = false, errors = new[] { ex.Message } }, BlenderCli.Json));
+            return ExitCodes.Error;
+        }
     }
 }
 

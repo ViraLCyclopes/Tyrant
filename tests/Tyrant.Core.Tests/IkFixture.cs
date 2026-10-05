@@ -41,7 +41,7 @@ public static class IkFixture
 
         SkeletonNode[] bones = [main, hip, left.Femur, left.Calve, left.Foot, left.Heel, right.Femur, right.Calve, right.Foot, right.Heel, spine, neck, head];
         Matrix4x4[] binds = [.. bones.Select(b => Matrix4x4.Invert(World(b), out var inv) ? inv : Matrix4x4.Identity)];
-        var renderer = new RendererModel("Quad_LOD0", BlenderAddonRunTests.SplitQuad(binds), bones, root)
+        var renderer = new RendererModel("Quad_LOD0", ModelFixture.SplitQuad(binds), bones, root)
         {
             Materials = [new MaterialModel("Carch", [new TextureSlot("_AdultDiffuse", null, 1), new TextureSlot("_AdultPatternMask", null, 4)])],
         };

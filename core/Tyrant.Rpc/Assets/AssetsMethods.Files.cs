@@ -106,6 +106,16 @@ public sealed partial class AssetsMethods
         });
     }
 
+    /// <summary>The species' IK chains in the game (FABRIK), as Open in Blender builds them into IK controls.</summary>
+    [RpcMethod("species.ik")]
+    public SpeciesIkResult Ik(SpeciesIkParams p)
+    {
+        var (_, install, index) = Open();
+        var species = SpeciesCatalog.Find(SpeciesCatalog.FromIndex(index), p.Key);
+        var chains = BlenderIkReader.From(Reader.ReadPrefabModel(install, species.Prefab))?.Chains ?? [];
+        return new SpeciesIkResult(chains.Select(c => new IkChainRow(c.Name, c.Kind, c.Joints.Select(j => j.Name).ToList(), BlenderIkReader.PoleFrom(c), c.Influence)).ToList());
+    }
+
     /// <summary>The export format, and for FBX the user's Blender: found (or refused) before a job starts, so nothing is half exported.</summary>
     private (ModelFormat Format, IModelConverter? Converter) FormatOf(Tyrant.Core.Workspaces.Workspace ws, string? text)
     {

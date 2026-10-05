@@ -65,6 +65,8 @@ public static class CliApp
                     .WithDescription("List the animals the game ships (park and vivarium).");
                 species.AddCommand<SpeciesTexturesCommand>("textures")
                     .WithDescription("List a species' skin textures (to replace them in a mod with 'tyrant mod replace').");
+                species.AddCommand<SpeciesIkCommand>("ik")
+                    .WithDescription("List a species' IK chains (Open in Blender builds them as IK controls).");
                 species.AddCommand<SpeciesPackCommand>("pack")
                     .WithDescription("Export one species' models, textures and targets.json to <workspace>/assets/species/<key>.");
             });
@@ -96,6 +98,7 @@ public static class CliApp
                 blender.AddCommand<BlenderInstallAddonCommand>("install-addon").WithDescription("Install or update Tyrant's add-on in Blender.");
                 blender.AddCommand<BlenderOpenCommand>("open").WithDescription("Open a species, a skin or a mod's model in Blender.");
                 blender.AddCommand<BlenderDestinationsCommand>("destinations").WithDescription("List where a Blender project can be sent (JSON, for the add-on).");
+                blender.AddCommand<BlenderIkDataCommand>("ik-data").WithDescription("Write the game's IK chains into an older Blender project (JSON, for the add-on).");
                 blender.AddCommand<BlenderSendCommand>("send").WithDescription("Add a model exported from a Blender project to its mod (JSON, for the add-on).");
             });
 

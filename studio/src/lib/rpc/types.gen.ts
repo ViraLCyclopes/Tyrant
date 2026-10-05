@@ -145,6 +145,7 @@ export interface BlenderOpenParams {
   lods?: boolean;
   sex?: string;
   prefabRef?: string | null;
+  ik?: boolean;
 }
 
 export interface BlenderSetPathParams {
@@ -311,6 +312,14 @@ export interface GamePackageFrameworkParams {
 
 export interface GamePackageFrameworkResult {
   path: string;
+}
+
+export interface IkChainRow {
+  name: string;
+  kind: string;
+  joints: string[];
+  poleFrom: string | null;
+  influence: number;
 }
 
 export interface InstallDetectParams {
@@ -875,6 +884,14 @@ export interface SoundsSearchResult {
   hasEventList: boolean;
 }
 
+export interface SpeciesIkParams {
+  key: string;
+}
+
+export interface SpeciesIkResult {
+  chains: IkChainRow[];
+}
+
 export interface SpeciesListResult {
   species: SpeciesRow[];
 }
@@ -1017,6 +1034,7 @@ export interface RpcMethods {
   "mods.thumbnail": { params: ModThumbnailParams; result: ModThumbnailResult };
   "sounds.forSpecies": { params: SoundsForSpeciesParams; result: SoundsForSpeciesResult };
   "sounds.search": { params: SoundsSearchParams; result: SoundsSearchResult };
+  "species.ik": { params: SpeciesIkParams; result: SpeciesIkResult };
   "species.list": { params: void; result: SpeciesListResult };
   "species.pack": { params: SpeciesPackParams; result: JobStarted };
   "workspace.create": { params: WorkspaceOpenParams; result: WorkspaceStatus };

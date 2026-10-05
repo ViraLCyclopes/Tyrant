@@ -205,4 +205,20 @@ public class AssetsMethodsTests
         Assert.Equal(StegoPrefab.Ref, species.GetProperty("prefabRef").GetString());
         Assert.Equal(2, species.GetProperty("textures").GetInt32());
     }
+
+    [Fact]
+    public async Task Species_ik_lists_the_chains_with_where_their_poles_come_from()
+    {
+        using var game = new FakeGame();
+        var (h, _, reader) = await Opened(game);
+        reader.PrefabModelToReturn = Tyrant.Core.Tests.IkFixture.Prefab();
+
+        var chains = (await h.Call("species.ik", new { key = "stegosaurus" })).GetProperty("chains").EnumerateArray().ToList();
+
+        Assert.Equal(["Leg L", "Leg R", "Head"], chains.Select(c => c.GetProperty("name").GetString()));
+        Assert.Equal(["Femur.L", "Calve.L", "Foot.L", "Heel.L"], chains[0].GetProperty("joints").EnumerateArray().Select(j => j.GetString()));
+        Assert.Equal("Hip", chains[0].GetProperty("poleFrom").GetString());
+        Assert.Equal("the leg's bend", chains[1].GetProperty("poleFrom").GetString());
+        Assert.Equal(JsonValueKind.Null, chains[2].GetProperty("poleFrom").ValueKind);
+    }
 }

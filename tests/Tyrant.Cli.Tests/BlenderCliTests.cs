@@ -28,7 +28,7 @@ public class BlenderCliTests
     {
         var (code, output, _) = Run("blender", "--help");
         Assert.Equal(ExitCodes.Ok, code);
-        foreach (var c in new[] { "status", "set-path", "install-addon", "open", "send", "destinations" }) Assert.Contains(c, output);
+        foreach (var c in new[] { "status", "set-path", "install-addon", "open", "send", "destinations", "ik-data" }) Assert.Contains(c, output);
     }
 
     [Fact]
@@ -38,6 +38,7 @@ public class BlenderCliTests
         Assert.Equal(ExitCodes.Ok, code);
         Assert.Contains("--sex", output);
         Assert.Contains("--prefab", output);
+        Assert.Contains("--no-ik", output);
     }
 
     [Fact]
@@ -137,5 +138,25 @@ public class BlenderCliTests
         var error = doc.RootElement.GetProperty("errors")[0].GetString()!; // parsed; it fails later (this workspace has no asset index)
         Assert.DoesNotContain("<slot>=<png>", error);
         Assert.DoesNotContain("male or female", error);
+    }
+
+    [Fact]
+    public void Ik_data_without_the_game_data_answers_one_json_line()
+    {
+        using var game = new FakeGame();
+        var ws = Workspace(game);
+        var dir = Path.Combine(ws, "blender", "game", "x");
+        Directory.CreateDirectory(dir);
+        var project = Path.Combine(dir, BlenderProjectFile.FileName);
+        BlenderProjectFile.Write(project, new BlenderProject(1, ws, "t.exe", "b", new BlenderSource("game", "Carcharodontosaurus", null, null),
+            null, new Dictionary<string, BlenderMaterial>(), null, [], null, false));
+
+        var (code, output, _) = Run("blender", "ik-data", "-w", ws, project);
+
+        Assert.Equal(ExitCodes.Error, code);
+        var line = Assert.Single(output.Split('\n', StringSplitOptions.RemoveEmptyEntries));
+        using var doc = System.Text.Json.JsonDocument.Parse(line);
+        Assert.False(doc.RootElement.GetProperty("ok").GetBoolean());
+        Assert.NotEmpty(doc.RootElement.GetProperty("errors").EnumerateArray());
     }
 }

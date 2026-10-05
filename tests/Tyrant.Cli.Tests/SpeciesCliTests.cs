@@ -70,4 +70,14 @@ public class SpeciesCliTests
         Assert.Equal(ExitCodes.Error, code);
         Assert.Contains("glb, fbx or both", err);
     }
+
+    [Fact]
+    public void Species_ik_is_listed_and_an_unknown_species_reports_not_found()
+    {
+        Assert.Contains("ik", Run("species", "--help").Out);
+        using var game = new FakeGame();
+        var (code, _, err) = Run("species", "ik", "stegosaurus", "-w", IndexedWorkspace(game));
+        Assert.Equal(ExitCodes.Error, code);
+        Assert.Contains("ASSET_NOT_FOUND", err);
+    }
 }

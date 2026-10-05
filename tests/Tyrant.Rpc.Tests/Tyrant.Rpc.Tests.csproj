@@ -16,6 +16,7 @@
     <Compile Include="..\Tyrant.Core.Tests\SoundDumps.cs" Link="SoundDumps.cs" />
     <Compile Include="..\Tyrant.Core.Tests\FakeBlenderProcess.cs" Link="FakeBlenderProcess.cs" />
     <Compile Include="..\Tyrant.Core.Tests\ModelFixture.cs" Link="ModelFixture.cs" />
+    <Compile Include="..\Tyrant.Core.Tests\IkFixture.cs" Link="IkFixture.cs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
