@@ -101,6 +101,39 @@ public class BlenderProjectTests
     }
 
     [Fact]
+    public void A_moved_workspace_still_finds_the_projects_blend()
+    {
+        using var c = Setup();
+        var first = c.Write(new BlenderOpenRequest("Carcharodontosaurus", null, null, false, false));
+        var blend = Path.Combine(first.Dir, "carch.blend");
+        File.WriteAllText(blend, "user work");
+        // Recorded where the workspace used to be (another drive letter, a renamed folder).
+        BlenderProjectFile.Write(first.ProjectFile, BlenderProjectFile.Read(first.ProjectFile) with { Blend = @"Z:\old-place\carch.blend" });
+        var glbStamp = File.GetLastWriteTimeUtc(Path.Combine(first.Dir, "model.glb"));
+        Thread.Sleep(20);
+
+        var again = c.Write(new BlenderOpenRequest("Carcharodontosaurus", null, null, false, false));
+
+        Assert.Equal(blend, BlenderProjectFile.Read(again.ProjectFile).Blend);
+        Assert.Equal(glbStamp, File.GetLastWriteTimeUtc(Path.Combine(first.Dir, "model.glb")));
+    }
+
+    [Fact]
+    public void Start_fresh_never_moves_a_blend_outside_the_project_folder()
+    {
+        using var c = Setup();
+        var first = c.Write(new BlenderOpenRequest("Carcharodontosaurus", null, null, false, false));
+        var elsewhere = Path.Combine(Path.GetTempPath(), "tyrant-tests", Guid.NewGuid().ToString("N"), "mine.blend");
+        Directory.CreateDirectory(Path.GetDirectoryName(elsewhere)!);
+        File.WriteAllText(elsewhere, "someone else's work");
+        BlenderProjectFile.Write(first.ProjectFile, BlenderProjectFile.Read(first.ProjectFile) with { Blend = elsewhere });
+
+        c.Write(new BlenderOpenRequest("Carcharodontosaurus", null, null, true, false));
+
+        Assert.True(File.Exists(elsewhere));
+    }
+
+    [Fact]
     public void Start_fresh_keeps_the_old_blend_as_old_blend()
     {
         using var c = Setup();

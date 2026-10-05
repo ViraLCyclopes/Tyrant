@@ -57,6 +57,21 @@ class OpenProjectTests(unittest.TestCase):
         self.assertEqual(bpy.data.filepath, data["blend"])
 
 
+class NoOverwriteTests(unittest.TestCase):
+    def setUp(self):
+        bpy.ops.wm.read_factory_settings(use_empty=True)
+
+    def test_an_existing_blend_is_kept_as_old_blend_not_overwritten(self):
+        path = fresh_project()
+        target = ui.project_blend(path, project.load(path))
+        with open(target, "wb") as f:
+            f.write(b"older work")
+        ui.import_and_save(path)
+        with open(target[:-len(".blend")] + ".old.blend", "rb") as f:
+            self.assertEqual(f.read(), b"older work")
+        self.assertEqual(bpy.data.filepath, target)
+
+
 class DirtyOpenTests(unittest.TestCase):
     def setUp(self):
         bpy.ops.wm.read_factory_settings(use_empty=True)

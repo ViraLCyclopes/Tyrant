@@ -42,12 +42,11 @@ public static class BlenderProjectWriter
         var build = GameFingerprint.Compute(install).BuildGuid;
         var gameChanged = old is not null && old.GameBuild != build;
 
-        if (request.Fresh && old?.Blend is { } oldBlend && File.Exists(oldBlend))
-        {
-            var kept = Path.Combine(Path.GetDirectoryName(oldBlend)!, Path.GetFileNameWithoutExtension(oldBlend) + ".old.blend");
-            File.Move(oldBlend, kept, overwrite: true);
-        }
-        var keepBlend = !request.Fresh && old?.Blend is { } b && File.Exists(b) ? b : null;
+        var existing = ExistingBlend(old, dir);
+        // Start fresh moves the project's own .blend aside, never a file outside its folder (a Save As elsewhere stays put).
+        if (request.Fresh && existing is not null && ModPaths.IsInside(existing, dir))
+            File.Move(existing, Path.Combine(dir, Path.GetFileNameWithoutExtension(existing) + ".old.blend"), overwrite: true);
+        var keepBlend = request.Fresh ? null : existing;
 
         Directory.CreateDirectory(dir);
         var prefab = reader.ReadPrefabModel(install, prefabRecord);
@@ -70,6 +69,20 @@ public static class BlenderProjectWriter
             materials, BlenderGrowthReader.Read(BlenderGrowthReader.TryStore(ws), speciesId), Rest(prefab.Root), keepBlend, request.Lods);
         BlenderProjectFile.Write(projectFile, project);
         return new BlenderProjectResult(projectFile, dir, gameChanged);
+    }
+
+    /// <summary>
+    /// The project's .blend: the one recorded when it still exists, else (the workspace moved, the project file was replaced)
+    /// the newest .blend in the project folder that is not a kept .old.blend.
+    /// </summary>
+    private static string? ExistingBlend(BlenderProject? old, string dir)
+    {
+        if (old?.Blend is { } recorded && File.Exists(recorded)) return Path.GetFullPath(recorded);
+        if (!Directory.Exists(dir)) return null;
+        return Directory.GetFiles(dir, "*.blend")
+            .Where(f => !f.EndsWith(".old.blend", StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(File.GetLastWriteTimeUtc)
+            .FirstOrDefault();
     }
 
     private static BlenderProject? TryRead(string path)

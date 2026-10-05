@@ -24,6 +24,8 @@ def import_and_save(path):
     data = project.load(path)
     importer.import_project(path)
     blend = project_blend(path, data)
+    if os.path.exists(blend):  # never over someone's work: the earlier file becomes <name>.old.blend
+        os.replace(blend, blend[:-len(".blend")] + ".old.blend")
     bpy.ops.wm.save_as_mainfile(filepath=blend)
     record_blend(path, blend)
 
