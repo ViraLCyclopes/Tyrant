@@ -283,7 +283,8 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
         try
         {
             var preview = ModelPreview(new ModModelPreviewParams(mod.Id, skin.Species, skinId));
-            return preview.Lods.Count == 0 ? null : new ModSkinOwnModel(preview.Lods[0].File, preview.Materials);
+            // The game's animal-shader materials wear the skin's maps (the model page shows the game's own textures instead).
+            return preview.Lods.Count == 0 ? null : new ModSkinOwnModel(preview.Lods[0].File, preview.Materials.Select(m => m with { Skinnable = m.Animal }).ToList());
         }
         catch (TyrantException)
         {

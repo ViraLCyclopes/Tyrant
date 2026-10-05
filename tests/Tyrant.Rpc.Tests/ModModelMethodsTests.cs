@@ -86,7 +86,8 @@ public class ModModelMethodsTests
     public async Task The_skins_3D_view_shows_the_skins_own_model()
     {
         using var game = new FakeGame();
-        var (h, ws, _, glb) = await Setup(game);
+        var (h, ws, reader, glb) = await Setup(game);
+        reader.ModelMaterials = [new Tyrant.Core.Models.ResolvedMaterial("Carch", null, null, null, []) { Animal = true }, new Tyrant.Core.Models.ResolvedMaterial("Eyes", null, null, null, [])];
         var dir = Path.Combine(ws, "mods", "big-carch");
         Directory.CreateDirectory(Path.Combine(dir, "skins", "spiked"));
         File.Copy(glb, Path.Combine(dir, "skins", "spiked", "male_D.png"));
@@ -100,7 +101,9 @@ public class ModModelMethodsTests
 
         var own = after.GetProperty("ownModel");
         Assert.StartsWith(Path.Combine(ws, "cache", "previews") + Path.DirectorySeparatorChar, own.GetProperty("file").GetString());
-        Assert.Equal(System.Text.Json.JsonValueKind.Array, own.GetProperty("materials").ValueKind);
+        var materials = own.GetProperty("materials").EnumerateArray().ToDictionary(m => m.GetProperty("name").GetString()!, m => m.GetProperty("skinnable").GetBoolean());
+        Assert.True(materials["Carch"]);  // the animal material wears the skin's maps
+        Assert.False(materials["Eyes"]);
     }
 
     [Fact]
