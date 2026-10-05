@@ -6,7 +6,7 @@ import textwrap
 
 import bpy
 
-from . import checks, gamematerial, growth, images, project, send, ui
+from . import checks, gamematerial, growth, ikpanel, images, project, send, ui
 
 REPORT = "tyrant_report"
 NEW_MOD = "__new__"
@@ -277,6 +277,7 @@ class VIEW3D_PT_tyrant(bpy.types.Panel):
             say(layout, context, "Set Growth to 1 before sculpting or editing.", "ERROR")
         if not data.get("growth"):
             say(layout, context, "Dump the game's data (Workspace tab) for its growth.", "INFO")
+        ikpanel.draw(layout, context, armature, data, say)
 
         layout.operator("tyrant.use_game_material", icon="MATERIAL")
         active = context.active_object

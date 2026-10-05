@@ -404,3 +404,106 @@ def snap_controls(arm, names=None):
     for c in chains:
         pose[c["target"]][IK_FK] = saved[c["target"]]
     refresh(arm)
+
+
+# --- removing, baking, resetting -------------------------------------------------------------------------------------------
+
+def remove_controls(arm):
+    """Deletes Tyrant's control and mechanism bones, their constraints, drivers and collections: the armature is as before."""
+    names = {n for c in built(arm) for n in c["bones"]} | {b.name for b in arm.data.bones if b.get(BONE_TAG)}
+    if not names:
+        raise IkError("This armature has no IK controls.")
+    if arm.animation_data is not None:
+        for curve in list(arm.animation_data.drivers):
+            if f'constraints["{PREFIX}' in curve.data_path:
+                arm.animation_data.drivers.remove(curve)
+    for pose_bone in arm.pose.bones:
+        for constraint in list(pose_bone.constraints):
+            if constraint.name.startswith(PREFIX):
+                pose_bone.constraints.remove(constraint)
+    view_layer = bpy.context.view_layer
+    active, mode = view_layer.objects.active, arm.mode
+    if bpy.context.mode != "OBJECT":
+        bpy.ops.object.mode_set(mode="OBJECT")
+    view_layer.objects.active = arm
+    bpy.ops.object.mode_set(mode="EDIT")
+    try:
+        for bone in [b for b in arm.data.edit_bones if b.name in names]:
+            arm.data.edit_bones.remove(bone)
+    finally:
+        bpy.ops.object.mode_set(mode="OBJECT")
+    for name in (CONTROLS, MECHANISM):
+        collection = arm.data.collections.get(name)
+        if collection is not None:
+            arm.data.collections.remove(collection)
+    for key in (TAG, SKIPPED):
+        if key in arm:
+            del arm[key]
+    if mode == "POSE":
+        bpy.ops.object.mode_set(mode="POSE")
+    view_layer.objects.active = active
+
+
+def _rotation_path(pose_bone):
+    return {"QUATERNION": "rotation_quaternion", "AXIS_ANGLE": "rotation_axis_angle"}.get(pose_bone.rotation_mode, "rotation_euler")
+
+
+def _depth(bone):
+    depth = 0
+    while bone.parent is not None:
+        bone, depth = bone.parent, depth + 1
+    return depth
+
+
+def bake(arm, scene, frame_range):
+    """Keys the IK result onto the game bones' rotations (this frame, or the scene's frame range) and switches those chains
+    to FK there, so the pose or animation plays without the controls. Returns the frames baked."""
+    pose = arm.pose.bones
+    chains = [c for c in built(arm) if pose.get(c["target"]) is not None and pose[c["target"]].get(IK_FK, 0.0) > 0.0]
+    if not chains:
+        raise IkError("No chain is on IK; nothing to bake.")
+    frames = list(range(scene.frame_start, scene.frame_end + 1)) if frame_range else [scene.frame_current]
+    original = scene.frame_current
+    joints = sorted({n for c in chains for n in c["joints"]}, key=lambda n: _depth(arm.data.bones[n]))
+    parents = {n: arm.data.bones[n].parent.name for n in joints if arm.data.bones[n].parent is not None}
+    visual = {}
+    for frame in frames:
+        scene.frame_set(frame)
+        visual[frame] = {n: pose[n].matrix.copy() for n in set(joints) | set(parents.values())}
+    for chain in chains:
+        control = pose[chain["target"]]
+        control[IK_FK] = 0.0
+        for frame in frames:
+            control.keyframe_insert(f'["{IK_FK}"]', frame=frame, group=chain["name"])
+    bones = arm.data.bones
+    for frame in frames:
+        scene.frame_set(frame)
+        seen = visual[frame]
+        for name in joints:
+            parent = parents.get(name)
+            frame_of = bones[name].matrix_local if parent is None else seen[parent] @ bones[parent].matrix_local.inverted() @ bones[name].matrix_local
+            pose[name].matrix_basis = frame_of.inverted() @ seen[name]
+            pose[name].keyframe_insert(_rotation_path(pose[name]), frame=frame, group=name)
+    scene.frame_set(original)
+    return frames
+
+
+def reset_pose(arm, data):
+    """Clears your pose on the game bones and the controls; Growth's own channels and the mechanism bones stay."""
+    from . import growth
+
+    bones = ((data or {}).get("growth") or {}).get("bones") or []
+    located = {b["name"] for b in bones if b.get("translation")}
+    scaled = {b["name"] for b in bones if b.get("scale")}
+    mechanism = {n for c in built(arm) for n in c["bones"] if n.startswith("mch_")}
+    for pose_bone in arm.pose.bones:
+        if pose_bone.name in mechanism:
+            continue
+        pose_bone.rotation_quaternion = (1.0, 0.0, 0.0, 0.0)
+        pose_bone.rotation_euler = (0.0, 0.0, 0.0)
+        pose_bone.rotation_axis_angle = (0.0, 0.0, 1.0, 0.0)
+        if pose_bone.name not in located:
+            pose_bone.location = (0.0, 0.0, 0.0)
+        if pose_bone.name not in scaled:
+            pose_bone.scale = (1.0, 1.0, 1.0)
+    growth.set_growth(arm, getattr(arm, "tyrant_growth", 1.0))

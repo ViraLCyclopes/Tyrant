@@ -3,7 +3,7 @@ import os
 
 import bpy
 
-from . import growth, ik, importer, listener, materials, meshops, panel, project, send, ui  # noqa: F401
+from . import growth, ik, ikpanel, importer, listener, materials, meshops, panel, project, send, ui  # noqa: F401
 
 _server = None
 
@@ -38,7 +38,7 @@ def _drain():
 
 def register():
     global _server
-    for cls in ui.CLASSES + panel.CLASSES:
+    for cls in ui.CLASSES + panel.CLASSES + ikpanel.CLASSES:
         bpy.utils.register_class(cls)
     bpy.types.Object.tyrant_growth = bpy.props.FloatProperty(
         name="Growth",
@@ -83,5 +83,5 @@ def unregister():
         _server = None
     del bpy.types.Object.tyrant_growth
     del bpy.types.Object.tyrant_sex
-    for cls in reversed(ui.CLASSES + panel.CLASSES):
+    for cls in reversed(ui.CLASSES + panel.CLASSES + ikpanel.CLASSES):
         bpy.utils.unregister_class(cls)
