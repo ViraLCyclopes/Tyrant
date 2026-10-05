@@ -31,6 +31,16 @@
     </ItemGroup>
     <Copy SourceFiles="@(PublishedDumperFiles)" DestinationFolder="$(PublishDir)dumper" SkipUnchangedFiles="true" />
   </Target>
+  <!-- Tyrant's Blender add-on, zipped as Blender's extension installer expects (manifest at the zip root). -->
+  <Target Name="ZipBlenderAddon" AfterTargets="Build">
+    <RemoveDir Directories="$(MSBuildThisFileDirectory)..\..\tools\blender\tyrant_blender\__pycache__" />
+    <MakeDir Directories="$(OutDir)blender" />
+    <ZipDirectory SourceDirectory="$(MSBuildThisFileDirectory)..\..\tools\blender\tyrant_blender"
+                  DestinationFile="$(OutDir)blender\tyrant_blender.zip" Overwrite="true" />
+  </Target>
+  <Target Name="PublishBlenderAddon" AfterTargets="Publish">
+    <Copy SourceFiles="$(OutDir)blender\tyrant_blender.zip" DestinationFolder="$(PublishDir)blender" SkipUnchangedFiles="true" />
+  </Target>
   <ItemGroup>
     <InternalsVisibleTo Include="Tyrant.Cli.Tests" />
   </ItemGroup>

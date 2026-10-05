@@ -14,6 +14,7 @@ const edits = [
   [resolve(studio, 'src-tauri', 'tauri.conf.json'), /("version":\s*")[^"]+(")/],
   [resolve(studio, 'src-tauri', 'Cargo.toml'), /(^version = ")[^"]+(")/m],
   [resolve(studio, '..', 'Directory.Build.props'), /(<Version>)[^<]+(<\/Version>)/],
+  [resolve(studio, '..', 'tools', 'blender', 'tyrant_blender', 'blender_manifest.toml'), /(^version = ")[^"]+(")/m],
 ];
 for (const [file, pattern] of edits) {
   const text = readFileSync(file, 'utf8');

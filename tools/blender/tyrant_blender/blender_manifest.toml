@@ -1,0 +1,15 @@
+schema_version = "1.0.0"
+
+id = "tyrant_blender"
+version = "0.1.0"
+name = "Tyrant"
+tagline = "Open Prehistoric Kingdom models from Tyrant and send them back"
+maintainer = "ViraLCyclopes"
+type = "add-on"
+blender_version_min = "5.0.0"
+license = ["SPDX:GPL-3.0-or-later"]
+website = "https://github.com/ViraLCyclopes/Tyrant"
+
+[permissions]
+network = "Listens on 127.0.0.1:8897 so Tyrant can ask this Blender to open a model"
+files = "Reads Tyrant projects and runs tyrant.exe to send models back"
