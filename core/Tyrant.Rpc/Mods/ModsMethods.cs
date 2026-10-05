@@ -307,28 +307,11 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
     /// <summary>The skin's own PNG for the slot, else the base skin's texture (written once to the preview cache). Infants use the male infant slots, then the adult ones.</summary>
     private string? MapFile(Workspace ws, GameInstall install, AssetIndex index, ModProject mod, Tyrant.Framework.Core.SkinEntry skin, VanillaSkin? based, string sex, string slot)
     {
-        var candidates = sex == "infant" ? new[] { "infant" + char.ToUpperInvariant(slot[0]) + slot[1..], slot } : [slot];
         // One sex only, as in the game (infants wear the male skin's infant slots).
-        IReadOnlyDictionary<string, string>?[] own = [sex == "female" ? skin.Female : skin.Male];
-        IReadOnlyDictionary<string, string>?[] vanilla = [sex == "female" ? based?.Female : based?.Male];
-        foreach (var candidate in candidates)
-        {
-            if (own.Select(d => d?.GetValueOrDefault(candidate)).FirstOrDefault(f => !string.IsNullOrEmpty(f)) is { } file
-                && OwnMapCopy(ws, mod, file) is { } copy)
-                return copy;
-            if (vanilla.Select(d => d?.GetValueOrDefault(candidate)).FirstOrDefault(g => !string.IsNullOrEmpty(g)) is { } textureGuid
-                && index.Assets.FirstOrDefault(a => a.Type == "Texture2D" && string.Equals(a.Guid, textureGuid, StringComparison.OrdinalIgnoreCase)) is { } texture)
-            {
-                var png = Path.Combine(PreviewsDir(ws, "skin-model"), $"{texture.Guid}.png");
-                if (!File.Exists(png))
-                {
-                    Directory.CreateDirectory(Path.GetDirectoryName(png)!);
-                    Options.AssetReader.WriteTexture(install, texture, png);
-                }
-                return png;
-            }
-        }
-        return null;
+        var source = SkinMaps.Source(skin, mod.Dir, based, slot, sex == "male" ? "male-only" : sex);
+        if (source is null) return null;
+        if (source.StartsWith("file:", StringComparison.Ordinal)) return OwnMapCopy(ws, mod, Path.GetRelativePath(mod.Dir, source[5..]));
+        return SkinMaps.Write(source, install, index, Options.AssetReader, Path.Combine(PreviewsDir(ws, "skin-model"), $"{source[5..]}.png"));
     }
 
     /// <summary>
@@ -412,13 +395,7 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
         }
     }
 
-    private static VanillaSkin? BaseSkin(IReadOnlyList<SpeciesSkins>? species, Tyrant.Framework.Core.SkinEntry skin)
-    {
-        var target = species?.FirstOrDefault(s => s.SpeciesId == skin.Species);
-        return target is null ? null
-            : int.TryParse(skin.Base, out var number) ? target.Skins.FirstOrDefault(v => v.Index == number)
-            : target.Skins.FirstOrDefault(v => string.Equals(v.Name, skin.Base, StringComparison.OrdinalIgnoreCase));
-    }
+    private static VanillaSkin? BaseSkin(IReadOnlyList<SpeciesSkins>? species, Tyrant.Framework.Core.SkinEntry skin) => SkinMaps.BaseOf(species, skin);
 
     private static IReadOnlyList<SpeciesSkins>? TrySpecies(Workspace ws)
     {
