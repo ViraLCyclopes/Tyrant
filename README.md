@@ -41,6 +41,14 @@ Tyrant works with **Blender 5.0 or newer** through its own Blender add-on.
 4. **Send to Tyrant** (same panel): only the Tyrant armature and the meshes with an Armature modifier on it go — a ported
    mesh counts once you add that modifier; reference meshes, physics boxes and other rigs stay out. The first send asks
    which mod and which model (species or a skin); Tyrant's report (errors, warnings, sizes) shows in the panel.
+   The panel lists what Send takes and why the rest stays, and stops with the fix in Blender words when something is
+   missing (no Armature modifier, weights on another skeleton, a missing growth key).
+5. **Textures:** paint or swap a texture in Blender and Send takes it too — only the ones you changed, unsaved painting
+   included. On a skin it becomes the skin's map for the sex shown; on a species model it replaces the game texture.
+6. **Ported models:** select your mesh and press **Use game material** in the Tyrant panel: your Base Color, Normal and
+   Roughness become the game's material (the baby uses the same images; pattern and fur masks start blank). The game gives
+   an animal one texture set, so bake several materials onto one first. Weights and growth keys are yours to make in
+   Blender.
 
 Each model opens as **its own scene in the file you have open** (e.g. *Tyrant · my-mod · Allosaurus Anax Red*); your other
 scenes and objects are never touched, and saving the file is up to you. **Open in Blender** again switches back to that

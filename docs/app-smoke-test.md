@@ -165,6 +165,15 @@ Release build: `npm run build:app`, install `studio/src-tauri/target/release/bun
     mesh into that scene (Object → Link/Transfer Data → Link Objects to Scene, or Append), give it an Armature
     modifier on the Tyrant armature, **Send to Tyrant**: only the Tyrant rig and its meshes went (no physics boxes, no
     airlift straps); the report names any bones it dropped.
+82. **Painted texture.** Open a skin of a mod in Blender, Texture Paint a stripe on the body (do not save the image), Send.
+    The panel says `Images: diffuse (skin maps (male))`; the skin page in Tyrant shows the stripe; in game the skin has it.
+83. **Nothing changed.** Send again without painting: no `Images:` line.
+84. **Use game material.** Import a ported mesh with its own Principled material into the Tyrant scene, add an Armature
+    modifier on the Tyrant rig, select it and press **Use game material**: it shows the skin's colours and the note box
+    lists what was plugged in. Send without removing Tyrant's own mesh: Send stops with "one texture set… remove the mesh
+    you replace".
+85. **Checks.** Remove the ported mesh's Armature modifier: the panel lists it under "not deformed by the Tyrant rig" and
+    Send says how to add the modifier.
 
 **Shell (tabs, log, preferences):**
 

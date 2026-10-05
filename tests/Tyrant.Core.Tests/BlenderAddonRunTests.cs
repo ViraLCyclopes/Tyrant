@@ -160,4 +160,32 @@ public class BlenderAddonRunTests
         Assert.True(run.ExitCode == 0, run.Output);
         Assert.Matches(@"TYRANT-TESTS ran [1-9]", run.Output);
     }
+
+    [SkippableFact]
+    public void A_texture_painted_in_blender_reaches_the_skins_maps()
+    {
+        Skip.If(BlenderIntegrationTests.Blender() is null, "Blender 5.x not found");
+        var (projectFile, prefab, ws, install, game) = Fixture();
+        using var _ = game;
+        var glb = Path.Combine(Path.GetDirectoryName(projectFile)!, "send.glb");
+
+        var run = RunPython("paintsend.py", projectFile, glb);
+        Assert.True(run.ExitCode == 0, run.Output);
+        var line = run.Output.Split('\n').Single(l => l.StartsWith("PAINTSEND ", StringComparison.Ordinal))["PAINTSEND ".Length..];
+        var images = System.Text.Json.JsonSerializer.Deserialize<string[][]>(line)!.Select(p => new BlenderImage(p[0], p[1])).ToList();
+        Assert.Equal(["diffuse"], images.Select(i => i.Slot));
+
+        var reader = new FakeAssetReader { PrefabModelToReturn = prefab, RealPngs = true };
+        var index = new AssetIndex { Assets = [.. SkinDumps.Textures, SkinDumps.Prefab] };
+        var species = SpeciesSkinsReader.Load(ws);
+        var mod = ModProject.Create(ws, "painted", "Painted", null);
+        var skin = mod.AddSkin(ws, install, index, reader, species, "Carcharodontosaurus", "Red", "1", new SkinTemplateOptions(true, false, false));
+
+        var sent = BlenderService.Send(ws, install, index, species, reader, projectFile, glb,
+            new BlenderDestination("painted", "Carcharodontosaurus", skin.Id), null, images, "male");
+
+        Assert.True(sent.Ok, string.Join(" | ", sent.Errors));
+        Assert.Equal(["diffuse"], sent.Images);
+        Assert.True(ModProject.Open(ws, "painted").Skin(skin.Id).Male!.ContainsKey("diffuse"));
+    }
 }
