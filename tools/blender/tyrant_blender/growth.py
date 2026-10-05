@@ -124,21 +124,25 @@ def set_growth(armature, value, scene_objects=None):
             if node is not None:
                 node.outputs[0].default_value = maturity
 
+    from . import ik  # late: ik uses growth too
+
     rest = {r["name"]: r for r in (data or {}).get("rest", [])}
-    bases = {}
+    opened = ik.open_pose(armature)
+    channels = {}
     for bone in growth.get("bones") or []:
         pose_bone = armature.pose.bones.get(bone["name"])
         if pose_bone is None or bone["name"] not in rest:
             continue
-        basis = Matrix.Identity(4) if value >= 1.0 else _basis(rest[bone["name"]], bone, value)
-        bases[bone["name"]] = basis
+        # The growth change is relative to the prefab's transforms, which the model opens posed in: applied on top of that
+        # pose, it lands where the game puts the bone even when the bind pose differs.
+        change = Matrix.Identity(4) if value >= 1.0 else _basis(rest[bone["name"]], bone, value)
+        basis = opened.get(bone["name"], Matrix.Identity(4)) @ change
         # Only the channels the game's growth owns: rotations are yours (poses, IK, animation).
         location, _rotation, scale = basis.decompose()
         if bone.get("translation"):
             pose_bone.location = location
         if bone.get("scale"):
             pose_bone.scale = scale
+        channels[bone["name"]] = (location if bone.get("translation") else None, scale if bone.get("scale") else None)
     armature["tyrant_growth_shown"] = value
-    from . import ik  # late: ik uses growth too
-
-    ik.follow_growth(armature, bases)
+    ik.follow_growth(armature, channels)

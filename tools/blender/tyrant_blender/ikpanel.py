@@ -113,13 +113,13 @@ class TYRANT_OT_ik_bake(_IkOperator):
 
 
 class TYRANT_OT_ik_reset_pose(_IkOperator):
-    """Clear the pose of every bone and control (Growth stays)"""
+    """Put every bone back as the model opened and clear the controls (Growth stays)"""
 
     bl_idname = "tyrant.ik_reset_pose"
     bl_label = "Reset pose"
 
     def run(self, context, armature):
-        ik.reset_pose(armature, _data(armature))
+        ik.reset_pose(armature)
         return None
 
 

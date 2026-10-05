@@ -6,7 +6,8 @@ namespace Tyrant.Core.Tests;
 /// <summary>
 /// A small two-legged animal with a neck, in Unity space with identity rotations, and the game's FABRIK chains on it: the
 /// left leg has a forward force on its knee (relative to Hip), the right leg none, the head matches its target's rotation.
-/// "Hip" is a SkinDumps growth bone (baby 0.2 lower), so Growth moves the chains.
+/// "Hip" is a SkinDumps growth bone (baby 0.2 lower), so Growth moves the chains. The femurs' bind pose differs from the
+/// prefab's pose, as on real game rigs.
 /// </summary>
 public static class IkFixture
 {
@@ -36,11 +37,21 @@ public static class IkFixture
         var left = Leg("L", 0.3f);
         var right = Leg("R", -0.3f);
         var spine = Node("Spine", new Vector3(0, 0.1f, 0.4f), hip);
-        var neck = Node("Neck", new Vector3(0, 0.3f, 0.3f), spine);
+        // The prefab's own transforms carry tiny non-uniform scales (Carcharodontosaurus' Neck.003: 1.0001, 0.9977, 1.0022)
+        // that the bind pose has not: Blender's IK cannot follow them, so Tyrant clears them on open.
+        var neck = new SkeletonNode("Neck", new Vector3(0, 0.3f, 0.3f), Quaternion.Identity, new Vector3(1.002f, 0.997f, 1.002f), spine);
+        spine.Children.Add(neck);
         var head = Node("Head", new Vector3(0, 0.2f, 0.3f), neck);
 
         SkeletonNode[] bones = [main, hip, left.Femur, left.Calve, left.Foot, left.Heel, right.Femur, right.Calve, right.Foot, right.Heel, spine, neck, head];
-        Matrix4x4[] binds = [.. bones.Select(b => Matrix4x4.Invert(World(b), out var inv) ? inv : Matrix4x4.Identity)];
+        // As in the game, the prefab's pose is not the bind pose: the hip and the femurs are bound turned (about 10-20 degrees),
+        // so Blender opens the legs posed (the controls must be built from the pose shown, not from the rest pose).
+        Matrix4x4 BindLocal(SkeletonNode n) =>
+            (n == left.Femur || n == right.Femur ? Matrix4x4.CreateRotationZ(0.3f) * Matrix4x4.CreateRotationX(0.35f)
+                : n == hip ? Matrix4x4.CreateRotationY(0.25f) * Matrix4x4.CreateRotationX(0.15f) : Matrix4x4.Identity)
+            * Matrix4x4.CreateScale(n == neck ? Vector3.One : n.LocalScale) * Matrix4x4.CreateFromQuaternion(n.LocalRotation) * Matrix4x4.CreateTranslation(n.LocalPosition);
+        Matrix4x4 BindWorld(SkeletonNode n) => n.Parent is null ? Matrix4x4.Identity : BindLocal(n) * BindWorld(n.Parent);
+        Matrix4x4[] binds = [.. bones.Select(b => Matrix4x4.Invert(BindWorld(b), out var inv) ? inv : Matrix4x4.Identity)];
         var renderer = new RendererModel("Quad_LOD0", ModelFixture.SplitQuad(binds), bones, root)
         {
             Materials = [new MaterialModel("Carch", [new TextureSlot("_AdultDiffuse", null, 1), new TextureSlot("_AdultPatternMask", null, 4)])],

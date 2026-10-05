@@ -20,6 +20,13 @@ public sealed class SpeciesIkCommand : Command<SpeciesIkCommand.Settings>
         public bool Json { get; set; }
     }
 
+    /// <summary>One chain as a line: plain ASCII, since the CLI writes in the console's own code page.</summary>
+    public static string Describe(BlenderIkChain chain)
+    {
+        var pole = BlenderIkReader.PoleFrom(chain) is { } from ? $", pole from {from}" : "";
+        return $"  {chain.Name,-14} {string.Join(" -> ", chain.Joints.Select(j => j.Name))}{pole}";
+    }
+
     public override int Execute(CommandContext context, Settings settings)
     {
         var (ws, install) = CliServices.OpenWorkspace(settings);
@@ -36,12 +43,8 @@ public sealed class SpeciesIkCommand : Command<SpeciesIkCommand.Settings>
             Console.WriteLine($"{species.DisplayName} has no IK chains in the game.");
             return ExitCodes.Ok;
         }
-        foreach (var chain in chains)
-        {
-            var pole = BlenderIkReader.PoleFrom(chain) is { } from ? $", pole from {from}" : "";
-            Console.WriteLine($"  {chain.Name,-14} {string.Join(" → ", chain.Joints.Select(j => j.Name))}{pole}");
-        }
-        Console.WriteLine($"{chains.Count} chain(s). Open in Blender builds them as IK controls (app: Open in Blender → Options → IK controls; " +
+        foreach (var chain in chains) Console.WriteLine(Describe(chain));
+        Console.WriteLine($"{chains.Count} chain(s). Open in Blender builds them as IK controls (app: Open in Blender > Options > IK controls; " +
                           "'tyrant blender open' builds them unless --no-ik). Blender's IK is close to the game's, not identical.");
         return ExitCodes.Ok;
     }

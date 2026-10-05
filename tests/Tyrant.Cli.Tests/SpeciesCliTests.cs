@@ -80,4 +80,17 @@ public class SpeciesCliTests
         Assert.Equal(ExitCodes.Error, code);
         Assert.Contains("ASSET_NOT_FOUND", err);
     }
+
+    [Fact]
+    public void Species_ik_lines_are_plain_ascii_for_any_console()
+    {
+        var chain = new Tyrant.Core.Blender.BlenderIkChain("Leg L", "limb", "L", false,
+            [new("Femur.L", 0.5f), new("Calve.L", 0.4f), new("Heel.L", 0f)], 1f, [0f, 0f, 0f],
+            [new("Calve.L", "Pelvis", [0f, 0f, 1f], 0.4f)], false, new("ctrl_foot.L", "ctrl_knee.L", null));
+
+        var line = Tyrant.Cli.Commands.SpeciesIkCommand.Describe(chain);
+
+        Assert.Contains("Femur.L -> Calve.L -> Heel.L, pole from Pelvis", line);
+        Assert.All(line, c => Assert.True(c < 128, $"non-ASCII '{c}' in: {line}"));
+    }
 }

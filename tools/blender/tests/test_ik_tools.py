@@ -104,16 +104,18 @@ class IkToolTests(unittest.TestCase):
         with self.assertRaisesRegex(ik.IkError, "No chain is on IK"):
             ik.bake(arm, bpy.context.scene, frame_range=False)
 
-    def test_reset_pose_clears_the_pose_and_keeps_growth(self):
-        arm, path = open_ik()
+    def test_reset_pose_goes_back_to_the_opened_pose_and_keeps_growth(self):
+        arm, _ = open_ik()
+        opened = arm.pose.bones["Femur.L"].rotation_quaternion.copy()  # the fixture opens with its femurs posed
         arm.tyrant_growth = 0.5
         hip = arm.pose.bones["Hip"].location.copy()  # Growth's own channel
-        arm.pose.bones["Calve.L"].rotation_quaternion = Quaternion((1, 0, 0), math.radians(20))
+        arm.pose.bones["Femur.L"].rotation_quaternion = Quaternion((1, 0, 0), math.radians(20))
         move(arm, "ctrl_foot.L", (0.0, 0.1, 0.1))
 
-        ik.reset_pose(arm, project.load(path))
+        ik.reset_pose(arm)
 
-        self.assertLess(arm.pose.bones["Calve.L"].rotation_quaternion.rotation_difference(Quaternion()).angle, 1e-6)
+        self.assertLess(arm.pose.bones["Femur.L"].rotation_quaternion.rotation_difference(opened).angle, 1e-6)
+        self.assertGreater(opened.angle, 0.01)
         self.assertLess(arm.pose.bones["ctrl_foot.L"].location.length, 1e-6)
         self.assertLess((arm.pose.bones["Hip"].location - hip).length, 1e-6)
         self.assertAlmostEqual(arm.tyrant_growth, 0.5)

@@ -158,6 +158,36 @@ class IkBuildTests(unittest.TestCase):
         self.assertIn("ctrl_head", names)
         self.assertNotIn("ctrl_foot.R", names)
 
+    def test_a_tip_on_its_joint_uses_the_joint_before(self):
+        """Stegosaurus' hands: the game's last joint sits on the one before it, the end offset gives the reach."""
+        arm, path = open_ik(controls=False)
+        bpy.context.view_layer.objects.active = arm
+        bpy.ops.object.mode_set(mode="EDIT")
+        heel = arm.data.edit_bones["Heel.R"]
+        tip = arm.data.edit_bones.new("Tip.R")
+        tip.head, tip.tail, tip.parent = heel.head.copy(), heel.head + Vector((0.0, 0.0, 0.1)), heel
+        bpy.ops.object.mode_set(mode="OBJECT")
+        data = project.load(path)
+        data["ik"]["chains"][1]["joints"].append({"name": "Tip.R", "length": 0.0})
+        before = game_pose(arm)
+
+        reasons = ik.add_controls(arm, data)
+
+        self.assertEqual(reasons, [])
+        leg = next(c for c in ik.built(arm) if c["name"] == "Leg R")
+        self.assertEqual(leg["joints"][-1], "Heel.R")
+        self.assertLess(max_change(before, game_pose(arm)), 1e-4)
+        move(arm, "ctrl_foot.R", (0.0, -0.1, 0.15))
+        self.assertLess((head_of(arm, "Heel.R") - head_of(arm, "mch_tip_foot.R")).length, 1e-3)
+
+    def test_the_fixture_opens_posed_like_a_game_rig(self):
+        arm, _ = open_ik(controls=False)
+        self.assertGreater(arm.pose.bones["Femur.L"].matrix_basis.to_quaternion().angle, 0.2)
+
+    def test_the_prefabs_tiny_scales_are_cleared_on_open(self):
+        arm, _ = open_ik(controls=False)
+        self.assertLess((arm.pose.bones["Neck"].scale - Vector((1.0, 1.0, 1.0))).length, 1e-6)
+
     def test_adding_twice_or_without_chains_is_refused(self):
         arm, path = open_ik()
         with self.assertRaisesRegex(ik.IkError, "Already has IK controls"):

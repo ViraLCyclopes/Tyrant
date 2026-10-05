@@ -4,9 +4,12 @@ control and a knee (elbow) pole per leg, a head control and an aim target for th
 poses are close to the game's, not identical.
 
 Per chain, e.g. the left foot: mch_grow_foot.L (follows Growth) → ctrl_foot.L (yours, flat on the ground contact point) →
-mch_tip_foot.L (the chain's last joint as it rests: the IK target, and the joint copies its rotation). mch_end_foot.L, a child
-of the joint before the last, reaches from that joint to the last one and carries the IK constraint: Blender's IK reaches
-with a bone's tail, and the game's bones do not point at their child.
+mch_tip_foot.L (the chain's last joint as it stands: the IK target, and the joint copies its rotation). mch_end_foot.L, a
+child of the joint before the last, reaches from that joint to the last one and carries the IK constraint: Blender's IK
+reaches with a bone's tail, and the game's bones do not point at their child.
+
+Everything is built from the pose shown when the controls are added (a game model opens in its prefab's pose, not its bind
+pose), so adding them moves nothing; Growth then moves the controls by how far the chain ends move from that pose.
 """
 import json
 import math
@@ -16,6 +19,8 @@ from mathutils import Matrix, Vector
 
 TAG = "tyrant_ik"  # armature: JSON list of the chains built
 SKIPPED = "tyrant_ik_skipped"  # armature: JSON list of the chains left out, with why
+REFERENCE = "tyrant_ik_reference"  # armature: the pose bases (at Growth 1) the controls were built from
+OPEN_POSE = "tyrant_open_pose"  # armature: the pose bases the model opened with (Reset pose goes back to them)
 BONE_TAG = "tyrant_ik"  # bone: one of Tyrant's IK bones
 CONTROLS = "Tyrant IK"
 MECHANISM = "Tyrant IK (mechanism)"
@@ -23,6 +28,7 @@ PREFIX = "Tyrant "  # constraint names
 IK_FK = "ik_fk"
 AIM = "aim"
 FORWARD = Vector((0.0, -1.0, 0.0))  # animals face -Y in Blender (Unity +Z → glTF +Z → Blender -Y)
+UP = Matrix.Rotation(math.pi / 2, 4, "X")  # a bone pointing up (+Z): flat custom shapes lie on the ground
 PALETTES = {"L": "THEME04", "R": "THEME01"}  # blue, red; heads yellow
 TRACK_AXES = ("TRACK_X", "TRACK_NEGATIVE_X", "TRACK_Y", "TRACK_NEGATIVE_Y", "TRACK_Z", "TRACK_NEGATIVE_Z")
 
@@ -51,26 +57,62 @@ def refresh(arm):
     bpy.context.view_layer.update()
 
 
-# --- where the bones go (armature space, from the rest pose) ---------------------------------------------------------------
+def flat(matrix):
+    return [v for row in matrix for v in row]
 
-def _point(arm, joint, local):
-    """A point given in a joint's own frame (glTF), in armature space: the importer keeps each bone's axes as the node's."""
-    return arm.data.bones[joint].matrix_local @ Vector(local)
 
+def unflat(values):
+    return Matrix([values[0:4], values[4:8], values[8:12], values[12:16]])
+
+
+def _matrices(arm, key):
+    try:
+        return {name: unflat(values) for name, values in json.loads(arm.get(key) or "{}").items()}
+    except (ValueError, TypeError, IndexError):
+        return {}
+
+
+def posed(basis):
+    location, rotation, scale = basis.decompose()
+    return rotation.angle > 1e-6 or location.length > 1e-6 or (scale - Vector((1.0, 1.0, 1.0))).length > 1e-6
+
+
+def clear_scale_noise(arm, names=None):
+    """The prefab's own transforms carry tiny non-uniform scales (under 1%) that Blender's IK cannot follow: they go."""
+    for pose_bone in arm.pose.bones:
+        if names is not None and pose_bone.name not in names:
+            continue
+        off = [abs(v - 1.0) for v in pose_bone.scale]
+        if max(off) < 0.01 and max(off) > 1e-7:
+            pose_bone.scale = (1.0, 1.0, 1.0)
+
+
+def remember_open_pose(arm):
+    """Called on import: clears the scale noise, then keeps the pose the model opens with (the prefab's) for Reset pose
+    and Growth."""
+    clear_scale_noise(arm)
+    arm[OPEN_POSE] = json.dumps({b.name: flat(b.matrix_basis) for b in arm.pose.bones if posed(b.matrix_basis)})
+
+
+def open_pose(arm):
+    """Bone name → its basis as the model opened (missing = the rest pose)."""
+    return _matrices(arm, OPEN_POSE)
+
+
+# --- where the bones go (armature space, in the pose shown) -----------------------------------------------------------------
 
 def _off_line(vector, line):
     return vector - line * vector.dot(line)
 
 
-def _pole_point(arm, chain, joints, length):
-    """In front of the knee (elbow): the game's pull on it, else the way the leg bends at rest, else forward."""
-    bones = arm.data.bones
-    root, knee, tip = (bones[n].head_local for n in (joints[0], joints[1], joints[-1]))
+def _pole_point(chain, joints, length, pose):
+    """In front of the knee (elbow): the game's pull on it, else the way the leg bends now, else forward."""
+    root, knee, tip = (pose[n].translation for n in (joints[0], joints[1], joints[-1]))
     line = (tip - root).normalized() if (tip - root).length > 1e-6 else Vector((0.0, 0.0, -1.0))
     pull = Vector()
     for force in chain.get("forces") or []:
-        if force["joint"] == joints[1] and force["bone"] in bones:
-            pull += (bones[force["bone"]].matrix_local.to_3x3() @ Vector(force["direction"])) * float(force["strength"])
+        if force["joint"] == joints[1] and force["bone"] in pose:
+            pull += (pose[force["bone"]].to_3x3() @ Vector(force["direction"])).normalized() * float(force["strength"])
     direction = _off_line(pull, line)
     if direction.length < 1e-4:
         direction = _off_line(knee - root, line)
@@ -79,34 +121,37 @@ def _pole_point(arm, chain, joints, length):
     return knee + direction.normalized() * length
 
 
-def _look_point(arm, joints):
-    """A few neck lengths along the Head bone's axis that points most forward, and that axis for the Damped Track."""
-    head = arm.data.bones[joints[-1]]
-    m = head.matrix_local.to_3x3()
+def _look_point(joints, pose):
+    """A few neck lengths along the head bone's axis that points most forward, and that axis for the Damped Track."""
+    m = pose[joints[-1]].to_3x3()
     axes = (m.col[0], -m.col[0], m.col[1], -m.col[1], m.col[2], -m.col[2])
     best = max(range(6), key=lambda i: axes[i].normalized().dot(FORWARD))
-    neck = (head.head_local - arm.data.bones[joints[-2]].head_local).length
-    return head.head_local + axes[best].normalized() * max(3.0 * neck, 0.5), TRACK_AXES[best]
+    head = pose[joints[-1]].translation
+    neck = (head - pose[joints[-2]].translation).length
+    return head + axes[best].normalized() * max(3.0 * neck, 0.5), TRACK_AXES[best]
 
 
-def _plan(arm, chain):
+def _plan(arm, chain, pose):
     """Where one chain's bones go, or why it is skipped."""
     bones = arm.data.bones
     joints = [j["name"] for j in chain["joints"]]
     missing = next((n for n in joints if n not in bones), None)
     if missing:
         return None, f"{chain['name']} skipped: no bone '{missing}'"
+    game_tip = joints[-1]
+    # The game's last joint may sit on the one before it (Stegosaurus' hands, the end offset gives the reach): the joint
+    # before carries the end then.
+    while len(joints) > 2 and (pose[joints[-1]].translation - pose[joints[-2]].translation).length < 1e-5:
+        joints = joints[:-1]
     if len(joints) < 3:
         return None, f"{chain['name']} skipped: it has only {len(joints)} joints"
-    if (bones[joints[-1]].head_local - bones[joints[-2]].head_local).length < 1e-5:
-        return None, f"{chain['name']} skipped: '{joints[-1]}' sits on '{joints[-2]}'"
-    length = sum((bones[a].head_local - bones[b].head_local).length for a, b in zip(joints, joints[1:]))
+    length = sum((pose[a].translation - pose[b].translation).length for a, b in zip(joints, joints[1:]))
     plan = {"chain": chain, "joints": joints, "length": length, "size": max(length * 0.15, 0.05),
-            "anchor": _point(arm, joints[-1], chain["endOffset"])}
+            "anchor": pose[game_tip] @ Vector(chain["endOffset"])}
     if chain["kind"] == "limb" and chain["controls"].get("pole"):
-        plan["pole"] = _pole_point(arm, chain, joints, length)
+        plan["pole"] = _pole_point(chain, joints, length, pose)
     if chain["kind"] == "head" and chain["controls"].get("look"):
-        plan["look"], plan["track"] = _look_point(arm, joints)
+        plan["look"], plan["track"] = _look_point(joints, pose)
     return plan, None
 
 
@@ -137,38 +182,49 @@ def _shape(kind):
     return bpy.data.objects.new(name, mesh)
 
 
-def _new(arm, name, head, tail, parent, roll=0.0):
+def _new(arm, name, parent, to_rest, shown, length):
+    """A bone that shows as `shown` (armature space) while its parent is posed as now; to_rest maps the pose shown into the
+    bone's rest space (its parent's rest @ the parent's pose⁻¹)."""
     bone = arm.data.edit_bones.new(name)
-    bone.head, bone.tail, bone.roll = head, tail, roll
+    head = shown.translation
+    bone.head = to_rest @ head
+    bone.tail = to_rest @ (head + shown.col[1].xyz.normalized() * length)
+    bone.align_roll(to_rest.to_3x3() @ shown.col[2].xyz.normalized())
     bone.parent = parent
     bone.use_deform = False
     bone[BONE_TAG] = True
     return bone
 
 
-def _edit_bones(arm, plan, root):
-    """Creates one chain's bones (edit mode); returns their names by role."""
+def _edit_bones(arm, plan, root, rest, pose):
+    """Creates one chain's bones (edit mode); returns their names by role and the matrices they show (armature space)."""
     edit = arm.data.edit_bones
-    chain, joints = plan["chain"], plan["joints"]
-    up = Vector((0.0, 0.0, plan["size"]))
-    made = {}
+    chain, joints, size = plan["chain"], plan["joints"], plan["size"]
+    # Every bone of ours hangs from the root, directly or through ours (which are not posed): one map into rest space.
+    root_map = rest[root] @ pose[root].inverted()
+    made, shown = {}, {}
 
-    def control(key, grow_key, name, at, scale=1.0):
+    def control(key, grow_key, name, at, length):
         stem = name[len("ctrl_"):] if name.startswith("ctrl_") else name
-        grow = _new(arm, f"mch_grow_{stem}", at, at + up * scale, edit[root])
-        bone = _new(arm, name, at, at + up * scale, grow)
+        matrix = Matrix.Translation(at) @ UP
+        grow = _new(arm, f"mch_grow_{stem}", edit[root], root_map, matrix, length)
+        bone = _new(arm, name, grow, root_map, matrix, length)
         made[key], made[grow_key] = bone.name, grow.name
+        shown[key] = shown[grow_key] = matrix
         return bone, stem
 
-    target, stem = control("target", "grow", chain["controls"]["target"], plan["anchor"])
-    last, before = edit[joints[-1]], edit[joints[-2]]
-    made["tip"] = _new(arm, f"mch_tip_{stem}", last.head.copy(), last.tail.copy(), target, last.roll).name
-    made["end"] = _new(arm, f"mch_end_{stem}", before.head.copy(), last.head.copy(), before).name
+    target, stem = control("target", "grow", chain["controls"]["target"], plan["anchor"], size)
+    tip = Matrix.LocRotScale(pose[joints[-1]].translation, pose[joints[-1]].to_quaternion(), None)
+    made["tip"] = _new(arm, f"mch_tip_{stem}", target, root_map, tip, max(edit[joints[-1]].length, 0.01)).name
+    shown["tip"] = tip
+    start, end = pose[joints[-2]].translation, pose[joints[-1]].translation
+    helper = Matrix.Translation(start) @ (end - start).to_track_quat("Y", "Z").to_matrix().to_4x4()
+    made["end"] = _new(arm, f"mch_end_{stem}", edit[joints[-2]], rest[joints[-2]] @ pose[joints[-2]].inverted(), helper, (end - start).length).name
     if "pole" in plan:
-        control("pole", "pole_grow", chain["controls"]["pole"], plan["pole"], 0.5)
+        control("pole", "pole_grow", chain["controls"]["pole"], plan["pole"], size * 0.5)
     if "look" in plan:
-        control("look", "look_grow", chain["controls"]["look"], plan["look"], 0.5)
-    return made
+        control("look", "look_grow", chain["controls"]["look"], plan["look"], size * 0.5)
+    return made, shown
 
 
 def _drive(arm, constraint, bone, key, scale):
@@ -184,15 +240,14 @@ def _drive(arm, constraint, bone, key, scale):
     driver.expression = "v" if abs(scale - 1.0) < 1e-6 else f"v * {scale:.6g}"
 
 
-def _solve_pole_angle(ik_constraint, arm, joints):
-    """The pole angle that leaves the chain where it rests. Blender's rule depends on where each bone's tail points, which
-    the game's bones do not follow, so it is found by trying: a 5° scan, then a golden-section search."""
-    rest = {n: arm.data.bones[n].matrix_local.copy() for n in joints}
+def _solve_pole_angle(ik_constraint, arm, joints, pose):
+    """The pole angle that leaves the chain as it stands. Blender's rule depends on where each bone's tail points and on
+    the pose above the chain, so it is found by trying: a 5° scan, then a golden-section search."""
 
     def drift(angle):
         ik_constraint.pole_angle = angle
         bpy.context.view_layer.update()
-        return max(abs(a - b) for n in joints for ra, rb in zip(arm.pose.bones[n].matrix, rest[n]) for a, b in zip(ra, rb))
+        return max(abs(a - b) for n in joints for ra, rb in zip(arm.pose.bones[n].matrix, pose[n]) for a, b in zip(ra, rb))
 
     best = min(range(-180, 180, 5), key=lambda d: drift(math.radians(d)))
     lo, hi = math.radians(best - 5), math.radians(best + 5)
@@ -206,14 +261,14 @@ def _solve_pole_angle(ik_constraint, arm, joints):
     ik_constraint.pole_angle = (lo + hi) / 2
 
 
-def _pose_setup(arm, plan, made):
-    pose = arm.pose.bones
+def _pose_setup(arm, plan, made, pose):
+    bones = arm.pose.bones
     chain, joints = plan["chain"], plan["joints"]
-    ctrl = pose[made["target"]]
+    ctrl = bones[made["target"]]
     ctrl[IK_FK] = 1.0
     ctrl.id_properties_ui(IK_FK).update(min=0.0, max=1.0, soft_min=0.0, soft_max=1.0,
                                         description="1: the control moves the chain (IK). 0: rotate the bones yourself (FK)")
-    end = pose[made["end"]]
+    end = bones[made["end"]]
     end.lock_ik_x = end.lock_ik_y = end.lock_ik_z = True  # rides on its joint; only the joints above it turn
     solver = end.constraints.new("IK")
     solver.name = PREFIX + "IK"
@@ -223,9 +278,9 @@ def _pose_setup(arm, plan, made):
     _drive(arm, solver, made["target"], IK_FK, float(chain.get("influence", 1.0)))
     if made.get("pole"):
         solver.pole_target, solver.pole_subtarget = arm, made["pole"]
-        _solve_pole_angle(solver, arm, joints[:-1])
+        _solve_pole_angle(solver, arm, joints[:-1], pose)
     if chain["kind"] == "limb" or chain.get("matchHeadRotation"):
-        rotation = pose[joints[-1]].constraints.new("COPY_ROTATION")
+        rotation = bones[joints[-1]].constraints.new("COPY_ROTATION")
         rotation.name = PREFIX + "rotation"
         rotation.target, rotation.subtarget = arm, made["tip"]
         _drive(arm, rotation, made["target"], IK_FK, 1.0)
@@ -233,7 +288,7 @@ def _pose_setup(arm, plan, made):
         ctrl[AIM] = 0.0
         ctrl.id_properties_ui(AIM).update(min=0.0, max=1.0, soft_min=0.0, soft_max=1.0,
                                           description="How much the head turns toward its aim target (ctrl_look)")
-        aim = pose[joints[-1]].constraints.new("DAMPED_TRACK")
+        aim = bones[joints[-1]].constraints.new("DAMPED_TRACK")
         aim.name = PREFIX + "aim"
         aim.target, aim.subtarget = arm, made["look"]
         aim.track_axis = plan["track"]
@@ -262,14 +317,17 @@ def _style(arm, plan, made):
             bone.hide = True
 
 
-def _root(arm, joints):
-    bone = arm.data.bones[joints[0]]
-    while bone.parent is not None:
-        bone = bone.parent
-    return bone.name
+def _ancestors(arm, names):
+    out = set()
+    for name in names:
+        bone = arm.data.bones[name]
+        while bone is not None and bone.name not in out:
+            out.add(bone.name)
+            bone = bone.parent
+    return out
 
 
-def _record(plan, made):
+def _record(plan, made, shown, pose):
     joints = plan["joints"]
     follow = [[made["grow"], joints[-1]]]
     if made.get("pole"):
@@ -277,19 +335,18 @@ def _record(plan, made):
     if made.get("look"):
         follow.append([made["look_grow"], joints[-1]])
     chain = plan["chain"]
+    # The matrices the controls showed and the joints they hang from, when built: Snap keeps those relations.
+    shapes = {key: flat(shown[key]) for key in ("target", "pole", "look") if key in shown}
+    shapes["tipJoint"] = flat(pose[joints[-1]])
+    shapes["knee"] = flat(pose[joints[1]])
     return {"name": chain["name"], "kind": chain["kind"], "side": chain.get("side"), "joints": joints,
             "target": made["target"], "pole": made.get("pole"), "look": made.get("look"), "tip": made["tip"], "end": made["end"],
-            "bones": list(made.values()), "follow": follow}
-
-
-def _posed(basis):
-    location, rotation, scale = basis.decompose()
-    return rotation.angle > 1e-6 or location.length > 1e-6 or (scale - Vector((1.0, 1.0, 1.0))).length > 1e-6
+            "bones": list(made.values()), "follow": follow, "shown": shapes}
 
 
 def add_controls(arm, data):
     """Builds the controls of every chain in the project's "ik" that fits this armature and returns the skipped chains'
-    reasons. Built from the rest pose at Growth 1; the pose and Growth are put back after, so no bone moves."""
+    reasons. Built from the pose shown (at Growth 1, which is put back after), so no bone moves."""
     from . import growth
 
     if built(arm):
@@ -300,41 +357,45 @@ def add_controls(arm, data):
     view_layer = bpy.context.view_layer
     if view_layer.objects.get(arm.name) is None:
         raise IkError(f"{arm.name} is in a collection excluded from the view layer; tick it in the Outliner first.")
+
+    shown_growth = getattr(arm, "tyrant_growth", 1.0)
+    growth.set_growth(arm, 1.0)
+    named = [j["name"] for c in chains for j in c["joints"] if j["name"] in arm.data.bones]
+    clear_scale_noise(arm, _ancestors(arm, named))
+    view_layer.update()
+    pose = {b.name: b.matrix.copy() for b in arm.pose.bones}
+    rest = {b.name: b.matrix_local.copy() for b in arm.data.bones}
     plans, reasons = [], []
     for chain in chains:
-        plan, why = _plan(arm, chain)
+        plan, why = _plan(arm, chain, pose)
         if why:
             reasons.append(why)
         else:
             plans.append(plan)
     if not plans:
+        growth.set_growth(arm, shown_growth)
         raise IkError("No IK chain fits this armature: " + "; ".join(reasons))
+    reference = {n: flat(arm.pose.bones[n].matrix_basis) for n in _ancestors(arm, {j for p in plans for j in p["joints"]})}
 
-    shown = getattr(arm, "tyrant_growth", 1.0)
-    pose = {b.name: b.matrix_basis.copy() for b in arm.pose.bones}
-    growth.set_growth(arm, 1.0)
-    for pose_bone in arm.pose.bones:
-        pose_bone.matrix_basis = Matrix.Identity(4)
     active, mode = view_layer.objects.active, arm.mode
     if bpy.context.mode != "OBJECT":
         bpy.ops.object.mode_set(mode="OBJECT")
     view_layer.objects.active = arm
-    root = _root(arm, plans[0]["joints"])
+    root = arm.data.bones[plans[0]["joints"][0]]
+    while root.parent is not None:
+        root = root.parent
     bpy.ops.object.mode_set(mode="EDIT")
     try:
-        made = [_edit_bones(arm, plan, root) for plan in plans]
+        made = [_edit_bones(arm, plan, root.name, rest, pose) for plan in plans]
     finally:
         bpy.ops.object.mode_set(mode="OBJECT")
-    for plan, names in zip(plans, made):
-        _pose_setup(arm, plan, names)
+    for plan, (names, _shown) in zip(plans, made):
+        _pose_setup(arm, plan, names, pose)
         _style(arm, plan, names)
-    arm[TAG] = json.dumps([_record(plan, names) for plan, names in zip(plans, made)])
+    arm[TAG] = json.dumps([_record(plan, names, shown, pose) for plan, (names, shown) in zip(plans, made)])
     arm[SKIPPED] = json.dumps(reasons)
-    for name, basis in pose.items():
-        arm.pose.bones[name].matrix_basis = basis
-    growth.set_growth(arm, shown)
-    if any(_posed(basis) for basis in pose.values()):
-        snap_controls(arm)
+    arm[REFERENCE] = json.dumps(reference)
+    growth.set_growth(arm, shown_growth)
     if mode == "POSE":
         bpy.ops.object.mode_set(mode="POSE")
     view_layer.objects.active = active
@@ -343,39 +404,50 @@ def add_controls(arm, data):
 
 # --- following Growth, snapping ---------------------------------------------------------------------------------------------
 
-def _growth_matrices(arm, bases):
-    """Every bone's pose matrix (armature space) with only Growth's bases applied (bone name → basis)."""
+def _depth(bone):
+    depth = 0
+    while bone.parent is not None:
+        bone, depth = bone.parent, depth + 1
+    return depth
+
+
+def _reference_matrices(arm, channels):
+    """The pose matrices (armature space) of the bones the controls hang from, as built, with Growth's own channels
+    (name → (location or None, scale or None)) put in; channels None = as built."""
+    reference = _matrices(arm, REFERENCE)
+    bones = arm.data.bones
     out = {}
-
-    def visit(bone):
-        local = bone.matrix_local @ bases.get(bone.name, Matrix.Identity(4))
-        out[bone.name] = local if bone.parent is None else out[bone.parent.name] @ bone.parent.matrix_local.inverted() @ local
-        for child in bone.children:
-            visit(child)
-
-    for bone in arm.data.bones:
-        if bone.parent is None:
-            visit(bone)
+    for name in sorted((n for n in reference if n in bones), key=lambda n: _depth(bones[n])):
+        bone, basis = bones[name], reference[name]
+        if channels and name in channels:
+            location, rotation, scale = basis.decompose()
+            new_location, new_scale = channels[name]
+            basis = Matrix.LocRotScale(new_location if new_location is not None else location, rotation,
+                                       new_scale if new_scale is not None else scale)
+        local = bone.matrix_local @ basis
+        parent = bone.parent
+        out[name] = local if parent is None else out[parent.name] @ parent.matrix_local.inverted() @ local
     return out
 
 
-def follow_growth(arm, bases):
-    """Moves each control's mechanism parent by how far its anchor (the chain end, the knee, the head) moves at this growth,
-    so an unmoved control sits on the chain end at any growth and your pose on it stays relative."""
+def follow_growth(arm, channels):
+    """Moves each control's mechanism parent by how far its anchor (the chain end, the knee, the head) moves at this growth
+    from where it was built, so an unmoved control sits on the chain end at any growth and your pose on it stays relative."""
     chains = built(arm)
     if not chains:
         return
-    m = _growth_matrices(arm, bases)
+    now, then = _reference_matrices(arm, channels), _reference_matrices(arm, None)
     bones = arm.data.bones
     for chain in chains:
         for grow, joint in chain["follow"]:
-            pose_bone, bone, anchor = arm.pose.bones.get(grow), bones.get(grow), bones.get(joint)
-            if pose_bone is None or anchor is None:
+            pose_bone, bone = arm.pose.bones.get(grow), bones.get(grow)
+            if pose_bone is None or bone.parent is None or joint not in now or bone.parent.name not in now:
                 continue
-            moved = m[joint] @ (anchor.matrix_local.inverted() @ bone.head_local)
             parent = bone.parent
-            frame = m[parent.name] @ parent.matrix_local.inverted() @ bone.matrix_local if parent is not None else bone.matrix_local
-            pose_bone.location = frame.to_3x3().inverted() @ (moved - frame.translation)
+            local = parent.matrix_local.inverted() @ bone.matrix_local
+            frame_then, frame_now = then[parent.name] @ local, now[parent.name] @ local
+            moved = now[joint] @ (then[joint].inverted() @ frame_then.translation)
+            pose_bone.location = frame_now.to_3x3().inverted() @ (moved - frame_now.translation)
 
 
 def _unscaled(matrix):
@@ -387,19 +459,20 @@ def snap_controls(arm, names=None):
     """Puts the controls where the current FK pose has the chain ends (and knees, and the head's aim), so switching to IK
     does not jump. names: chain names (None = every chain)."""
     chains = [c for c in built(arm) if names is None or c["name"] in names]
-    pose, bones = arm.pose.bones, arm.data.bones
+    pose = arm.pose.bones
     saved = {c["target"]: pose[c["target"]].get(IK_FK, 1.0) for c in chains}
     for c in chains:
         pose[c["target"]][IK_FK] = 0.0
     refresh(arm)
     fk = {n: pose[n].matrix.copy() for c in chains for n in c["joints"]}
     for c in chains:
+        was = {key: unflat(values) for key, values in c["shown"].items()}
         tip, knee = c["joints"][-1], c["joints"][1]
-        pose[c["target"]].matrix = _unscaled(fk[tip] @ bones[c["tip"]].matrix_local.inverted() @ bones[c["target"]].matrix_local)
+        pose[c["target"]].matrix = _unscaled(fk[tip] @ was["tipJoint"].inverted() @ was["target"])
         if c.get("pole"):
-            pose[c["pole"]].matrix = _unscaled(fk[knee] @ bones[knee].matrix_local.inverted() @ bones[c["pole"]].matrix_local)
+            pose[c["pole"]].matrix = _unscaled(fk[knee] @ was["knee"].inverted() @ was["pole"])
         if c.get("look"):
-            pose[c["look"]].matrix = _unscaled(fk[tip] @ bones[tip].matrix_local.inverted() @ bones[c["look"]].matrix_local)
+            pose[c["look"]].matrix = _unscaled(fk[tip] @ was["tipJoint"].inverted() @ was["look"])
         bpy.context.view_layer.update()
     for c in chains:
         pose[c["target"]][IK_FK] = saved[c["target"]]
@@ -436,7 +509,7 @@ def remove_controls(arm):
         collection = arm.data.collections.get(name)
         if collection is not None:
             arm.data.collections.remove(collection)
-    for key in (TAG, SKIPPED):
+    for key in (TAG, SKIPPED, REFERENCE):
         if key in arm:
             del arm[key]
     if mode == "POSE":
@@ -446,13 +519,6 @@ def remove_controls(arm):
 
 def _rotation_path(pose_bone):
     return {"QUATERNION": "rotation_quaternion", "AXIS_ANGLE": "rotation_axis_angle"}.get(pose_bone.rotation_mode, "rotation_euler")
-
-
-def _depth(bone):
-    depth = 0
-    while bone.parent is not None:
-        bone, depth = bone.parent, depth + 1
-    return depth
 
 
 def bake(arm, scene, frame_range):
@@ -488,22 +554,14 @@ def bake(arm, scene, frame_range):
     return frames
 
 
-def reset_pose(arm, data):
-    """Clears your pose on the game bones and the controls; Growth's own channels and the mechanism bones stay."""
+def reset_pose(arm):
+    """Puts every game bone back as the model opened and clears the controls; Growth's own channels and the mechanism
+    bones stay."""
     from . import growth
 
-    bones = ((data or {}).get("growth") or {}).get("bones") or []
-    located = {b["name"] for b in bones if b.get("translation")}
-    scaled = {b["name"] for b in bones if b.get("scale")}
+    opened = open_pose(arm)
     mechanism = {n for c in built(arm) for n in c["bones"] if n.startswith("mch_")}
     for pose_bone in arm.pose.bones:
-        if pose_bone.name in mechanism:
-            continue
-        pose_bone.rotation_quaternion = (1.0, 0.0, 0.0, 0.0)
-        pose_bone.rotation_euler = (0.0, 0.0, 0.0)
-        pose_bone.rotation_axis_angle = (0.0, 0.0, 1.0, 0.0)
-        if pose_bone.name not in located:
-            pose_bone.location = (0.0, 0.0, 0.0)
-        if pose_bone.name not in scaled:
-            pose_bone.scale = (1.0, 1.0, 1.0)
+        if pose_bone.name not in mechanism:
+            pose_bone.matrix_basis = opened.get(pose_bone.name, Matrix.Identity(4))
     growth.set_growth(arm, getattr(arm, "tyrant_growth", 1.0))
