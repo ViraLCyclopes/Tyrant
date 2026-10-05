@@ -27,12 +27,16 @@ public static class BlenderImages
         string to;
         if (destination.Skin is { } skinId)
         {
-            mod.Skin(skinId); // a skin that is gone is an error, before any image is written
+            var skin = mod.Skin(skinId); // a skin that is gone is an error, before any image is written
             // The shown sex's own maps: the game gives a female only the skin's female maps (never the male's), and so on.
             var useSex = sex == "female" ? "female" : "male";
             to = $"skin maps ({useSex})";
             foreach (var image in usable)
+            {
+                var held = (useSex == "female" ? skin.Female : skin.Male)?.GetValueOrDefault(image.Slot);
+                if (Holds(mod, held, image.Png)) continue;
                 Try(image, warnings, () => { mod.SetSkinFile(skinId, useSex, image.Slot, image.Png); written.Add(image.Slot); });
+            }
         }
         else
         {
@@ -50,6 +54,9 @@ public static class BlenderImages
                     warnings.Add($"'{image.Slot}' has no game texture on {destination.Species}'s {vanilla?.Name ?? "default"} skin, so it was not sent (send to a skin to use it).");
                     continue;
                 }
+                var name = index.Assets.FirstOrDefault(a => a.Type == "Texture2D" && string.Equals(a.Guid, guid, StringComparison.OrdinalIgnoreCase))?.Name;
+                var held = mod.Manifest.Replace.FirstOrDefault(r => string.Equals(r.Texture, name, StringComparison.OrdinalIgnoreCase))?.File;
+                if (name is not null && Holds(mod, held, image.Png)) continue;
                 Try(image, warnings, () =>
                 {
                     var entry = mod.Replace(ws, index, guid, image.Png);
@@ -75,6 +82,15 @@ public static class BlenderImages
             return false;
         }
         return true;
+    }
+
+    /// <summary>True when the mod's file (relative to the mod) already holds exactly this picture: nothing to write.</summary>
+    private static bool Holds(ModProject mod, string? file, string png)
+    {
+        if (string.IsNullOrEmpty(file)) return false;
+        var path = Path.Combine(mod.Dir, file.Replace('/', Path.DirectorySeparatorChar));
+        if (!File.Exists(path) || new FileInfo(path).Length != new FileInfo(png).Length) return false;
+        return File.ReadAllBytes(path).AsSpan().SequenceEqual(File.ReadAllBytes(png));
     }
 
     private static string? Guid(IReadOnlyDictionary<string, string>? maps, string slot) =>

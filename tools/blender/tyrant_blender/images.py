@@ -11,7 +11,6 @@ import numpy as np
 SLOTS = ("diffuse", "normal", "extra", "pattern", "fur", "infantDiffuse", "infantNormal", "infantExtra", "infantPattern", "infantFur")
 LEDGER = ".tyrant-sources.json"
 FOLDER = "send-images"
-SENT = "tyrant_sent"
 
 
 def file_hash(path):
@@ -117,35 +116,3 @@ def collect(meshes, project_dir):
             continue
         changed.append((slot, path, file_hash(path)))
     return changed, warnings
-
-
-def destination_key(destination, sex):
-    target = destination.get("skin") or ("species:" + (destination.get("species") or ""))
-    return f"{destination.get('mod')}/{target}/{sex}"
-
-
-def _sent(armature):
-    try:
-        value = json.loads(armature.get(SENT) or "{}")
-    except ValueError:
-        return {}
-    return value if isinstance(value, dict) else {}
-
-
-def not_sent_yet(armature, changed, key):
-    """Drops the images whose pixels already went to this place (deleting their PNGs)."""
-    sent = _sent(armature)
-    keep = []
-    for slot, path, digest in changed:
-        if sent.get(f"{key}/{slot}") == digest:
-            os.remove(path)
-        else:
-            keep.append((slot, path, digest))
-    return keep
-
-
-def record_sent(armature, sent_images, key):
-    sent = _sent(armature)
-    for slot, _path, digest in sent_images:
-        sent[f"{key}/{slot}"] = digest
-    armature[SENT] = json.dumps(sent)

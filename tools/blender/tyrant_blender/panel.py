@@ -69,11 +69,9 @@ def _start_send(context, armature, destination=None, new_mod_name=None):
     folder = os.path.dirname(path)
     glb = os.path.join(folder, "send.glb")
     send.export(armature, glb)
-    target = destination or data.get("destination") or {}
     sex = armature.tyrant_sex.lower()
-    key = images.destination_key(target, sex)
+    # Every changed image goes; Tyrant skips the ones the mod already holds (the mod, not Blender, knows what is there).
     changed, notes = images.collect(send.sendable(armature)[1:], folder)
-    changed = images.not_sent_yet(armature, changed, key)
     if bpy.data.filepath:  # an untitled file is the user's to name and save
         bpy.ops.wm.save_mainfile()
         ui.record_blend(path, bpy.data.filepath)  # a Blender Tyrant starts later opens this file at the model's scene
@@ -85,9 +83,6 @@ def _start_send(context, armature, destination=None, new_mod_name=None):
         if target_object is not None:
             result["warnings"] = notes + list(result.get("warnings") or [])
             target_object[REPORT] = json.dumps(result)
-            if result.get("ok"):
-                written = set(result.get("images") or [])
-                images.record_sent(target_object, [c for c in changed if c[0] in written], key)
         _redraw()
         return None
 

@@ -58,18 +58,13 @@ class ImageTests(unittest.TestCase):
         changed, _ = images.collect(self.meshes, self.dir)
         self.assertEqual([c[0] for c in changed], ["diffuse"])
 
-    def test_sent_pixels_are_not_sent_again_to_the_same_place(self):
+    def test_a_changed_image_goes_on_every_send(self):
         _, node = _diffuse(self.arm)
         _paint(node.image)
-        skin_a = images.destination_key({"mod": "m", "species": "Carch", "skin": "a"}, "male")
-        skin_b = images.destination_key({"mod": "m", "species": "Carch", "skin": "b"}, "male")
-        changed, _ = images.collect(self.meshes, self.dir)
-        images.record_sent(self.arm, images.not_sent_yet(self.arm, changed, skin_a), skin_a)
+        first, _ = images.collect(self.meshes, self.dir)
         again, _ = images.collect(self.meshes, self.dir)
-        self.assertEqual(images.not_sent_yet(self.arm, again, skin_a), [])
-        self.assertFalse(os.path.isfile(again[0][1]))  # its PNG is deleted, so nothing stale is left for Tyrant
-        third, _ = images.collect(self.meshes, self.dir)
-        self.assertEqual([c[0] for c in images.not_sent_yet(self.arm, third, skin_b)], ["diffuse"])  # another skin gets it
+        self.assertEqual([c[0] for c in again], ["diffuse"])  # Tyrant compares it with the mod and skips what it holds
+        self.assertEqual(first[0][2], again[0][2])  # the same pixels make the same PNG
 
     def test_an_image_without_pixels_is_skipped_with_a_warning(self):
         _, node = _diffuse(self.arm)

@@ -316,4 +316,41 @@ public class BlenderServiceTests
         Assert.Empty(ModProject.Open(s.Ws, "img-mod").Manifest.Replace);
         Assert.Empty(sent.Images);
     }
+
+    [Fact]
+    public void An_image_the_mod_already_holds_is_not_written_again_and_a_recreated_mod_gets_it_again()
+    {
+        var s = SendSetup("Alt 1");
+        using var _ = s.Game;
+        var png = Png(Path.Combine(Path.GetDirectoryName(s.Project)!, "send-images", "diffuse.png"));
+        BlenderImage[] images = [new("diffuse", png)];
+        var species = new BlenderDestination("img-mod", "Carcharodontosaurus", null);
+
+        var first = BlenderService.Send(s.Ws, s.Install, s.Index, s.Species, s.Reader, s.Project, s.Glb, species, "M", images, "male");
+        var again = BlenderService.Send(s.Ws, s.Install, s.Index, s.Species, s.Reader, s.Project, s.Glb, species, null, images, "male");
+
+        Assert.Equal(["diffuse"], first.Images);
+        Assert.Empty(again.Images); // the same picture is already in the mod
+        Assert.Null(again.ImagesTo);
+
+        Directory.Delete(ModProject.Open(s.Ws, "img-mod").Dir, true);
+        var recreated = BlenderService.Send(s.Ws, s.Install, s.Index, s.Species, s.Reader, s.Project, s.Glb, species, "M", images, "male");
+        Assert.Equal(["diffuse"], recreated.Images); // nothing in Blender remembers it: the mod decides
+    }
+
+    [Fact]
+    public void A_skin_map_the_mod_already_holds_is_not_written_again()
+    {
+        var s = SendSetup();
+        using var _ = s.Game;
+        var mod = ModProject.Create(s.Ws, "img-mod", "M", null);
+        var skin = mod.AddSkin(s.Ws, s.Install, s.Index, s.Reader, s.Species, "Carcharodontosaurus", "Red", "1", new SkinTemplateOptions(true, false, false));
+        var png = Png(Path.Combine(Path.GetDirectoryName(s.Project)!, "send-images", "extra.png"));
+        var destination = new BlenderDestination("img-mod", "Carcharodontosaurus", skin.Id);
+
+        BlenderService.Send(s.Ws, s.Install, s.Index, s.Species, s.Reader, s.Project, s.Glb, destination, null, [new BlenderImage("extra", png)], "male");
+        var again = BlenderService.Send(s.Ws, s.Install, s.Index, s.Species, s.Reader, s.Project, s.Glb, destination, null, [new BlenderImage("extra", png)], "male");
+
+        Assert.Empty(again.Images);
+    }
 }
