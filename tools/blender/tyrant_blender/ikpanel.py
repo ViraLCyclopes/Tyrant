@@ -131,6 +131,14 @@ def posed_hint(armature):
     return None
 
 
+def old_controls_hint(armature):
+    """Controls built by the earlier build, which opened models in the game's prefab pose instead of the bind pose."""
+    if ik.built(armature) and (ik.OLD_OPEN_POSE in armature or armature.get(ik.OLD_CONTROLS)):
+        return ("These IK controls were built on the game's prefab pose by an earlier Tyrant: Remove IK controls, Reset pose, "
+                "then Add IK controls to build them at rest.")
+    return None
+
+
 def draw(layout, context, armature, data, say):
     box = layout.box()
     box.label(text="IK controls", icon="CON_KINEMATIC")
@@ -142,9 +150,14 @@ def draw(layout, context, armature, data, say):
         row.operator("tyrant.ik_add", icon="ADD")
         if known and not (data.get("ik") or {}).get("chains"):
             say(box, context, "This model has no IK chains in the game.", "INFO")
-        elif posed_hint(armature):
-            say(box, context, posed_hint(armature), "INFO")
+        else:
+            hint = posed_hint(armature)
+            if hint:
+                say(box, context, hint, "INFO")
     else:
+        old = old_controls_hint(armature)
+        if old:
+            say(box, context, old, "ERROR")
         for chain in chains:
             control = armature.pose.bones.get(chain["target"])
             if control is None:

@@ -134,3 +134,24 @@ class IkToolTests(unittest.TestCase):
         self.assertIsNone(ikpanel.posed_hint(arm))
         arm.pose.bones["Femur.L"].rotation_quaternion = Quaternion((1, 0, 0), math.radians(20))  # as a scene opened by Tyrant 0.1 builds
         self.assertIn("Reset pose", ikpanel.posed_hint(arm))
+
+    def test_renamed_bones_are_named_as_the_cause(self):
+        arm, path = open_ik(controls=False)
+        for bone in arm.data.bones:  # as Armature > Names > Auto-Name Top/Bottom does
+            bone.name = bone.name + ".Top"
+
+        with self.assertRaisesRegex(ik.IkError, "no longer have the game's names"):
+            ik.add_controls(arm, project.load(path))
+
+    def test_controls_built_by_an_earlier_tyrant_say_how_to_rebuild_them(self):
+        arm, _ = open_ik()
+        self.assertIsNone(ikpanel.old_controls_hint(arm))
+        arm["tyrant_open_pose"] = "{}"  # left by the build that opened models in the prefab pose
+
+        self.assertIn("Remove IK controls, Reset pose, then Add IK controls", ikpanel.old_controls_hint(arm))
+        ik.reset_pose(arm)
+        self.assertNotIn("tyrant_open_pose", arm)
+        self.assertIsNotNone(ikpanel.old_controls_hint(arm))  # still built on the old pose until rebuilt
+        ik.remove_controls(arm)
+        ik.add_controls(arm, project.load(_))
+        self.assertIsNone(ikpanel.old_controls_hint(arm))

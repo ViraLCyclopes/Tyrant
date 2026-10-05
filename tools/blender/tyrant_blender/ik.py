@@ -20,6 +20,8 @@ from mathutils import Matrix, Vector
 TAG = "tyrant_ik"  # armature: JSON list of the chains built
 SKIPPED = "tyrant_ik_skipped"  # armature: JSON list of the chains left out, with why
 REFERENCE = "tyrant_ik_reference"  # armature: the pose bases (at Growth 1) the controls were built from
+OLD_OPEN_POSE = "tyrant_open_pose"  # armature: left by the build that opened models in the game's prefab pose
+OLD_CONTROLS = "tyrant_ik_old_pose"  # armature: these controls were built on that prefab pose (rebuild them at rest)
 BONE_TAG = "tyrant_ik"  # bone: one of Tyrant's IK bones
 CONTROLS = "Tyrant IK"
 MECHANISM = "Tyrant IK (mechanism)"
@@ -368,6 +370,12 @@ def add_controls(arm, data):
             plans.append(plan)
     if not plans:
         growth.set_growth(arm, shown_growth)
+        game = [r["name"] for r in (data or {}).get("rest") or [] if isinstance(r, dict) and r.get("name")]
+        missing = [n for n in game if n not in arm.data.bones]
+        if game and len(missing) > len(game) / 2:
+            raise IkError(f"This armature's bones no longer have the game's names (e.g. '{missing[0]}' is missing): Blender's "
+                          "Armature > Names > Auto-Name renames them, and Send needs the game's names too. Undo the rename "
+                          "(Ctrl+Z) or open the model again with Start fresh in Tyrant.")
         raise IkError("No IK chain fits this armature: " + "; ".join(reasons))
     reference = {n: flat(arm.pose.bones[n].matrix_basis) for n in _ancestors(arm, {j for p in plans for j in p["joints"]})}
 
@@ -389,6 +397,7 @@ def add_controls(arm, data):
     arm[TAG] = json.dumps([_record(plan, names, shown, pose) for plan, (names, shown) in zip(plans, made)])
     arm[SKIPPED] = json.dumps(reasons)
     arm[REFERENCE] = json.dumps(reference)
+    arm.pop(OLD_OPEN_POSE, None)
     growth.set_growth(arm, shown_growth)
     if mode == "POSE":
         bpy.ops.object.mode_set(mode="POSE")
@@ -503,7 +512,7 @@ def remove_controls(arm):
         collection = arm.data.collections.get(name)
         if collection is not None:
             arm.data.collections.remove(collection)
-    for key in (TAG, SKIPPED, REFERENCE):
+    for key in (TAG, SKIPPED, REFERENCE, OLD_CONTROLS):
         if key in arm:
             del arm[key]
     if mode == "POSE":
@@ -555,6 +564,8 @@ def reset_pose(arm):
     mechanism bones stay."""
     from . import growth
 
+    if arm.pop(OLD_OPEN_POSE, None) is not None and built(arm):
+        arm[OLD_CONTROLS] = True  # the controls still stand where the prefab pose had the chains: they need rebuilding
     mechanism = {n for c in built(arm) for n in c["bones"] if n.startswith("mch_")}
     for pose_bone in arm.pose.bones:
         if pose_bone.name not in mechanism:
