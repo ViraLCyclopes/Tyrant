@@ -43,6 +43,11 @@ def max_change(before, after):
     return max(max(abs(x - y) for ra, rb in zip(before[n], after[n]) for x, y in zip(ra, rb)) for n in before)
 
 
+def chain_ends(arm):
+    """Where each chain's last joint stands (world)."""
+    return {c["joints"][-1]: head_of(arm, c["joints"][-1]).copy() for c in ik.built(arm)}
+
+
 def move(arm, bone, by):
     bpy.context.view_layer.update()
     pose_bone = arm.pose.bones[bone]
@@ -74,13 +79,20 @@ class IkBuildTests(unittest.TestCase):
         self.assertNotIn("ctrl_foot.L", {b.name for b in arm.data.bones})
         self.assertEqual(ik.built(arm), [])
 
-    def test_adding_the_controls_moves_no_bone(self):
+    def test_adding_the_controls_keeps_the_stance(self):
+        """The model stands in the prefab's stance: the other bones keep it, the chain ends stay where they were (the
+        chains now hold it through their controls)."""
         arm, path = open_ik(controls=False)
         before = game_pose(arm)
+        heads = {n: head_of(arm, n).copy() for n in ("Heel.L", "Heel.R", "Head")}
 
         ik.add_controls(arm, project.load(path))
 
-        self.assertLess(max_change(before, game_pose(arm)), 1e-4)
+        joints = {j for c in ik.built(arm) for j in c["joints"]}
+        others = {n: m for n, m in before.items() if n not in joints and not any(arm.data.bones[j] in arm.data.bones[n].parent_recursive for j in joints)}
+        self.assertLess(max_change(others, game_pose(arm)), 1e-4)
+        for name, at in heads.items():
+            self.assertLess((head_of(arm, name) - at).length, 1e-3, name)
 
     def test_controls_do_not_deform_and_live_in_their_collections(self):
         arm, _ = open_ik()
@@ -96,6 +108,7 @@ class IkBuildTests(unittest.TestCase):
 
     def test_the_foot_control_sits_on_the_games_ground_contact_point(self):
         arm, path = open_ik()
+        ik.reset_pose(arm)  # at rest, where the controls were built
         # The game's end offset (0, -0.05, 0) under the heel, in the heel's frame as it rests (the bind pose; C# pins the
         # Unity → glTF conversion of the offset).
         offset = next(c for c in project.load(path)["ik"]["chains"] if c["name"] == "Leg L")["endOffset"]
@@ -112,8 +125,19 @@ class IkBuildTests(unittest.TestCase):
         self.assertGreater((head_of(arm, "Heel.L") - heel_before).length, 0.1)
         self.assertLess((head_of(arm, "Heel.L") - head_of(arm, "mch_tip_foot.L")).length, 1e-3)
 
+    def test_the_poles_sit_close_in_front_of_the_knees(self):
+        arm, _ = open_ik(controls=False)
+        ik.reset_pose(arm)
+        ik.add_controls(arm, project.load(arm[project.TAG]))
+        for side in ("L", "R"):
+            leg = [head_of(arm, f"{n}.{side}") for n in ("Femur", "Calve", "Foot", "Heel")]
+            length = sum((a - b).length for a, b in zip(leg, leg[1:]))
+            self.assertAlmostEqual((head_of(arm, f"ctrl_knee.{side}") - head_of(arm, f"Calve.{side}")).length, 0.4 * length, places=3)
+
     def test_the_knees_bend_toward_their_poles_in_front(self):
-        arm, _ = open_ik()
+        arm, _ = open_ik(controls=False)
+        ik.reset_pose(arm)
+        ik.add_controls(arm, project.load(arm[project.TAG]))
         for side in ("L", "R"):  # L from the game's force, R from the leg's own bend: both point forward (-Y)
             self.assertLess(head_of(arm, f"ctrl_knee.{side}").y, head_of(arm, f"Calve.{side}").y - 0.1)
         knee_before = head_of(arm, "Calve.L").copy()
@@ -173,23 +197,32 @@ class IkBuildTests(unittest.TestCase):
         bpy.ops.object.mode_set(mode="OBJECT")
         data = project.load(path)
         data["ik"]["chains"][1]["joints"].append({"name": "Tip.R", "length": 0.0})
-        before = game_pose(arm)
+        heel = head_of(arm, "Heel.R").copy()
 
         reasons = ik.add_controls(arm, data)
 
         self.assertEqual(reasons, [])
         leg = next(c for c in ik.built(arm) if c["name"] == "Leg R")
         self.assertEqual(leg["joints"][-1], "Heel.R")
-        self.assertLess(max_change(before, game_pose(arm)), 1e-4)
+        self.assertLess((head_of(arm, "Heel.R") - heel).length, 1e-3)
         move(arm, "ctrl_foot.R", (0.0, -0.1, 0.15))
         self.assertLess((head_of(arm, "Heel.R") - head_of(arm, "mch_tip_foot.R")).length, 1e-3)
 
-    def test_a_model_opens_in_its_bind_pose(self):
-        """The fixture's prefab pose differs from its bind pose, as on game rigs: Blender shows the bind (rest) pose, which
-        is what Send exports and what Clear Transform goes back to."""
+    def test_a_model_opens_in_the_prefabs_stance_with_its_chains_held_by_the_controls(self):
+        """The fixture's prefab pose differs from its bind pose, as on game rigs. Without IK the bones show it as they are;
+        with IK the chain joints stay at rest and their controls hold the same stance."""
         arm, _ = open_ik(controls=False)
-        for bone in arm.pose.bones:
-            self.assertLess(bone.matrix_basis.to_quaternion().angle, 1e-6, bone.name)
+        self.assertGreater(arm.pose.bones["Hip"].matrix_basis.to_quaternion().angle, 0.1)
+        self.assertGreater(arm.pose.bones["Femur.L"].matrix_basis.to_quaternion().angle, 0.1)
+        heels = {n: head_of(arm, n).copy() for n in ("Heel.L", "Heel.R")}
+        bpy.ops.wm.read_factory_settings(use_empty=True)
+
+        arm, _ = open_ik()
+
+        self.assertGreater(arm.pose.bones["Hip"].matrix_basis.to_quaternion().angle, 0.1)
+        self.assertLess(arm.pose.bones["Femur.L"].matrix_basis.to_quaternion().angle, 1e-6)
+        for name, at in heels.items():
+            self.assertLess((head_of(arm, name) - at).length, 1e-3, name)
 
     def test_clearing_every_transform_keeps_the_ik_lined_up(self):
         arm, _ = open_ik()
@@ -220,16 +253,17 @@ class IkBuildTests(unittest.TestCase):
         with self.assertRaisesRegex(ik.IkError, "no IK chains"):
             ik.add_controls(arm, data)
 
-    def test_adding_at_baby_growth_with_a_pose_moves_nothing(self):
+    def test_adding_at_baby_growth_with_a_pose_keeps_the_chain_ends(self):
         arm, path = open_ik(controls=False)
         arm.tyrant_growth = 0.3
         arm.pose.bones["Femur.L"].rotation_quaternion = Quaternion((1, 0, 0), math.radians(25))
         arm.pose.bones["Neck"].rotation_quaternion = Quaternion((0, 0, 1), math.radians(15))
-        before = game_pose(arm)
+        heads = {n: head_of(arm, n).copy() for n in ("Heel.L", "Heel.R", "Head")}
 
         ik.add_controls(arm, project.load(path))
 
-        self.assertLess(max_change(before, game_pose(arm)), 1e-3)
+        for name, at in heads.items():
+            self.assertLess((head_of(arm, name) - at).length, 1e-3, name)
         self.assertAlmostEqual(arm.tyrant_growth, 0.3)
 
     def test_growth_keeps_rotations(self):
@@ -246,9 +280,9 @@ class IkBuildTests(unittest.TestCase):
         arm, _ = open_ik()
         heel_adult = head_of(arm, "Heel.L").copy()
 
-        arm.tyrant_growth = 0.0  # SkinDumps: Hip baby 0.2 lower
+        arm.tyrant_growth = 0.0  # SkinDumps: Hip baby 0.2 lower, in its parent's space (the armature's up)
 
-        self.assertLess(abs(head_of(arm, "Heel.L").z - (heel_adult.z - 0.2)), 1e-3)
+        self.assertLess((head_of(arm, "Heel.L") - (heel_adult + Vector((0.0, 0.0, -0.2)))).length, 1e-3)
         self.assertLess((head_of(arm, "Heel.L") - head_of(arm, "mch_tip_foot.L")).length, 1e-3)
 
     def test_an_unexpected_ik_failure_still_opens_the_model_and_says_why(self):

@@ -28,7 +28,8 @@ def import_project(path):
     if armature is not None:
         armature[project.TAG] = path
         armature.data.display_type = "OCTAHEDRAL"
-        ik.to_rest(armature)  # the bind pose, not the prefab's: what Send exports and Clear Transform returns to
+        ik.clear_scale_noise(armature)  # the prefab's own tiny scales: Blender's IK cannot follow them
+        growth.remember_base(armature, data)  # it opens in the prefab's stance: Growth adds to it
     for obj in created:
         if obj.type != "MESH":
             continue

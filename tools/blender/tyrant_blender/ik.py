@@ -8,8 +8,10 @@ mch_tip_foot.L (the chain's last joint as it stands: the IK target, and the join
 child of the joint before the last, reaches from that joint to the last one and carries the IK constraint: Blender's IK
 reaches with a bone's tail, and the game's bones do not point at their child.
 
-Everything is built from the pose shown when the controls are added (a model opens in its bind pose, Blender's rest), so
-adding them moves nothing; Growth then moves the controls by how far the chain ends move from that pose.
+The controls are always built at rest (the bind pose: what Send exports and Clear Transform returns to), so the poles are
+set up for it. A model opens in the game's prefab stance: the other bones keep it and the chains show it through their
+controls (their joints stay at rest), so clearing the pose returns to the exact rest. Growth then moves the controls by
+how far the chain ends move.
 """
 import json
 import math
@@ -29,6 +31,7 @@ PREFIX = "Tyrant "  # constraint names
 IK_FK = "ik_fk"
 AIM = "aim"
 FORWARD = Vector((0.0, -1.0, 0.0))  # animals face -Y in Blender (Unity +Z → glTF +Z → Blender -Y)
+POLE_DISTANCE = 0.4  # of the leg's length, in front of the knee: close enough to grab, clear of the mesh
 UP = Matrix.Rotation(math.pi / 2, 4, "X")  # a bone pointing up (+Z): flat custom shapes lie on the ground
 PALETTES = {"L": "THEME04", "R": "THEME01"}  # blue, red; heads yellow
 TRACK_AXES = ("TRACK_X", "TRACK_NEGATIVE_X", "TRACK_Y", "TRACK_NEGATIVE_Y", "TRACK_Z", "TRACK_NEGATIVE_Z")
@@ -88,13 +91,6 @@ def clear_scale_noise(arm, names=None):
             pose_bone.scale = (1.0, 1.0, 1.0)
 
 
-def to_rest(arm):
-    """Called on import: the glTF importer poses the bones as the prefab stores them, but the bind pose is the model's rest
-    (what Send exports and Blender's Clear Transform returns to), so the model opens in it."""
-    for pose_bone in arm.pose.bones:
-        pose_bone.matrix_basis = Matrix.Identity(4)
-
-
 # --- where the bones go (armature space, in the pose shown) -----------------------------------------------------------------
 
 def _off_line(vector, line):
@@ -114,7 +110,7 @@ def _pole_point(chain, joints, length, pose):
         direction = _off_line(knee - root, line)
     if direction.length < 1e-4:
         direction = _off_line(FORWARD, line)
-    return knee + direction.normalized() * length
+    return knee + direction.normalized() * length * POLE_DISTANCE
 
 
 def _look_point(joints, pose):
@@ -356,8 +352,9 @@ def add_controls(arm, data):
 
     shown_growth = getattr(arm, "tyrant_growth", 1.0)
     growth.set_growth(arm, 1.0)
-    named = [j["name"] for c in chains for j in c["joints"] if j["name"] in arm.data.bones]
-    clear_scale_noise(arm, _ancestors(arm, named))
+    shown_pose = {b.name: b.matrix_basis.copy() for b in arm.pose.bones}
+    for pose_bone in arm.pose.bones:  # built at rest: the poles are set up for the pose Clear Transform returns to
+        pose_bone.matrix_basis = Matrix.Identity(4)
     view_layer.update()
     pose = {b.name: b.matrix.copy() for b in arm.pose.bones}
     rest = {b.name: b.matrix_local.copy() for b in arm.data.bones}
@@ -369,6 +366,8 @@ def add_controls(arm, data):
         else:
             plans.append(plan)
     if not plans:
+        for name, basis in shown_pose.items():
+            arm.pose.bones[name].matrix_basis = basis
         growth.set_growth(arm, shown_growth)
         game = [r["name"] for r in (data or {}).get("rest") or [] if isinstance(r, dict) and r.get("name")]
         missing = [n for n in game if n not in arm.data.bones]
@@ -377,7 +376,6 @@ def add_controls(arm, data):
                           "Armature > Names > Auto-Name renames them, and Send needs the game's names too. Undo the rename "
                           "(Ctrl+Z) or open the model again with Start fresh in Tyrant.")
         raise IkError("No IK chain fits this armature: " + "; ".join(reasons))
-    reference = {n: flat(arm.pose.bones[n].matrix_basis) for n in _ancestors(arm, {j for p in plans for j in p["joints"]})}
 
     active, mode = view_layer.objects.active, arm.mode
     if bpy.context.mode != "OBJECT":
@@ -396,13 +394,47 @@ def add_controls(arm, data):
         _style(arm, plan, names)
     arm[TAG] = json.dumps([_record(plan, names, shown, pose) for plan, (names, shown) in zip(plans, made)])
     arm[SKIPPED] = json.dumps(reasons)
-    arm[REFERENCE] = json.dumps(reference)
     arm.pop(OLD_OPEN_POSE, None)
+    # The pose shown before comes back: the other bones as they were, the chains through their controls.
+    for name, basis in shown_pose.items():
+        arm.pose.bones[name].matrix_basis = basis
+    if any(posed(basis) for basis in shown_pose.values()):
+        snap_controls(arm)
+        release_chains(arm, data)
+    capture_reference(arm)
     growth.set_growth(arm, shown_growth)
     if mode == "POSE":
         bpy.ops.object.mode_set(mode="POSE")
     view_layer.objects.active = active
     return reasons
+
+
+def release_chains(arm, data):
+    """The chains' own pose lives in their controls: their joints go back to rest (Growth's channels stay), so clearing the
+    pose returns to the exact rest the poles were set up for."""
+    bones = ((data or {}).get("growth") or {}).get("bones") or []
+    located = {b["name"] for b in bones if b.get("translation")}
+    scaled = {b["name"] for b in bones if b.get("scale")}
+    for name in {n for c in built(arm) for n in c["joints"]}:
+        pose_bone = arm.pose.bones[name]
+        pose_bone.rotation_quaternion = (1.0, 0.0, 0.0, 0.0)
+        pose_bone.rotation_euler = (0.0, 0.0, 0.0)
+        pose_bone.rotation_axis_angle = (0.0, 0.0, 1.0, 0.0)
+        if name not in located:
+            pose_bone.location = (0.0, 0.0, 0.0)
+        if name not in scaled:
+            pose_bone.scale = (1.0, 1.0, 1.0)
+
+
+def capture_reference(arm):
+    """The bases (at Growth 1) of the bones the controls hang from, as they stand now: Growth's follow is measured from them."""
+    from . import growth
+
+    shown = getattr(arm, "tyrant_growth", 1.0)
+    growth.set_growth(arm, 1.0)
+    joints = {n for c in built(arm) for n in c["joints"]}
+    arm[REFERENCE] = json.dumps({n: flat(arm.pose.bones[n].matrix_basis) for n in _ancestors(arm, joints)})
+    growth.set_growth(arm, shown)
 
 
 # --- following Growth, snapping ---------------------------------------------------------------------------------------------
@@ -570,4 +602,7 @@ def reset_pose(arm):
     for pose_bone in arm.pose.bones:
         if pose_bone.name not in mechanism:
             pose_bone.matrix_basis = Matrix.Identity(4)
+    arm.pop(growth.BASE, None)  # Growth now works from the rest pose, not the prefab stance
+    if built(arm):
+        capture_reference(arm)
     growth.set_growth(arm, getattr(arm, "tyrant_growth", 1.0))

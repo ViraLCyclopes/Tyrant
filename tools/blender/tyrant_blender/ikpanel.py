@@ -123,14 +123,6 @@ class TYRANT_OT_ik_reset_pose(_IkOperator):
         return None
 
 
-def posed_hint(armature):
-    """Before Add: the controls are built from the pose shown, so a posed model (or a scene opened by an earlier Tyrant, in
-    the game's prefab pose) is better reset to rest first."""
-    if any(b.matrix_basis.to_quaternion().angle > 1e-4 for b in armature.pose.bones):
-        return "The model is posed: Add IK controls builds them from this pose. For controls at rest, press Reset pose first."
-    return None
-
-
 def old_controls_hint(armature):
     """Controls built by the earlier build, which opened models in the game's prefab pose instead of the bind pose."""
     if ik.built(armature) and (ik.OLD_OPEN_POSE in armature or armature.get(ik.OLD_CONTROLS)):
@@ -150,10 +142,6 @@ def draw(layout, context, armature, data, say):
         row.operator("tyrant.ik_add", icon="ADD")
         if known and not (data.get("ik") or {}).get("chains"):
             say(box, context, "This model has no IK chains in the game.", "INFO")
-        else:
-            hint = posed_hint(armature)
-            if hint:
-                say(box, context, hint, "INFO")
     else:
         old = old_controls_hint(armature)
         if old:

@@ -5,6 +5,7 @@ the adult, so Growth 1 is exactly the rest pose that is edited and sent. The cur
 data dump they are straight lines and bones keep their proportions. Growth sets only the location and scale the game's
 growth data owns, never rotations, so poses and IK survive it.
 """
+import json
 import os
 
 from mathutils import Matrix, Quaternion, Vector
@@ -12,6 +13,7 @@ from mathutils import Matrix, Quaternion, Vector
 from . import project
 
 _cache = {}
+BASE = "tyrant_growth_base"  # armature: each growth bone's location and scale in the prefab stance it opened in
 
 
 def sample(table, t):
@@ -98,6 +100,20 @@ def _basis(rest, bone, value, pose_bone):
     return Matrix.LocRotScale(location, None, scale)
 
 
+def remember_base(armature, data):
+    """Called on import, in the prefab's stance: Growth adds its moves to each growth bone's own location and scale there."""
+    bones = ((data or {}).get("growth") or {}).get("bones") or []
+    found = [armature.pose.bones.get(b["name"]) for b in bones]
+    armature[BASE] = json.dumps({p.name: list(p.location) + list(p.scale) for p in found if p is not None})
+
+
+def _bases(armature):
+    try:
+        return {n: (Vector(v[0:3]), Vector(v[3:6])) for n, v in json.loads(armature.get(BASE) or "{}").items()}
+    except (ValueError, TypeError, IndexError):
+        return {}
+
+
 def set_growth(armature, value, scene_objects=None):
     """Shows the animal at this growth (0 baby – 1 adult)."""
     import bpy
@@ -123,14 +139,17 @@ def set_growth(armature, value, scene_objects=None):
     from . import ik  # late: ik uses growth too
 
     rest = {r["name"]: r for r in (data or {}).get("rest", [])}
+    bases = _bases(armature)
     channels = {}
     for bone in growth.get("bones") or []:
         pose_bone = armature.pose.bones.get(bone["name"])
         if pose_bone is None or bone["name"] not in rest:
             continue
-        basis = Matrix.Identity(4) if value >= 1.0 else _basis(rest[bone["name"]], bone, value, pose_bone)
-        # Only the channels the game's growth owns: rotations are yours (poses, IK, animation).
-        location, _rotation, scale = basis.decompose()
+        change = Matrix.Identity(4) if value >= 1.0 else _basis(rest[bone["name"]], bone, value, pose_bone)
+        # Only the channels the game's growth owns, on top of the stance the model opened in: rotations are yours.
+        base_location, base_scale = bases.get(bone["name"], (Vector((0.0, 0.0, 0.0)), Vector((1.0, 1.0, 1.0))))
+        location = base_location + change.translation
+        scale = Vector([b * c for b, c in zip(base_scale, change.to_scale())])
         if bone.get("translation"):
             pose_bone.location = location
         if bone.get("scale"):

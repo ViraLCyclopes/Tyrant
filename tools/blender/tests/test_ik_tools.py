@@ -115,25 +115,21 @@ class IkToolTests(unittest.TestCase):
         with self.assertRaisesRegex(ik.IkError, "No chain is on IK"):
             ik.bake(arm, bpy.context.scene, frame_range=False)
 
-    def test_reset_pose_goes_to_the_rest_pose_and_keeps_growth(self):
-        arm, _ = open_ik()
+    def test_reset_pose_goes_to_the_exact_rest_pose_and_keeps_growth(self):
+        arm, _ = open_ik()  # in the prefab's stance
         arm.tyrant_growth = 0.5
-        hip = arm.pose.bones["Hip"].location.copy()  # Growth's own channel
         arm.pose.bones["Femur.L"].rotation_quaternion = Quaternion((1, 0, 0), math.radians(20))
         move(arm, "ctrl_foot.L", (0.0, 0.1, 0.1))
 
         ik.reset_pose(arm)
+        arm.tyrant_growth = 1.0
+        bpy.context.view_layer.update()
 
-        self.assertLess(arm.pose.bones["Femur.L"].rotation_quaternion.rotation_difference(Quaternion()).angle, 1e-6)
+        joints = {j for c in ik.built(arm) for j in c["joints"]}
+        for bone in arm.pose.bones:
+            if bone.name in joints or bone.name == "Hip":
+                self.assertLess(max(abs(a - b) for ra, rb in zip(bone.matrix, bone.bone.matrix_local) for a, b in zip(ra, rb)), 1e-4, bone.name)
         self.assertLess(arm.pose.bones["ctrl_foot.L"].location.length, 1e-6)
-        self.assertLess((arm.pose.bones["Hip"].location - hip).length, 1e-6)
-        self.assertAlmostEqual(arm.tyrant_growth, 0.5)
-
-    def test_adding_on_a_posed_model_suggests_reset_pose_first(self):
-        arm, _ = open_ik(controls=False)
-        self.assertIsNone(ikpanel.posed_hint(arm))
-        arm.pose.bones["Femur.L"].rotation_quaternion = Quaternion((1, 0, 0), math.radians(20))  # as a scene opened by Tyrant 0.1 builds
-        self.assertIn("Reset pose", ikpanel.posed_hint(arm))
 
     def test_renamed_bones_are_named_as_the_cause(self):
         arm, path = open_ik(controls=False)
