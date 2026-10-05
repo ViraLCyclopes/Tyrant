@@ -42,12 +42,36 @@ public class ModelFitterTests
     }
 
     [Fact]
-    public void A_bone_missing_from_the_game_is_an_error_naming_it()
+    public void Weights_on_a_bone_the_game_lacks_are_dropped_and_the_rest_rebalanced()
     {
-        var fit = ModelFitter.Fit(Imported(joints: ["Hip", "Crest"]), Game, ["Carch"]);
+        // vertex 0: Hip; vertex 1: Crest only; vertex 2: half Hip, half Crest
+        var fit = ModelFitter.Fit(Imported(joints: ["Hip", "Crest"], extraVertices: 6), Game, ["Carch"]); // a few stray vertices in a bigger mesh
+
+        Assert.Empty(fit.Errors);
+        Assert.Contains(fit.Warnings, w => w.Contains("Crest") && w.Contains("dropped"));
+        Assert.Equal((0, 1f), (fit.Mesh!.Skin[2].I0, fit.Mesh.Skin[2].W0)); // what is left is rebalanced to a full weight
+        Assert.Equal((0, 1f), (fit.Mesh.Skin[1].I0, fit.Mesh.Skin[1].W0)); // no weight left: it borrows its nearest weighted neighbour's (vertex 0)
+    }
+
+    [Fact]
+    public void Blenders_neutral_bone_is_dropped_with_a_plain_warning()
+    {
+        var skin = new BoneWeight4[] { new(0, 0, 0, 0, 1, 0, 0, 0), new(2, 0, 0, 0, 1, 0, 0, 0), new(1, 0, 0, 0, 1, 0, 0, 0) };
+
+        var fit = ModelFitter.Fit(Imported(joints: ["Hip", "Tail", "neutral_bone"], skin: skin, extraVertices: 6), Game, ["Carch"]);
+
+        Assert.Empty(fit.Errors);
+        Assert.Contains(fit.Warnings, w => w.Contains("1 vertex") && w.Contains("no weight on the armature"));
+        Assert.Equal((0, 1f), (fit.Mesh!.Skin[1].I0, fit.Mesh.Skin[1].W0));
+    }
+
+    [Fact]
+    public void A_mesh_weighted_to_another_skeleton_is_an_error()
+    {
+        var fit = ModelFitter.Fit(Imported(joints: ["Wing", "Crest"]), Game, ["Carch"]);
 
         Assert.Null(fit.Mesh);
-        Assert.Contains(fit.Errors, e => e.Contains("Crest") && e.Contains("not in the game's skeleton"));
+        Assert.Contains(fit.Errors, e => e.Contains("game's skeleton") && e.Contains("Wing"));
     }
 
     [Fact]

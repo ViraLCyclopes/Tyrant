@@ -15,6 +15,33 @@ public class ModelBuilderTests
         return (dir, "models/carch-1a2b3c4d.glb", game with { Renderers = [game.Renderers[0] with { Materials = [new MaterialModel("Carch", [])] }] });
     }
 
+    private static ImportedMesh Mesh(string name, int lod, params string[] joints) =>
+        new(lod, name, ModelFixture.Triangle(name), joints, [], ["Carch"]);
+
+    [Fact]
+    public void Of_several_meshes_for_a_lod_the_one_on_the_games_skeleton_is_used_and_the_rest_ignored()
+    {
+        var warnings = new List<string>();
+        var errors = new List<string>();
+        var game = new HashSet<string>(["Hip", "Tail"]);
+
+        var picked = ModelBuilder.PickMeshes([Mesh("allosaurus_L0: ", 0, "Allosaurus_L0", "def_c_tail3_joint"), Mesh("AllosaurusAnax_LOD00", 0, "Hip", "Tail")], game, warnings, errors);
+
+        Assert.Empty(errors);
+        Assert.Equal("AllosaurusAnax_LOD00", Assert.Single(picked).Name);
+        Assert.Contains(warnings, w => w.Contains("allosaurus_L0") && w.Contains("ignored"));
+    }
+
+    [Fact]
+    public void Two_meshes_on_the_games_skeleton_for_one_lod_still_ask_to_be_joined()
+    {
+        var errors = new List<string>();
+
+        ModelBuilder.PickMeshes([Mesh("Body", 0, "Hip", "Tail"), Mesh("Spikes", 0, "Hip")], new HashSet<string>(["Hip", "Tail"]), [], errors);
+
+        Assert.Contains(errors, e => e.Contains("Body") && e.Contains("Spikes") && e.Contains("Ctrl+J"));
+    }
+
     [Fact]
     public void A_fitting_model_gets_a_tmesh_per_lod_and_a_report()
     {

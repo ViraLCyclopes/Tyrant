@@ -79,6 +79,8 @@ public static class ModelBuilder
 
         var errors = new List<string>();
         var warnings = new List<string>();
+        imported = PickMeshes(imported, renderers[0].Bones.Select(b => b.Name).ToHashSet(StringComparer.Ordinal), warnings, errors);
+        if (errors.Count > 0) return Save(modDir, glbFile, Report(errors, warnings, []));
         var fitted = new List<MeshData>();
         for (var lod = 0; lod < renderers.Count; lod++)
         {
@@ -176,6 +178,39 @@ public static class ModelBuilder
             BoundsMin = n == 0 ? new float[3] : min,
             BoundsMax = n == 0 ? new float[3] : max,
         };
+    }
+
+    /// <summary>
+    /// One mesh per LOD. Extra meshes skinned to another skeleton (a model ported from another game, still in the file) are
+    /// ignored with a warning; two on the game's skeleton for one LOD must be joined or named …_LOD1 / …_LOD2.
+    /// </summary>
+    public static IReadOnlyList<ImportedMesh> PickMeshes(IReadOnlyList<ImportedMesh> imported, IReadOnlySet<string> gameBones, List<string> warnings, List<string> errors)
+    {
+        static string Names(IEnumerable<ImportedMesh> meshes) => string.Join(", ", meshes.Select(m => m.Name.Trim()));
+        bool OnGameSkeleton(ImportedMesh m) => m.JointNames.Length > 0 && m.JointNames.Count(gameBones.Contains) * 2 >= m.JointNames.Length;
+        var picked = new List<ImportedMesh>();
+        foreach (var group in imported.GroupBy(m => m.Lod).OrderBy(g => g.Key))
+        {
+            var meshes = group.ToList();
+            if (meshes.Count == 1)
+            {
+                picked.Add(meshes[0]);
+                continue;
+            }
+            var onRig = meshes.Where(OnGameSkeleton).ToList();
+            var lod = group.Key == 0 ? "" : $"LOD {group.Key}: ";
+            if (onRig.Count == 1)
+            {
+                picked.Add(onRig[0]);
+                var others = meshes.Except(onRig).ToList();
+                warnings.Add($"{lod}{Names(others)} {(others.Count == 1 ? "is" : "are")} not on the game's skeleton and {(others.Count == 1 ? "was" : "were")} ignored; {onRig[0].Name.Trim()} is the model. (In Blender, export with Limit to: Selected Objects to leave such meshes out.)");
+            }
+            else if (onRig.Count == 0)
+                errors.Add($"{lod}None of the meshes in the file ({Names(meshes)}) is on the game's skeleton. Parent your model to the game's armature from Tyrant's export (Armature Deform).");
+            else
+                errors.Add($"{lod}The file has {onRig.Count} meshes on the game's skeleton for LOD {group.Key} ({Names(onRig)}). Join them in Blender (Ctrl+J) or name the extra ones …_LOD1 / …_LOD2.");
+        }
+        return picked;
     }
 
     /// <summary>A .tmesh back as a mesh (for previews), with the game renderer's bind poses.</summary>

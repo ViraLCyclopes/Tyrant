@@ -34,16 +34,8 @@ public static class ModelFitter
         var used = mesh.Skin.SelectMany(s => new[] { (s.I0, s.W0), (s.I1, s.W1), (s.I2, s.W2), (s.I3, s.W3) })
             .Where(p => p.Item2 > 0).Select(p => p.Item1).ToHashSet();
         var map = new int[imported.JointNames.Length];
-        for (var j = 0; j < map.Length; j++)
-        {
-            if (gameBones.TryGetValue(imported.JointNames[j], out var index)) map[j] = index;
-            else
-            {
-                map[j] = -1;
-                if (used.Contains(j))
-                    errors.Add($"Bone '{imported.JointNames[j]}' is not in the game's skeleton. Keep the bone names from Tyrant's export (new bones are not supported yet).");
-            }
-        }
+        for (var j = 0; j < map.Length; j++) map[j] = gameBones.TryGetValue(imported.JointNames[j], out var index) ? index : -1;
+        var skin = KeepGameBones(imported, mesh, map, used, errors, warnings);
         for (var j = 0; j < map.Length; j++)
         {
             if (map[j] < 0 || !used.Contains(j) || map[j] >= game.Mesh.BindPoses.Length) continue;
@@ -104,7 +96,7 @@ public static class ModelFitter
         var fitted = new MeshData
         {
             Name = mesh.Name, Positions = mesh.Positions, Normals = mesh.Normals, Uv0 = mesh.Uv0, Colors = mesh.Colors,
-            Skin = mesh.Skin.Select(s => Remap(s, map)).ToArray(), Indices = [.. indices], SubMeshes = [.. ordered],
+            Skin = skin, Indices = [.. indices], SubMeshes = [.. ordered],
             BindPoses = game.Mesh.BindPoses, BlendShapes = [.. shapes],
         };
         return new FitResult(fitted, errors, warnings);
@@ -120,10 +112,68 @@ public static class ModelFitter
     /// <summary>Average distance a shape key moves the vertices it changes.</summary>
     private static float MeanDelta(BlendShape shape) => shape.PositionDeltas.Length == 0 ? 0f : shape.PositionDeltas.Average(d => d.Length());
 
-    private static BoneWeight4 Remap(BoneWeight4 s, int[] map)
+    /// <summary>Blender's glTF exporter adds this joint for vertices with no weight on the armature's bones.</summary>
+    public const string BlenderNeutralBone = "neutral_bone";
+
+    /// <summary>Above this share of vertices with no weight on the game's bones, the mesh is on another skeleton: an error.</summary>
+    public const float MaxUnweightedShare = 0.25f;
+
+    /// <summary>
+    /// Weights in the game's bone order. Weights on bones the game lacks (leftovers of a ported model, Blender's neutral_bone) are
+    /// dropped and each vertex's remaining weight rebalanced; a vertex left with none borrows its nearest weighted neighbour's.
+    /// </summary>
+    private static BoneWeight4[] KeepGameBones(ImportedMesh imported, MeshData mesh, int[] map, HashSet<int> used, List<string> errors, List<string> warnings)
     {
-        int M(int i, float w) => w > 0 && i >= 0 && i < map.Length && map[i] >= 0 ? map[i] : 0;
-        return new BoneWeight4(M(s.I0, s.W0), M(s.I1, s.W1), M(s.I2, s.W2), M(s.I3, s.W3), s.W0, s.W1, s.W2, s.W3);
+        var skin = new BoneWeight4[mesh.Skin.Length];
+        var empty = new List<int>();
+        var neutral = 0;
+        for (var v = 0; v < skin.Length; v++)
+        {
+            var s = mesh.Skin[v];
+            var kept = new List<(int Bone, float Weight)>();
+            foreach (var (i, w) in new[] { (s.I0, s.W0), (s.I1, s.W1), (s.I2, s.W2), (s.I3, s.W3) })
+            {
+                if (w <= 0 || i < 0 || i >= map.Length) continue;
+                if (map[i] >= 0) kept.Add((map[i], w));
+                else if (imported.JointNames[i] == BlenderNeutralBone) neutral++;
+            }
+            var total = kept.Sum(k => k.Weight);
+            if (total <= 0)
+            {
+                empty.Add(v);
+                continue;
+            }
+            while (kept.Count < 4) kept.Add((0, 0));
+            skin[v] = new BoneWeight4(kept[0].Bone, kept[1].Bone, kept[2].Bone, kept[3].Bone,
+                kept[0].Weight / total, kept[1].Weight / total, kept[2].Weight / total, kept[3].Weight / total);
+        }
+
+        var unknown = map.Select((m, j) => (m, j)).Where(p => p.m < 0 && used.Contains(p.j) && imported.JointNames[p.j] != BlenderNeutralBone)
+            .Select(p => imported.JointNames[p.j]).ToList();
+        var listed = string.Join(", ", unknown.Take(6)) + (unknown.Count > 6 ? ", …" : "");
+        if (empty.Count > skin.Length * MaxUnweightedShare)
+        {
+            errors.Add($"Most of this mesh is weighted to bones that are not in the game's skeleton{(unknown.Count == 0 ? "" : $" ({listed})")}. Parent it to the game's armature from Tyrant's export (Armature Deform) and weight it to its bones.");
+            return skin;
+        }
+        if (unknown.Count > 0)
+            warnings.Add($"Weights on {unknown.Count} bone(s) the game doesn't have ({listed}) were dropped; the rest of each vertex's weight now carries it. Check those parts move well.");
+        if (neutral > 0)
+            warnings.Add($"{neutral} {(neutral == 1 ? "vertex" : "vertices")} had no weight on the armature in Blender (its exporter's 'neutral_bone'); {(neutral == 1 ? "it now follows its" : "they now follow their")} nearest weighted neighbour.");
+
+        var weighted = Enumerable.Range(0, skin.Length).Except(empty).ToArray();
+        foreach (var v in empty)
+        {
+            var best = -1;
+            var bestDistance = float.MaxValue;
+            foreach (var w in weighted)
+            {
+                var d = Vector3.DistanceSquared(mesh.Positions[v], mesh.Positions[w]);
+                if (d < bestDistance) (best, bestDistance) = (w, d);
+            }
+            skin[v] = best >= 0 ? skin[best] : new BoneWeight4(0, 0, 0, 0, 1, 0, 0, 0);
+        }
+        return skin;
     }
 
     private static bool Near(Matrix4x4 a, Matrix4x4 b)

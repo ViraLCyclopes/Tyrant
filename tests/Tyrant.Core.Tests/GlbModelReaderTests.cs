@@ -80,16 +80,16 @@ public class GlbModelReaderTests
     }
 
     [Fact]
-    public void Two_main_meshes_are_an_error_asking_to_join_them()
+    public void Two_main_meshes_are_both_read_for_the_builder_to_choose()
     {
         var path = TempGlb();
         var prefab = ModelFixture.Prefab(ModelFixture.Triangle(name: "Body"), skinned: true);
         var second = new RendererModel("Horn", ModelFixture.Triangle(name: "Horn"), prefab.Renderers[0].Bones, prefab.Renderers[0].Owner);
         GltfModelWriter.WriteGlbs(prefab with { Renderers = [prefab.Renderers[0], second] }, path);
 
-        var ex = Assert.Throws<TyrantException>(() => GlbModelReader.Read(path));
+        var meshes = GlbModelReader.Read(path);
 
-        Assert.Contains("Ctrl+J", ex.Message);
+        Assert.Equal(2, meshes.Count(m => m.Lod == 0)); // ModelBuilder.PickMeshes keeps one, or asks to join them
     }
 
     [Fact]

@@ -57,10 +57,7 @@ public static partial class GlbModelReader
         if (meshes.Count == 0)
             throw new TyrantException(TyrantErrorCode.ModInvalid,
                 $"'{Path.GetFileName(glbPath)}' has no mesh skinned to an armature. Keep the game's armature (from Tyrant's export) and parent your mesh to it with Armature Deform.");
-        foreach (var group in meshes.GroupBy(m => m.Lod).Where(g => g.Count() > 1))
-            throw new TyrantException(TyrantErrorCode.ModInvalid,
-                $"'{Path.GetFileName(glbPath)}' has {group.Count()} meshes for LOD {group.Key} ({string.Join(", ", group.Select(m => m.Name))}). Join them in Blender (Ctrl+J) or name the extra ones …_LOD1 / …_LOD2.");
-        return meshes.OrderBy(m => m.Lod).ToList();
+        return meshes.OrderBy(m => m.Lod).ToList(); // several per LOD: ModelBuilder.PickMeshes keeps the one on the game's skeleton
     }
 
     private static ImportedMesh ReadMesh(Node node, string name, int lod)
