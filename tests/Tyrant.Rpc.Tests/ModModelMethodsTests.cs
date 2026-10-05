@@ -83,6 +83,27 @@ public class ModModelMethodsTests
     }
 
     [Fact]
+    public async Task The_skins_3D_view_shows_the_skins_own_model()
+    {
+        using var game = new FakeGame();
+        var (h, ws, _, glb) = await Setup(game);
+        var dir = Path.Combine(ws, "mods", "big-carch");
+        Directory.CreateDirectory(Path.Combine(dir, "skins", "spiked"));
+        File.Copy(glb, Path.Combine(dir, "skins", "spiked", "male_D.png"));
+        File.WriteAllText(Path.Combine(dir, "mod.json"),
+            "{\"format\":1,\"id\":\"big-carch\",\"name\":\"Big Carch\",\"version\":\"1.0.0\",\"replace\":[],\"skins\":[{\"id\":\"spiked\",\"species\":\"Carcharodontosaurus\",\"name\":\"Spiked\",\"base\":\"1\",\"male\":{\"diffuse\":\"skins/spiked/male_D.png\"}}]}");
+        var before = await h.Call("mods.skinModel", new { id = "big-carch", skin = "spiked", sex = "male" });
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, before.GetProperty("ownModel").ValueKind); // the game's model
+
+        await h.Call("mods.replaceModel", new { id = "big-carch", file = glb, skin = "spiked" });
+        var after = await h.Call("mods.skinModel", new { id = "big-carch", skin = "spiked", sex = "male" });
+
+        var own = after.GetProperty("ownModel");
+        Assert.StartsWith(Path.Combine(ws, "cache", "previews") + Path.DirectorySeparatorChar, own.GetProperty("file").GetString());
+        Assert.Equal(System.Text.Json.JsonValueKind.Array, own.GetProperty("materials").ValueKind);
+    }
+
+    [Fact]
     public async Task Model_preview_writes_a_glb_per_lod_in_the_preview_cache()
     {
         using var game = new FakeGame();

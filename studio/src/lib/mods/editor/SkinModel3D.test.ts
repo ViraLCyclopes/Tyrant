@@ -56,6 +56,18 @@ describe('SkinModel3D', () => {
     expect(viewer.showModels.mock.calls[0][2].materials).toEqual(model.materials);
   });
 
+  it('a skin with its own model shows that model, not the species one', async () => {
+    const { rpc, session } = setup();
+    const own = [{ name: 'AcroNew', baseColor: null, normal: null, skinnable: true, animal: true, cutoff: 0.5, shader: 'AnimalShader', slots: [] }];
+    rpc.on('mods.skinModel', (p) => ({ prefabRef: 'acro#1', maps: { diffuse: `D:/m/${p.sex}_D.png` }, ownModel: { file: 'D:/cache/own_lod0.glb', materials: own } }));
+    renderWith(SkinModel3D, session, { doc, skin, colorsJson: null, variant: 'normal' });
+
+    await waitFor(() => expect(viewer.setAnimalMaps).toHaveBeenCalledWith({ diffuse: 'asset://D:/m/male_D.png' }));
+    expect(viewer.showModels.mock.calls[0][1]).toEqual([{ file: 'D:/cache/own_lod0.glb', url: 'asset://D:/cache/own_lod0.glb' }]);
+    expect(viewer.showModels.mock.calls[0][2].materials).toEqual(own);
+    expect(rpc.callsTo('assets.preview')).toHaveLength(0);
+  });
+
   it('Infant switches the maps; ↻ samples another animal', async () => {
     const { rpc, session } = setup();
     renderWith(SkinModel3D, session, { doc, skin, colorsJson: null, variant: 'normal' });

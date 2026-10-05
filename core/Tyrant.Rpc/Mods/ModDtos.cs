@@ -130,8 +130,14 @@ public sealed record ModSampledColors(string? A, string? B, string? Secondary, s
 /// <summary>Sex: male, female or infant.</summary>
 public sealed record ModSkinModelParams(string Id, string Skin, string Sex = "male");
 
-/// <summary>The species prefab to preview and the skin's maps (diffuse, normal, extra, pattern) as PNG files.</summary>
-public sealed record ModSkinModel(string PrefabRef, IReadOnlyDictionary<string, string> Maps);
+/// <summary>
+/// The species prefab to preview and the skin's maps (diffuse, normal, extra, pattern) as PNG files. OwnModel: the model the skin
+/// wears in this mod (its own, else the mod's species replacement), shown instead of the prefab; null for the game's model.
+/// </summary>
+public sealed record ModSkinModel(string PrefabRef, IReadOnlyDictionary<string, string> Maps, ModSkinOwnModel? OwnModel = null);
+
+/// <summary>The replacement model's LOD 0 preview (.glb in the preview cache) and its materials.</summary>
+public sealed record ModSkinOwnModel(string File, IReadOnlyList<Tyrant.Rpc.Assets.PreviewMaterial> Materials);
 
 public sealed record ModThumbnailParams(string Id, string File, int Size = 96);
 

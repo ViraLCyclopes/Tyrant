@@ -677,12 +677,18 @@ export interface ModSkinDto {
 export interface ModSkinModel {
   prefabRef: string;
   maps: Record<string, string>;
+  ownModel?: ModSkinOwnModel | null;
 }
 
 export interface ModSkinModelParams {
   id: string;
   skin: string;
   sex?: string;
+}
+
+export interface ModSkinOwnModel {
+  file: string;
+  materials: PreviewMaterial[];
 }
 
 export interface ModSoundDto {

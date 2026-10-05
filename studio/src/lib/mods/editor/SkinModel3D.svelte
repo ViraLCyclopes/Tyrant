@@ -2,13 +2,13 @@
   import { untrack } from 'svelte';
   import type { ModelViewer } from '$lib/assets/viewer';
   import { asRpcError } from '$lib/rpc/client';
-  import type { ModSkinDto } from '$lib/rpc/types.gen';
+  import type { ModSkinDto, ModSkinOwnModel } from '$lib/rpc/types.gen';
   import { getTab } from '$lib/shell/tab.svelte';
   import { getSession } from '$lib/stores/session.svelte';
   import type { Variant } from './colors';
   import type { ModDoc } from './modDoc.svelte';
 
-  /** One animal of the skin in 3D: the species' model wearing the skin's maps, with the 2D strip's first animal's colours. */
+  /** One animal of the skin in 3D: the model it wears (its own, the mod's species model, or the game's) with the skin's maps and the 2D strip's first animal's colours. */
   let { doc, skin, colorsJson, variant }: { doc: ModDoc; skin: ModSkinDto; colorsJson: string | null; variant: Variant } = $props();
   const session = getSession();
   const tab = getTab();
@@ -40,8 +40,9 @@
     try {
       const model = await session.rpc.call('mods.skinModel', { id: doc.id, skin: skin.id, sex });
       if (mine !== generation || disposed) return;
-      await ensureModel(model.prefabRef);
-      if (mine !== generation || disposed || !viewer || shownPrefab !== model.prefabRef) return;
+      const key = model.ownModel?.file ?? model.prefabRef;
+      await ensureModel(key, model.ownModel ?? null);
+      if (mine !== generation || disposed || !viewer || shownPrefab !== key) return;
       viewer.setAnimalMaps(Object.fromEntries(Object.entries(model.maps).map(([slot, file]) => [slot, session.platform.fileUrl(file)])));
       reason = null;
       await colour(mine);
@@ -54,13 +55,13 @@
    * One model on the canvas at a time: a load already on its way for the same prefab is shared, and a load for another
    * prefab waits for it, disposing the old viewer first (two engines on one canvas share and corrupt its WebGL state).
    */
-  function ensureModel(prefabRef: string): Promise<void> {
+  function ensureModel(prefabRef: string, own: ModSkinOwnModel | null): Promise<void> {
     wantedPrefab = prefabRef;
     if (shownPrefab === prefabRef && !loading) return Promise.resolve();
     const before = loading;
     const mine: Promise<void> = (async () => {
       await before?.catch(() => {});
-      if (shownPrefab !== prefabRef && wantedPrefab === prefabRef) await show(prefabRef);
+      if (shownPrefab !== prefabRef && wantedPrefab === prefabRef) await show(prefabRef, own);
     })().finally(() => {
       if (loading === mine) loading = null;
     });
@@ -68,8 +69,9 @@
     return mine;
   }
 
-  async function show(prefabRef: string) {
-    const preview = await session.rpc.call('assets.preview', { ref: prefabRef });
+  /** prefabRef is the game prefab, or the own model's preview file (then `own` holds its file and materials). */
+  async function show(prefabRef: string, own: ModSkinOwnModel | null) {
+    const preview = own ? { files: [own.file], materials: own.materials } : await session.rpc.call('assets.preview', { ref: prefabRef });
     if (disposed || wantedPrefab !== prefabRef) return;
     const module = await import('$lib/assets/viewer');
     viewer?.dispose();

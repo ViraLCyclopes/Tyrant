@@ -272,7 +272,23 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
         var maps = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var slot in new[] { "diffuse", "normal", "extra", "pattern" })
             if (MapFile(ws, install, index, mod, skin, based, p.Sex, slot) is { } file) maps[slot] = file;
-        return new ModSkinModel(prefab.Ref, maps);
+        return new ModSkinModel(prefab.Ref, maps, OwnModelOf(mod, skin));
+    }
+
+    /// <summary>The model the skin wears in this mod (its own, else the mod's species replacement); null when it is the game's or not built.</summary>
+    private ModSkinOwnModel? OwnModelOf(ModProject mod, Tyrant.Framework.Core.SkinEntry skin)
+    {
+        var skinId = skin.Model is not null ? skin.Id : null;
+        if (skinId is null && !mod.Manifest.Models.Any(m => m.Target == skin.Species)) return null;
+        try
+        {
+            var preview = ModelPreview(new ModModelPreviewParams(mod.Id, skin.Species, skinId));
+            return preview.Lods.Count == 0 ? null : new ModSkinOwnModel(preview.Lods[0].File, preview.Materials);
+        }
+        catch (TyrantException)
+        {
+            return null; // not built yet (its page says why): the game's model is shown meanwhile
+        }
     }
 
     /// <summary>The skin's own PNG for the slot, else the base skin's texture (written once to the preview cache). Infants use the male infant slots, then the adult ones.</summary>
