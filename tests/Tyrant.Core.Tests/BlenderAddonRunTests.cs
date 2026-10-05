@@ -68,6 +68,27 @@ public class BlenderAddonRunTests
     }
 
     [SkippableFact]
+    public void A_model_opened_and_sent_back_unchanged_builds_without_warnings()
+    {
+        Skip.If(BlenderIntegrationTests.Blender() is null, "Blender 5.x not found");
+        var (projectFile, prefab, _, _, game) = Fixture();
+        using var _ = game;
+        var modDir = Directory.CreateDirectory(Path.Combine(Path.GetDirectoryName(projectFile)!, "mod")).FullName;
+        var glb = Path.Combine(modDir, "send.glb");
+
+        var run = RunPython("roundtrip.py", projectFile, glb);
+        Assert.True(run.ExitCode == 0 && run.Output.Contains("ROUNDTRIP"), run.Output);
+
+        var report = Tyrant.Core.ModelReplacements.ModelBuilder.Build(modDir, "send.glb", prefab);
+
+        Assert.True(report.Errors.Count == 0, string.Join(" | ", report.Errors));
+        Assert.DoesNotContain(report.Warnings, w => w.Contains("rest pose", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(report.Warnings, w => w.Contains("Shape key", StringComparison.Ordinal));
+        Assert.DoesNotContain(report.Warnings, w => w.Contains("neutral_bone", StringComparison.Ordinal));
+        Assert.Single(report.Lods);
+    }
+
+    [SkippableFact]
     public void Python_tests_pass_in_blender()
     {
         Skip.If(BlenderIntegrationTests.Blender() is null, "Blender 5.x not found");

@@ -23,7 +23,7 @@ def modifier_warnings(meshes):
 
 
 def export(armature, path):
-    """Writes the .glb Tyrant builds the model from: adult, rest pose, placeholder materials (Tyrant matches them by name)."""
+    """Writes the .glb Tyrant builds the model from: adult, rest pose, materials as names and viewport colours only (Tyrant matches them by name; placeholder mode drops the names)."""
     armature.tyrant_growth = 1.0
     growth.set_growth(armature, 1.0)
     objects = sendable(armature)
@@ -37,7 +37,7 @@ def export(armature, path):
     view_layer.objects.active = armature
     try:
         bpy.ops.export_scene.gltf(filepath=path, export_format="GLB", use_selection=True, export_skins=True, export_morph=True,
-                                  export_morph_normal=True, export_animations=False, export_materials="PLACEHOLDER", export_yup=True,
+                                  export_morph_normal=True, export_animations=False, export_materials="VIEWPORT", export_yup=True,
                                   export_rest_position_armature=True, export_apply=False)
     finally:
         for obj in view_layer.objects:
