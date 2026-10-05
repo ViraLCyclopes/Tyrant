@@ -80,6 +80,10 @@ public sealed class BlenderOpenCommand : Command<BlenderOpenCommand.Settings>
         [Description("Also bring the far levels of detail.")]
         public bool Lods { get; set; }
 
+        [CommandOption("--prefab <REF>")]
+        [Description("Open any GameObject (a fence, a building) by its reference from 'tyrant assets list', instead of --species.")]
+        public string? Prefab { get; set; }
+
         [CommandOption("--sex <SEX>")]
         [Description("male (default) or female: the sex Blender shows first (its maps and growth; the Tyrant panel switches it).")]
         public string Sex { get; set; } = "male";
@@ -94,7 +98,7 @@ public sealed class BlenderOpenCommand : Command<BlenderOpenCommand.Settings>
         var (ws, install) = CliServices.OpenWorkspace(settings);
         var service = new BlenderService(CliServices.Blender);
         var request = new BlenderOpenRequest(settings.Species, settings.Skin, settings.Mod, settings.Fresh, settings.Lods,
-            string.Equals(settings.Sex, "female", StringComparison.OrdinalIgnoreCase) ? "female" : "male");
+            string.Equals(settings.Sex, "female", StringComparison.OrdinalIgnoreCase) ? "female" : "male") { PrefabRef = settings.Prefab };
         if (!settings.NoLaunch) service.CheckReady(ws); // before the index and data, so a missing Blender is said first
         var index = CliServices.LoadIndex(ws, install);
         var species = ModCli.RequireSpecies(ws);

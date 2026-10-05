@@ -37,6 +37,7 @@ public class BlenderCliTests
         var (code, output, _) = Run("blender", "open", "--help");
         Assert.Equal(ExitCodes.Ok, code);
         Assert.Contains("--sex", output);
+        Assert.Contains("--prefab", output);
     }
 
     [Fact]

@@ -8,7 +8,8 @@
    * Open in Blender for a game species (skins: its game skins to pick from), a mod skin (mod + skin) or a mod's species
    * model (mod, no skin). Start fresh rebuilds the Blender project; far LODs come along on request.
    */
-  let { species, skin = undefined, mod = undefined, skins = undefined }: { species: string; skin?: string; mod?: string; skins?: string[] } = $props();
+  let { species = '', skin = undefined, mod = undefined, skins = undefined, prefabRef = undefined }:
+    { species?: string; skin?: string; mod?: string; skins?: string[]; prefabRef?: string } = $props();
   const session = getSession();
   const tab = getTab();
   const blender = getBlender(session);
@@ -22,7 +23,7 @@
 
   function open() {
     const gameSkin = skins ? (chosen ?? skins[0] ?? null) : null;
-    void blender.open(tab, { species, skin: mod ? (skin ?? null) : gameSkin, mod: mod ?? null, fresh, lods, sex });
+    void blender.open(tab, { species, skin: mod ? (skin ?? null) : gameSkin, mod: mod ?? null, fresh, lods, sex, prefabRef: prefabRef ?? null });
     fresh = false; // once: the next open must not set the .blend aside again
   }
 </script>

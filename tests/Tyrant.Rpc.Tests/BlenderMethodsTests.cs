@@ -92,6 +92,18 @@ public class BlenderMethodsTests
     }
 
     [Fact]
+    public async Task Open_takes_a_prefab_from_the_assets_tab()
+    {
+        using var game = new FakeGame();
+        var (programFiles, appData, _, process) = Blender52(addon: true);
+        var (h, _) = await Setup(game, TestStudio.NoBlender(process, new TestStudio.SilentLink(answers: true), programFiles, appData));
+
+        var result = await h.Call("blender.open", new { prefabRef = SkinDumps.Prefab.Ref });
+
+        Assert.Equal("Carcharodontosaurus", Tyrant.Core.Blender.BlenderProjectFile.Read(result.GetProperty("projectFile").GetString()!).Source.Species);
+    }
+
+    [Fact]
     public async Task Open_can_start_as_female()
     {
         using var game = new FakeGame();

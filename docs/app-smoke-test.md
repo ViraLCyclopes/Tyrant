@@ -158,6 +158,8 @@ Release build: `npm run build:app`, install `studio/src-tauri/target/release/bun
 79. With Blender open: **Open in Blender** on another species → a second Tyrant scene is added to the same file, no dialog,
     no second Blender window; **Open in Blender** on the first one again switches back to its scene. **Start fresh** keeps
     the old scene as *… (old)*.
+79b. Assets -> Browse -> any GameObject: an animal prefab offers **Open in Blender** with its skins; a fence or building
+    opens as *Tyrant · object · <name>* with its pictures (Send to Tyrant says objects are for reference).
 80. **(game, ask first)** Install the mod: the sculpt shows in game.
 81. Ultimasaurus: in the file with the JWE mesh, open `ultimasaurus-allo`'s skin from Tyrant (a new scene), bring the JWE
     mesh into that scene (Object → Link/Transfer Data → Link Objects to Scene, or Append), give it an Armature

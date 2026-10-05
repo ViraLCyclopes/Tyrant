@@ -140,6 +140,9 @@ def why_not_sendable(context):
 
     if project.armature_of(context) is not None:
         return None
+    scene_project = context.scene.get(project.TAG)
+    if scene_project and not project.tagged_armatures(context.scene):
+        return "This is a game object, opened for reference or as a base: Send to Tyrant is for animals (new objects come later)."
     if len(project.tagged_armatures(context.scene)) > 1:
         return "Select the model or armature to send (this scene has several from Tyrant)."
     return "This scene was not opened from Tyrant; use Open in Blender in Tyrant."

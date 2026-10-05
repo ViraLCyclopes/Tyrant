@@ -83,6 +83,41 @@ public class BlenderProjectTests
     }
 
     [Fact]
+    public void Any_game_object_opens_as_an_object_project_with_its_meshes_and_materials()
+    {
+        using var c = Setup();
+        var fence = new AssetRecord("fences.bundle", 42, "GameObject", "Fence_AdobeClay_Post_End_1m", "Assets/Fence.prefab", "abcabcabcabcabcabcabcabcabcabcab", null);
+        var picture = new AssetRecord("fences.bundle", 43, "Texture2D", "T_Fence_D", null, "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd", null);
+        var post = ModelFixture.Prefab(ModelFixture.Triangle(name: "FencePost", skinned: false, withShape: false), skinned: false);
+        post = post with { Renderers = [post.Renderers[0] with { Name = "FencePost", Materials = [new MaterialModel("Adobe", [new TextureSlot("_DiffuseTex", null, 43)])] }] };
+        var reader = new FakeAssetReader { PrefabModelToReturn = post };
+        var index = new AssetIndex { Assets = [.. SkinDumps.Textures, SkinDumps.Prefab, fence, picture] };
+
+        var result = BlenderProjectWriter.Write(new BlenderOpenRequest("", null, null, false, false) { PrefabRef = fence.Ref }, c.Ws, c.Install, index, c.Species, reader, "t.exe");
+
+        var project = BlenderProjectFile.Read(result.ProjectFile);
+        Assert.Equal("object", project.Source.Kind);
+        Assert.Equal("Fence_AdobeClay_Post_End_1m", project.Source.Species); // its name, for the scene
+        Assert.Null(project.Destination);
+        Assert.Null(project.Growth);
+        Assert.Null(project.Sexes);
+        Assert.False(project.Materials["Adobe"].Animal);
+        Assert.Equal("textures/Adobe-diffuse.png", project.Materials["Adobe"].Maps["diffuse"]);
+        Assert.StartsWith(Path.Combine(c.Ws.Dir, "blender", "objects"), result.Dir, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(["FencePost"], SharpGLTF.Schema2.ModelRoot.Load(Path.Combine(result.Dir, "model.glb")).LogicalMeshes.Select(m => m.Name)); // a prop has no armature
+    }
+
+    [Fact]
+    public void An_animal_prefab_given_by_reference_opens_as_its_species()
+    {
+        using var c = Setup();
+        var result = c.Write(new BlenderOpenRequest("", null, null, false, false) { PrefabRef = SkinDumps.Prefab.Ref });
+        var project = BlenderProjectFile.Read(result.ProjectFile);
+        Assert.Equal("game", project.Source.Kind);
+        Assert.Equal("Carcharodontosaurus", project.Source.Species);
+    }
+
+    [Fact]
     public void Far_lods_come_along_when_asked()
     {
         using var c = Setup();

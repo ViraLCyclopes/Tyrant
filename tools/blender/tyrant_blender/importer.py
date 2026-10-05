@@ -21,10 +21,12 @@ def import_project(path):
                               import_shading="NORMALS", merge_vertices=False, import_scene_as_collection=False)
     created = [o for o in bpy.data.objects if o not in before]
     armature = next((o for o in created if o.type == "ARMATURE"), None)
-    if armature is None:
+    is_object = source.get("kind") == "object"  # a fence, a building: meshes only, for reference or a new object
+    if armature is None and not is_object:
         raise project.ProjectError("model.glb has no armature; open it again from Tyrant (Open in Blender → Start fresh).")
-    armature[project.TAG] = path
-    armature.data.display_type = "OCTAHEDRAL"
+    if armature is not None:
+        armature[project.TAG] = path
+        armature.data.display_type = "OCTAHEDRAL"
     for obj in created:
         if obj.type != "MESH":
             continue
@@ -34,6 +36,8 @@ def import_project(path):
 
     if hasattr(materials, "apply_all"):
         materials.apply_all(created, data, folder)
+    if armature is None:
+        return next((o for o in created if o.type == "MESH"), None)
     if hasattr(type(armature), "tyrant_sex"):
         armature.tyrant_sex = "FEMALE" if data.get("sex") == "female" else "MALE"  # swaps the maps and the growth limit
     if hasattr(growth, "set_growth"):

@@ -32,7 +32,7 @@ describe('OpenInBlender', () => {
     await fireEvent.click(screen.getByLabelText('Include far LODs'));
     await fireEvent.click(screen.getByRole('button', { name: 'Open in Blender' }));
 
-    await waitFor(() => expect(rpc.callsTo('blender.open')[0]?.params).toEqual({ species: 'Carcharodontosaurus', skin: 'Alt 1', mod: null, fresh: false, lods: true, sex: 'male' }));
+    await waitFor(() => expect(rpc.callsTo('blender.open')[0]?.params).toEqual({ species: 'Carcharodontosaurus', skin: 'Alt 1', mod: null, fresh: false, lods: true, sex: 'male', prefabRef: null }));
   });
 
   it('opens a mod skin', async () => {
@@ -42,7 +42,7 @@ describe('OpenInBlender', () => {
     await fireEvent.click(await screen.findByLabelText('Start fresh'));
     await fireEvent.click(screen.getByRole('button', { name: 'Open in Blender' }));
 
-    await waitFor(() => expect(rpc.callsTo('blender.open')[0]?.params).toEqual({ species: 'Carcharodontosaurus', skin: 'red', mod: 'reds', fresh: true, lods: false, sex: 'male' }));
+    await waitFor(() => expect(rpc.callsTo('blender.open')[0]?.params).toEqual({ species: 'Carcharodontosaurus', skin: 'red', mod: 'reds', fresh: true, lods: false, sex: 'male', prefabRef: null }));
   });
 
   it('Start fresh is used once, then unticked (a second open must not replace the .blend again)', async () => {

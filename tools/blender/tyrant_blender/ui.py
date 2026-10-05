@@ -21,7 +21,8 @@ def record_blend(path, blend):
 def scene_name(data):
     source = data["source"]
     who = " ".join(p for p in (source["species"], source.get("skin")) if p)
-    return f"Tyrant · {source.get('mod') or 'game'} · {who}"[:MAX_NAME]
+    group = "object" if source.get("kind") == "object" else source.get("mod") or "game"
+    return f"Tyrant · {group} · {who}"[:MAX_NAME]
 
 
 def scene_of(path):

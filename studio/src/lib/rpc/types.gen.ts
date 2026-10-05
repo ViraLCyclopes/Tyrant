@@ -137,12 +137,13 @@ export interface BlenderOpenDto {
 }
 
 export interface BlenderOpenParams {
-  species: string;
+  species?: string;
   skin?: string | null;
   mod?: string | null;
   fresh?: boolean;
   lods?: boolean;
   sex?: string;
+  prefabRef?: string | null;
 }
 
 export interface BlenderSetPathParams {

@@ -10,8 +10,11 @@ using Tyrant.Framework.Core;
 namespace Tyrant.Core.Blender;
 
 /// <summary>What to open: a species (with a game skin), or with Mod a mod's skin (Skin = its id) or its species model.</summary>
-/// <summary>Sex: which sex Blender shows first ("male" or "female").</summary>
-public sealed record BlenderOpenRequest(string Species, string? Skin, string? Mod, bool Fresh, bool Lods, string Sex = "male");
+/// <summary>Sex: which sex Blender shows first ("male" or "female"). PrefabRef: any GameObject from the Assets tab instead of a species.</summary>
+public sealed record BlenderOpenRequest(string Species, string? Skin, string? Mod, bool Fresh, bool Lods, string Sex = "male")
+{
+    public string? PrefabRef { get; init; }
+}
 
 public sealed record BlenderProjectResult(string ProjectFile, string Dir, bool GameChanged);
 
@@ -23,6 +26,14 @@ public static class BlenderProjectWriter
     public static BlenderProjectResult Write(BlenderOpenRequest request, Workspace ws, GameInstall install, AssetIndex index,
         IReadOnlyList<SpeciesSkins> species, IAssetReader reader, string tyrantExe)
     {
+        if (request.PrefabRef is { } prefabRef)
+        {
+            var record = index.Resolve(prefabRef, "GameObject");
+            var owner = record.Guid is null ? null : species.FirstOrDefault(s => string.Equals(s.PrefabGuid, record.Guid, StringComparison.OrdinalIgnoreCase));
+            return owner is not null
+                ? Write(request with { PrefabRef = null, Species = owner.SpeciesId }, ws, install, index, species, reader, tyrantExe)
+                : WriteObject(request, record, ws, install, index, reader, tyrantExe);
+        }
         var mod = request.Mod is null ? null : ModProject.Open(ws, request.Mod);
         var ownSkin = mod is not null && request.Skin is not null ? mod.Skin(request.Skin) : null;
         var (speciesId, prefabRecord) = ModProject.ResolveModelTarget(index, species, ownSkin?.Species ?? request.Species, null);
@@ -90,6 +101,44 @@ public static class BlenderProjectWriter
             .Where(f => !f.EndsWith(".old.blend", StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(File.GetLastWriteTimeUtc)
             .FirstOrDefault();
+    }
+
+    /// <summary>
+    /// Any other GameObject (fences, scenery, buildings): its meshes with their pictures, for reference or as a base for new
+    /// objects. No growth, sexes or destination (Send to Tyrant is for animals).
+    /// </summary>
+    private static BlenderProjectResult WriteObject(BlenderOpenRequest request, AssetRecord record, Workspace ws, GameInstall install,
+        AssetIndex index, IAssetReader reader, string tyrantExe)
+    {
+        var name = record.Name.Length > 0 ? record.Name : $"object-{record.PathId}";
+        var dir = Path.Combine(ws.Dir, "blender", "objects", TextureExporter.Sanitize($"{name}-{record.PathId}".ToLowerInvariant()));
+        var projectFile = Path.Combine(dir, BlenderProjectFile.FileName);
+        var old = File.Exists(projectFile) ? TryRead(projectFile) : null;
+        var build = GameFingerprint.Compute(install).BuildGuid;
+        var existing = ExistingBlend(old, dir);
+        var keepModel = !request.Fresh && existing is not null;
+        var modelBuild = keepModel && old is not null ? old.GameBuild : build;
+
+        Directory.CreateDirectory(dir);
+        var prefab = reader.ReadPrefabModel(install, record);
+        // The most detailed level only (a prop's LOD1/LOD2 would sit on top of it), unless the far LODs were asked for.
+        var renderers = prefab.Renderers.Where(r => request.Lods || !(GlbModelReader.HasLodSuffix(r.Name) || GlbModelReader.HasLodSuffix(r.Mesh.Name))
+            || GlbModelReader.LodOf(GlbModelReader.HasLodSuffix(r.Name) ? r.Name : r.Mesh.Name) == 0).ToList();
+        if (renderers.Count == 0)
+            throw new TyrantException(TyrantErrorCode.AssetUnreadable, $"'{name}' has no mesh Tyrant can read, so there is nothing to open in Blender.");
+        var modelGlb = Path.Combine(dir, ModelFile);
+        if (!keepModel || !File.Exists(modelGlb))
+            GltfModelWriter.WriteGlb(prefab, renderers, modelGlb, r => r.Materials.Select(m => new GltfMaterial(m.Name)).ToList());
+
+        var materials = Materials(renderers, index, record.Bundle, install, reader, null, null, null, dir, request.Fresh);
+        var project = new BlenderProject(BlenderProjectFile.CurrentVersion, ws.Dir, tyrantExe, modelBuild,
+            new BlenderSource("object", name, null, null), null, materials, null, Rest(prefab.Root), existing, request.Lods)
+        {
+            GameChanged = modelBuild != build,
+            Fresh = request.Fresh,
+        };
+        BlenderProjectFile.Write(projectFile, project);
+        return new BlenderProjectResult(projectFile, dir, modelBuild != build);
     }
 
     private static BlenderProject? TryRead(string path)

@@ -56,13 +56,14 @@ describe('AssetDetail, Open in Blender', () => {
     await waitFor(() => expect(rpc.callsTo('blender.open')[0]?.params).toMatchObject({ species: 'Allosaurus Europaeus', skin: 'Alt 2', mod: null }));
   });
 
-  it('other objects (fences, scenery) do not offer it', async () => {
-    const { session, prefab } = prefabSetup('ffffffffffffffffffffffffffffffff');
+  it('any other object (a fence, a building) opens in Blender by its reference, without skins', async () => {
+    const { rpc, session, prefab } = prefabSetup('ffffffffffffffffffffffffffffffff');
     renderWith(AssetDetail, session, { ref: prefab.ref, onOpen: vi.fn() });
 
-    expect(await screen.findByRole('heading', { name: 'Allosaurus Europaeus.V2' })).toBeInTheDocument();
-    await new Promise((r) => setTimeout(r, 20));
-    expect(screen.queryByRole('button', { name: 'Open in Blender' })).not.toBeInTheDocument();
+    await fireEvent.click(await screen.findByRole('button', { name: 'Open in Blender' }));
+
+    expect(screen.queryByLabelText('Skin')).not.toBeInTheDocument();
+    await waitFor(() => expect(rpc.callsTo('blender.open')[0]?.params).toMatchObject({ prefabRef: prefab.ref, mod: null }));
   });
 });
 

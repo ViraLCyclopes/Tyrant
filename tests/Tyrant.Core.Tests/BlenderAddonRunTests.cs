@@ -59,12 +59,28 @@ public class BlenderAddonRunTests
         return (result.ProjectFile, prefab, ws, install, game);
     }
 
-    internal static BlenderRun RunPython(string script, params string[] args)
+    /// <summary>A game object (a fence post, no armature) as a project in the same workspace, for the add-on's object tests.</summary>
+    internal static string ObjectProject(Workspace ws, GameInstall install)
+    {
+        var fence = new AssetRecord("fences.bundle", 42, "GameObject", "Fence_Post", "Assets/Fence.prefab", "abcabcabcabcabcabcabcabcabcabcab", null);
+        var picture = new AssetRecord("fences.bundle", 43, "Texture2D", "T_Fence_D", null, "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd", null);
+        var post = ModelFixture.Prefab(ModelFixture.Triangle(name: "FencePost", skinned: false, withShape: false), skinned: false);
+        post = post with { Renderers = [post.Renderers[0] with { Name = "FencePost", Materials = [new MaterialModel("Adobe", [new TextureSlot("_DiffuseTex", null, 43)])] }] };
+        var index = new AssetIndex { Assets = [.. SkinDumps.Textures, SkinDumps.Prefab, fence, picture] };
+        return BlenderProjectWriter.Write(new BlenderOpenRequest("", null, null, false, false) { PrefabRef = fence.Ref }, ws, install, index,
+            SpeciesSkinsReader.Load(ws), new FakeAssetReader { PrefabModelToReturn = post }, "tyrant.exe").ProjectFile;
+    }
+
+    internal static BlenderRun RunPython(string script, params string[] args) => RunPythonWith(script, null, args);
+
+    internal static BlenderRun RunPythonWith(string script, string? objectProject, params string[] args)
     {
         var blender = BlenderIntegrationTests.Blender()!;
+        var env = BlenderIntegrationTests.ThrowawayUser(out _);
+        if (objectProject is not null) env["TYRANT_TEST_OBJECT_PROJECT"] = objectProject;
         return new BlenderProcess().Run(blender.Exe,
             ["-b", "--factory-startup", "--python", Path.Combine(BlenderAddonTests.RepoRoot(), "tools", "blender", "tests", script), "--", .. args],
-            BlenderIntegrationTests.ThrowawayUser(out _), TimeSpan.FromMinutes(5));
+            env, TimeSpan.FromMinutes(5));
     }
 
     [SkippableTheory]
@@ -134,10 +150,10 @@ public class BlenderAddonRunTests
     public void Python_tests_pass_in_blender()
     {
         Skip.If(BlenderIntegrationTests.Blender() is null, "Blender 5.x not found");
-        var (projectFile, _, _, _, game) = Fixture();
+        var (projectFile, _, ws, install, game) = Fixture();
         using var _ = game;
 
-        var run = RunPython("run.py", projectFile);
+        var run = RunPythonWith("run.py", ObjectProject(ws, install), projectFile);
 
         Assert.True(run.ExitCode == 0, run.Output);
         Assert.Matches(@"TYRANT-TESTS ran [1-9]", run.Output);

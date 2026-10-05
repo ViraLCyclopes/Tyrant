@@ -74,9 +74,13 @@
     </div>
     {#if asset.type === 'Texture2D'}<ReplaceInMod {asset} />{/if}
     {#if asset.type === 'GameObject'}<ReplaceModelInMod {asset} />{/if}
-    {#if asset.type === 'GameObject' && speciesOf(asset.guid)}
-      {@const species = speciesOf(asset.guid)!}
-      <div class="row"><OpenInBlender species={species.speciesId} skins={species.skins.map((k) => k.name)} /></div>
+    {#if asset.type === 'GameObject'}
+      {@const species = speciesOf(asset.guid)}
+      <!-- An animal opens as its species (with its skins); any other object opens as it is (for reference or a base). -->
+      <div class="row">
+        {#if species}<OpenInBlender species={species.speciesId} skins={species.skins.map((k) => k.name)} />
+        {:else}<OpenInBlender prefabRef={asset.ref} />{/if}
+      </div>
     {/if}
   </section>
 
