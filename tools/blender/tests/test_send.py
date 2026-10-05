@@ -44,6 +44,21 @@ class SendTests(unittest.TestCase):
         bpy.ops.import_scene.gltf(filepath=glb, disable_bone_shape=True)  # else Blender adds its Icosphere bone shape
         self.assertEqual(len([o for o in bpy.data.objects if o.type == "MESH"]), 1)
 
+    def test_hidden_armature_and_meshes_still_go_and_stay_hidden(self):
+        path = fresh_project()
+        arm = importer.import_project(path)
+        mesh = next(o for o in send.sendable(arm) if o.type == "MESH")
+        arm.hide_set(True)
+        mesh.hide_viewport = True
+        glb = os.path.join(os.path.dirname(path), "send.glb")
+        send.export(arm, glb)
+        self.assertTrue(arm.hide_get())
+        self.assertTrue(mesh.hide_viewport)
+        bpy.ops.wm.read_factory_settings(use_empty=True)
+        bpy.ops.import_scene.gltf(filepath=glb, disable_bone_shape=True)
+        self.assertEqual(len([o for o in bpy.data.objects if o.type == "ARMATURE"]), 1)
+        self.assertEqual(len([o for o in bpy.data.objects if o.type == "MESH"]), 1)
+
     def test_other_modifiers_are_warned_about(self):
         arm = importer.import_project(fresh_project())
         mesh = next(o for o in send.sendable(arm) if o.type == "MESH")

@@ -22,20 +22,32 @@ def modifier_warnings(meshes):
             for mesh in meshes if mesh.type == "MESH" for mod in mesh.modifiers if mod.type != "ARMATURE"]
 
 
+class SendError(Exception):
+    pass
+
+
 def export(armature, path):
-    """Writes the .glb Tyrant builds the model from: adult, rest pose, materials as names and viewport colours only (Tyrant matches them by name; placeholder mode drops the names)."""
+    """Writes the .glb Tyrant builds the model from: adult, rest pose, materials as names and viewport colours only (Tyrant
+    matches them by name; placeholder mode drops the names). Hidden objects go too (hidden only for the export's length)."""
     armature.tyrant_growth = 1.0
     growth.set_growth(armature, 1.0)
     objects = sendable(armature)
     view_layer = bpy.context.view_layer
+    excluded = [o.name for o in objects if view_layer.objects.get(o.name) is None]
+    if excluded:
+        raise SendError(f"{', '.join(excluded)} is in a collection excluded from the view layer; tick it in the Outliner, then send.")
+    hidden = [(o, o.hide_get(), o.hide_viewport) for o in objects]
     selected = [o for o in view_layer.objects if o.select_get()]
     active = view_layer.objects.active
     if bpy.context.mode != "OBJECT":
         bpy.ops.object.mode_set(mode="OBJECT")
-    for obj in view_layer.objects:
-        obj.select_set(obj in objects)
-    view_layer.objects.active = armature
     try:
+        for obj, _, _ in hidden:
+            obj.hide_viewport = False
+            obj.hide_set(False)
+        for obj in view_layer.objects:
+            obj.select_set(obj in objects)
+        view_layer.objects.active = armature
         bpy.ops.export_scene.gltf(filepath=path, export_format="GLB", use_selection=True, export_skins=True, export_morph=True,
                                   export_morph_normal=True, export_animations=False, export_materials="VIEWPORT", export_yup=True,
                                   export_rest_position_armature=True, export_apply=False)
@@ -43,6 +55,9 @@ def export(armature, path):
         for obj in view_layer.objects:
             obj.select_set(obj in selected)
         view_layer.objects.active = active
+        for obj, hide, hide_viewport in hidden:
+            obj.hide_set(hide)
+            obj.hide_viewport = hide_viewport
 
 
 def command(data, project_path, glb, destination, new_mod_name):
