@@ -4,7 +4,8 @@ using Tyrant.Core.Errors;
 
 namespace Tyrant.Core.Blender;
 
-public enum AddonState { Missing, Older, Current, Newer }
+/// <summary>Changed: the same version number as this Tyrant's, but other files (an older build of it).</summary>
+public enum AddonState { Missing, Older, Current, Newer, Changed }
 
 /// <summary>Tyrant's Blender extension: where Blender keeps it, which version is installed, which one this Tyrant ships.</summary>
 public static partial class BlenderAddon
@@ -43,6 +44,33 @@ public static partial class BlenderAddon
     {
         var manifest = Path.Combine(InstalledDir(blender, appData), ManifestName);
         return File.Exists(manifest) ? VersionOf(File.ReadAllText(manifest)) : null;
+    }
+
+    /// <summary>
+    /// True when every file of the zip is in the installed folder with the same bytes. Builds of one version differ only in
+    /// their files, so this tells an installed copy from an older build of the same version (Blender's __pycache__ aside).
+    /// </summary>
+    public static bool SameFiles(string zipPath, string installedDir)
+    {
+        if (!File.Exists(zipPath) || !Directory.Exists(installedDir)) return false;
+        try
+        {
+            using var zip = ZipFile.OpenRead(zipPath);
+            foreach (var entry in zip.Entries.Where(e => e.Name.Length > 0 && !e.FullName.Contains("__pycache__", StringComparison.Ordinal)))
+            {
+                var path = Path.Combine(installedDir, entry.FullName.Replace('/', Path.DirectorySeparatorChar));
+                if (!File.Exists(path) || new FileInfo(path).Length != entry.Length) return false;
+                using var zipped = entry.Open();
+                using var buffer = new MemoryStream();
+                zipped.CopyTo(buffer);
+                if (!buffer.ToArray().AsSpan().SequenceEqual(File.ReadAllBytes(path))) return false;
+            }
+            return true;
+        }
+        catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
     public static AddonState State(string? installed, string? bundled)

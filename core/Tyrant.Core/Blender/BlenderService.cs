@@ -49,7 +49,7 @@ public sealed class BlenderService(BlenderEnvironment env)
                 find.MissingConfigured is { } gone ? $"Blender is not at {gone} any more, and no other Blender was found." : "Blender was not found.");
         var installed = BlenderAddon.InstalledVersion(b, env.AppData);
         return new BlenderStatus(true, b.Exe, b.Version.ToString(3), b.Supported, find.MissingConfigured,
-            BlenderAddon.State(installed, bundled).ToString().ToLowerInvariant(), installed, bundled, b.Supported ? null : BlenderAddon.TooOld(b));
+            AddonState(b, installed, bundled).ToString().ToLowerInvariant(), installed, bundled, b.Supported ? null : BlenderAddon.TooOld(b));
     }
 
     /// <summary>Uses this blender.exe from now on (saved in the workspace); null finds Blender again.</summary>
@@ -76,10 +76,14 @@ public sealed class BlenderService(BlenderEnvironment env)
     {
         var blender = RequireBlender(ws);
         var installed = BlenderAddon.InstalledVersion(blender, env.AppData);
-        if (BlenderAddon.State(installed, BlenderAddon.BundledVersion(env.AddonZip)) is AddonState.Missing or AddonState.Older)
-            throw new TyrantException(TyrantErrorCode.BlenderMissing, installed is null
-                ? $"Tyrant's add-on is not installed in Blender {blender.MajorMinor}: click Install add-on on the Workspace tab (Blender card), or run 'tyrant blender install-addon'."
-                : $"Tyrant's add-on in Blender is older ({installed}) than this Tyrant's: click Update add-on on the Workspace tab (Blender card), or run 'tyrant blender install-addon'.");
+        var state = AddonState(blender, installed, BlenderAddon.BundledVersion(env.AddonZip));
+        if (state is Blender.AddonState.Missing or Blender.AddonState.Older or Blender.AddonState.Changed)
+            throw new TyrantException(TyrantErrorCode.BlenderMissing, state switch
+            {
+                Blender.AddonState.Missing => $"Tyrant's add-on is not installed in Blender {blender.MajorMinor}: click Install add-on on the Workspace tab (Blender card), or run 'tyrant blender install-addon'.",
+                Blender.AddonState.Older => $"Tyrant's add-on in Blender is older ({installed}) than this Tyrant's: click Update add-on on the Workspace tab (Blender card), or run 'tyrant blender install-addon'.",
+                _ => "Tyrant's add-on in Blender is an older build than this Tyrant's: click Update add-on on the Workspace tab (Blender card), or run 'tyrant blender install-addon'.",
+            });
         return blender;
     }
 
@@ -146,6 +150,17 @@ public sealed class BlenderService(BlenderEnvironment env)
                 "Blender was not found: choose blender.exe on the Workspace tab (Blender card), or run 'tyrant blender set-path <blender.exe>'.");
         if (!blender.Supported) throw new TyrantException(TyrantErrorCode.BlenderMissing, BlenderAddon.TooOld(blender));
         return blender;
+    }
+
+    /// <summary>The version comparison, and for the same version whether the installed files are this Tyrant's.</summary>
+    private AddonState AddonState(BlenderInstall blender, string? installed, string? bundled)
+    {
+        var state = BlenderAddon.State(installed, bundled);
+        // Without this Tyrant's zip there is nothing to compare the files with: the version decides.
+        return state == Blender.AddonState.Current && File.Exists(env.AddonZip)
+            && !BlenderAddon.SameFiles(env.AddonZip, BlenderAddon.InstalledDir(blender, env.AppData))
+            ? Blender.AddonState.Changed
+            : state;
     }
 
     private BlenderLocator Locator() => new(env.Steam, env.ProgramFiles, env.Process);

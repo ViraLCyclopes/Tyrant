@@ -99,6 +99,29 @@ public class BlenderAddonTests
         Assert.Contains("Blender 5.0 or newer (found 4.5)", ex.Message);
     }
 
+    [Fact]
+    public void Same_files_compares_the_installed_copy_with_the_zip_ignoring_pycache()
+    {
+        var root = Temp();
+        var zip = Path.Combine(root, "tyrant_blender.zip");
+        using (var archive = ZipFile.Open(zip, ZipArchiveMode.Create))
+        {
+            foreach (var (name, text) in new[] { ("blender_manifest.toml", "version = \"0.1.0\""), ("ui.py", "new code") })
+                using (var w = new StreamWriter(archive.CreateEntry(name).Open())) w.Write(text);
+        }
+        var installed = Directory.CreateDirectory(Path.Combine(root, "installed")).FullName;
+        File.WriteAllText(Path.Combine(installed, "blender_manifest.toml"), "version = \"0.1.0\"");
+        File.WriteAllText(Path.Combine(installed, "ui.py"), "new code");
+        Directory.CreateDirectory(Path.Combine(installed, "__pycache__"));
+        File.WriteAllText(Path.Combine(installed, "__pycache__", "ui.cpython-313.pyc"), "bytes");
+
+        Assert.True(BlenderAddon.SameFiles(zip, installed));
+        File.WriteAllText(Path.Combine(installed, "ui.py"), "old code");
+        Assert.False(BlenderAddon.SameFiles(zip, installed));
+        File.Delete(Path.Combine(installed, "ui.py"));
+        Assert.False(BlenderAddon.SameFiles(zip, installed));
+    }
+
     internal static string RepoRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);

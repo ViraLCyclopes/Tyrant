@@ -87,6 +87,20 @@ public class BlenderServiceTests
     }
 
     [Fact]
+    public void Same_version_with_other_files_is_changed_and_open_offers_the_update()
+    {
+        var (env, _, _, _) = Env(running: false); // installed 0.1.0 = bundled 0.1.0, but an older build of it
+        File.WriteAllText(Path.Combine(env.AppData, "Blender Foundation", "Blender", "5.2", "extensions", "user_default", "tyrant_blender", "blender_manifest.toml"),
+            "version = \"0.1.0\"\n# an older build");
+        var ws = Ws(out var game);
+        using var _ = game;
+
+        Assert.Equal("changed", new BlenderService(env).Status(ws).Addon);
+        var ex = Assert.Throws<Tyrant.Core.Errors.TyrantException>(() => new BlenderService(env).CheckReady(ws));
+        Assert.Contains("Update add-on", ex.Message);
+    }
+
+    [Fact]
     public void Blender_4_is_found_but_not_supported()
     {
         var (env, _, _, _) = Env(running: false, version: "Blender 4.5.0");

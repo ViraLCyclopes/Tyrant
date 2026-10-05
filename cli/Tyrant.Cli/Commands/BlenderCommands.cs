@@ -190,6 +190,7 @@ internal static class BlenderCli
         {
             "missing" => $"Add-on: not installed · {s.AddonBundled} in this Tyrant — Install add-on on the Workspace tab, or 'tyrant blender install-addon'.",
             "older" => $"Add-on: {s.AddonInstalled} in Blender · {s.AddonBundled} in this Tyrant — Update add-on on the Workspace tab, or 'tyrant blender install-addon'.",
+            "changed" => $"Add-on: an older build of {s.AddonInstalled} in Blender — Update add-on on the Workspace tab, or 'tyrant blender install-addon'.",
             "unknown" => "Add-on: unknown (no Blender)",
             _ => $"Add-on: {s.AddonInstalled} in Blender · {s.AddonBundled} in this Tyrant",
         });

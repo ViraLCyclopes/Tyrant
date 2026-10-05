@@ -91,6 +91,19 @@ describe('OpenInBlender', () => {
     expect(platform.confirms[0]).toMatch(/Install Tyrant's add-on/);
   });
 
+  it('offers the update first when Blender has an older build of the add-on', async () => {
+    const { rpc, platform, session } = setup({ ...ready, addon: 'changed' });
+    rpc.on('blender.installAddon', () => ready);
+    platform.confirmAnswer = true;
+    renderWith(OpenInBlender, session, { species: 'Carcharodontosaurus', mod: 'm', skin: 's' });
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Open in Blender' })).toBeEnabled());
+    await fireEvent.click(screen.getByRole('button', { name: 'Open in Blender' }));
+
+    await waitFor(() => expect(rpc.callsTo('blender.installAddon')).toHaveLength(1));
+    expect(platform.confirms[0]).toMatch(/Update Tyrant's add-on/);
+  });
+
   it('does not open when the user declines the add-on install', async () => {
     const { rpc, platform, session } = setup({ ...ready, addon: 'missing', addonInstalled: null });
     platform.confirmAnswer = false;

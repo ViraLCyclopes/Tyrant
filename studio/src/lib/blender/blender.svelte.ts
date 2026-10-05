@@ -12,6 +12,10 @@ export function blockedReason(status: BlenderStatusDto | null): string | null {
 /** The Blender card's and the Open in Blender buttons' shared state: one per session. */
 export class BlenderState {
   status = $state<BlenderStatusDto | null>(null);
+  /** Blender is installing the add-on (two short Blender runs: a few seconds). */
+  installing = $state(false);
+  /** What the last install did, shown on the card until the next one. */
+  installedNote = $state<string | null>(null);
   private loading: Promise<void> | null = null;
 
   constructor(private readonly session: Session) {}
@@ -33,18 +37,32 @@ export class BlenderState {
   }
 
   async install(tab: Tab): Promise<boolean> {
-    const status = await tab.safely(() => this.session.rpc.call('blender.installAddon'));
-    if (!status) return false;
-    this.status = status;
-    tab.info(`Installed Tyrant's add-on ${status.addonInstalled ?? ''} into Blender ${status.version ?? ''}. Restart Blender if it is open, so it loads the add-on.`);
-    return true;
+    this.installing = true;
+    this.installedNote = null;
+    try {
+      const status = await tab.safely(() => this.session.rpc.call('blender.installAddon'));
+      if (!status) return false;
+      this.status = status;
+      const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      this.installedNote = `Installed add-on ${status.addonInstalled ?? ''} into Blender ${status.version ?? ''} at ${time}. Restart Blender if it is open, so it loads the new add-on.`;
+      tab.info(this.installedNote);
+      return true;
+    } finally {
+      this.installing = false;
+    }
+  }
+
+  /** The add-on must be installed or updated before Open in Blender works. */
+  needsInstall(): boolean {
+    const addon = this.status?.addon;
+    return addon === 'missing' || addon === 'older' || addon === 'changed';
   }
 
   /** Opens in Blender; a missing or older add-on is installed first when the user agrees. */
   async open(tab: Tab, params: BlenderOpenParams): Promise<void> {
     await this.ensure(tab);
     const status = this.status;
-    if (status && (status.addon === 'missing' || status.addon === 'older')) {
+    if (status && this.needsInstall()) {
       const message = status.addon === 'missing'
         ? `Install Tyrant's add-on into Blender ${status.version ?? ''}? Open in Blender needs it.`
         : `Update Tyrant's add-on in Blender ${status.version ?? ''} (${status.addonInstalled} → ${status.addonBundled})? This Tyrant needs the newer one.`;

@@ -50,6 +50,31 @@ describe('BlenderCard', () => {
     await waitFor(() => expect(rpc.callsTo('blender.installAddon')).toHaveLength(1));
   });
 
+  it('shows that it is installing, then says it is done and to restart Blender', async () => {
+    const { rpc, session } = setup();
+    let finish: (value: BlenderStatusDto) => void = () => {};
+    rpc.on('blender.installAddon', () => new Promise<BlenderStatusDto>((resolve) => (finish = resolve)));
+    renderWith(BlenderCard, session);
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Install add-on' }));
+
+    expect(await screen.findByRole('progressbar')).toBeInTheDocument();
+    expect(screen.getByText(/Installing Tyrant's add-on into Blender 5\.2\.2/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Installing…' })).toBeDisabled();
+
+    finish({ ...found, addon: 'current', addonInstalled: '0.1.0' });
+
+    await waitFor(() => expect(screen.queryByRole('progressbar')).not.toBeInTheDocument());
+    expect(screen.getByRole('status')).toHaveTextContent(/Installed add-on 0\.1\.0 .*Restart Blender/);
+  });
+
+  it('offers Update add-on for an older build of the same version', async () => {
+    const { session } = setup({ ...found, addon: 'changed', addonInstalled: '0.1.0' });
+    renderWith(BlenderCard, session);
+    expect(await screen.findByRole('button', { name: 'Update add-on' })).toBeInTheDocument();
+    expect(screen.getByText(/older build/)).toBeInTheDocument();
+  });
+
   it('without Blender lets the user choose blender.exe', async () => {
     const { rpc, platform, session } = setup({ ...found, found: false, exe: null, version: null, supported: false, addon: 'unknown', problem: 'Blender was not found.' });
     rpc.on('blender.setPath', (p) => ({ ...found, exe: p.path ?? null }));
