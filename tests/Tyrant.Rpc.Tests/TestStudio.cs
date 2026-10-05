@@ -27,8 +27,9 @@ public static class TestStudio
     }
 
     public static StudioOptions Options(IGameLauncher? launcher = null, (string Path, string Sha)? loaderZip = null, IAssetReader? reader = null, string? dumperDir = null,
-        Func<HttpClient>? http = null) => new()
+        Func<HttpClient>? http = null, Tyrant.Core.Blender.BlenderEnvironment? blender = null) => new()
     {
+        Blender = blender ?? NoBlender(),
         Http = http ?? (() => throw new InvalidOperationException("This test has no network.")),
         Locator = new GameInstallLocator(new NoSteam()),
         Launcher = launcher ?? new NeverLauncher(),
@@ -36,6 +37,30 @@ public static class TestStudio
         LoaderZip = (_, _) => loaderZip?.Path ?? throw new InvalidOperationException("This test has no MelonLoader archive."),
         Installer = () => new ModLoaderInstaller(loaderZip?.Sha ?? ModLoaderInstaller.Sha256, _ => false),
         AssetReader = reader ?? new FakeAssetReader(),
+    };
+
+    public sealed class SilentLink(bool answers = false) : Tyrant.Core.Blender.IBlenderLink
+    {
+        public List<string> Opened { get; } = [];
+
+        public bool TryOpen(string projectFile)
+        {
+            Opened.Add(projectFile);
+            return answers;
+        }
+    }
+
+    /// <summary>No Blender anywhere unless given: an empty Program Files, no Steam, a link nobody answers.</summary>
+    public static Tyrant.Core.Blender.BlenderEnvironment NoBlender(FakeBlenderProcess? process = null, Tyrant.Core.Blender.IBlenderLink? link = null,
+        string? programFiles = null, string? appData = null) => new()
+    {
+        Process = process ?? new FakeBlenderProcess(),
+        Link = link ?? new SilentLink(),
+        Steam = new NoSteam(),
+        ProgramFiles = programFiles ?? Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), "tyrant-tests", Guid.NewGuid().ToString("N"))).FullName,
+        AppData = appData ?? Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), "tyrant-tests", Guid.NewGuid().ToString("N"))).FullName,
+        AddonZip = Path.Combine(Path.GetTempPath(), "tyrant-tests", "no-addon.zip"),
+        TyrantExe = "tyrant.exe",
     };
 
     /// <summary>A zip shaped like the MelonLoader release; returns (path, sha256).</summary>

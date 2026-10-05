@@ -25,6 +25,7 @@ public static class RpcHost
         server.Register(new AssetsMethods(session, jobs));
         server.Register(new ModsMethods(session, jobs));
         server.Register(new Sounds.SoundsMethods(session));
+        server.Register(new Blender.BlenderMethods(session));
         return (server, jobs);
     }
 

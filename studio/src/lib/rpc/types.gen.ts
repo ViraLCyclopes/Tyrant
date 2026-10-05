@@ -130,6 +130,36 @@ export interface AssetsSummary {
   newBundles?: number;
 }
 
+export interface BlenderOpenDto {
+  projectFile: string;
+  how: string;
+  gameChanged: boolean;
+}
+
+export interface BlenderOpenParams {
+  species: string;
+  skin?: string | null;
+  mod?: string | null;
+  fresh?: boolean;
+  lods?: boolean;
+}
+
+export interface BlenderSetPathParams {
+  path: string | null;
+}
+
+export interface BlenderStatusDto {
+  found: boolean;
+  exe: string | null;
+  version: string | null;
+  supported: boolean;
+  missingConfigured: string | null;
+  addon: string;
+  addonInstalled: string | null;
+  addonBundled: string | null;
+  problem: string | null;
+}
+
 export interface DataCompareParams {
   type: string;
   names: string[];
@@ -924,6 +954,10 @@ export interface RpcMethods {
   "assets.preview": { params: AssetRefParams; result: AssetPreview };
   "assets.refs": { params: AssetRefsParams; result: AssetRefsResult };
   "assets.summary": { params: void; result: AssetsSummary };
+  "blender.installAddon": { params: void; result: BlenderStatusDto };
+  "blender.open": { params: BlenderOpenParams; result: BlenderOpenDto };
+  "blender.setPath": { params: BlenderSetPathParams; result: BlenderStatusDto };
+  "blender.status": { params: void; result: BlenderStatusDto };
   "data.compare": { params: DataCompareParams; result: DataCompareResult };
   "data.export": { params: DataExportParams; result: DataExportResult };
   "data.languages": { params: void; result: LanguagesResult };

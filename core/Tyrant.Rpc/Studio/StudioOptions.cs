@@ -22,6 +22,9 @@ public sealed class StudioOptions
     /// <summary>Reads the game's bundles (previews, exports, species packs); tests use a fake.</summary>
     public IAssetReader AssetReader { get; init; } = new BundleAssetReader();
 
+    /// <summary>Blender: where to find it, how to start it, the add-on zip; tests pass fakes.</summary>
+    public Tyrant.Core.Blender.BlenderEnvironment Blender { get; init; } = Tyrant.Core.Blender.BlenderEnvironment.Default();
+
     /// <summary>HTTP for update checks; tests pass a fake.</summary>
     public Func<HttpClient> Http { get; init; } = () => new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
 }
