@@ -59,4 +59,40 @@ public class TMeshTests
         Assert.Equal("models/carch-1a2b.lod2.tmesh", ModelFiles.Lod("models/carch-1a2b.glb", 2));
         Assert.Equal("models/carch-1a2b.model.json", ModelFiles.Report("models/carch-1a2b.glb"));
     }
+
+    private static int VersionOf(TMesh m)
+    {
+        using var s = new MemoryStream();
+        m.Write(s);
+        return BitConverter.ToInt32(s.ToArray(), 4);
+    }
+
+    private static TMesh RoundTrip(TMesh m)
+    {
+        using var s = new MemoryStream();
+        m.Write(s);
+        s.Position = 0;
+        return TMesh.Read(s);
+    }
+
+    [Fact]
+    public void Bind_poses_round_trip_as_format_2_and_plain_meshes_stay_format_1()
+    {
+        var withBinds = Sample();
+        withBinds.BindPoses = Enumerable.Range(0, withBinds.BoneCount * 16).Select(i => (float)i).ToArray();
+
+        Assert.Equal(1, VersionOf(Sample()));
+        Assert.Equal(2, VersionOf(withBinds));
+        Assert.Equal(withBinds.BindPoses, RoundTrip(withBinds).BindPoses);
+        Assert.Empty(RoundTrip(Sample()).BindPoses);
+    }
+
+    [Fact]
+    public void Bind_poses_of_the_wrong_size_are_damaged()
+    {
+        var m = Sample();
+        m.BindPoses = new float[5];
+
+        Assert.Contains("bind poses", Assert.Throws<TMeshException>(() => RoundTrip(m)).Message);
+    }
 }

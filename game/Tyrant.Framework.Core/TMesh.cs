@@ -19,11 +19,12 @@ namespace Tyrant.Framework.Core
 
     /// <summary>
     /// A replacement mesh ready for Unity, written by Tyrant and read by the framework. Bone indices follow the game
-    /// renderer's bone order; bind poses are the game's (copied from the original mesh in game, so not stored).
+    /// renderer's bone order; bind poses are the game's (copied from the original mesh in game) unless the model has a rig
+    /// edit, whose edited bind poses are stored (format 2; files without them stay format 1 for older frameworks).
     /// </summary>
     public sealed class TMesh
     {
-        public const int FileVersion = 1;
+        public const int FileVersion = 2;
         private const int MaxArray = 200_000_000;
         private static readonly byte[] Magic = { (byte)'T', (byte)'M', (byte)'S', (byte)'H' };
 
@@ -51,11 +52,14 @@ namespace Tyrant.Framework.Core
         public float[] BoundsMin { get; set; } = new float[3];
         public float[] BoundsMax { get; set; } = new float[3];
 
+        /// <summary>16 per bone, Unity's m[row, col] row by row; empty = the game's bind poses.</summary>
+        public float[] BindPoses { get; set; } = Array.Empty<float>();
+
         public void Write(Stream stream)
         {
             using var w = new BinaryWriter(stream, Encoding.UTF8, leaveOpen: true);
             w.Write(Magic);
-            w.Write(FileVersion);
+            w.Write(BindPoses.Length > 0 ? 2 : 1);
             w.Write(Name);
             w.Write(SourceStamp);
             w.Write(VertexCount);
@@ -79,6 +83,7 @@ namespace Tyrant.Framework.Core
             }
             WriteFloats(w, BoundsMin);
             WriteFloats(w, BoundsMax);
+            if (BindPoses.Length > 0) WriteFloats(w, BindPoses);
         }
 
         public static TMesh Read(Stream stream)
@@ -111,6 +116,7 @@ namespace Tyrant.Framework.Core
                     mesh.Shapes[i] = new TMeshShape { Name = r.ReadString(), PositionDeltas = ReadFloats(r), NormalDeltas = ReadFloats(r) };
                 mesh.BoundsMin = ReadFloats(r);
                 mesh.BoundsMax = ReadFloats(r);
+                if (version >= 2) mesh.BindPoses = ReadFloats(r);
                 Validate(mesh);
                 return mesh;
             }
@@ -132,6 +138,8 @@ namespace Tyrant.Framework.Core
             for (var s = 0; s < m.SubMeshStarts.Length; s++)
                 if (m.SubMeshStarts[s] < 0 || m.SubMeshCounts[s] < 0 || m.SubMeshStarts[s] + m.SubMeshCounts[s] > m.Indices.Length)
                     throw new TMeshException("damaged (a part points past the indices)");
+            if (m.BindPoses.Length != 0 && m.BindPoses.Length != m.BoneCount * 16)
+                throw new TMeshException("damaged (bind poses do not match the bone count)");
             foreach (var shape in m.Shapes)
                 if (shape.PositionDeltas.Length != n * 3 || shape.NormalDeltas.Length != n * 3) throw new TMeshException($"damaged (shape key {shape.Name})");
         }

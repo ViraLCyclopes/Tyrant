@@ -46,4 +46,47 @@ public class ModelManifestTests
 
         Assert.DoesNotContain("\"models\"", m.ToJson());
     }
+
+    [Fact]
+    public void A_species_entry_may_be_a_rig_without_a_file()
+    {
+        var m = ModManifest.Parse("""{"format":1,"id":"abc","models":[{"target":"Carcharodontosaurus","rig":{"Jaw":{"move":[0,0.1,0]}}}]}""");
+
+        Assert.Equal("", m.Models[0].File);
+        Assert.Single(m.Models[0].Rig!);
+        Assert.DoesNotContain("\"file\"", m.ToJson());
+        Assert.Equal(m.ToJson(), ModManifest.Parse(m.ToJson()).ToJson());
+    }
+
+    [Fact]
+    public void A_species_entry_without_file_or_rig_is_refused_with_both_named()
+    {
+        var ex = Assert.Throws<ManifestException>(() => ModManifest.Parse("""{"format":1,"id":"abc","models":[{"target":"Carcharodontosaurus","rig":{}}]}"""));
+
+        Assert.Contains("\"file\" or \"rig\"", ex.Message);
+    }
+
+    [Fact]
+    public void A_skin_keeps_its_rig()
+    {
+        var json = """{"format":1,"id":"abc","skins":[{"id":"long","species":"AllosaurusAnax","male":{"diffuse":"a.png"},"rig":{"Neck.002":{"move":[0,0.2,0]}}}]}""";
+
+        var m = ModManifest.Parse(json);
+
+        Assert.Equal(new RigVector3(0, 0.2f, 0), m.Skins[0].Rig!["Neck.002"].Move);
+        Assert.Contains("\"rig\"", m.ToJson());
+        Assert.Equal(m.Skins[0].Rig!["Neck.002"].Move, ModManifest.Parse(m.ToJson()).Skins[0].Rig!["Neck.002"].Move);
+    }
+
+    [Fact]
+    public void A_bad_skin_rig_skips_only_that_skin_in_game()
+    {
+        var json = """{"format":1,"id":"abc","skins":[{"id":"long","species":"AllosaurusAnax","male":{"diffuse":"a.png"},"rig":{"Jaw":{"scale":[0,1,1]}}}]}""";
+        var skipped = new List<string>();
+
+        var m = ModManifest.Parse(json, skipped);
+
+        Assert.Empty(m.Skins);
+        Assert.Contains(skipped, s => s.Contains("scale"));
+    }
 }

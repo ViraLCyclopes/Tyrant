@@ -10,7 +10,7 @@ public class ModelTableTests
         var dir = Path.Combine(Path.GetTempPath(), "tyrant-tests", Guid.NewGuid().ToString("N"), id);
         Directory.CreateDirectory(dir);
         var manifest = ModManifest.Parse(json);
-        foreach (var file in manifest.Models.Select(m => m.File).Concat(manifest.Skins.Where(s => s.Model != null).Select(s => s.Model!)))
+        foreach (var file in manifest.Models.Where(m => m.File.Length > 0).Select(m => m.File).Concat(manifest.Skins.Where(s => s.Model != null).Select(s => s.Model!)))
         {
             var path = Path.GetFullPath(Path.Combine(dir, ModelFiles.Lod(file, 0)));
             if (!ModPaths.IsInside(path, dir)) continue; // never write outside the test folder
@@ -78,5 +78,69 @@ public class ModelTableTests
         File.Delete(Path.Combine(mod.Directory, ModelFiles.Lod("models/a.glb", 0)));
 
         Assert.False(ModelTable.Build([mod]).TryChoose("Carcharodontosaurus", null, out _));
+    }
+
+    private const string RigOnly = """{"format":1,"id":"long-carch","models":[{"target":"Carcharodontosaurus","rig":{"Jaw":{"move":[0,0.1,0]}}}]}""";
+
+    [Fact]
+    public void The_later_mod_supplies_both_model_and_rig_of_a_species()
+    {
+        var table = ModelTable.Build([Mod("long-carch", RigOnly), Mod("big-carch", Species)], out var messages);
+
+        Assert.True(table.TryChoose("Carcharodontosaurus", null, out var set));
+        Assert.Equal("big-carch", set.ModId);
+        Assert.Null(set.Rig); // long-carch's rig does not go onto big-carch's model
+        Assert.Contains(messages, m => m.Contains("long-carch") && m.Contains("big-carch"));
+    }
+
+    [Fact]
+    public void A_rig_only_species_entry_is_chosen_with_no_lods()
+    {
+        var table = ModelTable.Build([Mod("long-carch", RigOnly)], out var messages);
+
+        Assert.True(table.TryChoose("Carcharodontosaurus", null, out var set));
+        Assert.Empty(set.LodPaths);
+        Assert.Equal(0.1f, set.Rig!["Jaw"].Move.Y);
+        Assert.Empty(messages);
+    }
+
+    [Fact]
+    public void A_skin_with_only_a_rig_wins_over_the_species_model()
+    {
+        var json = """
+            {"format":1,"id":"big-carch","models":[{"target":"Carcharodontosaurus","file":"models/a.glb"}],
+             "skins":[{"id":"long","species":"Carcharodontosaurus","male":{"diffuse":"a.png"},"rig":{"Jaw":{"move":[0,0.1,0]}}}]}
+            """;
+
+        var table = ModelTable.Build([Mod("big-carch", json)]);
+
+        Assert.True(table.TryChoose("Carcharodontosaurus", "big-carch/long", out var set));
+        Assert.Empty(set.LodPaths); // the game's mesh with the skin's rig, not the species model
+        Assert.NotNull(set.Rig);
+    }
+
+    [Fact]
+    public void A_skin_model_carries_its_rig()
+    {
+        var json = SkinModel.Replace("\"model\":\"models/b.glb\"", "\"model\":\"models/b.glb\",\"rig\":{\"Jaw\":{\"move\":[0,0.1,0]}}");
+
+        var table = ModelTable.Build([Mod("spiked-carch", json)]);
+
+        Assert.True(table.TryChoose("Carcharodontosaurus", "spiked-carch/spiked", out var set));
+        Assert.Single(set.LodPaths);
+        Assert.NotNull(set.Rig);
+    }
+
+    [Fact]
+    public void Clashes_name_the_overridden_mod_once_per_species()
+    {
+        var a = ModManifest.Parse(RigOnly);
+        var b = ModManifest.Parse(Species);
+        var c = ModManifest.Parse("""{"format":1,"id":"stego","models":[{"target":"Stegosaurus","file":"m.glb"}]}""");
+
+        var clash = Assert.Single(ModelTable.Clashes([("long-carch", a), ("big-carch", b), ("stego", c)]));
+
+        Assert.Equal(("Carcharodontosaurus", "long-carch", "big-carch"), (clash.Species, clash.Loser, clash.Winner));
+        Assert.Contains("big-carch", clash.Message);
     }
 }

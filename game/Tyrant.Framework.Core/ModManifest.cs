@@ -41,7 +41,10 @@ namespace Tyrant.Framework.Core
     }
 
     /// <summary>The texture slots a skin can provide, as written in mod.json, with their shader properties.</summary>
-    /// <summary>A model replacement: Target is a species id (or, later, an object name); File is the user's .glb in the mod.</summary>
+    /// <summary>
+    /// A species' model replacement and/or rig edit: Target is a species id (or, later, an object name); File is the user's
+    /// .glb in the mod, "" for a rig edit on the game's own mesh.
+    /// </summary>
     public sealed class ModelReplacement
     {
         public string Target { get; set; } = "";
@@ -50,6 +53,9 @@ namespace Tyrant.Framework.Core
         public string? Key { get; set; }
 
         public string File { get; set; } = "";
+
+        /// <summary>The rig edit (bone → offset), null for none; the model's bind poses are built for it.</summary>
+        public Dictionary<string, RigOffset>? Rig { get; set; }
     }
 
     /// <summary>
@@ -130,6 +136,9 @@ namespace Tyrant.Framework.Core
 
         /// <summary>The skin's own model (a .glb in the mod), overriding the species' model.</summary>
         public string? Model { get; set; }
+
+        /// <summary>The skin's rig edit (bone → offset), null for none; with it the skin overrides the species' model and rig.</summary>
+        public Dictionary<string, RigOffset>? Rig { get; set; }
 
         /// <summary>The skin's permanent key in skin-slots.json.</summary>
         public string Key(string modId) => modId + "/" + Id;
@@ -226,8 +235,10 @@ namespace Tyrant.Framework.Core
                 var target = Text(entry, "target");
                 if (string.IsNullOrWhiteSpace(target)) throw new ManifestException($"\"models\" entry {n} has no \"target\".");
                 var file = Text(entry, "file");
-                if (string.IsNullOrWhiteSpace(file)) throw new ManifestException($"\"models\" entry {n} ({target}) has no \"file\".");
-                manifest.Models.Add(new ModelReplacement { Target = target!, Key = Text(entry, "key"), File = file! });
+                var rig = entry.TryGetValue("rig", out var rigJson) && rigJson != null ? RigEdit.Parse(rigJson, $"\"models\" entry {n} ({target})") : null;
+                if (string.IsNullOrWhiteSpace(file) && (rig == null || rig.Count == 0))
+                    throw new ManifestException($"\"models\" entry {n} ({target}) has no \"file\" or \"rig\".");
+                manifest.Models.Add(new ModelReplacement { Target = target!, Key = Text(entry, "key"), File = file ?? "", Rig = rig is { Count: > 0 } ? rig : null });
             }
             n = 0;
             foreach (var item in Array(map, "sounds"))
@@ -279,6 +290,7 @@ namespace Tyrant.Framework.Core
                     Female = Slots(entry, "female", skinId),
                     Colors = entry.TryGetValue("colors", out var colors) && colors != null ? SkinColors.Parse(colors, skinId) : null,
                     Model = Text(entry, "model"),
+                    Rig = entry.TryGetValue("rig", out var rig) && rig != null && RigEdit.Parse(rig, $"Skin \"{skinId}\"") is { Count: > 0 } parsed ? parsed : null,
                 };
                 if ((skin.Male?.Count ?? 0) == 0 && (skin.Female?.Count ?? 0) == 0)
                     throw new ManifestException($"Skin \"{skinId}\" needs \"male\" or \"female\" textures.");
@@ -307,7 +319,8 @@ namespace Tyrant.Framework.Core
                 {
                     var entry = new Dictionary<string, object?> { ["target"] = m.Target };
                     if (m.Key != null) entry["key"] = m.Key;
-                    entry["file"] = m.File;
+                    if (m.File.Length > 0) entry["file"] = m.File;
+                    if (m.Rig is { Count: > 0 }) entry["rig"] = RigEdit.ToJson(m.Rig);
                     return (object?)entry;
                 }).ToList();
             if (Sounds.Count > 0)
@@ -330,6 +343,7 @@ namespace Tyrant.Framework.Core
                     if (s.Male != null) entry["male"] = Ordered(s.Male);
                     if (s.Female != null) entry["female"] = Ordered(s.Female);
                     if (s.Model != null) entry["model"] = s.Model;
+                    if (s.Rig is { Count: > 0 }) entry["rig"] = RigEdit.ToJson(s.Rig);
                     if (s.Colors != null) entry["colors"] = s.Colors.ToJson();
                     return (object?)entry;
                 }).ToList();
