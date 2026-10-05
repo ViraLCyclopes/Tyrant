@@ -74,7 +74,7 @@ public class ModModelMethodsTests
         using var game = new FakeGame();
         var (h, _, reader, glb) = await Setup(game);
         reader.PrefabModelToReturn = reader.PrefabModelToReturn! with
-        { Renderers = [reader.PrefabModelToReturn.Renderers[0] with { Materials = [new MaterialModel("Stego", [])] }] };
+        { Renderers = [reader.PrefabModelToReturn.Renderers[0] with { Materials = [new MaterialModel("Stego", []), new MaterialModel("Eyes", [])] }] };
 
         var ex = await Assert.ThrowsAsync<RpcCallException>(() => h.Call("mods.replaceModel", new { id = "big-carch", file = glb, target = "Carcharodontosaurus" }));
 
