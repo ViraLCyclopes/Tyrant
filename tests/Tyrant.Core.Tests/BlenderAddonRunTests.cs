@@ -88,6 +88,37 @@ public class BlenderAddonRunTests
         Assert.Single(report.Lods);
     }
 
+    /// <summary>
+    /// Opt-in (TYRANT_BLENDER_GUI=1: it opens a Blender window): Tyrant's real start of a fresh Blender (detached, through the
+    /// shell, the multi-line start script) opens the project and saves its .blend. Only the Blender it started is closed after.
+    /// </summary>
+    [SkippableFact]
+    public void A_blender_tyrant_starts_opens_the_project_in_a_window()
+    {
+        var blender = BlenderIntegrationTests.Blender();
+        Skip.If(blender is null || Environment.GetEnvironmentVariable("TYRANT_BLENDER_GUI") != "1", "set TYRANT_BLENDER_GUI=1 to run (opens a Blender window)");
+        var (projectFile, _, _, _, game) = Fixture();
+        using var _ = game;
+        var env = BlenderIntegrationTests.ThrowawayUser(out var _root);
+        BlenderAddon.Install(new BlenderProcess(), blender!, BlenderIntegrationTests.AddonZip(), env);
+        foreach (var (key, value) in env) Environment.SetEnvironmentVariable(key, value); // the started Blender inherits them
+        var before = System.Diagnostics.Process.GetProcessesByName("blender").Select(p => p.Id).ToHashSet();
+        try
+        {
+            new BlenderProcess().Start(blender!.Exe, ["--python-expr", BlenderService.StartScript(projectFile)]);
+            var deadline = DateTime.UtcNow.AddMinutes(2);
+            while (DateTime.UtcNow < deadline && BlenderProjectFile.Read(projectFile).Blend is null) Thread.Sleep(500);
+            var blend = BlenderProjectFile.Read(projectFile).Blend;
+            Assert.NotNull(blend);
+            Assert.True(File.Exists(blend));
+        }
+        finally
+        {
+            foreach (var p in System.Diagnostics.Process.GetProcessesByName("blender").Where(p => !before.Contains(p.Id))) p.Kill();
+            foreach (var key in env.Keys) Environment.SetEnvironmentVariable(key, null);
+        }
+    }
+
     [SkippableFact]
     public void Python_tests_pass_in_blender()
     {
