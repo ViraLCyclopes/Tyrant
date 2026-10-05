@@ -100,9 +100,7 @@ public static class BlenderProjectWriter
     private static Dictionary<string, BlenderMaterial> Materials(IReadOnlyList<RendererModel> renderers, AssetIndex index, string bundle,
         GameInstall install, IAssetReader reader, ModProject? mod, SkinEntry? ownSkin, VanillaSkin? vanilla, string dir, bool fresh)
     {
-        var textures = Path.Combine(dir, "textures");
-        // The skin's maps can change between opens (a new PNG in the mod): written again every time.
-        if (Directory.Exists(textures)) Directory.Delete(textures, recursive: true);
+        var store = new ProjectTextures(Path.Combine(dir, "textures"), fresh);
         var colors = Colors(ownSkin);
         var result = new Dictionary<string, BlenderMaterial>(StringComparer.Ordinal);
         foreach (var material in renderers.SelectMany(r => r.Materials).Where(m => m.Name.Length > 0))
@@ -113,8 +111,11 @@ public static class BlenderProjectWriter
             if (resolved.Animal)
             {
                 foreach (var slot in SkinMaps.Slots)
-                    if (SkinMaps.Write(SkinMaps.Source(ownSkin, mod?.Dir, vanilla, slot, "male"), install, index, reader, Path.Combine(textures, slot + ".png")) is not null)
+                {
+                    var source = SkinMaps.Source(ownSkin, mod?.Dir, vanilla, slot, "male");
+                    if (source is not null && store.Put(slot + ".png", SourceKey(source), png => SkinMaps.Write(source, install, index, reader, png) is not null))
                         maps[slot] = $"textures/{slot}.png";
+                }
             }
             else
             {
@@ -122,18 +123,23 @@ public static class BlenderProjectWriter
                 foreach (var (slot, record) in new[] { ("diffuse", resolved.BaseColor), ("normal", resolved.Normal) })
                 {
                     if (record is null) continue;
-                    var png = Path.Combine(textures, $"{stem}-{slot}.png");
-                    if (!File.Exists(png))
-                    {
-                        Directory.CreateDirectory(textures);
-                        reader.WriteTexture(install, record, png);
-                    }
-                    maps[slot] = $"textures/{stem}-{slot}.png";
+                    var file = $"{stem}-{slot}.png";
+                    if (store.Put(file, "asset:" + record.Ref, png => { reader.WriteTexture(install, record, png); return true; }))
+                        maps[slot] = $"textures/{file}";
                 }
             }
             result[material.Name] = new BlenderMaterial(resolved.Animal, resolved.Cutoff, maps, resolved.Animal ? colors : null);
         }
+        store.Save();
         return result;
+    }
+
+    /// <summary>What a picture came from: a mod file with its size and time (a replaced PNG is a new source), or a game texture.</summary>
+    private static string SourceKey(string source)
+    {
+        if (!source.StartsWith("file:", StringComparison.Ordinal)) return source;
+        var info = new FileInfo(source[5..]);
+        return $"{source}|{info.Length}|{info.LastWriteTimeUtc.Ticks}";
     }
 
     /// <summary>The colours the 3D view shows for a mod skin (the strip's first animal, seed 1); null = textures untouched.</summary>

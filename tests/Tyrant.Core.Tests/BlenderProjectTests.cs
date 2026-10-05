@@ -150,6 +150,44 @@ public class BlenderProjectTests
     }
 
     [Fact]
+    public void A_texture_painted_in_blender_and_other_files_survive_a_normal_open()
+    {
+        using var c = Setup();
+        var first = c.Write(new BlenderOpenRequest("Carcharodontosaurus", "Alt 1", null, false, false));
+        var diffuse = Path.Combine(first.Dir, "textures", "diffuse.png");
+        File.WriteAllText(diffuse, "painted in Blender");
+        File.WriteAllText(Path.Combine(first.Dir, "textures", "notes.txt"), "mine");
+
+        c.Write(new BlenderOpenRequest("Carcharodontosaurus", "Alt 1", null, false, false));
+
+        Assert.Equal("painted in Blender", File.ReadAllText(diffuse));
+        Assert.True(File.Exists(Path.Combine(first.Dir, "textures", "notes.txt")));
+    }
+
+    [Fact]
+    public void A_changed_skin_picture_replaces_the_projects_copy_and_keeps_an_edited_one_as_old_png()
+    {
+        using var c = Setup();
+        var mod = ModProject.Create(c.Ws, "reds", null, null);
+        var skin = mod.AddSkin(c.Ws, c.Install, c.Index, c.Reader, c.Species, "Carcharodontosaurus", "Red", "1", new SkinTemplateOptions(true, false, false));
+        var own = Path.Combine(mod.Dir, "skins", "red-d.png");
+        Directory.CreateDirectory(Path.GetDirectoryName(own)!);
+        File.WriteAllText(own, "version 1");
+        skin.Male = new() { ["diffuse"] = "skins/red-d.png" };
+        mod.Save();
+        var first = c.Write(new BlenderOpenRequest("Carcharodontosaurus", skin.Id, "reds", false, false));
+        var copy = Path.Combine(first.Dir, "textures", "diffuse.png");
+        Assert.Equal("version 1", File.ReadAllText(copy));
+        File.WriteAllText(copy, "painted in Blender");
+        File.WriteAllText(own, "version 2 (longer)");
+
+        c.Write(new BlenderOpenRequest("Carcharodontosaurus", skin.Id, "reds", false, false));
+
+        Assert.Equal("version 2 (longer)", File.ReadAllText(copy));
+        Assert.Equal("painted in Blender", File.ReadAllText(Path.Combine(first.Dir, "textures", "diffuse.old.png")));
+    }
+
+    [Fact]
     public void A_project_from_another_game_build_says_so()
     {
         using var c = Setup();
