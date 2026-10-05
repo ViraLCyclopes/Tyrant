@@ -28,10 +28,21 @@ class SendError(Exception):
 
 
 def export(armature, path):
-    """Writes the .glb Tyrant builds the model from: adult, rest pose, materials as names and viewport colours only (Tyrant
-    matches them by name; placeholder mode drops the names). Hidden objects go too (hidden only for the export's length)."""
+    """Writes the .glb Tyrant builds the model from: adult, rest pose, deforming bones only (Tyrant's IK bones stay out),
+    materials as names and viewport colours only (Tyrant matches them by name; placeholder mode drops the names). Hidden
+    objects go too (hidden only for the export's length). Your pose and the Growth shown are as before afterwards."""
+    shown = armature.tyrant_growth
     armature.tyrant_growth = 1.0
     growth.set_growth(armature, 1.0)
+    try:
+        _export(armature, path)
+    finally:
+        armature.tyrant_growth = shown
+        growth.set_growth(armature, shown)
+
+
+def _export(armature, path):
+    """The export itself, at adult (see export)."""
     objects = sendable(armature)
     view_layer = bpy.context.view_layer
     excluded = [o.name for o in objects if view_layer.objects.get(o.name) is None]
@@ -59,7 +70,8 @@ def export(armature, path):
         view_layer.objects.active = armature
         bpy.ops.export_scene.gltf(filepath=path, export_format="GLB", use_selection=True, export_skins=True, export_morph=True,
                                   export_morph_normal=True, export_animations=False, export_materials="VIEWPORT", export_yup=True,
-                                  export_rest_position_armature=True, export_apply=False)
+                                  export_rest_position_armature=True, export_apply=False,
+                                  export_def_bones=True)
     finally:
         for obj in view_layer.objects:
             obj.select_set(obj in selected)

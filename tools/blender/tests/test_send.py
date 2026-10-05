@@ -39,7 +39,7 @@ class SendTests(unittest.TestCase):
         glb = os.path.join(os.path.dirname(path), "send.glb")
         send.export(arm, glb)
         self.assertTrue(os.path.getsize(glb) > 0)
-        self.assertAlmostEqual(arm.tyrant_growth, 1.0)  # Send puts the animal back to adult
+        self.assertAlmostEqual(arm.tyrant_growth, 0.0)  # Send exports the adult, then shows the growth you had
         bpy.ops.wm.read_factory_settings(use_empty=True)
         bpy.ops.import_scene.gltf(filepath=glb, disable_bone_shape=True)  # else Blender adds its Icosphere bone shape
         self.assertEqual(len([o for o in bpy.data.objects if o.type == "MESH"]), 1)

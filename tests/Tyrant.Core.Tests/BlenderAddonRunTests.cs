@@ -142,6 +142,26 @@ public class BlenderAddonRunTests
     }
 
     [SkippableFact]
+    public void An_ik_rig_sent_back_builds_without_warnings()
+    {
+        Skip.If(BlenderIntegrationTests.Blender() is null, "Blender 5.x not found");
+        var (_, _, ws, install, game) = Fixture();
+        using var _ = game;
+        var projectFile = IkProject(ws, install);
+        var modDir = Directory.CreateDirectory(Path.Combine(Path.GetDirectoryName(projectFile)!, "mod")).FullName;
+        var glb = Path.Combine(modDir, "send.glb");
+
+        var run = RunPython("ikroundtrip.py", projectFile, glb);
+        Assert.True(run.ExitCode == 0 && run.Output.Contains("IKROUNDTRIP"), run.Output);
+
+        var report = Tyrant.Core.ModelReplacements.ModelBuilder.Build(modDir, "send.glb", IkFixture.Prefab());
+        Assert.True(report.Errors.Count == 0, string.Join(" | ", report.Errors));
+        Assert.DoesNotContain(report.Warnings, w => w.Contains("rest pose", StringComparison.OrdinalIgnoreCase));
+        var nodes = SharpGLTF.Schema2.ModelRoot.Load(glb).LogicalNodes.Select(n => n.Name ?? "").ToList();
+        Assert.DoesNotContain(nodes, n => n.StartsWith("ctrl_", StringComparison.Ordinal) || n.StartsWith("mch_", StringComparison.Ordinal));
+    }
+
+    [SkippableFact]
     public void Python_tests_pass_in_blender()
     {
         Skip.If(BlenderIntegrationTests.Blender() is null, "Blender 5.x not found");

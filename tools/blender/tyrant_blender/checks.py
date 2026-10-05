@@ -1,7 +1,7 @@
 """What Send takes and what it leaves, and the problems that stop it, each said the way it is fixed in Blender."""
 import bpy
 
-from . import send
+from . import ik, send
 
 MAX_UNWEIGHTED = 0.25  # the core's ModelFitter.MaxUnweightedShare
 
@@ -120,6 +120,11 @@ def problems(armature, data):
             if key not in have:
                 found.append(f"{mesh.name} has no shape key '{key}': the game uses it for growth. Keep Tyrant's shape keys "
                              "(Voxel Remesh deletes them).")
+    stiff = [b.name for b in armature.data.bones if not b.use_deform and not b.get(ik.BONE_TAG)]
+    if stiff:
+        more = ", …" if len(stiff) > 3 else ""
+        found.append(f"{', '.join(stiff[:3])}{more} {'is' if len(stiff) == 1 else 'are'} not set to Deform: Send keeps only "
+                     "deforming bones (Tyrant's IK bones stay out). Tick Deform in Bone Properties → Deform.")
     shown = pictures(meshes)
     if len(shown) > 1:
         found.append(one_set_message(shown))
