@@ -24,9 +24,36 @@ def _redraw():
                 area.tag_redraw()
 
 
+def project_data(armature):
+    """(project, None) or (None, why it cannot be read): the panel and the operators never show a traceback."""
+    try:
+        data = growth._project(armature)
+    except (project.ProjectError, KeyError, TypeError, ValueError) as ex:
+        return None, str(ex) if isinstance(ex, project.ProjectError) else f"This project cannot be read ({ex}). Open it again from Tyrant."
+    if data is None:
+        return None, "This model's Tyrant project is gone or on a network share. Open it again from Tyrant."
+    return data, None
+
+
+def is_busy(armature):
+    try:
+        return bool(json.loads(armature.get(REPORT) or "{}").get("busy"))
+    except ValueError:
+        return False
+
+
+def clear_stale_busy(*_args):
+    """A file saved while Tyrant was building would say "building" forever: on load it becomes "send again"."""
+    for obj in bpy.data.objects:
+        if obj.type == "ARMATURE" and is_busy(obj):
+            obj[REPORT] = json.dumps({"ok": False, "errors": ["The last send did not finish (Blender was closed meanwhile); send again."]})
+
+
 def _start_send(context, armature, destination=None, new_mod_name=None):
     path = armature[project.TAG]
     data = project.load(path)
+    if not send.trusted_tyrant(data.get("tyrant")):
+        raise send.SendError(f"This project names {data.get('tyrant')!r} as Tyrant; open it again from Tyrant on this PC.")
     glb = os.path.join(os.path.dirname(path), "send.glb")
     send.export(armature, glb)
     if bpy.data.filepath:
@@ -59,11 +86,21 @@ class TYRANT_OT_send(bpy.types.Operator):
             self.report({"ERROR"}, reason)
             return {"CANCELLED"}
         armature = project.armature_of(context)
-        data = project.load(armature[project.TAG])
-        if not data.get("destination"):
-            bpy.ops.tyrant.choose_destination("INVOKE_DEFAULT", armature=armature.name)
-            return {"FINISHED"}
-        _start_send(context, armature)
+        if is_busy(armature):
+            self.report({"ERROR"}, "Tyrant is still building the last send; wait for its report in the Tyrant panel.")
+            return {"CANCELLED"}
+        data, error = project_data(armature)
+        if error:
+            self.report({"ERROR"}, error)
+            return {"CANCELLED"}
+        try:
+            if not data.get("destination"):
+                bpy.ops.tyrant.choose_destination("INVOKE_DEFAULT", armature=armature.name)
+                return {"FINISHED"}
+            _start_send(context, armature)
+        except (project.ProjectError, send.SendError) as ex:
+            self.report({"ERROR"}, str(ex))
+            return {"CANCELLED"}
         return {"FINISHED"}
 
 
@@ -93,7 +130,13 @@ class TYRANT_OT_choose_destination(bpy.types.Operator):
 
     def invoke(self, context, event):
         armature = bpy.data.objects.get(self.armature)
-        data = project.load(armature[project.TAG])
+        data, error = project_data(armature) if armature is not None else (None, "The armature is gone.")
+        if error:
+            self.report({"ERROR"}, error)
+            return {"CANCELLED"}
+        if not send.trusted_tyrant(data["tyrant"]):
+            self.report({"ERROR"}, f"This project names {data['tyrant']!r} as Tyrant; open it again from Tyrant on this PC.")
+            return {"CANCELLED"}
         args = [data["tyrant"], "blender", "destinations", "-w", data["workspace"], armature[project.TAG]]
         try:
             done = subprocess.run(args, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120,
@@ -120,6 +163,13 @@ class TYRANT_OT_choose_destination(bpy.types.Operator):
         if armature is None:
             return {"CANCELLED"}
         species = _destinations["species"]
+        try:
+            return self._send(context, armature, species)
+        except (project.ProjectError, send.SendError) as ex:
+            self.report({"ERROR"}, str(ex))
+            return {"CANCELLED"}
+
+    def _send(self, context, armature, species):
         if self.mod == NEW_MOD:
             if not self.new_id.strip():
                 self.report({"ERROR"}, "Give the new mod an id (e.g. my-carcharo).")
@@ -145,7 +195,12 @@ class VIEW3D_PT_tyrant(bpy.types.Panel):
             layout.label(text=reason, icon="INFO")
             return
         armature = project.armature_of(context)
-        data = growth._project(armature) or {}
+        data, error = project_data(armature)
+        if error:
+            layout.label(text=error, icon="ERROR")
+            return
+        if data.get("gameChanged"):
+            layout.label(text="The game was updated since this was made: Start fresh in Tyrant for the new model.", icon="ERROR")
         source = data.get("source") or {}
         layout.label(text=f"From: {source.get('species', '?')} {source.get('skin') or ''}".strip() + (f" ({source['mod']})" if source.get("mod") else ""))
         destination = data.get("destination")
@@ -163,7 +218,9 @@ class VIEW3D_PT_tyrant(bpy.types.Panel):
 
         for warning in send.modifier_warnings(send.sendable(armature)[1:]):
             layout.label(text=warning, icon="ERROR")
-        layout.operator("tyrant.send", icon="EXPORT")
+        row = layout.row()
+        row.enabled = not is_busy(armature)
+        row.operator("tyrant.send", icon="EXPORT")
 
         report = armature.get(REPORT)
         if report:

@@ -11,14 +11,50 @@ class ProjectError(Exception):
     pass
 
 
+_AGAIN = "Open it again from Tyrant (Open in Blender → Start fresh)."
+
+
+def is_local(path):
+    """False for network paths: a .blend from someone else must not make Blender reach out to a share."""
+    return isinstance(path, str) and not path.startswith(("\\\\", "//"))
+
+
+def _numbers(value, count):
+    return isinstance(value, list) and len(value) == count and all(isinstance(v, (int, float)) for v in value)
+
+
+def _valid(data):
+    source = data.get("source")
+    if not isinstance(source, dict) or not isinstance(source.get("species"), str):
+        return False
+    if not isinstance(data.get("tyrant"), str) or not isinstance(data.get("workspace"), str):
+        return False
+    materials = data.get("materials")
+    if not isinstance(materials, dict) or not all(isinstance(m, dict) and isinstance(m.get("maps", {}), dict) for m in materials.values()):
+        return False
+    rest = data.get("rest")
+    if not isinstance(rest, list) or not all(isinstance(r, dict) and isinstance(r.get("name"), str) and _numbers(r.get("position"), 3)
+                                             and _numbers(r.get("rotation"), 4) and _numbers(r.get("scale"), 3) for r in rest):
+        return False
+    growth = data.get("growth")
+    if growth is None:
+        return True
+    if not isinstance(growth, dict) or not isinstance(growth.get("blend"), list) or not isinstance(growth.get("skin"), list):
+        return False
+    return all(isinstance(b, dict) and isinstance(b.get("name"), str) and all(_numbers(b.get(k), 6) for k in ("baby", "adolescent", "adult"))
+               for b in growth.get("bones") or [])
+
+
 def load(path):
+    if not is_local(path):
+        raise ProjectError(f"{path} is on a network share; Tyrant only opens projects on this PC. {_AGAIN}")
     try:
         with open(path, encoding="utf-8") as f:
             data = json.load(f)
     except (OSError, ValueError) as ex:
-        raise ProjectError(f"{path} could not be read ({ex}). Open it again from Tyrant (Open in Blender → Start fresh).") from ex
-    if not isinstance(data, dict) or data.get("version") != VERSION or not all(k in data for k in ("source", "materials", "rest")):
-        raise ProjectError("This project was made by another Tyrant version; open it again from Tyrant (Open in Blender → Start fresh).")
+        raise ProjectError(f"{path} could not be read ({ex}). {_AGAIN}") from ex
+    if not isinstance(data, dict) or data.get("version") != VERSION or not _valid(data):
+        raise ProjectError(f"This project was made by another Tyrant version or was changed by hand. {_AGAIN}")
     return data
 
 

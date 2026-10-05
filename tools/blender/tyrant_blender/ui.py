@@ -63,6 +63,8 @@ def _import_later(path):
         import_and_save(path)
     except project.ProjectError as ex:
         _report(str(ex))
+    except Exception as ex:  # noqa: BLE001 - shown to the user instead of an empty scene and a console traceback
+        _report(f"Tyrant could not import this model ({ex}). Open it again from Tyrant with Start fresh.")
     return None
 
 

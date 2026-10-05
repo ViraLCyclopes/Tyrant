@@ -8,7 +8,10 @@ _server = None
 
 def _growth_changed(obj, _context):
     if obj.type == "ARMATURE" and obj.get(project.TAG):
-        growth.set_growth(obj, obj.tyrant_growth)
+        try:
+            growth.set_growth(obj, obj.tyrant_growth)
+        except (project.ProjectError, KeyError, TypeError, ValueError) as ex:
+            print("Tyrant: the Growth slider cannot read this project:", ex)
 
 
 def _drain():
@@ -28,6 +31,10 @@ def register():
     bpy.types.Object.tyrant_growth = bpy.props.FloatProperty(
         name="Growth", description="Baby (0) to adult (1), as the game grows this animal", min=0.0, max=1.0, default=1.0,
         update=_growth_changed)
+    if not bpy.app.timers.is_registered(send.drain_finished):
+        bpy.app.timers.register(send.drain_finished, first_interval=0.25, persistent=True)
+    if panel.clear_stale_busy not in bpy.app.handlers.load_post:
+        bpy.app.handlers.load_post.append(panel.clear_stale_busy)
     if bpy.app.background:
         return  # scripted runs (tests, installs) never listen
     try:
@@ -42,6 +49,10 @@ def register():
 
 def unregister():
     global _server
+    if bpy.app.timers.is_registered(send.drain_finished):
+        bpy.app.timers.unregister(send.drain_finished)
+    if panel.clear_stale_busy in bpy.app.handlers.load_post:
+        bpy.app.handlers.load_post.remove(panel.clear_stale_busy)
     if bpy.app.timers.is_registered(_drain):
         bpy.app.timers.unregister(_drain)
     if _server is not None:

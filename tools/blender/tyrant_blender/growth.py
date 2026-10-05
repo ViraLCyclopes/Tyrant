@@ -38,9 +38,13 @@ def shape_values(m, relative):
     return clamp(key0), clamp(key1)
 
 
+def forget(path):
+    _cache.pop(path, None)
+
+
 def _project(armature):
     path = armature.get(project.TAG)
-    if not path or not os.path.isfile(path):
+    if not path or not project.is_local(path) or not os.path.isfile(path):
         return None
     stamp = os.path.getmtime(path)
     cached = _cache.get(path)

@@ -1,6 +1,7 @@
 """Send to Tyrant: export only the Tyrant armature and the meshes it deforms, then let tyrant.exe add the model to the mod."""
 import json
 import os
+import queue
 import subprocess
 import threading
 
@@ -99,13 +100,38 @@ def run(args, timeout=900):
     return {"ok": False, "errors": [f"Tyrant did not answer ({tail or 'no output'})."], "warnings": [], "lodVertices": []}
 
 
+finished = queue.Queue()
+
+
 def run_async(args, done):
-    """Runs tyrant.exe off Blender's main thread, then calls done(result) on it."""
+    """Runs tyrant.exe off Blender's main thread; done(result) runs on it, from drain_finished (a main-thread timer)."""
     def work():
-        result = run(args)
-        bpy.app.timers.register(lambda: done(result), first_interval=0.0)
+        finished.put((done, run(args)))
 
     threading.Thread(target=work, name="tyrant-send", daemon=True).start()
+
+
+def drain_finished():
+    """Applies finished sends on Blender's main thread (registered as a timer by the add-on)."""
+    while not finished.empty():
+        done, result = finished.get()
+        try:
+            done(result)
+        except Exception as ex:  # noqa: BLE001 - a timer that raises is removed by Blender
+            print("Tyrant:", ex)
+    return 0.25
+
+
+def trusted_tyrant(path):
+    """Only a tyrant.exe on this PC: the exe named in a project file is run by Send."""
+    return (isinstance(path, str) and os.path.isabs(path) and project_is_local(path)
+            and os.path.basename(path).lower() == "tyrant.exe")
+
+
+def project_is_local(path):
+    from . import project
+
+    return project.is_local(path)
 
 
 def why_not_sendable(context):

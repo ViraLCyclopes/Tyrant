@@ -25,7 +25,7 @@ def parse(line):
     if not isinstance(request, dict) or set(request) != {"open"} or not isinstance(request["open"], str):
         return {"ok": False, "error": 'only {"open": "<path to tyrant-blender.json>"} is accepted'}, None
     path = request["open"]
-    if not os.path.isabs(path) or os.path.basename(path) != project.FILE_NAME:
+    if not os.path.isabs(path) or not project.is_local(path) or os.path.basename(path) != project.FILE_NAME:
         return {"ok": False, "error": f"the path must be an absolute path to a {project.FILE_NAME}"}, None
     if not os.path.isfile(path):
         return {"ok": False, "error": f"{path} does not exist"}, None

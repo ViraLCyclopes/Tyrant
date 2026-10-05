@@ -59,7 +59,7 @@ class ImportTests(unittest.TestCase):
             f.write('{"version": 99}')
         with self.assertRaises(project.ProjectError) as caught:
             project.load(path)
-        self.assertIn("open it again from Tyrant", str(caught.exception))
+        self.assertIn("open it again from tyrant", str(caught.exception).lower())
 
     def test_seams_follow_uv_islands_only(self):
         bpy.ops.mesh.primitive_plane_add()
