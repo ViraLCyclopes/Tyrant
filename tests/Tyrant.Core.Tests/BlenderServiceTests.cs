@@ -239,22 +239,25 @@ public class BlenderServiceTests
     }
 
     [Fact]
-    public void Send_puts_images_into_the_skins_maps_and_a_female_without_her_own_maps_uses_the_shared_ones()
+    public void A_female_shown_writes_the_females_maps_even_on_a_male_only_skin()
     {
         var s = SendSetup();
         using var _ = s.Game;
         var mod = ModProject.Create(s.Ws, "img-mod", "M", null);
         var skin = mod.AddSkin(s.Ws, s.Install, s.Index, s.Reader, s.Species, "Carcharodontosaurus", "Red", "1", new SkinTemplateOptions(true, false, false));
         var png = Png(Path.Combine(Path.GetDirectoryName(s.Project)!, "send-images", "diffuse.png"));
+        string? maleBefore = skin.Male is { } m && m.TryGetValue("diffuse", out var f) ? File.ReadAllText(Path.Combine(mod.Dir, f)) : null;
 
         var sent = BlenderService.Send(s.Ws, s.Install, s.Index, s.Species, s.Reader, s.Project, s.Glb,
             new BlenderDestination("img-mod", "Carcharodontosaurus", skin.Id), null, [new BlenderImage("diffuse", png)], "female");
 
         Assert.True(sent.Ok, string.Join(" ", sent.Errors));
         Assert.Equal(["diffuse"], sent.Images);
-        Assert.Equal("skin maps (male)", sent.ImagesTo);
-        var file = ModProject.Open(s.Ws, "img-mod").Skin(skin.Id).Male!["diffuse"];
-        Assert.True(File.Exists(Path.Combine(ModProject.Open(s.Ws, "img-mod").Dir, file)));
+        Assert.Equal("skin maps (female)", sent.ImagesTo); // the game never lends a male's maps to a female
+        var saved = ModProject.Open(s.Ws, "img-mod").Skin(skin.Id);
+        Assert.True(File.Exists(Path.Combine(ModProject.Open(s.Ws, "img-mod").Dir, saved.Female!["diffuse"])));
+        string? maleAfter = saved.Male is { } after && after.TryGetValue("diffuse", out var g) ? File.ReadAllText(Path.Combine(mod.Dir, g)) : null;
+        Assert.Equal(maleBefore, maleAfter); // the male's map is left as it was
     }
 
     [Fact]

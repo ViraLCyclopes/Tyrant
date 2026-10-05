@@ -27,11 +27,9 @@ public static class BlenderImages
         string to;
         if (destination.Skin is { } skinId)
         {
-            var skin = mod.Skin(skinId);
-            static bool Has(Dictionary<string, string>? maps) => maps is { Count: > 0 };
-            // The shown sex's maps; a skin without that sex's own maps shares the other's (as the game borrows them).
-            var useSex = sex == "female" ? (Has(skin.Female) || !Has(skin.Male) ? "female" : "male")
-                : (Has(skin.Male) || !Has(skin.Female) ? "male" : "female");
+            mod.Skin(skinId); // a skin that is gone is an error, before any image is written
+            // The shown sex's own maps: the game gives a female only the skin's female maps (never the male's), and so on.
+            var useSex = sex == "female" ? "female" : "male";
             to = $"skin maps ({useSex})";
             foreach (var image in usable)
                 Try(image, warnings, () => { mod.SetSkinFile(skinId, useSex, image.Slot, image.Png); written.Add(image.Slot); });
