@@ -15,4 +15,15 @@ public class BlenderProcessTests
         Assert.Equal(["--python-expr", "print('x y')"], info.ArgumentList);
         Assert.Equal(@"C:\b", info.WorkingDirectory);
     }
+
+    [Fact]
+    public void Blender_run_by_tyrant_gets_its_own_closed_input()
+    {
+        // In the app the core's input is the app's request pipe; Blender inheriting it waited on it forever (install hung).
+        var info = BlenderProcess.RunInfo(@"C:lender.exe", ["--command", "extension", "list"], null);
+
+        Assert.True(info.RedirectStandardInput);
+        Assert.True(info.RedirectStandardOutput);
+        Assert.False(info.UseShellExecute);
+    }
 }

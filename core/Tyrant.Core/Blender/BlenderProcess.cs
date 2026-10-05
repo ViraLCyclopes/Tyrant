@@ -18,10 +18,8 @@ public sealed class BlenderProcess : IBlenderProcess
 {
     public BlenderRun Run(string exe, IReadOnlyList<string> args, IReadOnlyDictionary<string, string>? env = null, TimeSpan? timeout = null)
     {
-        var info = new ProcessStartInfo(exe) { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true };
-        foreach (var arg in args) info.ArgumentList.Add(arg);
-        foreach (var (key, value) in env ?? new Dictionary<string, string>()) info.Environment[key] = value;
-        using var process = Process.Start(info) ?? throw new InvalidOperationException($"Could not start {exe}.");
+        using var process = Process.Start(RunInfo(exe, args, env)) ?? throw new InvalidOperationException($"Could not start {exe}.");
+        process.StandardInput.Close(); // nothing to read: Blender sees the end of its input at once
         var output = new System.Text.StringBuilder();
         process.OutputDataReceived += (_, e) => { if (e.Data is not null) lock (output) output.AppendLine(e.Data); };
         process.ErrorDataReceived += (_, e) => { if (e.Data is not null) lock (output) output.AppendLine(e.Data); };
@@ -34,6 +32,21 @@ public sealed class BlenderProcess : IBlenderProcess
         }
         process.WaitForExit(); // flush the async readers
         lock (output) return new BlenderRun(process.ExitCode, output.ToString());
+    }
+
+    /// <summary>
+    /// A Blender run Tyrant waits for: its output read, and its own (closed) input. Inheriting the core's input in the app (the
+    /// app's request pipe) made 'blender --command extension install-file' wait on it forever.
+    /// </summary>
+    internal static ProcessStartInfo RunInfo(string exe, IReadOnlyList<string> args, IReadOnlyDictionary<string, string>? env)
+    {
+        var info = new ProcessStartInfo(exe)
+        {
+            RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true,
+        };
+        foreach (var arg in args) info.ArgumentList.Add(arg);
+        foreach (var (key, value) in env ?? new Dictionary<string, string>()) info.Environment[key] = value;
+        return info;
     }
 
     public void Start(string exe, IReadOnlyList<string> args) => Process.Start(StartInfo(exe, args))?.Dispose();
