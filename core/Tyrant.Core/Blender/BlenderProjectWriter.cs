@@ -14,6 +14,9 @@ namespace Tyrant.Core.Blender;
 public sealed record BlenderOpenRequest(string Species, string? Skin, string? Mod, bool Fresh, bool Lods, string Sex = "male")
 {
     public string? PrefabRef { get; init; }
+
+    /// <summary>False: Open in Blender builds no IK controls (the chains are still written, for Add IK controls later).</summary>
+    public bool Ik { get; init; } = true;
 }
 
 public sealed record BlenderProjectResult(string ProjectFile, string Dir, bool GameChanged);
@@ -87,6 +90,8 @@ public static class BlenderProjectWriter
             GrowthKeys = renderers.Count > 0
                 ? renderers[0].Mesh.BlendShapes.Take(ModelFitter.GrowthKeys).Select(s => s.Name).ToList()
                 : [],
+            Ik = BlenderIkReader.From(prefab),
+            IkOnOpen = request.Ik,
         };
         BlenderProjectFile.Write(projectFile, project);
         return new BlenderProjectResult(projectFile, dir, gameChanged);

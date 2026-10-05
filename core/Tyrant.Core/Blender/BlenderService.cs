@@ -122,6 +122,23 @@ public sealed class BlenderService(BlenderEnvironment env)
                 .Select(s => new BlenderSkinChoice(s.Id, s.Name)).ToList())).ToList();
 
     /// <summary>
+    /// Writes the game's IK chains into an existing project (one written before Tyrant read them), for the add-on's Add IK
+    /// controls; returns how many chains the model has.
+    /// </summary>
+    public static int RefreshIk(GameInstall install, AssetIndex index, IReadOnlyList<SpeciesSkins> species, IAssetReader reader, string projectFile)
+    {
+        var project = BlenderProjectFile.Read(projectFile);
+        BlenderIk? ik = null;
+        if (project.Source.Kind != "object")
+        {
+            var (_, prefabRecord) = ModProject.ResolveModelTarget(index, species, project.Source.Species, null);
+            ik = BlenderIkReader.From(reader.ReadPrefabModel(install, prefabRecord));
+        }
+        BlenderProjectFile.Write(projectFile, project with { Ik = ik });
+        return ik?.Chains.Count ?? 0;
+    }
+
+    /// <summary>
     /// Adds the exported .glb to the project's destination (or the one chosen now, saved into the project), creating the mod
     /// when newModName is given. Never throws for Tyrant's own errors: they come back in the result for Blender's panel.
     /// </summary>

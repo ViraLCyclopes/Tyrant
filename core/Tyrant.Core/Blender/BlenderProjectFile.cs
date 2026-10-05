@@ -46,6 +46,12 @@ public sealed record BlenderProject(int Version, string Workspace, string Tyrant
 
     /// <summary>The game's growth shape keys (the first two of LOD 0: baby, juvenile), so the add-on can check them before Send.</summary>
     public IReadOnlyList<string> GrowthKeys { get; init; } = [];
+
+    /// <summary>The game's IK chains (null = none, or a project written before Tyrant read them).</summary>
+    public BlenderIk? Ik { get; init; }
+
+    /// <summary>Whether Open in Blender builds the IK controls (the app's IK controls option, 'blender open --no-ik').</summary>
+    public bool IkOnOpen { get; init; } = true;
 }
 
 public static class BlenderProjectFile
