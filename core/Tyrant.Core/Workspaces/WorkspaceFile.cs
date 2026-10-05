@@ -14,6 +14,9 @@ public sealed class WorkspaceFile
 
     /// <summary>Output name ("source", "assets", "data") → build it was generated from.</summary>
     public Dictionary<string, OutputStamp> Outputs { get; set; } = [];
+
+    /// <summary>The blender.exe the user chose (Workspace tab → Blender, or 'tyrant blender set-path'); null = find it.</summary>
+    public string? BlenderPath { get; set; }
 }
 
 public sealed record OutputStamp(GameFingerprint Fingerprint, DateTimeOffset CreatedUtc);
