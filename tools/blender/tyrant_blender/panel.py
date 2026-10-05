@@ -6,7 +6,7 @@ import textwrap
 
 import bpy
 
-from . import checks, gamematerial, growth, ikpanel, images, project, send, ui
+from . import checks, gamematerial, growth, ikpanel, images, project, rig, rigpanel, send, ui
 
 REPORT = "tyrant_report"
 NEW_MOD = "__new__"
@@ -65,10 +65,17 @@ def _start_send(context, armature, destination=None, new_mod_name=None):
     data = project.load(path)
     if not send.trusted_tyrant(data.get("tyrant")):
         raise send.SendError(f"This project names {data.get('tyrant')!r} as Tyrant; open it again from Tyrant on this PC.")
+    if rig.editing(armature):
+        raise send.SendError("A rig edit is started: Apply it or Cancel it first.")
     _stop_on_problems(armature, data)
     folder = os.path.dirname(path)
     glb = os.path.join(folder, "send.glb")
     send.export(armature, glb)
+    # The rig edit always goes (an empty one clears the destination's): the model is built for this skeleton.
+    rig_file = os.path.join(folder, "send-rig.json")
+    with open(rig_file, "w", encoding="utf-8") as f:
+        json.dump(rig.unity_rig(armature), f)
+    rig_only = bool(rig.offsets(armature)) and armature.tyrant_rig_only
     sex = armature.tyrant_sex.lower()
     # Every changed image goes; Tyrant skips the ones the mod already holds (the mod, not Blender, knows what is there).
     changed, notes = images.collect(send.sendable(armature)[1:], folder)
@@ -86,7 +93,7 @@ def _start_send(context, armature, destination=None, new_mod_name=None):
         _redraw()
         return None
 
-    send.run_async(send.command(data, path, glb, destination, new_mod_name, changed, sex), done)
+    send.run_async(send.command(data, path, glb, destination, new_mod_name, changed, sex, rig_file, rig_only), done)
 
 
 class TYRANT_OT_send(bpy.types.Operator):
@@ -278,6 +285,7 @@ class VIEW3D_PT_tyrant(bpy.types.Panel):
         if not data.get("growth"):
             say(layout, context, "Dump the game's data (Workspace tab) for its growth.", "INFO")
         ikpanel.draw(layout, context, armature, data, say)
+        rigpanel.draw(layout, context, armature, data, say)
 
         layout.operator("tyrant.use_game_material", icon="MATERIAL")
         active = context.active_object
@@ -295,8 +303,10 @@ class VIEW3D_PT_tyrant(bpy.types.Panel):
             say(preview, context, f"{name}: {why}", "BLANK1")
         if len(stays) > 6:
             say(preview, context, f"…and {len(stays) - 6} more left out", "BLANK1")
+        if rig.offsets(armature):
+            layout.prop(armature, "tyrant_rig_only")
         row = layout.row()
-        row.enabled = not is_busy(armature)
+        row.enabled = not is_busy(armature) and not rig.editing(armature)
         row.operator("tyrant.send", icon="EXPORT")
 
         report = armature.get(REPORT)

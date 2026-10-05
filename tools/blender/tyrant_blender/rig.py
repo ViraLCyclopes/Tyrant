@@ -16,6 +16,7 @@ RIG = "tyrant_rig"  # armature: {bone: [mx,my,mz, qw,qx,qy,qz, sx,sy,sz]} the of
 GAME = "tyrant_rig_game"  # armature: {bone: 16 floats} each game bone's local in the game's own bind skeleton
 START = "tyrant_rig_start"  # armature: the pose (true locals) a rig edit started from, while one is being made
 SIGMA = "tyrant_rig_sigma"  # armature: {bone: [x,y,z]} the scale Blender's rest lost for that bone (product down the chain)
+PROBLEM = "tyrant_rig_problem"  # armature: why the rig edit a model came with could not be shown
 TOLERANCE = 1e-5
 ONE = Vector((1.0, 1.0, 1.0))
 

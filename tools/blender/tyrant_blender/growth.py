@@ -80,16 +80,23 @@ def _stage(bone, value):
     return [a + (b - a) * t for a, b in zip(stages[first], stages[first + 1])]
 
 
-def _basis(rest, bone, value, pose_bone):
+def _basis(rest, bone, value, pose_bone, offsets=None, sigma=None):
     """The pose basis (location, scale) for this growth, relative to the game's adult stage. The game moves the bone in its
     parent's space: that move is turned into the bone's own rest frame (its bind pose, which can differ from the prefab's
-    pose the stages are written against), so it lands where the game puts it."""
+    pose the stages are written against), so it lands where the game puts it. A rig edit on the bone turns and scales that
+    move as the game composes it (rotate × (scale ⊙ move)); the parent's scale Blender's rest lost is put back."""
     target = _stage(bone, value)
     adult = bone["adult"]
     location, scale = Vector((0.0, 0.0, 0.0)), Vector((1.0, 1.0, 1.0))
     if bone.get("translation"):
         move = Vector(target[0:3]) - Vector(adult[0:3])
+        if offsets and bone["name"] in offsets:
+            _m, turn, grow = offsets[bone["name"]]
+            move = turn @ Vector((grow.x * move.x, grow.y * move.y, grow.z * move.z))
         b = pose_bone.bone
+        if sigma and b.parent is not None and b.parent.name in sigma:
+            lost = sigma[b.parent.name]
+            move = Vector((lost.x * move.x, lost.y * move.y, lost.z * move.z))
         if b.parent is not None:  # Blender keeps each bone's axes as the node's: the parent bone's frame is the parent's space
             frame = (b.parent.matrix_local.inverted() @ b.matrix_local).to_3x3().normalized()
         else:
@@ -138,14 +145,17 @@ def set_growth(armature, value, scene_objects=None):
 
     from . import ik  # late: ik uses growth too
 
+    from . import rig  # late: rig uses growth too
+
     rest = {r["name"]: r for r in (data or {}).get("rest", [])}
     bases = _bases(armature)
+    offsets, sigma = rig.offsets(armature), rig._sigma(armature)
     channels = {}
     for bone in growth.get("bones") or []:
         pose_bone = armature.pose.bones.get(bone["name"])
         if pose_bone is None or bone["name"] not in rest:
             continue
-        change = Matrix.Identity(4) if value >= 1.0 else _basis(rest[bone["name"]], bone, value, pose_bone)
+        change = Matrix.Identity(4) if value >= 1.0 else _basis(rest[bone["name"]], bone, value, pose_bone, offsets, sigma)
         # Only the channels the game's growth owns, on top of the stance the model opened in: rotations are yours.
         base_location, base_scale = bases.get(bone["name"], (Vector((0.0, 0.0, 0.0)), Vector((1.0, 1.0, 1.0))))
         location = base_location + change.translation

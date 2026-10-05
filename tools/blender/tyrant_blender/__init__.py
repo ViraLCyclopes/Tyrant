@@ -3,7 +3,7 @@ import os
 
 import bpy
 
-from . import growth, ik, ikpanel, importer, listener, materials, meshops, panel, project, send, ui  # noqa: F401
+from . import growth, ik, ikpanel, importer, listener, materials, meshops, panel, project, rig, rigpanel, send, ui  # noqa: F401
 
 _server = None
 
@@ -38,8 +38,13 @@ def _drain():
 
 def register():
     global _server
-    for cls in ui.CLASSES + panel.CLASSES + ikpanel.CLASSES:
+    for cls in ui.CLASSES + panel.CLASSES + ikpanel.CLASSES + rigpanel.CLASSES:
         bpy.utils.register_class(cls)
+    bpy.types.Object.tyrant_rig_only = bpy.props.BoolProperty(
+        name="Rig edit only (keep the game's mesh)",
+        description=("Send only the rig edit: the destination wears the game's own mesh, which stretches with the moved bones "
+                     "(its own model, if it had one, is no longer used)"),
+        default=False)
     bpy.types.Object.tyrant_growth = bpy.props.FloatProperty(
         name="Growth",
         description=("Baby (0) to adult (1), as the game grows this animal. Baby and juvenile proportions are shown relative to "
@@ -82,6 +87,7 @@ def unregister():
         _server.stop()
         _server = None
     del bpy.types.Object.tyrant_growth
+    del bpy.types.Object.tyrant_rig_only
     del bpy.types.Object.tyrant_sex
-    for cls in reversed(ui.CLASSES + panel.CLASSES + ikpanel.CLASSES):
+    for cls in reversed(ui.CLASSES + panel.CLASSES + ikpanel.CLASSES + rigpanel.CLASSES):
         bpy.utils.unregister_class(cls)

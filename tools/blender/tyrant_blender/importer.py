@@ -4,7 +4,7 @@ import os
 
 import bpy
 
-from . import growth, ik, materials, meshops, project
+from . import growth, ik, materials, meshops, project, rig
 
 
 def import_project(path):
@@ -45,6 +45,11 @@ def import_project(path):
         armature.tyrant_sex = "FEMALE" if data.get("sex") == "female" else "MALE"  # swaps the maps and the growth limit
     if hasattr(growth, "set_growth"):
         growth.set_growth(armature, 1.0)
+    if data.get("rig"):
+        try:
+            rig.adopt(armature, data)  # before IK: the controls are built on the skeleton the model wears in game
+        except Exception as ex:  # noqa: BLE001 - the model still opens, as it came
+            armature[rig.PROBLEM] = f"The rig edit could not be shown ({type(ex).__name__}: {ex}); Clear rig edit or open the model again."
     if data.get("ikOnOpen", True) and (data.get("ik") or {}).get("chains"):
         try:
             ik.add_controls(armature, data)

@@ -86,9 +86,10 @@ def _export(armature, path):
             obj.matrix_parent_inverse = inverse
 
 
-def command(data, project_path, glb, destination, new_mod_name, images=(), sex="male"):
+def command(data, project_path, glb, destination, new_mod_name, images=(), sex="male", rig_file=None, rig_only=False):
     """tyrant.exe's arguments for sending this project's export (with a destination chosen now, or the saved one), plus the
-    changed images ((slot, png, hash)) and the sex shown, whose maps they go to."""
+    changed images ((slot, png, hash)) and the sex shown, whose maps they go to, and the armature's rig edit (a file; an
+    empty one clears the destination's), alone with rig_only."""
     args = [data["tyrant"], "blender", "send", "-w", data["workspace"], project_path, glb]
     if destination:
         args += ["--mod", destination["mod"]]
@@ -100,6 +101,10 @@ def command(data, project_path, glb, destination, new_mod_name, images=(), sex="
         args += ["--image", f"{slot}={path}"]
     if images:
         args += ["--sex", sex]
+    if rig_file:
+        args += ["--rig", rig_file]
+        if rig_only:
+            args += ["--rig-only"]
     return args
 
 
