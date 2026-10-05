@@ -45,6 +45,9 @@ internal static class CliServices
     /// <summary>Tyrant's game mods (dumper and framework) shipped next to the CLI; settable for tests, like AssetReader.</summary>
     public static string GameModsDir { get; set; } = Path.Combine(AppContext.BaseDirectory, "dumper");
 
+    /// <summary>Blender: where to find it, how to start it, the add-on zip next to tyrant.exe; settable for tests.</summary>
+    public static Tyrant.Core.Blender.BlenderEnvironment Blender { get; set; } = Tyrant.Core.Blender.BlenderEnvironment.Default();
+
     /// <summary>HTTP for update checks; settable for tests.</summary>
     public static Func<HttpClient> Http { get; set; } = () => new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
 

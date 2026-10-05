@@ -71,7 +71,8 @@ public sealed class BlenderService(BlenderEnvironment env)
         return Status(ws);
     }
 
-    public BlenderOpenResult Open(Workspace ws, GameInstall install, AssetIndex index, IReadOnlyList<SpeciesSkins> species, IAssetReader reader, BlenderOpenRequest request)
+    /// <summary>Throws the reason Open in Blender cannot work now (no Blender, Blender 4, add-on missing or older), naming the fix.</summary>
+    public BlenderInstall CheckReady(Workspace ws)
     {
         var blender = RequireBlender(ws);
         var installed = BlenderAddon.InstalledVersion(blender, env.AppData);
@@ -79,6 +80,12 @@ public sealed class BlenderService(BlenderEnvironment env)
             throw new TyrantException(TyrantErrorCode.BlenderMissing, installed is null
                 ? $"Tyrant's add-on is not installed in Blender {blender.MajorMinor}: click Install add-on on the Workspace tab (Blender card), or run 'tyrant blender install-addon'."
                 : $"Tyrant's add-on in Blender is older ({installed}) than this Tyrant's: click Update add-on on the Workspace tab (Blender card), or run 'tyrant blender install-addon'.");
+        return blender;
+    }
+
+    public BlenderOpenResult Open(Workspace ws, GameInstall install, AssetIndex index, IReadOnlyList<SpeciesSkins> species, IAssetReader reader, BlenderOpenRequest request)
+    {
+        var blender = CheckReady(ws);
         var project = BlenderProjectWriter.Write(request, ws, install, index, species, reader, env.TyrantExe);
         if (env.Link.TryOpen(project.ProjectFile)) return new BlenderOpenResult(project.ProjectFile, "running", project.GameChanged);
         env.Process.Start(blender.Exe, ["--python-expr", StartScript(project.ProjectFile)]);

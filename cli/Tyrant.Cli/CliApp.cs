@@ -88,6 +88,17 @@ public static class CliApp
                 game.AddCommand<GamePackageFrameworkCommand>("package-framework").WithDescription("Save Tyrant's framework as a zip for players without Tyrant.");
             });
 
+            config.AddBranch("blender", blender =>
+            {
+                blender.SetDescription("Open models in Blender with Tyrant's add-on and send them back (the Workspace tab's Blender card, Open in Blender).");
+                blender.AddCommand<BlenderStatusCommand>("status").WithDescription("Show the Blender Tyrant uses and its add-on.");
+                blender.AddCommand<BlenderSetPathCommand>("set-path").WithDescription("Use this blender.exe (or --clear to find Blender again).");
+                blender.AddCommand<BlenderInstallAddonCommand>("install-addon").WithDescription("Install or update Tyrant's add-on in Blender.");
+                blender.AddCommand<BlenderOpenCommand>("open").WithDescription("Open a species, a skin or a mod's model in Blender.");
+                blender.AddCommand<BlenderDestinationsCommand>("destinations").WithDescription("List where a Blender project can be sent (JSON, for the add-on).");
+                blender.AddCommand<BlenderSendCommand>("send").WithDescription("Add a model exported from a Blender project to its mod (JSON, for the add-on).");
+            });
+
             config.AddBranch("mod", mod =>
             {
                 mod.SetDescription("Make, check and install mods: texture, model and sound replacements and new skins.");
