@@ -1,6 +1,7 @@
 <script lang="ts">
   import ExportFormatSelect from './ExportFormatSelect.svelte';
   import IkChains from './IkChains.svelte';
+  import RigInfo from './RigInfo.svelte';
   import { formatParam } from './exportFormat.svelte';
   import { onMount } from 'svelte';
   import type { SpeciesRow } from '$lib/rpc/types.gen';
@@ -70,7 +71,7 @@
             <button disabled={session.busy} aria-label="Export {row.displayName} pack" onclick={() => exportPack(row)}>Export pack</button>
             <button aria-label="Add a skin to {row.displayName}" onclick={() => (addingTo = addingTo === row.key ? null : row.key)}>Add a skin…</button>
             <button aria-label="Sounds of {row.displayName}" onclick={() => (soundsOf = soundsOf === row.key ? null : row.key)}>Sounds…</button>
-            <button aria-label="IK chains of {row.displayName}" onclick={() => (ikOf = ikOf === row.key ? null : row.key)}>IK chains…</button>
+            <button aria-label="IK chains of {row.displayName}" onclick={() => (ikOf = ikOf === row.key ? null : row.key)}>IK and rig…</button>
             {#if dumped.get(row.key)}
               {@const d = dumped.get(row.key)!}
               <OpenInBlender species={d.speciesId} skins={d.skins.map((k) => k.name)} />
@@ -89,4 +90,4 @@
 {:else if soundsRow}
   {#key soundsRow.key}<SpeciesSounds speciesKey={soundsRow.key} displayName={soundsRow.displayName} />{/key}
 {/if}
-{#if ikRow}{#key ikRow.key}<IkChains speciesKey={ikRow.key} displayName={ikRow.displayName} />{/key}{/if}
+{#if ikRow}{#key ikRow.key}<IkChains speciesKey={ikRow.key} displayName={ikRow.displayName} /><RigInfo speciesKey={ikRow.key} displayName={ikRow.displayName} />{/key}{/if}

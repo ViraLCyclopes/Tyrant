@@ -140,6 +140,38 @@ and on a skin: `"model": "models/carcharodontosaurus-spiked-5e6f7a8b.glb"`.
 - `file` must lie inside the mod; a path that leads outside it is an error, and Tyrant builds nothing for it.
 - Check and Install rebuild the converted files when the `.glb` in the mod changed. Tyrant also remembers the file you added the model from; when you export it again, Check warns and the model's page offers **Re-import** (or run `tyrant mod replace-model` again).
 
+## Rig edits (changing an animal's skeleton)
+
+```json
+"models": [
+  { "target": "Allosaurus Anax", "rig": { "Jaw": { "move": [0, -0.05, 0.02] }, "Calve.L": { "scale": [1.1, 1.1, 1.1] } } }
+]
+```
+
+and on a skin: `"rig": { … }` next to its `"model"`. Needs Tyrant framework **0.2.0** or newer.
+
+| Field | Meaning |
+|---|---|
+| `move` | Metres, added to the bone's place (Unity space, in its parent's space). |
+| `rotate` | A rotation (quaternion x, y, z, w) in the parent's space. |
+| `scale` | Per axis, above 0. |
+
+Each part is optional (left out = no change). Every frame the game composes the edit on the animation, like a JWE NODE
+bone between the bone and its parent: place = move + rotate × (scale × place), rotation = rotate × rotation,
+scale = scale × scale.
+
+- **Made in Blender:** Tyrant panel → Rig edit → **Start rig edit**, pose the bones, **Apply rig edit**, then **Send to
+  Tyrant**. Tyrant writes the `rig` and builds the model's bind poses for the edited skeleton.
+- **Species or skin:** a species entry's rig edit applies to every animal of that species, the game's own skins
+  included. A skin's rig edit (or its own model) replaces the species' for animals wearing it.
+- **With or without a model:** with a model made for it, the mesh fits the edited bones. A `models` entry with a `rig`
+  and no `file` keeps the game's mesh, which stretches with the moved bones.
+- **Several mods on one species:** a species' model and rig edit go together. The later mod in the load order supplies
+  both; the Mods tab names the mod it overrides.
+- **Bones the game moves itself:** `tyrant species rig-info <species>` (Species tab → **IK and rig…**) lists the bones
+  the animations move (an edit changes that motion) and the bones growth positions or scales (Check says whether edits
+  on those work yet).
+
 ## Sounds (replacing game sounds)
 
 Needs Tyrant Framework 0.1.0 or newer (Tyrant writes `requires.tyrant` for you when it exports the mod).

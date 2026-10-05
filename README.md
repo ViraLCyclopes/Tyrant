@@ -61,6 +61,16 @@ Tyrant works with **Blender 5.0 or newer** through its own Blender add-on.
    identical. Don't want them? Untick **IK controls** in Open in Blender's Options (`--no-ik` in the CLI), or **Remove IK
    controls** in the panel. `tyrant species ik <species>` (Species tab → **IK chains…**) lists a species' chains.
 
+9. **Rig edits:** Tyrant panel → Rig edit → **Start rig edit**, then move, rotate or scale the game's bones in Pose Mode
+   and press **Apply rig edit**: the mesh and the rest pose take only your edit, your stance stays, and the IK controls
+   are rebuilt on the new legs (**Cancel** puts the pose back; **Clear rig edit** returns to the game's skeleton). Send
+   takes the edit with the model: on the species model it changes every animal of that species (the game's skins too),
+   on a skin only that skin. **Rig edit only (keep the game's mesh)** sends the edit alone (the game's mesh stretches
+   with the bones). The panel warns about bones the game's animations or growth move. The mod editor's model and skin
+   pages show the edit (**Clear rig edit**); `tyrant mod rig <mod> <species> [--skin <id>] [--clear]` and
+   `tyrant species rig-info <species>` (Species tab → **IK and rig…**) do the same. When two mods change the same
+   species, the later one in the load order supplies both its model and its rig edit (the Mods tab says so).
+
 Each model opens as **its own scene in the file you have open** (e.g. *Tyrant · my-mod · Allosaurus Anax Red*); your other
 scenes and objects are never touched, and saving the file is up to you. **Open in Blender** again switches back to that
 scene. **Start fresh** (Options) keeps the old scene as *… (old)* and imports the model anew. To port a model, open the

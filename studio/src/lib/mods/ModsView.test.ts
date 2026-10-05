@@ -59,6 +59,14 @@ describe('ModsView', () => {
     expect(screen.getByText('Installed')).toBeInTheDocument();
   });
 
+  it('notes a species model or rig edit a later mod overrides', async () => {
+    const clash = "Allosaurus Anax: its model or rig edit is overridden by 'short-anax' (later in the load order).";
+    const { session } = setup([row({ id: 'long-anax', name: 'Long Anax', state: 'installed', enabled: true, clashes: [clash] })]);
+    renderWith(ModsView, session);
+
+    expect(await screen.findByText(clash)).toBeInTheDocument();
+  });
+
   it('creates a mod', async () => {
     const { rpc, session } = setup([]);
     rpc.on('mods.create', () => ({ mods: [row({ id: 'blue-stripes', name: 'blue-stripes' })], frameworkInstalled: false, frameworkOutdated: false }));

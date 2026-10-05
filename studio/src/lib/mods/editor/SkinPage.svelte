@@ -3,6 +3,7 @@
   import type { ModSkinDto } from '$lib/rpc/types.gen';
   import { getSession } from '$lib/stores/session.svelte';
   import ColourEditor from './ColourEditor.svelte';
+  import RigEdit from './RigEdit.svelte';
   import type { ModDoc } from './modDoc.svelte';
   import RemoveSkinDialog from './RemoveSkinDialog.svelte';
   import SkinFiles from './SkinFiles.svelte';
@@ -68,11 +69,12 @@
       <button onclick={replaceModel}>Replace model…</button>
       <button onclick={() => doc.edit('mods.removeModel', { target: skin.species, skin: skin.id })}>Use species model</button>
     {:else}
-      <span>{speciesModel ? `Model: species replacement (${speciesModel.file})` : "Model: the game's"}</span>
+      <span>{skin.rig ? "Model: the game's, with this skin's rig edit" : speciesModel?.file ? `Model: species replacement (${speciesModel.file})` : speciesModel?.rig ? "Model: the game's, with the species' rig edit" : "Model: the game's"}</span>
       <button onclick={replaceModel}>Replace model…</button>
     {/if}
     <OpenInBlender species={skin.species} mod={doc.id} skin={skin.id} />
   </div>
+  <RigEdit {doc} target={skin.species} skin={skin.id} />
 </section>
 
 <section class="card">

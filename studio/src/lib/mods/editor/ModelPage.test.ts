@@ -102,4 +102,16 @@ describe('ModelPage', () => {
     expect(await screen.findByText(/no built levels of detail/)).toBeInTheDocument();
     expect(viewer.showModels).not.toHaveBeenCalled();
   });
+
+  it('shows a rig edit without a model of its own as such, with no preview or LODs', async () => {
+    const { session, doc, rpc } = setup();
+    rpc.on('mods.rig', () => ({ bones: [{ bone: 'Jaw', move: [0, 0.1, 0], rotate: [0, 0, 0, 1], scale: [1, 1, 1] }], hasModel: false, errors: [], warnings: [] }));
+    const rigOnly: ModModelDto = { ...model, file: '', lods: [], warnings: [], rig: [{ bone: 'Jaw', move: [0, 0.1, 0], rotate: [0, 0, 0, 1], scale: [1, 1, 1] }] };
+    renderWith(ModelPage, session, { doc, model: rigOnly });
+
+    expect(await screen.findByText(/Rig edit only/)).toBeInTheDocument();
+    expect(await screen.findByText('Jaw')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Rebuild LODs' })).toBeNull();
+    expect(rpc.callsTo('mods.modelPreview')).toHaveLength(0);
+  });
 });

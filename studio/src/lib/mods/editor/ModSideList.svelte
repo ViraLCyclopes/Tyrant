@@ -61,7 +61,7 @@
   </div>
   {#each speciesModels as model (model.target)}
     <button class:on={isModel(model.target)} onclick={() => onSelect({ kind: 'model', target: model.target, skin: null })}>
-      {model.target}{#if model.errors.length || model.stale}<span class="count">⚠</span>{/if}
+      {model.target}{#if !model.file} <span class="hint">rig edit</span>{:else if model.rig} <span class="hint">+ rig edit</span>{/if}{#if model.errors.length || model.stale}<span class="count">⚠</span>{/if}
     </button>
   {:else}
     <p class="empty">None.</p>

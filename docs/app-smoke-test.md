@@ -194,6 +194,19 @@ Release build: `npm run build:app`, install `studio/src-tauri/target/release/bun
     controls** takes them away. Species tab → Carcharodontosaurus → **IK chains…** lists Head, Leg L, Leg R;
     `tyrant species ik carcharodontosaurus` prints the same.
 
+94. Open Allosaurus Anax in Blender: **Start rig edit**, move `Neck.002` forward and lower `Calve.L` and `Calve.R`, then
+    **Apply rig edit**: nothing jumps, the mesh follows, the IK controls sit on the new feet, and the panel lists the edited
+    bones with a warning for `Neck.002` (growth).
+95. **Send to Tyrant** to a skin: the skin page's **Rig edit** box lists the bones; `tyrant mod rig <mod> "Allosaurus Anax"
+    --skin <id>` prints the same. **Check** shows the animation and growth notes.
+96. In game: the skin's Anax has the longer neck and legs, a base-skin Anax next to it is unchanged, both walk normally,
+    and the feet plant on the ground (if not, note it: FABRIK leg lengths).
+97. A baby on that skin keeps the proportions as it grows.
+98. **Rig edit only (keep the game's mesh)** to the species model: base-skin Anaxes stretch with the bones; the model page
+    says *Rig edit only*.
+99. Two mods with a rig edit on Anax: the Mods tab notes the overridden one; reorder them and the other wins.
+100. **Clear rig edit** in Blender, then Send: the skin's rig edit is gone (its page says *No rig edit*).
+
 **Shell (tabs, log, preferences):**
 
 - Open Assets twice (dock, then **+**): two tabs, the second titled *Assets (2)*. Filter one; switch away and back: the

@@ -113,7 +113,7 @@
     <tbody>
       {#each list.mods as row (row.id)}
         <tr>
-          <td><strong>{row.name}</strong>{#if row.name !== row.id} <span class="hint">{row.id}</span>{/if}{#if row.error}<div class="warn">{row.error}</div>{/if}</td>
+          <td><strong>{row.name}</strong>{#if row.name !== row.id} <span class="hint">{row.id}</span>{/if}{#if row.error}<div class="warn">{row.error}</div>{/if}{#each row.clashes ?? [] as clash (clash)}<div class="hint">{clash}</div>{/each}</td>
           <td>{row.version}</td>
           <td>{summary(row)}</td>
           <td>{STATE_LABEL[row.state] ?? row.state}</td>

@@ -6,8 +6,12 @@
   import { getTab } from '$lib/shell/tab.svelte';
   import { getSession } from '$lib/stores/session.svelte';
   import type { ModDoc } from './modDoc.svelte';
+  import RigEdit from './RigEdit.svelte';
 
-  /** A replacement model: its 3D preview per LOD, its sizes against the game's, its problems, and Replace / Rebuild / Remove. */
+  /**
+   * A replacement model: its 3D preview per LOD, its sizes against the game's, its problems, Replace / Rebuild / Remove, and its
+   * rig edit. A species entry with no model file is a rig edit on the game's own mesh.
+   */
   let { doc, model, onRemoved = () => {} }: { doc: Pick<ModDoc, 'id' | 'detail' | 'edit'>; model: ModModelDto; onRemoved?: () => void } = $props();
   const session = getSession();
   const tab = getTab();
@@ -61,7 +65,7 @@
   $effect(() => {
     void model.file;
     void doc.detail?.revision;
-    void show(lod);
+    if (model.file) void show(lod);
   });
   $effect(() => {
     if (tab.active) viewer?.resume();
@@ -88,6 +92,13 @@
 
 <section class="card">
   <h2>Model: {model.target}{model.skin ? ` (skin ${model.skin})` : ''}</h2>
+  {#if !model.file}
+  <p class="hint">Rig edit only: the game's own mesh with the edited skeleton (it stretches with the moved bones). Add a model made for the rig edit from Blender (Send to Tyrant), or here.</p>
+  <div class="row">
+    <button onclick={replace}>Add a model…</button>
+    <OpenInBlender species={model.target} mod={doc.id} skin={model.skin ?? undefined} />
+  </div>
+  {:else}
   {#if reason}<p class="hint">{reason}</p>{/if}
   <canvas bind:this={canvas} class="viewport" class:hidden={!!reason} aria-label="3D preview of the replacement model"></canvas>
   <div class="row">
@@ -118,6 +129,8 @@
     in Shape Keys and the growth keys follow it; do not repeat the change on them, and do not use Voxel Remesh (it deletes them). Name extra meshes …_LOD1 / …_LOD2 to use your own levels of detail; otherwise
     Tyrant makes them.
   </p>
+  {/if}
+  <RigEdit {doc} target={model.target} skin={model.skin} />
 </section>
 
 <style>
