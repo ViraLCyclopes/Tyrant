@@ -1,7 +1,7 @@
 """Tyrant's Blender add-on: open Prehistoric Kingdom models from Tyrant and send them back."""
 import bpy
 
-from . import growth, importer, listener, materials, meshops, project, ui  # noqa: F401
+from . import growth, importer, listener, materials, meshops, panel, project, send, ui  # noqa: F401
 
 _server = None
 
@@ -20,7 +20,7 @@ def _drain():
 
 def register():
     global _server
-    for cls in ui.CLASSES:
+    for cls in ui.CLASSES + panel.CLASSES:
         bpy.utils.register_class(cls)
     bpy.types.Object.tyrant_growth = bpy.props.FloatProperty(
         name="Growth", description="Baby (0) to adult (1), as the game grows this animal", min=0.0, max=1.0, default=1.0,
@@ -45,5 +45,5 @@ def unregister():
         _server.stop()
         _server = None
     del bpy.types.Object.tyrant_growth
-    for cls in reversed(ui.CLASSES):
+    for cls in reversed(ui.CLASSES + panel.CLASSES):
         bpy.utils.unregister_class(cls)
