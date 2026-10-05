@@ -176,6 +176,7 @@ public class BlenderAddonRunTests
             ["TYRANT_TEST_IK_PROJECT"] = IkProject(ws, install),
         };
         var run = RunPythonWith("run.py", env, string.IsNullOrEmpty(pattern) ? [projectFile] : [projectFile, pattern]);
+        File.WriteAllText(Path.Combine(Path.GetTempPath(), "tyrant-python-tests.log"), run.Output); // every test's line, pass or fail
 
         Assert.True(run.ExitCode == 0, run.Output);
         Assert.Matches(@"TYRANT-TESTS ran [1-9]", run.Output);

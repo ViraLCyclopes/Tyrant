@@ -45,6 +45,12 @@ def _valid(data):
         return False
     if data.get("ik") is not None and not _valid_ik(data["ik"]):
         return False
+    if data.get("rig") is not None and not _valid_rig(data["rig"]):
+        return False
+    info = data.get("rigInfo")
+    if info is not None and not (isinstance(info, dict) and all(
+            isinstance(info.get(k), list) and all(isinstance(n, str) for n in info[k]) for k in ("clipMoved", "growthMoved", "growthScaled"))):
+        return False
     growth = data.get("growth")
     if growth is None:
         return True
@@ -52,6 +58,15 @@ def _valid(data):
         return False
     return all(isinstance(b, dict) and isinstance(b.get("name"), str) and all(_numbers(b.get(k), 6) for k in ("baby", "adolescent", "adult"))
                for b in growth.get("bones") or [])
+
+
+def _valid_rig(rig):
+    """mod.json's "rig": bone → move (3), rotate (4), scale (3), each optional."""
+    if not isinstance(rig, dict):
+        return False
+    return all(isinstance(name, str) and isinstance(bone, dict)
+               and all(bone.get(k) is None or _numbers(bone[k], n) for k, n in (("move", 3), ("rotate", 4), ("scale", 3)))
+               for name, bone in rig.items())
 
 
 def _valid_ik(ik):
