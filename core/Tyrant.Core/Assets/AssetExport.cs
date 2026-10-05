@@ -36,8 +36,7 @@ public sealed class AssetExport(IAssetReader reader, AssetIndex? index = null, M
             }
         if (format != ModelFormat.Glb && converter is not null)
         {
-            progress?.Report(new JobProgress(0.99, "Converting models to FBX"));
-            ConvertModels(items);
+            ConvertModels(items, progress, ct);
         }
         var report = new AssetExportReport(DateTimeOffset.UtcNow, GameFingerprint.Compute(install).BuildGuid, items);
         var reportPath = ReportPath(ws);
@@ -48,10 +47,12 @@ public sealed class AssetExport(IAssetReader reader, AssetIndex? index = null, M
     }
 
     /// <summary>One Blender run for every model of the export: each model item's glb outputs become FBX (or both).</summary>
-    private void ConvertModels(List<AssetExportItem> items)
+    private void ConvertModels(List<AssetExportItem> items, IProgress<JobProgress>? progress, CancellationToken ct)
     {
         var models = Enumerable.Range(0, items.Count).Where(k => items[k].Success && items[k].Type is "Mesh" or "GameObject").ToList();
-        var (files, notes) = ModelFormats.Apply(converter!, [.. models.SelectMany(k => items[k].Outputs)], format);
+        progress?.Report(new JobProgress(0, "Converting models to FBX"));
+        Action<double>? converted = progress is null ? null : p => progress.Report(new JobProgress(p, "Converting models to FBX"));
+        var (files, notes) = ModelFormats.Apply(converter!, [.. models.SelectMany(k => items[k].Outputs)], format, progress: converted, ct: ct);
         var produced = files.ToHashSet(StringComparer.OrdinalIgnoreCase);
         foreach (var k in models)
         {

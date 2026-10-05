@@ -99,7 +99,8 @@ public sealed partial class AssetsMethods
             var result = Reader.WriteSpeciesPack(install, ws, index, species, progress, ct);
             var notes = result.Notes.ToList();
             if (converter is not null)
-                notes.AddRange(ModelFormats.Apply(converter, [.. result.Models.Where(m => m.Success).Select(m => m.OutputPath)], format, keepGlb: true).Notes);
+                notes.AddRange(ModelFormats.Apply(converter, [.. result.Models.Where(m => m.Success).Select(m => m.OutputPath)], format, keepGlb: true,
+                    v => progress.Report(new Tyrant.Core.Jobs.JobProgress(v, "Converting models to FBX")), ct).Notes);
             return new SpeciesPackRunResult(result.Directory, result.Models.Count(m => m.Success), result.Textures.Count(t => t.Success),
                 result.Models.Count(m => !m.Success) + result.Textures.Count(t => !t.Success), result.TargetsPath, notes);
         });

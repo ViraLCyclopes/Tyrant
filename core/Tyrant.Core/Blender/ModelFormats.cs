@@ -15,16 +15,26 @@ public static class ModelFormats
         _ => throw new TyrantException(TyrantErrorCode.ModInvalid, $"Format must be glb, fbx or both (got '{text}')."),
     };
 
+    /// <summary>Models converted per Blender run: Blender's start is paid once per chunk, and progress and Cancel come between chunks.</summary>
+    public const int ChunkSize = 10;
+
     /// <summary>
-    /// Converts every .glb in files to FBX in one Blender run. Fbx drops the converted glb files (unless keepGlb: species
-    /// packs keep theirs for targets.json); a glb that failed stays, with a note.
+    /// Converts every .glb in files to FBX, ChunkSize per Blender run. Fbx drops the converted glb files (unless keepGlb:
+    /// species packs keep theirs for targets.json); a glb that failed stays, with a note. Progress is the share converted.
     /// </summary>
     public static (IReadOnlyList<string> Files, IReadOnlyList<string> Notes) Apply(IModelConverter converter, IReadOnlyList<string> files,
-        ModelFormat format, bool keepGlb = false)
+        ModelFormat format, bool keepGlb = false, Action<double>? progress = null, CancellationToken ct = default)
     {
         if (format == ModelFormat.Glb) return (files, []);
         var glbs = files.Where(IsGlb).ToList();
-        var failures = converter.GlbToFbx([.. glbs.Select(g => (g, Path.ChangeExtension(g, ".fbx")))]);
+        var failures = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var chunk in glbs.Chunk(ChunkSize))
+        {
+            ct.ThrowIfCancellationRequested();
+            foreach (var (glb, why) in converter.GlbToFbx([.. chunk.Select(g => (g, Path.ChangeExtension(g, ".fbx")))])) failures[glb] = why;
+            progress?.Invoke((double)(glbs.IndexOf(chunk[^1]) + 1) / glbs.Count);
+            ct.ThrowIfCancellationRequested();
+        }
         var result = new List<string>();
         var notes = new List<string>();
         foreach (var file in files)

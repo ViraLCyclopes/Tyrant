@@ -70,4 +70,42 @@ public class ModelFormatsTests
         Assert.Equal(files, ModelFormats.Apply(converter, files, ModelFormat.Glb).Files);
         Assert.Empty(converter.Batches);
     }
+
+    [Fact]
+    public void A_big_export_converts_in_chunks_and_reports_progress_between_them()
+    {
+        var files = Files([.. Enumerable.Range(0, 25).Select(i => $"m{i}.glb")]);
+        var converter = new FakeModelConverter();
+        var seen = new List<double>();
+
+        var (result, _) = ModelFormats.Apply(converter, files, ModelFormat.Fbx, progress: v => seen.Add(Math.Round(v, 2)));
+
+        Assert.Equal([10, 10, 5], converter.Batches.Select(b => b.Count));
+        Assert.Equal(25, result.Count(f => f.EndsWith(".fbx")));
+        Assert.Equal([0.4, 0.8, 1.0], seen);
+    }
+
+    [Fact]
+    public void Cancel_stops_between_chunks()
+    {
+        var files = Files([.. Enumerable.Range(0, 25).Select(i => $"m{i}.glb")]);
+        using var cts = new CancellationTokenSource();
+        var converter = new CancellingConverter(cts);
+
+        Assert.Throws<OperationCanceledException>(() => ModelFormats.Apply(converter, files, ModelFormat.Fbx, ct: cts.Token));
+        Assert.Equal(1, converter.Runs);
+    }
+
+    private sealed class CancellingConverter(CancellationTokenSource cts) : IModelConverter
+    {
+        public int Runs;
+        public void FbxToGlb(string fbx, string glb) => throw new NotSupportedException();
+        public IReadOnlyDictionary<string, string> GlbToFbx(IReadOnlyList<(string Glb, string Fbx)> pairs)
+        {
+            Runs++;
+            cts.Cancel(); // the user presses Cancel while Blender works on the first chunk
+            foreach (var (_, fbx) in pairs) File.WriteAllText(fbx, "fbx");
+            return new Dictionary<string, string>();
+        }
+    }
 }
