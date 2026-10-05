@@ -36,7 +36,8 @@ public sealed record ModInstallResult(string Message, IReadOnlyList<string> Warn
 
 public sealed record VanillaSkinRow(int Index, string Name, bool Male, bool Female);
 
-public sealed record SpeciesSkinsRow(string SpeciesId, bool Vivarium, IReadOnlyList<VanillaSkinRow> Skins);
+/// <summary>PrefabGuid: the species prefab's Addressables GUID (the Assets tab finds a prefab's species by it).</summary>
+public sealed record SpeciesSkinsRow(string SpeciesId, bool Vivarium, IReadOnlyList<VanillaSkinRow> Skins, string? PrefabGuid = null);
 
 /// <summary>Species and their vanilla skins from the data dump; HasDump false when there is none yet.</summary>
 public sealed record ModSpeciesResult(bool HasDump, IReadOnlyList<SpeciesSkinsRow> Species);

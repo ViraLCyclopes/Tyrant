@@ -1,6 +1,8 @@
 <script lang="ts">
   import ReplaceInMod from '$lib/mods/ReplaceInMod.svelte';
   import ReplaceModelInMod from '$lib/mods/ReplaceModelInMod.svelte';
+  import OpenInBlender from '$lib/blender/OpenInBlender.svelte';
+  import type { SpeciesSkinsRow } from '$lib/rpc/types.gen';
   import JsonTree from '$lib/data/JsonTree.svelte';
   import { formatBytes } from '$lib/format';
   import type { AssetDetails } from '$lib/rpc/types.gen';
@@ -13,6 +15,13 @@
   const session = getSession();
   const tab = getTab();
   let details = $state<AssetDetails | null>(null);
+  // The dump's species by their prefab GUID: an animal prefab opens in Blender as its species (objects cannot be sent back yet).
+  let species = $state<SpeciesSkinsRow[]>([]);
+  $effect(() => {
+    void tab.quietly(() => session.rpc.call('mods.species')).then((r) => (species = r?.species ?? []));
+  });
+  const speciesOf = (guid: string | null | undefined) =>
+    guid ? species.find((s) => s.prefabGuid?.toLowerCase() === guid.toLowerCase()) : undefined;
   let failed = $state(false);
   let sequence = 0;
 
@@ -65,6 +74,10 @@
     </div>
     {#if asset.type === 'Texture2D'}<ReplaceInMod {asset} />{/if}
     {#if asset.type === 'GameObject'}<ReplaceModelInMod {asset} />{/if}
+    {#if asset.type === 'GameObject' && speciesOf(asset.guid)}
+      {@const species = speciesOf(asset.guid)!}
+      <div class="row"><OpenInBlender species={species.speciesId} skins={species.skins.map((k) => k.name)} /></div>
+    {/if}
   </section>
 
   <AssetPreviewPanel {asset} />

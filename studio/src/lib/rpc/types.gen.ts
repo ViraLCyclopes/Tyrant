@@ -903,6 +903,7 @@ export interface SpeciesSkinsRow {
   speciesId: string;
   vivarium: boolean;
   skins: VanillaSkinRow[];
+  prefabGuid?: string | null;
 }
 
 export interface SpeciesTextureDto {

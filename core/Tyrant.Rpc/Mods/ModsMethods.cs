@@ -149,7 +149,7 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
         var (ws, _) = session.Current();
         var species = TrySpecies(ws);
         return new ModSpeciesResult(species is not null, (species ?? []).Select(s =>
-            new SpeciesSkinsRow(s.SpeciesId, s.Vivarium, s.Skins.Select(k => new VanillaSkinRow(k.Index, k.Name, k.Male.Count > 0, k.Female.Count > 0)).ToList())).ToList());
+            new SpeciesSkinsRow(s.SpeciesId, s.Vivarium, s.Skins.Select(k => new VanillaSkinRow(k.Index, k.Name, k.Male.Count > 0, k.Female.Count > 0)).ToList(), s.PrefabGuid)).ToList());
     }
 
     [RpcMethod("mods.addSkin")]

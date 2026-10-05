@@ -29,6 +29,43 @@ function setup() {
   return { rpc, platform, session: new Session(rpc, platform, memoryStore()) };
 }
 
+function prefabSetup(guid: string) {
+  const rpc = new FakeRpc();
+  const prefab: AssetRow = { ...row, ref: 'allo.bundle#9', type: 'GameObject', name: 'Allosaurus Europaeus.V2', script: null, guid };
+  rpc.on('assets.get', () => ({ asset: prefab, byteSize: 183, references: [], fields: {} }));
+  rpc.on('mods.species', () => ({
+    hasDump: true,
+    species: [{ speciesId: 'Allosaurus Europaeus', vivarium: false, prefabGuid: '1dfcc93380398b34a9d44b615b09c01f',
+      skins: [{ index: 0, name: 'Base', male: true, female: true }, { index: 1, name: 'Alt 2', male: true, female: true }] }],
+  }));
+  rpc.on('blender.status', () => ({ found: true, exe: 'b.exe', version: '5.2.2', supported: true, missingConfigured: null,
+    addon: 'current', addonInstalled: '0.1.0', addonBundled: '0.1.0', problem: null }));
+  rpc.on('blender.open', () => ({ projectFile: 'p', how: 'running', gameChanged: false }));
+  const session = new Session(rpc, new FakePlatform(), memoryStore());
+  return { rpc, session, prefab };
+}
+
+describe('AssetDetail, Open in Blender', () => {
+  it('an animal prefab opens in Blender as its species, with its game skins', async () => {
+    const { rpc, session, prefab } = prefabSetup('1dfcc93380398b34a9d44b615b09c01f');
+    renderWith(AssetDetail, session, { ref: prefab.ref, onOpen: vi.fn() });
+
+    await fireEvent.change(await screen.findByLabelText('Skin'), { target: { value: 'Alt 2' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Open in Blender' }));
+
+    await waitFor(() => expect(rpc.callsTo('blender.open')[0]?.params).toMatchObject({ species: 'Allosaurus Europaeus', skin: 'Alt 2', mod: null }));
+  });
+
+  it('other objects (fences, scenery) do not offer it', async () => {
+    const { session, prefab } = prefabSetup('ffffffffffffffffffffffffffffffff');
+    renderWith(AssetDetail, session, { ref: prefab.ref, onOpen: vi.fn() });
+
+    expect(await screen.findByRole('heading', { name: 'Allosaurus Europaeus.V2' })).toBeInTheDocument();
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.queryByRole('button', { name: 'Open in Blender' })).not.toBeInTheDocument();
+  });
+});
+
 describe('AssetDetail', () => {
   it('shows the keys and copies them', async () => {
     const { platform, session } = setup();
