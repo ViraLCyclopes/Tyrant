@@ -297,3 +297,25 @@ class IkBuildTests(unittest.TestCase):
             ik.add_controls = real
         self.assertEqual(arm.type, "ARMATURE")
         self.assertTrue(any("something unexpected" in line for line in ik.skipped(arm)), ik.skipped(arm))
+
+    def test_controls_follow_growth_that_scales_a_bone_inside_the_chain(self):
+        """Growth changes the rig: here it shrinks the left femur (Stegosaurus' growth scales its femurs, calves, arms)."""
+        def scaled_femur(path):
+            data = project.load(path)
+            data["growth"]["bones"].append({"name": "Femur.L", "mode": "Scale", "translation": False, "scale": True,
+                                            "baby": [0, 0, 0, 0.8, 0.8, 0.8], "adolescent": [0, 0, 0, 0.9, 0.9, 0.9], "adult": [0, 0, 0, 1, 1, 1]})
+            data["ikOnOpen"] = False
+            project.save(path, data)
+            return importer.import_project(path)
+
+        arm = scaled_femur(fresh_ik_project())
+        arm.tyrant_growth = 0.0
+        heel_without_ik = head_of(arm, "Heel.L").copy()
+        bpy.ops.wm.read_factory_settings(use_empty=True)
+        path = fresh_ik_project()
+        arm = scaled_femur(path)
+        ik.add_controls(arm, project.load(path))
+
+        arm.tyrant_growth = 0.0
+
+        self.assertLess((head_of(arm, "Heel.L") - heel_without_ik).length, 1e-3)

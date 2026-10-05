@@ -151,3 +151,13 @@ class IkToolTests(unittest.TestCase):
         ik.remove_controls(arm)
         ik.add_controls(arm, project.load(_))
         self.assertIsNone(ikpanel.old_controls_hint(arm))
+
+    def test_remove_keeps_the_stance(self):
+        arm, _ = open_ik()  # the chains hold the prefab's stance through their controls
+        names = ("Heel.L", "Heel.R", "Calve.L", "Calve.R", "Head", "Neck")
+        before = {n: head_of(arm, n).copy() for n in names}
+
+        ik.remove_controls(arm)
+
+        for name in names:
+            self.assertLess((head_of(arm, name) - before[name]).length, 1e-4, name)

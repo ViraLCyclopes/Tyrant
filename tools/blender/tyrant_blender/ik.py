@@ -22,6 +22,7 @@ from mathutils import Matrix, Vector
 TAG = "tyrant_ik"  # armature: JSON list of the chains built
 SKIPPED = "tyrant_ik_skipped"  # armature: JSON list of the chains left out, with why
 REFERENCE = "tyrant_ik_reference"  # armature: the pose bases (at Growth 1) the controls were built from
+POINTS = "tyrant_ik_points"  # armature: where each control stood (at Growth 1) when that reference was taken
 OLD_OPEN_POSE = "tyrant_open_pose"  # armature: left by the build that opened models in the game's prefab pose
 OLD_CONTROLS = "tyrant_ik_old_pose"  # armature: these controls were built on that prefab pose (rebuild them at rest)
 BONE_TAG = "tyrant_ik"  # bone: one of Tyrant's IK bones
@@ -321,11 +322,11 @@ def _ancestors(arm, names):
 
 def _record(plan, made, shown, pose):
     joints = plan["joints"]
-    follow = [[made["grow"], joints[-1]]]
+    follow = [[made["grow"], joints[-1], made["tip"]]]  # the foot follows by the heel itself (its spot shrinks with the leg)
     if made.get("pole"):
-        follow.append([made["pole_grow"], joints[1]])
+        follow.append([made["pole_grow"], joints[1], made["pole"]])
     if made.get("look"):
-        follow.append([made["look_grow"], joints[-1]])
+        follow.append([made["look_grow"], joints[-1], made["look"]])
     chain = plan["chain"]
     # The matrices the controls showed and the joints they hang from, when built: Snap keeps those relations.
     shapes = {key: flat(shown[key]) for key in ("target", "pole", "look") if key in shown}
@@ -400,8 +401,10 @@ def add_controls(arm, data):
         arm.pose.bones[name].matrix_basis = basis
     if any(posed(basis) for basis in shown_pose.values()):
         snap_controls(arm)
+        capture_reference(arm)  # while the chains still show the stance: Growth moves the controls with it
         release_chains(arm, data)
-    capture_reference(arm)
+    else:
+        capture_reference(arm)
     growth.set_growth(arm, shown_growth)
     if mode == "POSE":
         bpy.ops.object.mode_set(mode="POSE")
@@ -426,14 +429,26 @@ def release_chains(arm, data):
             pose_bone.scale = (1.0, 1.0, 1.0)
 
 
+def _follows(chain):
+    """(mechanism bone, joint it rides on, bone whose spot it follows) for each control of a chain: the chain end follows by
+    its tip bone, the pole and the aim by themselves."""
+    controls = [chain["tip"]] + [chain[k] for k in ("pole", "look") if chain.get(k)]
+    return [(f[0], f[1], f[2] if len(f) > 2 else c) for f, c in zip(chain["follow"], controls)]
+
+
 def capture_reference(arm):
-    """The bases (at Growth 1) of the bones the controls hang from, as they stand now: Growth's follow is measured from them."""
+    """The bases (at Growth 1) of the bones the controls hang from, as they stand now, and where each control stands:
+    Growth's follow is measured from them."""
     from . import growth
 
     shown = getattr(arm, "tyrant_growth", 1.0)
     growth.set_growth(arm, 1.0)
-    joints = {n for c in built(arm) for n in c["joints"]}
+    bpy.context.view_layer.update()
+    chains = built(arm)
+    joints = {n for c in chains for n in c["joints"]}
     arm[REFERENCE] = json.dumps({n: flat(arm.pose.bones[n].matrix_basis) for n in _ancestors(arm, joints)})
+    arm[POINTS] = json.dumps({grow: list(arm.pose.bones[control].head) for c in chains for grow, _joint, control in _follows(c)
+                              if arm.pose.bones.get(control) is not None})
     growth.set_growth(arm, shown)
 
 
@@ -472,17 +487,24 @@ def follow_growth(arm, channels):
     if not chains:
         return
     now, then = _reference_matrices(arm, channels), _reference_matrices(arm, None)
+    try:
+        points = {grow: Vector(at) for grow, at in json.loads(arm.get(POINTS) or "{}").items()}
+    except (ValueError, TypeError):
+        points = {}
     bones = arm.data.bones
     for chain in chains:
-        for grow, joint in chain["follow"]:
+        for grow, joint, _control in _follows(chain):
             pose_bone, bone = arm.pose.bones.get(grow), bones.get(grow)
             if pose_bone is None or bone.parent is None or joint not in now or bone.parent.name not in now:
                 continue
             parent = bone.parent
             local = parent.matrix_local.inverted() @ bone.matrix_local
             frame_then, frame_now = then[parent.name] @ local, now[parent.name] @ local
-            moved = now[joint] @ (then[joint].inverted() @ frame_then.translation)
-            pose_bone.location = frame_now.to_3x3().inverted() @ (moved - frame_now.translation)
+            # The control moves as its spot on the joint does: from where it stood when the reference was taken.
+            point = points.get(grow, frame_then.translation)
+            moved = now[joint] @ (then[joint].inverted() @ point)
+            at = frame_then.translation + (moved - point)
+            pose_bone.location = frame_now.to_3x3().inverted() @ (at - frame_now.translation)
 
 
 def _unscaled(matrix):
@@ -516,11 +538,30 @@ def snap_controls(arm, names=None):
 
 # --- removing, baking, resetting -------------------------------------------------------------------------------------------
 
+def _keep_what_the_chains_show(arm):
+    """Before the IK goes: each chain on IK keeps the pose it shows, written into its joints' own channels."""
+    pose = arm.pose.bones
+    chains = [c for c in built(arm) if pose.get(c["target"]) is not None and pose[c["target"]].get(IK_FK, 0.0) > 0.0]
+    bones = arm.data.bones
+    joints = sorted({n for c in chains for n in c["joints"] if n in pose}, key=lambda n: _depth(bones[n]))
+    bpy.context.view_layer.update()
+    seen = {n: pose[n].matrix.copy() for n in joints}
+    for name in joints:
+        parent = bones[name].parent
+        if parent is None:
+            frame = bones[name].matrix_local
+        else:
+            above = seen[parent.name] if parent.name in seen else pose[parent.name].matrix
+            frame = above @ parent.matrix_local.inverted() @ bones[name].matrix_local
+        pose[name].matrix_basis = frame.inverted() @ seen[name]
+
+
 def remove_controls(arm):
     """Deletes Tyrant's control and mechanism bones, their constraints, drivers and collections: the armature is as before."""
     names = {n for c in built(arm) for n in c["bones"]} | {b.name for b in arm.data.bones if b.get(BONE_TAG)}
     if not names:
         raise IkError("This armature has no IK controls.")
+    _keep_what_the_chains_show(arm)
     if arm.animation_data is not None:
         for curve in list(arm.animation_data.drivers):
             if f'constraints["{PREFIX}' in curve.data_path:
@@ -544,7 +585,7 @@ def remove_controls(arm):
         collection = arm.data.collections.get(name)
         if collection is not None:
             arm.data.collections.remove(collection)
-    for key in (TAG, SKIPPED, REFERENCE, OLD_CONTROLS):
+    for key in (TAG, SKIPPED, REFERENCE, POINTS, OLD_CONTROLS):
         if key in arm:
             del arm[key]
     if mode == "POSE":
