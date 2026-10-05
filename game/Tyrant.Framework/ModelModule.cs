@@ -10,9 +10,10 @@ using UnityEngine.Rendering;
 namespace Tyrant.Framework
 {
     /// <summary>
-    /// Gives animals the models mods replace: the skin's model, else the species' replacement. Each LOD renderer gets the
-    /// matching .tmesh as its sharedMesh; bones, bind poses (copied from the original mesh), materials and the game's growth
-    /// shape keys stay. A model that cannot be loaded is logged once and the animal keeps its own.
+    /// Gives animals the models and rig edits mods set: the skin's entry, else the species'. Each LOD renderer gets the
+    /// matching .tmesh as its sharedMesh; bones, materials and the game's growth shape keys stay, and the bind poses are the
+    /// original mesh's unless the .tmesh brings its own (a model made for a rig edit). A rig edit without a model keeps the
+    /// game's mesh. A model that cannot be loaded is logged once and the animal keeps its own.
     /// </summary>
     internal static class ModelModule
     {
@@ -26,7 +27,11 @@ namespace Tyrant.Framework
 
         public static bool HasModels => _table.Count > 0;
 
-        public static void Start(IReadOnlyList<LoadedMod> mods) => _table = ModelTable.Build(mods);
+        public static void Start(IReadOnlyList<LoadedMod> mods)
+        {
+            _table = ModelTable.Build(mods, out var messages);
+            foreach (var message in messages) FrameworkMod.Log.Warning(message);
+        }
 
         public static void Apply(object animal, IReadOnlyList<Renderer> lods, string? skinKey)
         {
@@ -34,6 +39,15 @@ namespace Tyrant.Framework
             if (!_table.TryChoose(SpeciesOf(animal), skinKey, out var set))
             {
                 RestoreOriginals(lods); // e.g. the animal changed to a skin without a model of its own
+                RigModule.Set(animal, null);
+                return;
+            }
+            RigModule.Set(animal, set.Rig);
+            if (set.LodPaths.Count == 0)
+            {
+                RestoreOriginals(lods); // a rig edit on the game's own mesh
+                if (Announced.Add(set.ModId + "|" + set.Target + "|rig|" + skinKey))
+                    FrameworkMod.Log.Msg($"Rig edit on {set.Target} ({set.ModId}{(skinKey == null ? "" : ", skin " + skinKey)}).");
                 return;
             }
             var meshes = new Mesh?[lods.Count];
@@ -116,7 +130,7 @@ namespace Tyrant.Framework
                     };
                 mesh.boneWeights = weights;
             }
-            mesh.bindposes = original.bindposes;
+            mesh.bindposes = t.BindPoses.Length == original.bindposes.Length * 16 && t.BindPoses.Length > 0 ? Binds(t.BindPoses) : original.bindposes;
             mesh.subMeshCount = t.SubMeshStarts.Length;
             for (var s = 0; s < t.SubMeshStarts.Length; s++)
             {
@@ -132,6 +146,20 @@ namespace Tyrant.Framework
             mesh.RecalculateTangents();
             mesh.RecalculateBounds();
             return mesh;
+        }
+
+        /// <summary>A rig edit's bind poses: 16 floats per bone, Unity's m[row, col] row by row.</summary>
+        private static Matrix4x4[] Binds(float[] v)
+        {
+            var binds = new Matrix4x4[v.Length / 16];
+            for (var b = 0; b < binds.Length; b++)
+            {
+                var m = new Matrix4x4();
+                for (var row = 0; row < 4; row++)
+                    for (var col = 0; col < 4; col++) m[row, col] = v[b * 16 + row * 4 + col];
+                binds[b] = m;
+            }
+            return binds;
         }
 
         private static List<Vector3> Vectors3(float[] values)
