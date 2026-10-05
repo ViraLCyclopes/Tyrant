@@ -319,3 +319,16 @@ class IkBuildTests(unittest.TestCase):
         arm.tyrant_growth = 0.0
 
         self.assertLess((head_of(arm, "Heel.L") - heel_without_ik).length, 1e-3)
+
+    def test_a_chain_the_game_starts_switched_off_still_works(self):
+        """Tyrannosaurus' legs have influence 0 in its prefab (the game fades foot IK in at runtime): the IK/FK value decides."""
+        path = fresh_ik_project()
+        data = project.load(path)
+        for chain in data["ik"]["chains"]:
+            chain["influence"] = 0.0
+        project.save(path, data)
+        arm = importer.import_project(path)
+
+        move(arm, "ctrl_foot.L", (0.0, -0.1, 0.15))
+
+        self.assertLess((head_of(arm, "Heel.L") - head_of(arm, "mch_tip_foot.L")).length, 1e-3)

@@ -81,7 +81,7 @@ public static class BlenderProjectWriter
         var project = new BlenderProject(BlenderProjectFile.CurrentVersion, ws.Dir, tyrantExe, modelBuild,
             new BlenderSource(kind, speciesId, ownSkin?.Id ?? vanilla?.Name, mod?.Id),
             old?.Destination ?? (mod is null ? null : new BlenderDestination(mod.Id, speciesId, ownSkin?.Id)),
-            materials, BlenderGrowthReader.Read(BlenderGrowthReader.TryStore(ws), speciesId), Rest(prefab.Root), existing, request.Lods)
+            materials, BlenderGrowthReader.Read(BlenderGrowthReader.TryStore(ws), speciesId, prefab.Root.DepthFirst().Select(n => n.Name)), Rest(prefab.Root), existing, request.Lods)
         {
             GameChanged = gameChanged,
             Fresh = request.Fresh,

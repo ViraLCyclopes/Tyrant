@@ -268,7 +268,9 @@ def _pose_setup(arm, plan, made, pose):
     solver.target, solver.subtarget = arm, made["tip"]
     solver.use_tail = True
     solver.chain_count = len(joints)  # the helper and every joint but the last
-    _drive(arm, solver, made["target"], IK_FK, float(chain.get("influence", 1.0)))
+    # Full strength: the game's own influence is a runtime value (Tyrannosaurus' legs start at 0 and fade in), so your
+    # IK/FK value alone decides here.
+    _drive(arm, solver, made["target"], IK_FK, 1.0)
     if made.get("pole"):
         solver.pole_target, solver.pole_subtarget = arm, made["pole"]
         _solve_pole_angle(solver, arm, joints[:-1], pose)

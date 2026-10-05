@@ -37,4 +37,35 @@ public class BlenderGrowthTests
         Assert.Null(BlenderGrowthReader.Read(null, "Carcharodontosaurus"));
         Assert.Null(BlenderGrowthReader.Read(Store(), "Frog")); // no growth fields
     }
+
+    [Theory]
+    [InlineData("Femur.L", -1561929513)] // Tyrannosaurus' GrowthData: its bones are stored by this hash, not by name
+    [InlineData("Head", -158744160)]
+    [InlineData("Hip", 339800441)]
+    public void The_bone_hash_is_the_games_stable_hash(string name, int hash)
+    {
+        Assert.Equal(hash, BlenderGrowthReader.StableHash(name));
+    }
+
+    [Fact]
+    public void Bones_stored_by_hash_are_found_by_the_skeletons_names()
+    {
+        // As 45 of the game's animals store them (Tyrannosaurus, Carcharodontosaurus…): no name, the name's hash in the address.
+        var dir = Path.Combine(Path.GetTempPath(), "tyrant-tests", Guid.NewGuid().ToString("N"), "data");
+        SkinDumps.Write(dir);
+        foreach (var file in Directory.GetFiles(dir, "*.json", SearchOption.AllDirectories))
+        {
+            var text = File.ReadAllText(file);
+            if (text.Contains("\"transformName\":\"Hip\"", StringComparison.Ordinal))
+                File.WriteAllText(file, text.Replace("\"transformName\":\"Hip\"",
+                    "\"transformName\":\"\",\"transformAddress\":{\"finalDestinationHash\":339800441}", StringComparison.Ordinal));
+        }
+        var store = DataStore.OpenDirectory(dir);
+
+        Assert.DoesNotContain(BlenderGrowthReader.Read(store, "Carcharodontosaurus")!.Bones, b => b.Name == "Hip"); // no skeleton given
+        var growth = BlenderGrowthReader.Read(store, "Carcharodontosaurus", ["Animal", "Hip", "Tail"])!;
+
+        var hip = Assert.Single(growth.Bones, b => b.Name == "Hip");
+        Assert.True(hip.Translation);
+    }
 }
