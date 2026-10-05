@@ -135,10 +135,10 @@ public sealed partial class ModProject
         return stream.Read(head, 0, head.Length) == head.Length && head.AsSpan().SequenceEqual(PngSignature);
     }
 
-    private static readonly string[] TemplateSlots = ["diffuse", "normal", "extra", "pattern"];
+    private static readonly string[] TemplateSlots = ["diffuse", "normal", "extra", "pattern", "fur"];
 
     /// <summary>The babies' maps, copied into the male skin (the game dresses babies of both sexes in the male skin's infant maps).</summary>
-    private static readonly string[] InfantTemplateSlots = ["infantDiffuse", "infantNormal", "infantExtra", "infantPattern"];
+    private static readonly string[] InfantTemplateSlots = ["infantDiffuse", "infantNormal", "infantExtra", "infantPattern", "infantFur"];
 
     /// <summary>
     /// Adds a new skin based on a vanilla skin: exports the base textures (diffuse; with Maps also normal, extra and pattern) into

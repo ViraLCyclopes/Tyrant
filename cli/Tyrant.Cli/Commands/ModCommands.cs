@@ -284,7 +284,7 @@ public sealed class ModAddSkinCommand : Command<ModAddSkinCommand.Settings>
         public bool Female { get; set; }
 
         [CommandOption("--maps")]
-        [Description("Also export the base normal, extra and pattern maps to edit.")]
+        [Description("Also export the base normal, extra, pattern and fur maps to edit (the babies' colour map always comes).")]
         public bool Maps { get; set; }
     }
 

@@ -93,7 +93,7 @@
       </label>
       <label><input type="checkbox" bind:checked={male} disabled={baseSkin ? !baseSkin.male : false} /> Male</label>
       <label><input type="checkbox" bind:checked={female} disabled={baseSkin ? !baseSkin.female : false} /> Female</label>
-      <label><input type="checkbox" bind:checked={maps} /> Also normal, extra and pattern maps</label>
+      <label><input type="checkbox" bind:checked={maps} /> Also normal, extra, pattern and fur maps</label>
       {#if !modId}
         <label>Mod
           <select aria-label="Mod" bind:value={target}>

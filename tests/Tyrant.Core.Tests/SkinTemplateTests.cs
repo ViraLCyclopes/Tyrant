@@ -218,4 +218,24 @@ public class SkinTemplateTests
         var none = Assert.Throws<TyrantException>(() => mod.CopyBaseFile(install, IndexWithInfants, new FakeAssetReader(), species, "red-spot", "male", "extra"));
         Assert.Contains("has no", none.Message);
     }
+
+    [Fact]
+    public void With_maps_the_fur_masks_come_too()
+    {
+        var (game, ws, install) = Setup();
+        using var _ = game;
+        var mod = ModProject.Create(ws, "woolly", null, null);
+        const string Fur = "88888888888888888888888888888888", InfantFur = "99999999999999999999999999999999";
+        var index = new AssetIndex { Assets = [.. IndexWithInfants.Assets,
+            new("m.bundle", 8, "Texture2D", "T_mammoth_fur", "Assets/T_mammoth_fur.png", Fur, null),
+            new("m.bundle", 9, "Texture2D", "T_mammoth_infant_fur", "Assets/T_mammoth_infant_fur.png", InfantFur, null)] };
+        IReadOnlyList<SpeciesSkins> species = [new("Mammoth", false, [new VanillaSkin(0, "Base",
+            new Dictionary<string, string> { ["diffuse"] = MaleDiffuse, ["fur"] = Fur, ["infantDiffuse"] = InfantDiffuse, ["infantFur"] = InfantFur },
+            new Dictionary<string, string> { ["diffuse"] = FemaleDiffuse })])];
+
+        var entry = mod.AddSkin(ws, install, index, new FakeAssetReader(), species, "Mammoth", "Shaggy", "Base", new SkinTemplateOptions(Male: true, Female: false, Maps: true));
+
+        Assert.Equal("skins/shaggy/male_fur.png", entry.Male!["fur"]);
+        Assert.Equal("skins/shaggy/male_infant_fur.png", entry.Male["infantFur"]);
+    }
 }

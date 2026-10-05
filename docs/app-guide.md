@@ -153,7 +153,7 @@ files that changed; again after a game update).
   2. Fill in the form:
      - pick a mod (or **New mod…**) and name the skin;
      - choose the vanilla skin to start from and which sexes;
-     - optionally tick **Also normal, extra and pattern maps**.
+     - optionally tick **Also normal, extra, pattern and fur maps** (the babies' maps come along; the baby colour map always does).
   3. Tyrant copies that skin's textures into `mods\<id>\skins\<skin>\`. Edit them, then **Check** and **Install to game**.
   4. In the game's Nursery the new skin appears next to the vanilla ones, and the row scrolls when there are many.
   - This needs a data dump (Workspace → **Run data dump**).
