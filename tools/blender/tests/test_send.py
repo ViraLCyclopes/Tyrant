@@ -59,6 +59,27 @@ class SendTests(unittest.TestCase):
         self.assertEqual(len([o for o in bpy.data.objects if o.type == "ARMATURE"]), 1)
         self.assertEqual(len([o for o in bpy.data.objects if o.type == "MESH"]), 1)
 
+    def test_a_ported_mesh_still_parented_to_its_old_rig_is_sent_skinned(self):
+        """A mesh brought in from another file keeps its old parent; only its Armature modifier points at the Tyrant rig."""
+        import json, struct
+
+        path = fresh_project()
+        arm = importer.import_project(path)
+        mesh = next(o for o in send.sendable(arm) if o.type == "MESH")
+        old_rig = bpy.data.objects.new("OldRig", bpy.data.armatures.new("OldRig"))
+        bpy.context.scene.collection.objects.link(old_rig)
+        mesh.parent = old_rig  # as imported from the other game's file
+        glb = os.path.join(os.path.dirname(path), "send.glb")
+
+        send.export(arm, glb)
+
+        data = open(glb, "rb").read()
+        gltf = json.loads(data[20:20 + struct.unpack_from("<I", data, 12)[0]])
+        mesh_nodes = [n for n in gltf["nodes"] if "mesh" in n]
+        self.assertEqual(len(mesh_nodes), 1)
+        self.assertIn("skin", mesh_nodes[0])  # linked to the Tyrant rig's skin, so Tyrant can fit it
+        self.assertEqual(mesh.parent, old_rig)  # the scene is left as it was
+
     def test_other_modifiers_are_warned_about(self):
         arm = importer.import_project(fresh_project())
         mesh = next(o for o in send.sendable(arm) if o.type == "MESH")

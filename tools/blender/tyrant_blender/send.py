@@ -42,7 +42,15 @@ def export(armature, path):
     active = view_layer.objects.active
     if bpy.context.mode != "OBJECT":
         bpy.ops.object.mode_set(mode="OBJECT")
+    # Blender's glTF exporter skins a mesh only when it hangs under the armature: a mesh brought in from another file keeps
+    # its old parent (only its Armature modifier points here), so for the export it is parented here without moving.
+    parents = [(o, o.parent, o.parent_type, o.parent_bone, o.matrix_parent_inverse.copy()) for o in objects[1:] if o.parent != armature]
     try:
+        for obj, parent, _, _, inverse in parents:
+            world_of_parent = parent.matrix_world if parent is not None else None
+            obj.parent = armature
+            obj.parent_type = "OBJECT"
+            obj.matrix_parent_inverse = armature.matrix_world.inverted() @ (world_of_parent @ inverse if world_of_parent is not None else inverse)
         for obj, _, _ in hidden:
             obj.hide_viewport = False
             obj.hide_set(False)
@@ -59,6 +67,11 @@ def export(armature, path):
         for obj, hide, hide_viewport in hidden:
             obj.hide_set(hide)
             obj.hide_viewport = hide_viewport
+        for obj, parent, parent_type, parent_bone, inverse in parents:
+            obj.parent = parent
+            obj.parent_type = parent_type
+            obj.parent_bone = parent_bone
+            obj.matrix_parent_inverse = inverse
 
 
 def command(data, project_path, glb, destination, new_mod_name):
