@@ -115,7 +115,51 @@ def ensure_group():
     tree.links.new(inp["Normal"], normal_map.inputs["Color"])
     tree.links.new(normal_map.outputs["Normal"], bsdf.inputs["Normal"])
     tree.links.new(bsdf.outputs["BSDF"], out.inputs["BSDF"])
+    arrange(tree, column=280)
     return tree
+
+
+def _height(node):
+    """A node's drawn height, estimated (Blender only knows it once the node editor has drawn it)."""
+    sockets = sum(1 for sock in node.inputs if sock.enabled and not sock.hide) + sum(1 for sock in node.outputs if sock.enabled)
+    return 60 + 24 * sockets + (180 if node.type == "TEX_IMAGE" else 0) + (60 if node.type in ("MIX", "MATH", "HUE_SAT") else 0)
+
+
+def arrange(tree, column=300, gap=30):
+    """Lays the nodes out left to right: each one a column right of the nodes feeding it, columns stacked top to bottom."""
+    depth = {}
+
+    def depth_of(node, seen=()):
+        if node in depth:
+            return depth[node]
+        sources = [link.from_node for link in tree.links if link.to_node == node and link.from_node not in seen]
+        depth[node] = 0 if not sources else 1 + max(depth_of(n, seen + (node,)) for n in sources)
+        return depth[node]
+
+    columns = {}
+    for node in tree.nodes:
+        columns.setdefault(depth_of(node), []).append(node)
+    for d, nodes in columns.items():
+        y = 0
+        for node in nodes:
+            node.location = (d * column, y)
+            y -= _height(node) + gap
+
+
+def _piled_up(tree):
+    return len(tree.nodes) > 1 and len({(round(n.location.x), round(n.location.y)) for n in tree.nodes}) == 1
+
+
+@bpy.app.handlers.persistent  # else Blender drops it at the first file load
+def tidy_piled_up(*_args):
+    """Files saved by the first Tyrant add-on have every node on one spot: lay out the PK Animal group and its materials."""
+    group = bpy.data.node_groups.get(GROUP)
+    if group is not None and _piled_up(group):
+        arrange(group, column=280)
+    for material in bpy.data.materials:
+        tree = material.node_tree
+        if tree is not None and GROUP in tree.nodes and _piled_up(tree):
+            arrange(tree)
 
 
 def _linear(hex_value):
@@ -156,6 +200,7 @@ def build(material, spec, folder):
     maps = spec.get("maps") or {}
     if not spec.get("animal"):
         _build_plain(tree, output, maps, spec.get("cutoff"), folder)
+        arrange(tree)
         _cut_out(material)
         return
     group = tree.nodes.new("ShaderNodeGroup")
@@ -196,6 +241,7 @@ def build(material, spec, folder):
         for key, name in (("hue", "Hue"), ("saturation", "Saturation"), ("value", "Value")):
             group.inputs[name].default_value = float(colors.get(key) or 0.0)
     group.inputs["Cutoff"].default_value = float(spec.get("cutoff") if spec.get("cutoff") is not None else 0.5)
+    arrange(tree)
     _cut_out(material)
 
 

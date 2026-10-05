@@ -43,6 +43,7 @@ def is_busy(armature):
         return False
 
 
+@bpy.app.handlers.persistent  # else Blender drops it at the first file load
 def clear_stale_busy(*_args):
     """A file saved while Tyrant was building would say "building" forever: on load it becomes "send again"."""
     for obj in bpy.data.objects:

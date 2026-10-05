@@ -54,6 +54,8 @@ def register():
         bpy.app.timers.register(send.drain_finished, first_interval=0.25, persistent=True)
     if panel.clear_stale_busy not in bpy.app.handlers.load_post:
         bpy.app.handlers.load_post.append(panel.clear_stale_busy)
+    if materials.tidy_piled_up not in bpy.app.handlers.load_post:
+        bpy.app.handlers.load_post.append(materials.tidy_piled_up)
     if bpy.app.background:
         return  # scripted runs (tests, installs) never listen
     try:
@@ -72,6 +74,8 @@ def unregister():
         bpy.app.timers.unregister(send.drain_finished)
     if panel.clear_stale_busy in bpy.app.handlers.load_post:
         bpy.app.handlers.load_post.remove(panel.clear_stale_busy)
+    if materials.tidy_piled_up in bpy.app.handlers.load_post:
+        bpy.app.handlers.load_post.remove(materials.tidy_piled_up)
     if bpy.app.timers.is_registered(_drain):
         bpy.app.timers.unregister(_drain)
     if _server is not None:
