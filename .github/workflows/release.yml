@@ -86,3 +86,13 @@ jobs:
           gh release upload "$env:TAG" "release-assets/$name" --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Blender add-on zip
+        shell: pwsh
+        run: |
+          dotnet build cli/Tyrant.Cli -c Release
+          $name = "Tyrant-Blender-Addon-$($env:TAG.TrimStart('v')).zip"
+          Copy-Item cli/Tyrant.Cli/bin/Release/net10.0/blender/tyrant_blender.zip "release-assets/$name"
+          gh release upload "$env:TAG" "release-assets/$name" --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

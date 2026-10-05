@@ -140,6 +140,24 @@ Release build: `npm run build:app`, install `studio/src-tauri/target/release/bun
 73. **(game)** A chance on a looping sound (a breathing replacement): it still loops while the animal breathes, and Check warns
     that a chance is only for one-off sounds.
 
+**Blender (Blender 5.2 from Steam; Tyrant's add-on):**
+
+74. Workspace → **Blender** card shows *Blender 5.2.2* and its path; **Install add-on** → "Add-on 0.1.0 installed". Restart
+    Blender: Edit → Preferences → Add-ons lists **Tyrant**, enabled.
+75. Species → Allosaurus Anax → **Open in Blender** (skin Base): Blender opens it. Bones are plain (no spheres), the model is
+    smooth (no cracks at hard edges), Edit Mode shows UV seams, Material Preview looks like the game.
+76. Tyrant panel (N → Tyrant) → **Growth** 0: baby shape, infant textures, baby proportions. Compare with a baby in the
+    Nursery. Growth back to 1.
+77. Sculpt a change; **Send to Tyrant** → choose a mod and the species model (or a skin) → the panel shows the LODs built.
+    Switch to Tyrant: the mod editor's model page shows the sculpt (no restart, no manual refresh).
+78. Close Blender. From the mod's model page → **Open in Blender**: the saved .blend opens with the sculpt.
+79. With Blender open (unsaved change): **Open in Blender** on another species → Blender asks *Save and open / Open without
+    saving / Cancel*; no second Blender window opens.
+80. **(game, ask first)** Install the mod: the sculpt shows in game.
+81. Ultimasaurus: open `ultimasaurus-allo`'s skin in Blender, import the JWE mesh into that scene, give it an Armature
+    modifier on the Tyrant armature, **Send to Tyrant**: only the Tyrant rig and its meshes went (no physics boxes, no
+    airlift straps); the report names any bones it dropped.
+
 **Shell (tabs, log, preferences):**
 
 - Open Assets twice (dock, then **+**): two tabs, the second titled *Assets (2)*. Filter one; switch away and back: the

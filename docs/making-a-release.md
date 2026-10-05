@@ -19,12 +19,14 @@ Builds made before step 1 still run; their Help → Check for updates says updat
 
 ## Each release
 
-1. `cd studio` → `npm run set-version 0.2.0` (writes the version in package.json, tauri.conf.json, Cargo.toml and
-   Directory.Build.props).
+1. `cd studio` → `npm run set-version 0.2.0` (writes the version in package.json, tauri.conf.json, Cargo.toml,
+   Directory.Build.props and the Blender add-on's blender_manifest.toml).
 2. Commit: `git commit -am "release: 0.2.0"`.
 3. Tag and push: `git tag v0.2.0` → `git push origin main v0.2.0`.
 4. GitHub → Actions → **Release**: it checks the tag matches the version and the key is set up, runs the tests, builds
-   the Setup, signs it, writes `latest.json` and attaches the framework zip to a **draft** release.
+   the Setup, signs it, writes `latest.json` and attaches the framework zip and the Blender add-on zip
+   (`Tyrant-Blender-Addon-<version>.zip`; `set-version` also writes the version into the add-on's manifest) to a
+   **draft** release.
 5. Open the draft (Releases), write what changed, **Publish**. Only published releases are offered to users.
 6. Upload the same Setup to the Nexus page.
 

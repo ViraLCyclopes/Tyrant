@@ -25,12 +25,25 @@ anyway**.
 To play a mod someone shared: **Mods tab → Add mod from zip…**, then **Install to game**. Without Tyrant: install
 MelonLoader 0.7.3, unzip `Tyrant-Framework-<version>.zip` (from the releases page) and the mod's zip into the game folder.
 
-## Blender tips
+## Blender
 
-- Export an animal's **prefab** (GameObject) from the Assets tab, not its bare mesh.
-- In Blender's glTF import tick **Merge Vertices** (clean seams, Tris to Quads works) and **Disable Bone Shape** (plain bones).
-- Sculpt or edit with the **Basis** shape key selected: the growth keys follow. Don't use Voxel Remesh (it deletes the
-  shape keys).
+Tyrant works with **Blender 5.0 or newer** through its own Blender add-on.
+
+1. **Install the add-on:** Workspace tab → **Blender** card → **Install add-on** (Tyrant finds Blender from Steam or
+   Program Files; **Choose blender.exe…** if it doesn't). By hand: drag `Tyrant-Blender-Addon-<version>.zip` (from the
+   releases page, or `sidecarlender	yrant_blender.zip` in Tyrant's folder) onto Blender, or Edit → Preferences →
+   Get Extensions → Install from Disk.
+2. **Open in Blender** on a species (Species tab, pick a game skin), a skin page or a model page of the mod editor. The
+   model opens looking like the game: plain bones, merged vertices with UV seams marked, the game's materials (skin
+   colours, pattern, eyes) and a **Growth** slider (Tyrant panel: press N → Tyrant) that shows the animal as a baby.
+3. Sculpt or edit with Growth at 1 and the **Basis** shape key selected: the growth keys follow. Don't use Voxel Remesh
+   (it deletes the shape keys).
+4. **Send to Tyrant** (same panel): only the Tyrant armature and the meshes with an Armature modifier on it go — a ported
+   mesh counts once you add that modifier; reference meshes, physics boxes and other rigs stay out. The first send asks
+   which mod and which model (species or a skin); Tyrant's report (errors, warnings, sizes) shows in the panel.
+
+Your work is kept as a `.blend` in `<workspace>lender\…`; **Open in Blender** reopens it. **Start fresh** (Options)
+rebuilds it from the current model and keeps the old file as `.old.blend`.
 
 ## Updates
 
