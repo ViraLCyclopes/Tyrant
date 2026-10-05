@@ -36,10 +36,16 @@ public sealed class BlenderProcess : IBlenderProcess
         lock (output) return new BlenderRun(process.ExitCode, output.ToString());
     }
 
-    public void Start(string exe, IReadOnlyList<string> args)
+    public void Start(string exe, IReadOnlyList<string> args) => Process.Start(StartInfo(exe, args))?.Dispose();
+
+    /// <summary>
+    /// Blender started for the user through the shell: it gets its own console and none of Tyrant's handles (the sidecar's
+    /// stdout is the app's protocol pipe; an inherited copy would mix Blender's output in and keep the pipe open).
+    /// </summary>
+    internal static ProcessStartInfo StartInfo(string exe, IReadOnlyList<string> args)
     {
-        var info = new ProcessStartInfo(exe) { UseShellExecute = false };
+        var info = new ProcessStartInfo(exe) { UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(exe) ?? "" };
         foreach (var arg in args) info.ArgumentList.Add(arg);
-        Process.Start(info)?.Dispose();
+        return info;
     }
 }
