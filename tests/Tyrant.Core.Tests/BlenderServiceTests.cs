@@ -353,4 +353,18 @@ public class BlenderServiceTests
 
         Assert.Empty(again.Images);
     }
+
+    [Fact]
+    public void Without_blender_the_converter_says_fbx_needs_blender()
+    {
+        var ws = Ws(out var game);
+        using var _ = game;
+        var env = new BlenderEnvironment { Process = new FakeBlenderProcess(), Link = new Link(false), Steam = new NoSteam(), ProgramFiles = Temp(), AppData = Temp() };
+
+        var ex = Assert.Throws<Tyrant.Core.Errors.TyrantException>(() => new BlenderService(env).Converter(ws));
+
+        Assert.Equal(Tyrant.Core.Errors.TyrantErrorCode.BlenderMissing, ex.Code);
+        Assert.StartsWith("FBX needs Blender", ex.Message);
+        Assert.Contains("tyrant blender set-path", ex.Message);
+    }
 }

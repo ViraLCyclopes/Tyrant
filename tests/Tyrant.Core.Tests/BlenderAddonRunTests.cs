@@ -188,4 +188,23 @@ public class BlenderAddonRunTests
         Assert.Equal(["diffuse"], sent.Images);
         Assert.True(ModProject.Open(ws, "painted").Skin(skin.Id).Male!.ContainsKey("diffuse"));
     }
+
+    [SkippableFact]
+    public void A_model_survives_glb_to_fbx_and_back_and_still_builds()
+    {
+        var blender = BlenderIntegrationTests.Blender();
+        Skip.If(blender is null, "Blender 5.x not found");
+        var dir = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), "tyrant-tests", Guid.NewGuid().ToString("N"))).FullName;
+        var prefab = ModelFixture.Prefab(ModelFixture.Triangle(name: "Carch_LOD00"), skinned: true);
+        prefab = prefab with { Renderers = [prefab.Renderers[0] with { Materials = [new MaterialModel("Carch", [])] }] };
+        var glb = Path.Combine(dir, "carch.glb");
+        GltfModelWriter.WriteGlb(prefab, prefab.Renderers[0], glb, [new GltfMaterial("Carch")]);
+        var converter = new BlenderModelConverter(new BlenderProcess(), blender!.Exe, BlenderIntegrationTests.ThrowawayUser(out _));
+
+        Assert.Empty(converter.GlbToFbx([(glb, Path.Combine(dir, "carch.fbx"))]));
+        converter.FbxToGlb(Path.Combine(dir, "carch.fbx"), Path.Combine(dir, "back.glb"));
+
+        var report = Tyrant.Core.ModelReplacements.ModelBuilder.Build(dir, "back.glb", prefab);
+        Assert.True(report.Errors.Count == 0, string.Join(" | ", report.Errors)); // bones, growth keys and material survived
+    }
 }

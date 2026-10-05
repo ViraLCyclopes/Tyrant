@@ -154,6 +154,19 @@ public sealed class BlenderService(BlenderEnvironment env)
         }
     }
 
+    /// <summary>The user's Blender as Tyrant's FBX converter; without Blender, says FBX needs it (glb works without).</summary>
+    public IModelConverter Converter(Workspace ws)
+    {
+        try
+        {
+            return new BlenderModelConverter(env.Process, RequireBlender(ws).Exe);
+        }
+        catch (TyrantException ex) when (ex.Code == TyrantErrorCode.BlenderMissing)
+        {
+            throw new TyrantException(TyrantErrorCode.BlenderMissing, "FBX needs Blender: " + ex.Message, ex.Fix, ex);
+        }
+    }
+
     private BlenderInstall RequireBlender(Workspace ws)
     {
         var find = Locator().Find(ws.Data.BlenderPath);
