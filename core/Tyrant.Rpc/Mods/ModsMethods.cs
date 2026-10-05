@@ -210,6 +210,18 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
         Edit(p.Id, p.Revision, mod => mod.SetSkinFile(p.Skin, p.Sex, p.Slot, p.Png),
             p.Png is null ? $"'{p.Skin}' {p.Sex} {p.Slot} uses the base skin's texture" : $"'{p.Skin}' {p.Sex} {p.Slot} uses {p.Png}");
 
+    [RpcMethod("mods.copyBaseFile")]
+    public ModDetail CopyBaseFile(ModCopyBaseFileParams p)
+    {
+        var (ws, install) = session.Current();
+        var species = TrySpecies(ws) ?? throw new TyrantException(TyrantErrorCode.DataMissing,
+            "Copying a base texture needs the game's data: on the Workspace tab click Run data dump (or run 'tyrant dump run').", FixAction.RefreshWorkspace);
+        var index = TryIndex(ws) ?? throw new TyrantException(TyrantErrorCode.AssetIndexMissing,
+            "Copying a base texture needs the asset index: on the Workspace tab click Index assets (or run 'tyrant assets index').", FixAction.ReindexAssets);
+        return Edit(p.Id, p.Revision, mod => mod.CopyBaseFile(install, index, Options.AssetReader, species, p.Skin, p.Sex, p.Slot),
+            $"'{p.Skin}' {p.Sex} {p.Slot} is now a copy of the base skin's texture, to edit");
+    }
+
     [RpcMethod("mods.setThumbnail")]
     public ModDetail SetThumbnail(ModSetThumbnailParams p) => Edit(p.Id, p.Revision, mod => mod.SetThumbnail(p.Skin, p.Png), $"set the thumbnail of '{p.Skin}'");
 

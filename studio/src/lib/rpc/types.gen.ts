@@ -393,6 +393,14 @@ export interface ModColorPreviewParams {
   size?: number;
 }
 
+export interface ModCopyBaseFileParams {
+  id: string;
+  revision: string;
+  skin: string;
+  sex: string;
+  slot: string;
+}
+
 export interface ModCreateParams {
   id: string;
   name?: string | null;
@@ -935,6 +943,7 @@ export interface RpcMethods {
   "mods.addSkin": { params: ModAddSkinParams; result: ModsListResult };
   "mods.check": { params: ModIdParams; result: ModCheckReport };
   "mods.colorPreview": { params: ModColorPreviewParams; result: ModPreviewFiles };
+  "mods.copyBaseFile": { params: ModCopyBaseFileParams; result: ModDetail };
   "mods.create": { params: ModCreateParams; result: ModsListResult };
   "mods.enable": { params: ModEnableParams; result: ModsListResult };
   "mods.export": { params: ModExportParams; result: JobStarted };

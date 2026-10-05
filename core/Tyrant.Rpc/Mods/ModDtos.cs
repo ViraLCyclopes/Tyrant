@@ -111,6 +111,9 @@ public sealed record ModSetColorsParams(string Id, string Revision, string Skin,
 /// <summary>Png null: use the base skin's texture for that slot.</summary>
 public sealed record ModSetSkinFileParams(string Id, string Revision, string Skin, string Sex, string Slot, string? Png = null);
 
+/// <summary>Copies the base skin's texture for the slot into the skin, to edit.</summary>
+public sealed record ModCopyBaseFileParams(string Id, string Revision, string Skin, string Sex, string Slot);
+
 public sealed record ModSetThumbnailParams(string Id, string Revision, string Skin, string? Png = null);
 
 public sealed record ModRemoveReplacementParams(string Id, string Revision, string Texture);

@@ -46,6 +46,10 @@
           <div class="buttons">
             <button aria-label="Replace {name}…" title="Copies your PNG into the skin's folder; this cannot be undone" onclick={() => replace(slot)}>Replace…</button>
             <button aria-label="Use base for {name}" disabled={!file} onclick={() => doc.edit('mods.setSkinFile', { skin: skin.id, sex, slot, png: null })}>Use base</button>
+            {#if !file && base?.includes(slot)}
+              <button aria-label="Copy the base {name} to edit" title="Copies the base skin's texture into the skin's folder so you can paint over it"
+                onclick={() => doc.edit('mods.copyBaseFile', { skin: skin.id, sex, slot })}>Edit a copy</button>
+            {/if}
             <button class="ghost" aria-label="Open folder of {name}" onclick={() => session.platform.reveal(pathOf(file))}>Open folder</button>
             {#if isColourSlot(slot) && file}
               <button class="ghost" aria-label="Restore cutouts of {name}" onclick={restore}>Restore cutouts</button>

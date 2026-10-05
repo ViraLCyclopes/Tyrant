@@ -164,14 +164,26 @@ public sealed class ModSkinFileCommand : Command<ModSkinFileCommand.Settings>
         [CommandOption("--base")]
         [Description("Use the base skin's texture for this slot instead.")]
         public bool Base { get; set; }
+
+        [CommandOption("--copy-base")]
+        [Description("Copy the base skin's texture into the skin's folder, to edit (needs the data dump and the asset index).")]
+        public bool CopyBase { get; set; }
     }
 
     public override int Execute(CommandContext context, Settings settings)
     {
-        if (settings.Base == (settings.Png is not null))
+        if ((settings.Base ? 1 : 0) + (settings.CopyBase ? 1 : 0) + (settings.Png is not null ? 1 : 0) != 1)
         {
-            Console.Error.WriteLine("Give a PNG or --base (not both).");
+            Console.Error.WriteLine("Give one of: a PNG, --base or --copy-base.");
             return ExitCodes.Error;
+        }
+        if (settings.CopyBase)
+        {
+            var (workspace, install) = CliServices.OpenWorkspace(settings);
+            var copied = ModProject.Open(workspace, settings.Id).CopyBaseFile(install, CliServices.LoadIndex(workspace, install), CliServices.AssetReader,
+                ModCli.RequireSpecies(workspace), settings.Skin, settings.Sex, settings.Slot);
+            Console.WriteLine($"  {settings.Sex} {settings.Slot} <- {copied} (a copy of the base skin's texture, to edit)");
+            return ExitCodes.Ok;
         }
         var (ws, _) = CliServices.OpenWorkspace(settings);
         var file = ModProject.Open(ws, settings.Id).SetSkinFile(settings.Skin, settings.Sex, settings.Slot, settings.Png);

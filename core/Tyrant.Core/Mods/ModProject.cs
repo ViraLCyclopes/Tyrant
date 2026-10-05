@@ -135,7 +135,10 @@ public sealed partial class ModProject
         return stream.Read(head, 0, head.Length) == head.Length && head.AsSpan().SequenceEqual(PngSignature);
     }
 
-    private static readonly (string Slot, string Suffix)[] TemplateSlots = [("diffuse", "D"), ("normal", "N"), ("extra", "extra"), ("pattern", "pattern")];
+    private static readonly string[] TemplateSlots = ["diffuse", "normal", "extra", "pattern"];
+
+    /// <summary>The babies' maps, copied into the male skin (the game dresses babies of both sexes in the male skin's infant maps).</summary>
+    private static readonly string[] InfantTemplateSlots = ["infantDiffuse", "infantNormal", "infantExtra", "infantPattern"];
 
     /// <summary>
     /// Adds a new skin based on a vanilla skin: exports the base textures (diffuse; with Maps also normal, extra and pattern) into
@@ -159,13 +162,14 @@ public sealed partial class ModProject
         var named = based.Name != $"Skin {based.Index}" && target.Skins.Count(s => string.Equals(s.Name, based.Name, StringComparison.OrdinalIgnoreCase)) == 1;
         var entry = new SkinEntry { Id = id, Species = target.SpeciesId, Name = name.Trim(), Base = named ? based.Name : based.Index.ToString(System.Globalization.CultureInfo.InvariantCulture) };
         var slots = options.Maps ? TemplateSlots : TemplateSlots[..1];
+        var infantSlots = options.Maps ? InfantTemplateSlots : InfantTemplateSlots[..1];
         var folder = Path.Combine(Dir, "skins", id);
         var existed = Directory.Exists(folder);
         var before = existed ? Directory.GetFiles(folder, "*", SearchOption.AllDirectories).ToHashSet(StringComparer.OrdinalIgnoreCase) : [];
         try
         {
-            if (options.Male) entry.Male = Template(ws, install, index, reader, id, "male", based.Male, slots);
-            if (options.Female) entry.Female = Template(ws, install, index, reader, id, "female", based.Female, slots);
+            if (options.Male) entry.Male = Template(install, index, reader, id, "male", based.Male, slots, infantSlots);
+            if (options.Female) entry.Female = Template(install, index, reader, id, "female", based.Female, slots, options.Male ? [] : infantSlots);
         }
         catch
         {
@@ -184,20 +188,48 @@ public sealed partial class ModProject
         return entry;
     }
 
-    private Dictionary<string, string> Template(Workspace ws, GameInstall install, AssetIndex index, IAssetReader reader, string skinId, string sex,
-        IReadOnlyDictionary<string, string> textures, (string Slot, string Suffix)[] slots)
+    private Dictionary<string, string> Template(GameInstall install, AssetIndex index, IAssetReader reader, string skinId, string sex,
+        IReadOnlyDictionary<string, string> textures, string[] slots, string[] infantSlots)
     {
         if (!textures.ContainsKey("diffuse"))
             throw new TyrantException(TyrantErrorCode.TargetNotFound, $"The base skin has no {sex} diffuse texture in the game data; pick another base or leave {sex} out.");
         var files = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var (slot, suffix) in slots)
+        foreach (var slot in slots.Concat(infantSlots))
         {
             if (!textures.TryGetValue(slot, out var guid)) continue;
-            var file = $"skins/{skinId}/{sex}_{suffix}.png";
+            var file = $"skins/{skinId}/{SkinFileName(sex, slot)}";
             reader.WriteTexture(install, index.Resolve(guid, "Texture2D"), Path.Combine(Dir, file.Replace('/', Path.DirectorySeparatorChar)));
             files[slot] = file;
         }
         return files;
+    }
+
+    /// <summary>
+    /// Copies the base skin's texture for one slot into the skin (skins/&lt;id&gt;/…) and uses it, so it can be edited: a slot that
+    /// showed "Base" (e.g. the babies' maps of a skin made before they were copied too).
+    /// </summary>
+    public string CopyBaseFile(GameInstall install, AssetIndex index, IAssetReader reader, IReadOnlyList<SpeciesSkins> species, string skinId, string sex, string slot)
+    {
+        var skin = Skin(skinId);
+        if (sex is not ("male" or "female")) throw new TyrantException(TyrantErrorCode.ModInvalid, $"Sex must be male or female (got '{sex}').");
+        var canonical = SkinSlotNames.Canonical(slot)
+            ?? throw new TyrantException(TyrantErrorCode.ModInvalid, $"'{slot}' is not a skin slot (use {string.Join(", ", SkinSlotNames.All)}).");
+        var target = species.FirstOrDefault(s => string.Equals(s.SpeciesId, skin.Species, StringComparison.OrdinalIgnoreCase))
+            ?? throw new TyrantException(TyrantErrorCode.TargetNotFound, $"'{skin.Species}' is not in the game data.");
+        var based = int.TryParse(skin.Base, out var number) ? target.Skins.FirstOrDefault(s => s.Index == number)
+            : target.Skins.FirstOrDefault(s => string.Equals(s.Name, skin.Base, StringComparison.OrdinalIgnoreCase));
+        var textures = based is null ? null : sex == "male" ? based.Male : based.Female;
+        if (textures is null || !textures.TryGetValue(canonical, out var guid))
+            throw new TyrantException(TyrantErrorCode.TargetNotFound, $"The base skin {based?.Name ?? skin.Base} has no {sex} {SpeciesTextures.Label(canonical)} texture to copy.");
+        var file = $"skins/{skinId}/{SkinFileName(sex, canonical)}";
+        var path = Path.Combine(Dir, file.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        reader.WriteTexture(install, index.Resolve(guid, "Texture2D"), path);
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow);
+        var files = sex == "male" ? skin.Male ??= new Dictionary<string, string>(StringComparer.Ordinal) : skin.Female ??= new Dictionary<string, string>(StringComparer.Ordinal);
+        files[canonical] = file;
+        Save();
+        return file;
     }
 
     /// <summary>A skin id from its name ("Red spot" → "red-spot"), unique within the mod.</summary>

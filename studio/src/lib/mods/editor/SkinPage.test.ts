@@ -99,6 +99,15 @@ describe('SkinPage', () => {
     await waitFor(() => expect(rpc.callsTo('mods.thumbnail').length).toBeGreaterThan(before));
   });
 
+  it('a slot on the base can be copied into the skin to edit', async () => {
+    const { rpc } = await setup();
+    rpc.on('mods.copyBaseFile', () => modDetail({ revision: 'r2' }));
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Copy the base male normal to edit' }));
+
+    await waitFor(() => expect(rpc.callsTo('mods.copyBaseFile')[0]?.params).toMatchObject({ skin: 'blue', sex: 'male', slot: 'normal' }));
+  });
+
   it('Remove skin asks, can delete the files, and sends it', async () => {
     const { rpc } = await setup();
     rpc.on('mods.removeSkin', () => modDetail({ revision: 'r2', skins: [modDetail().skins[1]] }));

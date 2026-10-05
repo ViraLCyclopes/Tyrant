@@ -8,6 +8,7 @@ export type EditMethod =
   | 'mods.removeSkin'
   | 'mods.setColors'
   | 'mods.setSkinFile'
+  | 'mods.copyBaseFile'
   | 'mods.setThumbnail'
   | 'mods.removeReplacement'
   | 'mods.replaceModel'

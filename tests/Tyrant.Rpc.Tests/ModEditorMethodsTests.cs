@@ -225,6 +225,18 @@ public class ModEditorMethodsTests
     }
 
     [Fact]
+    public async Task A_base_texture_is_copied_into_the_skin_to_edit()
+    {
+        using var game = new FakeGame();
+        var (h, _, _) = await WithSkinAndPrefab(game);
+        var detail = await h.Call("mods.get", new { id = "red-spot" });
+
+        var after = await h.Call("mods.copyBaseFile", new { id = "red-spot", revision = Rev(detail), skin = "blue", sex = "male", slot = "normal" });
+
+        Assert.Equal("skins/blue/male_N.png", after.GetProperty("skins")[0].GetProperty("male").GetProperty("normal").GetString());
+    }
+
+    [Fact]
     public async Task Skin_files_thumbnail_removal_and_replacements()
     {
         using var game = new FakeGame();

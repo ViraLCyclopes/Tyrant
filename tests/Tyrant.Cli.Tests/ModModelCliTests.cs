@@ -56,6 +56,30 @@ public class ModModelCliTests
     }
 
     [Fact]
+    public void Skin_file_copy_base_puts_the_base_texture_in_the_skin()
+    {
+        using var game = new FakeGame();
+        var (ws, _) = Setup(game);
+        try
+        {
+            var dir = Path.Combine(ws, "mods", "big-carch");
+            Directory.CreateDirectory(Path.Combine(dir, "skins", "spiked"));
+            File.WriteAllText(Path.Combine(dir, "skins", "spiked", "male_D.png"), "png");
+            File.WriteAllText(Path.Combine(dir, "mod.json"),
+                "{\"format\":1,\"id\":\"big-carch\",\"name\":\"Big Carch\",\"version\":\"1.0.0\",\"replace\":[],\"skins\":[{\"id\":\"spiked\",\"species\":\"Carcharodontosaurus\",\"name\":\"Spiked\",\"base\":\"1\",\"male\":{\"diffuse\":\"skins/spiked/male_D.png\"}}]}");
+
+            var copy = Run("mod", "skin-file", "big-carch", "spiked", "male", "normal", "--copy-base", "-w", ws);
+
+            Assert.True(copy.Code == ExitCodes.Ok, copy.Err + copy.Out);
+            Assert.Contains("skins/spiked/male_N.png", File.ReadAllText(Path.Combine(ws, "mods", "big-carch", "mod.json")));
+        }
+        finally
+        {
+            CliServices.AssetReader = new BundleAssetReader();
+        }
+    }
+
+    [Fact]
     public void Replace_model_and_remove_model_work_from_the_command_line()
     {
         using var game = new FakeGame();

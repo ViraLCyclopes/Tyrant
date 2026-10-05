@@ -164,4 +164,58 @@ public class SkinTemplateTests
 
         Assert.Equal(["my-art.psd"], Directory.GetFiles(folder).Select(Path.GetFileName));
     }
+
+    private const string InfantDiffuse = "66666666666666666666666666666666", InfantNormal = "77777777777777777777777777777777";
+
+    private static readonly AssetIndex IndexWithInfants = new()
+    {
+        Assets = [.. SkinDumps.Textures,
+            new("carch.bundle", 6, "Texture2D", "T_carch_infant_D", "Assets/T_carch_infant_D.png", InfantDiffuse, null),
+            new("carch.bundle", 7, "Texture2D", "T_carch_infant_N", "Assets/T_carch_infant_N.png", InfantNormal, null)],
+    };
+
+    private static IReadOnlyList<SpeciesSkins> SpeciesWithInfants() =>
+    [
+        new("Carcharodontosaurus", false, [new VanillaSkin(0, "Alt 1",
+            new Dictionary<string, string> { ["diffuse"] = MaleDiffuse, ["normal"] = MaleNormal, ["infantDiffuse"] = InfantDiffuse, ["infantNormal"] = InfantNormal },
+            new Dictionary<string, string> { ["diffuse"] = FemaleDiffuse })]),
+    ];
+
+    [Fact]
+    public void Add_skin_also_copies_the_base_babies_textures_into_the_male_skin()
+    {
+        var (game, ws, install) = Setup();
+        using var _ = game;
+        var mod = ModProject.Create(ws, "red-spot-carcharo", null, null);
+
+        var plain = mod.AddSkin(ws, install, IndexWithInfants, new FakeAssetReader(), SpeciesWithInfants(), "Carcharodontosaurus", "Red spot", "Alt 1",
+            new SkinTemplateOptions(Male: true, Female: true, Maps: false));
+        var withMaps = mod.AddSkin(ws, install, IndexWithInfants, new FakeAssetReader(), SpeciesWithInfants(), "Carcharodontosaurus", "Blue", "Alt 1",
+            new SkinTemplateOptions(Male: true, Female: true, Maps: true));
+
+        Assert.Equal("skins/red-spot/male_infant_D.png", plain.Male!["infantDiffuse"]);
+        Assert.False(plain.Male.ContainsKey("infantNormal")); // maps not asked for
+        Assert.False(plain.Female!.ContainsKey("infantDiffuse")); // babies wear the male skin's infant maps
+        Assert.Equal("skins/blue/male_infant_N.png", withMaps.Male!["infantNormal"]);
+        Assert.True(File.Exists(Path.Combine(mod.Dir, "skins", "red-spot", "male_infant_D.png")));
+    }
+
+    [Fact]
+    public void A_slot_on_the_base_can_be_copied_into_the_skin_to_edit()
+    {
+        var (game, ws, install) = Setup();
+        using var _ = game;
+        var mod = ModProject.Create(ws, "red-spot-carcharo", null, null);
+        var species = SpeciesWithInfants();
+        mod.AddSkin(ws, install, IndexWithInfants, new FakeAssetReader(), species, "Carcharodontosaurus", "Red spot", "Alt 1",
+            new SkinTemplateOptions(Male: true, Female: false, Maps: false));
+
+        var file = mod.CopyBaseFile(install, IndexWithInfants, new FakeAssetReader(), species, "red-spot", "male", "infantNormal");
+
+        Assert.Equal("skins/red-spot/male_infant_N.png", file);
+        Assert.True(File.Exists(Path.Combine(mod.Dir, "skins", "red-spot", "male_infant_N.png")));
+        Assert.Equal(file, ModProject.Open(ws, "red-spot-carcharo").Skin("red-spot").Male!["infantNormal"]);
+        var none = Assert.Throws<TyrantException>(() => mod.CopyBaseFile(install, IndexWithInfants, new FakeAssetReader(), species, "red-spot", "male", "extra"));
+        Assert.Contains("has no", none.Message);
+    }
 }
