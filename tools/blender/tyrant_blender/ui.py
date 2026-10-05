@@ -29,16 +29,19 @@ def import_and_save(path):
 
 
 def _window_override():
+    """A context with Blender's first window, or None when there is no real window (background runs list one anyway)."""
     wm = bpy.context.window_manager
-    return bpy.context.temp_override(window=wm.windows[0]) if wm and wm.windows else None
+    if bpy.app.background or not wm or not wm.windows:
+        return None
+    return bpy.context.temp_override(window=wm.windows[0])
 
 
-def _run(operator, **kwargs):
+def _run(operator, *args, **kwargs):
     override = _window_override()
     if override is None:
-        return operator(**kwargs)
+        return operator(*args, **kwargs)
     with override:
-        return operator(**kwargs)
+        return operator(*args, **kwargs)
 
 
 def open_project(path):
@@ -65,21 +68,35 @@ def _report(message):
     def draw(menu, _context):
         menu.layout.label(text=message)
 
-    wm = bpy.context.window_manager
-    if wm and wm.windows:
-        wm.popup_menu(draw, title="Tyrant", icon="ERROR")
+    override = _window_override()
+    if override is not None:
+        with override:
+            bpy.context.window_manager.popup_menu(draw, title="Tyrant", icon="ERROR")
     print("Tyrant:", message)
 
 
-def request_open(path):
-    """Opens a project for Tyrant; asks first when the current file has unsaved changes."""
-    if bpy.data.is_dirty:
+def ask_then_open(path):
+    """Asks what to do with the unsaved changes, then opens (the dialog's choice runs TYRANT_OT_open_project)."""
+    if _window_override() is None:  # no window to ask in: a dialog then crashes Blender instead of failing
+        _report("This file has unsaved changes: save it, then Open in Blender again from Tyrant.")
+        return
+    try:
         _run(bpy.ops.tyrant.open_project, "INVOKE_DEFAULT", path=path)
-    else:
-        try:
+    except RuntimeError as ex:  # no window to ask in (background) or the dialog failed
+        _report(f"Tyrant could not ask about the unsaved changes ({ex}); save this file, then Open in Blender again.")
+
+
+def request_open(path):
+    """Opens a project for Tyrant; asks first when the current file has unsaved changes. Never raises (it runs in a timer)."""
+    try:
+        if bpy.data.is_dirty:
+            ask_then_open(path)
+        else:
             open_project(path)
-        except project.ProjectError as ex:
-            _report(str(ex))
+    except project.ProjectError as ex:
+        _report(str(ex))
+    except Exception as ex:  # noqa: BLE001 - a timer that raises is removed by Blender: Tyrant's later opens would be lost
+        _report(f"Tyrant could not open {path}: {ex}")
 
 
 class TYRANT_OT_open_project(bpy.types.Operator):

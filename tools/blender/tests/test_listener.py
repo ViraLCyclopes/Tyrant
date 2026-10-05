@@ -55,3 +55,23 @@ class OpenProjectTests(unittest.TestCase):
         self.assertTrue(os.path.isfile(data["blend"]))
         self.assertEqual(os.path.dirname(data["blend"]), os.path.dirname(path))
         self.assertEqual(bpy.data.filepath, data["blend"])
+
+
+class DirtyOpenTests(unittest.TestCase):
+    def setUp(self):
+        bpy.ops.wm.read_factory_settings(use_empty=True)
+
+    def test_asking_before_opening_over_unsaved_changes_does_not_fail(self):
+        # In the background there is no window to ask in: it must report, not throw (it threw a TypeError before).
+        ui.ask_then_open(fresh_project())
+
+    def test_the_open_queue_survives_bad_requests_one_per_tick(self):
+        import tyrant_blender
+
+        gone = os.path.join(os.path.dirname(fresh_project()), "gone", "tyrant-blender.json")
+        listener.pending.put(gone)
+        listener.pending.put(gone)
+        self.assertEqual(tyrant_blender._drain(), 0.25)  # the timer keeps running
+        self.assertEqual(listener.pending.qsize(), 1)  # one request per tick: the next waits for the next tick
+        self.assertEqual(tyrant_blender._drain(), 0.25)
+        self.assertTrue(listener.pending.empty())

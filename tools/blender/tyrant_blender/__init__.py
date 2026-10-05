@@ -12,9 +12,12 @@ def _growth_changed(obj, _context):
 
 
 def _drain():
-    """Opens what Tyrant asked for, on Blender's main thread."""
-    while not listener.pending.empty():
-        ui.request_open(listener.pending.get())
+    """Opens what Tyrant asked for, on Blender's main thread: one request per tick (opening replaces the file), never raising."""
+    if not listener.pending.empty():
+        try:
+            ui.request_open(listener.pending.get())
+        except Exception as ex:  # noqa: BLE001 - a timer that raises is removed by Blender
+            print("Tyrant:", ex)
     return 0.25
 
 
