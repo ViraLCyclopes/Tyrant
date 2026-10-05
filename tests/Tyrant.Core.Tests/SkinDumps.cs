@@ -34,6 +34,18 @@ public static class SkinDumps
         const string Var = "PrehistoricKingdom.AnimalSkinVariationAsset";
         Add("PrehistoricKingdom.AnimalData", "Carcharodontosaurus", 1, $$$$"""
             {"$type":"PrehistoricKingdom.AnimalData","$name":"Carcharodontosaurus","$id":1,"speciesID":"Carcharodontosaurus","animalRef":{"m_AssetGUID":"{{{{PrefabGuid}}}}"},
+             "blendGrowthCurve":{"keys":[{"time":0,"value":0,"inTangent":1,"outTangent":1},{"time":1,"value":1,"inTangent":1,"outTangent":1}]},
+             "skinGrowthCurve":{"keys":[{"time":0,"value":0,"inTangent":1,"outTangent":1},{"time":1,"value":1,"inTangent":1,"outTangent":1}]},
+             "blendShapesRelative":true,
+             "GrowthData":{"bones":[
+               {"transformName":"Arm.L","mode":"Scale",
+                "localBabyTransformation":{"position":{"x":0.1,"y":0.3,"z":0},"scale":{"x":1.14,"y":1.14,"z":1.14}},
+                "localAdolescentTransformation":{"position":{"x":0.1,"y":0.3,"z":0},"scale":{"x":1.07,"y":1.07,"z":1.07}},
+                "localAdultTransformation":{"position":{"x":0.1,"y":0.3,"z":0},"scale":{"x":1.09,"y":1.09,"z":1.09}}},
+               {"transformName":"Hip","mode":"All",
+                "localBabyTransformation":{"position":{"x":0,"y":0.8,"z":0},"scale":{"x":1,"y":1,"z":1}},
+                "localAdolescentTransformation":{"position":{"x":0,"y":0.9,"z":0},"scale":{"x":1,"y":1,"z":1}},
+                "localAdultTransformation":{"position":{"x":0,"y":1,"z":0},"scale":{"x":1,"y":1,"z":1}}}]},
              "skinsData":[
                {"skinName":"Base","maleVariationData":{"$ref":{"type":"{{{{Var}}}}","name":"Carch_Base_M","id":10}},"femaleVariationData":{"$ref":{"type":"{{{{Var}}}}","name":"Carch_Base_F","id":11}}},
                {"skinName":"Alt 1","maleVariationData":{"$ref":{"type":"{{{{Var}}}}","name":"Carch_Alt1_M","id":12}},"femaleVariationData":{"$ref":{"type":"{{{{Var}}}}","name":"Carch_Alt1_F","id":13}}}
