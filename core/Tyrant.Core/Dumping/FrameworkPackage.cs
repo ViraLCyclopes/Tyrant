@@ -34,6 +34,8 @@ public static class FrameworkPackage
                    Mods load in the order of UserData\Tyrant\mods.json; mods not listed there load after, by id.
 
                 Remove: delete Mods\Tyrant.Framework.dll and UserLibs\Tyrant.Framework*.dll.
+
+                Step-by-step guide (with or without the Tyrant app): {Mods.ModSharing.GuideUrl}
                 """.Replace("\n", "\r\n").Replace("\r\r\n", "\r\n"));
         }
         File.Move(temp, zipPath, overwrite: true);
