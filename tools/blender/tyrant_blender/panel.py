@@ -6,7 +6,7 @@ import textwrap
 
 import bpy
 
-from . import checks, gamematerial, growth, ikpanel, images, project, rig, rigpanel, send, ui
+from . import animpanel, checks, gamematerial, growth, ikpanel, images, project, rig, rigpanel, send, ui
 
 REPORT = "tyrant_report"
 NEW_MOD = "__new__"
@@ -290,6 +290,7 @@ class VIEW3D_PT_tyrant(bpy.types.Panel):
             say(layout, context, "Dump the game's data (Workspace tab) for its growth.", "INFO")
         ikpanel.draw(layout, context, armature, data, say)
         rigpanel.draw(layout, context, armature, data, say)
+        animpanel.draw(layout, context, armature, data, say)
 
         layout.operator("tyrant.use_game_material", icon="MATERIAL")
         active = context.active_object
