@@ -73,7 +73,11 @@ public static class ClipReader
         var dense = data["m_DenseClip"];
         static float Float(AssetTypeValueField f) => f.IsDummy ? 0f : f.AsFloat;
         var bindings = clip["m_ClipBindingConstant"]["genericBindings"]["Array"].Children
-            .Select(b => new Animation.ClipBindingRaw(b["path"].AsUInt, (int)b["attribute"].AsUInt)).ToList();
+            .Select(b => new Animation.ClipBindingRaw(b["path"].AsUInt, (int)b["attribute"].AsUInt,
+                b["typeID"].IsDummy ? Animation.ClipBindingRaw.Transform : b["typeID"].AsInt,
+                !b["isPPtrCurve"].IsDummy && b["isPPtrCurve"].AsUInt != 0,
+                // An euler curve's rotation order is kept in customType (ZXY, Unity's own, when there is none).
+                b["customType"].IsDummy ? Animation.ClipBindingRaw.UnityOrder : (int)b["customType"].AsUInt)).ToList();
         return new Animation.RawClip(
             clip["m_Name"].AsString, Float(clip["m_SampleRate"]), Float(muscle["m_StartTime"]), Float(muscle["m_StopTime"]),
             !muscle["m_LoopTime"].IsDummy && muscle["m_LoopTime"].AsBool,
@@ -114,11 +118,11 @@ public static class ClipReader
         var animatedCurves = clip.StreamedCurves + clip.DenseCurves;
         foreach (var b in clip.Bindings)
         {
-            var dims = Animation.RawClip.Dims(b.Attribute);
+            var dims = b.Dims;
             var range = offset < animatedCurves
                 ? Enumerable.Range(offset, dims).Where(i => i < total && max[i] >= min[i]).Select(i => max[i] - min[i]).DefaultIfEmpty(0).Max()
                 : 0f;
-            bindings.Add(new ClipBinding(b.PathHash, b.Attribute, range));
+            if (b.IsBone) bindings.Add(new ClipBinding(b.PathHash, b.Attribute, range)); // other components' curves only take their place
             offset += dims;
         }
         return new ClipChannels(clip.Name, bindings);

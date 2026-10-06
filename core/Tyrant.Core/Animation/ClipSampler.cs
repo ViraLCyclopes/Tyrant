@@ -65,10 +65,11 @@ public static class ClipSampler
         var offset = 0;
         foreach (var binding in clip.Bindings)
         {
-            var dims = RawClip.Dims(binding.Attribute);
             var first = offset;
-            offset += dims;
-            if (binding.Attribute is < 1 or > 4)
+            offset += binding.Dims;
+            if (binding.ObjectReference || binding.TypeId != ClipBindingRaw.Transform)
+                continue; // the Animator's own curves (root motion, parameters) and object swaps: not bone keys
+            if (!binding.IsBone)
             {
                 Note(skipped, $"curve kind {binding.Attribute} is not read (only bone position, rotation and scale)");
                 continue;
@@ -96,7 +97,7 @@ public static class ClipSampler
                     track.R = Thin(at.Select(t => Normalised(t, new Quaternion(V(0, t), V(1, t), V(2, t), V(3, t)))).ToList());
                     break;
                 case 4:
-                    track.R = Thin(at.Select(t => Normalised(t, Euler(V(0, t), V(1, t), V(2, t)))).ToList());
+                    track.R = Thin(at.Select(t => Normalised(t, Euler(V(0, t), V(1, t), V(2, t), binding.RotationOrder))).ToList());
                     break;
             }
             tracks[node.Name] = track;
@@ -117,14 +118,22 @@ public static class ClipSampler
     private static float Range(List<VecKey> keys) =>
         new Vector3(keys.Max(k => k.X) - keys.Min(k => k.X), keys.Max(k => k.Y) - keys.Min(k => k.Y), keys.Max(k => k.Z) - keys.Min(k => k.Z)).Length();
 
-    /// <summary>Unity's Quaternion.Euler (degrees): Z first, then X, then Y.</summary>
-    private static Quaternion Euler(float x, float y, float z)
+    /// <summary>Euler degrees in the curve's rotation order (Unity's RotationOrder; the first axis turns first).</summary>
+    private static Quaternion Euler(float x, float y, float z, int order)
     {
         const float d = MathF.PI / 180f;
         var qx = Quaternion.CreateFromAxisAngle(Vector3.UnitX, x * d);
         var qy = Quaternion.CreateFromAxisAngle(Vector3.UnitY, y * d);
         var qz = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, z * d);
-        return qy * qx * qz;
+        return order switch
+        {
+            0 => qz * qy * qx, // XYZ
+            1 => qy * qz * qx, // XZY
+            2 => qx * qz * qy, // YZX
+            3 => qz * qx * qy, // YXZ
+            5 => qx * qy * qz, // ZYX
+            _ => qy * qx * qz, // ZXY, Unity's own (Quaternion.Euler)
+        };
     }
 
     private static QuatKey Normalised(float t, Quaternion q)
