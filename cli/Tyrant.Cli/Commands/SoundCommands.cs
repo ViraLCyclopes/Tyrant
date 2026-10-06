@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Globalization;
 using Spectre.Console.Cli;
+using Tyrant.Core.Errors;
 using Tyrant.Core.Mods;
 using Tyrant.Core.Sounds;
 using Tyrant.Framework.Core;
@@ -96,6 +97,66 @@ public sealed class ModReplaceSoundCommand : Command<ModReplaceSoundCommand.Sett
         if (settings.Volume is not null || settings.AgePitch is not null || settings.Chance is not null || settings.LikeGame)
             mod.SetSound(entry.Event, entry.Species, entry.Skin, settings.Volume, settings.AgePitch, null, null, null, settings.Chance, settings.LikeGame);
         Console.WriteLine($"'{settings.Id}' replaces {SoundCatalog.NameOf(entry.Event).ToLowerInvariant()} {ModProject.ScopeText(entry.Species, entry.Skin)}: {string.Join(", ", entry.Files)}.");
+        return ExitCodes.Ok;
+    }
+}
+
+/// <summary>A sound pack's folder: its files matched to the game's sounds by name (takes grouped), all replaced at once.</summary>
+public sealed class ModReplaceSoundsCommand : Command<ModReplaceSoundsCommand.Settings>
+{
+    public sealed class Settings : ModSettings
+    {
+        [CommandArgument(1, "<FOLDER>")]
+        [Description("A folder of audio files named like the game's sounds, e.g. AlloAnax_VoxAngry_01.wav (a prefix and a take number are fine).")]
+        public string Folder { get; set; } = "";
+
+        [CommandOption("--species <ID>")]
+        [Description("Match that species' own sounds; only it hears the replacements.")]
+        public string? Species { get; set; }
+
+        [CommandOption("--for-everyone")]
+        [Description("Match every game sound; everyone hears the replacements.")]
+        public bool ForEveryone { get; set; }
+
+        [CommandOption("--dry-run")]
+        [Description("Show what matches; change nothing.")]
+        public bool DryRun { get; set; }
+    }
+
+    public override int Execute(CommandContext context, Settings settings)
+    {
+        if (string.IsNullOrWhiteSpace(settings.Species) == !settings.ForEveryone)
+            throw new TyrantException(TyrantErrorCode.ModInvalid, "Choose one: --species <ID> (only that species hears them) or --for-everyone.");
+        var folder = Path.GetFullPath(settings.Folder);
+        if (!Directory.Exists(folder)) throw new TyrantException(TyrantErrorCode.ModInvalid, $"The folder '{folder}' does not exist.");
+        var (ws, _) = CliServices.OpenWorkspace(settings);
+        var catalog = SoundCatalog.Load(ws);
+        IReadOnlyList<SoundInfo> sounds = catalog.Search(null, int.MaxValue);
+        string? species = null;
+        if (!settings.ForEveryone)
+        {
+            species = catalog.SpeciesIdFor(settings.Species!)
+                ?? throw new TyrantException(TyrantErrorCode.TargetNotFound, $"'{settings.Species}' has no sounds in the game data (see 'tyrant sounds list').");
+            sounds = catalog.ForSpecies(species).Where(s => s.PerAnimal).ToList();
+        }
+        var match = SoundFolderMatcher.Match(Directory.GetFiles(folder), sounds);
+        var chosen = new List<SoundFiles>();
+        foreach (var group in match.Groups)
+        {
+            var names = string.Join(" or ", group.Events.Select(SoundCatalog.NameOf));
+            Console.WriteLine($"  {group.Name} ({group.Files.Count} file{(group.Files.Count == 1 ? "" : "s")}) -> {names}");
+            if (group.Events.Count == 1) chosen.Add(new SoundFiles(group.Events[0], group.Files));
+            else Console.WriteLine($"    fits several sounds; replace it with 'tyrant mod replace-sound' and the one you mean: {string.Join(", ", group.Events)}");
+        }
+        if (match.Unmatched.Count > 0) Console.WriteLine($"Not matched: {string.Join(", ", match.Unmatched.Select(Path.GetFileName))}");
+        if (chosen.Count == 0) throw new TyrantException(TyrantErrorCode.ModInvalid, "No file matched one game sound; nothing was replaced.");
+        if (settings.DryRun)
+        {
+            Console.WriteLine($"{chosen.Count} sound(s) would be replaced {ModProject.ScopeText(species, null)} (dry run: nothing changed).");
+            return ExitCodes.Ok;
+        }
+        ModProject.Open(ws, settings.Id).ReplaceSounds(chosen, species, null);
+        Console.WriteLine($"'{settings.Id}' replaces {chosen.Count} sound(s) {ModProject.ScopeText(species, null)}.");
         return ExitCodes.Ok;
     }
 }

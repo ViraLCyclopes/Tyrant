@@ -364,4 +364,31 @@ public class ModProjectSoundsTests
 
         Assert.Equal(["mod.json", .. entry.Files.Order(StringComparer.Ordinal)], shared);
     }
+
+    [Fact]
+    public void Several_sounds_are_replaced_at_once_each_with_its_takes()
+    {
+        var (game, mod, dir) = Setup();
+        using var _ = game;
+        var takes = new[] { Wav(dir, "AlloAnax_VoxBroadcast_01.wav", "a"), Wav(dir, "AlloAnax_VoxBroadcast_02.wav", "b") };
+
+        mod.ReplaceSounds([new SoundFiles(Roar, takes), new SoundFiles(Click, [Ogg(dir, "click.ogg")])], "Allosaurus Anax", null);
+
+        Assert.Equal(2, mod.Manifest.Sounds.Single(s => s.Event == Roar).Files.Count);
+        Assert.Equal("Allosaurus Anax", mod.Manifest.Sounds.Single(s => s.Event == Click).Species);
+    }
+
+    [Fact]
+    public void When_one_of_several_sounds_cannot_be_used_none_is_replaced()
+    {
+        var (game, mod, dir) = Setup();
+        using var _ = game;
+
+        var ex = Assert.Throws<TyrantException>(() => mod.ReplaceSounds(
+            [new SoundFiles(Roar, [Wav(dir, "roar.wav")]), new SoundFiles(Click, [Path.Combine(dir, "gone.wav")])], "Allosaurus Anax", null));
+
+        Assert.Contains("gone.wav", ex.Message);
+        Assert.Empty(mod.Manifest.Sounds);
+        Assert.DoesNotContain("TheroLarge_VoxBroadcast", File.ReadAllText(Path.Combine(mod.Dir, ModManifest.FileName)));
+    }
 }
