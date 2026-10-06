@@ -176,6 +176,7 @@ dotnet run --project cli/Tyrant.Cli -- mod replace red-spot-carcharo T_carcharod
 dotnet run --project cli/Tyrant.Cli -- mod add-skin red-spot-carcharo Carcharodontosaurus --name "Red spot" --base "Alt 1" -w D:\tyrant-workspace   # a new skin from a vanilla template (needs a data dump)
 dotnet run --project cli/Tyrant.Cli -- sounds list --species Carcharodontosaurus -w D:\tyrant-workspace   # its sounds by moment (needs a data dump); --search click for any game sound
 dotnet run --project cli/Tyrant.Cli -- mod replace-sound red-spot-carcharo "event:/…/TheroLarge_VoxSocialCall" call1.ogg call2.ogg --species Carcharodontosaurus -w D:\tyrant-workspace   # also: set-sound, remove-sound
+dotnet run --project cli/Tyrant.Cli -- mod replace-sounds anax-voice "D:\packs\Ultimasaurus" --species "Allosaurus Anax" --dry-run -w D:\tyrant-workspace   # a whole folder, matched by name
 dotnet run --project cli/Tyrant.Cli -- mod check red-spot-carcharo -w D:\tyrant-workspace
 dotnet run --project cli/Tyrant.Cli -- mod restore-cutouts red-spot-carcharo -w D:\tyrant-workspace   # put back see-through feathers/hair an editor flattened
 dotnet run --project cli/Tyrant.Cli -- mod install red-spot-carcharo -w D:\tyrant-workspace   # adds MelonLoader + Tyrant's framework if needed
