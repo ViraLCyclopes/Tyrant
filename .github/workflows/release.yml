@@ -27,8 +27,8 @@ jobs:
           # "0.1.0", " v0.1.0 " and "V0.1.0" all mean v0.1.0; the rest of the run uses that form.
           $tag = 'v' + $env:TAG.Trim().TrimStart('v', 'V')
           $version = (Get-Content studio/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
-          if ("v$version" -ne $tag) { throw "Tag '$($env:TAG)' does not match the app version $version: use v$version (or run npm run set-version)." }
-          "TAG=$tag" >> $env:GITHUB_ENV
+          if ("v$version" -ne $tag) { throw "Tag '$($env:TAG)' does not match the app version $($version): use v$($version) (or run npm run set-version)." }
+          "RELEASE_TAG=$tag" >> $env:GITHUB_ENV
 
       - name: The updater key must be set up (and goes into the build config)
         shell: pwsh
@@ -73,8 +73,8 @@ jobs:
         with:
           projectPath: studio
           args: --config src-tauri/tauri.ci.conf.json
-          tagName: ${{ env.TAG }}
-          releaseName: Tyrant ${{ env.TAG }}
+          tagName: ${{ env.RELEASE_TAG }}
+          releaseName: Tyrant ${{ env.RELEASE_TAG }}
           releaseBody: ''
           releaseDraft: true
           includeUpdaterJson: true
@@ -86,7 +86,7 @@ jobs:
           $zip = Get-ChildItem release-assets/framework.zip
           $name = "Tyrant-Framework-$((Select-String -Path game/Tyrant.Framework.Core/ModManifest.cs -Pattern 'Version = "([^"]+)"').Matches[0].Groups[1].Value).zip"
           Rename-Item $zip.FullName $name
-          gh release upload "$env:TAG" "release-assets/$name" --clobber
+          gh release upload "$env:RELEASE_TAG" "release-assets/$name" --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -94,8 +94,8 @@ jobs:
         shell: pwsh
         run: |
           dotnet build cli/Tyrant.Cli -c Release
-          $name = "Tyrant-Blender-Addon-$($env:TAG.TrimStart('v')).zip"
+          $name = "Tyrant-Blender-Addon-$($env:RELEASE_TAG.TrimStart('v')).zip"
           Copy-Item cli/Tyrant.Cli/bin/Release/net10.0/blender/tyrant_blender.zip "release-assets/$name"
-          gh release upload "$env:TAG" "release-assets/$name" --clobber
+          gh release upload "$env:RELEASE_TAG" "release-assets/$name" --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
