@@ -24,7 +24,8 @@ function setup() {
   }));
   const session = new Session(rpc, platform, memoryStore());
   const onReplace = vi.fn(async () => true);
-  renderWith(ReplaceFromFolder, session, { species: 'Allosaurus Anax', onReplace });
+  const skins = [{ key: 'Allosaurus Anax/Ultimasaurus', label: 'Ultimasaurus' }];
+  renderWith(ReplaceFromFolder, session, { species: 'Allosaurus Anax', skins, onReplace });
   return { rpc, onReplace };
 }
 
@@ -39,7 +40,17 @@ describe('ReplaceFromFolder', () => {
     expect(screen.getByText(/AlloAnax_Sneeze_01\.wav/)).toBeInTheDocument();
     await fireEvent.click(screen.getByRole('button', { name: 'Replace 1 sound' }));
 
-    expect(onReplace).toHaveBeenCalledWith([{ event: angry.event, files: ['C:\\pack\\AlloAnax_VoxAngry_01.wav', 'C:\\pack\\AlloAnax_VoxAngry_02.wav'] }]);
+    expect(onReplace).toHaveBeenCalledWith([{ event: angry.event, files: ['C:\\pack\\AlloAnax_VoxAngry_01.wav', 'C:\\pack\\AlloAnax_VoxAngry_02.wav'] }], null);
+  });
+
+  it('the sounds can be for one skin only', async () => {
+    const { onReplace } = setup();
+    await fireEvent.click(screen.getByRole('button', { name: 'Replace from folder…' }));
+
+    await fireEvent.change(await screen.findByRole('combobox', { name: 'Who hears them' }), { target: { value: 'Allosaurus Anax/Ultimasaurus' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Replace 1 sound' }));
+
+    expect(onReplace).toHaveBeenCalledWith([expect.objectContaining({ event: angry.event })], 'Allosaurus Anax/Ultimasaurus');
   });
 
   it('a name that fits several sounds is replaced once one is picked', async () => {
@@ -52,7 +63,7 @@ describe('ReplaceFromFolder', () => {
     expect(onReplace).toHaveBeenCalledWith([
       { event: angry.event, files: ['C:\\pack\\AlloAnax_VoxAngry_01.wav', 'C:\\pack\\AlloAnax_VoxAngry_02.wav'] },
       { event: yawnLarge.event, files: ['C:\\pack\\AlloAnax_VoxYawn_01.wav'] },
-    ]);
+    ], null);
   });
 
   it('unticking a row leaves that sound as the game has it', async () => {

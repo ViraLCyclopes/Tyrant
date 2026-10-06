@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import type { ModSpeciesResult } from '$lib/rpc/types.gen';
+  import type { ModSkinDto, ModSpeciesResult } from '$lib/rpc/types.gen';
   import { getTab } from '$lib/shell/tab.svelte';
   import { getSession } from '$lib/stores/session.svelte';
   import AllSounds from '$lib/sounds/AllSounds.svelte';
@@ -12,10 +12,12 @@
    * The mod editor's Sounds → + Add: a species' sounds (or every game sound), each with Replace… into this mod; for a species,
    * Replace from folder replaces a sound pack's matched files at once (onReplaceMany: one edit of the editor's).
    */
-  let { modId, onDone, onReplaceMany = undefined }: {
+  let { modId, onDone, onReplaceMany = undefined, modSkins = [] }: {
     modId: string;
     onDone: (added: AddedSound | null) => void;
-    onReplaceMany?: (species: string, sounds: { event: string; files: string[] }[]) => Promise<boolean>;
+    onReplaceMany?: (species: string, skin: string | null, sounds: { event: string; files: string[] }[]) => Promise<boolean>;
+    /** This mod's own skins: a folder of sounds can be for one of them too. */
+    modSkins?: ModSkinDto[];
   } = $props();
 
   const ALL = '__all__';
@@ -23,6 +25,13 @@
   const tab = getTab();
   let data = $state.raw<ModSpeciesResult | null>(null);
   let source = $state('');
+
+  /** The species' game skins and this mod's skins of it, as the keys a sound replacement names a skin by. */
+  function skinsOf(speciesId: string): { key: string; label: string }[] {
+    const game = (data?.species.find((s) => s.speciesId === speciesId)?.skins ?? []).map((s) => ({ key: `${speciesId}/${s.name}`, label: s.name }));
+    const own = modSkins.filter((s) => s.species === speciesId).map((s) => ({ key: s.key, label: s.name }));
+    return [...game, ...own];
+  }
 
   onMount(async () => {
     data = await tab.quietly(() => session.rpc.call('mods.species'));
@@ -50,7 +59,7 @@
       {#key source}
         {#if onReplaceMany}
           {@const replaceMany = onReplaceMany}
-          <ReplaceFromFolder species={source} onReplace={(sounds) => replaceMany(source, sounds)} />
+          <ReplaceFromFolder species={source} skins={skinsOf(source)} onReplace={(sounds, skin) => replaceMany(source, skin, sounds)} />
         {/if}
         <SpeciesSounds speciesKey={source} displayName={source} {modId} onAdded={onDone} />
       {/key}

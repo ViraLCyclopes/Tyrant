@@ -125,8 +125,8 @@ files that changed; again after a game update).
   5. A whole sound pack at once: mod editor → **Sounds +** → pick the species → **Replace from folder…**. Files named like
      the game's sounds match by name, whatever prefix and take number they have (`AlloAnax_VoxAngry_03.wav` is take 3 of
      **Angry**); each sound gets all its takes (one plays at random). Untick what you don't want, pick the sound for a
-     name that fits two, then **Replace N sounds** (one step that **Undo** takes back). Files that match nothing are
-     listed and left out. CLI: `tyrant mod replace-sounds <mod> <folder> --species <id> [--dry-run]`.
+     name that fits two, choose **Who hears them** (every animal of the species, or only one of its skins), then **Replace N sounds** (one step that **Undo** takes back). Files that match nothing are
+     listed and left out. CLI: `tyrant mod replace-sounds <mod> <folder> --species <id> [--skin <key>] [--dry-run]`.
   6. CLI: `tyrant sounds list [--species <id>] [--search <text>]`, `tyrant mod replace-sound <mod> <event> <files…> [--species <id> | --skin <key>] [--volume 0-2] [--age-pitch 0-1]`, `tyrant mod set-sound`, `tyrant mod remove-sound`.
 - **Edit a mod:** **Open** a mod in the Mods tab (a new mod opens by itself) to edit it in its own tab.
   - The list on the left has **Mod details**, each **skin**, each **texture replacement**, models, sounds and **Check**; the page on the right edits what you picked.

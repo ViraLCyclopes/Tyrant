@@ -114,6 +114,10 @@ public sealed class ModReplaceSoundsCommand : Command<ModReplaceSoundsCommand.Se
         [Description("Match that species' own sounds; only it hears the replacements.")]
         public string? Species { get; set; }
 
+        [CommandOption("--skin <KEY>")]
+        [Description("With --species: only this skin of it hears the replacements, e.g. my-mod/scarred or Allosaurus Anax/Ultimasaurus.")]
+        public string? Skin { get; set; }
+
         [CommandOption("--for-everyone")]
         [Description("Match every game sound; everyone hears the replacements.")]
         public bool ForEveryone { get; set; }
@@ -127,6 +131,8 @@ public sealed class ModReplaceSoundsCommand : Command<ModReplaceSoundsCommand.Se
     {
         if (string.IsNullOrWhiteSpace(settings.Species) == !settings.ForEveryone)
             throw new TyrantException(TyrantErrorCode.ModInvalid, "Choose one: --species <ID> (only that species hears them) or --for-everyone.");
+        if (!string.IsNullOrWhiteSpace(settings.Skin) && settings.ForEveryone)
+            throw new TyrantException(TyrantErrorCode.ModInvalid, "--skin needs --species (the skin's species, whose sounds are matched), not --for-everyone.");
         var folder = Path.GetFullPath(settings.Folder);
         if (!Directory.Exists(folder)) throw new TyrantException(TyrantErrorCode.ModInvalid, $"The folder '{folder}' does not exist.");
         var (ws, _) = CliServices.OpenWorkspace(settings);
@@ -150,13 +156,15 @@ public sealed class ModReplaceSoundsCommand : Command<ModReplaceSoundsCommand.Se
         }
         if (match.Unmatched.Count > 0) Console.WriteLine($"Not matched: {string.Join(", ", match.Unmatched.Select(Path.GetFileName))}");
         if (chosen.Count == 0) throw new TyrantException(TyrantErrorCode.ModInvalid, "No file matched one game sound; nothing was replaced.");
+        var skin = string.IsNullOrWhiteSpace(settings.Skin) ? null : settings.Skin.Trim();
+        var (forSpecies, forSkin) = skin is null ? (species, null) : ((string?)null, skin);
         if (settings.DryRun)
         {
-            Console.WriteLine($"{chosen.Count} sound(s) would be replaced {ModProject.ScopeText(species, null)} (dry run: nothing changed).");
+            Console.WriteLine($"{chosen.Count} sound(s) would be replaced {ModProject.ScopeText(forSpecies, forSkin)} (dry run: nothing changed).");
             return ExitCodes.Ok;
         }
-        ModProject.Open(ws, settings.Id).ReplaceSounds(chosen, species, null);
-        Console.WriteLine($"'{settings.Id}' replaces {chosen.Count} sound(s) {ModProject.ScopeText(species, null)}.");
+        ModProject.Open(ws, settings.Id).ReplaceSounds(chosen, forSpecies, forSkin);
+        Console.WriteLine($"'{settings.Id}' replaces {chosen.Count} sound(s) {ModProject.ScopeText(forSpecies, forSkin)}.");
         return ExitCodes.Ok;
     }
 }

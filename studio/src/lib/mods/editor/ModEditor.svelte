@@ -102,11 +102,12 @@
     selection = { kind: 'sound', ...added };
   }
 
-  /** Replace from folder: every matched sound in one edit (one undo step), for that species; the first one opens. */
-  async function soundsReplaced(species: string, sounds: { event: string; files: string[] }[]): Promise<boolean> {
-    if (!(await doc.edit('mods.replaceSounds', { species, skin: null, sounds }))) return false;
+  /** Replace from folder: every matched sound in one edit (one undo step), for that species or one skin; the first one opens. */
+  async function soundsReplaced(species: string, skin: string | null, sounds: { event: string; files: string[] }[]): Promise<boolean> {
+    const scope = skin ? { species: null, skin } : { species, skin: null };
+    if (!(await doc.edit('mods.replaceSounds', { ...scope, sounds }))) return false;
     adding = null;
-    selection = { kind: 'sound', event: sounds[0].event, species, skin: null };
+    selection = { kind: 'sound', event: sounds[0].event, ...scope };
     return true;
   }
 
@@ -156,7 +157,7 @@
       {:else if adding === 'model'}
         <AddModel {doc} onDone={modelAdded} />
       {:else if adding === 'sound'}
-        <AddSound modId={doc.id} onDone={soundAdded} onReplaceMany={soundsReplaced} />
+        <AddSound modId={doc.id} onDone={soundAdded} onReplaceMany={soundsReplaced} modSkins={doc.detail?.skins ?? []} />
       {:else if adding === 'texture'}
         <AddReplacement modId={doc.id} onDone={replacementAdded} />
       {:else if selection.kind === 'details'}

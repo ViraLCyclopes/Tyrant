@@ -5,11 +5,13 @@
 
   /**
    * Replace from folder: a sound pack's files matched to this species' sounds by name ("AlloAnax_VoxAngry_03.wav" is take 3
-   * of Angry), shown to tick before anything changes; onReplace saves the ticked ones in one edit.
+   * of Angry), shown to tick before anything changes; onReplace saves the ticked ones in one edit, for the whole species or
+   * one of its skins (skin: its key, or null).
    */
-  let { species, onReplace }: {
+  let { species, skins = [], onReplace }: {
     species: string;
-    onReplace: (sounds: { event: string; files: string[] }[]) => Promise<boolean>;
+    skins?: { key: string; label: string }[];
+    onReplace: (sounds: { event: string; files: string[] }[], skin: string | null) => Promise<boolean>;
   } = $props();
   const session = getSession();
   const tab = getTab();
@@ -19,6 +21,8 @@
   let ticked = $state<Record<string, boolean>>({});
   let picked = $state<Record<string, string>>({});
   let saving = $state(false);
+  /** Who hears them: '' = every animal of the species, else a skin's key. */
+  let skin = $state('');
 
   const baseName = (file: string) => file.split(/[\\/]/).pop() ?? file;
   const chosen = $derived(
@@ -38,7 +42,7 @@
   async function replace() {
     saving = true;
     try {
-      if (await onReplace(chosen)) match = null;
+      if (await onReplace(chosen, skin || null)) match = null;
     } finally {
       saving = false;
     }
@@ -73,6 +77,15 @@
         </tbody>
       </table>
       <p class="hint">Several files for one sound: one plays at random each time, as the game does with its own takes.</p>
+    {/if}
+    {#if skins.length > 0}
+      <label>
+        Who hears them
+        <select aria-label="Who hears them" bind:value={skin}>
+          <option value="">Every {species}</option>
+          {#each skins as s (s.key)}<option value={s.key}>Only the {s.label} skin</option>{/each}
+        </select>
+      </label>
     {/if}
     {#if match.unmatched.length}
       <p class="hint">Not matched (left out): {match.unmatched.map(baseName).join(', ')}</p>

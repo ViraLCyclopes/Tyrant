@@ -81,6 +81,27 @@ describe('ModEditor', () => {
     expect(await screen.findByRole('heading', { name: 'Sound: Social call' })).toBeInTheDocument();
   });
 
+  it('a folder of sounds can be for one of the species skins', async () => {
+    const { rpc, platform } = setup();
+    platform.folders.push('C:\\pack');
+    rpc
+      .on('mods.species', () => ({ hasDump: true, species: [{ speciesId: 'Allosaurus Anax', vivarium: false, skins: [{ index: 0, name: 'Ultimasaurus', male: true, female: true }] }] }))
+      .on('sounds.forSpecies', () => ({ speciesId: 'Allosaurus Anax', hasEventList: true, sounds: [] }))
+      .on('sounds.matchFolder', () => ({
+        groups: [{ name: 'AlloAnax_VoxAngry', files: ['C:\\pack\\a.wav'], sounds: [{ event: 'event:/X/Vox/TheroMed_VoxAngry', name: 'Angry', group: 'Calls', species: ['Allosaurus Anax'], lengthMs: null, oneShot: true, perAnimal: true }] }],
+        unmatched: [],
+      }))
+      .on('mods.replaceSounds', () => modDetail({ revision: 'r2' }));
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Add a sound' }));
+    await fireEvent.change(await screen.findByRole('combobox', { name: 'Sounds of' }), { target: { value: 'Allosaurus Anax' } });
+    await fireEvent.click(await screen.findByRole('button', { name: 'Replace from folder…' }));
+    await fireEvent.change(await screen.findByRole('combobox', { name: 'Who hears them' }), { target: { value: 'Allosaurus Anax/Ultimasaurus' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Replace 1 sound' }));
+
+    await waitFor(() => expect(rpc.callsTo('mods.replaceSounds')[0]?.params).toMatchObject({ species: null, skin: 'Allosaurus Anax/Ultimasaurus' }));
+  });
+
   it("a folder of sounds is replaced in one edit that undo takes back, and the first one opens", async () => {
     const angry = { event: 'event:/X/Vox/TheroMed_VoxAngry', name: 'Angry', group: 'Calls', species: 'Allosaurus Anax', skin: null, files: ['sounds/a.wav', 'sounds/b.wav'], volume: 1, agePitch: 1, chance: null };
     const { rpc, platform, tab } = setup();
