@@ -60,8 +60,10 @@ use.
 ## 5. Mods you make
 
 - What you make with Tyrant is yours (apart from any game content in it; see section 3). You are responsible for what you
-  share and for having the right to share it. You are however are not allowed to privatley sell mods, or keep them behind a paywall.
-  They must be accessible through some public or free means. Commissions however are fine, you just cannot put the individuals mods up for sale.
+  share and for having the right to share it.
+- Mods made with Tyrant must be free to get: do not sell them or put them behind a paywall.
+- Commissions are fine: you may be paid to make a mod for someone, but the mod itself must not be sold. This does not
+  limit Tyrant's own code, which anyone may share under the GPL-3.0.
 - The Tyrant framework zip that Tyrant can save for players is part of Tyrant and is shared under the GPL-3.0.
 
 ## 6. Official downloads
