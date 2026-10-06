@@ -5,6 +5,9 @@ using Tyrant.Framework.Core;
 
 namespace Tyrant.Core.Mods;
 
+/// <summary>One game sound and the audio files to replace it with (several = one picked at random each time).</summary>
+public sealed record SoundFiles(string Event, IReadOnlyList<string> Files);
+
 /// <summary>Sound replacements: the game's sound for everyone, or only for one species or one skin (mod.json "sounds").</summary>
 public sealed partial class ModProject
 {
@@ -19,15 +22,7 @@ public sealed partial class ModProject
     {
         var path = EventPathOf(eventPath);
         (species, skin) = ScopeOf(species, skin);
-        if (sourceFiles.Count == 0) throw new TyrantException(TyrantErrorCode.ModInvalid, "Pick at least one audio file (WAV, OGG, MP3 or FLAC).");
-
-        var formats = new List<string>();
-        foreach (var source in sourceFiles)
-        {
-            if (!File.Exists(source)) throw new TyrantException(TyrantErrorCode.ModInvalid, $"'{source}' does not exist.");
-            formats.Add(AudioFormat.Sniff(Head(source))
-                ?? throw new TyrantException(TyrantErrorCode.ModInvalid, $"'{source}' is not an audio file (WAV, OGG, MP3 or FLAC)."));
-        }
+        var formats = FormatsOf(sourceFiles);
 
         Directory.CreateDirectory(Path.Combine(Dir, SoundsFolder));
         var files = new List<string>();
@@ -55,6 +50,36 @@ public sealed partial class ModProject
         Manifest.Sounds.Insert(at, entry);
         Save();
         return entry;
+    }
+
+    /// <summary>
+    /// Replaces several game sounds at once (a sound pack's folder), all for the same species, skin or everyone: every sound and
+    /// file is checked first, so either all are replaced or none.
+    /// </summary>
+    public IReadOnlyList<SoundReplacement> ReplaceSounds(IReadOnlyList<SoundFiles> sounds, string? species, string? skin)
+    {
+        if (sounds.Count == 0) throw new TyrantException(TyrantErrorCode.ModInvalid, "Pick at least one sound to replace.");
+        ScopeOf(species, skin);
+        foreach (var sound in sounds)
+        {
+            EventPathOf(sound.Event);
+            FormatsOf(sound.Files);
+        }
+        return sounds.Select(s => ReplaceSound(s.Event, s.Files, species, skin)).ToList();
+    }
+
+    /// <summary>Each file's audio format; throws naming the first file that is missing or not audio.</summary>
+    private static List<string> FormatsOf(IReadOnlyList<string> sourceFiles)
+    {
+        if (sourceFiles.Count == 0) throw new TyrantException(TyrantErrorCode.ModInvalid, "Pick at least one audio file (WAV, OGG, MP3 or FLAC).");
+        var formats = new List<string>();
+        foreach (var source in sourceFiles)
+        {
+            if (!File.Exists(source)) throw new TyrantException(TyrantErrorCode.ModInvalid, $"'{source}' does not exist.");
+            formats.Add(AudioFormat.Sniff(Head(source))
+                ?? throw new TyrantException(TyrantErrorCode.ModInvalid, $"'{source}' is not an audio file (WAV, OGG, MP3 or FLAC)."));
+        }
+        return formats;
     }
 
     /// <summary>Removes a sound replacement; its files stay in sounds/ (the editor's undo puts the entry back).</summary>

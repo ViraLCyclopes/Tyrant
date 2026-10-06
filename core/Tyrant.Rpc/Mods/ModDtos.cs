@@ -114,6 +114,12 @@ public sealed record ModSoundDto(string Event, string Name, string Group, string
 public sealed record ModReplaceSoundParams(string Id, string Event, IReadOnlyList<string> Files, string? Revision = null, string? Species = null,
     string? Skin = null, double? Volume = null, double? AgePitch = null, double? Chance = null, bool LikeGame = false);
 
+/// <summary>One game sound and its files, for mods.replaceSounds.</summary>
+public sealed record ModSoundFilesDto(string Event, IReadOnlyList<string> Files);
+
+/// <summary>Several sounds replaced in one edit (a sound pack's folder), all for the same species, skin or everyone.</summary>
+public sealed record ModReplaceSoundsParams(string Id, string Revision, IReadOnlyList<ModSoundFilesDto> Sounds, string? Species = null, string? Skin = null);
+
 public sealed record ModRemoveSoundParams(string Id, string Revision, string Event, string? Species = null, string? Skin = null);
 
 /// <summary>Species/Skin pick the replacement; NewSpecies, NewSkin or ForEveryone move it to another scope.</summary>

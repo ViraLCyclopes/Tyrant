@@ -630,6 +630,14 @@ export interface ModReplaceSoundParams {
   likeGame?: boolean;
 }
 
+export interface ModReplaceSoundsParams {
+  id: string;
+  revision: string;
+  sounds: ModSoundFilesDto[];
+  species?: string | null;
+  skin?: string | null;
+}
+
 export interface ModReplacementDto {
   texture: string;
   key: string | null;
@@ -794,6 +802,11 @@ export interface ModSoundDto {
   chance: number | null;
 }
 
+export interface ModSoundFilesDto {
+  event: string;
+  files: string[];
+}
+
 export interface ModSpeciesResult {
   hasDump: boolean;
   species: SpeciesSkinsRow[];
@@ -898,6 +911,12 @@ export interface SoundDto {
   perAnimal: boolean;
 }
 
+export interface SoundFolderGroupDto {
+  name: string;
+  files: string[];
+  sounds: SoundDto[];
+}
+
 export interface SoundsForSpeciesParams {
   species: string;
 }
@@ -906,6 +925,16 @@ export interface SoundsForSpeciesResult {
   speciesId: string | null;
   sounds: SoundDto[];
   hasEventList: boolean;
+}
+
+export interface SoundsMatchFolderParams {
+  folder: string;
+  species?: string | null;
+}
+
+export interface SoundsMatchFolderResult {
+  groups: SoundFolderGroupDto[];
+  unmatched: string[];
 }
 
 export interface SoundsSearchParams {
@@ -1092,6 +1121,7 @@ export interface RpcMethods {
   "mods.replace": { params: ModReplaceParams; result: ModsListResult };
   "mods.replaceModel": { params: ModReplaceModelParams; result: ModDetail };
   "mods.replaceSound": { params: ModReplaceSoundParams; result: ModDetail };
+  "mods.replaceSounds": { params: ModReplaceSoundsParams; result: ModDetail };
   "mods.restoreCutouts": { params: ModIdParams; result: ModRestoreCutoutsResult };
   "mods.rig": { params: ModRigParams; result: ModRigView };
   "mods.sampleColors": { params: ModSampleColorsParams; result: ModSampledColors };
@@ -1107,6 +1137,7 @@ export interface RpcMethods {
   "mods.speciesTextures": { params: ModSpeciesTexturesParams; result: ModSpeciesTexturesResult };
   "mods.thumbnail": { params: ModThumbnailParams; result: ModThumbnailResult };
   "sounds.forSpecies": { params: SoundsForSpeciesParams; result: SoundsForSpeciesResult };
+  "sounds.matchFolder": { params: SoundsMatchFolderParams; result: SoundsMatchFolderResult };
   "sounds.search": { params: SoundsSearchParams; result: SoundsSearchResult };
   "species.animations": { params: SpeciesAnimationsParams; result: SpeciesAnimationsResult };
   "species.exportAnimations": { params: SpeciesExportAnimationsParams; result: JobStarted };

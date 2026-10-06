@@ -220,6 +220,9 @@ Release build: `npm run build:app`, install `studio/src-tauri/target/release/bun
 107. Open Camarasaurus with **Choose animations… → Select all → Clear**, then tick LocWalk and LocSwim: both play like the
     game (body level, neck forward; the swim paddles), and while they play the foot and head controls move with them.
 108. Update the add-on from the Blender card while Blender is open, then Open in Blender: Blender says to restart it.
+109. Mod editor → **Sounds +** → Allosaurus Anax → **Replace from folder…** on the Ultimasaurus pack: 6 sounds matched
+    (Growl 1sec 15 files, Angry 7, Broadcast A/B, Social call, Social response), none left out; **Replace 6 sounds**,
+    **Undo** takes all six back, **Redo**; installed, the Anax growls with the pack's takes in game.
 
 **Shell (tabs, log, preferences):**
 

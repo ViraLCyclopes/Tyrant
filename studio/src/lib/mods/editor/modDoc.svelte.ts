@@ -16,6 +16,7 @@ export type EditMethod =
   | 'mods.rebuildModels'
   | 'mods.clearRig'
   | 'mods.replaceSound'
+  | 'mods.replaceSounds'
   | 'mods.removeSound'
   | 'mods.setSound';
 

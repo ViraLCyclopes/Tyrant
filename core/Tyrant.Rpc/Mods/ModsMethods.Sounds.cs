@@ -22,6 +22,12 @@ public sealed partial class ModsMethods
         return DetailOf(ws, mod);
     }
 
+    /// <summary>All of a folder's matched sounds in one edit (one undo step in the editor); none when one cannot be used.</summary>
+    [RpcMethod("mods.replaceSounds")]
+    public ModDetail ReplaceSounds(ModReplaceSoundsParams p) =>
+        Edit(p.Id, p.Revision, mod => mod.ReplaceSounds(p.Sounds.Select(s => new SoundFiles(s.Event, s.Files)).ToList(), p.Species, p.Skin),
+            $"replaces {p.Sounds.Count} sound(s) {ModProject.ScopeText(Blank(p.Species), Blank(p.Skin))} from a folder");
+
     [RpcMethod("mods.removeSound")]
     public ModDetail RemoveSound(ModRemoveSoundParams p) =>
         Edit(p.Id, p.Revision, mod => mod.RemoveSound(p.Event, p.Species, p.Skin),
