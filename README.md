@@ -13,6 +13,9 @@ Get the latest **Setup** from [GitHub Releases](https://github.com/ViraLCyclopes
 rights needed). Tyrant updates itself from GitHub. Windows may warn that the publisher is unknown (Tyrant is not code-signed): click **More info → Run
 anyway**.
 
+**Just want to play mods?** [Installing mods made with Tyrant](docs/installing-mods.md) walks you through it, with or
+without the app.
+
 ## Start in three steps
 
 1. **Workspace tab:** pick the game folder (found through Steam on its own) and an empty folder for your workspace, then
@@ -23,6 +26,7 @@ anyway**.
 
 To play a mod someone shared: **Mods tab → Add mod from zip…**, then **Install to game**. Without Tyrant: install
 MelonLoader 0.7.3, unzip `Tyrant-Framework-<version>.zip` (from the releases page) and the mod's zip into the game folder.
+Step by step, for players: [Installing mods made with Tyrant](docs/installing-mods.md).
 
 ## Blender
 

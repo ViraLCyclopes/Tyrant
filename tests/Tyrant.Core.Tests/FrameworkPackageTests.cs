@@ -24,6 +24,7 @@ public class FrameworkPackageTests
         Assert.Equal(["Mods/Tyrant.Framework.dll", "README.txt", "UserLibs/Tyrant.Framework.Core.dll"], names);
         Assert.Contains("MelonLoader 0.7.3", readme);
         Assert.Contains(FrameworkInfo.Version, readme);
+        Assert.Contains("https://github.com/ViraLCyclopes/Tyrant/blob/main/docs/installing-mods.md", readme); // the step-by-step guide
         Assert.Contains("UserData\\Tyrant\\Mods", readme);
         Assert.EndsWith($"Tyrant-Framework-{FrameworkInfo.Version}.zip", zip);
     }

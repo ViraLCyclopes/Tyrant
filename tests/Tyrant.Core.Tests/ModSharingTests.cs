@@ -76,6 +76,7 @@ public class ModSharingTests
         Assert.Contains("Tyrant Framework 0.3.0", readme);
         Assert.Contains("UserData\\Tyrant\\Mods\\red-spot", readme);
         Assert.Contains("https://github.com/ViraLCyclopes/Tyrant/releases", readme);
+        Assert.Contains("https://github.com/ViraLCyclopes/Tyrant/blob/main/docs/installing-mods.md", readme); // the step-by-step guide
     }
 
     [Fact]

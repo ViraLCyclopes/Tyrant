@@ -155,6 +155,9 @@ public static class ModSharing
     /// <summary>Where players get Tyrant and its framework zip.</summary>
     public const string ReleasesUrl = "https://github.com/ViraLCyclopes/Tyrant/releases";
 
+    /// <summary>The players' guide to installing MelonLoader, the framework and mods (docs/installing-mods.md).</summary>
+    public const string GuideUrl = "https://github.com/ViraLCyclopes/Tyrant/blob/main/docs/installing-mods.md";
+
     private static void WriteText(ZipArchive archive, string name, string text)
     {
         using var writer = new StreamWriter(archive.CreateEntry(name, CompressionLevel.Optimal).Open(), new UTF8Encoding(false));
@@ -226,6 +229,8 @@ public static class ModSharing
             3. Unzip this file into the game folder. The mod lands in UserData\Tyrant\Mods\{m.Id}.
 
             Remove: delete the folder UserData\Tyrant\Mods\{m.Id}.
+
+            Step-by-step guide (with or without the Tyrant app): {GuideUrl}
             """.Replace("\n", "\r\n").Replace("\r\r\n", "\r\n");
     }
 }
