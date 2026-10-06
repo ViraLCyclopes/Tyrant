@@ -37,9 +37,17 @@ and publisher. Tyrant is a fan-made tool; it is not made, approved or supported 
 - Do not share the game's own files or assets (as they are, or converted, such as exported models, textures or
   animations), except as the game's developer and publisher allow. Share your own work, and mods that need the game to
   be installed.
-- Follow the game's end user licence agreement and its developer's rules for mods.
+- Do not share the game's source files: decompiled game code, data dumps, or files extracted from the game. Sharing
+  them is legally problematic. Share instructions for extracting them locally instead; Tyrant is built for that, and
+  each person's Tyrant reads their own copy of the game.
+- Do not share what you datamine. Tyrant can show game content that has not been released or announced yet: animals,
+  skins, features, sounds, text. Keep it to yourself until the game's team releases or announces it. The game's team
+  has a policy against sharing datamined content, because it spoils what they are working on.
+- Follow the game's end user licence agreement and its developer's rules for mods, including those pinned in the
+  game's official modding channels.
 
-These rules come from the game's owners' rights, not from Tyrant, and they apply whatever tool or fork you use.
+These rules come from the game's owners' rights and policies, not from Tyrant, and they apply whatever tool or fork you
+use.
 
 ## 4. Using Tyrant
 
