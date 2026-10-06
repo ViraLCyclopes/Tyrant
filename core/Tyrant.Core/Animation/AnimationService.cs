@@ -35,12 +35,17 @@ public static class AnimationService
         return list;
     }
 
-    /// <summary>Each asked clip sampled (from the cache when it was before), or why it could not be.</summary>
+    /// <summary>
+    /// Each asked clip sampled (from the cache when it was before), or why it could not be. A clip is asked for by its id or by a
+    /// name that picks one animation (its shown name, any case); the results carry the ids.
+    /// </summary>
     public static IReadOnlyList<(string Id, ClipAnimation? Clip, string? Failure)> Clips(Workspace ws, GameInstall install, AssetIndex index,
         IReadOnlyList<SpeciesSkins> species, IAssetReader reader, string speciesId, IReadOnlyList<string> ids)
     {
         var (id, prefab, dir) = Where(ws, install, index, species, speciesId);
-        var asked = ids.Distinct(StringComparer.Ordinal).ToList();
+        Dictionary<string, AssetRecord>? table = null;
+        Dictionary<string, AssetRecord> Table() => table ??= Records(ws, index, id);
+        var asked = ids.Select(a => File.Exists(FileOf(dir, a)) ? a : Resolve(Table(), a)).Distinct(StringComparer.Ordinal).ToList();
         var results = new Dictionary<string, (ClipAnimation? Clip, string? Failure)>(StringComparer.Ordinal);
         var missing = new List<string>();
         foreach (var clipId in asked)
@@ -50,9 +55,11 @@ public static class AnimationService
         }
         if (missing.Count > 0)
         {
-            var records = Records(ws, index, id);
+            var records = Table();
             foreach (var clipId in missing.Where(m => !records.ContainsKey(m)))
-                results[clipId] = (null, $"'{clipId}' is not one of {id}'s animations in the game (game updated? run the data dump again: Workspace → Run data dump, or 'tyrant dump run').");
+                results[clipId] = (null, Matches(records, clipId) is { Count: > 1 } several
+                    ? $"'{clipId}' names several of {id}'s animations ({string.Join(", ", several)}); ask for one by its id."
+                    : $"'{clipId}' is not one of {id}'s animations in the game (game updated? run the data dump again: Workspace → Run data dump, or 'tyrant dump run').");
             var wanted = missing.Where(records.ContainsKey).ToList();
             if (wanted.Count > 0)
             {
@@ -74,6 +81,14 @@ public static class AnimationService
         }
         return asked.Select(i => (i, results[i].Clip, results[i].Failure)).ToList();
     }
+
+    /// <summary>The id an asked name stands for: itself when it is an id, else the one animation whose id or shown name it is.</summary>
+    private static string Resolve(Dictionary<string, AssetRecord> records, string asked) =>
+        records.ContainsKey(asked) ? asked : Matches(records, asked) is [var only] ? only : asked;
+
+    private static List<string> Matches(Dictionary<string, AssetRecord> records, string asked) =>
+        records.Keys.Where(k => string.Equals(k, asked, StringComparison.OrdinalIgnoreCase)
+                                || string.Equals(ClipSampler.DisplayName(k), asked, StringComparison.OrdinalIgnoreCase)).ToList();
 
     /// <summary>A clip as the add-on reads it (the cache's own format).</summary>
     public static void WriteClip(string file, ClipAnimation clip) => Save(file, clip);

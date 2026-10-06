@@ -117,6 +117,7 @@ public class SpeciesCliTests
         ]).ToList();
 
         Assert.Contains(lines, l => l.Contains("LocWalk") && l.Contains("2.50 s") && l.Contains("24 fps") && l.Contains("loops") && l.Contains("travels"));
+        Assert.Contains(lines, l => l.Contains("Carch|LocWalk")); // the id the other commands take (or the shown name)
         Assert.Contains(lines, l => l.Contains("Roar") && !l.Contains("loops"));
         Assert.Contains(lines, l => l.Contains("2 animation(s)"));
         Assert.All(string.Join("", lines), c => Assert.True(c < 128, $"non-ASCII '{c}'"));

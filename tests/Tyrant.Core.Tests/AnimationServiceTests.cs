@@ -113,4 +113,16 @@ public class AnimationServiceTests
 
         Assert.Contains("Run data dump", ex.Message);
     }
+
+    [Fact]
+    public void An_animation_can_be_asked_for_by_its_shown_name()
+    {
+        var (game, ws, install, reader) = Setup();
+        using var _ = game;
+        reader.RawClipsToReturn = [WalkClip()];
+
+        var clips = AnimationService.Clips(ws, install, Index(), SpeciesSkinsReader.Load(ws), reader, "Carcharodontosaurus", ["walk"]);
+
+        Assert.Equal("Carch|Walk", clips[0].Clip!.Id);
+    }
 }

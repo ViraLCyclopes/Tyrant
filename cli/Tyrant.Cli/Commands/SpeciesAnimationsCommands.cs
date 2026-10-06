@@ -29,9 +29,9 @@ public sealed class SpeciesAnimationsCommand : Command<SpeciesAnimationsCommand.
         foreach (var a in animations)
         {
             var flags = string.Join(", ", new[] { a.Loops ? "loops" : null, a.Travels ? "travels" : null }.OfType<string>());
-            yield return string.Create(CultureInfo.InvariantCulture, $"  {a.Name,-32} {a.Length,6:0.00} s  {a.FrameRate,3:0} fps  {flags}").TrimEnd();
+            yield return string.Create(CultureInfo.InvariantCulture, $"  {a.Name,-32} {a.Length,6:0.00} s  {a.FrameRate,3:0} fps  {flags,-15}  {a.Id}").TrimEnd();
         }
-        yield return $"{animations.Count} animation(s). Open them in Blender (app: Species tab > Animations..., or 'tyrant blender open --animations <id>') " +
+        yield return $"{animations.Count} animation(s). Open them in Blender (app: Species tab > Animations..., or 'tyrant blender open --animations <id or name>') " +
                      "or export them ('tyrant species export-animations').";
     }
 
