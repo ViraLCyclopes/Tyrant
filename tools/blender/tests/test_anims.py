@@ -223,3 +223,32 @@ class AnimTests(unittest.TestCase):
         arm = importer.import_project(self.path)
 
         self.assertEqual(arm.animation_data.action.name, "Walk")
+
+    def test_a_clip_holding_the_prefab_pose_reproduces_the_stance_the_model_opens_in(self):
+        """The root bone too: its local is in the armature's own space, which Blender turns Z up (the real Carch's MainBone
+        is turned 180 degrees there, and a wrong conversion tips the whole animal over)."""
+        import struct
+
+        with open(os.path.join(os.path.dirname(self.path), "model.glb"), "rb") as f:
+            blob = f.read()
+        doc = json.loads(blob[20:20 + struct.unpack_from("<I", blob, 12)[0]])
+        nodes = {n.get("name"): n for n in doc["nodes"]}
+        bpy.context.view_layer.update()
+        stance = {n: self.arm.pose.bones[n].matrix.copy() for n in ("MainBone", "Hip", "Femur.L")}
+        bones = {}
+        for name in stance:
+            node = nodes[name]
+            p = Vector(node.get("translation", [0, 0, 0]))
+            r = node.get("rotation", [0, 0, 0, 1])
+            q = Quaternion((r[3], r[0], r[1], r[2]))
+            sc = Vector(node.get("scale", [1, 1, 1]))
+            bones[name] = [(0.0, (p, q, sc)), (1.0, (p, q, sc))]
+
+        anims.play(self.arm, anims.load(self.arm, self.data, clip("Hold", bones)))
+        bpy.context.scene.frame_set(1)
+        bpy.context.view_layer.update()
+
+        for name, before in stance.items():
+            now = self.arm.pose.bones[name].matrix
+            self.assertLess(before.to_quaternion().rotation_difference(now.to_quaternion()).angle, 1e-3, name)
+            self.assertLess((before.translation - now.translation).length, 1e-3, name)

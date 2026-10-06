@@ -19,6 +19,7 @@ LOOPS = "tyrant_loops"
 TRAVELS = "tyrant_travels"
 IN_PLACE = "Tyrant in place"  # the travelling bone's constraint that hides the travel
 ONE = Vector((1.0, 1.0, 1.0))
+_Y_UP = rig._GLTF_TO_BLENDER  # glTF (Y up) → Blender (Z up): +90 degrees about X
 
 
 class AnimError(Exception):
@@ -137,8 +138,11 @@ def load(arm, data, clip):
         times = sorted({t for keys in channels.values() if keys for t, _ in keys})
         if not times:
             continue
+        root = name_ in roots
         rest_p, rest_q, rest_s = _rest_local(arm, name_).decompose()
         rest = rig.compose_inverse(table[name_], (rest_p, rest_q, rest_s)) if name_ in table else (rest_p, rest_q, rest_s)
+        # The game's own local for channels the clip does not animate, in glTF terms (a root's is in Blender's Z-up space).
+        rest_gltf = rig._trs(_Y_UP.inverted() @ rig._matrix(rest)) if root else rest
         frame_of = bone.matrix_local if bone.parent is None else bone.parent.matrix_local.inverted() @ bone.matrix_local
         to_basis = frame_of.inverted()
         parent_sigma = Matrix.Diagonal(sigma.get(bone.parent.name, ONE) if bone.parent is not None else ONE).to_4x4()
@@ -150,9 +154,11 @@ def load(arm, data, clip):
             q = _at(channels["rotation"], t) if channels["rotation"] else None
             s = _at(channels["scale"], t) if channels["scale"] else None
             gp, gq, gs = _gltf(p or [0, 0, 0], q or [0, 0, 0, 1], s or [1, 1, 1])
-            if name_ in roots:
-                gp, gq, gs = rig._from_gltf_frame((gp, gq, gs))
-            local = (gp if p else rest[0], gq if q else rest[1], gs if s else rest[2])
+            local = (gp if p else rest_gltf[0], gq if q else rest_gltf[1], gs if s else rest_gltf[2])
+            if root:
+                # A root bone's local is in the armature's space, which Blender turned Z up: the whole local is turned (a
+                # rig offset, between parent and bone, is conjugated instead; see rig._from_gltf_frame).
+                local = rig._trs(_Y_UP @ rig._matrix(local))
             if name_ in table:
                 local = rig.compose(table[name_], local)
             basis = to_basis @ parent_sigma @ rig._matrix(local) @ own_sigma
