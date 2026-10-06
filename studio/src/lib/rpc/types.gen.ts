@@ -824,12 +824,6 @@ export interface ModsListResult {
   frameworkOutdated?: boolean;
 }
 
-export interface NexusCheck {
-  version: string | null;
-  url: string | null;
-  error: string | null;
-}
-
 export interface OrphanSkinRow {
   species: string;
   key: string;
@@ -1042,7 +1036,6 @@ export interface WorkspaceStatus {
 }
 
 export interface RpcMethods {
-  "app.checkNexus": { params: void; result: NexusCheck };
   "app.diagnostics": { params: void; result: DiagnosticsResult };
   "app.info": { params: void; result: AppInfo };
   "assets.bundles": { params: AssetBundlesParams; result: AssetBundlesResult };

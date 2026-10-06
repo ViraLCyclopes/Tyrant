@@ -82,22 +82,6 @@ public sealed class StudioMethods(StudioSession session, JobManager jobs)
         });
     }
 
-    [RpcMethod("app.checkNexus")]
-    public async Task<NexusCheck> CheckNexus()
-    {
-        if (UpdateSources.NexusModId is not { } id) return new NexusCheck(null, null, null);
-        try
-        {
-            using var http = Options.Http();
-            var version = await new UpdateChecker(http, UpdateChecker.CurrentVersion).NexusVersionAsync(id, CancellationToken.None);
-            return new NexusCheck(version, UpdateSources.NexusPage(id), null);
-        }
-        catch (TyrantException ex)
-        {
-            return new NexusCheck(null, UpdateSources.NexusPage(id), ex.Message);
-        }
-    }
-
     [RpcMethod("game.packageFramework")]
     public GamePackageFrameworkResult PackageFramework(GamePackageFrameworkParams p)
     {

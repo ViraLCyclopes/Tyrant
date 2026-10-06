@@ -150,7 +150,7 @@ public static class CliApp
             config.AddBranch("update", update =>
             {
                 update.SetDescription("Check for a newer Tyrant (the app installs it: Help → Check for updates).");
-                update.AddCommand<UpdateCheckCommand>("check").WithDescription("Show this version and the latest on GitHub and Nexus.");
+                update.AddCommand<UpdateCheckCommand>("check").WithDescription("Show this version and the latest on GitHub.");
             });
 
             config.AddCommand<RpcCommand>("rpc")

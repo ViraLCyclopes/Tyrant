@@ -15,22 +15,21 @@ function setup() {
 }
 
 describe('UpdateBanner', () => {
-  it('offers a GitHub update with its notes, Update now, Later and the Nexus page', async () => {
+  it('offers an update with its notes, Update now and Later', async () => {
     const { platform, updates } = setup();
-    updates.offer = { kind: 'github', version: '0.2.0', notes: 'Fences and sounds', nexusUrl: 'https://www.nexusmods.com/prehistorickingdom/mods/7' };
+    updates.offer = { version: '0.2.0', notes: 'Fences and sounds' };
     render(UpdateBanner, { props: { updates } });
 
     expect(screen.getByText('Tyrant 0.2.0 is available')).toBeInTheDocument();
     expect(screen.getByText('Fences and sounds')).toBeInTheDocument();
     await fireEvent.click(screen.getByRole('button', { name: 'Update now' }));
     expect(platform.installed).toBe(1);
-    await fireEvent.click(screen.getByRole('button', { name: 'Also on Nexus' }));
-    expect(platform.opened).toEqual(['https://www.nexusmods.com/prehistorickingdom/mods/7']);
+    expect(screen.getByRole('button', { name: 'Later' })).toBeInTheDocument();
   });
 
   it('links to the release page for what changed', async () => {
     const { platform, updates } = setup();
-    updates.offer = { kind: 'github', version: '0.2.0', notes: '', nexusUrl: null };
+    updates.offer = { version: '0.2.0', notes: '' };
     render(UpdateBanner, { props: { updates } });
 
     await fireEvent.click(screen.getByRole('button', { name: "What's new" }));
@@ -40,7 +39,7 @@ describe('UpdateBanner', () => {
 
   it('while installing it shows progress, never a second Update now', () => {
     const { updates } = setup();
-    updates.offer = { kind: 'github', version: '0.2.0', notes: '', nexusUrl: null };
+    updates.offer = { version: '0.2.0', notes: '' };
     updates.installing = true;
     updates.progress = null;
     render(UpdateBanner, { props: { updates } });
@@ -49,26 +48,15 @@ describe('UpdateBanner', () => {
     expect(screen.getByText(/Installing/)).toBeInTheDocument();
   });
 
-  it('a Nexus-only offer links to the page and cannot install', async () => {
-    const { platform, updates } = setup();
-    updates.offer = { kind: 'nexus', version: '0.2.0', url: 'https://www.nexusmods.com/prehistorickingdom/mods/7' };
-    render(UpdateBanner, { props: { updates } });
-
-    expect(screen.getByText('Tyrant 0.2.0 is on Nexus')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Update now' })).toBeNull();
-    await fireEvent.click(screen.getByRole('button', { name: 'Open Nexus page' }));
-    expect(platform.opened).toHaveLength(1);
-  });
-
   it('Later hides the offer', async () => {
     const { updates } = setup();
-    updates.offer = { kind: 'nexus', version: '0.2.0', url: 'https://x' };
+    updates.offer = { version: '0.2.0', notes: '' };
     render(UpdateBanner, { props: { updates } });
 
     await fireEvent.click(screen.getByRole('button', { name: 'Later' }));
 
     expect(updates.offer).toBeNull();
-    expect(screen.queryByText('Tyrant 0.2.0 is on Nexus')).toBeNull();
+    expect(screen.queryByText('Tyrant 0.2.0 is available')).toBeNull();
   });
 
   it('shows a note from the manual check', () => {

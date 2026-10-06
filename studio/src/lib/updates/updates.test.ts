@@ -3,12 +3,12 @@ import { memoryStore } from '$lib/storage';
 import { Session } from '$lib/stores/session.svelte';
 import { FakePlatform } from '$lib/test/fakePlatform';
 import { FakeRpc } from '$lib/test/fakeRpc';
-import { compareVersions, Updates } from './updates.svelte';
+import { Updates } from './updates.svelte';
 
 const HOUR = 60 * 60 * 1000;
 
-function setup(nexus: { version: string | null; url: string | null; error: string | null } = { version: null, url: null, error: null }) {
-  const rpc = new FakeRpc().on('app.checkNexus', () => nexus);
+function setup() {
+  const rpc = new FakeRpc();
   const platform = new FakePlatform();
   const session = new Session(rpc, platform, memoryStore());
   const store = memoryStore();
@@ -27,25 +27,17 @@ function setup(nexus: { version: string | null; url: string | null; error: strin
 }
 
 describe('Updates', () => {
-  it('offers a newer GitHub release, with the Nexus page when it has the same version', async () => {
-    const { platform, updates } = setup({ version: '0.2.0', url: 'https://www.nexusmods.com/prehistorickingdom/mods/7', error: null });
+  it('offers a newer GitHub release with its notes', async () => {
+    const { platform, updates } = setup();
     platform.update = { version: '0.2.0', notes: 'Fences!' };
 
     await updates.check();
 
-    expect(updates.offer).toEqual({ kind: 'github', version: '0.2.0', notes: 'Fences!', nexusUrl: 'https://www.nexusmods.com/prehistorickingdom/mods/7' });
-  });
-
-  it('a newer version only on Nexus is shown with its page, not installed', async () => {
-    const { updates } = setup({ version: '0.2.0', url: 'https://www.nexusmods.com/prehistorickingdom/mods/7', error: null });
-
-    await updates.check();
-
-    expect(updates.offer).toEqual({ kind: 'nexus', version: '0.2.0', url: 'https://www.nexusmods.com/prehistorickingdom/mods/7' });
+    expect(updates.offer).toEqual({ version: '0.2.0', notes: 'Fences!' });
   });
 
   it('when nothing is newer the manual check says so', async () => {
-    const { updates } = setup({ version: '0.1.0', url: 'https://www.nexusmods.com/prehistorickingdom/mods/7', error: null });
+    const { updates } = setup();
 
     await updates.check();
 
@@ -144,13 +136,5 @@ describe('Updates', () => {
     expect(updates.installing).toBe(true);
     finish();
     await installing;
-  });
-
-  it('versions compare as releases write them', () => {
-    expect(compareVersions('0.2.0', '0.1.9')).toBeGreaterThan(0);
-    expect(compareVersions('v0.2.0', '0.2.0')).toBe(0);
-    expect(compareVersions('0.2.0', '0.2.0-beta')).toBeGreaterThan(0);
-    expect(compareVersions('0.10.0', '0.9.0')).toBeGreaterThan(0);
-    expect(compareVersions('nonsense', '0.0.1')).toBeLessThan(0);
   });
 });

@@ -28,18 +28,11 @@ Builds made before step 1 still run; their Help → Check for updates says updat
    (`Tyrant-Blender-Addon-<version>.zip`; `set-version` also writes the version into the add-on's manifest) to a
    **draft** release.
 5. Open the draft (Releases), write what changed, **Publish**. Only published releases are offered to users.
-6. Upload the same Setup to the Nexus page.
 
 The first time, do a dry run: GitHub → Actions → **Release** → **Run workflow**, and give the tag of the current version
 (e.g. `v0.1.0`; it must match `tauri.conf.json`). Check the draft it makes (the Setup, its `.sig`, `latest.json` and the
 framework zip), then delete the draft and, if GitHub created it, the tag. The update banner links to the release page
 for what changed, so write the notes there.
-
-## Nexus
-
-Once Tyrant's Nexus page exists, put its mod id in `core/Tyrant.Core/Updates/UpdateChecker.cs`
-(`UpdateSources.NexusModId`) and release once: Tyrant then also shows when the Nexus page has a newer version (it only
-links to the page; updates install from GitHub).
 
 ## If the private key is lost
 

@@ -6,11 +6,9 @@ const LAST_CHECK = 'tyrant.updates.lastCheck';
 const DAY = 24 * 60 * 60 * 1000;
 export const RELEASES = 'https://github.com/ViraLCyclopes/Tyrant/releases';
 
-export type UpdateOffer =
-  | { kind: 'github'; version: string; notes: string; nexusUrl: string | null }
-  | { kind: 'nexus'; version: string; url: string };
+export type UpdateOffer = { version: string; notes: string };
 
-/** Tyrant's own updates: GitHub installs them, Nexus only notifies (spec: release plan 2). */
+/** Tyrant's own updates, from GitHub releases. */
 export class Updates {
   offer = $state<UpdateOffer | null>(null);
   checking = $state(false);
@@ -43,7 +41,7 @@ export class Updates {
   }
 
   async install(): Promise<void> {
-    if (this.offer?.kind !== 'github' || this.installing) return;
+    if (!this.offer || this.installing) return;
     if (this.session.busy) {
       this.note = `Wait for ${this.session.job?.title ?? 'the running job'} to finish, then update.`;
       return;
@@ -66,7 +64,7 @@ export class Updates {
     }
   }
 
-  /** The native side (opening the Nexus page). */
+  /** The native side (opening the release page). */
   get platform() {
     return this.session.platform;
   }
@@ -88,15 +86,7 @@ export class Updates {
       } catch (e) {
         failure = e instanceof Error ? e.message : String(e);
       }
-      const nexus = await this.session.rpc.call('app.checkNexus').catch(() => null);
-      const nexusNewer = nexus?.version && nexus.url && compareVersions(nexus.version, current) > 0 ? { version: nexus.version, url: nexus.url } : null;
-      if (github && github !== 'unavailable') {
-        this.offer = { kind: 'github', version: github.version, notes: github.notes, nexusUrl: nexus?.version === github.version ? (nexus.url ?? null) : null };
-      } else if (nexusNewer) {
-        this.offer = { kind: 'nexus', ...nexusNewer };
-      } else {
-        this.offer = null;
-      }
+      this.offer = github && github !== 'unavailable' ? { version: github.version, notes: github.notes } : null;
       if (!manual) return;
       if (failure) this.note = `The update check failed: ${failure}`;
       else if (github === 'unavailable' && !this.offer) this.note = `Updates aren't set up in this build; download new versions from ${RELEASES}.`;
@@ -105,20 +95,4 @@ export class Updates {
       this.checking = false;
     }
   }
-}
-
-/** "v0.2.0" / "0.2.0" / "0.2.0-beta": a pre-release sorts before its release; unparsable sorts lowest. */
-export function compareVersions(a: string, b: string): number {
-  const parse = (v: string) => {
-    const m = /^v?(\d+)\.(\d+)\.(\d+)(?:-(.+))?$/.exec(v.trim());
-    return m ? { n: [Number(m[1]), Number(m[2]), Number(m[3])], pre: m[4] ?? null } : null;
-  };
-  const x = parse(a);
-  const y = parse(b);
-  if (!x || !y) return x ? 1 : y ? -1 : 0;
-  for (let i = 0; i < 3; i++) if (x.n[i] !== y.n[i]) return x.n[i] - y.n[i];
-  if (x.pre === y.pre) return 0;
-  if (x.pre === null) return 1;
-  if (y.pre === null) return -1;
-  return x.pre < y.pre ? -1 : 1;
 }

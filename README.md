@@ -9,9 +9,8 @@ game** puts the game back to vanilla. Nothing from the game is redistributed; ev
 
 ## Download
 
-Get the latest **Setup** from [GitHub Releases](https://github.com/ViraLCyclopes/Tyrant/releases) or
-[Nexus Mods](https://www.nexusmods.com/prehistorickingdom/mods/24) and run it (no admin rights needed). Tyrant updates itself
-from GitHub, wherever you downloaded it. Windows may warn that the publisher is unknown (Tyrant is not code-signed): click **More info → Run
+Get the latest **Setup** from [GitHub Releases](https://github.com/ViraLCyclopes/Tyrant/releases) and run it (no admin
+rights needed). Tyrant updates itself from GitHub. Windows may warn that the publisher is unknown (Tyrant is not code-signed): click **More info → Run
 anyway**.
 
 ## Start in three steps
@@ -184,7 +183,7 @@ dotnet run --project cli/Tyrant.Cli -- mod export red-spot-carcharo -w D:\tyrant
 dotnet run --project cli/Tyrant.Cli -- mod import red-spot-carcharo-1.0.0.zip -w D:\tyrant-workspace   # add a shared mod (--replace to overwrite)
 dotnet run --project cli/Tyrant.Cli -- game status -w D:\tyrant-workspace   # framework version in the game and in this Tyrant
 dotnet run --project cli/Tyrant.Cli -- game package-framework -w D:\tyrant-workspace   # the framework as a zip for players without Tyrant
-dotnet run --project cli/Tyrant.Cli -- update check   # this version and the latest on GitHub (and Nexus)
+dotnet run --project cli/Tyrant.Cli -- update check   # this version and the latest on GitHub
 dotnet run --project cli/Tyrant.Cli -- mod list -w D:\tyrant-workspace
 dotnet run --project cli/Tyrant.Cli -- mod clean-skins -w D:\tyrant-workspace   # list skin numbers left by removed mods; --forget <mod/skin> frees one
 ```
