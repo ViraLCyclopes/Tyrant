@@ -88,6 +88,10 @@ public sealed class BlenderOpenCommand : Command<BlenderOpenCommand.Settings>
         [Description("male (default) or female: the sex Blender shows first (its maps and growth; the Tyrant panel switches it).")]
         public string Sex { get; set; } = "male";
 
+        [CommandOption("--animations <ID>")]
+        [Description("Open with these animations as Actions (ids from 'tyrant species animations --json'); repeatable.")]
+        public string[] Animations { get; set; } = [];
+
         [CommandOption("--no-ik")]
         [Description("Build no IK controls (the add-on's Add IK controls can still add them later).")]
         public bool NoIk { get; set; }
@@ -102,7 +106,7 @@ public sealed class BlenderOpenCommand : Command<BlenderOpenCommand.Settings>
         var (ws, install) = CliServices.OpenWorkspace(settings);
         var service = new BlenderService(CliServices.Blender);
         var request = new BlenderOpenRequest(settings.Species, settings.Skin, settings.Mod, settings.Fresh, settings.Lods,
-            string.Equals(settings.Sex, "female", StringComparison.OrdinalIgnoreCase) ? "female" : "male") { PrefabRef = settings.Prefab, Ik = !settings.NoIk };
+            string.Equals(settings.Sex, "female", StringComparison.OrdinalIgnoreCase) ? "female" : "male") { PrefabRef = settings.Prefab, Ik = !settings.NoIk, Animations = settings.Animations };
         if (!settings.NoLaunch) service.CheckReady(ws); // before the index and data, so a missing Blender is said first
         var index = CliServices.LoadIndex(ws, install);
         var species = ModCli.RequireSpecies(ws);
@@ -155,6 +159,65 @@ public sealed class BlenderIkDataCommand : Command<BlenderIkDataCommand.Settings
             var (ws, install) = CliServices.OpenWorkspace(settings);
             var chains = BlenderService.RefreshIk(install, CliServices.LoadIndex(ws, install), ModCli.RequireSpecies(ws), CliServices.AssetReader, settings.Project);
             Console.WriteLine(JsonSerializer.Serialize(new { ok = true, chains }, BlenderCli.Json));
+            return ExitCodes.Ok;
+        }
+        catch (TyrantException ex)
+        {
+            Console.WriteLine(JsonSerializer.Serialize(new { ok = false, errors = new[] { ex.Message } }, BlenderCli.Json));
+            return ExitCodes.Error;
+        }
+    }
+}
+
+/// <summary>Writes animations (clip ids) next to a Blender project for the add-on's Add animations; one JSON line (files, errors).</summary>
+public sealed class BlenderAnimationsCommand : Command<BlenderAnimationsCommand.Settings>
+{
+    public sealed class Settings : WorkspaceSettings
+    {
+        [CommandArgument(0, "<PROJECT>")]
+        [Description("The project's tyrant-blender.json.")]
+        public string Project { get; set; } = "";
+
+        [CommandArgument(1, "<ID>")]
+        [Description("Animation ids, e.g. Carch|LocWalk (see 'tyrant species animations --json').")]
+        public string[] Ids { get; set; } = [];
+    }
+
+    public override int Execute(CommandContext context, Settings settings)
+    {
+        try
+        {
+            var (ws, install) = CliServices.OpenWorkspace(settings);
+            var (files, errors) = BlenderService.Animations(ws, install, CliServices.LoadIndex(ws, install), ModCli.RequireSpecies(ws), CliServices.AssetReader,
+                settings.Project, settings.Ids);
+            Console.WriteLine(JsonSerializer.Serialize(new { ok = files.Count > 0 || errors.Count == 0, files, errors }, BlenderCli.Json));
+            return files.Count > 0 || errors.Count == 0 ? ExitCodes.Ok : ExitCodes.Error;
+        }
+        catch (TyrantException ex)
+        {
+            Console.WriteLine(JsonSerializer.Serialize(new { ok = false, files = Array.Empty<string>(), errors = new[] { ex.Message } }, BlenderCli.Json));
+            return ExitCodes.Error;
+        }
+    }
+}
+
+/// <summary>Writes the species' animation list into an older Blender project (one JSON line), as ik-data does for IK chains.</summary>
+public sealed class BlenderAnimationListCommand : Command<BlenderAnimationListCommand.Settings>
+{
+    public sealed class Settings : WorkspaceSettings
+    {
+        [CommandArgument(0, "<PROJECT>")]
+        [Description("The project's tyrant-blender.json.")]
+        public string Project { get; set; } = "";
+    }
+
+    public override int Execute(CommandContext context, Settings settings)
+    {
+        try
+        {
+            var (ws, install) = CliServices.OpenWorkspace(settings);
+            var count = BlenderService.RefreshAnimations(ws, install, CliServices.LoadIndex(ws, install), ModCli.RequireSpecies(ws), CliServices.AssetReader, settings.Project);
+            Console.WriteLine(JsonSerializer.Serialize(new { ok = true, animations = count }, BlenderCli.Json));
             return ExitCodes.Ok;
         }
         catch (TyrantException ex)

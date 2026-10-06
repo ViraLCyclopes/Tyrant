@@ -116,6 +116,16 @@ public sealed partial class AssetsMethods
         return new SpeciesIkResult(chains.Select(c => new IkChainRow(c.Name, c.Kind, c.Joints.Select(j => j.Name).ToList(), BlenderIkReader.PoleFrom(c), c.Influence)).ToList());
     }
 
+    /// <summary>A species' animations in the game (the Species tab's Animations list).</summary>
+    [RpcMethod("species.animations")]
+    public SpeciesAnimationsResult Animations(SpeciesAnimationsParams p)
+    {
+        var (ws, install, index) = Open();
+        var species = Tyrant.Core.Mods.SpeciesSkinsReader.Load(ws);
+        var id = Tyrant.Core.Rigging.RigInfoService.SpeciesIdOf(p.Species, species, SpeciesCatalog.FromIndex(index));
+        return new SpeciesAnimationsResult(id, Tyrant.Core.Animation.AnimationService.List(ws, install, index, species, Reader, id));
+    }
+
     /// <summary>What a species' skeleton does in game, for rig edits (the species page's Rig info).</summary>
     [RpcMethod("species.rigInfo")]
     public SpeciesRigInfoResult RigInfo(SpeciesRigInfoParams p)

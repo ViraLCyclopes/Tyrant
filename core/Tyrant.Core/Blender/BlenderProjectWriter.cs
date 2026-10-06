@@ -17,6 +17,9 @@ public sealed record BlenderOpenRequest(string Species, string? Skin, string? Mo
 
     /// <summary>False: Open in Blender builds no IK controls (the chains are still written, for Add IK controls later).</summary>
     public bool Ik { get; init; } = true;
+
+    /// <summary>Animations (clip ids, e.g. "Carch|LocWalk") the model opens with, as Actions.</summary>
+    public IReadOnlyList<string> Animations { get; init; } = [];
 }
 
 public sealed record BlenderProjectResult(string ProjectFile, string Dir, bool GameChanged);
@@ -99,6 +102,10 @@ public static class BlenderProjectWriter
             Rig = rig?.ToDictionary(p => p.Key, p => BlenderRigOffset.From(p.Value)),
             RigBaked = rigBaked,
             RigInfo = RigInfoOf(ws, install, index, species, reader, speciesId),
+            Animations = AnimationsOf(ws, install, index, species, reader, speciesId),
+            AnimationFiles = request.Animations.Count == 0 ? null
+                : BlenderService.WriteAnimations(ws, install, index, species, reader, speciesId, dir, request.Animations).Files
+                    .Select(f => Path.GetRelativePath(dir, f).Replace(Path.DirectorySeparatorChar, '/')).ToList(),
         };
         BlenderProjectFile.Write(projectFile, project);
         return new BlenderProjectResult(projectFile, dir, gameChanged);
@@ -234,6 +241,20 @@ public static class BlenderProjectWriter
             var q = UnityToGltf.Rotation(n.LocalRotation);
             return new BlenderBoneRest(n.Name, [p.X, p.Y, p.Z], [q.X, q.Y, q.Z, q.W], [n.LocalScale.X, n.LocalScale.Y, n.LocalScale.Z]);
         }).ToList();
+
+    /// <summary>The species' animation list for the add-on; null when it cannot be worked out (opening goes on).</summary>
+    private static IReadOnlyList<Animation.AnimationInfo>? AnimationsOf(Workspace ws, GameInstall install, AssetIndex index,
+        IReadOnlyList<SpeciesSkins> species, IAssetReader reader, string speciesId)
+    {
+        try
+        {
+            return Animation.AnimationService.List(ws, install, index, species, reader, speciesId);
+        }
+        catch (TyrantException)
+        {
+            return null;
+        }
+    }
 
     private static bool SkinDecides(SkinEntry? skin) => skin is not null && (skin.Model is not null || skin.Rig is not null);
 

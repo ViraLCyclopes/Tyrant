@@ -86,6 +86,11 @@ public sealed record IkChainRow(string Name, string Kind, IReadOnlyList<string> 
 
 public sealed record SpeciesIkResult(IReadOnlyList<IkChainRow> Chains);
 
+/// <summary>species.animations: a species by its data id (or catalog key/name).</summary>
+public sealed record SpeciesAnimationsParams(string Species);
+
+public sealed record SpeciesAnimationsResult(string Species, IReadOnlyList<Tyrant.Core.Animation.AnimationInfo> Animations);
+
 /// <summary>species.rigInfo: a species by its data id (or catalog key/name).</summary>
 public sealed record SpeciesRigInfoParams(string Species);
 

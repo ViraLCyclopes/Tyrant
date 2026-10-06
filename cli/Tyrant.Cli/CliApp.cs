@@ -67,6 +67,7 @@ public static class CliApp
                     .WithDescription("List a species' skin textures (to replace them in a mod with 'tyrant mod replace').");
                 species.AddCommand<SpeciesIkCommand>("ik")
                     .WithDescription("List a species' IK chains (Open in Blender builds them as IK controls).");
+                species.AddCommand<SpeciesAnimationsCommand>("animations").WithDescription("List a species' animations in the game (for Blender and exports).");
                 species.AddCommand<SpeciesRigInfoCommand>("rig-info")
                     .WithDescription("List the bones a species' animations move and the bones its growth positions or scales (for rig edits).");
                 species.AddCommand<SpeciesPackCommand>("pack")
@@ -101,6 +102,8 @@ public static class CliApp
                 blender.AddCommand<BlenderOpenCommand>("open").WithDescription("Open a species, a skin or a mod's model in Blender.");
                 blender.AddCommand<BlenderDestinationsCommand>("destinations").WithDescription("List where a Blender project can be sent (JSON, for the add-on).");
                 blender.AddCommand<BlenderIkDataCommand>("ik-data").WithDescription("Write the game's IK chains into an older Blender project (JSON, for the add-on).");
+                blender.AddCommand<BlenderAnimationsCommand>("animations").WithDescription("Write animations next to a Blender project (JSON, for the add-on).");
+                blender.AddCommand<BlenderAnimationListCommand>("animation-list").WithDescription("Write the species' animation list into an older Blender project (JSON, for the add-on).");
                 blender.AddCommand<BlenderSendCommand>("send").WithDescription("Add a model exported from a Blender project to its mod (JSON, for the add-on).");
             });
 

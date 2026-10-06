@@ -75,6 +75,9 @@ public static class AnimationService
         return asked.Select(i => (i, results[i].Clip, results[i].Failure)).ToList();
     }
 
+    /// <summary>A clip as the add-on reads it (the cache's own format).</summary>
+    public static void WriteClip(string file, ClipAnimation clip) => Save(file, clip);
+
     private static (string Id, AssetRecord Prefab, string Dir) Where(Workspace ws, GameInstall install, AssetIndex index,
         IReadOnlyList<SpeciesSkins> species, string speciesId)
     {

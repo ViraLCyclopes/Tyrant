@@ -16,7 +16,7 @@ public sealed record BlenderSetPathParams(string? Path);
 
 /// <summary>Sex: "male" or "female", the sex Blender shows first. PrefabRef: any GameObject from the Assets tab instead of a species.</summary>
 public sealed record BlenderOpenParams(string Species = "", string? Skin = null, string? Mod = null, bool Fresh = false, bool Lods = false, string Sex = "male",
-    string? PrefabRef = null, bool Ik = true);
+    string? PrefabRef = null, bool Ik = true, IReadOnlyList<string>? Animations = null);
 
 /// <summary>How: "running" (the open Blender took it) or "started" (a new Blender).</summary>
 public sealed record BlenderOpenDto(string ProjectFile, string How, bool GameChanged);
@@ -69,7 +69,7 @@ public sealed class BlenderMethods(StudioSession session)
             throw new TyrantException(TyrantErrorCode.DataMissing,
                 "Open in Blender needs the game's data: on the Workspace tab click Run data dump (or run 'tyrant dump run').", FixAction.RefreshWorkspace, ex);
         }
-        var result = service.Open(ws, install, index, species, session.Options.AssetReader, new BlenderOpenRequest(p.Species, p.Skin, p.Mod, p.Fresh, p.Lods, p.Sex) { PrefabRef = p.PrefabRef, Ik = p.Ik });
+        var result = service.Open(ws, install, index, species, session.Options.AssetReader, new BlenderOpenRequest(p.Species, p.Skin, p.Mod, p.Fresh, p.Lods, p.Sex) { PrefabRef = p.PrefabRef, Ik = p.Ik, Animations = p.Animations ?? [] });
         var what = p.PrefabRef is not null ? "the object" : p.Mod is null ? p.Species + (p.Skin is null ? "" : $" ({p.Skin})") : $"{p.Skin ?? p.Species} from '{p.Mod}'";
         session.Log(result.How == "running" ? $"Opened {what} in the running Blender." : $"Started Blender with {what}.");
         if (result.GameChanged) session.Log("The game was updated since this Blender project was made: use Start fresh for the new model.", "warn");

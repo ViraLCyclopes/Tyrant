@@ -75,6 +75,12 @@ public sealed record BlenderProject(int Version, string Workspace, string Tyrant
 
     /// <summary>The species' rig info for the warnings (null for objects, or when it could not be worked out).</summary>
     public BlenderRigInfo? RigInfo { get; init; }
+
+    /// <summary>The species' animations for the add-on's list (null: none known yet, e.g. no data dump; the add-on asks Tyrant).</summary>
+    public IReadOnlyList<Animation.AnimationInfo>? Animations { get; init; }
+
+    /// <summary>Animation files (project-relative, written by Tyrant) the add-on loads as Actions when it opens the model.</summary>
+    public IReadOnlyList<string>? AnimationFiles { get; init; }
 }
 
 public static class BlenderProjectFile
