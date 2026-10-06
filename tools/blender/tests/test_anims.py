@@ -252,3 +252,79 @@ class AnimTests(unittest.TestCase):
             now = self.arm.pose.bones[name].matrix
             self.assertLess(before.to_quaternion().rotation_difference(now.to_quaternion()).angle, 1e-3, name)
             self.assertLess((before.translation - now.translation).length, 1e-3, name)
+
+    def test_a_channel_the_clip_leaves_out_keeps_the_games_value_with_the_rig_edit(self):
+        """Unity leaves an unanimated channel at the prefab's value; a rig edit's scale on that bone stays on top of it."""
+        rig.start(self.arm, self.data)
+        self.arm.pose.bones["Calve.L"].scale = Vector((1.5, 1.5, 1.5))
+        rig.apply(self.arm, self.data)
+        prefab = {r["name"]: r for r in self.data["rest"]}["Calve.L"]
+        p = Vector(prefab["position"])
+        q = Quaternion((prefab["rotation"][3], prefab["rotation"][0], prefab["rotation"][1], prefab["rotation"][2]))
+        only_rotation = clip("Turn", {"Calve.L": [(0.0, (p, q, Vector((1, 1, 1))))]})
+        only_rotation["bones"][0]["position"] = []
+        only_rotation["bones"][0]["scale"] = []
+
+        anims.play(self.arm, anims.load(self.arm, self.data, only_rotation))
+        bpy.context.scene.frame_set(1)
+
+        local = true_local(self.arm, "Calve.L")
+        offset = rig.offsets(self.arm)["Calve.L"]
+        expected = rig._matrix(rig.compose(offset, (p, q, Vector(prefab["scale"]))))
+        self.assertLess((local.to_scale() - expected.to_scale()).length, 1e-3)
+        self.assertLess((local.translation - expected.translation).length, 1e-3)
+
+    def test_a_bone_the_model_lacks_and_the_clips_skipped_curves_are_reported(self):
+        walk = self.calve_walk()
+        walk["bones"].append({"bone": "Tail.099", "position": [{"time": 0, "x": 0, "y": 0, "z": 0}], "rotation": [], "scale": []})
+        walk["skipped"] = ["curve kind 9 is not read (only bone position, rotation and scale)"]
+        folder = os.path.join(os.path.dirname(self.path), "animations")
+        os.makedirs(folder, exist_ok=True)
+        file = os.path.join(folder, "Carch_Walk.json")
+        with open(file, "w", encoding="utf-8") as f:
+            json.dump(walk, f)
+
+        anims.load_files(self.arm, self.data, [file])
+
+        report = json.loads(self.arm[anims.REPORT])
+        self.assertTrue(any("Tail.099" in line for line in report))
+        self.assertTrue(any("curve kind 9" in line for line in report))
+
+    def test_a_broken_animation_file_is_reported_not_left_reading(self):
+        from tyrant_blender import animpanel
+
+        folder = os.path.join(os.path.dirname(self.path), "animations")
+        os.makedirs(folder, exist_ok=True)
+        file = os.path.join(folder, "Carch_Bad.json")
+        with open(file, "w", encoding="utf-8") as f:
+            json.dump({"id": "Carch|Bad", "name": "Bad", "bones": {"not": "a list"}}, f)
+        self.arm[anims.REPORT] = json.dumps(["Tyrant is reading 1 animation(s)…"])
+
+        animpanel.finish_add(self.arm.name, self.path, {"ok": True, "files": [file], "errors": []})
+
+        report = json.loads(self.arm[anims.REPORT])
+        self.assertTrue(any("could not be loaded" in line for line in report))
+        self.assertFalse(any("reading" in line for line in report))
+
+    def test_opening_a_model_already_in_the_file_with_new_animations_adds_them(self):
+        from tyrant_blender import project, ui
+
+        walk = self.calve_walk()
+        bpy.ops.wm.read_factory_settings(use_empty=True)
+        ui.show_project(self.path)
+        folder = os.path.join(os.path.dirname(self.path), "animations")
+        os.makedirs(folder, exist_ok=True)
+        with open(os.path.join(folder, "Carch_Walk.json"), "w", encoding="utf-8") as f:
+            json.dump(walk, f)
+        data = project.load(self.path)
+        data["animationFiles"] = ["animations/Carch_Walk.json"]
+        data["animationErrors"] = ["'Carch|Gone' is not one of its animations"]
+        project.save(self.path, data)
+        from tyrant_blender import growth
+        growth.forget(self.path)
+
+        scene = ui.show_project(self.path)
+
+        arm = project.tagged_armatures(scene)[0]
+        self.assertIn("Walk", [a.name for a in anims.tyrant_actions()])
+        self.assertTrue(any("Carch|Gone" in line for line in json.loads(arm[anims.REPORT])))

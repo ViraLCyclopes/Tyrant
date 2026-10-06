@@ -18,6 +18,8 @@ RATE = "tyrant_frame_rate"
 LOOPS = "tyrant_loops"
 TRAVELS = "tyrant_travels"
 IN_PLACE = "Tyrant in place"  # the travelling bone's constraint that hides the travel
+NOTES = "tyrant_notes"  # action: what could not be used of its clip (JSON list)
+REPORT = "tyrant_anim_report"  # armature: what the last animations loaded said (errors and notes, JSON list)
 ONE = Vector((1.0, 1.0, 1.0))
 _Y_UP = rig._GLTF_TO_BLENDER  # glTF (Y up) → Blender (Z up): +90 degrees about X
 
@@ -127,12 +129,15 @@ def load(arm, data, clip):
     sigma = rig._sigma(arm)
     roots = rig._root_names(arm)
     growth = _growth_channels(data)
+    prefab = {r["name"]: r for r in (data or {}).get("rest") or [] if isinstance(r, dict) and r.get("name")}
     bones = arm.data.bones
+    missing = []
     for track in clip.get("bones") or []:
         name_ = track["bone"]
         bone = bones.get(name_)
         pose_bone = arm.pose.bones.get(name_)
         if bone is None or pose_bone is None:
+            missing.append(name_)
             continue
         channels = {k: _channel(track.get(k), k) for k in ("position", "rotation", "scale")}
         times = sorted({t for keys in channels.values() if keys for t, _ in keys})
@@ -141,8 +146,13 @@ def load(arm, data, clip):
         root = name_ in roots
         rest_p, rest_q, rest_s = _rest_local(arm, name_).decompose()
         rest = rig.compose_inverse(table[name_], (rest_p, rest_q, rest_s)) if name_ in table else (rest_p, rest_q, rest_s)
-        # The game's own local for channels the clip does not animate, in glTF terms (a root's is in Blender's Z-up space).
-        rest_gltf = rig._trs(_Y_UP.inverted() @ rig._matrix(rest)) if root else rest
+        # Channels the clip does not animate keep the prefab's own value in game (glTF terms, from Tyrant); without it, the
+        # game's bind local (a root's is in Blender's Z-up space).
+        if name_ in prefab:
+            r = prefab[name_]
+            rest_gltf = (Vector(r["position"]), Quaternion((r["rotation"][3], r["rotation"][0], r["rotation"][1], r["rotation"][2])), Vector(r["scale"]))
+        else:
+            rest_gltf = rig._trs(_Y_UP.inverted() @ rig._matrix(rest)) if root else rest
         frame_of = bone.matrix_local if bone.parent is None else bone.parent.matrix_local.inverted() @ bone.matrix_local
         to_basis = frame_of.inverted()
         parent_sigma = Matrix.Diagonal(sigma.get(bone.parent.name, ONE) if bone.parent is not None else ONE).to_4x4()
@@ -189,6 +199,10 @@ def load(arm, data, clip):
         if control is not None and ik.IK_FK in control:
             control[ik.IK_FK] = 0.0
             control.keyframe_insert(f'["{ik.IK_FK}"]', frame=1, group=chain["name"])
+    notes = [f"{action.name}: {', '.join(missing[:6])}{' and more' if len(missing) > 6 else ''} "
+             f"{'is' if len(missing) == 1 else 'are'} not on this model, so {'it does' if len(missing) == 1 else 'they do'} not move."] if missing else []
+    notes += [f"{action.name}: {note}" for note in clip.get("skipped") or []]
+    action[NOTES] = json.dumps(notes)
     action.use_frame_range = True
     action.frame_start = 1
     action.frame_end = max(1.0, 1.0 + round(length * rate))
@@ -197,15 +211,44 @@ def load(arm, data, clip):
     return action
 
 
-def load_files(arm, data, files):
-    """Loads Tyrant's clip files (written next to the project) as Actions; the first one plays."""
+def load_files(arm, data, files, errors=()):
+    """
+    Loads Tyrant's clip files (written next to the project) as Actions; the first one plays. What Tyrant could not read
+    (errors) and what each clip could not use go into the panel's report.
+    """
     actions = []
     for file in files:
         with open(file, encoding="utf-8") as f:
             actions.append(load(arm, data, json.load(f)))
     if actions:
         play(arm, actions[0])
+    lines = list(errors)
+    for action in actions:
+        lines += json.loads(action.get(NOTES) or "[]")
+    arm[REPORT] = json.dumps(lines)
     return actions
+
+
+def load_pending(arm, data, path):
+    """The project's animation files (asked for at Open in Blender) not yet loaded as Actions, and what Tyrant reported."""
+    folder_ = os.path.dirname(path)
+    loaded = {a.get(CLIP_ID) for a in tyrant_actions()}
+    pending = []
+    for relative in (data or {}).get("animationFiles") or []:
+        file = os.path.join(folder_, relative)
+        if not os.path.isfile(file):
+            continue
+        with open(file, encoding="utf-8") as f:
+            clip_id = json.load(f).get("id")
+        if clip_id not in loaded:
+            pending.append(file)
+    errors = (data or {}).get("animationErrors") or []
+    if pending or errors:
+        load_files(arm, data, pending, errors)
+
+
+def report_failure(arm, what, ex):
+    arm[REPORT] = json.dumps([f"{what} could not be loaded ({type(ex).__name__}: {ex})."])
 
 
 def play(arm, action):

@@ -408,4 +408,15 @@ public class BlenderProjectTests
         Assert.Equal(2, count);
         Assert.Equal(2, BlenderProjectFile.Read(projectFile).Animations!.Count);
     }
+
+    [Fact]
+    public void An_animation_that_cannot_be_read_on_open_is_named_in_the_project()
+    {
+        using var c = SetupWithAnimations();
+
+        var project = BlenderProjectFile.Read(c.Write(new BlenderOpenRequest("Carcharodontosaurus", null, null, false, false) { Animations = ["Carch|Walk", "Carch|Gone"] }).ProjectFile);
+
+        Assert.Single(project.AnimationFiles!);
+        Assert.Contains(project.AnimationErrors!, e => e.Contains("Carch|Gone"));
+    }
 }

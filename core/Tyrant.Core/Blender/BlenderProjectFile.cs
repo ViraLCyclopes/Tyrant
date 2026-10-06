@@ -81,6 +81,9 @@ public sealed record BlenderProject(int Version, string Workspace, string Tyrant
 
     /// <summary>Animation files (project-relative, written by Tyrant) the add-on loads as Actions when it opens the model.</summary>
     public IReadOnlyList<string>? AnimationFiles { get; init; }
+
+    /// <summary>Animations asked for at Open in Blender that could not be written (each named), for the panel's report.</summary>
+    public IReadOnlyList<string>? AnimationErrors { get; init; }
 }
 
 public static class BlenderProjectFile

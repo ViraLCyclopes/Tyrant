@@ -59,10 +59,8 @@ def import_project(path):
         except Exception as ex:  # noqa: BLE001 - a fault in building the controls must not stop the model opening
             armature[ik.SKIPPED] = json.dumps([f"The IK controls could not be built ({type(ex).__name__}: {ex}); the model "
                                                "opened without them. Try Add IK controls in this panel."])
-    files = [os.path.join(folder, f) for f in data.get("animationFiles") or []]
-    if files:
-        try:
-            anims.load_files(armature, data, [f for f in files if os.path.isfile(f)])
-        except Exception as ex:  # noqa: BLE001 - the model still opens without its animations
-            armature["tyrant_anim_report"] = json.dumps([f"The animations could not be loaded ({type(ex).__name__}: {ex})."])
+    try:
+        anims.load_pending(armature, data, path)
+    except Exception as ex:  # noqa: BLE001 - the model still opens without its animations
+        anims.report_failure(armature, "The animations", ex)
     return armature

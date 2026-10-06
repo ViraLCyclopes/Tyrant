@@ -84,6 +84,8 @@ public static class BlenderProjectWriter
         // The model and rig edit the animal wears in game: the skin's entry (a model or a rig edit) wins, else the species'.
         var (rig, rigBaked) = SkinDecides(ownSkin) ? (ownSkin!.Rig, ownSkin.Model is not null && ownSkin.Rig is not null)
             : (speciesEntry?.Rig, modReplacement is not null && speciesEntry?.Rig is not null);
+        (IReadOnlyList<string> Files, IReadOnlyList<string> Errors)? asked = request.Animations.Count == 0 ? null
+            : BlenderService.WriteAnimations(ws, install, index, species, reader, speciesId, dir, request.Animations);
         var materials = Materials(renderers, index, prefabRecord.Bundle, install, reader, mod, ownSkin, vanilla, dir, request.Fresh);
         var project = new BlenderProject(BlenderProjectFile.CurrentVersion, ws.Dir, tyrantExe, modelBuild,
             new BlenderSource(kind, speciesId, ownSkin?.Id ?? vanilla?.Name, mod?.Id),
@@ -103,9 +105,8 @@ public static class BlenderProjectWriter
             RigBaked = rigBaked,
             RigInfo = RigInfoOf(ws, install, index, species, reader, speciesId),
             Animations = AnimationsOf(ws, install, index, species, reader, speciesId),
-            AnimationFiles = request.Animations.Count == 0 ? null
-                : BlenderService.WriteAnimations(ws, install, index, species, reader, speciesId, dir, request.Animations).Files
-                    .Select(f => Path.GetRelativePath(dir, f).Replace(Path.DirectorySeparatorChar, '/')).ToList(),
+            AnimationFiles = asked?.Files.Select(f => Path.GetRelativePath(dir, f).Replace(Path.DirectorySeparatorChar, '/')).ToList(),
+            AnimationErrors = asked is { Errors.Count: > 0 } ? asked.Value.Errors : null,
         };
         BlenderProjectFile.Write(projectFile, project);
         return new BlenderProjectResult(projectFile, dir, gameChanged);

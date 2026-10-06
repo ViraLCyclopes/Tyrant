@@ -5,7 +5,7 @@ import bpy
 
 from . import anims, growth, project, send
 
-REPORT = "tyrant_anim_report"  # armature: what the last Add animations said (errors and notes)
+REPORT = anims.REPORT  # armature: what the last Add animations said (errors and notes)
 
 
 def _armature(context):
@@ -27,14 +27,11 @@ def finish_add(armature_name, path, result):
     armature = bpy.data.objects.get(armature_name)
     if armature is None:
         return
-    lines = list(result.get("errors") or [])
+    errors = list(result.get("errors") or [])
     try:
-        files = result.get("files") or []
-        if files:
-            anims.load_files(armature, project.load(path), files)
-    except (OSError, ValueError, KeyError, project.ProjectError) as ex:
-        lines.append(f"The animations could not be loaded ({ex}).")
-    armature[REPORT] = json.dumps(lines)
+        anims.load_files(armature, project.load(path), result.get("files") or [], errors)
+    except Exception as ex:  # noqa: BLE001 - whatever went wrong is shown in the panel, never left as "reading"
+        armature[REPORT] = json.dumps(errors + [f"The animations could not be loaded ({type(ex).__name__}: {ex})."])
     for window in bpy.context.window_manager.windows if bpy.context.window_manager else []:
         for area in window.screen.areas:
             area.tag_redraw()
