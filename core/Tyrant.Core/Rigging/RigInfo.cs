@@ -29,7 +29,7 @@ public static class RigInfoService
     public static RigInfo For(Workspace ws, GameInstall install, AssetIndex index, IReadOnlyList<SpeciesSkins> species, IAssetReader reader, string speciesId)
     {
         var (id, prefab) = ModProject.ResolveModelTarget(index, species, speciesId, null);
-        var cache = Path.Combine(ws.CacheDir, "rig-info", $"{TextureExporter.Sanitize(id)}-{Key(ws, install, prefab)}.json");
+        var cache = Path.Combine(ws.CacheDir, "rig-info", $"{TextureExporter.Sanitize(id)}-{WorkspaceCache.Key(ws, install, prefab, CacheVersion)}.json");
         if (File.Exists(cache))
         {
             try
@@ -81,26 +81,5 @@ public static class RigInfoService
         var entry = Species.SpeciesCatalog.Find(catalog, name);
         return species.FirstOrDefault(s => string.Equals(s.PrefabGuid, entry.Prefab.Guid, StringComparison.OrdinalIgnoreCase))?.SpeciesId
             ?? throw new TyrantException(TyrantErrorCode.TargetNotFound, $"{entry.DisplayName} is not in the game data; run the data dump again (Workspace → Run data dump, or 'tyrant dump run').");
-    }
-
-    /// <summary>Changes with the species' prefab bundle, the data dump and this code's version.</summary>
-    private static string Key(Workspace ws, GameInstall install, AssetRecord prefab)
-    {
-        static string Stamp(string path)
-        {
-            var info = new FileInfo(path);
-            return info.Exists ? $"{info.Length}|{info.LastWriteTimeUtc.Ticks}" : "-";
-        }
-        string bundle;
-        try
-        {
-            bundle = prefab.IsBuiltIn ? "builtin" : Stamp(Path.Combine(AssetSession.AaDirOf(install), prefab.Bundle.Replace('/', Path.DirectorySeparatorChar)));
-        }
-        catch (ArgumentException)
-        {
-            bundle = "-";
-        }
-        var text = $"{CacheVersion}|{prefab.Ref}|{bundle}|{Stamp(Path.Combine(ws.DataDir, "manifest.json"))}";
-        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)))[..12].ToLowerInvariant();
     }
 }

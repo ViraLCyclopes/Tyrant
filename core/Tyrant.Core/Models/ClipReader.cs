@@ -132,10 +132,26 @@ public static class ClipReader
     {
         var moved = clips.SelectMany(c => c.Bindings).Where(b => b.Attribute == 1 && b.Range > threshold).Select(b => b.PathHash).ToHashSet();
         if (moved.Count == 0) return [];
-        var bound = clips.SelectMany(c => c.Bindings).Select(b => b.PathHash).ToHashSet();
-        var candidates = Within(prefabRoot, 3).ToList();
-        var animatorRoot = candidates.MaxBy(c => PathsBelow(c).Count(p => bound.Contains(p.Hash))) ?? prefabRoot;
+        var animatorRoot = AnimatorRoot(clips.SelectMany(c => c.Bindings).Select(b => b.PathHash), prefabRoot);
         return PathsBelow(animatorRoot).Where(p => moved.Contains(p.Hash)).Select(p => p.Node.Name).ToList();
+    }
+
+    /// <summary>
+    /// The node the clips' paths start below (the Animator's object): of the prefab's top nodes, the one whose paths match
+    /// the most bound path hashes.
+    /// </summary>
+    public static SkeletonNode AnimatorRoot(IEnumerable<uint> boundHashes, SkeletonNode prefabRoot)
+    {
+        var bound = boundHashes.ToHashSet();
+        return Within(prefabRoot, 3).MaxBy(c => PathsBelow(c).Count(p => bound.Contains(p.Hash))) ?? prefabRoot;
+    }
+
+    /// <summary>Every node below <paramref name="animatorRoot"/> by the CRC32 of its path (the first node wins a clash).</summary>
+    public static IReadOnlyDictionary<uint, SkeletonNode> PathHashes(SkeletonNode animatorRoot)
+    {
+        var map = new Dictionary<uint, SkeletonNode>();
+        foreach (var (node, hash) in PathsBelow(animatorRoot)) map.TryAdd(hash, node);
+        return map;
     }
 
     private static IEnumerable<SkeletonNode> Within(SkeletonNode node, int depth)
