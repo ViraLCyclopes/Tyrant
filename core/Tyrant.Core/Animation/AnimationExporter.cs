@@ -46,26 +46,14 @@ public static class AnimationExporter
         var ready = clips.Where(c => c.Clip is not null).Select(c => c.Clip!).ToList();
         Directory.CreateDirectory(outDir);
         var stem = TextureExporter.Sanitize(id);
-        var files = new List<string>();
-        if (ready.Count == 0) return new AnimationExportResult(files, notes);
-        if (singleFile)
-        {
-            var file = Path.Combine(outDir, $"{stem}-animations.glb");
-            reader.WriteAnimatedModel(install, prefab, file, index, ready);
-            files.Add(file);
-        }
-        else
-        {
-            for (var i = 0; i < ready.Count; i++)
-            {
-                ct.ThrowIfCancellationRequested();
-                progress?.Report(new JobProgress((double)i / ready.Count, $"Writing {ready[i].Name}"));
-                var file = Path.Combine(outDir, $"{stem}-{TextureExporter.Sanitize(ready[i].Name)}.glb");
-                reader.WriteAnimatedModel(install, prefab, file, index, [ready[i]]);
-                files.Add(file);
-            }
-        }
+        if (ready.Count == 0) return new AnimationExportResult([], notes);
+        IReadOnlyList<(string Path, IReadOnlyList<ClipAnimation> Animations)> files = singleFile
+            ? [(Path.Combine(outDir, $"{stem}-animations.glb"), ready)]
+            : ready.Select(c => (Path.Combine(outDir, $"{stem}-{TextureExporter.Sanitize(c.Name)}.glb"), (IReadOnlyList<ClipAnimation>)[c])).ToList();
+        ct.ThrowIfCancellationRequested();
+        progress?.Report(new JobProgress(0.5, $"Writing {files.Count} file(s)"));
+        reader.WriteAnimatedModels(install, prefab, index, files);
         progress?.Report(new JobProgress(1, "Done"));
-        return new AnimationExportResult(files, notes);
+        return new AnimationExportResult(files.Select(f => f.Path).ToList(), notes);
     }
 }

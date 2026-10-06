@@ -328,3 +328,59 @@ class AnimTests(unittest.TestCase):
         arm = project.tagged_armatures(scene)[0]
         self.assertIn("Walk", [a.name for a in anims.tyrant_actions()])
         self.assertTrue(any("Carch|Gone" in line for line in json.loads(arm[anims.REPORT])))
+
+    def walk_from_file(self, walk=None):
+        """The calve walk (on the game's skeleton) as Tyrant writes it next to the project, loaded and playing."""
+        folder = os.path.join(os.path.dirname(self.path), "animations")
+        os.makedirs(folder, exist_ok=True)
+        file = os.path.join(folder, "Carch_Walk.json")
+        with open(file, "w", encoding="utf-8") as f:
+            json.dump(walk or self.calve_walk(), f)
+        return anims.load_files(self.arm, self.data, [file])[0]
+
+    def test_a_playing_animation_is_held_off_during_a_rig_edit_and_plays_again_after(self):
+        self.walk_from_file()
+
+        rig.start(self.arm, self.data)
+        self.assertIsNone(self.arm.animation_data.action)
+        self.arm.pose.bones["Calve.L"].location += Vector((0.0, 0.2, 0.0))
+        moved = Vector(self.arm.pose.bones["Calve.L"].location)
+        bpy.context.scene.frame_set(15)
+        self.assertLess((Vector(self.arm.pose.bones["Calve.L"].location) - moved).length, 1e-6)
+        rig.apply(self.arm, self.data)
+
+        self.assertEqual(self.arm.animation_data.action.name, "Walk")
+
+    def test_cancel_puts_the_playing_animation_back(self):
+        self.walk_from_file()
+        rig.start(self.arm, self.data)
+
+        rig.cancel(self.arm, self.data)
+
+        self.assertEqual(self.arm.animation_data.action.name, "Walk")
+
+    def test_after_a_rig_edit_the_animations_play_on_the_new_skeleton(self):
+        p, _, _ = rest_trs(self.arm, "Calve.L")
+        self.walk_from_file()
+        rig.start(self.arm, self.data)
+        self.arm.pose.bones["Femur.L"].scale = Vector((2.0, 2.0, 2.0))
+        rig.apply(self.arm, self.data)
+
+        bpy.context.scene.frame_set(31)
+
+        # The game puts the calve where the clip keys it under the scaled thigh (the clip's local, unscaled).
+        self.assertLess((true_local(self.arm, "Calve.L").translation - (p + Vector((0, 0.1, 0)))).length, 1e-3)
+
+    def test_after_clearing_the_rig_edit_the_animations_play_on_the_games_skeleton(self):
+        p, _, _ = rest_trs(self.arm, "Calve.L")
+        walk = self.calve_walk()
+        rig.start(self.arm, self.data)
+        self.arm.pose.bones["Femur.L"].scale = Vector((2.0, 2.0, 2.0))
+        rig.apply(self.arm, self.data)
+        self.walk_from_file(walk)
+
+        rig.clear(self.arm, self.data)
+        bpy.context.scene.frame_set(31)
+
+        self.assertEqual(self.arm.animation_data.action.name, "Walk")
+        self.assertLess((true_local(self.arm, "Calve.L").translation - (p + Vector((0, 0.1, 0)))).length, 1e-3)

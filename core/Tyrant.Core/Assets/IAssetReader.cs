@@ -70,10 +70,11 @@ public interface IAssetReader
     (IReadOnlyList<Animation.RawClip> Clips, IReadOnlyList<string> Failures) ReadRawClips(GameInstall install, IReadOnlyList<AssetRecord> clips);
 
     /// <summary>
-    /// The prefab's first level of detail with the game's materials (textures in <paramref name="path"/>'s folder, shared) and
-    /// the animations as glTF animations, written as one .glb.
+    /// The prefab's first level of detail with the game's materials (textures in each file's folder, shared) and the
+    /// animations as glTF animations: one .glb per file, the prefab and its textures read once for them all.
     /// </summary>
-    void WriteAnimatedModel(GameInstall install, AssetRecord prefab, string path, AssetIndex index, IReadOnlyList<Animation.ClipAnimation> animations);
+    void WriteAnimatedModels(GameInstall install, AssetRecord prefab, AssetIndex index,
+        IReadOnlyList<(string Path, IReadOnlyList<Animation.ClipAnimation> Animations)> files);
 
     /// <summary>The prefab's materials (each renderer's, distinct by name), for the skin page's slot list.</summary>
     IReadOnlyList<MaterialModel> ReadMaterials(GameInstall install, AssetRecord prefab);

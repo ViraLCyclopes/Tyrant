@@ -97,4 +97,17 @@ public class AnimationExporterTests
         Assert.Contains("bake_anim_use_all_actions=True", Tyrant.Core.Blender.BlenderModelConverter.Scripts.GlbToFbx);
         Assert.Contains("bake_anim=bool(bpy.data.actions)", Tyrant.Core.Blender.BlenderModelConverter.Scripts.GlbToFbx);
     }
+
+    [Fact]
+    public void The_model_and_its_textures_are_read_once_however_many_files_are_written()
+    {
+        var (game, ws, install, reader, index) = Setup();
+        using var _ = game;
+
+        var result = AnimationExporter.Export(install, ws, index, SpeciesSkinsReader.Load(ws), reader, "Carcharodontosaurus",
+            ["Carch|Walk", "Carch|Roar"], Path.Combine(ws.Dir, "out"), singleFile: false, null, CancellationToken.None);
+
+        Assert.Equal(2, result.Files.Count);
+        Assert.Equal(1, reader.AnimatedModelReads);
+    }
 }

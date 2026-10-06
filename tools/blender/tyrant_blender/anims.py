@@ -110,7 +110,10 @@ def _keys(action, arm, path, index, group, frames, values):
 def load(arm, data, clip):
     """Creates (or replaces) the Action of one clip file's content and returns it (it is not made to play)."""
     name = clip.get("name") or clip.get("id") or "Animation"
+    previous = arm.animation_data.action if arm.animation_data else None
     for old in [a for a in bpy.data.actions if a.get(CLIP_ID) == clip.get("id")]:
+        if old == previous:
+            previous = None
         bpy.data.actions.remove(old)
     action = bpy.data.actions.new(name)
     action.use_fake_user = True
@@ -121,7 +124,6 @@ def load(arm, data, clip):
     action[TRAVELS] = bool(clip.get("travels"))
     length = float(clip.get("length") or 0.0)
 
-    previous = arm.animation_data.action if arm.animation_data else None
     arm.animation_data_create()
     arm.animation_data.action = action  # the keys are made for this armature's slot
 
@@ -245,6 +247,53 @@ def load_pending(arm, data, path):
     errors = (data or {}).get("animationErrors") or []
     if pending or errors:
         load_files(arm, data, pending, errors)
+
+
+def hold(arm):
+    """Takes the playing Action off the armature while a rig edit poses the bones by hand; returns its name (or None)."""
+    action = arm.animation_data.action if arm.animation_data else None
+    if action is None:
+        return None
+    arm.animation_data.action = None
+    return action.name
+
+
+def after_rig_change(arm, data, playing, rebuild=True):
+    """
+    After a rig edit: the rest pose changed (rebuild), so this model's Actions from Tyrant are made again from their clip files
+    (their keys are relative to the rest pose); then the Action that played plays again.
+    """
+    if rebuild:
+        lines = []
+        try:
+            for clip in _project_clips(arm):
+                if any(a.get(CLIP_ID) == clip.get("id") for a in tyrant_actions()):
+                    lines += json.loads(load(arm, data, clip).get(NOTES) or "[]")
+        except Exception as ex:  # noqa: BLE001 - the rig edit stands; the panel says the animations need adding again
+            lines.append(f"The animations could not be redone for the rig edit ({type(ex).__name__}: {ex}); add them again.")
+        if lines:
+            arm[REPORT] = json.dumps(lines)
+    action = bpy.data.actions.get(playing) if playing else None
+    if action is not None:
+        arm.animation_data_create()
+        arm.animation_data.action = action
+        bpy.context.scene.frame_set(bpy.context.scene.frame_current)
+
+
+def _project_clips(arm):
+    """The clip files Tyrant wrote next to this model's project."""
+    from . import project
+
+    path = arm.get(project.TAG)
+    where = folder(path) if path else None
+    if not where or not os.path.isdir(where):
+        return []
+    clips = []
+    for name in sorted(os.listdir(where)):
+        if name.endswith(".json"):
+            with open(os.path.join(where, name), encoding="utf-8") as f:
+                clips.append(json.load(f))
+    return clips
 
 
 def report_failure(arm, what, ex):

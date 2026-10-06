@@ -331,9 +331,13 @@ def start(arm, data=None):
     """Remembers the pose shown (at adult, IK controls off) as where the rig edit starts."""
     if editing(arm):
         raise RigError("A rig edit is already started: Apply it or Cancel it first.")
+    from . import anims
+
+    playing = anims.hold(arm)  # an Action would put its keys back over the bones being edited
     shown, had_ik = _ready(arm, data)
     reference = _true_locals(arm, _sigma(arm))
-    arm[START] = json.dumps({"locals": {k: _flat(v) for k, v in reference.items()}, "growth": shown, "ik": had_ik})
+    arm[START] = json.dumps({"locals": {k: _flat(v) for k, v in reference.items()}, "growth": shown, "ik": had_ik,
+                             "action": playing})
 
 
 def _started(arm):
@@ -367,17 +371,23 @@ def apply(arm, data):
         offset = (p1 - turn @ _mul(grow, p0), turn, grow)
         if not _identity(offset):
             new[name] = offset
+    from . import anims
+
     _reshape(arm, data, new, stance_game)
     del arm[START]
     _restore(arm, data, state.get("growth", 1.0), state.get("ik", False))
+    anims.after_rig_change(arm, data, state.get("action"))
 
 
 def cancel(arm, data=None):
     """Puts the pose back as it was at Start; nothing is recorded."""
     state = _started(arm)
+    from . import anims
+
     _pose_to(arm, {k: _unflat(v) for k, v in state["locals"].items()}, _sigma(arm))
     del arm[START]
     _restore(arm, data, state.get("growth", 1.0), state.get("ik", False))
+    anims.after_rig_change(arm, data, state.get("action"), rebuild=False)
 
 
 def clear(arm, data):
@@ -387,11 +397,15 @@ def clear(arm, data):
     old = offsets(arm)
     if not old:
         raise RigError("This armature has no rig edit.")
+    from . import anims
+
+    playing = anims.hold(arm)
     shown, had_ik = _ready(arm, data)
     now = _true_locals(arm, _sigma(arm))
     stance_game = {name: (compose_inverse(old[name], _trs(local)) if name in old else _trs(local)) for name, local in now.items()}
     _reshape(arm, data, {}, stance_game)
     _restore(arm, data, shown, had_ik)
+    anims.after_rig_change(arm, data, playing)
 
 
 def adopt(arm, data):
