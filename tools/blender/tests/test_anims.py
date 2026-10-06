@@ -384,3 +384,14 @@ class AnimTests(unittest.TestCase):
 
         self.assertEqual(self.arm.animation_data.action.name, "Walk")
         self.assertLess((true_local(self.arm, "Calve.L").translation - (p + Vector((0, 0.1, 0)))).length, 1e-3)
+
+    def test_select_all_and_clear_tick_every_animation_in_the_add_list(self):
+        items = bpy.context.window_manager.tyrant_anim_items
+        items.clear()
+        for clip_id in ("Carch|Walk", "Carch|Roar", "Carch|Idle"):
+            items.add().clip_id = clip_id
+
+        bpy.ops.tyrant.anim_pick_all(pick=True)
+        self.assertTrue(all(item.pick for item in items))
+        bpy.ops.tyrant.anim_pick_all(pick=False)
+        self.assertFalse(any(item.pick for item in items))
