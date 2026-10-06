@@ -36,13 +36,45 @@ public static class GltfModelWriter
     }
 
     /// <summary>Several renderers of a prefab on one armature in one .glb (Blender projects: LOD0, optionally the far LODs).</summary>
-    public static void WriteGlb(PrefabModel model, IReadOnlyList<RendererModel> renderers, string path, Func<RendererModel, IReadOnlyList<GltfMaterial>?>? materials = null)
+    /// <param name="animations">Game animations to add as glTF animations (named after each clip), keyed on the nodes their bones name.</param>
+    public static void WriteGlb(PrefabModel model, IReadOnlyList<RendererModel> renderers, string path, Func<RendererModel, IReadOnlyList<GltfMaterial>?>? materials = null,
+        IReadOnlyList<Animation.ClipAnimation>? animations = null)
     {
         var nodes = new Dictionary<SkeletonNode, NodeBuilder>();
         var scene = new SceneBuilder();
         scene.AddNode(BuildNodes(model.Root, null, nodes));
         foreach (var renderer in renderers) AddRenderer(scene, nodes, renderer, materials?.Invoke(renderer));
+        if (animations is not null) AddAnimations(nodes, animations);
         Save(scene, path);
+    }
+
+    /// <summary>Each clip's keys (Unity space) as linear glTF tracks on the node of the same name (the first one, for a reused name).</summary>
+    private static void AddAnimations(Dictionary<SkeletonNode, NodeBuilder> nodes, IReadOnlyList<Animation.ClipAnimation> animations)
+    {
+        var byName = new Dictionary<string, NodeBuilder>(StringComparer.Ordinal);
+        foreach (var (node, builder) in nodes) byName.TryAdd(node.Name, builder);
+        foreach (var clip in animations)
+        {
+            foreach (var track in clip.Bones)
+            {
+                if (!byName.TryGetValue(track.Bone, out var node)) continue;
+                if (track.Position is { Count: > 0 } positions)
+                {
+                    var curve = node.UseTranslation(clip.Name);
+                    foreach (var k in positions) curve.SetPoint(k.Time, UnityToGltf.Position(new Vector3(k.X, k.Y, k.Z)), true);
+                }
+                if (track.Rotation is { Count: > 0 } rotations)
+                {
+                    var curve = node.UseRotation(clip.Name);
+                    foreach (var k in rotations) curve.SetPoint(k.Time, UnityToGltf.Rotation(new Quaternion(k.X, k.Y, k.Z, k.W)), true);
+                }
+                if (track.Scale is { Count: > 0 } scales)
+                {
+                    var curve = node.UseScale(clip.Name);
+                    foreach (var k in scales) curve.SetPoint(k.Time, new Vector3(k.X, k.Y, k.Z), true);
+                }
+            }
+        }
     }
 
     /// <summary>Every renderer of a prefab in one .glb (tests: a file with several meshes, as Blender writes when objects are not joined).</summary>

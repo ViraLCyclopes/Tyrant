@@ -68,6 +68,7 @@ public static class CliApp
                 species.AddCommand<SpeciesIkCommand>("ik")
                     .WithDescription("List a species' IK chains (Open in Blender builds them as IK controls).");
                 species.AddCommand<SpeciesAnimationsCommand>("animations").WithDescription("List a species' animations in the game (for Blender and exports).");
+                species.AddCommand<SpeciesExportAnimationsCommand>("export-animations").WithDescription("Export a species' animations as FBX (default) or glb files.");
                 species.AddCommand<SpeciesRigInfoCommand>("rig-info")
                     .WithDescription("List the bones a species' animations move and the bones its growth positions or scales (for rig edits).");
                 species.AddCommand<SpeciesPackCommand>("pack")

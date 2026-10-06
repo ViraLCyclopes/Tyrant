@@ -121,4 +121,15 @@ public class SpeciesCliTests
         Assert.Contains(lines, l => l.Contains("2 animation(s)"));
         Assert.All(string.Join("", lines), c => Assert.True(c < 128, $"non-ASCII '{c}'"));
     }
+
+    [Fact]
+    public void Export_animations_needs_names_or_all()
+    {
+        using var game = new FakeGame();
+
+        var (code, _, err) = Run("species", "export-animations", "carcharodontosaurus", "-w", IndexedWorkspace(game));
+
+        Assert.Equal(ExitCodes.Error, code);
+        Assert.Contains("--all", err);
+    }
 }

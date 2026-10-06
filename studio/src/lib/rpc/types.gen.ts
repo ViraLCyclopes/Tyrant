@@ -933,6 +933,21 @@ export interface SpeciesAnimationsResult {
   animations: AnimationInfo[];
 }
 
+export interface SpeciesExportAnimationsParams {
+  species: string;
+  ids?: string[] | null;
+  all?: boolean;
+  format?: string | null;
+  singleFile?: boolean;
+  out?: string | null;
+}
+
+export interface SpeciesExportAnimationsResult {
+  directory: string;
+  files: string[];
+  notes: string[];
+}
+
 export interface SpeciesIkParams {
   key: string;
 }
@@ -948,6 +963,7 @@ export interface SpeciesListResult {
 export interface SpeciesPackParams {
   key: string;
   format?: string | null;
+  animations?: string | null;
 }
 
 export interface SpeciesPackRunResult {
@@ -1100,6 +1116,7 @@ export interface RpcMethods {
   "sounds.forSpecies": { params: SoundsForSpeciesParams; result: SoundsForSpeciesResult };
   "sounds.search": { params: SoundsSearchParams; result: SoundsSearchResult };
   "species.animations": { params: SpeciesAnimationsParams; result: SpeciesAnimationsResult };
+  "species.exportAnimations": { params: SpeciesExportAnimationsParams; result: JobStarted };
   "species.ik": { params: SpeciesIkParams; result: SpeciesIkResult };
   "species.list": { params: void; result: SpeciesListResult };
   "species.pack": { params: SpeciesPackParams; result: JobStarted };
@@ -1119,6 +1136,7 @@ export interface RpcJobs {
   "dump.run": DumpRunResult;
   "mods.export": ModExportResult;
   "mods.install": ModInstallResult;
+  "species.exportAnimations": SpeciesExportAnimationsResult;
   "species.pack": SpeciesPackRunResult;
   "workspace.refreshAll": RefreshAllResult;
 }

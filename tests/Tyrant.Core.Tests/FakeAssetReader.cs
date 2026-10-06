@@ -56,6 +56,14 @@ public sealed class FakeAssetReader : IAssetReader
         return (ClipsToReturn, []);
     }
 
+    /// <summary>Writes a real .glb (no textures) of PrefabModelToReturn's first LOD with the animations.</summary>
+    public void WriteAnimatedModel(GameInstall install, AssetRecord prefab, string path, AssetIndex index, IReadOnlyList<Tyrant.Core.Animation.ClipAnimation> animations)
+    {
+        Fail(prefab);
+        var model = PrefabModelToReturn ?? throw new InvalidOperationException("Set PrefabModelToReturn.");
+        GltfModelWriter.WriteGlb(model, Tyrant.Core.ModelReplacements.ModelBuilder.GameRenderers(model).Take(1).ToList(), path, null, animations);
+    }
+
     /// <summary>What ReadRawClips returns (whatever clips are asked for), and the clips asked for last.</summary>
     public IReadOnlyList<Tyrant.Core.Animation.RawClip> RawClipsToReturn { get; set; } = [];
     public IReadOnlyList<AssetRecord> LastRawClipsAsked { get; private set; } = [];

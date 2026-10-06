@@ -111,6 +111,17 @@ public sealed class BundleAssetReader : IAssetReader
         return new ModelExporter().ReadPrefab(session, prefab);
     }
 
+    public void WriteAnimatedModel(GameInstall install, AssetRecord prefab, string path, AssetIndex index, IReadOnlyList<Animation.ClipAnimation> animations)
+    {
+        using var lease = Session(install, out var session);
+        var model = new ModelExporter().ReadPrefab(session, prefab);
+        var lod0 = Tyrant.Core.ModelReplacements.ModelBuilder.GameRenderers(model).Take(1).ToList();
+        session.Release();
+        var dir = Path.GetDirectoryName(Path.GetFullPath(path))!;
+        var textures = ModelTextures.Write(session, index, prefab.Bundle, model, dir);
+        GltfModelWriter.WriteGlb(model, lod0, path, r => textures.For(r), animations);
+    }
+
     public (IReadOnlyList<ClipChannels> Clips, IReadOnlyList<string> Failures) ReadClips(GameInstall install, IReadOnlyList<AssetRecord> clips)
     {
         var (raw, failures) = ReadRawClips(install, clips);

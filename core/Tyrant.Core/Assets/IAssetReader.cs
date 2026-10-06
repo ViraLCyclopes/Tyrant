@@ -69,6 +69,12 @@ public interface IAssetReader
     /// <summary>Each animation clip's curve data as stored (animation import); unreadable clips are named in Failures.</summary>
     (IReadOnlyList<Animation.RawClip> Clips, IReadOnlyList<string> Failures) ReadRawClips(GameInstall install, IReadOnlyList<AssetRecord> clips);
 
+    /// <summary>
+    /// The prefab's first level of detail with the game's materials (textures in <paramref name="path"/>'s folder, shared) and
+    /// the animations as glTF animations, written as one .glb.
+    /// </summary>
+    void WriteAnimatedModel(GameInstall install, AssetRecord prefab, string path, AssetIndex index, IReadOnlyList<Animation.ClipAnimation> animations);
+
     /// <summary>The prefab's materials (each renderer's, distinct by name), for the skin page's slot list.</summary>
     IReadOnlyList<MaterialModel> ReadMaterials(GameInstall install, AssetRecord prefab);
 

@@ -101,6 +101,14 @@ public sealed partial class AssetsMethods
             if (converter is not null)
                 notes.AddRange(ModelFormats.Apply(converter, [.. result.Models.Where(m => m.Success).Select(m => m.OutputPath)], format, keepGlb: true,
                     v => progress.Report(new Tyrant.Core.Jobs.JobProgress(v, "Converting models to FBX")), ct).Notes);
+            if (string.Equals(p.Animations, "all", StringComparison.OrdinalIgnoreCase))
+            {
+                var dumped = Tyrant.Core.Mods.SpeciesSkinsReader.Load(ws);
+                var id = Tyrant.Core.Rigging.RigInfoService.SpeciesIdOf(species.Key, dumped, SpeciesCatalog.FromIndex(index));
+                var ids = Tyrant.Core.Animation.AnimationService.List(ws, install, index, dumped, Reader, id).Select(a => a.Id).ToList();
+                notes.AddRange(Tyrant.Core.Animation.AnimationExporter.Run(install, ws, index, dumped, Reader, id, ids,
+                    Path.Combine(result.Directory, "animations"), false, format, converter, progress, ct).Notes);
+            }
             return new SpeciesPackRunResult(result.Directory, result.Models.Count(m => m.Success), result.Textures.Count(t => t.Success),
                 result.Models.Count(m => !m.Success) + result.Textures.Count(t => !t.Success), result.TargetsPath, notes);
         });
@@ -114,6 +122,25 @@ public sealed partial class AssetsMethods
         var species = SpeciesCatalog.Find(SpeciesCatalog.FromIndex(index), p.Key);
         var chains = BlenderIkReader.From(Reader.ReadPrefabModel(install, species.Prefab))?.Chains ?? [];
         return new SpeciesIkResult(chains.Select(c => new IkChainRow(c.Name, c.Kind, c.Joints.Select(j => j.Name).ToList(), BlenderIkReader.PoleFrom(c), c.Influence)).ToList());
+    }
+
+    /// <summary>A species' animations as files (the Species tab's Export animations): a job, FBX by default.</summary>
+    [RpcMethod("species.exportAnimations", JobResult = typeof(SpeciesExportAnimationsResult))]
+    public JobStarted ExportAnimations(SpeciesExportAnimationsParams p)
+    {
+        var (ws, install, index) = Open();
+        var (format, converter) = FormatOf(ws, p.Format ?? "fbx");
+        var species = Tyrant.Core.Mods.SpeciesSkinsReader.Load(ws);
+        var id = Tyrant.Core.Rigging.RigInfoService.SpeciesIdOf(p.Species, species, SpeciesCatalog.FromIndex(index));
+        if (!p.All && (p.Ids is null || p.Ids.Count == 0))
+            throw new Tyrant.Core.Errors.TyrantException(Tyrant.Core.Errors.TyrantErrorCode.ModInvalid, "Tick the animations to export (or choose Select all).");
+        var outDir = p.Out ?? Path.Combine(ws.AssetsDir, "animations", Tyrant.Core.Assets.TextureExporter.Sanitize(id));
+        return _jobs.Start($"Animations: {id}", (progress, ct) =>
+        {
+            var ids = p.All ? Tyrant.Core.Animation.AnimationService.List(ws, install, index, species, Reader, id).Select(a => a.Id).ToList() : p.Ids!.ToList();
+            var result = Tyrant.Core.Animation.AnimationExporter.Run(install, ws, index, species, Reader, id, ids, outDir, p.SingleFile, format, converter, progress, ct);
+            return new SpeciesExportAnimationsResult(outDir, result.Files, result.Notes);
+        });
     }
 
     /// <summary>A species' animations in the game (the Species tab's Animations list).</summary>
