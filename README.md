@@ -223,4 +223,5 @@ for the release checklist.
 Tyrant is free software under the [GNU General Public License v3.0](LICENSE): you may use, study, share and change it;
 if you share a changed version, share its source under the same licence. See [NOTICE](NOTICE) for the third-party
 files it includes. Prehistoric Kingdom and its content belong to its developer and publisher; Tyrant is a fan-made tool
-and is not affiliated with them.
+and is not affiliated with them. Using Tyrant, its name and logo, and sharing what you make with it: see the
+[terms of use and trademark policy](TERMS.md).
