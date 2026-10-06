@@ -538,6 +538,24 @@ def snap_controls(arm, names=None):
     refresh(arm)
 
 
+def follow_fk(arm, names):
+    """
+    snap_controls for chains already in FK, from the pose the frame already has: no IK/FK switch and no evaluation, so it
+    is safe inside a frame-change handler (making Blender evaluate there crashed Blender 5.0).
+    """
+    pose = arm.pose.bones
+    for c in built(arm):
+        if c["name"] not in names:
+            continue
+        was = {key: unflat(values) for key, values in c["shown"].items()}
+        tip, knee = pose[c["joints"][-1]].matrix.copy(), pose[c["joints"][1]].matrix.copy()
+        pose[c["target"]].matrix = _unscaled(tip @ was["tipJoint"].inverted() @ was["target"])
+        if c.get("pole"):
+            pose[c["pole"]].matrix = _unscaled(knee @ was["knee"].inverted() @ was["pole"])
+        if c.get("look"):
+            pose[c["look"]].matrix = _unscaled(tip @ was["tipJoint"].inverted() @ was["look"])
+
+
 # --- removing, baking, resetting -------------------------------------------------------------------------------------------
 
 def _keep_what_the_chains_show(arm):
