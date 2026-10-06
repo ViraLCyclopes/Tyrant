@@ -65,4 +65,18 @@ public class ClipReaderTests
         Assert.Equal(["Carch|Walk", "Carch|Idle"], names);
         Assert.Empty(ClipReader.ClipNames(DataStore.OpenDirectory(dir), "Stegosaurus"));
     }
+
+    [Fact]
+    public void Channel_ranges_come_from_a_raw_clip()
+    {
+        // A position binding on 3 dense curves whose x changes by 0.2; a scale binding on 3 constants.
+        var clip = ClipEvaluatorTests.Clip([], 0, [0, 0, 0, 0.2f, 0, 0], 3, 2, [1, 1, 1],
+            [new Tyrant.Core.Animation.ClipBindingRaw(ClipReader.Crc32("MainBone"), 1), new Tyrant.Core.Animation.ClipBindingRaw(ClipReader.Crc32("MainBone"), 3)]);
+
+        var channels = ClipReader.Channels(clip);
+
+        Assert.Equal("Test|Walk", channels.Name);
+        Assert.Equal(0.2f, channels.Bindings[0].Range, 5);
+        Assert.Equal(0f, channels.Bindings[1].Range);
+    }
 }

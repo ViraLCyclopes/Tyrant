@@ -113,15 +113,21 @@ public sealed class BundleAssetReader : IAssetReader
 
     public (IReadOnlyList<ClipChannels> Clips, IReadOnlyList<string> Failures) ReadClips(GameInstall install, IReadOnlyList<AssetRecord> clips)
     {
+        var (raw, failures) = ReadRawClips(install, clips);
+        return (raw.Select(ClipReader.Channels).ToList(), failures);
+    }
+
+    public (IReadOnlyList<Animation.RawClip> Clips, IReadOnlyList<string> Failures) ReadRawClips(GameInstall install, IReadOnlyList<AssetRecord> clips)
+    {
         using var lease = Session(install, out var session);
-        var read = new List<ClipChannels>();
+        var read = new List<Animation.RawClip>();
         var failures = new List<string>();
         foreach (var clip in clips)
         {
             try
             {
                 var (_, root) = session.Open(clip);
-                read.Add(ClipReader.Decode(root));
+                read.Add(ClipReader.Raw(root));
             }
             catch (Exception ex) when (ex is TyrantException or InvalidDataException or IndexOutOfRangeException or NullReferenceException or ArgumentException)
             {

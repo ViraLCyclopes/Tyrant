@@ -64,19 +64,30 @@ public static class ClipReader
         }
     }
 
-    /// <summary>A clip's bindings and how far each moves: streamed, dense and constant curves (Mecanim's muscle clip).</summary>
-    public static ClipChannels Decode(AssetTypeValueField clip)
+    /// <summary>A clip's curve data and bindings as stored (Mecanim's muscle clip: streamed, dense and constant curves).</summary>
+    public static Animation.RawClip Raw(AssetTypeValueField clip)
     {
-        var data = clip["m_MuscleClip"]["m_Clip"]["data"];
+        var muscle = clip["m_MuscleClip"];
+        var data = muscle["m_Clip"]["data"];
         var streamed = data["m_StreamedClip"];
-        var streamedCount = (int)streamed["curveCount"].AsUInt;
-        var words = streamed["data"]["Array"].Children.Select(c => c.AsUInt).ToArray();
         var dense = data["m_DenseClip"];
-        var denseCount = dense["m_CurveCount"].AsInt;
-        var frames = dense["m_FrameCount"].AsInt;
-        var samples = dense["m_SampleArray"]["Array"].Children.Select(c => c.AsFloat).ToArray();
-        var constant = data["m_ConstantClip"]["data"]["Array"].Children.Select(c => c.AsFloat).ToArray();
-        var total = streamedCount + denseCount + constant.Length;
+        static float Float(AssetTypeValueField f) => f.IsDummy ? 0f : f.AsFloat;
+        var bindings = clip["m_ClipBindingConstant"]["genericBindings"]["Array"].Children
+            .Select(b => new Animation.ClipBindingRaw(b["path"].AsUInt, (int)b["attribute"].AsUInt)).ToList();
+        return new Animation.RawClip(
+            clip["m_Name"].AsString, Float(clip["m_SampleRate"]), Float(muscle["m_StartTime"]), Float(muscle["m_StopTime"]),
+            !muscle["m_LoopTime"].IsDummy && muscle["m_LoopTime"].AsBool,
+            (int)streamed["curveCount"].AsUInt, streamed["data"]["Array"].Children.Select(c => c.AsUInt).ToArray(),
+            dense["m_CurveCount"].AsInt, dense["m_FrameCount"].AsInt, Float(dense["m_BeginTime"]),
+            dense["m_SampleArray"]["Array"].Children.Select(c => c.AsFloat).ToArray(),
+            data["m_ConstantClip"]["data"]["Array"].Children.Select(c => c.AsFloat).ToArray(),
+            bindings);
+    }
+
+    /// <summary>A clip's bindings and how far each moves (0 for constants): the largest change of any of its curves.</summary>
+    public static ClipChannels Channels(Animation.RawClip clip)
+    {
+        var total = clip.CurveCount;
         var min = Enumerable.Repeat(float.MaxValue, total).ToArray();
         var max = Enumerable.Repeat(float.MinValue, total).ToArray();
         void See(int curve, float value)
@@ -86,6 +97,7 @@ public static class ClipReader
             max[curve] = Math.Max(max[curve], value);
         }
         // Streamed: frames of (time, key count, keys of (curve index, 4 coefficients)); the 4th coefficient is the value at the key.
+        var words = clip.Streamed;
         for (var p = 0; p + 1 < words.Length;)
         {
             var keys = (int)words[p + 1];
@@ -93,25 +105,23 @@ public static class ClipReader
             for (var k = 0; k < keys && p + 4 < words.Length; k++, p += 5)
                 See((int)words[p], BitConverter.UInt32BitsToSingle(words[p + 4]));
         }
-        for (var f = 0; f < frames; f++)
-            for (var c = 0; c < denseCount && f * denseCount + c < samples.Length; c++)
-                See(streamedCount + c, samples[f * denseCount + c]);
-        for (var c = 0; c < constant.Length; c++) See(streamedCount + denseCount + c, constant[c]);
+        for (var f = 0; f < clip.DenseFrames; f++)
+            for (var c = 0; c < clip.DenseCurves && f * clip.DenseCurves + c < clip.Dense.Length; c++)
+                See(clip.StreamedCurves + c, clip.Dense[f * clip.DenseCurves + c]);
 
         var bindings = new List<ClipBinding>();
         var offset = 0;
-        foreach (var b in clip["m_ClipBindingConstant"]["genericBindings"]["Array"].Children)
+        var animatedCurves = clip.StreamedCurves + clip.DenseCurves;
+        foreach (var b in clip.Bindings)
         {
-            var attribute = (int)b["attribute"].AsUInt;
-            var dims = attribute switch { 1 => 3, 2 => 4, 3 => 3, 4 => 3, _ => 1 };
-            var animated = offset < streamedCount + denseCount;
-            var range = animated
+            var dims = Animation.RawClip.Dims(b.Attribute);
+            var range = offset < animatedCurves
                 ? Enumerable.Range(offset, dims).Where(i => i < total && max[i] >= min[i]).Select(i => max[i] - min[i]).DefaultIfEmpty(0).Max()
                 : 0f;
-            bindings.Add(new ClipBinding(b["path"].AsUInt, attribute, range));
+            bindings.Add(new ClipBinding(b.PathHash, b.Attribute, range));
             offset += dims;
         }
-        return new ClipChannels(clip["m_Name"].AsString, bindings);
+        return new ClipChannels(clip.Name, bindings);
     }
 
     /// <summary>
