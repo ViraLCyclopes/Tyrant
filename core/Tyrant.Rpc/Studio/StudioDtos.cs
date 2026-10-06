@@ -25,8 +25,6 @@ public sealed record GamePackageFrameworkParams(string? Out = null);
 
 public sealed record GamePackageFrameworkResult(string Path);
 
-/// <summary>The version on Tyrant's Nexus page and its address; all null when the page is not set up; Error when Nexus failed.</summary>
-public sealed record NexusCheck(string? Version, string? Url, string? Error);
 
 public sealed record DumperUninstallResult(bool RemovedLoader, string Message);
 

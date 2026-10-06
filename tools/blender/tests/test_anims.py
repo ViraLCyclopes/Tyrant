@@ -384,3 +384,44 @@ class AnimTests(unittest.TestCase):
 
         self.assertEqual(self.arm.animation_data.action.name, "Walk")
         self.assertLess((true_local(self.arm, "Calve.L").translation - (p + Vector((0, 0.1, 0)))).length, 1e-3)
+
+    def test_select_all_and_clear_tick_every_animation_in_the_add_list(self):
+        items = bpy.context.window_manager.tyrant_anim_items
+        items.clear()
+        for clip_id in ("Carch|Walk", "Carch|Roar", "Carch|Idle"):
+            items.add().clip_id = clip_id
+
+        bpy.ops.tyrant.anim_pick_all(pick=True)
+        self.assertTrue(all(item.pick for item in items))
+        bpy.ops.tyrant.anim_pick_all(pick=False)
+        self.assertFalse(any(item.pick for item in items))
+
+    def test_a_track_on_the_armature_object_itself_is_not_reported_as_a_missing_bone(self):
+        walk = self.calve_walk()
+        walk["bones"].append(dict(walk["bones"][0], bone=self.arm.name))
+
+        action = anims.load(self.arm, self.data, walk)
+
+        self.assertEqual(json.loads(action[anims.NOTES]), [])
+
+    def test_while_a_chain_plays_in_fk_its_controls_follow_the_animation(self):
+        bpy.ops.wm.read_factory_settings(use_empty=True)
+        arm, path = open_ik(controls=True)
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        p, q, s = rest_trs(arm, "Calve.L")
+        turned = Quaternion((1, 0, 0), 0.5) @ q
+        anims.play(arm, anims.load(arm, data, clip("Walk", {"Calve.L": [(0.0, (p, q, s)), (1.0, (p, turned, s))]})))
+        chain = next(c for c in ik.built(arm) if c["name"] == "Leg L")
+        control = arm.pose.bones[chain["target"]]
+        bpy.context.view_layer.update()
+        at_start = control.matrix.translation.copy()
+
+        bpy.context.scene.frame_set(16)
+        bpy.context.view_layer.update()
+        followed = control.matrix.translation.copy()
+        ik.snap_controls(arm, [chain["name"]])
+        bpy.context.view_layer.update()
+
+        self.assertGreater((followed - at_start).length, 0.01)  # the foot moved, and its control with it
+        self.assertLess((followed - control.matrix.translation).length, 1e-4)  # exactly where the foot has it

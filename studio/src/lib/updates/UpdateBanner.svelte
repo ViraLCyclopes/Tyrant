@@ -1,32 +1,22 @@
 <script lang="ts">
   import { RELEASES, type Updates } from './updates.svelte';
 
-  /** Tyrant's own update: Update now (GitHub), the Nexus page, Later; or a note from Help → Check for updates. */
+  /** Tyrant's own update: Update now, What's new, Later; or a note from Help → Check for updates. */
   let { updates }: { updates: Updates } = $props();
   const platform = $derived(updates.platform);
 </script>
 
 {#if updates.offer}
+  {@const page = `${RELEASES}/tag/v${updates.offer.version}`}
   <div class="banner" role="status">
-    {#if updates.offer.kind === 'github'}
-      <strong>Tyrant {updates.offer.version} is available</strong>
-      {#if updates.offer.notes}<details><summary>Notes</summary><p class="notes">{updates.offer.notes}</p></details>{/if}
-      {#if updates.installing}
-        <span>Installing…{updates.progress !== null ? ` ${Math.round(updates.progress * 100)}%` : ''}</span>
-      {:else}
-        <button class="primary" onclick={() => void updates.install()}>Update now</button>
-      {/if}
-      {@const page = `${RELEASES}/tag/v${updates.offer.version}`}
-      <button class="ghost" onclick={() => void platform.openUrl(page)}>What's new</button>
-      {#if updates.offer.nexusUrl}
-        {@const url = updates.offer.nexusUrl}
-        <button class="ghost" onclick={() => void platform.openUrl(url)}>Also on Nexus</button>
-      {/if}
+    <strong>Tyrant {updates.offer.version} is available</strong>
+    {#if updates.offer.notes}<details><summary>Notes</summary><p class="notes">{updates.offer.notes}</p></details>{/if}
+    {#if updates.installing}
+      <span>Installing…{updates.progress !== null ? ` ${Math.round(updates.progress * 100)}%` : ''}</span>
     {:else}
-      {@const url = updates.offer.url}
-      <strong>Tyrant {updates.offer.version} is on Nexus</strong>
-      <button class="primary" onclick={() => void platform.openUrl(url)}>Open Nexus page</button>
+      <button class="primary" onclick={() => void updates.install()}>Update now</button>
     {/if}
+    <button class="ghost" onclick={() => void platform.openUrl(page)}>What's new</button>
     <button class="ghost" onclick={() => updates.dismiss()}>Later</button>
     {#if updates.note}<span class="note">{updates.note}</span>{/if}
   </div>

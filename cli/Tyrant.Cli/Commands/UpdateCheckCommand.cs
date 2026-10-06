@@ -3,7 +3,7 @@ using Tyrant.Core.Updates;
 
 namespace Tyrant.Cli.Commands;
 
-/// <summary>Checks GitHub (and Nexus, once Tyrant's page is set) for a newer Tyrant; the app installs updates (Help → Check for updates).</summary>
+/// <summary>Checks GitHub for a newer Tyrant; the app installs updates (Help → Check for updates).</summary>
 public sealed class UpdateCheckCommand : Command
 {
     public override int Execute(CommandContext context)
@@ -12,8 +12,6 @@ public sealed class UpdateCheckCommand : Command
         var checker = new UpdateChecker(http, UpdateChecker.CurrentVersion);
         Console.WriteLine($"This Tyrant: {UpdateChecker.CurrentVersion}");
         var release = checker.LatestGitHubReleaseAsync(CancellationToken.None).GetAwaiter().GetResult();
-        var nexus = checker.NexusVersionAsync(UpdateSources.NexusModId, CancellationToken.None).GetAwaiter().GetResult();
-        if (nexus is not null) Console.WriteLine($"Nexus: {nexus} ({UpdateSources.NexusPage(UpdateSources.NexusModId!.Value)})");
         if (release is null)
         {
             Console.WriteLine($"No release is published yet ({UpdateSources.ReleasesPage}).");

@@ -9,6 +9,7 @@ import json
 import os
 
 import bpy
+from bpy.app.handlers import persistent
 from mathutils import Matrix, Quaternion, Vector
 
 from . import rig
@@ -139,7 +140,8 @@ def load(arm, data, clip):
         bone = bones.get(name_)
         pose_bone = arm.pose.bones.get(name_)
         if bone is None or pose_bone is None:
-            missing.append(name_)
+            if name_ not in (arm.name, arm.data.name):  # the armature's own node: the game holds it still
+                missing.append(name_)
             continue
         channels = {k: _channel(track.get(k), k) for k in ("position", "rotation", "scale")}
         times = sorted({t for keys in channels.values() if keys for t, _ in keys})
@@ -349,6 +351,27 @@ def set_in_place(arm, on):
 
 
 # ---- IK controls ------------------------------------------------------------------------------------------------------
+
+@persistent
+def follow_controls(scene, _depsgraph=None):
+    """
+    On every frame: the IK controls of each chain in FK go where the playing animation has the chain's end, knee and aim (a
+    constraint cannot do it: the controls drive those bones in IK), so switching a chain to IK starts from the pose shown.
+    Chains in IK keep their controls where their own keys put them.
+    """
+    from . import ik, project
+
+    for arm in [o for o in scene.objects if o.type == "ARMATURE" and o.get(project.TAG)]:
+        if arm.animation_data is None or arm.animation_data.action is None:
+            continue
+        try:
+            pose = arm.pose.bones
+            fk = [c["name"] for c in ik.built(arm) if pose.get(c["target"]) is not None and pose[c["target"]].get(ik.IK_FK, 1.0) < 0.5]
+            if fk:
+                ik.snap_controls(arm, fk)
+        except Exception as ex:  # noqa: BLE001 - a handler that raises would stop every frame change
+            print("Tyrant: the IK controls could not follow the animation:", ex)
+
 
 def move_to_ik(arm, scene):
     """Keys the IK controls to follow the playing Action on every frame and switches its chains to IK."""

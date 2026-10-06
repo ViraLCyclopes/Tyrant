@@ -55,6 +55,29 @@ public class ClipSamplerTests
     }
 
     [Fact]
+    public void The_animators_own_curves_take_one_value_each_and_object_curves_none()
+    {
+        // As the game's clips: the Animator's root motion curves (attributes 1..13 of the Animator, one float each) and an
+        // object-reference curve (no float) come before the bones' own; the bones must still read their own values.
+        // Pelvis turned 90 degrees about z; read from the wrong place it would take the 9s that follow.
+        var clip = Clip("Camara|LocWalk", 1, [], 0, 0, [5, 6, 0, 0, 0.70710677f, 0.70710677f, 9, 9, 9, 9, 9, 9],
+            new ClipBindingRaw(0, 1, TypeId: 95),
+            new ClipBindingRaw(0, 2, TypeId: 95),
+            new ClipBindingRaw(0, 7, TypeId: 95, ObjectReference: true),
+            new ClipBindingRaw(Models.ClipReader.Crc32("Carch/MainBone/Pelvis"), 2));
+
+        var anim = ClipSampler.Sample(clip, Skeleton());
+
+        var pelvis = Assert.Single(anim.Bones);
+        Assert.Equal("Pelvis", pelvis.Bone);
+        var key = Assert.Single(pelvis.Rotation!);
+        Assert.Equal(0f, key.X, 5);
+        Assert.Equal(0f, key.Y, 5);
+        Assert.Equal(0.70710677f, key.Z, 5);
+        Assert.Equal(0.70710677f, key.W, 5);
+    }
+
+    [Fact]
     public void A_binding_to_a_bone_the_skeleton_lacks_is_named_and_skipped()
     {
         var clip = Clip("Carch|Roar", 1, [], 0, 0, [1, 2, 3, 0, 0, 0],
@@ -97,6 +120,24 @@ public class ClipSamplerTests
 
         Assert.Equal(0.7071f, key.Y, 3);
         Assert.Equal(0.7071f, key.W, 3);
+    }
+
+    [Theory]
+    // x 90 and z 90: X then Z (an XYZ clip, as models made in Blender or Maya come in) is (0.5, 0.5, 0.5, 0.5);
+    // Z then X (Unity's default ZXY) is (0.5, -0.5, 0.5, 0.5).
+    [InlineData(0, 0.5f)]
+    [InlineData(4, -0.5f)]
+    public void Euler_curves_turn_in_the_rotation_order_the_clip_was_made_with(int order, float y)
+    {
+        var clip = Clip("Camara|LocWalk", 1, [], 0, 0, [90, 0, 90],
+            new ClipBindingRaw(Models.ClipReader.Crc32("Carch/MainBone"), 4, RotationOrder: order));
+
+        var key = Assert.Single(Assert.Single(ClipSampler.Sample(clip, Skeleton()).Bones).Rotation!);
+
+        Assert.Equal(0.5f, key.X, 4);
+        Assert.Equal(y, key.Y, 4);
+        Assert.Equal(0.5f, key.Z, 4);
+        Assert.Equal(0.5f, key.W, 4);
     }
 
     [Fact]

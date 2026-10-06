@@ -145,4 +145,19 @@ describe('OpenInBlender', () => {
 
     await waitFor(() => expect(rpc.callsTo('blender.open')[0]?.params).toMatchObject({ animations: ['Carch|LocWalk'] }));
   });
+
+  it('Select all in the animation picker opens with every animation', async () => {
+    const { rpc, session } = setup();
+    rpc.on('species.animations', () => ({ species: 'Carcharodontosaurus', animations: [
+      { id: 'Carch|LocWalk', name: 'LocWalk', length: 2.5, frameRate: 24, loops: true, travels: true },
+      { id: 'Carch|Roar', name: 'Roar', length: 3, frameRate: 30, loops: false, travels: false },
+    ] }));
+    renderWith(OpenInBlender, session, { species: 'Carcharodontosaurus' });
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Choose animations…' }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Select all' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Open in Blender' }));
+
+    await waitFor(() => expect(rpc.callsTo('blender.open')[0]?.params).toMatchObject({ animations: ['Carch|LocWalk', 'Carch|Roar'] }));
+  });
 });

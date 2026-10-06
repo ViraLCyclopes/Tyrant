@@ -16,7 +16,7 @@ namespace Tyrant.Core.Animation;
 /// </summary>
 public static class AnimationService
 {
-    private const int CacheVersion = 1;
+    private const int CacheVersion = 2; // 2: clips with the Animator's own curves were read misaligned
 
     private static readonly JsonSerializerOptions Json = new(DataStore.ReadableJson) { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 

@@ -90,6 +90,9 @@ class TYRANT_OT_anim_add(bpy.types.Operator):
 
     def draw(self, context):
         wm = context.window_manager
+        row = self.layout.row(align=True)
+        row.operator("tyrant.anim_pick_all", text="Select all").pick = True
+        row.operator("tyrant.anim_pick_all", text="Clear").pick = False
         self.layout.template_list("TYRANT_UL_animations", "", wm, "tyrant_anim_items", wm, "tyrant_anim_index", rows=14)
 
     def execute(self, context):
@@ -111,6 +114,21 @@ class TYRANT_OT_anim_add(bpy.types.Operator):
         name = armature.name
         args = [data["tyrant"], "blender", "animations", "-w", data["workspace"], path, *ids]
         send.run_async(args, lambda result: finish_add(name, path, result))
+        return {"FINISHED"}
+
+
+class TYRANT_OT_anim_pick_all(bpy.types.Operator):
+    """Tick (or untick) every animation in the list"""
+
+    bl_idname = "tyrant.anim_pick_all"
+    bl_label = "Select all"
+    bl_options = {"INTERNAL"}
+
+    pick: bpy.props.BoolProperty(default=True)
+
+    def execute(self, context):
+        for item in context.window_manager.tyrant_anim_items:
+            item.pick = self.pick
         return {"FINISHED"}
 
 
@@ -168,12 +186,14 @@ def draw(layout, context, armature, data, say):
     if anims.tyrant_actions():
         box.prop(armature, "tyrant_in_place")
         box.operator("tyrant.anim_to_ik", icon="CON_KINEMATIC")
+        say(box, context, "The IK controls follow the animation; Move to IK controls to edit it with them.", "INFO")
         say(box, context, "Blender does not run the game's foot planting or look-at, so feet can sit slightly off.", "INFO")
     for line in json.loads(armature.get(REPORT) or "[]"):
         say(box, context, line, "ERROR" if "not" in line or "could" in line else "INFO")
 
 
-CLASSES = (TyrantAnimationItem, TYRANT_UL_animations, TYRANT_OT_anim_add, TYRANT_OT_anim_play, TYRANT_OT_anim_to_ik)
+CLASSES = (TyrantAnimationItem, TYRANT_UL_animations, TYRANT_OT_anim_add, TYRANT_OT_anim_pick_all, TYRANT_OT_anim_play,
+           TYRANT_OT_anim_to_ik)
 
 
 def register_properties():

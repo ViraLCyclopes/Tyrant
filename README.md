@@ -9,9 +9,8 @@ game** puts the game back to vanilla. Nothing from the game is redistributed; ev
 
 ## Download
 
-Get the latest **Setup** from [GitHub Releases](https://github.com/ViraLCyclopes/Tyrant/releases) or
-[Nexus Mods](https://www.nexusmods.com/prehistorickingdom/mods/24) and run it (no admin rights needed). Tyrant updates itself
-from GitHub, wherever you downloaded it. Windows may warn that the publisher is unknown (Tyrant is not code-signed): click **More info → Run
+Get the latest **Setup** from [GitHub Releases](https://github.com/ViraLCyclopes/Tyrant/releases) and run it (no admin
+rights needed). Tyrant updates itself from GitHub. Windows may warn that the publisher is unknown (Tyrant is not code-signed): click **More info → Run
 anyway**.
 
 ## Start in three steps
@@ -73,8 +72,9 @@ Tyrant works with **Blender 5.0 or newer** through its own Blender add-on.
 
 10. **Animations:** the game's animations, exactly as the game plays them (on a reshaped model too, rig edit included).
    In Blender: Tyrant panel → Animations → **Add animations…** (search, tick, Add): each becomes an Action; click one to play
-   it. **In place** hides the walk's travel (keys untouched); **Move to IK controls** puts the feet and head on the IK
-   controls for editing (**Bake frame range** turns them back into bone keys). Growth keeps working while it plays. In the
+   it. **In place** hides the walk's travel (keys untouched). While it plays the IK controls follow the feet and head;
+   **Move to IK controls** hands those chains to the controls for editing (**Bake frame range** turns them back into bone
+   keys). Growth keeps working while it plays. In the
    app: Species tab → **Animations…** to search them, **Open in Blender with these**, or **Export animations…** as **FBX**
    (default; one file per animation with the model, each animation an FBX take; your Blender makes the FBX) or glb. Open in
    Blender's Options can **Choose animations…** too, and species packs can take them (**With animations**). Better FBX users
@@ -184,7 +184,7 @@ dotnet run --project cli/Tyrant.Cli -- mod export red-spot-carcharo -w D:\tyrant
 dotnet run --project cli/Tyrant.Cli -- mod import red-spot-carcharo-1.0.0.zip -w D:\tyrant-workspace   # add a shared mod (--replace to overwrite)
 dotnet run --project cli/Tyrant.Cli -- game status -w D:\tyrant-workspace   # framework version in the game and in this Tyrant
 dotnet run --project cli/Tyrant.Cli -- game package-framework -w D:\tyrant-workspace   # the framework as a zip for players without Tyrant
-dotnet run --project cli/Tyrant.Cli -- update check   # this version and the latest on GitHub (and Nexus)
+dotnet run --project cli/Tyrant.Cli -- update check   # this version and the latest on GitHub
 dotnet run --project cli/Tyrant.Cli -- mod list -w D:\tyrant-workspace
 dotnet run --project cli/Tyrant.Cli -- mod clean-skins -w D:\tyrant-workspace   # list skin numbers left by removed mods; --forget <mod/skin> frees one
 ```

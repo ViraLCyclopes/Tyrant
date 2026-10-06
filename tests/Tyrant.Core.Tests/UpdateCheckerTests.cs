@@ -63,26 +63,4 @@ public class UpdateCheckerTests
         Assert.Equal(TyrantErrorCode.UpdateCheckFailed, a.Code);
         Assert.Equal(TyrantErrorCode.UpdateCheckFailed, b.Code);
     }
-
-    [Fact]
-    public async Task Nexus_gives_the_mods_version_without_a_key()
-    {
-        var http = new FakeHttp(_ => Json("""{ "data": { "mod": { "version": "0.2.0" } } }"""));
-
-        var version = await new UpdateChecker(new HttpClient(http), "0.1.0").NexusVersionAsync(123, CancellationToken.None);
-
-        Assert.Equal("0.2.0", version);
-        Assert.Equal("https://api.nexusmods.com/v2/graphql", http.Requests[0].RequestUri!.ToString());
-        Assert.Equal("Tyrant", http.Requests[0].Headers.GetValues("Application-Name").Single());
-        Assert.False(http.Requests[0].Headers.Contains("apikey"));
-    }
-
-    [Fact]
-    public async Task Nexus_errors_or_no_mod_id_give_no_version()
-    {
-        var notFound = new FakeHttp(_ => Json("""{ "errors": [ { "message": "Mod not found" } ], "data": null }"""));
-        Assert.Null(await new UpdateChecker(new HttpClient(notFound), "0.1.0").NexusVersionAsync(123, CancellationToken.None));
-        var never = new FakeHttp(_ => throw new InvalidOperationException("must not be called"));
-        Assert.Null(await new UpdateChecker(new HttpClient(never), "0.1.0").NexusVersionAsync(null, CancellationToken.None));
-    }
 }

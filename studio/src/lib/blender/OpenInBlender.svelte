@@ -44,6 +44,14 @@
     const r = await tab.safely(() => session.rpc.call('species.animations', { species }));
     animationList = r ? r.animations.map((a) => ({ id: a.id, name: a.name })) : [];
   }
+  /** Above this many, ticking them all asks first (as the Animations page does). */
+  const MANY = 50;
+  async function selectAllAnimations() {
+    const ids = (animationList ?? []).map((a) => a.id);
+    if (ids.length > MANY && !(await session.platform.confirm(
+      `Open with all ${ids.length} animations? Reading them takes a while.`, 'Select all'))) return;
+    animations = ids;
+  }
   const reason = $derived(blockedReason(blender.status));
 
   onMount(() => void blender.ensure(tab));
@@ -83,6 +91,8 @@
         {:else if animationList.length === 0}
           <p class="hint">No animations found (run the data dump on the Workspace tab).</p>
         {:else}
+          <button onclick={selectAllAnimations}>Select all</button>
+          <button onclick={() => (animations = [])} disabled={animations.length === 0}>Clear</button>
           <div class="pick">
             {#each animationList as a (a.id)}
               <label><input type="checkbox" aria-label="Open with {a.name}" checked={animations.includes(a.id)}

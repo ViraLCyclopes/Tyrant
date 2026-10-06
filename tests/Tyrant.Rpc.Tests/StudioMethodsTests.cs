@@ -153,21 +153,6 @@ public class StudioMethodsTests
     }
 
     [Fact]
-    public async Task The_nexus_check_asks_tyrants_page_and_reports_being_offline()
-    {
-        using var game = new FakeGame();
-        var network = new NoNetwork();
-        var (harness, _) = await Opened(game, TestStudio.Options(http: () => new HttpClient(network)));
-
-        var nexus = await harness.Call("app.checkNexus");
-
-        Assert.Equal(1, network.Calls);
-        Assert.Equal(System.Text.Json.JsonValueKind.Null, nexus.GetProperty("version").ValueKind);
-        Assert.Equal("https://www.nexusmods.com/prehistorickingdom/mods/24", nexus.GetProperty("url").GetString());
-        Assert.NotEqual(System.Text.Json.JsonValueKind.Null, nexus.GetProperty("error").ValueKind);
-    }
-
-    [Fact]
     public async Task Status_reports_the_framework_versions()
     {
         using var game = new FakeGame();

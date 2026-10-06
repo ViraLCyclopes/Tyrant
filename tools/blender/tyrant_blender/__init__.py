@@ -62,6 +62,8 @@ def register():
         bpy.app.handlers.load_post.append(panel.clear_stale_busy)
     if materials.tidy_piled_up not in bpy.app.handlers.load_post:
         bpy.app.handlers.load_post.append(materials.tidy_piled_up)
+    if anims.follow_controls not in bpy.app.handlers.frame_change_post:
+        bpy.app.handlers.frame_change_post.append(anims.follow_controls)
     if bpy.app.background:
         return  # scripted runs (tests, installs) never listen
     try:
@@ -82,6 +84,8 @@ def unregister():
         bpy.app.handlers.load_post.remove(panel.clear_stale_busy)
     if materials.tidy_piled_up in bpy.app.handlers.load_post:
         bpy.app.handlers.load_post.remove(materials.tidy_piled_up)
+    if anims.follow_controls in bpy.app.handlers.frame_change_post:
+        bpy.app.handlers.frame_change_post.remove(anims.follow_controls)
     if bpy.app.timers.is_registered(_drain):
         bpy.app.timers.unregister(_drain)
     if _server is not None:
