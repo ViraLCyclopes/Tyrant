@@ -395,3 +395,11 @@ class AnimTests(unittest.TestCase):
         self.assertTrue(all(item.pick for item in items))
         bpy.ops.tyrant.anim_pick_all(pick=False)
         self.assertFalse(any(item.pick for item in items))
+
+    def test_a_track_on_the_armature_object_itself_is_not_reported_as_a_missing_bone(self):
+        walk = self.calve_walk()
+        walk["bones"].append(dict(walk["bones"][0], bone=self.arm.name))
+
+        action = anims.load(self.arm, self.data, walk)
+
+        self.assertEqual(json.loads(action[anims.NOTES]), [])

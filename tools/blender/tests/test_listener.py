@@ -111,3 +111,21 @@ class QueueTests(unittest.TestCase):
         self.assertEqual(listener.pending.qsize(), 1)  # one request per tick: the next waits for the next tick
         self.assertEqual(tyrant_blender._drain(), 0.25)
         self.assertTrue(listener.pending.empty())
+
+    def test_an_add_on_updated_while_blender_runs_asks_for_a_restart_when_opening(self):
+        said = []
+        report, loaded = ui._report, dict(ui._LOADED)
+        ui._report = said.append
+        try:
+            bpy.ops.wm.read_factory_settings(use_empty=True)
+            ui.request_open(fresh_project())
+            self.assertEqual(said, [])
+
+            ui._LOADED["anims.py"] = -1.0  # as if Tyrant replaced the file after Blender loaded it
+            bpy.ops.wm.read_factory_settings(use_empty=True)
+            ui.request_open(fresh_project())
+        finally:
+            ui._report, ui._LOADED = report, loaded
+
+        self.assertEqual(len(said), 1)
+        self.assertIn("restart Blender", said[0])

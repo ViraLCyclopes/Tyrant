@@ -139,7 +139,8 @@ def load(arm, data, clip):
         bone = bones.get(name_)
         pose_bone = arm.pose.bones.get(name_)
         if bone is None or pose_bone is None:
-            missing.append(name_)
+            if name_ not in (arm.name, arm.data.name):  # the armature's own node: the game holds it still
+                missing.append(name_)
             continue
         channels = {k: _channel(track.get(k), k) for k in ("position", "rotation", "scale")}
         times = sorted({t for keys in channels.values() if keys for t, _ in keys})

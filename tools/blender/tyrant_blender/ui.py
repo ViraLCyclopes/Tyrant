@@ -103,6 +103,26 @@ def _later(path):
     return None
 
 
+def _files():
+    """This add-on's code files and when each was last written."""
+    folder = os.path.dirname(os.path.abspath(__file__))
+    return {name: os.path.getmtime(os.path.join(folder, name)) for name in os.listdir(folder) if name.endswith(".py")}
+
+
+_LOADED = _files()  # the files as this Blender loaded them
+
+STALE = ("Tyrant updated its add-on while Blender was open: restart Blender to use the new version (until then new features, "
+         "such as animations, do not work).")
+
+
+def updated_since_loaded():
+    """True when Tyrant replaced the add-on's files after Blender loaded them: Blender runs the old code until it restarts."""
+    try:
+        return _files() != _LOADED
+    except OSError:
+        return False
+
+
 def _report(message):
     def draw(menu, _context):
         menu.layout.label(text=message)
@@ -116,6 +136,8 @@ def _report(message):
 
 def request_open(path):
     """Opens a project for Tyrant (from the listener). Never raises: it runs in a timer, and Blender drops a timer that raises."""
+    if updated_since_loaded():
+        _report(STALE)
     try:
         show_project(path)
     except project.ProjectError as ex:
