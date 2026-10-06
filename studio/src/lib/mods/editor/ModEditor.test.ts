@@ -81,6 +81,32 @@ describe('ModEditor', () => {
     expect(await screen.findByRole('heading', { name: 'Sound: Social call' })).toBeInTheDocument();
   });
 
+  it("a folder of sounds is replaced in one edit that undo takes back, and the first one opens", async () => {
+    const angry = { event: 'event:/X/Vox/TheroMed_VoxAngry', name: 'Angry', group: 'Calls', species: 'Allosaurus Anax', skin: null, files: ['sounds/a.wav', 'sounds/b.wav'], volume: 1, agePitch: 1, chance: null };
+    const { rpc, platform, tab } = setup();
+    platform.folders.push('C:\pack');
+    rpc
+      .on('mods.species', () => ({ hasDump: true, species: [{ speciesId: 'Allosaurus Anax', vivarium: false, skins: [] }] }))
+      .on('sounds.forSpecies', () => ({ speciesId: 'Allosaurus Anax', hasEventList: true, sounds: [] }))
+      .on('sounds.matchFolder', () => ({
+        groups: [{ name: 'AlloAnax_VoxAngry', files: ['C:\pack\a.wav', 'C:\pack\b.wav'], sounds: [{ event: angry.event, name: 'Angry', group: 'Calls', species: ['Allosaurus Anax'], lengthMs: null, oneShot: true, perAnimal: true }] }],
+        unmatched: [],
+      }))
+      .on('mods.replaceSounds', () => modDetail({ revision: 'r2', sounds: [angry] }));
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Add a sound' }));
+    await fireEvent.change(await screen.findByRole('combobox', { name: 'Sounds of' }), { target: { value: 'Allosaurus Anax' } });
+    await fireEvent.click(await screen.findByRole('button', { name: 'Replace from folder…' }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Replace 1 sound' }));
+
+    expect(await screen.findByRole('heading', { name: 'Sound: Angry' })).toBeInTheDocument();
+    expect(rpc.callsTo('mods.replaceSounds')[0]?.params).toMatchObject({
+      species: 'Allosaurus Anax', skin: null, sounds: [{ event: angry.event, files: ['C:\pack\a.wav', 'C:\pack\b.wav'] }],
+    });
+    expect(rpc.callsTo('mods.replaceSounds')[0]?.params).toHaveProperty('revision');
+    expect(tab.undo?.canUndo()).toBe(true);
+  });
+
   it('lists sounds under Sounds with who hears them and opens their page', async () => {
     setup(modDetail({
       sounds: [

@@ -5,10 +5,18 @@
   import { getSession } from '$lib/stores/session.svelte';
   import AllSounds from '$lib/sounds/AllSounds.svelte';
   import type { AddedSound } from '$lib/sounds/audio';
+  import ReplaceFromFolder from '$lib/sounds/ReplaceFromFolder.svelte';
   import SpeciesSounds from '$lib/sounds/SpeciesSounds.svelte';
 
-  /** The mod editor's Sounds → + Add: a species' sounds (or every game sound), each with Replace… into this mod. */
-  let { modId, onDone }: { modId: string; onDone: (added: AddedSound | null) => void } = $props();
+  /**
+   * The mod editor's Sounds → + Add: a species' sounds (or every game sound), each with Replace… into this mod; for a species,
+   * Replace from folder replaces a sound pack's matched files at once (onReplaceMany: one edit of the editor's).
+   */
+  let { modId, onDone, onReplaceMany = undefined }: {
+    modId: string;
+    onDone: (added: AddedSound | null) => void;
+    onReplaceMany?: (species: string, sounds: { event: string; files: string[] }[]) => Promise<boolean>;
+  } = $props();
 
   const ALL = '__all__';
   const session = getSession();
@@ -39,7 +47,13 @@
     {#if source === ALL}
       <AllSounds {modId} onAdded={onDone} />
     {:else if source}
-      {#key source}<SpeciesSounds speciesKey={source} displayName={source} {modId} onAdded={onDone} />{/key}
+      {#key source}
+        {#if onReplaceMany}
+          {@const replaceMany = onReplaceMany}
+          <ReplaceFromFolder species={source} onReplace={(sounds) => replaceMany(source, sounds)} />
+        {/if}
+        <SpeciesSounds speciesKey={source} displayName={source} {modId} onAdded={onDone} />
+      {/key}
     {/if}
   {/if}
   <div class="row"><button onclick={() => onDone(null)}>Cancel</button></div>

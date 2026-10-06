@@ -102,6 +102,14 @@
     selection = { kind: 'sound', ...added };
   }
 
+  /** Replace from folder: every matched sound in one edit (one undo step), for that species; the first one opens. */
+  async function soundsReplaced(species: string, sounds: { event: string; files: string[] }[]): Promise<boolean> {
+    if (!(await doc.edit('mods.replaceSounds', { species, skin: null, sounds }))) return false;
+    adding = null;
+    selection = { kind: 'sound', event: sounds[0].event, species, skin: null };
+    return true;
+  }
+
   async function skinAdded() {
     adding = null;
     const before = new Set(doc.detail?.skins.map((s) => s.id));
@@ -148,7 +156,7 @@
       {:else if adding === 'model'}
         <AddModel {doc} onDone={modelAdded} />
       {:else if adding === 'sound'}
-        <AddSound modId={doc.id} onDone={soundAdded} />
+        <AddSound modId={doc.id} onDone={soundAdded} onReplaceMany={soundsReplaced} />
       {:else if adding === 'texture'}
         <AddReplacement modId={doc.id} onDone={replacementAdded} />
       {:else if selection.kind === 'details'}
