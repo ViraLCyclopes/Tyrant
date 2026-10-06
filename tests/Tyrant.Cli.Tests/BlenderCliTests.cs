@@ -162,6 +162,26 @@ public class BlenderCliTests
         Assert.Contains(message, doc.RootElement.GetProperty("errors")[0].GetString());
     }
 
+    [Theory]
+    [InlineData("animations")]
+    [InlineData("animation-list")]
+    public void Animation_commands_without_the_game_data_answer_one_json_line(string command)
+    {
+        using var game = new FakeGame();
+        var ws = Workspace(game);
+        var dir = Path.Combine(ws, "blender", "game", "x");
+        Directory.CreateDirectory(dir);
+        var project = Path.Combine(dir, BlenderProjectFile.FileName);
+        BlenderProjectFile.Write(project, new BlenderProject(1, ws, "t.exe", "b", new BlenderSource("game", "Carcharodontosaurus", null, null),
+            null, new Dictionary<string, BlenderMaterial>(), null, [], null, false));
+
+        var (code, output, _) = command == "animations" ? Run("blender", command, "-w", ws, project, "Carch|Walk") : Run("blender", command, "-w", ws, project);
+
+        Assert.Equal(ExitCodes.Error, code);
+        using var doc = System.Text.Json.JsonDocument.Parse(Assert.Single(output.Split('\n', StringSplitOptions.RemoveEmptyEntries)));
+        Assert.False(doc.RootElement.GetProperty("ok").GetBoolean());
+    }
+
     [Fact]
     public void Ik_data_without_the_game_data_answers_one_json_line()
     {

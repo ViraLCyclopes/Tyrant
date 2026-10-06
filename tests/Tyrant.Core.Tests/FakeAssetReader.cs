@@ -56,6 +56,30 @@ public sealed class FakeAssetReader : IAssetReader
         return (ClipsToReturn, []);
     }
 
+    /// <summary>How many times the prefab (and its textures) were read to write animated models.</summary>
+    public int AnimatedModelReads { get; private set; }
+
+    /// <summary>Writes real .glb files (no textures) of PrefabModelToReturn's first LOD with the animations.</summary>
+    public void WriteAnimatedModels(GameInstall install, AssetRecord prefab, AssetIndex index,
+        IReadOnlyList<(string Path, IReadOnlyList<Tyrant.Core.Animation.ClipAnimation> Animations)> files)
+    {
+        Fail(prefab);
+        AnimatedModelReads++;
+        var model = PrefabModelToReturn ?? throw new InvalidOperationException("Set PrefabModelToReturn.");
+        foreach (var (path, animations) in files)
+            GltfModelWriter.WriteGlb(model, Tyrant.Core.ModelReplacements.ModelBuilder.GameRenderers(model).Take(1).ToList(), path, null, animations);
+    }
+
+    /// <summary>What ReadRawClips returns (whatever clips are asked for), and the clips asked for last.</summary>
+    public IReadOnlyList<Tyrant.Core.Animation.RawClip> RawClipsToReturn { get; set; } = [];
+    public IReadOnlyList<AssetRecord> LastRawClipsAsked { get; private set; } = [];
+
+    public (IReadOnlyList<Tyrant.Core.Animation.RawClip> Clips, IReadOnlyList<string> Failures) ReadRawClips(GameInstall install, IReadOnlyList<AssetRecord> clips)
+    {
+        LastRawClipsAsked = clips;
+        return (RawClipsToReturn, []);
+    }
+
     /// <summary>What ReadPrefabModel returns (the game prefab a model is fitted to).</summary>
     public Tyrant.Core.Models.PrefabModel? PrefabModelToReturn { get; set; }
 

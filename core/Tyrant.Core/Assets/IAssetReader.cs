@@ -66,6 +66,16 @@ public interface IAssetReader
     /// <summary>Each animation clip's bound channels and how far they move (rig editing's analysis); unreadable clips are named in Failures.</summary>
     (IReadOnlyList<ClipChannels> Clips, IReadOnlyList<string> Failures) ReadClips(GameInstall install, IReadOnlyList<AssetRecord> clips);
 
+    /// <summary>Each animation clip's curve data as stored (animation import); unreadable clips are named in Failures.</summary>
+    (IReadOnlyList<Animation.RawClip> Clips, IReadOnlyList<string> Failures) ReadRawClips(GameInstall install, IReadOnlyList<AssetRecord> clips);
+
+    /// <summary>
+    /// The prefab's first level of detail with the game's materials (textures in each file's folder, shared) and the
+    /// animations as glTF animations: one .glb per file, the prefab and its textures read once for them all.
+    /// </summary>
+    void WriteAnimatedModels(GameInstall install, AssetRecord prefab, AssetIndex index,
+        IReadOnlyList<(string Path, IReadOnlyList<Animation.ClipAnimation> Animations)> files);
+
     /// <summary>The prefab's materials (each renderer's, distinct by name), for the skin page's slot list.</summary>
     IReadOnlyList<MaterialModel> ReadMaterials(GameInstall install, AssetRecord prefab);
 

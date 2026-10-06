@@ -141,6 +141,47 @@ public sealed class BlenderService(BlenderEnvironment env)
     }
 
     /// <summary>
+    /// Writes the asked animations (clip ids) as files next to a Blender project, for the add-on's Add animations; ids that
+    /// cannot be read come back as errors naming them, the rest are written.
+    /// </summary>
+    public static (IReadOnlyList<string> Files, IReadOnlyList<string> Errors) Animations(Workspace ws, GameInstall install, AssetIndex index,
+        IReadOnlyList<SpeciesSkins> species, IAssetReader reader, string projectFile, IReadOnlyList<string> ids)
+    {
+        var project = BlenderProjectFile.Read(projectFile);
+        if (project.Source.Kind == "object")
+            throw new TyrantException(TyrantErrorCode.ModInvalid, "Game objects have no animations: open an animal to add animations.");
+        return WriteAnimations(ws, install, index, species, reader, project.Source.Species, Path.GetDirectoryName(projectFile)!, ids);
+    }
+
+    internal static (IReadOnlyList<string> Files, IReadOnlyList<string> Errors) WriteAnimations(Workspace ws, GameInstall install, AssetIndex index,
+        IReadOnlyList<SpeciesSkins> species, IAssetReader reader, string speciesId, string projectDir, IReadOnlyList<string> ids)
+    {
+        var files = new List<string>();
+        var errors = new List<string>();
+        foreach (var (id, clip, failure) in Animation.AnimationService.Clips(ws, install, index, species, reader, speciesId, ids))
+        {
+            if (clip is null)
+            {
+                errors.Add(failure ?? $"'{id}' could not be read.");
+                continue;
+            }
+            var file = Path.Combine(projectDir, "animations", TextureExporter.Sanitize(id) + ".json");
+            Animation.AnimationService.WriteClip(file, clip);
+            files.Add(file);
+        }
+        return (files, errors);
+    }
+
+    /// <summary>Writes the species' animation list into an existing project (one written before Tyrant listed them); returns how many.</summary>
+    public static int RefreshAnimations(Workspace ws, GameInstall install, AssetIndex index, IReadOnlyList<SpeciesSkins> species, IAssetReader reader, string projectFile)
+    {
+        var project = BlenderProjectFile.Read(projectFile);
+        var list = project.Source.Kind == "object" ? [] : Animation.AnimationService.List(ws, install, index, species, reader, project.Source.Species);
+        BlenderProjectFile.Write(projectFile, project with { Animations = list });
+        return list.Count;
+    }
+
+    /// <summary>
     /// Adds the exported .glb to the project's destination (or the one chosen now, saved into the project), creating the mod
     /// when newModName is given. Never throws for Tyrant's own errors: they come back in the result for Blender's panel.
     /// <paramref name="rig"/>: the armature's rig edit (an empty one clears the destination's; null keeps it). With

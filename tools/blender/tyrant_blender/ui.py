@@ -61,6 +61,14 @@ def show_project(path):
         project.save(path, data)
     if scene is not None:
         _show(scene)
+        # Animations asked for at this Open in Blender that the model in this file does not have yet.
+        from . import anims
+
+        for armature in project.tagged_armatures(scene):
+            try:
+                anims.load_pending(armature, data, path)
+            except Exception as ex:  # noqa: BLE001 - the scene still shows
+                anims.report_failure(armature, "The animations", ex)
         return scene
     scene = bpy.data.scenes.new(scene_name(data))
     scene[project.TAG] = path

@@ -107,4 +107,30 @@ public class SpeciesCliTests
         Assert.Contains(lines, l => l.StartsWith("  WARN", StringComparison.Ordinal));
         Assert.All(string.Join("", lines), c => Assert.True(c < 128, $"non-ASCII '{c}'"));
     }
+
+    [Fact]
+    public void Species_animations_lines_show_name_length_rate_and_flags_in_ascii()
+    {
+        var lines = Tyrant.Cli.Commands.SpeciesAnimationsCommand.Lines([
+            new Tyrant.Core.Animation.AnimationInfo("Carch|LocWalk", "LocWalk", 2.5f, 24, true, true),
+            new Tyrant.Core.Animation.AnimationInfo("Carch|Roar", "Roar", 3f, 30, false, false),
+        ]).ToList();
+
+        Assert.Contains(lines, l => l.Contains("LocWalk") && l.Contains("2.50 s") && l.Contains("24 fps") && l.Contains("loops") && l.Contains("travels"));
+        Assert.Contains(lines, l => l.Contains("Carch|LocWalk")); // the id the other commands take (or the shown name)
+        Assert.Contains(lines, l => l.Contains("Roar") && !l.Contains("loops"));
+        Assert.Contains(lines, l => l.Contains("2 animation(s)"));
+        Assert.All(string.Join("", lines), c => Assert.True(c < 128, $"non-ASCII '{c}'"));
+    }
+
+    [Fact]
+    public void Export_animations_needs_names_or_all()
+    {
+        using var game = new FakeGame();
+
+        var (code, _, err) = Run("species", "export-animations", "carcharodontosaurus", "-w", IndexedWorkspace(game));
+
+        Assert.Equal(ExitCodes.Error, code);
+        Assert.Contains("--all", err);
+    }
 }

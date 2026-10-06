@@ -1,6 +1,15 @@
 // Generated from the C# DTOs in core/Tyrant.Rpc by `tyrant rpc --emit-ts`. Do not edit by hand:
 // run `npm run gen:types` in studio/ (a test fails while this file is out of date).
 
+export interface AnimationInfo {
+  id: string;
+  name: string;
+  length: number;
+  frameRate: number;
+  loops: boolean;
+  travels: boolean;
+}
+
 export interface AppInfo {
   version: string;
   protocolVersion: number;
@@ -146,6 +155,7 @@ export interface BlenderOpenParams {
   sex?: string;
   prefabRef?: string | null;
   ik?: boolean;
+  animations?: string[] | null;
 }
 
 export interface BlenderSetPathParams {
@@ -914,6 +924,30 @@ export interface SoundsSearchResult {
   hasEventList: boolean;
 }
 
+export interface SpeciesAnimationsParams {
+  species: string;
+}
+
+export interface SpeciesAnimationsResult {
+  species: string;
+  animations: AnimationInfo[];
+}
+
+export interface SpeciesExportAnimationsParams {
+  species: string;
+  ids?: string[] | null;
+  all?: boolean;
+  format?: string | null;
+  singleFile?: boolean;
+  out?: string | null;
+}
+
+export interface SpeciesExportAnimationsResult {
+  directory: string;
+  files: string[];
+  notes: string[];
+}
+
 export interface SpeciesIkParams {
   key: string;
 }
@@ -929,6 +963,7 @@ export interface SpeciesListResult {
 export interface SpeciesPackParams {
   key: string;
   format?: string | null;
+  animations?: string | null;
 }
 
 export interface SpeciesPackRunResult {
@@ -1080,6 +1115,8 @@ export interface RpcMethods {
   "mods.thumbnail": { params: ModThumbnailParams; result: ModThumbnailResult };
   "sounds.forSpecies": { params: SoundsForSpeciesParams; result: SoundsForSpeciesResult };
   "sounds.search": { params: SoundsSearchParams; result: SoundsSearchResult };
+  "species.animations": { params: SpeciesAnimationsParams; result: SpeciesAnimationsResult };
+  "species.exportAnimations": { params: SpeciesExportAnimationsParams; result: JobStarted };
   "species.ik": { params: SpeciesIkParams; result: SpeciesIkResult };
   "species.list": { params: void; result: SpeciesListResult };
   "species.pack": { params: SpeciesPackParams; result: JobStarted };
@@ -1099,6 +1136,7 @@ export interface RpcJobs {
   "dump.run": DumpRunResult;
   "mods.export": ModExportResult;
   "mods.install": ModInstallResult;
+  "species.exportAnimations": SpeciesExportAnimationsResult;
   "species.pack": SpeciesPackRunResult;
   "workspace.refreshAll": RefreshAllResult;
 }

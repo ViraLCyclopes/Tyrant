@@ -4,7 +4,7 @@ import os
 
 import bpy
 
-from . import growth, ik, materials, meshops, project, rig
+from . import anims, growth, ik, materials, meshops, project, rig
 
 
 def import_project(path):
@@ -59,4 +59,8 @@ def import_project(path):
         except Exception as ex:  # noqa: BLE001 - a fault in building the controls must not stop the model opening
             armature[ik.SKIPPED] = json.dumps([f"The IK controls could not be built ({type(ex).__name__}: {ex}); the model "
                                                "opened without them. Try Add IK controls in this panel."])
+    try:
+        anims.load_pending(armature, data, path)
+    except Exception as ex:  # noqa: BLE001 - the model still opens without its animations
+        anims.report_failure(armature, "The animations", ex)
     return armature

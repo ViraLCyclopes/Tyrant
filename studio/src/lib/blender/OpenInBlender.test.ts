@@ -130,4 +130,19 @@ describe('OpenInBlender', () => {
     renderWith(OpenInBlender, session, { species: 'Carcharodontosaurus', mod: 'reds', skin: 'red' });
     expect(await screen.findByLabelText('IK controls')).not.toBeChecked();
   });
+
+  it('opens with animations picked in the options, and without the field when none are', async () => {
+    const { rpc, session } = setup();
+    rpc.on('species.animations', () => ({ species: 'Carcharodontosaurus', animations: [
+      { id: 'Carch|LocWalk', name: 'LocWalk', length: 2.5, frameRate: 24, loops: true, travels: true },
+      { id: 'Carch|Roar', name: 'Roar', length: 3, frameRate: 30, loops: false, travels: false },
+    ] }));
+    renderWith(OpenInBlender, session, { species: 'Carcharodontosaurus' });
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Choose animations…' }));
+    await fireEvent.click(await screen.findByLabelText('Open with LocWalk'));
+    await fireEvent.click(screen.getByRole('button', { name: 'Open in Blender' }));
+
+    await waitFor(() => expect(rpc.callsTo('blender.open')[0]?.params).toMatchObject({ animations: ['Carch|LocWalk'] }));
+  });
 });

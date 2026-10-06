@@ -228,4 +228,26 @@ public class BlenderAddonRunTests
         var report = Tyrant.Core.ModelReplacements.ModelBuilder.Build(dir, "back.glb", prefab);
         Assert.True(report.Errors.Count == 0, string.Join(" | ", report.Errors)); // bones, growth keys and material survived
     }
+
+    [SkippableFact]
+    public void Exported_animations_come_back_from_fbx_as_takes()
+    {
+        var blender = BlenderIntegrationTests.Blender();
+        Skip.If(blender is null, "Blender 5.x not found");
+        var dir = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), "tyrant-tests", Guid.NewGuid().ToString("N"))).FullName;
+        var prefab = ModelFixture.Prefab(ModelFixture.Triangle(name: "Carch_LOD00"), skinned: true);
+        var walk = Tyrant.Core.Animation.ClipSampler.Sample(AnimationFixture.WalkClip(), prefab.Root);
+        var roar = Tyrant.Core.Animation.ClipSampler.Sample(AnimationFixture.RoarClip(), prefab.Root);
+        var glb = Path.Combine(dir, "carch-animations.glb");
+        GltfModelWriter.WriteGlb(prefab, [prefab.Renderers[0]], glb, null, [walk, roar]);
+        var converter = new BlenderModelConverter(new BlenderProcess(), blender!.Exe, BlenderIntegrationTests.ThrowawayUser(out _));
+
+        Assert.Empty(converter.GlbToFbx([(glb, Path.Combine(dir, "carch-animations.fbx"))]));
+        var run = RunPython("count_fbx_takes.py", Path.Combine(dir, "carch-animations.fbx"));
+
+        var line = run.Output.Split('\n').First(l => l.StartsWith("TYRANT-TAKES", StringComparison.Ordinal));
+        Assert.True(int.Parse(line.Split(' ')[1]) >= 2, line); // one take per animation
+        Assert.Contains("Walk", line);
+        Assert.Contains("Roar", line);
+    }
 }

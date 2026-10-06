@@ -77,7 +77,13 @@ public sealed record AssetExportRunResult(int Exported, int Failed, string Repor
     IReadOnlyList<string>? Notes = null);
 
 /// <summary>Format: "glb" (default), "fbx" or "both" (a pack keeps its glb files; FBX is added next to them).</summary>
-public sealed record SpeciesPackParams(string Key, string? Format = null);
+/// <summary>Animations: "none" (default) or "all": the species' animations too, in the pack's format.</summary>
+public sealed record SpeciesPackParams(string Key, string? Format = null, string? Animations = null);
+
+/// <summary>species.exportAnimations: ids (or All), FBX by default, one file per animation unless SingleFile; Out defaults to the workspace's assets/animations/&lt;species&gt;.</summary>
+public sealed record SpeciesExportAnimationsParams(string Species, IReadOnlyList<string>? Ids = null, bool All = false, string? Format = null, bool SingleFile = false, string? Out = null);
+
+public sealed record SpeciesExportAnimationsResult(string Directory, IReadOnlyList<string> Files, IReadOnlyList<string> Notes);
 
 public sealed record SpeciesIkParams(string Key);
 
@@ -85,6 +91,11 @@ public sealed record SpeciesIkParams(string Key);
 public sealed record IkChainRow(string Name, string Kind, IReadOnlyList<string> Joints, string? PoleFrom, float Influence);
 
 public sealed record SpeciesIkResult(IReadOnlyList<IkChainRow> Chains);
+
+/// <summary>species.animations: a species by its data id (or catalog key/name).</summary>
+public sealed record SpeciesAnimationsParams(string Species);
+
+public sealed record SpeciesAnimationsResult(string Species, IReadOnlyList<Tyrant.Core.Animation.AnimationInfo> Animations);
 
 /// <summary>species.rigInfo: a species by its data id (or catalog key/name).</summary>
 public sealed record SpeciesRigInfoParams(string Species);

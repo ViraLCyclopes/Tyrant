@@ -2,6 +2,7 @@
   import ExportFormatSelect from './ExportFormatSelect.svelte';
   import IkChains from './IkChains.svelte';
   import RigInfo from './RigInfo.svelte';
+  import Animations from './Animations.svelte';
   import { formatParam } from './exportFormat.svelte';
   import { onMount } from 'svelte';
   import type { SpeciesRow } from '$lib/rpc/types.gen';
@@ -27,6 +28,9 @@
   /** The species whose IK chains are open. */
   let ikOf = $state<string | null>(null);
   const ikRow = $derived(species.find((s) => s.key === ikOf));
+  /** The species whose animations are open. */
+  let animationsOf = $state<string | null>(null);
+  const animationsRow = $derived(species.find((s) => s.key === animationsOf));
   const shown = $derived(species.filter((s) => s.displayName.toLowerCase().includes(filter.trim().toLowerCase())));
 
   /** The dump's species (ids and game skins) by Species tab key, for Open in Blender. */
@@ -39,8 +43,12 @@
     if (d) dumped = new Map(d.species.map((s) => [keyOf(s.speciesId), s]));
   });
 
+  /** Species packs take the species' animations too (in the pack's format). */
+  let packAnimations = $state(false);
+
   async function exportPack(row: SpeciesRow) {
-    const r = await session.runJob('species.pack', { key: row.key, ...formatParam() }, `Species pack: ${row.displayName}`, tab);
+    const r = await session.runJob('species.pack', { key: row.key, ...formatParam(), ...(packAnimations ? { animations: 'all' } : {}) },
+      `Species pack: ${row.displayName}`, tab);
     if (!r) return;
     lastPack = r.directory;
     const notes = r.notes?.length ? ` ${r.notes.join(' ')}` : '';
@@ -56,6 +64,7 @@
 <div class="toolbar">
   <input type="search" placeholder="Find a species…" aria-label="Find a species" bind:value={filter} />
   <ExportFormatSelect />
+  <label title="Species packs also export every animation of the species (in the pack's format)"><input type="checkbox" bind:checked={packAnimations} /> With animations</label>
   {#if lastPack}<button onclick={() => session.platform.reveal(lastPack!)}>Show in Explorer</button>{/if}
   <button onclick={() => (soundsOf = soundsOf === ALL ? null : ALL)}>All sounds…</button>
 </div>
@@ -71,6 +80,7 @@
             <button disabled={session.busy} aria-label="Export {row.displayName} pack" onclick={() => exportPack(row)}>Export pack</button>
             <button aria-label="Add a skin to {row.displayName}" onclick={() => (addingTo = addingTo === row.key ? null : row.key)}>Add a skin…</button>
             <button aria-label="Sounds of {row.displayName}" onclick={() => (soundsOf = soundsOf === row.key ? null : row.key)}>Sounds…</button>
+            <button aria-label="Animations of {row.displayName}" onclick={() => (animationsOf = animationsOf === row.key ? null : row.key)}>Animations…</button>
             <button aria-label="IK chains of {row.displayName}" onclick={() => (ikOf = ikOf === row.key ? null : row.key)}>IK and rig…</button>
             {#if dumped.get(row.key)}
               {@const d = dumped.get(row.key)!}
@@ -90,4 +100,5 @@
 {:else if soundsRow}
   {#key soundsRow.key}<SpeciesSounds speciesKey={soundsRow.key} displayName={soundsRow.displayName} />{/key}
 {/if}
+{#if animationsRow}{#key animationsRow.key}<Animations speciesKey={animationsRow.key} displayName={animationsRow.displayName} />{/key}{/if}
 {#if ikRow}{#key ikRow.key}<IkChains speciesKey={ikRow.key} displayName={ikRow.displayName} /><RigInfo speciesKey={ikRow.key} displayName={ikRow.displayName} />{/key}{/if}

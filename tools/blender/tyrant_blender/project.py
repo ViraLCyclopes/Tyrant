@@ -47,6 +47,13 @@ def _valid(data):
         return False
     if data.get("rig") is not None and not _valid_rig(data["rig"]):
         return False
+    animations = data.get("animations")
+    if animations is not None and not (isinstance(animations, list) and all(
+            isinstance(a, dict) and isinstance(a.get("id"), str) and isinstance(a.get("name"), str) for a in animations)):
+        return False
+    files = data.get("animationFiles")
+    if files is not None and not (isinstance(files, list) and all(isinstance(f, str) and ".." not in f and not os.path.isabs(f) for f in files)):
+        return False
     info = data.get("rigInfo")
     if info is not None and not (isinstance(info, dict) and all(
             isinstance(info.get(k), list) and all(isinstance(n, str) for n in info[k]) for k in ("clipMoved", "growthMoved", "growthScaled"))):

@@ -348,4 +348,75 @@ public class BlenderProjectTests
         Assert.Null(project.Rig);
         Assert.Contains("Hip", project.RigInfo!.GrowthMoved);
     }
+
+    private static Ctx SetupWithAnimations()
+    {
+        var c = Setup();
+        AnimationFixture.WriteTable(c.Ws.DataDir);
+        c.Reader.RawClipsToReturn = [AnimationFixture.WalkClip(), AnimationFixture.RoarClip()];
+        return c with { Index = new AssetIndex { Assets = [.. c.Index.Assets, AnimationFixture.Walk, AnimationFixture.Roar] } };
+    }
+
+    [Fact]
+    public void A_project_lists_the_species_animations_and_writes_the_ones_asked_for()
+    {
+        using var c = SetupWithAnimations();
+
+        var result = c.Write(new BlenderOpenRequest("Carcharodontosaurus", null, null, false, false) { Animations = ["Carch|Walk"] });
+
+        var project = BlenderProjectFile.Read(result.ProjectFile);
+        Assert.Equal(["Walk", "Roar"], project.Animations!.Select(a => a.Name));
+        var file = Assert.Single(project.AnimationFiles!);
+        var written = Path.Combine(result.Dir, file);
+        Assert.True(File.Exists(written));
+        Assert.Contains("\"name\": \"Walk\"", File.ReadAllText(written));
+    }
+
+    [Fact]
+    public void Without_the_animation_table_a_project_still_opens_with_no_list()
+    {
+        using var c = Setup();
+
+        var project = BlenderProjectFile.Read(c.Write(new BlenderOpenRequest("Carcharodontosaurus", null, null, false, false)).ProjectFile);
+
+        Assert.Null(project.Animations);
+        Assert.Null(project.AnimationFiles);
+    }
+
+    [Fact]
+    public void Animations_asked_for_later_are_written_next_to_the_project_and_unknown_ones_named()
+    {
+        using var c = SetupWithAnimations();
+        var projectFile = c.Write(new BlenderOpenRequest("Carcharodontosaurus", null, null, false, false)).ProjectFile;
+
+        var (files, errors) = BlenderService.Animations(c.Ws, c.Install, c.Index, c.Species, c.Reader, projectFile, ["Carch|Roar", "Carch|Nope"]);
+
+        var file = Assert.Single(files);
+        Assert.StartsWith(Path.GetDirectoryName(projectFile)!, file);
+        Assert.Contains(errors, e => e.Contains("Carch|Nope"));
+    }
+
+    [Fact]
+    public void An_older_project_gets_its_animation_list_written_in()
+    {
+        using var c = SetupWithAnimations();
+        var projectFile = c.Write(new BlenderOpenRequest("Carcharodontosaurus", null, null, false, false)).ProjectFile;
+        BlenderProjectFile.Write(projectFile, BlenderProjectFile.Read(projectFile) with { Animations = null });
+
+        var count = BlenderService.RefreshAnimations(c.Ws, c.Install, c.Index, c.Species, c.Reader, projectFile);
+
+        Assert.Equal(2, count);
+        Assert.Equal(2, BlenderProjectFile.Read(projectFile).Animations!.Count);
+    }
+
+    [Fact]
+    public void An_animation_that_cannot_be_read_on_open_is_named_in_the_project()
+    {
+        using var c = SetupWithAnimations();
+
+        var project = BlenderProjectFile.Read(c.Write(new BlenderOpenRequest("Carcharodontosaurus", null, null, false, false) { Animations = ["Carch|Walk", "Carch|Gone"] }).ProjectFile);
+
+        Assert.Single(project.AnimationFiles!);
+        Assert.Contains(project.AnimationErrors!, e => e.Contains("Carch|Gone"));
+    }
 }

@@ -111,17 +111,38 @@ public sealed class BundleAssetReader : IAssetReader
         return new ModelExporter().ReadPrefab(session, prefab);
     }
 
-    public (IReadOnlyList<ClipChannels> Clips, IReadOnlyList<string> Failures) ReadClips(GameInstall install, IReadOnlyList<AssetRecord> clips)
+    public void WriteAnimatedModels(GameInstall install, AssetRecord prefab, AssetIndex index,
+        IReadOnlyList<(string Path, IReadOnlyList<Animation.ClipAnimation> Animations)> files)
     {
         using var lease = Session(install, out var session);
-        var read = new List<ClipChannels>();
+        var model = new ModelExporter().ReadPrefab(session, prefab);
+        var lod0 = Tyrant.Core.ModelReplacements.ModelBuilder.GameRenderers(model).Take(1).ToList();
+        session.Release();
+        foreach (var folder in files.GroupBy(f => Path.GetDirectoryName(Path.GetFullPath(f.Path))!, StringComparer.OrdinalIgnoreCase))
+        {
+            var textures = ModelTextures.Write(session, index, prefab.Bundle, model, folder.Key);
+            foreach (var (path, animations) in folder)
+                GltfModelWriter.WriteGlb(model, lod0, path, r => textures.For(r), animations);
+        }
+    }
+
+    public (IReadOnlyList<ClipChannels> Clips, IReadOnlyList<string> Failures) ReadClips(GameInstall install, IReadOnlyList<AssetRecord> clips)
+    {
+        var (raw, failures) = ReadRawClips(install, clips);
+        return (raw.Select(ClipReader.Channels).ToList(), failures);
+    }
+
+    public (IReadOnlyList<Animation.RawClip> Clips, IReadOnlyList<string> Failures) ReadRawClips(GameInstall install, IReadOnlyList<AssetRecord> clips)
+    {
+        using var lease = Session(install, out var session);
+        var read = new List<Animation.RawClip>();
         var failures = new List<string>();
         foreach (var clip in clips)
         {
             try
             {
                 var (_, root) = session.Open(clip);
-                read.Add(ClipReader.Decode(root));
+                read.Add(ClipReader.Raw(root));
             }
             catch (Exception ex) when (ex is TyrantException or InvalidDataException or IndexOutOfRangeException or NullReferenceException or ArgumentException)
             {
