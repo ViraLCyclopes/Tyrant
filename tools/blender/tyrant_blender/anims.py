@@ -357,7 +357,8 @@ def follow_controls(scene, _depsgraph=None):
     """
     On every frame: the IK controls of each chain in FK go where the playing animation has the chain's end, knee and aim (a
     constraint cannot do it: the controls drive those bones in IK), so switching a chain to IK starts from the pose shown.
-    Chains in IK keep their controls where their own keys put them.
+    Chains in IK keep their controls where their own keys put them. Nothing here may make Blender evaluate the scene: it
+    runs inside Blender's own frame change.
     """
     from . import ik, project
 
@@ -368,7 +369,7 @@ def follow_controls(scene, _depsgraph=None):
             pose = arm.pose.bones
             fk = [c["name"] for c in ik.built(arm) if pose.get(c["target"]) is not None and pose[c["target"]].get(ik.IK_FK, 1.0) < 0.5]
             if fk:
-                ik.snap_controls(arm, fk)
+                ik.follow_fk(arm, fk)
         except Exception as ex:  # noqa: BLE001 - a handler that raises would stop every frame change
             print("Tyrant: the IK controls could not follow the animation:", ex)
 

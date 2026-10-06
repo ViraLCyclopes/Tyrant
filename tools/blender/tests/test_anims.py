@@ -425,3 +425,54 @@ class AnimTests(unittest.TestCase):
 
         self.assertGreater((followed - at_start).length, 0.01)  # the foot moved, and its control with it
         self.assertLess((followed - control.matrix.translation).length, 1e-4)  # exactly where the foot has it
+
+    def test_opening_a_model_with_ik_controls_and_animations_in_a_fresh_blender(self):
+        # As Open in Blender with animations picked when Blender was closed: a new scene, IK controls built, the first
+        # animation playing — the controls follow it (this crashed Blender inside its frame change).
+        from test_ik_build import fresh_ik_project
+        from tyrant_blender import project, ui
+
+        walk = self.calve_walk()
+        path = fresh_ik_project()
+        folder = os.path.join(os.path.dirname(path), "animations")
+        os.makedirs(folder, exist_ok=True)
+        with open(os.path.join(folder, "Carch_Walk.json"), "w", encoding="utf-8") as f:
+            json.dump(walk, f)
+        data = project.load(path)
+        data["animationFiles"] = ["animations/Carch_Walk.json"]
+        project.save(path, data)
+        bpy.ops.wm.read_factory_settings(use_empty=True)
+
+        scene = ui.show_project(path)
+        scene.frame_set(16)
+
+        arm = project.tagged_armatures(scene)[0]
+        self.assertEqual(arm.animation_data.action.name, "Walk")
+        self.assertTrue(ik.built(arm))
+
+    def test_the_controls_follow_without_asking_blender_to_evaluate_inside_its_frame_change(self):
+        # Blender 5.0 crashed when the frame-change handler made it evaluate the scene again (view_layer.update): the
+        # handler places the controls from the pose the frame already has.
+        bpy.ops.wm.read_factory_settings(use_empty=True)
+        arm, path = open_ik(controls=True)
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        p, q, s = rest_trs(arm, "Calve.L")
+        turned = Quaternion((1, 0, 0), 0.5) @ q
+        anims.play(arm, anims.load(arm, data, clip("Walk", {"Calve.L": [(0.0, (p, q, s)), (1.0, (p, turned, s))]})))
+        chain = next(c for c in ik.built(arm) if c["name"] == "Leg L")
+        control = arm.pose.bones[chain["target"]]
+        bpy.context.view_layer.update()
+        at_start = control.matrix.translation.copy()
+        evaluations = []
+        snap, refresh = ik.snap_controls, ik.refresh
+        ik.snap_controls = lambda *a, **k: evaluations.append("snap_controls")
+        ik.refresh = lambda *a, **k: evaluations.append("refresh")
+        try:
+            bpy.context.scene.frame_set(16)
+        finally:
+            ik.snap_controls, ik.refresh = snap, refresh
+        bpy.context.view_layer.update()
+
+        self.assertEqual(evaluations, [])
+        self.assertGreater((control.matrix.translation - at_start).length, 0.01)
