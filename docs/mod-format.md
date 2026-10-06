@@ -148,7 +148,7 @@ and on a skin: `"model": "models/carcharodontosaurus-spiked-5e6f7a8b.glb"`.
 ]
 ```
 
-and on a skin: `"rig": { … }` next to its `"model"`. Needs Tyrant framework **0.2.0** or newer.
+and on a skin: `"rig": { … }` next to its `"model"`.
 
 | Field | Meaning |
 |---|---|
