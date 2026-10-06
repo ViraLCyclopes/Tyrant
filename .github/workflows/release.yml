@@ -24,8 +24,11 @@ jobs:
       - name: The tag must match the app version
         shell: pwsh
         run: |
+          # "0.1.0", " v0.1.0 " and "V0.1.0" all mean v0.1.0; the rest of the run uses that form.
+          $tag = 'v' + $env:TAG.Trim().TrimStart('v', 'V')
           $version = (Get-Content studio/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
-          if ("v$version" -ne $env:TAG) { throw "Tag $env:TAG does not match the app version $version (npm run set-version)." }
+          if ("v$version" -ne $tag) { throw "Tag '$($env:TAG)' does not match the app version $version: use v$version (or run npm run set-version)." }
+          "TAG=$tag" >> $env:GITHUB_ENV
 
       - name: The updater key must be set up (and goes into the build config)
         shell: pwsh
