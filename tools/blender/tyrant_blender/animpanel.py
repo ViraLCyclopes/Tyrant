@@ -186,6 +186,7 @@ def draw(layout, context, armature, data, say):
     if anims.tyrant_actions():
         box.prop(armature, "tyrant_in_place")
         box.operator("tyrant.anim_to_ik", icon="CON_KINEMATIC")
+        say(box, context, "The IK controls follow the animation; Move to IK controls to edit it with them.", "INFO")
         say(box, context, "Blender does not run the game's foot planting or look-at, so feet can sit slightly off.", "INFO")
     for line in json.loads(armature.get(REPORT) or "[]"):
         say(box, context, line, "ERROR" if "not" in line or "could" in line else "INFO")

@@ -217,6 +217,9 @@ Release build: `npm run build:app`, install `studio/src-tauri/target/release/bun
 105. **Export animations…** two animations as FBX (one file each): open one in Blender (File → Import → FBX) and, if you
     have it, in Better FBX: the model and its animation take play.
 106. Species pack with **With animations** ticked: the pack has an animations folder in the pack's format.
+107. Open Camarasaurus with **Choose animations… → Select all → Clear**, then tick LocWalk and LocSwim: both play like the
+    game (body level, neck forward; the swim paddles), and while they play the foot and head controls move with them.
+108. Update the add-on from the Blender card while Blender is open, then Open in Blender: Blender says to restart it.
 
 **Shell (tabs, log, preferences):**
 

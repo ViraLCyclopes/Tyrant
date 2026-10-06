@@ -403,3 +403,25 @@ class AnimTests(unittest.TestCase):
         action = anims.load(self.arm, self.data, walk)
 
         self.assertEqual(json.loads(action[anims.NOTES]), [])
+
+    def test_while_a_chain_plays_in_fk_its_controls_follow_the_animation(self):
+        bpy.ops.wm.read_factory_settings(use_empty=True)
+        arm, path = open_ik(controls=True)
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        p, q, s = rest_trs(arm, "Calve.L")
+        turned = Quaternion((1, 0, 0), 0.5) @ q
+        anims.play(arm, anims.load(arm, data, clip("Walk", {"Calve.L": [(0.0, (p, q, s)), (1.0, (p, turned, s))]})))
+        chain = next(c for c in ik.built(arm) if c["name"] == "Leg L")
+        control = arm.pose.bones[chain["target"]]
+        bpy.context.view_layer.update()
+        at_start = control.matrix.translation.copy()
+
+        bpy.context.scene.frame_set(16)
+        bpy.context.view_layer.update()
+        followed = control.matrix.translation.copy()
+        ik.snap_controls(arm, [chain["name"]])
+        bpy.context.view_layer.update()
+
+        self.assertGreater((followed - at_start).length, 0.01)  # the foot moved, and its control with it
+        self.assertLess((followed - control.matrix.translation).length, 1e-4)  # exactly where the foot has it
