@@ -34,13 +34,26 @@
     }
   }
   let chosen = $state<string | null>(null);
+  /** Animations to open with (as Actions), picked from the species' list; loaded the first time the picker is opened. */
+  let animationList = $state<{ id: string; name: string }[] | null>(null);
+  let animations = $state<string[]>([]);
+  let picking = $state(false);
+  async function chooseAnimations() {
+    picking = !picking;
+    if (!picking || animationList !== null) return;
+    const r = await tab.safely(() => session.rpc.call('species.animations', { species }));
+    animationList = r ? r.animations.map((a) => ({ id: a.id, name: a.name })) : [];
+  }
   const reason = $derived(blockedReason(blender.status));
 
   onMount(() => void blender.ensure(tab));
 
   function open() {
     const gameSkin = skins ? (chosen ?? skins[0] ?? null) : null;
-    void blender.open(tab, { species, skin: mod ? (skin ?? null) : gameSkin, mod: mod ?? null, fresh, lods, sex, prefabRef: prefabRef ?? null, ik });
+    void blender.open(tab, {
+      species, skin: mod ? (skin ?? null) : gameSkin, mod: mod ?? null, fresh, lods, sex, prefabRef: prefabRef ?? null, ik,
+      ...(animations.length > 0 ? { animations } : {}),
+    });
     fresh = false; // once: the next open must not set the .blend aside again
   }
 </script>
@@ -61,6 +74,24 @@
     <label title="Foot, hand and head controls built from the game's IK chains (Blender's IK is close to the game's, not identical)">
       <input type="checkbox" bind:checked={ik} onchange={rememberIk} /> IK controls
     </label>
+    {#if species && !prefabRef}
+      <button class="choose" onclick={chooseAnimations}>Choose animations…</button>
+      {#if animations.length > 0}<span class="hint">{animations.length} animation(s)</span>{/if}
+      {#if picking}
+        {#if animationList === null}
+          <p class="hint">Reading the game's animations…</p>
+        {:else if animationList.length === 0}
+          <p class="hint">No animations found (run the data dump on the Workspace tab).</p>
+        {:else}
+          <div class="pick">
+            {#each animationList as a (a.id)}
+              <label><input type="checkbox" aria-label="Open with {a.name}" checked={animations.includes(a.id)}
+                onchange={() => (animations = animations.includes(a.id) ? animations.filter((x) => x !== a.id) : [...animations, a.id])} /> {a.name}</label>
+            {/each}
+          </div>
+        {/if}
+      {/if}
+    {/if}
     <label>Sex
       <select bind:value={sex}>
         <option value="male">Male</option>
@@ -74,4 +105,5 @@
   .open-in-blender { display: inline-flex; flex-wrap: wrap; gap: 8px; align-items: center; }
   details { display: inline-block; }
   details label { display: block; white-space: nowrap; }
+  .pick { max-height: 180px; overflow: auto; }
 </style>

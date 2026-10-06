@@ -55,6 +55,16 @@ describe('SpeciesPanel', () => {
     exportFormat.value = 'glb';
   });
 
+  it('a species pack can take the animations too', async () => {
+    const { rpc, session } = setup();
+    renderWith(SpeciesPanel, session);
+
+    await fireEvent.click(await screen.findByLabelText('With animations'));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Export Carcharodontosaurus pack' }));
+
+    await waitFor(() => expect(rpc.callsTo('species.pack')[0]?.params).toEqual({ key: 'carcharodontosaurus', animations: 'all' }));
+  });
+
   it('exports a species pack and offers to show it', async () => {
     const { rpc, platform, session } = setup();
     renderWith(SpeciesPanel, session);

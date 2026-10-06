@@ -207,6 +207,17 @@ Release build: `npm run build:app`, install `studio/src-tauri/target/release/bun
 99. Two mods with a rig edit on Anax: the Mods tab notes the overridden one; reorder them and the other wins.
 100. **Clear rig edit** in Blender, then Send: the skin's rig edit is gone (its page says *No rig edit*).
 
+101. Species tab → Carcharodontosaurus → **Animations…**: the list shows its animations with lengths, *loops* and
+    *travels*; search filters it. Tick LocWalk and a roar, **Open in Blender with these**: both are Actions; LocWalk plays
+    and walks off like in the game; **In place** keeps it on the spot.
+102. Compare Carch's walk and roar in Blender with the game (same rhythm, jaw and tail motion).
+103. Open a rig-edited Anax (longer neck) and **Add animations…** a walk: the edited neck walks like the game shows it;
+    **Growth** to 0 still makes the baby while it plays.
+104. **Move to IK controls**, nudge a foot control, **Bake frame range**: the edited walk plays without the controls.
+105. **Export animations…** two animations as FBX (one file each): open one in Blender (File → Import → FBX) and, if you
+    have it, in Better FBX: the model and its animation take play.
+106. Species pack with **With animations** ticked: the pack has an animations folder in the pack's format.
+
 **Shell (tabs, log, preferences):**
 
 - Open Assets twice (dock, then **+**): two tabs, the second titled *Assets (2)*. Filter one; switch away and back: the

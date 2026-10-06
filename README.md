@@ -71,6 +71,18 @@ Tyrant works with **Blender 5.0 or newer** through its own Blender add-on.
    `tyrant species rig-info <species>` (Species tab → **IK and rig…**) do the same. When two mods change the same
    species, the later one in the load order supplies both its model and its rig edit (the Mods tab says so).
 
+10. **Animations:** the game's animations, exactly as the game plays them (on a reshaped model too, rig edit included).
+   In Blender: Tyrant panel → Animations → **Add animations…** (search, tick, Add): each becomes an Action; click one to play
+   it. **In place** hides the walk's travel (keys untouched); **Move to IK controls** puts the feet and head on the IK
+   controls for editing (**Bake frame range** turns them back into bone keys). Growth keeps working while it plays. In the
+   app: Species tab → **Animations…** to search them, **Open in Blender with these**, or **Export animations…** as **FBX**
+   (default; one file per animation with the model, each animation an FBX take; your Blender makes the FBX) or glb. Open in
+   Blender's Options can **Choose animations…** too, and species packs can take them (**With animations**). Better FBX users
+   can open the FBX files with it; plain Blender, Maya, Max and Unity read them as well. CLI: `tyrant species animations
+   <species>`, `tyrant species export-animations <species> <id…> | --all [--format fbx|glb|both] [--single-file]`,
+   `tyrant blender open … --animations <id>`, `tyrant species pack --animations all`. Blender does not run the game's foot
+   planting or look-at, so feet can sit slightly off where the game would plant them.
+
 Each model opens as **its own scene in the file you have open** (e.g. *Tyrant · my-mod · Allosaurus Anax Red*); your other
 scenes and objects are never touched, and saving the file is up to you. **Open in Blender** again switches back to that
 scene. **Start fresh** (Options) keeps the old scene as *… (old)* and imports the model anew. To port a model, open the
