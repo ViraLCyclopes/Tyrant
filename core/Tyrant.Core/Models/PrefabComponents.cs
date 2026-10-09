@@ -30,42 +30,59 @@ internal static class PrefabComponentReader
         AssetTypeValueField? transform = null;
         foreach (var entry in gameObject["m_Component.Array"].Children)
         {
-            var ext = manager.GetExtAsset(file, entry["component"], onlyGetInfo: true);
-            if (ext.info is null || ext.file is null) continue;
-            switch ((AssetClassID)ext.info.TypeId)
+            try
             {
-                case AssetClassID.Transform:
-                case AssetClassID.RectTransform:
-                    transform = manager.GetBaseField(ext.file, ext.info);
-                    break;
-                case AssetClassID.MonoBehaviour:
+                var ext = manager.GetExtAsset(file, entry["component"], onlyGetInfo: true);
+                if (ext.info is null || ext.file is null) continue;
+                switch ((AssetClassID)ext.info.TypeId)
                 {
-                    var header = manager.GetBaseField(ext.file, ext.info, AssetReadFlags.SkipMonoBehaviourFields);
-                    var script = manager.GetExtAsset(ext.file, header["m_Script"]).baseField;
-                    if (script is null) continue;
-                    var full = manager.GetBaseField(ext.file, ext.info);
-                    found.Add((path, script["m_ClassName"].AsString, script["m_Namespace"].AsString, script["m_AssemblyName"].AsString, FieldJsonWriter.ToJson(full)));
-                    break;
+                    case AssetClassID.Transform:
+                    case AssetClassID.RectTransform:
+                        transform = manager.GetBaseField(ext.file, ext.info);
+                        break;
+                    case AssetClassID.MonoBehaviour:
+                    {
+                        var header = manager.GetBaseField(ext.file, ext.info, AssetReadFlags.SkipMonoBehaviourFields);
+                        var className = AssetIndexer.ScriptClass(manager, ext.file, header);
+                        if (className is null) continue; // a script we cannot resolve is skipped
+                        var script = manager.GetExtAsset(ext.file, header["m_Script"]).baseField!;
+                        var full = manager.GetBaseField(ext.file, ext.info);
+                        found.Add((path, className, Text(script["m_Namespace"]), Text(script["m_AssemblyName"]), FieldJsonWriter.ToJson(full)));
+                        break;
+                    }
+                    case AssetClassID.LODGroup:
+                        found.Add((path, "LODGroup", null, null, FieldJsonWriter.ToJson(manager.GetBaseField(ext.file, ext.info))));
+                        break;
+                    case AssetClassID.Animator:
+                        found.Add((path, "Animator", null, null, FieldJsonWriter.ToJson(manager.GetBaseField(ext.file, ext.info))));
+                        break;
                 }
-                case AssetClassID.LODGroup:
-                    found.Add((path, "LODGroup", null, null, FieldJsonWriter.ToJson(manager.GetBaseField(ext.file, ext.info))));
-                    break;
-                case AssetClassID.Animator:
-                    found.Add((path, "Animator", null, null, FieldJsonWriter.ToJson(manager.GetBaseField(ext.file, ext.info))));
-                    break;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // One unreadable component must not fail the whole prefab; it is left out.
             }
         }
         if (transform is null) return;
         foreach (var child in transform["m_Children.Array"].Children)
         {
-            var childTransform = manager.GetExtAsset(file, child).baseField;
-            if (childTransform is null) continue;
-            var childObject = manager.GetExtAsset(file, childTransform["m_GameObject"]).baseField;
-            if (childObject is null) continue;
-            var name = childObject["m_Name"].AsString;
-            Walk(manager, file, childObject, path.Length == 0 ? name : path + "/" + name, found);
+            try
+            {
+                var childTransform = manager.GetExtAsset(file, child);
+                if (childTransform.baseField is null) continue;
+                var childObject = manager.GetExtAsset(childTransform.file, childTransform.baseField["m_GameObject"]);
+                if (childObject.baseField is null) continue;
+                var name = childObject.baseField["m_Name"].AsString;
+                Walk(manager, childObject.file, childObject.baseField, path.Length == 0 ? name : path + "/" + name, found);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // A child that cannot be resolved is left out with its subtree.
+            }
         }
     }
+
+    private static string? Text(AssetTypeValueField field) => field.IsDummy ? null : field.AsString;
 
     internal static IReadOnlyList<PrefabObject> Group(IEnumerable<(string Path, string Type, string? Ns, string? Asm, string Json)> found)
     {
