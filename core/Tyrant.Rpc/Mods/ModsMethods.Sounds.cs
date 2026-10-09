@@ -73,7 +73,7 @@ public sealed partial class ModsMethods
                 return null;
             }
         };
-        return ModChecker.ForGame(install).Check(mod, index, m.Skins.Count > 0 || m.Sounds.Count > 0 ? species : null,
-            m.Sounds.Count > 0 ? TrySounds(ws) : null, rigInfo);
+        return ModChecker.ForGame(install).Check(mod, index, m.Species.Count > 0 || m.Skins.Count > 0 || m.Sounds.Count > 0 ? species : null,
+            m.Sounds.Count > 0 ? TrySounds(ws) : null, rigInfo, id => SpeciesDatabase.Template(ws, id));
     }
 }

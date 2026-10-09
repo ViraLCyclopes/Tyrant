@@ -43,5 +43,13 @@
   </Target>
   <ItemGroup>
     <InternalsVisibleTo Include="Tyrant.Cli.Tests" />
+    <Content Include="..\..\unity\SpeciesAuthoring\Assets\Tyrant\Editor\**\*">
+      <Link>unity\SpeciesAuthoring\Assets\Tyrant\Editor\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+    <Content Include="..\..\unity\SpeciesAuthoring\Packages\manifest.json" Link="unity\SpeciesAuthoring\Packages\manifest.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\unity\SpeciesAuthoring\ProjectSettings\ProjectVersion.txt" Link="unity\SpeciesAuthoring\ProjectSettings\ProjectVersion.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\unity\SpeciesAuthoring\README.md;..\..\unity\SpeciesAuthoring\Import-PKReferences.ps1" Link="unity\SpeciesAuthoring\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

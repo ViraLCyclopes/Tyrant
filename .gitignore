@@ -61,6 +61,14 @@ tyrant-workspace*/
 *.assets
 *.resS
 
+# Unity authoring caches, local game references and authored game assets
+unity/**/Library/
+unity/**/Temp/
+unity/**/Logs/
+unity/**/UserSettings/
+unity/**/Assets/PKReferences/
+unity/**/Assets/Animals/
+
 # design specs, plans and their working files stay local
 .superpowers/
 docs/superpowers/

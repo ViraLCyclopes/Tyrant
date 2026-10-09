@@ -8,16 +8,27 @@ namespace Tyrant.Core.Mods;
 /// <summary>Editing a mod in place (the app's mod editor and the matching 'tyrant mod …' commands).</summary>
 public sealed partial class ModProject
 {
-    /// <summary>SHA-256 of mod.json as it is on disk: an editor sends back the revision it started from.</summary>
-    public string Revision() => Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(Path.Combine(Dir, ModManifest.FileName))));
+    /// <summary>Revision of the manifest and committed SQLite species data, including external WAL edits.</summary>
+    public string Revision() => Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(
+        File.ReadAllText(Path.Combine(Dir, ModManifest.FileName)) + "\n" + AnimalDatabaseFile.Snapshot(AnimalDatabaseFile.Read(DatabasePath)) +
+        string.Concat(AnimalLocalization.Codes.SelectMany(code => new[] { code + ".txt", code + ".json" }).Select(file =>
+        {
+            var path = Path.Combine(Dir, "localization", file);
+            return "\n" + file + "\n" + (File.Exists(path) ? File.ReadAllText(path) : "");
+        })) + string.Concat(Manifest.Species.SelectMany(s => s.Localization.Values).Distinct().OrderBy(term => term, StringComparer.Ordinal)
+            .SelectMany(term => AnimalLocalization.Codes.Select(code =>
+            {
+                var path = AnimalLocalization.FileFor(Dir, code, term);
+                return "\n" + code + "/" + term + "\n" + (File.Exists(path) ? File.ReadAllText(path) : "");
+            }))))));
 
-    /// <summary>Opens the mod, refusing when mod.json changed since <paramref name="expectedRevision"/> was read.</summary>
+    /// <summary>Opens the mod, refusing when its manifest or animal database changed since the editor's revision.</summary>
     public static ModProject Open(Workspace ws, string id, string? expectedRevision)
     {
         var mod = Open(ws, id);
         if (expectedRevision is not null && !string.Equals(mod.Revision(), expectedRevision, StringComparison.OrdinalIgnoreCase))
             throw new TyrantException(TyrantErrorCode.ModChanged,
-                $"'{id}' changed outside this editor (mod.json was edited elsewhere). It was reloaded; make your change again.");
+                $"'{id}' changed outside this editor (mod.json or animals.db was edited elsewhere). It was reloaded; make your change again.");
         return mod;
     }
 
@@ -36,6 +47,7 @@ public sealed partial class ModProject
         }
         if (manifest.Id != id)
             throw new TyrantException(TyrantErrorCode.ModInvalid, $"That mod.json belongs to '{manifest.Id}', not '{id}'.");
+        manifest.Species.AddRange(mod.Manifest.Species);
         var saved = new ModProject(mod.Dir, manifest);
         saved.Save();
         return saved;
@@ -213,7 +225,7 @@ public sealed partial class ModProject
     public string FilesStamp()
     {
         var files = Manifest.Replace.Select(r => r.File).Concat(Manifest.Skins.SelectMany(FilesOf)).Concat(Manifest.Skins.Select(s => s.Model))
-            .Concat(Manifest.Models.Select(m => m.File)).Concat(Manifest.Sounds.SelectMany(s => s.Files)).OfType<string>()
+            .Concat(Manifest.Models.Select(m => m.File)).Concat(Manifest.Sounds.SelectMany(s => s.Files)).Concat(Manifest.Species.Select(s => s.Icon)).OfType<string>()
             .Select(Normal).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(f => f, StringComparer.Ordinal);
         var text = new System.Text.StringBuilder();
         foreach (var file in files)

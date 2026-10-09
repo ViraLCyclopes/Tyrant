@@ -115,6 +115,7 @@ public sealed class GameMods(Func<GameInstall, bool>? isGameRunning = null)
                 var path = Path.Combine(dir, ModManifest.FileName);
                 if (!File.Exists(path)) throw new ManifestException("mod.json is missing.");
                 var manifest = ModManifest.Parse(File.ReadAllText(path));
+                manifest.Species.AddRange(AnimalDatabaseFile.Read(Path.Combine(dir, AnimalDatabaseFile.FileName)));
                 if (enabled) manifests[folder] = manifest;
                 result.Add(new InstalledMod(folder, manifest.Name, manifest.Version, manifest.Replace.Count, manifest.Skins.Count, enabled, dir, null));
             }
@@ -166,12 +167,15 @@ public sealed class GameMods(Func<GameInstall, bool>? isGameRunning = null)
     {
         using var sha = SHA256.Create();
         foreach (var file in Directory.GetFiles(dir, "*", SearchOption.AllDirectories)
+                     .Where(f => !AnimalDatabaseFile.IsAuxiliary(f))
                      .Select(f => (Path: f, Relative: Path.GetRelativePath(dir, f).Replace('\\', '/').ToLowerInvariant()))
                      .OrderBy(f => f.Relative, StringComparer.Ordinal))
         {
             var name = Encoding.UTF8.GetBytes(file.Relative + "\n");
             sha.TransformBlock(name, 0, name.Length, null, 0);
-            var content = FileHash(file.Path);
+            var content = file.Relative == AnimalDatabaseFile.FileName
+                ? SHA256.HashData(Encoding.UTF8.GetBytes(AnimalDatabaseFile.Snapshot(AnimalDatabaseFile.Read(file.Path))))
+                : FileHash(file.Path);
             sha.TransformBlock(content, 0, content.Length, null, 0);
         }
         sha.TransformFinalBlock([], 0, 0);
@@ -204,9 +208,11 @@ public sealed class GameMods(Func<GameInstall, bool>? isGameRunning = null)
     {
         foreach (var file in Directory.GetFiles(from, "*", SearchOption.AllDirectories))
         {
+            if (AnimalDatabaseFile.IsAuxiliary(file)) continue;
             var destination = Path.Combine(to, Path.GetRelativePath(from, file));
             Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-            File.Copy(file, destination);
+            if (Path.GetRelativePath(from, file) == AnimalDatabaseFile.FileName) AnimalDatabaseFile.CopySnapshot(file, destination);
+            else File.Copy(file, destination);
         }
         Directory.CreateDirectory(to);
     }

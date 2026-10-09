@@ -34,6 +34,7 @@
 
 <nav class="side" aria-label="Mod contents">
   <button class:on={selection.kind === 'details'} onclick={() => onSelect({ kind: 'details' })}>Mod details</button>
+  <button class:on={selection.kind === 'speciesDatabase'} onclick={() => onSelect({ kind: 'speciesDatabase' })}>Species database</button>
 
   <div class="heading">
     <span>Skins ({detail.skins.length})</span>

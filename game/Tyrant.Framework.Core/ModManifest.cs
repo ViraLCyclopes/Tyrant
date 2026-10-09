@@ -169,6 +169,9 @@ namespace Tyrant.Framework.Core
 
         public List<SkinEntry> Skins { get; } = new List<SkinEntry>();
 
+        /// <summary>In-memory species from animals.db; never serialized into mod.json.</summary>
+        public List<SpeciesEntry> Species { get; } = new List<SpeciesEntry>();
+
         public List<ModelReplacement> Models { get; } = new List<ModelReplacement>();
 
         public List<SoundReplacement> Sounds { get; } = new List<SoundReplacement>();
@@ -266,6 +269,7 @@ namespace Tyrant.Framework.Core
                     skippedSkins.Add($"\"skins\" entry {n} was skipped: {ex.Message}");
                 }
             }
+            if (map.ContainsKey("species")) throw new ManifestException("Species definitions belong in animals.db, not mod.json.");
             return manifest;
         }
 

@@ -353,6 +353,7 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
     private ModDetail DetailOf(Workspace ws, ModProject mod)
     {
         var species = mod.Manifest.Skins.Count > 0 ? TrySpecies(ws) : null;
+        if (species is not null) species = ModProject.WithSpecies(species, mod.Manifest);
         var m = mod.Manifest;
         return new ModDetail(m.Id, m.Name, m.Version, m.Author, m.Description, mod.Dir, mod.Revision(),
             File.ReadAllText(Path.Combine(mod.Dir, Tyrant.Framework.Core.ModManifest.FileName)),

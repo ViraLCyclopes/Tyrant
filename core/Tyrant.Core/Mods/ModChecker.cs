@@ -35,12 +35,43 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
 
     /// <param name="rigInfo">A species' rig info (its skeleton, bones its animations and growth move); null without the index or dump.</param>
     public ModCheckResult Check(ModProject mod, AssetIndex? index, IReadOnlyList<SpeciesSkins>? species = null, SoundCatalog? sounds = null,
-        Func<string, Rigging.RigInfo?>? rigInfo = null)
+        Func<string, Rigging.RigInfo?>? rigInfo = null, Func<string, SpeciesTemplateStats?>? templateStats = null)
     {
         var errors = new List<string>();
         var warnings = new List<string>();
+        foreach (var entry in mod.Manifest.Species)
+        {
+            if (entry.Icon != null) Image(mod, $"Species {entry.Id} icon", entry.Icon, errors);
+            if (entry.Prefab != null)
+            {
+                var path = Path.GetFullPath(Path.Combine(mod.Dir, entry.Prefab.Bundle));
+                if (!ModPaths.IsInside(path, mod.Dir) || !File.Exists(path))
+                    errors.Add($"Species {entry.Id}: prefab bundle is missing: {entry.Prefab.Bundle}");
+                else
+                {
+                    using var input = File.OpenRead(path);
+                    var header = new byte[8];
+                    if (input.Read(header, 0, header.Length) != 8 || System.Text.Encoding.ASCII.GetString(header) != "UnityFS\0")
+                        errors.Add($"Species {entry.Id}: prefab file is not a Unity AssetBundle.");
+                }
+                warnings.Add($"Species {entry.Id}: custom Unity prefab loading is experimental. Validate with the Unity exporter and test the animal in PK.");
+            }
+            if (species is null) warnings.Add($"Species {entry.Id}: template not checked because the game data dump is missing.");
+            else if (!species.Any(s => s.SpeciesId == entry.Base && !s.Vivarium && s.Skins.Count > 0))
+                errors.Add($"Species {entry.Id}: '{entry.Base}' is not a regular animal template with skins in the game data dump.");
+            try
+            {
+                SpeciesDatabase.ValidateEffective(entry.Stats, templateStats?.Invoke(entry.Base)?.Stats ?? new Dictionary<string, double>());
+            }
+            catch (ManifestException ex) { errors.Add($"Species {entry.Id}: {ex.Message}"); }
+        }
+        if (mod.Manifest.Species.Count > 0)
+        {
+            warnings.Add("New species support is experimental; spawning and save/reload need an in-game test. Removing the species mod prevents its saved animals from loading.");
+            if (species is not null) species = ModProject.WithSpecies(species, mod.Manifest);
+        }
         if (mod.Manifest.Replace.Count == 0 && mod.Manifest.Skins.Count == 0 && mod.Manifest.Models.Count == 0 && mod.Manifest.Sounds.Count == 0
-            && mod.Manifest.Assembly is null)
+            && mod.Manifest.Species.Count == 0 && mod.Manifest.Assembly is null)
             warnings.Add("The mod does nothing yet: add a texture replacement, a skin, a model or a sound.");
         if (index is null && mod.Manifest.Replace.Count > 0)
             warnings.Add("There is no asset index, so the target textures were not checked. Click Index assets on the Workspace tab.");

@@ -4,6 +4,10 @@ import type { Tab } from '$lib/shell/tab.svelte';
 
 export type EditMethod =
   | 'mods.setDetails'
+  | 'mods.addSpecies'
+  | 'mods.setSpecies'
+  | 'mods.setSpeciesIcon'
+  | 'mods.setSpeciesPrefab'
   | 'mods.renameSkin'
   | 'mods.removeSkin'
   | 'mods.setColors'

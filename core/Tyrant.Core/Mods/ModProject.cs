@@ -19,7 +19,11 @@ public sealed partial class ModProject
     {
         Dir = dir;
         Manifest = manifest;
+        _databaseSnapshot = AnimalDatabaseFile.Snapshot(manifest.Species);
     }
+
+    private string _databaseSnapshot;
+    public string DatabasePath => Path.Combine(Dir, AnimalDatabaseFile.FileName);
 
     public string Dir { get; }
     public ModManifest Manifest { get; }
@@ -54,6 +58,7 @@ public sealed partial class ModProject
         try
         {
             var manifest = ModManifest.Parse(File.ReadAllText(path));
+            manifest.Species.AddRange(AnimalDatabaseFile.Read(Path.Combine(dir, AnimalDatabaseFile.FileName)));
             if (manifest.Id != id) throw new ManifestException($"its id \"{manifest.Id}\" does not match its folder \"{id}\"");
             return new ModProject(dir, manifest);
         }
@@ -147,6 +152,7 @@ public sealed partial class ModProject
     public SkinEntry AddSkin(Workspace ws, GameInstall install, AssetIndex index, IAssetReader reader, IReadOnlyList<SpeciesSkins> species,
         string speciesId, string name, string? baseSkin, SkinTemplateOptions options)
     {
+        species = WithSpecies(species, Manifest);
         if (!options.Male && !options.Female) throw new TyrantException(TyrantErrorCode.ModInvalid, "Choose male, female or both for the new skin.");
         var target = species.FirstOrDefault(s => string.Equals(s.SpeciesId, speciesId, StringComparison.OrdinalIgnoreCase))
             ?? throw new TyrantException(TyrantErrorCode.TargetNotFound, $"No species '{speciesId}' in the game data. Pick one from the list (Species tab).");

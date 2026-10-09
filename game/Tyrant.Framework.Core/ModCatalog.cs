@@ -114,6 +114,8 @@ namespace Tyrant.Framework.Core
                 {
                     var skippedSkins = new List<string>();
                     var manifest = ModManifest.Parse(source.ManifestJson, skippedSkins); // one bad skin does not cost the whole mod
+                    manifest.Species.AddRange(AnimalDatabaseFile.Read(Path.Combine(source.Directory, AnimalDatabaseFile.FileName)));
+                    AnimalLocalization.Load(source.Directory, manifest.Species);
                     foreach (var skipped in skippedSkins) plan.Warnings.Add($"{source.Folder}: {skipped}");
                     if (manifest.Id != source.Folder)
                         plan.Skipped.Add(new SkippedMod(source.Folder, $"its id \"{manifest.Id}\" does not match its folder \"{source.Folder}\"."));

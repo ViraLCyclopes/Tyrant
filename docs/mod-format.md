@@ -2,6 +2,9 @@
 
 A Tyrant mod is a folder. Tyrant makes it for you (Mods tab, or `tyrant mod new`), but it is plain files you can edit.
 
+Experimental custom species use a separate SQLite `animals.db` alongside `mod.json`.
+See [Custom species and animal databases](custom-species.md) for the SQL schema and stat editor.
+
 ```
 red-spot-carcharo/
   mod.json

@@ -23,6 +23,7 @@ public sealed partial class ModProject
         string glbPath, string? target, string? prefabRef, string? skinId, Func<IModelConverter>? converter = null,
         IReadOnlyDictionary<string, RigOffset>? rig = null)
     {
+        species = WithSpecies(species, Manifest);
         if (!File.Exists(glbPath)) throw new TyrantException(TyrantErrorCode.ModInvalid, $"'{glbPath}' does not exist.");
         if (!string.Equals(Path.GetExtension(glbPath), ".fbx", StringComparison.OrdinalIgnoreCase))
             return ReplaceModelFrom(install, index, species, reader, glbPath, glbPath, target, prefabRef, skinId, rig);
@@ -112,6 +113,7 @@ public sealed partial class ModProject
     public ModelReport? SetRig(GameInstall install, AssetIndex index, IReadOnlyList<SpeciesSkins> species, IAssetReader reader,
         string speciesId, string? skinId, IReadOnlyDictionary<string, RigOffset>? rig)
     {
+        species = WithSpecies(species, Manifest);
         var skin = skinId is null ? null : Skin(skinId);
         var (id, prefab) = ResolveModelTarget(index, species, skin?.Species ?? speciesId, null);
         var owned = Owned(rig);
@@ -147,6 +149,7 @@ public sealed partial class ModProject
     /// <summary>Rebuilds every model whose .glb changed since it was built; returns the .glb files rebuilt.</summary>
     public IReadOnlyList<string> RebuildStaleModels(GameInstall install, AssetIndex index, IReadOnlyList<SpeciesSkins> species, IAssetReader reader)
     {
+        species = WithSpecies(species, Manifest);
         var rebuilt = new List<string>();
         foreach (var (speciesId, file) in ModelEntries())
         {

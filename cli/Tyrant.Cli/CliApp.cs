@@ -23,6 +23,11 @@ public static class CliApp
             config.SetApplicationName("tyrant");
             config.ConfigureConsole(AnsiConsole.Create(new AnsiConsoleSettings { Out = new AnsiConsoleOutput(Console.Out) })); // help goes to the current output
             config.PropagateExceptions();
+            config.AddBranch("unity", unity =>
+            {
+                unity.AddCommand<UnityPrepareCommand>("prepare").WithDescription("Prepare local PK DLL references for a Unity authoring project.");
+                unity.AddCommand<UnityImportPrefabCommand>("import-prefab").WithDescription("Recover a species template as an editable Unity prefab with its dependencies.");
+            });
             config.AddBranch("install", install =>
             {
                 install.SetDescription("Find the game install.");
@@ -130,6 +135,7 @@ public static class CliApp
                 mod.AddCommand<ModEnableCommand>("enable").WithDescription("Turn an installed mod on.");
                 mod.AddCommand<ModDisableCommand>("disable").WithDescription("Turn an installed mod off.");
                 mod.AddCommand<ModAddSkinCommand>("add-skin").WithDescription("Add a new skin to a species, starting from a vanilla skin's textures.");
+                mod.AddCommand<ModAddSpeciesCommand>("add-species").WithDescription("Experimental: add a distinct species using a vanilla regular animal as its template.");
                 mod.AddCommand<ModCleanSkinsCommand>("clean-skins").WithDescription("List or forget skin numbers left by removed mods.");
                 mod.AddCommand<ModListCommand>("list").WithDescription("List your mods and what is installed in the game.");
                 mod.AddCommand<ModShowCommand>("show").WithDescription("Show a mod's details, replacements and skins.");

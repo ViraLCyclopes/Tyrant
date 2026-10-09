@@ -17,6 +17,7 @@
   import type { Selection } from './selection';
   import SkinPage from './SkinPage.svelte';
   import SoundPage from './SoundPage.svelte';
+  import SpeciesDatabase from './SpeciesDatabase.svelte';
 
   const session = getSession();
   const tab = getTab();
@@ -162,6 +163,8 @@
         <AddReplacement modId={doc.id} onDone={replacementAdded} />
       {:else if selection.kind === 'details'}
         <ModDetailsPage {doc} />
+      {:else if selection.kind === 'speciesDatabase'}
+        <SpeciesDatabase {doc} />
       {:else if selectedSkin}
         <SkinPage {doc} skin={selectedSkin} onOpenModel={(target, skin) => (selection = { kind: 'model', target, skin })} />
       {:else if selectedModel}

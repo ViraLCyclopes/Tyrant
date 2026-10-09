@@ -17,6 +17,8 @@ public sealed class ModShowCommand : Command<ModSettings>
         if (m.Description is not null) Console.WriteLine($"  {m.Description}");
         Console.WriteLine($"Replacements ({m.Replace.Count}):");
         foreach (var r in m.Replace) Console.WriteLine($"  {r.Texture} <- {r.File}");
+        Console.WriteLine($"Species ({m.Species.Count}):");
+        foreach (var entry in m.Species) Console.WriteLine($"  {entry.Key(m.Id)}  {entry.Name}  template {entry.Base}");
         Console.WriteLine($"Skins ({m.Skins.Count}):");
         foreach (var s in m.Skins)
         {

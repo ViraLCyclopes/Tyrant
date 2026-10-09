@@ -58,8 +58,8 @@ internal static class ModCli
     public static ModCheckResult Check(Workspace ws, GameInstall install, ModProject mod)
     {
         var m = mod.Manifest;
-        return ModChecker.ForGame(install).Check(mod, TryIndex(ws), m.Skins.Count > 0 || m.Sounds.Count > 0 ? TrySpecies(ws) : null,
-            m.Sounds.Count > 0 ? TrySounds(ws) : null, RigInfoProvider(ws, install));
+        return ModChecker.ForGame(install).Check(mod, TryIndex(ws), m.Species.Count > 0 || m.Skins.Count > 0 || m.Sounds.Count > 0 ? TrySpecies(ws) : null,
+            m.Sounds.Count > 0 ? TrySounds(ws) : null, RigInfoProvider(ws, install), id => SpeciesDatabase.Template(ws, id));
     }
 
     /// <summary>Rig edits' species skeletons for Check (null without the asset index or the data dump).</summary>

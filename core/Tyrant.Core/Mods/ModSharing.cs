@@ -19,7 +19,18 @@ public static class ModSharing
     public static IReadOnlyList<string> SharedFiles(ModProject mod)
     {
         var m = mod.Manifest;
+        foreach (var species in m.Species.Where(s => s.Prefab != null))
+            if (!File.Exists(Path.Combine(mod.Dir, species.Prefab!.Bundle)))
+                throw new TyrantException(TyrantErrorCode.ModInvalid, $"Species '{species.Id}' is missing its prefab bundle '{species.Prefab.Bundle}'.");
         var named = new List<string?> { ModManifest.FileName, m.Assembly };
+        if (File.Exists(mod.DatabasePath)) named.Add(AnimalDatabaseFile.FileName);
+        foreach (var code in AnimalLocalization.Codes) named.Add("localization/" + code + ".json");
+        foreach (var code in AnimalLocalization.Codes) named.Add("localization/" + code + ".txt");
+        foreach (var entry in m.Species)
+            foreach (var term in entry.Localization.Values)
+                foreach (var code in AnimalLocalization.Codes) named.Add($"localization/{code}/{term.Replace('\\', '/')}.txt");
+        named.AddRange(m.Species.Select(s => s.Icon));
+        named.AddRange(m.Species.Select(s => s.Prefab?.Bundle));
         named.AddRange(m.Replace.Select(r => r.File));
         foreach (var skin in m.Skins)
         {
@@ -60,6 +71,16 @@ public static class ModSharing
                 var source = Path.Combine(mod.Dir, file);
                 if (file == ModManifest.FileName) WriteText(archive, name, SharedManifest(mod, frameworkVersion));
                 else if (file.EndsWith(".model.json", StringComparison.OrdinalIgnoreCase)) WriteText(archive, name, WithoutLocalPaths(File.ReadAllText(source)));
+                else if (file == AnimalDatabaseFile.FileName)
+                {
+                    var snapshot = Path.Combine(Path.GetTempPath(), "tyrant-animal-snapshot-" + Guid.NewGuid().ToString("N") + ".db");
+                    try
+                    {
+                        AnimalDatabaseFile.CopySnapshot(source, snapshot);
+                        archive.CreateEntryFromFile(snapshot, name, CompressionLevel.Optimal);
+                    }
+                    finally { if (File.Exists(snapshot)) File.Delete(snapshot); }
+                }
                 else archive.CreateEntryFromFile(source, name, CompressionLevel.Optimal);
             }
             using var readme = new StreamWriter(archive.CreateEntry("README.txt").Open(), new UTF8Encoding(false));
@@ -130,6 +151,9 @@ public static class ModSharing
                 Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
                 entry.ExtractToFile(destination);
             }
+            // Validate the database before replacing an existing workspace mod.
+            try { AnimalDatabaseFile.Read(Path.Combine(staging, AnimalDatabaseFile.FileName)); }
+            catch (ManifestException ex) { throw new TyrantException(TyrantErrorCode.ModInvalid, "The imported animal database is invalid: " + ex.Message); }
             if (Directory.Exists(previous)) Directory.Delete(previous, recursive: true);
             if (Directory.Exists(target)) Directory.Move(target, previous);
             try

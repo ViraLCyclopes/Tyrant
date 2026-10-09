@@ -428,6 +428,48 @@ export interface ModAddSkinParams {
   maps?: boolean;
 }
 
+export interface ModAddSpeciesParams {
+  id: string;
+  revision: string;
+  speciesId: string;
+  template: string;
+  name: string;
+  genus: string;
+  epithet: string;
+  cost?: number | null;
+  stats?: Record<string, number> | null;
+}
+
+export interface ModAnimalDatabase {
+  animals: ModAnimalDto[];
+  fields: ModStatDto[];
+}
+
+export interface ModAnimalDto {
+  id: string;
+  key: string;
+  base: string;
+  name: string;
+  genus: string;
+  epithet: string;
+  cost: number | null;
+  stats: Record<string, number>;
+  inheritedCost: number | null;
+  inheritedStats: Record<string, number>;
+  dataFields: ModAnimalFieldDto[];
+  localization: Record<string, string>;
+  icon: string | null;
+  prefab: SpeciesPrefab | null;
+}
+
+export interface ModAnimalFieldDto {
+  path: string;
+  kind: string;
+  value: string;
+  templateValue: string;
+  editable: boolean;
+}
+
 export interface ModCheckReport {
   errors: string[];
   warnings: string[];
@@ -514,6 +556,11 @@ export interface ModImportResult {
   id: string;
   problems: string[];
   mods: ModsListResult;
+}
+
+export interface ModImportUnityPrefabParams {
+  id: string;
+  speciesId: string;
 }
 
 export interface ModInstallResult {
@@ -750,6 +797,34 @@ export interface ModSetSoundParams {
   likeGame?: boolean;
 }
 
+export interface ModSetSpeciesIconParams {
+  id: string;
+  revision: string;
+  speciesId: string;
+  png?: string | null;
+}
+
+export interface ModSetSpeciesParams {
+  id: string;
+  revision: string;
+  speciesId: string;
+  name: string;
+  genus: string;
+  epithet: string;
+  cost: number | null;
+  stats: Record<string, number>;
+  dataFields?: Record<string, string> | null;
+  localization?: Record<string, string> | null;
+}
+
+export interface ModSetSpeciesPrefabParams {
+  id: string;
+  revision: string;
+  speciesId: string;
+  bundle?: string | null;
+  asset?: string | null;
+}
+
 export interface ModSetThumbnailParams {
   id: string;
   revision: string;
@@ -821,6 +896,14 @@ export interface ModSpeciesTexturesResult {
   textures: SpeciesTextureDto[];
 }
 
+export interface ModStatDto {
+  id: string;
+  label: string;
+  unit: string;
+  min: number;
+  max: number;
+}
+
 export interface ModThumbnailParams {
   id: string;
   file: string;
@@ -829,6 +912,11 @@ export interface ModThumbnailParams {
 
 export interface ModThumbnailResult {
   file: string | null;
+}
+
+export interface ModUnityProjectDto {
+  directory: string;
+  readme: string;
 }
 
 export interface ModsListResult {
@@ -998,6 +1086,11 @@ export interface SpeciesPackRunResult {
   notes?: string[] | null;
 }
 
+export interface SpeciesPrefab {
+  bundle: string;
+  asset: string;
+}
+
 export interface SpeciesRigInfoParams {
   species: string;
 }
@@ -1033,6 +1126,13 @@ export interface SpeciesTextureDto {
   slot: string;
   skins: string[];
   sharedWith: string[];
+}
+
+export interface UnityPrefabImportResult {
+  directory: string;
+  prefab: string;
+  report: string;
+  assets: number;
 }
 
 export interface VanillaSkinRow {
@@ -1098,16 +1198,20 @@ export interface RpcMethods {
   "job.cancel": { params: JobCancelParams; result: JobCancelResult };
   "job.current": { params: void; result: JobCurrentResult };
   "mods.addSkin": { params: ModAddSkinParams; result: ModsListResult };
+  "mods.addSpecies": { params: ModAddSpeciesParams; result: ModDetail };
+  "mods.animalDatabase": { params: ModIdParams; result: ModAnimalDatabase };
   "mods.check": { params: ModIdParams; result: ModCheckReport };
   "mods.clearRig": { params: ModClearRigParams; result: ModDetail };
   "mods.colorPreview": { params: ModColorPreviewParams; result: ModPreviewFiles };
   "mods.copyBaseFile": { params: ModCopyBaseFileParams; result: ModDetail };
   "mods.create": { params: ModCreateParams; result: ModsListResult };
+  "mods.createUnityProject": { params: ModIdParams; result: ModUnityProjectDto };
   "mods.enable": { params: ModEnableParams; result: ModsListResult };
   "mods.export": { params: ModExportParams; result: JobStarted };
   "mods.forgetSkins": { params: ModForgetSkinsParams; result: SkinSlotsResult };
   "mods.get": { params: ModIdParams; result: ModDetail };
   "mods.import": { params: ModImportParams; result: ModImportResult };
+  "mods.importUnityPrefab": { params: ModImportUnityPrefabParams; result: JobStarted };
   "mods.install": { params: ModIdParams; result: JobStarted };
   "mods.list": { params: void; result: ModsListResult };
   "mods.modelPreview": { params: ModModelPreviewParams; result: ModModelPreview };
@@ -1130,6 +1234,9 @@ export interface RpcMethods {
   "mods.setDetails": { params: ModSetDetailsParams; result: ModDetail };
   "mods.setSkinFile": { params: ModSetSkinFileParams; result: ModDetail };
   "mods.setSound": { params: ModSetSoundParams; result: ModDetail };
+  "mods.setSpecies": { params: ModSetSpeciesParams; result: ModDetail };
+  "mods.setSpeciesIcon": { params: ModSetSpeciesIconParams; result: ModDetail };
+  "mods.setSpeciesPrefab": { params: ModSetSpeciesPrefabParams; result: ModDetail };
   "mods.setThumbnail": { params: ModSetThumbnailParams; result: ModDetail };
   "mods.skinModel": { params: ModSkinModelParams; result: ModSkinModel };
   "mods.skinSlots": { params: void; result: SkinSlotsResult };
@@ -1159,6 +1266,7 @@ export interface RpcJobs {
   "dump.install": DumperInstallResult;
   "dump.run": DumpRunResult;
   "mods.export": ModExportResult;
+  "mods.importUnityPrefab": UnityPrefabImportResult;
   "mods.install": ModInstallResult;
   "species.exportAnimations": SpeciesExportAnimationsResult;
   "species.pack": SpeciesPackRunResult;
