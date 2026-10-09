@@ -27,10 +27,8 @@ namespace Tyrant.Framework
         {
             public Transform Transform = null!;
             public RigOffset Offset;
-            public bool HasFinal;
-            public Vector3 FinalPosition, CopiedPosition;
-            public Quaternion FinalRotation;
-            public Vector3 FinalScale, CopiedScale;
+            public readonly RigBoneState State = new RigBoneState();
+            public Vector3 CopiedPosition, CopiedScale;
             public object? Virtual; // the game's VLib.VirtualValueTransform for this bone (a handle on native memory)
         }
 
@@ -151,13 +149,12 @@ namespace Tyrant.Framework
                 var p = t.localPosition;
                 var r = t.localRotation;
                 var s = t.localScale;
-                // Not written by the animator since last frame's end (an animal it skipped): it still wears the edit.
-                if (!(bone.HasFinal && p == bone.FinalPosition && r == bone.FinalRotation && s == bone.FinalScale))
+                var position = new RigVector3(p.x, p.y, p.z);
+                var rotation = new RigQuaternion(r.x, r.y, r.z, r.w);
+                var scale = new RigVector3(s.x, s.y, s.z);
+                // The offset goes on once per value the animator wrote; a channel it left alone keeps its edit (RigBoneState).
+                if (bone.State.Compose(bone.Offset, ref position, ref rotation, ref scale))
                 {
-                    var position = new RigVector3(p.x, p.y, p.z);
-                    var rotation = new RigQuaternion(r.x, r.y, r.z, r.w);
-                    var scale = new RigVector3(s.x, s.y, s.z);
-                    bone.Offset.Apply(ref position, ref rotation, ref scale);
                     p = new Vector3(position.X, position.Y, position.Z);
                     s = new Vector3(scale.X, scale.Y, scale.Z);
                     t.localPosition = p;
@@ -243,10 +240,10 @@ namespace Tyrant.Framework
                     {
                         var t = bone.Transform;
                         if (t == null) continue;
-                        bone.FinalPosition = t.localPosition;
-                        bone.FinalRotation = t.localRotation;
-                        bone.FinalScale = t.localScale;
-                        bone.HasFinal = true;
+                        var p = t.localPosition;
+                        var r = t.localRotation;
+                        var s = t.localScale;
+                        bone.State.NoteFinal(new RigVector3(p.x, p.y, p.z), new RigQuaternion(r.x, r.y, r.z, r.w), new RigVector3(s.x, s.y, s.z));
                     }
                 });
             }
