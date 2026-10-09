@@ -122,6 +122,25 @@ public class ModModelMethodsTests
     }
 
     [Fact]
+    public async Task A_custom_species_skins_own_model_can_be_previewed()
+    {
+        using var game = new FakeGame();
+        var (h, ws, _, glb) = await Setup(game);
+        var dir = Path.Combine(ws, "mods", "big-carch");
+        Tyrant.Framework.Core.AnimalDatabaseFile.Save(Path.Combine(dir, Tyrant.Framework.Core.AnimalDatabaseFile.FileName),
+            [new Tyrant.Framework.Core.SpeciesEntry { Id = "giga", Base = "Carcharodontosaurus", Name = "Giga", Genus = "G", Epithet = "giga" }]);
+        Directory.CreateDirectory(Path.Combine(dir, "skins", "spiked"));
+        File.Copy(glb, Path.Combine(dir, "skins", "spiked", "male_D.png"));
+        File.WriteAllText(Path.Combine(dir, "mod.json"),
+            "{\"format\":1,\"id\":\"big-carch\",\"name\":\"Big Carch\",\"version\":\"1.0.0\",\"replace\":[],\"skins\":[{\"id\":\"spiked\",\"species\":\"tyrant.big-carch.giga\",\"name\":\"Spiked\",\"base\":\"0\",\"male\":{\"diffuse\":\"skins/spiked/male_D.png\"}}]}");
+        await h.Call("mods.replaceModel", new { id = "big-carch", file = glb, skin = "spiked" });
+
+        var preview = await h.Call("mods.modelPreview", new { id = "big-carch", target = "tyrant.big-carch.giga", skin = "spiked" });
+
+        Assert.Equal(SkinDumps.Prefab.Ref, preview.GetProperty("prefabRef").GetString());
+    }
+
+    [Fact]
     public async Task A_changed_source_file_is_flagged_with_its_path()
     {
         using var game = new FakeGame();

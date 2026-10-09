@@ -60,7 +60,7 @@ public sealed partial class ModsMethods
         var file = p.Skin is null ? mod.Manifest.Models.FirstOrDefault(m => m.Target == p.Target)?.File : mod.Skin(p.Skin).Model;
         if (file is null) throw new TyrantException(TyrantErrorCode.TargetNotFound, $"'{p.Id}' has no model for {p.Skin ?? p.Target}.");
         var index = RequireIndex(ws);
-        var prefab = ModProject.ResolveModelTarget(index, RequireSpecies(ws), p.Target, null).Prefab;
+        var prefab = ModProject.ResolveModelTarget(index, mod.SpeciesFor(ws, install, RequireSpecies(ws)), p.Target, null).Prefab;
         var report = ModelBuilder.ReadReport(mod.Dir, file);
         if (report is null || report.Errors.Count > 0 || report.Lods.Count == 0)
             throw new TyrantException(TyrantErrorCode.ModInvalid, "The model has no built levels of detail to show: fix its problems (see Check), then click Rebuild LODs.");
