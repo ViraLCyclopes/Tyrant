@@ -6,7 +6,7 @@ namespace Tyrant.Rpc.Mods;
 /// </summary>
 /// <summary>Clashes: species whose model or rig edit a later enabled mod in the load order overrides (the game uses the later one).</summary>
 public sealed record ModRow(string Id, string Name, string Version, string? Author, int Replacements, int Skins, string State, bool? Enabled, string? Dir, string? Error,
-    IReadOnlyList<string>? Clashes = null);
+    IReadOnlyList<string>? Clashes = null, IReadOnlyList<string>? NeedsMods = null);
 
 public sealed record ModsListResult(IReadOnlyList<ModRow> Mods, bool FrameworkInstalled, bool FrameworkOutdated = false);
 
@@ -107,7 +107,9 @@ public sealed record ModReplacementDto(string Texture, string? Key, string? Guid
 public sealed record ModDetail(string Id, string Name, string Version, string? Author, string? Description, string Dir, string Revision,
     string ManifestJson, IReadOnlyList<ModReplacementDto> Replace, IReadOnlyList<ModSkinDto> Skins, IReadOnlyList<ModModelDto> Models,
     IReadOnlyList<ModSoundDto> Sounds, string FilesStamp = "", IReadOnlyDictionary<string, string>? PrefabFiles = null,
-    IReadOnlyList<ModPrefabTargetDto>? PrefabTargets = null);
+    IReadOnlyList<ModPrefabTargetDto>? PrefabTargets = null, IReadOnlyList<ModSpeciesUseDto>? UsesSpeciesFrom = null);
+
+public sealed record ModSpeciesUseDto(string ModId, string? ModName, int Skins, bool InWorkspace, bool Installed, bool Enabled);
 
 /// <summary>A sound replacement: Species or Skin set = only that species or skin hears it; neither = everyone.</summary>
 public sealed record ModSoundDto(string Event, string Name, string Group, string? Species, string? Skin, IReadOnlyList<string> Files, double Volume, double AgePitch,

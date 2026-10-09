@@ -174,6 +174,18 @@ export interface BlenderStatusDto {
   problem: string | null;
 }
 
+export interface CustomSpeciesRow {
+  speciesId: string;
+  name: string;
+  modId: string;
+  modName: string;
+  own: boolean;
+  inWorkspace: boolean;
+  installed: boolean;
+  enabled: boolean;
+  skins: VanillaSkinRow[];
+}
+
 export interface DataCompareParams {
   type: string;
   names: string[];
@@ -439,6 +451,7 @@ export interface ModAddSpeciesParams {
   epithet: string;
   cost?: number | null;
   stats?: Record<string, number> | null;
+  startingSkin?: number;
 }
 
 export interface ModAnimalDatabase {
@@ -461,6 +474,9 @@ export interface ModAnimalDto {
   localization: Record<string, string>;
   icon: string | null;
   prefab: SpeciesPrefab | null;
+  startingSkin?: number;
+  startingSkinName?: string | null;
+  swatch?: string | null;
 }
 
 export interface ModAnimalFieldDto {
@@ -515,6 +531,14 @@ export interface ModCreateParams {
   author?: string | null;
 }
 
+export interface ModCustomSpeciesParams {
+  id?: string | null;
+}
+
+export interface ModCustomSpeciesResult {
+  species: CustomSpeciesRow[];
+}
+
 export interface ModDeleteParams {
   id: string;
   removeFromGame?: boolean;
@@ -536,6 +560,7 @@ export interface ModDetail {
   filesStamp?: string;
   prefabFiles?: Record<string, string> | null;
   prefabTargets?: ModPrefabTargetDto[] | null;
+  usesSpeciesFrom?: ModSpeciesUseDto[] | null;
 }
 
 export interface ModEnableParams {
@@ -788,6 +813,7 @@ export interface ModRow {
   dir: string | null;
   error: string | null;
   clashes?: string[] | null;
+  needsMods?: string[] | null;
 }
 
 export interface ModSampleColorsParams {
@@ -888,6 +914,21 @@ export interface ModSetSpeciesPrefabParams {
   asset?: string | null;
 }
 
+export interface ModSetSpeciesStartingSkinParams {
+  id: string;
+  revision: string;
+  speciesId: string;
+  startingSkin: number;
+  name?: string | null;
+}
+
+export interface ModSetSpeciesSwatchParams {
+  id: string;
+  revision: string;
+  speciesId: string;
+  png?: string | null;
+}
+
 export interface ModSetThumbnailParams {
   id: string;
   revision: string;
@@ -974,6 +1015,15 @@ export interface ModSpeciesTexturesParams {
 export interface ModSpeciesTexturesResult {
   speciesId: string | null;
   textures: SpeciesTextureDto[];
+}
+
+export interface ModSpeciesUseDto {
+  modId: string;
+  modName: string | null;
+  skins: number;
+  inWorkspace: boolean;
+  installed: boolean;
+  enabled: boolean;
 }
 
 export interface ModStatDto {
@@ -1280,6 +1330,7 @@ export interface RpcMethods {
   "mods.copyBaseFile": { params: ModCopyBaseFileParams; result: ModDetail };
   "mods.create": { params: ModCreateParams; result: ModsListResult };
   "mods.createUnityProject": { params: ModIdParams; result: ModUnityProjectDto };
+  "mods.customSpecies": { params: ModCustomSpeciesParams; result: ModCustomSpeciesResult };
   "mods.delete": { params: ModDeleteParams; result: ModsListResult };
   "mods.enable": { params: ModEnableParams; result: ModsListResult };
   "mods.export": { params: ModExportParams; result: JobStarted };
@@ -1315,6 +1366,8 @@ export interface RpcMethods {
   "mods.setSpecies": { params: ModSetSpeciesParams; result: ModDetail };
   "mods.setSpeciesIcon": { params: ModSetSpeciesIconParams; result: ModDetail };
   "mods.setSpeciesPrefab": { params: ModSetSpeciesPrefabParams; result: ModDetail };
+  "mods.setSpeciesStartingSkin": { params: ModSetSpeciesStartingSkinParams; result: ModDetail };
+  "mods.setSpeciesSwatch": { params: ModSetSpeciesSwatchParams; result: ModDetail };
   "mods.setThumbnail": { params: ModSetThumbnailParams; result: ModDetail };
   "mods.skinModel": { params: ModSkinModelParams; result: ModSkinModel };
   "mods.skinSlots": { params: void; result: SkinSlotsResult };

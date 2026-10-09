@@ -8,7 +8,8 @@ namespace Tyrant.Rpc.Mods;
 
 public sealed record ModAnimalDto(string Id, string Key, string Base, string Name, string Genus, string Epithet,
     int? Cost, IReadOnlyDictionary<string, double> Stats, int? InheritedCost, IReadOnlyDictionary<string, double> InheritedStats,
-    IReadOnlyList<ModAnimalFieldDto> DataFields, IReadOnlyDictionary<string, string> Localization, string? Icon, SpeciesPrefab? Prefab);
+    IReadOnlyList<ModAnimalFieldDto> DataFields, IReadOnlyDictionary<string, string> Localization, string? Icon, SpeciesPrefab? Prefab,
+    int StartingSkin = 0, string? StartingSkinName = null, string? Swatch = null);
 public sealed record ModAnimalFieldDto(string Path, string Kind, string Value, string TemplateValue, bool Editable);
 public sealed record ModSetSpeciesIconParams(string Id, string Revision, string SpeciesId, string? Png = null);
 public sealed record ModSetSpeciesPrefabParams(string Id, string Revision, string SpeciesId, string? Bundle = null, string? Asset = null);
@@ -16,10 +17,17 @@ public sealed record ModUnityProjectDto(string Directory, string Readme);
 public sealed record ModStatDto(string Id, string Label, string Unit, double Min, double Max);
 public sealed record ModAnimalDatabase(IReadOnlyList<ModAnimalDto> Animals, IReadOnlyList<ModStatDto> Fields);
 public sealed record ModAddSpeciesParams(string Id, string Revision, string SpeciesId, string Template, string Name,
-    string Genus, string Epithet, int? Cost = null, IReadOnlyDictionary<string, double>? Stats = null);
+    string Genus, string Epithet, int? Cost = null, IReadOnlyDictionary<string, double>? Stats = null, int StartingSkin = 0);
 public sealed record ModSetSpeciesParams(string Id, string Revision, string SpeciesId, string Name, string Genus, string Epithet,
     int? Cost, IReadOnlyDictionary<string, double> Stats, IReadOnlyDictionary<string, string>? DataFields = null,
     IReadOnlyDictionary<string, string>? Localization = null);
+
+public sealed record ModSetSpeciesStartingSkinParams(string Id, string Revision, string SpeciesId, int StartingSkin, string? Name = null);
+public sealed record ModSetSpeciesSwatchParams(string Id, string Revision, string SpeciesId, string? Png = null);
+public sealed record ModCustomSpeciesParams(string? Id = null);
+public sealed record CustomSpeciesRow(string SpeciesId, string Name, string ModId, string ModName, bool Own, bool InWorkspace, bool Installed, bool Enabled,
+    IReadOnlyList<VanillaSkinRow> Skins);
+public sealed record ModCustomSpeciesResult(IReadOnlyList<CustomSpeciesRow> Species);
 
 public sealed record ModSpeciesTemplateParams(string Template);
 /// <summary>Found: the game data dump has this species; Cost and Stats are what a new species based on it inherits.</summary>
@@ -56,7 +64,7 @@ public sealed partial class ModsMethods
             return new ModAnimalDto(s.Id, s.Key(mod.Id), s.Base, s.Name, s.Genus, s.Epithet, s.Cost, s.Stats,
                 inherited?.Cost, inherited?.Stats ?? new Dictionary<string, double>(),
                 (s.Fields.Count > 0 ? s.Fields : inherited?.Fields ?? []).Select(f => new ModAnimalFieldDto(f.Path, f.Kind, f.Value, f.TemplateValue, f.Editable)).ToList(),
-                s.Localization, s.Icon, s.Prefab);
+                s.Localization, s.Icon, s.Prefab, s.StartingSkin, s.StartingSkinName, s.Swatch);
         }).ToList(), SpeciesStats.Fields.Select(f => new ModStatDto(f.Id, f.Label, f.Unit, f.Min, f.Max)).ToList());
     }
 
@@ -69,7 +77,7 @@ public sealed partial class ModsMethods
         var template = vanilla.FirstOrDefault(s => string.Equals(s.SpeciesId, p.Template, StringComparison.OrdinalIgnoreCase));
         var inherited = SpeciesDatabase.Template(ws, template?.SpeciesId ?? p.Template);
         ValidateStats(stats, inherited);
-        mod.AddSpecies(vanilla, p.SpeciesId, p.Template, p.Name, p.Genus, p.Epithet, p.Cost, stats, inherited);
+        mod.AddSpecies(vanilla, p.SpeciesId, p.Template, p.Name, p.Genus, p.Epithet, p.Cost, stats, inherited, startingSkin: p.StartingSkin);
     }, "added species " + p.Name);
 
     [RpcMethod("mods.setSpecies")]
@@ -96,4 +104,37 @@ public sealed partial class ModsMethods
     [RpcMethod("mods.setSpeciesIcon")]
     public ModDetail SetSpeciesIcon(ModSetSpeciesIconParams p) => Edit(p.Id, p.Revision,
         mod => mod.SetSpeciesIcon(p.SpeciesId, p.Png), "updated species icon " + p.SpeciesId);
+
+    [RpcMethod("mods.setSpeciesStartingSkin")]
+    public ModDetail SetSpeciesStartingSkin(ModSetSpeciesStartingSkinParams p) => Edit(p.Id, p.Revision, mod =>
+    {
+        var (ws, _) = session.Current();
+        mod.SetSpeciesStartingSkin(SpeciesSkinsReader.Load(ws), p.SpeciesId, p.StartingSkin, p.Name);
+    }, "updated starting skin " + p.SpeciesId);
+
+    [RpcMethod("mods.setSpeciesSwatch")]
+    public ModDetail SetSpeciesSwatch(ModSetSpeciesSwatchParams p) => Edit(p.Id, p.Revision,
+        mod => mod.SetSpeciesSwatch(p.SpeciesId, p.Png), "updated species swatch " + p.SpeciesId);
+
+    /// <summary>Every custom species a skin can target: this mod's (Own) and other mods' in the workspace or installed in the game.</summary>
+    [RpcMethod("mods.customSpecies")]
+    public ModCustomSpeciesResult CustomSpecies(ModCustomSpeciesParams p)
+    {
+        var (ws, install) = session.Current();
+        var vanilla = TrySpecies(ws) ?? [];
+        var own = p.Id is null ? null : ModProject.Open(ws, p.Id).Manifest;
+        var others = OtherModSpecies.Load(ws, Game.List(install), p.Id);
+        var rows = new List<CustomSpeciesRow>();
+        void Add(string key, SpeciesEntry entry, string modId, string modName, bool isOwn, OtherModState? state)
+        {
+            var row = ModProject.WithSpecies(vanilla, new ModManifest { Id = modId, Name = modName }, [new OtherSpecies(key, modId, modName, entry)])
+                .FirstOrDefault(s => s.SpeciesId == key);
+            if (row is null) return; // its template is not in this workspace's data dump
+            rows.Add(new CustomSpeciesRow(key, entry.Name, modId, modName, isOwn, state?.InWorkspace ?? true, state?.Installed ?? false, state?.Enabled ?? false,
+                row.Skins.Select(k => new VanillaSkinRow(k.Index, k.Name, k.Male.Count > 0, k.Female.Count > 0)).ToList()));
+        }
+        if (own is not null) foreach (var entry in own.Species) Add(entry.Key(own.Id), entry, own.Id, own.Name, true, null);
+        foreach (var other in others.Species) Add(other.Key, other.Entry, other.ModId, other.ModName, false, others.Mods[other.ModId]);
+        return new ModCustomSpeciesResult(rows);
+    }
 }

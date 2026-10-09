@@ -115,6 +115,7 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
     {
         var game = Game;
         var installed = game.List(install).ToDictionary(m => m.Id);
+        var everyone = OtherModSpecies.Load(ws, installed.Values.ToList(), null);
         var rows = new List<ModRow>();
         foreach (var id in ModProject.Ids(ws))
         {
@@ -122,8 +123,10 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
             try
             {
                 var mod = ModProject.Open(ws, id);
+                var needs = SpeciesUse.Of(mod.Manifest)
+                    .Where(u => !(everyone.Mods.TryGetValue(u.ModId, out var s) && s.Installed && s.Enabled)).Select(u => u.ModId).ToList();
                 rows.Add(new ModRow(id, mod.Manifest.Name, mod.Manifest.Version, mod.Manifest.Author, mod.Manifest.Replace.Count, mod.Manifest.Skins.Count,
-                    Wire(game.StateOf(install, mod)), inGame?.Enabled, mod.Dir, null, inGame?.Clashes));
+                    Wire(game.StateOf(install, mod)), inGame?.Enabled, mod.Dir, null, inGame?.Clashes, needs.Count > 0 ? needs : null));
             }
             catch (TyrantException ex)
             {
@@ -157,7 +160,8 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
     {
         var (ws, install) = session.Current();
         var entry = ModProject.Open(ws, p.Id).AddSkin(ws, install, AssetIndex.Load(AssetIndex.PathIn(ws)), Options.AssetReader, SpeciesSkinsReader.Load(ws),
-            p.Species, p.Name, p.Base, new SkinTemplateOptions(p.Male, p.Female, p.Maps), p.Group);
+            p.Species, p.Name, p.Base, new SkinTemplateOptions(p.Male, p.Female, p.Maps), p.Group,
+            OtherModSpecies.Load(ws, Game.List(install), p.Id).Species);
         session.Log($"'{p.Id}' adds skin '{entry.Name}' to {entry.Species}.");
         return ListOf(ws, install);
     }
@@ -346,8 +350,11 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
 
     private ModDetail DetailOf(Workspace ws, ModProject mod)
     {
+        var (_, install) = session.Current();
+        var uses = SpeciesUse.Of(mod.Manifest);
+        var others = uses.Count > 0 ? OtherModSpecies.Load(ws, Game.List(install), mod.Id) : null;
         var species = mod.Manifest.Skins.Count > 0 ? TrySpecies(ws) : null;
-        if (species is not null) species = ModProject.WithSpecies(species, mod.Manifest);
+        if (species is not null) species = ModProject.WithSpecies(species, mod.Manifest, others?.Species);
         var m = mod.Manifest;
         return new ModDetail(m.Id, m.Name, m.Version, m.Author, m.Description, mod.Dir, mod.Revision(),
             File.ReadAllText(Path.Combine(mod.Dir, Tyrant.Framework.Core.ModManifest.FileName)),
@@ -368,7 +375,10 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
                 .ToList(),
             m.Sounds.Select(SoundDto).ToList(), mod.FilesStamp(),
             PrefabFiles: mod.PrefabFiles(),
-            PrefabTargets: mod.PrefabTargets().Select(t => new ModPrefabTargetDto(t.Overrides.Target, t.File, t.Overrides.Fields.Count)).ToList());
+            PrefabTargets: mod.PrefabTargets().Select(t => new ModPrefabTargetDto(t.Overrides.Target, t.File, t.Overrides.Fields.Count)).ToList(),
+            UsesSpeciesFrom: uses.Count == 0 ? null : uses.Select(u => others!.Mods.TryGetValue(u.ModId, out var s)
+                ? new ModSpeciesUseDto(u.ModId, s.Name, u.Skins, s.InWorkspace, s.Installed, s.Enabled)
+                : new ModSpeciesUseDto(u.ModId, null, u.Skins, false, false, false)).ToList());
     }
 
     /// <summary>Game build + species → the slots its shader uses (null: unknown). Reading a prefab costs a bundle load, so it is cached.</summary>

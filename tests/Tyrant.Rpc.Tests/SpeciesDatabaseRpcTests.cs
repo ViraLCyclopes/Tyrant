@@ -77,4 +77,52 @@ public class SpeciesDatabaseRpcTests
         Assert.Equal("MOD_CHANGED", stale.DataCode);
         Assert.Equal("SQL editor change", Assert.Single(AnimalDatabaseFile.Read(path)).Name);
     }
+
+    [Fact]
+    public async Task Starting_skin_swatch_custom_species_and_uses_species_from()
+    {
+        using var game = new FakeGame();
+        var (h, ws, _) = await AssetFixtures.Opened(game);
+        var objects = new DumpResult();
+        objects.Objects.Add(new DumpObject(typeof(object), new EngineObjectInfo("PrehistoricKingdom.AnimalData", "Allosaurus", 1), """
+            {"speciesID":"Allosaurus Anax", "cost":20000, "skinsData":[{"skinName":"Default"},{"skinName":"Albino"}]}
+            """));
+        DumpWriter.Write(Path.Combine(ws, "data"), objects, [], new DumpManifest { RequestId = "r1", BuildGuid = "b" });
+        await h.Call("mods.create", new { id = "mod-a", name = "Mod A" });
+        await h.Call("mods.create", new { id = "mod-b" });
+        string Rev(System.Text.Json.JsonElement d) => d.GetProperty("revision").GetString()!;
+        var a = await h.Call("mods.get", new { id = "mod-a" });
+        a = await h.Call("mods.addSpecies", new
+        {
+            id = "mod-a", revision = Rev(a), speciesId = "mirabilis", template = "Allosaurus Anax", name = "Mirabilis", genus = "Example", epithet = "mirabilis", startingSkin = 1,
+        });
+        a = await h.Call("mods.setSpeciesStartingSkin", new { id = "mod-a", revision = Rev(a), speciesId = "mirabilis", startingSkin = 1, name = "Ghost" });
+        var png = Path.Combine(ws, "swatch.png");
+        File.WriteAllBytes(png, Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jWWQAAAAASUVORK5CYII="));
+        await h.Call("mods.setSpeciesSwatch", new { id = "mod-a", revision = Rev(a), speciesId = "mirabilis", png });
+
+        var animal = Assert.Single((await h.Call("mods.animalDatabase", new { id = "mod-a" })).GetProperty("animals").EnumerateArray());
+        Assert.Equal(1, animal.GetProperty("startingSkin").GetInt32());
+        Assert.Equal("Ghost", animal.GetProperty("startingSkinName").GetString());
+        Assert.Equal("icons/mirabilis.swatch.png", animal.GetProperty("swatch").GetString());
+
+        var forB = (await h.Call("mods.customSpecies", new { id = "mod-b" })).GetProperty("species").EnumerateArray().ToList();
+        var row = Assert.Single(forB);
+        Assert.Equal(("tyrant.mod-a.mirabilis", "Mod A", false), (row.GetProperty("speciesId").GetString(), row.GetProperty("modName").GetString(), row.GetProperty("own").GetBoolean()));
+        Assert.Equal("Ghost", Assert.Single(row.GetProperty("skins").EnumerateArray()).GetProperty("name").GetString());
+        Assert.True(Assert.Single((await h.Call("mods.customSpecies", new { id = "mod-a" })).GetProperty("species").EnumerateArray()).GetProperty("own").GetBoolean());
+
+        // The dump has no textures, so mods.addSkin cannot copy a base; write the skin (with its own texture) the way the editor would save it.
+        var dirB = Path.Combine(ws, "mods", "mod-b");
+        Directory.CreateDirectory(Path.Combine(dirB, "skins", "blue"));
+        File.Copy(png, Path.Combine(dirB, "skins", "blue", "male_D.png"));
+        File.WriteAllText(Path.Combine(dirB, "mod.json"),
+            "{\"format\":1,\"id\":\"mod-b\",\"name\":\"mod-b\",\"version\":\"1.0.0\",\"replace\":[],\"skins\":[{\"id\":\"blue\",\"species\":\"tyrant.mod-a.mirabilis\",\"name\":\"Blue\",\"base\":\"0\",\"male\":{\"diffuse\":\"skins/blue/male_D.png\"}}]}");
+        var b = await h.Call("mods.get", new { id = "mod-b" });
+        var use = Assert.Single(b.GetProperty("usesSpeciesFrom").EnumerateArray());
+        Assert.Equal(("mod-a", 1, true, false), (use.GetProperty("modId").GetString(), use.GetProperty("skins").GetInt32(), use.GetProperty("inWorkspace").GetBoolean(), use.GetProperty("installed").GetBoolean()));
+        var list = await h.Call("mods.list", new { });
+        var rowB = list.GetProperty("mods").EnumerateArray().Single(m => m.GetProperty("id").GetString() == "mod-b");
+        Assert.Equal(["mod-a"], rowB.GetProperty("needsMods").EnumerateArray().Select(x => x.GetString()));
+    }
 }
