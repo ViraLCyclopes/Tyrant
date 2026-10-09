@@ -254,4 +254,21 @@ public class SpeciesCliTests
         var shown = Run("mod", "show", "mod-b", "-w", ws);
         Assert.Contains("Uses species from: mod-a (1 skin(s))", shown.Out + shown.Err);
     }
+
+    [Fact]
+    public void Add_skin_finds_another_mods_species_but_not_a_missing_one()
+    {
+        // The fake game has no template textures, so a full add-skin cannot succeed; the error shows how far it got.
+        using var game = new FakeGame();
+        var ws = SeedAllosaurus(game);
+        Assert.Equal(ExitCodes.Ok, Run("mod", "new", "mod-b", "-w", ws).Code);
+
+        var found = Run("mod", "add-skin", "mod-b", "tyrant.mod-a.mirabilis", "--name", "Blue", "-w", ws);
+        var missing = Run("mod", "add-skin", "mod-b", "tyrant.mod-z.nope", "--name", "X", "-w", ws);
+
+        Assert.Equal(ExitCodes.Error, found.Code);
+        Assert.DoesNotContain("No species", found.Out + found.Err);
+        Assert.Equal(ExitCodes.Error, missing.Code);
+        Assert.Contains("No species", missing.Out + missing.Err);
+    }
 }
