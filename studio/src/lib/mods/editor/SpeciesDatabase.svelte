@@ -3,9 +3,10 @@
   import { getSession } from '$lib/stores/session.svelte';
   import { getTab } from '$lib/shell/tab.svelte';
   import type { ModAnimalDatabase, SpeciesSkinsRow } from '$lib/rpc/types.gen';
+  import OpenInBlender from '$lib/blender/OpenInBlender.svelte';
   import type { ModDoc } from './modDoc.svelte';
 
-  let { doc }: { doc: ModDoc } = $props();
+  let { doc, onPrefab = () => {} }: { doc: ModDoc; onPrefab?: (target: string) => void } = $props();
   const session = getSession();
   const tab = getTab();
   let database = $state<ModAnimalDatabase | null>(null);
@@ -21,7 +22,6 @@
   let dataValues = $state<Record<string, string>>({});
   let localization = $state<Record<string, string>>({});
   let textLanguage = $state('en-US');
-  let prefabAsset = $state('');
   let search = $state('');
   let page = $state(0);
   let busy = $state(false);
@@ -66,7 +66,6 @@
     values = { ...(source?.stats ?? {}) };
     dataValues = Object.fromEntries((source?.dataFields ?? []).filter(f => f.editable).map(f => [f.path, f.value]));
     localization = { ...(source?.localization ?? {}) };
-    prefabAsset = source?.prefab?.asset ?? '';
     if (source) template = source.base;
   });
 
@@ -89,17 +88,6 @@
   async function pickIcon() {
     const png = await session.platform.openFile('Choose a species portrait PNG', ['png']);
     if (png) await doc.edit('mods.setSpeciesIcon', { speciesId: selected, png }, { undoable: false });
-  }
-  async function pickPrefab() {
-    const bundle = await session.platform.openFile('Choose the Unity animal prefab bundle', ['bundle']);
-    if (bundle) await doc.edit('mods.setSpeciesPrefab', { speciesId: selected, bundle, asset: prefabAsset }, { undoable: false });
-  }
-  async function unityProject() {
-    const project = await tab.safely(() => session.rpc.call('mods.createUnityProject', { id: doc.id }));
-    if (project) {
-      await session.platform.reveal(project.readme);
-      tab.info(`Unity project: ${project.directory}. Add this folder in Unity Hub using Editor 2022.3.62f3. Read README.md for local PK references and prefab setup.`);
-    }
   }
 </script>
 
@@ -152,14 +140,6 @@
           {/each}
         </div>
         {#if !creating}
-          <h3>Unity animal prefab (experimental)</h3>
-          <p class="hint">{animal?.prefab?.bundle ?? 'Using the template prefab'}. Attach a complete PK animal prefab built with Unity 2022.3.62f3. Copy its lowercase Asset path from the exporter report. Database settings still inherit from the selected animal template.</p>
-          <label>Prefab asset path <input bind:value={prefabAsset} placeholder="assets/animals/mirabilis.prefab" /></label>
-          <div class="toolbar">
-            <button type="button" onclick={unityProject}>Create / show Unity project…</button>
-            <button type="button" disabled={!prefabAsset.trim()} onclick={pickPrefab}>Attach Unity prefab bundle…</button>
-            <button type="button" disabled={!animal?.prefab} onclick={() => doc.edit('mods.setSpeciesPrefab', { speciesId: selected, bundle: null, asset: null }, { undoable: false })}>Use template prefab</button>
-          </div>
           <h3>Species icon</h3>
           <p class="hint">{animal?.icon ?? 'Using the template portrait'}. A PNG replaces this species' Nursery portrait.</p>
           <div class="toolbar">
@@ -203,6 +183,17 @@
         </div>
       </fieldset>
     </form>
+    {#if animal && !creating}
+      <h3>Prefab and look</h3>
+      <div class="toolbar">
+        <button type="button" onclick={() => onPrefab(animal.key)}>Prefab settings</button>
+        <OpenInBlender species={animal.key} mod={doc.id} />
+        {#if animal.prefab}
+          <button type="button" onclick={() => doc.edit('mods.setSpeciesPrefab', { speciesId: selected, bundle: null, asset: null }, { undoable: false })}>Use template prefab</button>
+          <span class="hint">This species loads a Unity bundle ({animal.prefab.bundle}); the Unity path is parked.</span>
+        {/if}
+      </div>
+    {/if}
     {#if creating && !templates.length}<p class="hint">Run the game's data dump on the Workspace tab to choose a template.</p>{/if}
   {:else}<p class="hint">Loading species…</p>{/if}
 </section>

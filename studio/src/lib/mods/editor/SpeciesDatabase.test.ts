@@ -1,5 +1,5 @@
 import { fireEvent, screen, waitFor } from '@testing-library/svelte';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { Tab } from '$lib/shell/tab.svelte';
 import { memoryStore } from '$lib/storage';
 import { Session } from '$lib/stores/session.svelte';
@@ -13,30 +13,38 @@ import SpeciesDatabase from './SpeciesDatabase.svelte';
 const animal = { id: 'new-animal', key: 'tyrant.red-spot.new-animal', base: 'Allosaurus Anax', name: 'New animal', genus: 'Example', epithet: 'animal', cost: null, stats: { adultMassKg: 4500 }, inheritedCost: 20000, inheritedStats: { adultMassKg: 4010, maxAgeYears: 40 }, dataFields: [{ path: '/brain/needs/adult/native/hitPoints', kind: 'number', value: '660', templateValue: '660', editable: true }], localization: { description: 'pack.description' }, icon: null };
 const fields = [{ id: 'adultMassKg', label: 'Adult mass', unit: 'kg', min: 0.001, max: 1000000 }, { id: 'maxAgeYears', label: 'Lifespan', unit: 'years', min: 0.001, max: 10000 }];
 
-async function setup(animals = [animal]) {
+async function setup(animals: (typeof animal)[] = [animal], props: { onPrefab?: (t: string) => void } = {}) {
   const rpc = new FakeRpc()
     .on('mods.get', () => modDetail())
     .on('mods.check', () => ({ errors: [], warnings: [], missingCutouts: [] }))
     .on('mods.species', () => ({ hasDump: true, species: [{ speciesId: 'Allosaurus Anax', vivarium: false, skins: [{ index: 0, name: 'Default', male: true, female: true }], prefabGuid: null }] }))
-    .on('mods.animalDatabase', () => ({ animals, fields }));
+    .on('mods.animalDatabase', () => ({ animals, fields }))
+    .on('blender.status', () => ({ found: true, exe: 'b.exe', version: '5.2.2', supported: true, missingConfigured: null, addon: 'current', addonInstalled: '0.1.0', addonBundled: '0.1.0', problem: null }));
   const platform = new FakePlatform();
   const session = new Session(rpc, platform, memoryStore());
   const tab = new Tab('tab-mod', session.log, { retitle: () => {}, openTool: () => null });
   const doc = new ModDoc('red-spot', rpc, tab, () => {});
   await doc.load();
-  renderWith(SpeciesDatabase, session, { doc }, tab);
+  renderWith(SpeciesDatabase, session, { doc, ...props }, tab);
   await screen.findByRole('spinbutton', { name: /Adult mass/ });
   return { rpc, platform, doc };
 }
 
 describe('Species database', () => {
-  it('attaches a Unity bundle using the exporter asset path', async () => {
-    const { rpc, platform } = await setup();
+  it('a species has Prefab settings and Open in Blender, and no Unity buttons', async () => {
+    const onPrefab = vi.fn();
+    await setup([{ ...animal, key: 'tyrant.red-spot.mirabilis' }], { onPrefab });
+    await fireEvent.click(await screen.findByRole('button', { name: 'Prefab settings' }));
+    expect(onPrefab).toHaveBeenCalledWith('tyrant.red-spot.mirabilis');
+    expect(screen.getByRole('button', { name: /Open in Blender/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Unity/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Use template prefab' })).toBeNull();
+  });
+  it('offers Use template prefab only when the species has a bundle', async () => {
+    const { rpc } = await setup([{ ...animal, prefab: { bundle: 'C:/x/m.bundle', asset: 'assets/m.prefab' } } as typeof animal]);
     rpc.on('mods.setSpeciesPrefab', () => modDetail({ revision: 'r2' }));
-    await fireEvent.input(screen.getByRole('textbox', { name: 'Prefab asset path' }), { target: { value: 'assets/animals/mirabilis.prefab' } });
-    platform.files.push('C:/exports/mirabilis.bundle');
-    await fireEvent.click(screen.getByRole('button', { name: 'Attach Unity prefab bundle…' }));
-    await waitFor(() => expect(rpc.callsTo('mods.setSpeciesPrefab')[0]?.params).toMatchObject({ speciesId: 'new-animal', bundle: 'C:/exports/mirabilis.bundle', asset: 'assets/animals/mirabilis.prefab' }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Use template prefab' }));
+    await waitFor(() => expect(rpc.callsTo('mods.setSpeciesPrefab')[0]?.params).toMatchObject({ speciesId: 'new-animal', bundle: null, asset: null }));
   });
   it('saves full fields and localization keys and imports a custom icon', async () => {
     const { rpc, platform } = await setup();

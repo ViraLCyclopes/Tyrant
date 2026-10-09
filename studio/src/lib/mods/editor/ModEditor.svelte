@@ -197,7 +197,7 @@
       {:else if selection.kind === 'details'}
         <ModDetailsPage {doc} />
       {:else if selection.kind === 'speciesDatabase'}
-        <SpeciesDatabase {doc} />
+        <SpeciesDatabase {doc} onPrefab={(t) => (selection = { kind: 'prefab', target: t })} />
       {:else if selectedSkin}
         <SkinPage {doc} skin={selectedSkin} onOpenModel={(target, skin) => (selection = { kind: 'model', target, skin })} />
       {:else if selectedModel}
