@@ -33,6 +33,7 @@ public enum TyrantErrorCode
     UpdateCheckFailed,
     BlenderMissing,
     BlenderFailed,
+    DeleteFailed,
 }
 
 /// <summary>A suggested remedy the UI can render as a button.</summary>
