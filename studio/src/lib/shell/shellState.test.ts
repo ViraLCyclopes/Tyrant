@@ -229,4 +229,14 @@ describe('ShellState', () => {
     log.add({ level: 'info', message: 'core line', tab: null });
     expect(s.status(a)?.message).toBe('Exported 3 textures.');
   });
+
+  it('closeTool closes the tab open for that key, and nothing else', () => {
+    const { s } = shell();
+    s.openTool('assets', { key: 'a', title: 'A' });
+    const b = s.openTool('assets', { key: 'b', title: 'B' });
+    s.closeTool('assets', 'a');
+    s.closeTool('assets', 'missing');
+    expect(s.tabs.map((t) => t.id)).toEqual([s.tabs[0].id, b]);
+    expect(s.tabs).toHaveLength(2);
+  });
 });

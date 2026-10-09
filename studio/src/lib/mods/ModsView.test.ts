@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from '@testing-library/svelte';
+import { fireEvent, screen, waitFor, within } from '@testing-library/svelte';
 import { describe, expect, it } from 'vitest';
 import type { ModRow } from '$lib/rpc/types.gen';
 import { memoryStore } from '$lib/storage';
@@ -179,5 +179,30 @@ describe('ModsView', () => {
     await fireEvent.input(await screen.findByRole('textbox', { name: /id/i }), { target: { value: 'blue-pack' } });
     await fireEvent.click(screen.getByRole('button', { name: 'New mod' }));
     await waitFor(() => expect(opened).toEqual([['mod', { key: 'blue-pack', title: 'blue-pack' }]]));
+  });
+
+  it('Delete asks, can keep the game copy, and refreshes the list', async () => {
+    const { rpc, session } = setup([row({ state: 'installed', enabled: true })]);
+    rpc.on('mods.delete', () => ({ mods: [], frameworkInstalled: false, frameworkOutdated: false }));
+    renderWith(ModsView, session);
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Delete Red spot' }));
+    const dialog = screen.getByRole('dialog', { name: 'Delete Red spot' });
+    expect(dialog).toHaveTextContent(/Recycle Bin/);
+    await fireEvent.click(within(dialog).getByRole('checkbox', { name: 'Also remove it from the game' }));
+    await fireEvent.click(within(dialog).getByRole('button', { name: 'Delete mod' }));
+
+    await waitFor(() => expect(rpc.callsTo('mods.delete')[0]?.params).toEqual({ id: 'red-spot', removeFromGame: false }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(screen.queryByText('Red spot')).toBeNull();
+  });
+
+  it('a mod only in the game has no Delete, and a mod not installed has no game checkbox', async () => {
+    const { session } = setup([row(), row({ id: 'other', name: 'Other', state: 'gameOnly' })]);
+    renderWith(ModsView, session);
+
+    expect(screen.queryByRole('button', { name: 'Delete Other' })).toBeNull();
+    await fireEvent.click(await screen.findByRole('button', { name: 'Delete Red spot' }));
+    expect(screen.queryByRole('checkbox', { name: 'Also remove it from the game' })).toBeNull();
   });
 });

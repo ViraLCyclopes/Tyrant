@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from '@testing-library/svelte';
+import { fireEvent, screen, waitFor, within } from '@testing-library/svelte';
 import { describe, expect, it } from 'vitest';
 import { Tab } from '$lib/shell/tab.svelte';
 import { memoryStore } from '$lib/storage';
@@ -199,5 +199,33 @@ describe('ModEditor', () => {
     renderWith(ModEditor, session, {}, tab);
     expect(await screen.findByText(/could not be opened/)).toBeInTheDocument();
     expect(messages(session, tab).join('\n')).toContain('no mod');
+  });
+
+  it('Mod → Delete mod… deletes it and closes the tab', async () => {
+    const rpc = new FakeRpc()
+      .on('mods.get', () => modDetail())
+      .on('mods.check', () => ({ errors: [], warnings: [], missingCutouts: [] }))
+      .on('mods.thumbnail', () => ({ file: null }))
+      .on('mods.colorPreview', () => ({ files: [] }))
+      .on('mods.list', () => ({ mods: [{ id: 'red-spot', name: 'Carch pack', version: '1.0.0', author: null, replacements: 1, skins: 2, state: 'notInstalled', enabled: null, dir: 'D:\ws\mods\red-spot', error: null }], frameworkInstalled: false, frameworkOutdated: false }))
+      .on('mods.delete', () => ({ mods: [], frameworkInstalled: false, frameworkOutdated: false }));
+    const session = new Session(rpc, new FakePlatform(), memoryStore());
+    const closed: [string, string][] = [];
+    const tab = new Tab('tab-mod', session.log, { retitle: () => {}, openTool: () => null, closeTool: (t, k) => void closed.push([t, k]) });
+    tab.key = 'red-spot';
+    tab.active = true;
+    renderWith(ModEditor, session, {}, tab);
+    await screen.findByRole('button', { name: 'Blue-green stripes' });
+
+    const items = tab.menus[0]!.items;
+    const del = (typeof items === 'function' ? items() : items).find((i) => 'label' in i && i.label === 'Delete mod…');
+    if (!del || !('run' in del)) throw new Error('no Delete mod… item');
+    del.run();
+    const dialog = await screen.findByRole('dialog', { name: 'Delete Carch pack' });
+    expect(within(dialog).queryByRole('checkbox')).toBeNull(); // not installed
+    await fireEvent.click(within(dialog).getByRole('button', { name: 'Delete mod' }));
+
+    await waitFor(() => expect(rpc.callsTo('mods.delete')[0]?.params).toEqual({ id: 'red-spot', removeFromGame: false }));
+    expect(closed).toEqual([['mod', 'red-spot']]);
   });
 });

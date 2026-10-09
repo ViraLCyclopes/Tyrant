@@ -68,3 +68,23 @@ export async function importModZip(session: Session, tab: Tab): Promise<ModsList
   for (const problem of result.problems) tab.warn(problem);
   return result.mods;
 }
+
+/** Delete mod (Mods list, and the mod's Mod menu): to the Recycle Bin, closing its editor tab. A failure is for the dialog to show. */
+export async function deleteMod(
+  session: Session,
+  tab: Tab,
+  id: string,
+  name: string,
+  removeFromGame: boolean,
+): Promise<{ list: ModsListResult } | { error: string }> {
+  try {
+    const list = await session.rpc.call('mods.delete', { id, removeFromGame });
+    tab.info(`'${name}' went to the Recycle Bin${removeFromGame ? ' and is out of the game' : ''}. Its skin numbers stay reserved: Clean up skin numbers… frees them.`);
+    tab.closeTool('mod', id);
+    return { list };
+  } catch (e) {
+    const error = asRpcError(e);
+    tab.fail(error);
+    return { error: error.message };
+  }
+}

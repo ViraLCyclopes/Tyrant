@@ -14,6 +14,8 @@ export interface OpenOptions {
 export interface TabHost {
   retitle(tabId: string, title: string): void;
   openTool(toolId: string, options?: OpenOptions): string | null;
+  /** Closes the open tab of a keyed tool, if any (the editor of a mod just deleted). */
+  closeTool?(toolId: string, key: string): void;
 }
 
 /** A tool that can step back and forward (the mod editor); the shell's Edit menu and Ctrl+Z / Ctrl+Y use it. */
@@ -93,6 +95,10 @@ export class Tab {
 
   openTool(toolId: string, options?: OpenOptions): string | null {
     return this.host.openTool(toolId, options);
+  }
+
+  closeTool(toolId: string, key: string): void {
+    this.host.closeTool?.(toolId, key);
   }
 }
 

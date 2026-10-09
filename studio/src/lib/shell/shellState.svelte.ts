@@ -105,6 +105,11 @@ export class ShellState implements TabHost {
     return this.store.open({ toolId, title: options.title ?? def.name, closable: def.closable ?? true, key });
   }
 
+  closeTool(toolId: string, key: string): void {
+    const open = this.store.list().find((t) => t.toolId === toolId && t.key === key);
+    if (open) this.close(open.id);
+  }
+
   close(id: string): void {
     const tab = this.tabObjects.get(id);
     if (!this.store.close(id)) return;

@@ -5,7 +5,8 @@ import { FakePlatform } from '$lib/test/fakePlatform';
 import { FakeRpc } from '$lib/test/fakeRpc';
 import { messages, testTab, workspaceStatus } from '$lib/test/fixtures';
 import { Session } from '$lib/stores/session.svelte';
-import { exportMod, importModZip } from './modActions';
+import { Tab } from '$lib/shell/tab.svelte';
+import { deleteMod, exportMod, importModZip } from './modActions';
 
 function setup() {
   const rpc = new FakeRpc().on('workspace.status', () => workspaceStatus());
@@ -55,5 +56,24 @@ describe('mod sharing actions', () => {
       { file: 'D:\\downloads\\shared-mod.zip', replace: true },
     ]);
     expect(list).not.toBeNull();
+  });
+
+  it('deleteMod deletes, closes the mod tab and returns the list; a failure is returned for the dialog', async () => {
+    const { rpc, session } = setup();
+    rpc.on('mods.delete', () => ({ mods: [], frameworkInstalled: false, frameworkOutdated: false }));
+    const closed: [string, string][] = [];
+    const tab = new Tab('tab-test', session.log, { retitle: () => {}, openTool: () => null, closeTool: (tool, key) => void closed.push([tool, key]) });
+
+    const ok = await deleteMod(session, tab, 'red-spot', 'Red spot', true);
+
+    expect(ok).toEqual({ list: { mods: [], frameworkInstalled: false, frameworkOutdated: false } });
+    expect(rpc.callsTo('mods.delete')[0]?.params).toEqual({ id: 'red-spot', removeFromGame: true });
+    expect(closed).toEqual([['mod', 'red-spot']]);
+
+    rpc.on('mods.delete', () => {
+      throw new RpcError('Close the game first: removing a mod while it runs is refused.', 'GAME_RUNNING');
+    });
+    expect(await deleteMod(session, tab, 'red-spot', 'Red spot', true)).toEqual({ error: 'Close the game first: removing a mod while it runs is refused.' });
+    expect(closed).toHaveLength(1); // a failed delete keeps the tab
   });
 });

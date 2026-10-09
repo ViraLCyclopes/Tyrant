@@ -4,11 +4,25 @@
   import { getTab } from '$lib/shell/tab.svelte';
   import { getSession } from '$lib/stores/session.svelte';
   import CleanSkins from './CleanSkins.svelte';
-  import { importModZip, installMod, removeFromGame, restoreCutouts as restoreModCutouts } from './modActions';
+  import DeleteModDialog from './DeleteModDialog.svelte';
+  import { deleteMod, importModZip, installMod, removeFromGame, restoreCutouts as restoreModCutouts } from './modActions';
 
   const session = getSession();
   const tab = getTab();
   let list = $state<ModsListResult | null>(null);
+  let deleting = $state<ModRow | null>(null);
+  let deleteError = $state<string | null>(null);
+
+  async function confirmDelete(removeFromGame: boolean) {
+    const row = deleting;
+    if (!row) return;
+    const r = await deleteMod(session, tab, row.id, row.name, removeFromGame);
+    if ('error' in r) deleteError = r.error;
+    else {
+      list = r.list;
+      deleting = null;
+    }
+  }
   let cleaning = $state(false);
   let checks = $state<Record<string, ModCheckReport>>({});
   let newId = $state('');
@@ -132,6 +146,9 @@
               <button aria-label="Remove {row.name} from the game" onclick={() => remove(row)} disabled={session.busy}>Remove from game</button>
             {/if}
             {#if row.dir}<button class="ghost" aria-label="Open {row.name} folder" onclick={() => session.platform.reveal(row.dir!)}>Open folder</button>{/if}
+            {#if row.state !== 'gameOnly'}
+              <button class="ghost" aria-label="Delete {row.name}" onclick={() => { deleteError = null; deleting = row; }} disabled={session.busy}>Delete…</button>
+            {/if}
           </td>
         </tr>
         {#if checks[row.id]}
@@ -151,6 +168,10 @@
   </table>
 {:else if list}
   <p class="hint">No mods yet. Create one above, or open a texture in the Assets tab and click Replace in a mod….</p>
+{/if}
+
+{#if deleting}
+  <DeleteModDialog name={deleting.name} installed={deleting.state !== 'notInstalled'} error={deleteError} onCancel={() => (deleting = null)} onConfirm={confirmDelete} />
 {/if}
 
 <style>

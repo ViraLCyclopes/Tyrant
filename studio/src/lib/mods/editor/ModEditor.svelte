@@ -3,11 +3,12 @@
   import { getTab } from '$lib/shell/tab.svelte';
   import { getSession } from '$lib/stores/session.svelte';
   import AddSkin from '../AddSkin.svelte';
+  import DeleteModDialog from '../DeleteModDialog.svelte';
   import type { AddedSound } from '$lib/sounds/audio';
   import AddModel from './AddModel.svelte';
   import AddReplacement from './AddReplacement.svelte';
   import AddSound from './AddSound.svelte';
-  import { exportMod, installMod, removeFromGame, restoreCutouts } from '../modActions';
+  import { deleteMod, exportMod, installMod, removeFromGame, restoreCutouts } from '../modActions';
   import CheckPage from './CheckPage.svelte';
   import ModDetailsPage from './ModDetailsPage.svelte';
   import ModelPage from './ModelPage.svelte';
@@ -72,9 +73,27 @@
         { label: 'Restore cutouts', run: () => void restore(), enabled: () => !!doc.check?.missingCutouts?.length },
         { label: 'Open folder', run: () => void (doc.detail && session.platform.reveal(doc.detail.dir)), enabled: () => !!doc.detail },
         { label: 'Remove from game', run: () => void (doc.detail && removeFromGame(session, tab, doc.id, doc.detail.name)), enabled: () => !!doc.detail && !session.busy },
+        { label: 'Delete mod…', run: () => void askDelete(), enabled: () => !!doc.detail && !session.busy },
       ],
     },
   ];
+
+  let deleting = $state<{ installed: boolean } | null>(null);
+  let deleteError = $state<string | null>(null);
+
+  async function askDelete() {
+    const list = await tab.quietly(() => session.rpc.call('mods.list'));
+    const row = list?.mods.find((m) => m.id === doc.id);
+    deleteError = null;
+    deleting = { installed: row ? row.state !== 'notInstalled' : true }; // unknown: offer it; deleting copes with not installed
+  }
+
+  async function confirmDelete(removeFromGame: boolean) {
+    if (!doc.detail) return;
+    const r = await deleteMod(session, tab, doc.id, doc.detail.name, removeFromGame);
+    if ('error' in r) deleteError = r.error;
+    else deleting = null; // deleteMod closed this tab
+  }
 
   async function install() {
     if (doc.detail) await installMod(session, tab, doc.id, doc.detail.name);
@@ -189,6 +208,10 @@
   </div>
 {:else}
   <p class="hint">Loading the mod…</p>
+{/if}
+
+{#if deleting && doc.detail}
+  <DeleteModDialog name={doc.detail.name} installed={deleting.installed} error={deleteError} onCancel={() => (deleting = null)} onConfirm={confirmDelete} />
 {/if}
 
 <style>
