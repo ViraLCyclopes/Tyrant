@@ -47,7 +47,7 @@ const snapshotOf = (d: ModDetail): Snapshot => ({ manifest: d.manifestJson, pref
 const CHECK_DELAY = 1000;
 const MAX_UNDO = 100;
 
-/** One mod open in an editor tab: its content, Check results, and undo/redo by whole mod.json snapshots. */
+/** One mod open in an editor tab: its content, Check results, and undo/redo by snapshots of mod.json plus the prefab settings files. */
 export class ModDoc {
   detail = $state.raw<ModDetail | null>(null);
   check = $state.raw<ModCheckReport | null>(null);

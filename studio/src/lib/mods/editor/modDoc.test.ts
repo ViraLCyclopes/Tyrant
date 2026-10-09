@@ -24,16 +24,31 @@ async function setupWith(detail: ReturnType<typeof modDetail>) {
 }
 
 describe('ModDoc', () => {
-  it('undo of a prefab edit puts the prefab files back as they were', async () => {
-    const before = modDetail({ revision: 'r1', prefabFiles: {} });
-    const after = modDetail({ revision: 'r2', prefabFiles: { 'spinosaurus.json': '{"format":1}' } });
+  it('undo and redo of a prefab edit put the prefab files back as they were', async () => {
+    const beforeFiles = { 'spinosaurus.json': '{"format":1,"target":"Spinosaurus","fields":[]}' };
+    const afterFiles = { 'spinosaurus.json': '{"format":1,"target":"Spinosaurus","fields":[{"object":"","component":"AnimalPhysics","field":"x","value":1}]}' };
+    const before = modDetail({ revision: 'r1', prefabFiles: beforeFiles });
+    const after = modDetail({ revision: 'r2', prefabFiles: afterFiles });
     const { rpc, doc } = await setupWith(before);
     rpc.on('mods.setPrefabField', () => after).on('mods.restoreSnapshot', () => before);
 
-    await doc.edit('mods.setPrefabField', { target: 'Spinosaurus', object: '', component: 'AnimalPhysics', field: 'inputParams.waterlineHeight', value: 3.5 });
+    await doc.edit('mods.setPrefabField', { target: 'Spinosaurus', object: '', component: 'AnimalPhysics', field: 'x', value: 1 });
     await doc.undo();
+    rpc.on('mods.restoreSnapshot', () => after);
+    await doc.redo();
 
-    expect(rpc.callsTo('mods.restoreSnapshot')[0]?.params).toEqual({ id: 'red-spot', revision: 'r2', manifest: before.manifestJson, prefabs: {} });
+    const calls = rpc.callsTo('mods.restoreSnapshot');
+    expect(calls[0]?.params).toEqual({ id: 'red-spot', revision: 'r2', manifest: before.manifestJson, prefabs: beforeFiles });
+    expect(calls[1]?.params).toMatchObject({ prefabs: afterFiles });
+  });
+
+  it('a mod without prefabFiles undoes with no prefab files', async () => {
+    const before = modDetail({ revision: 'r1', prefabFiles: undefined });
+    const { rpc, doc } = await setupWith(before);
+    rpc.on('mods.setDetails', () => modDetail({ revision: 'r2', manifestJson: '{"x":1}' })).on('mods.restoreSnapshot', () => before);
+    await doc.edit('mods.setDetails', { name: 'x' });
+    await doc.undo();
+    expect(rpc.callsTo('mods.restoreSnapshot')[0]?.params).toMatchObject({ prefabs: {} });
   });
 
   it('loads the mod and checks it', async () => {
