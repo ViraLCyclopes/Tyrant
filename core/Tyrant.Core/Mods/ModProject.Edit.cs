@@ -5,6 +5,9 @@ using Tyrant.Framework.Core;
 
 namespace Tyrant.Core.Mods;
 
+/// <summary>What a removal sent to the Recycle Bin, and what stayed with why ("&lt;path&gt;: &lt;reason&gt;").</summary>
+public sealed record RemovedFiles(IReadOnlyList<string> Recycled, IReadOnlyList<string> Kept);
+
 /// <summary>Editing a mod in place (the app's mod editor and the matching 'tyrant mod …' commands).</summary>
 public sealed partial class ModProject
 {
@@ -91,47 +94,56 @@ public sealed partial class ModProject
     /// <summary>
     /// Removes a skin. With <paramref name="deleteFiles"/>, its files go to the Recycle Bin too: its PNGs, its own model (with its
     /// LODs and report) and its Blender project, except files another skin, model or texture replacement still uses. Its number in
-    /// the game stays reserved, so other skins keep theirs. Returns what went to the bin.
+    /// the game stays reserved, so other skins keep theirs. Returns what went to the bin and what stayed (with why).
     /// </summary>
-    public IReadOnlyList<string> RemoveSkin(string skinId, bool deleteFiles)
+    public RemovedFiles RemoveSkin(string skinId, bool deleteFiles)
     {
         var skin = Skin(skinId);
         Manifest.Skins.Remove(skin);
         Save();
-        if (!deleteFiles) return [];
+        if (!deleteFiles) return new RemovedFiles([], []);
         var stillUsed = new HashSet<string>(Manifest.Skins.SelectMany(FilesOf)
             .Concat(Manifest.Replace.Select(r => r.File))
             .Concat(Manifest.Skins.SelectMany(s => ModSharing.ModelFilesOf(this, s.Model)))
             .Concat(Manifest.Models.SelectMany(m => ModSharing.ModelFilesOf(this, m.File)))
             .Select(Normal), StringComparer.OrdinalIgnoreCase);
         var removed = new List<string>();
+        var kept = new List<string>();
         foreach (var file in FilesOf(skin).Concat(ModSharing.ModelFilesOf(this, skin.Model)).Distinct(StringComparer.OrdinalIgnoreCase))
         {
             var path = Path.GetFullPath(Path.Combine(Dir, file));
             if (stillUsed.Contains(Normal(file)) || !ModPaths.IsInside(path, Dir) || !File.Exists(path)) continue;
-            if (TryRecycle(path)) removed.Add(Normal(file));
+            var why = TryRecycle(path);
+            if (why is null) removed.Add(Normal(file));
+            else kept.Add($"{Normal(file)}: {why}");
         }
         var folder = Path.Combine(Dir, "skins", skinId);
         try { if (Directory.Exists(folder) && !Directory.EnumerateFileSystemEntries(folder).Any()) Directory.Delete(folder); } catch (IOException) { }
         var blender = Tyrant.Core.Blender.BlenderProjectWriter.FolderOf(WorkspaceDir, Id, skin.Species, skin.Id);
-        if (Directory.Exists(blender) && TryRecycle(blender)) removed.Add(Normal(Path.GetRelativePath(WorkspaceDir, blender)) + "/");
-        return removed;
+        if (Directory.Exists(blender))
+        {
+            var blenderRel = Normal(Path.GetRelativePath(WorkspaceDir, blender)) + "/";
+            var why = TryRecycle(blender);
+            if (why is null) removed.Add(blenderRel);
+            else kept.Add($"{blenderRel}: {why}");
+        }
+        return new RemovedFiles(removed, kept);
     }
 
     /// <summary>The workspace holding this mod: &lt;workspace&gt;/mods/&lt;id&gt; (see RootOf).</summary>
     private string WorkspaceDir => Path.GetDirectoryName(Path.GetDirectoryName(Dir)!)!;
 
-    /// <summary>To the Recycle Bin; false when it stays (in use, or no bin): the edit itself is already saved.</summary>
-    private static bool TryRecycle(string path)
+    /// <summary>To the Recycle Bin; returns why it stayed (in use, or no bin), null when it went: the edit itself is already saved.</summary>
+    private static string? TryRecycle(string path)
     {
         try
         {
             RecycleBin.Current.Recycle(path);
-            return true;
+            return null;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return false;
+            return ex.Message;
         }
     }
 

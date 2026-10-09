@@ -80,6 +80,20 @@ public class ModEditCliTests
     }
 
     [Fact]
+    public void Remove_skin_says_which_files_stayed()
+    {
+        using var game = new FakeGame();
+        var ws = WorkspaceWithSkin(game);
+        TestRecycleBin.Instance.RefuseUnder(Path.Combine(ws, "mods", "red-spot", "skins", "blue", "male_D.png"));
+
+        var run = Run("mod", "remove-skin", "red-spot", "blue", "--delete-files", "-w", ws);
+
+        Assert.Equal(ExitCodes.Ok, run.Code);
+        Assert.Contains("stayed  skins/blue/male_D.png: ", run.Out);
+        Assert.True(File.Exists(Path.Combine(ws, "mods", "red-spot", "skins", "blue", "male_D.png")));
+    }
+
+    [Fact]
     public void Colors_show_set_and_clear()
     {
         using var game = new FakeGame();

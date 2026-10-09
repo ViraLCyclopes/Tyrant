@@ -104,7 +104,8 @@ public sealed class ModRemoveSkinCommand : Command<ModRemoveSkinCommand.Settings
         var (ws, _) = CliServices.OpenWorkspace(settings);
         var deleted = ModProject.Open(ws, settings.Id).RemoveSkin(settings.Skin, settings.DeleteFiles);
         Console.WriteLine($"Removed skin '{settings.Skin}'. Its number in the game stays reserved.");
-        foreach (var file in deleted) Console.WriteLine($"  to the Recycle Bin  {file}");
+        foreach (var file in deleted.Recycled) Console.WriteLine($"  to the Recycle Bin  {file}");
+        foreach (var file in deleted.Kept) Console.WriteLine($"  stayed  {file}");
         return ExitCodes.Ok;
     }
 }

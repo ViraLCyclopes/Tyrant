@@ -200,7 +200,10 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
 
     [RpcMethod("mods.removeSkin")]
     public ModDetail RemoveSkin(ModRemoveSkinParams p) =>
-        Edit(p.Id, p.Revision, mod => mod.RemoveSkin(p.Skin, p.DeleteFiles), $"removed skin '{p.Skin}'{(p.DeleteFiles ? " and its files" : "")}");
+        Edit(p.Id, p.Revision, mod =>
+        {
+            foreach (var line in mod.RemoveSkin(p.Skin, p.DeleteFiles).Kept) session.Log($"'{p.Id}': {line}");
+        }, $"removed skin '{p.Skin}'{(p.DeleteFiles ? " and its files" : "")}");
 
     [RpcMethod("mods.setColors")]
     public ModDetail SetColors(ModSetColorsParams p) => Edit(p.Id, p.Revision, mod => mod.SetColors(p.Skin, p.Colors), $"set the colours of '{p.Skin}'");

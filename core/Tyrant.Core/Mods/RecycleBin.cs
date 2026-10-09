@@ -25,6 +25,9 @@ public sealed class ShellRecycleBin : IRecycleBin
         // Network and removable drives have no Recycle Bin: the shell would delete for good.
         if (full.StartsWith(@"\\", StringComparison.Ordinal) || new DriveInfo(Path.GetPathRoot(full)!).DriveType != DriveType.Fixed)
             throw new IOException($"'{full}' is on a drive without a Recycle Bin; move it to a local drive or delete it yourself.");
+        // The shell silently deletes for good when the path is too long for the bin.
+        if (full.Length >= 260)
+            throw new IOException($"'{full}' has too long a path for the Recycle Bin; move the workspace to a shorter folder, or delete it yourself.");
         var op = new ShFileOpStruct
         {
             wFunc = FoDelete,
@@ -33,7 +36,7 @@ public sealed class ShellRecycleBin : IRecycleBin
         };
         var result = SHFileOperation(ref op);
         if (result != 0 || op.fAnyOperationsAborted != 0)
-            throw new IOException($"'{full}' could not go to the Recycle Bin (shell code {result}); is a file open in another program?");
+            throw new IOException($"'{full}' could not go to the Recycle Bin (shell code {result}); close any program using it and try again.");
     }
 
     private const uint FoDelete = 3;

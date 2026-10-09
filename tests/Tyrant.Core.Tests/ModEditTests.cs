@@ -162,7 +162,7 @@ public class ModEditTests
         var deleted = mod.RemoveSkin("blue", deleteFiles: true);
 
         Assert.Equal(["green"], ModProject.Open(ws, "red-spot").Manifest.Skins.Select(s => s.Id));
-        Assert.Equal(["skins/blue/female_D.png", "skins/blue/male_pattern.png"], deleted.Order(StringComparer.Ordinal));
+        Assert.Equal(["skins/blue/female_D.png", "skins/blue/male_pattern.png"], deleted.Recycled.Order(StringComparer.Ordinal));
         Assert.True(File.Exists(Path.Combine(mod.Dir, "skins", "blue", "male_D.png"))); // green uses it
         mod.RemoveSkin("green", deleteFiles: false);
         Assert.True(File.Exists(Path.Combine(mod.Dir, "skins", "blue", "male_D.png")));
@@ -324,7 +324,7 @@ public class ModEditTests
 
         Assert.Equal(["blender/red-spot/carcharodontosaurus-blue/", "models/carch-blue-1.glb", "models/carch-blue-1.lod0.tmesh",
             "models/carch-blue-1.lod1.tmesh", "models/carch-blue-1.model.json", "skins/blue/female_D.png", "skins/blue/male_pattern.png"],
-            removed.Order(StringComparer.Ordinal));
+            removed.Recycled.Order(StringComparer.Ordinal));
         Assert.True(TestRecycleBin.Instance.Holds(blender));
         Assert.True(TestRecycleBin.Instance.Holds(Path.Combine(models, "carch-blue-1.glb")));
         Assert.True(File.Exists(Path.Combine(models, "carch-green-2.glb")));
@@ -345,7 +345,7 @@ public class ModEditTests
 
         var removed = ModProject.Open(ws, "red-spot").RemoveSkin("blue", deleteFiles: true);
 
-        Assert.DoesNotContain("models/shared.glb", removed);
+        Assert.DoesNotContain("models/shared.glb", removed.Recycled);
         Assert.True(File.Exists(Path.Combine(mod.Dir, "models", "shared.glb")));
     }
 
@@ -359,7 +359,9 @@ public class ModEditTests
 
         var removed = mod.RemoveSkin("blue", deleteFiles: true);
 
-        Assert.Equal(["skins/blue/male_pattern.png"], removed);
+        Assert.Equal(["skins/blue/male_pattern.png"], removed.Recycled);
+        var locked = Path.GetFullPath(Path.Combine(mod.Dir, "skins", "blue", "female_D.png"));
+        Assert.Equal([$"skins/blue/female_D.png: '{locked}' is in use by another program."], removed.Kept);
         Assert.True(File.Exists(Path.Combine(mod.Dir, "skins", "blue", "female_D.png")));
         Assert.Equal(["green"], ModProject.Open(ws, "red-spot").Manifest.Skins.Select(s => s.Id));
     }
