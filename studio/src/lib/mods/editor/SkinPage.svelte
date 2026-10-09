@@ -41,7 +41,7 @@
   async function remove(deleteFiles: boolean) {
     removing = false;
     // Deleted files cannot come back, so undo must not bring back a skin without them.
-    await doc.edit('mods.removeSkin', { skin: skin.id, deleteFiles }, { undoable: !deleteFiles });
+    await doc.removeSkin(skin.id, deleteFiles);
   }
 </script>
 

@@ -6,7 +6,7 @@
   import { getSession } from '$lib/stores/session.svelte';
 
   /** modId: add to this mod (the mod editor) instead of choosing one; onDone: called after adding, or on Cancel. */
-  let { speciesKey = '', modId, onDone }: { speciesKey?: string; modId?: string; onDone?: () => void } = $props();
+  let { speciesKey = '', modId, group = null, onDone }: { speciesKey?: string; modId?: string; group?: string | null; onDone?: () => void } = $props();
 
   const NEW = '__new__';
   const session = getSession();
@@ -58,7 +58,7 @@
       target = id;
     }
     const r = await tab.safely(() =>
-      session.rpc.call('mods.addSkin', { id, species, name: name.trim(), base, male, female, maps }),
+      session.rpc.call('mods.addSkin', { id, species, name: name.trim(), base, male, female, maps, ...(group ? { group } : {}) }),
     );
     if (!r) return;
     tab.info(
@@ -77,6 +77,7 @@
       Adding a skin needs the game's data (species and their skins). On the Workspace tab, click <strong>Run data dump</strong>, then come back.
     </p>
   {:else if data}
+    {#if group}<p class="hint">Adds it into {group}.</p>{/if}
     {#if unmatched && !species}<p class="warn">Tyrant could not match this species to the game data's species list; pick it below.</p>{/if}
     <div class="form">
       <label>Species

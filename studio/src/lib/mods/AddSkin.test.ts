@@ -82,4 +82,15 @@ describe('AddSkin', () => {
     await waitFor(() => expect(female.disabled).toBe(true)); // once the base skin is chosen
     expect(female.checked).toBe(false);
   });
+
+  it('adds into the group it was opened from', async () => {
+    const { rpc, session } = setup();
+    renderWith(AddSkin, session, { speciesKey: 'carcharodontosaurus', modId: 'red-spot', group: 'Jurassic Park' });
+
+    expect(await screen.findByText(/into Jurassic Park/)).toBeInTheDocument();
+    await fireEvent.input(screen.getByRole('textbox', { name: 'Skin name' }), { target: { value: 'Red spot' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Add skin' }));
+
+    await waitFor(() => expect(rpc.callsTo('mods.addSkin')[0]?.params).toMatchObject({ id: 'red-spot', group: 'Jurassic Park' }));
+  });
 });

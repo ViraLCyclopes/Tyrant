@@ -13,6 +13,7 @@
   import ModDetailsPage from './ModDetailsPage.svelte';
   import ModelPage from './ModelPage.svelte';
   import { ModDoc } from './modDoc.svelte';
+  import RemoveSkinDialog from './RemoveSkinDialog.svelte';
   import ModSideList from './ModSideList.svelte';
   import ReplacementPage from './ReplacementPage.svelte';
   import type { Selection } from './selection';
@@ -25,6 +26,8 @@
   const doc = new ModDoc(tab.key ?? '', session.rpc, tab);
   let selection = $state<Selection>({ kind: 'details' });
   let failed = $state(false);
+  let addingGroup = $state<string | null>(null);
+  let removingSkin = $state<string | null>(null);
   /** The form shown instead of a page: + Add on Skins, Models or Sounds. */
   let adding = $state<'skin' | 'model' | 'sound' | 'texture' | null>(null);
 
@@ -169,11 +172,12 @@
 {:else if doc.detail}
   <div class="editor">
     <ModSideList detail={doc.detail} check={doc.check} {selection} onSelect={(s) => { adding = null; selection = s; }}
-      onAddSkin={() => (adding = 'skin')} onAddModel={() => (adding = 'model')} onAddSound={() => (adding = 'sound')}
+      onAddSkin={(group) => { addingGroup = group; adding = 'skin'; }}
+      onArrange={(order) => void doc.edit('mods.arrangeSkins', { order })} onRemoveSkin={(id) => (removingSkin = id)} onAddModel={() => (adding = 'model')} onAddSound={() => (adding = 'sound')}
       onAddReplacement={() => (adding = 'texture')} />
     <section class="page">
       {#if adding === 'skin'}
-        <AddSkin modId={doc.id} onDone={skinAdded} />
+        <AddSkin modId={doc.id} group={addingGroup} onDone={skinAdded} />
       {:else if adding === 'model'}
         <AddModel {doc} onDone={modelAdded} />
       {:else if adding === 'sound'}
@@ -212,6 +216,13 @@
 
 {#if deleting && doc.detail}
   <DeleteModDialog name={doc.detail.name} installed={deleting.installed} error={deleteError} onCancel={() => (deleting = null)} onConfirm={confirmDelete} />
+{/if}
+
+{#if removingSkin && doc.detail}
+  {@const skin = doc.detail.skins.find((k) => k.id === removingSkin)}
+  {#if skin}
+    <RemoveSkinDialog name={skin.name} onCancel={() => (removingSkin = null)} onConfirm={(deleteFiles) => { removingSkin = null; void doc.removeSkin(skin.id, deleteFiles); }} />
+  {/if}
 {/if}
 
 <style>

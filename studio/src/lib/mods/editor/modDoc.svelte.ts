@@ -10,6 +10,7 @@ export type EditMethod =
   | 'mods.setSpeciesPrefab'
   | 'mods.renameSkin'
   | 'mods.removeSkin'
+  | 'mods.arrangeSkins'
   | 'mods.setColors'
   | 'mods.setSkinFile'
   | 'mods.copyBaseFile'
@@ -63,6 +64,11 @@ export class ModDoc {
   }
 
   /** Saves one change (after any still running); on success the previous mod.json becomes an undo step. */
+  /** Remove skin (side list and skin page): with its files it cannot be undone, so the history is forgotten. */
+  removeSkin(id: string, deleteFiles: boolean): Promise<boolean> {
+    return this.edit('mods.removeSkin', { skin: id, deleteFiles }, { undoable: !deleteFiles });
+  }
+
   edit(method: EditMethod, params: EditParams, options: EditOptions = {}): Promise<boolean> {
     return this.serial(async () => {
       const before = this.detail;
