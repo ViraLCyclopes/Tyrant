@@ -137,4 +137,32 @@ describe('SkinPage', () => {
     await waitFor(() => expect(rpc.callsTo('mods.removeSkin')).toHaveLength(1));
     expect(doc.canUndo).toBe(false);
   });
+
+  it('the Group menu moves the skin into a group, or a new one', async () => {
+    const detail = modDetail();
+    detail.skins[1] = { ...detail.skins[1], group: 'Jurassic Park' };
+    const { rpc } = await setup(detail);
+    rpc.on('mods.arrangeSkins', () => modDetail({ revision: 'r2' }));
+
+    await fireEvent.change(screen.getByRole('combobox', { name: 'Group' }), { target: { value: 'Jurassic Park' } });
+    await waitFor(() =>
+      expect(rpc.callsTo('mods.arrangeSkins')[0]?.params).toMatchObject({ order: [{ id: 'red', group: 'Jurassic Park' }, { id: 'blue', group: 'Jurassic Park' }] }),
+    );
+
+    await fireEvent.change(screen.getByRole('combobox', { name: 'Group' }), { target: { value: '__new__' } });
+    const dialog = screen.getByRole('dialog', { name: 'New group' });
+    await fireEvent.input(within(dialog).getByRole('textbox', { name: 'Group name' }), { target: { value: 'Isla Sorna' } });
+    await fireEvent.click(within(dialog).getByRole('button', { name: 'Move' }));
+    await waitFor(() => expect(rpc.callsTo('mods.arrangeSkins')).toHaveLength(2));
+  });
+
+  it('the Remove skin dialog says the files go to the Recycle Bin with the model and Blender project', async () => {
+    await setup();
+    await fireEvent.click(screen.getByRole('button', { name: 'Remove skin…' }));
+    const dialog = screen.getByRole('dialog', { name: /Remove/ });
+    const box = within(dialog).getByRole('checkbox', { name: /Also delete its files/ });
+    expect(dialog).toHaveTextContent(/its model and its Blender project/);
+    await fireEvent.click(box);
+    expect(dialog).toHaveTextContent(/Recycle Bin/);
+  });
 });

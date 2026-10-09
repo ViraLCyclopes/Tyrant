@@ -22,8 +22,8 @@
   <div class="dialog" role="dialog" aria-modal="true" aria-label="Remove {name}" tabindex="-1" bind:this={dialog} onclick={(e) => e.stopPropagation()} onkeydown={() => {}}>
     <h2>Remove '{name}'?</h2>
     <p>Its number in the game stays reserved, so other skins keep theirs; saved animals with this skin fall back to its base skin.</p>
-    <label class="row"><input type="checkbox" bind:checked={deleteFiles} /> Also delete its files (never ones another skin or replacement uses)</label>
-    {#if deleteFiles}<p class="warn">Deleted files cannot be undone: Ctrl+Z will not bring this skin back.</p>{/if}
+    <label class="row"><input type="checkbox" bind:checked={deleteFiles} /> Also delete its files, its model and its Blender project (never ones another skin, model or replacement uses)</label>
+    {#if deleteFiles}<p class="warn">They go to the Recycle Bin. This cannot be undone with Ctrl+Z: the skin does not come back.</p>{/if}
     <div class="actions">
       <button onclick={onCancel}>Cancel</button>
       <button class="primary" onclick={() => onConfirm(deleteFiles)}>Remove skin</button>

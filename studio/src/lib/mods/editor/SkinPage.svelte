@@ -2,6 +2,8 @@
   import OpenInBlender from '$lib/blender/OpenInBlender.svelte';
   import type { ModSkinDto } from '$lib/rpc/types.gen';
   import { getSession } from '$lib/stores/session.svelte';
+  import NameDialog from './NameDialog.svelte';
+  import { groupNames, setGroup } from './skinGroups';
   import ColourEditor from './ColourEditor.svelte';
   import RigEdit from './RigEdit.svelte';
   import type { ModDoc } from './modDoc.svelte';
@@ -14,6 +16,9 @@
   const session = getSession();
   let name = $state('');
   let removing = $state(false);
+  const NEW_GROUP = '__new__';
+  const groups = $derived(groupNames(doc.detail?.skins ?? []));
+  let namingGroup = $state(false);
   const lines = $derived(checkLinesFor(doc.check, skin.key));
   const speciesModel = $derived(doc.detail?.models.find((m) => m.skin === null && m.target === skin.species));
 
@@ -38,6 +43,21 @@
     if (png) await doc.edit('mods.setThumbnail', { skin: skin.id, png });
   }
 
+  function pickGroup(e: Event & { currentTarget: HTMLSelectElement }) {
+    const value = e.currentTarget.value;
+    if (value === NEW_GROUP) {
+      e.currentTarget.value = skin.group ?? ''; // the dialog decides
+      namingGroup = true;
+      return;
+    }
+    void moveTo(value || null);
+  }
+
+  async function moveTo(group: string | null) {
+    if ((group ?? null) === (skin.group ?? null)) return;
+    await doc.edit('mods.arrangeSkins', (d) => ({ order: setGroup(d.skins, [skin.id], group) }));
+  }
+
   async function remove(deleteFiles: boolean) {
     removing = false;
     // Deleted files cannot come back, so undo must not bring back a skin without them.
@@ -47,6 +67,13 @@
 
 <header class="head">
   <label class="name">Skin name <input aria-label="Skin name" bind:value={name} onchange={rename} /></label>
+  <label class="group">Group
+    <select aria-label="Group" value={skin.group ?? ''} onchange={pickGroup}>
+      <option value="">No group</option>
+      {#each groups as g (g)}<option value={g}>{g}</option>{/each}
+      <option value={NEW_GROUP}>New group…</option>
+    </select>
+  </label>
   <p class="hint">{skin.species} · based on {skin.base} · id <code>{skin.id}</code> (saved animals use it, so it never changes)</p>
 </header>
 
@@ -102,10 +129,16 @@
   <RemoveSkinDialog name={skin.name} onCancel={() => (removing = false)} onConfirm={remove} />
 {/if}
 
+{#if namingGroup}
+  <NameDialog title="New group" label="Group name" action="Move" onCancel={() => (namingGroup = false)}
+    onConfirm={(name) => { namingGroup = false; void moveTo(name); }} />
+{/if}
+
 <style>
   .head { display: grid; gap: 4px; }
   .head p { margin: 0; }
   .name { display: flex; gap: 8px; align-items: center; font-weight: 600; }
+  .group { display: flex; gap: 8px; align-items: center; }
   .name input { font-size: 18px; min-width: 260px; }
   .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   .card { display: grid; gap: 10px; }
