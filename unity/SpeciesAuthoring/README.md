@@ -11,9 +11,8 @@ need Unity installed.
 
 ## Prepare local references
 
-In Tyrant, select a species and choose **Create / show Unity project**. Tyrant
-imports the local game references automatically. Close the Unity project before
-preparing references for an existing project.
+Tyrant's **Create / show Unity project** step is not available in the app while the Unity path is parked.
+Close the Unity project before preparing references for an existing project.
 
 For a project copied manually, run Tyrant's sidecar CLI:
 
@@ -39,13 +38,13 @@ Editor/Windows compatibility flags if an older project imported its DLLs incorre
 2. Create the species prefab in Unity yourself. Tyrant no longer recovers the template prefab for you.
 3. Build a complete PK animal prefab. It needs the root's `Animal`, `AnimalSetup`, `AnimalAnimationController`,
    `AnimalGrowthManager`, and `AnimalAudioComponent`, including their linked assets.
-   Animator, meshes, materials, bones, LODs and serialized component settings.
-   Edit this copy and keep the root **inactive**. Its animations, species gameplay
+   Include the Animator, meshes, materials, bones, LODs and serialized component settings.
+   Keep the root **inactive**. Its animations, species gameplay
    settings and skins still inherit from the AnimalData template selected in Tyrant.
 4. Open **Tyrant → Species prefab exporter**. Select the saved `.prefab` asset,
    validate, select an output folder outside `Assets`, and build the Windows bundle.
-5. In Tyrant's species database, select the species, paste the **Asset** path from
-   the generated `.bundle.txt` report and choose **Attach Unity prefab bundle**.
+5. Attaching the bundle (**Attach Unity prefab bundle**) is not available in the app while the Unity path
+   is parked; a species that already has a bundle keeps loading it.
 6. Install the mod with the updated framework and restart PK. Test Nursery preview,
    spawning, movement, animation, growth, audio, skins, and save/reload in a test park.
 

@@ -79,7 +79,7 @@ public sealed class ModPrefabCommand : Command<ModPrefabCommand.Settings>
             if (settings.Overridden && mine is null) continue;
             if (settings.Find is { } find && !$"{f.Object}|{f.Component}|{f.Field}".Contains(find, StringComparison.OrdinalIgnoreCase)) continue;
             var value = mine is null ? "" : " -> " + JsonSerializer.Serialize(JsonDocument.Parse(Tyrant.Framework.Core.Json.Write(mine.Value)).RootElement);
-            Console.WriteLine($"{(f.Object.Length == 0 ? "(root)" : f.Object)} | {f.Component} | {f.Field} = {f.Value}{value}{(f.Editable ? "" : " (read-only)")}");
+            Console.WriteLine($"{(f.Object.Length == 0 ? "(root)" : f.Object)} | {f.Component} | {f.Field} = {f.Value}{value}{(f.Editable ? "" : f.Kind == "duplicate" ? " (duplicate path — the game can't address it)" : " (read-only)")}");
         }
         return ExitCodes.Ok;
     }

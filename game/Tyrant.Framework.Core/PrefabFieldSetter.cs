@@ -149,7 +149,11 @@ namespace Tyrant.Framework.Core
             if (value is Dictionary<string, object?> parts && type.IsValueType)
             {
                 var result = Activator.CreateInstance(type)!;
-                foreach (var field in type.GetFields(BindingFlags.Instance | BindingFlags.Public))
+                var fields = type.GetFields(BindingFlags.Instance | BindingFlags.Public);
+                if (fields.Length == 0) throw new InvalidOperationException($"A {Describe(type)} has no public fields to set.");
+                foreach (var key in parts.Keys)
+                    if (!fields.Any(f => f.Name == key)) throw new InvalidOperationException($"It has no field '{key}'.");
+                foreach (var field in fields)
                 {
                     if (!parts.TryGetValue(field.Name, out var part)) throw new InvalidOperationException($"It needs '{field.Name}' too.");
                     field.SetValue(result, Convert(part, field.FieldType));

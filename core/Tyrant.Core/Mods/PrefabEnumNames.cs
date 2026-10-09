@@ -24,8 +24,11 @@ public sealed class PrefabEnumNames(string managedDir) : IDisposable
             type = Resolve(fieldType);
         }
         if (type is null || !type.IsEnum) return null;
-        return type.Fields.Where(f => f.IsStatic && f.HasConstant).OrderBy(f => Convert.ToInt64(f.Constant)).Select(f => new PrefabEnumValue(f.Name, Convert.ToInt64(f.Constant))).ToList();
+        return type.Fields.Where(f => f.IsStatic && f.HasConstant).Select(f => new PrefabEnumValue(f.Name, ToLong(f.Constant))).OrderBy(v => v.Value).ToList();
     }
+
+    /// <summary>A ulong constant above long.MaxValue wraps instead of throwing, so the read never fails.</summary>
+    private static long ToLong(object constant) => constant is ulong u ? unchecked((long)u) : Convert.ToInt64(constant);
 
     private static DefaultAssemblyResolver CreateResolver(string dir)
     {

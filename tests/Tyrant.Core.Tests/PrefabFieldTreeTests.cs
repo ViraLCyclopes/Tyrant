@@ -73,6 +73,57 @@ public class PrefabFieldTreeTests
     }
 
     [Fact]
+    public void Object_values_are_compact_json_even_when_the_game_json_is_indented()
+    {
+        var indented = """
+            {
+              "offset": {
+                "x": 0,
+                "y": 1,
+                "z": 0
+              },
+              "raw": {
+                "$bytes": 40
+              },
+              "big": {
+                "$array": "float",
+                "count": 9000
+              }
+            }
+            """.ReplaceLineEndings("\r\n");
+        var tree = PrefabFieldTree.Build(new("P", [new PrefabObject("", [new PrefabComponent("C", null, null, 0, indented)])]), (_, _) => null);
+
+        Assert.Equal("{\"x\":0,\"y\":1,\"z\":0}", tree.Single(f => f.Field == "offset").Value);
+        Assert.Equal("40", tree.Single(f => f.Field == "raw").Value);
+        Assert.Equal("9000", tree.Single(f => f.Field == "big").Value);
+    }
+
+    [Fact]
+    public void A_component_on_a_duplicate_path_is_listed_but_not_editable()
+    {
+        var tree = PrefabFieldTree.Build(new("P", [new PrefabObject("Legs", [
+            new PrefabComponent("C", null, null, 0, """{"speed":2}"""),
+            new PrefabComponent("C", null, null, 1, """{"speed":3,"mode":1}""", DuplicatePath: true),
+            new PrefabComponent("Animator", null, null, 0, """{"m_ApplyRootMotion":1,"m_CullingMode":1}""", DuplicatePath: true)])]), (_, _) => null);
+
+        Assert.Equal(("number", true), (tree.Single(f => f.Component == "C" && f.Field == "speed").Kind, tree.Single(f => f.Component == "C" && f.Field == "speed").Editable));
+        var dup = tree.Where(f => f.Component == "C#1" || f.Component == "Animator").ToList();
+        Assert.Equal(4, dup.Count);
+        Assert.All(dup, f => { Assert.Equal("duplicate", f.Kind); Assert.False(f.Editable); });
+        Assert.Equal("3", tree.Single(f => f.Component == "C#1" && f.Field == "speed").Value);
+    }
+
+    [Theory]
+    [InlineData("inputParams.waterlineHeight", "1e400")]
+    [InlineData("inputParams.offset", """{"x":1,"y":1e999,"z":0}""")]
+    public void A_number_must_be_finite(string field, string json)
+    {
+        using var value = JsonDocument.Parse(json);
+
+        Assert.Contains("finite number", PrefabFieldTree.CheckValue(Get("", "AnimalPhysics", field), value.RootElement));
+    }
+
+    [Fact]
     public void Enum_numbers_are_checked_as_real_values_not_positions()
     {
         var tree = PrefabFieldTree.Build(Prefab, (c, path) => path == "inputParams.mode" ? [new("Walk", 0), new("Swim", 2)] : null);
@@ -109,12 +160,15 @@ public class PrefabFieldTreeTests
 
 public enum PrefabTestGait { Walk, Run = 5, Swim = 2 }
 
+public enum PrefabTestHuge : ulong { Small = 1, Big = ulong.MaxValue }
+
 public class PrefabTestHolderBase { public PrefabTestGait[] baseGaits = []; }
 
 public class PrefabTestHolder : PrefabTestHolderBase
 {
     public List<PrefabTestGait> gaits = [];
     public int plain;
+    public PrefabTestHuge huge;
 }
 
 public class PrefabEnumNamesTests
@@ -129,6 +183,7 @@ public class PrefabEnumNamesTests
         PrefabEnumValue[] expected = [new("Walk", 0), new("Swim", 2), new("Run", 5)];
         Assert.Equal(expected, names.For(component, "gaits"));
         Assert.Equal(expected, names.For(component, "baseGaits"));
+        Assert.Equal(2, names.For(component, "huge")!.Count); // a ulong constant above long.MaxValue must not throw
         Assert.Null(names.For(component, "plain"));
         Assert.Null(names.For(component, "missing"));
     }

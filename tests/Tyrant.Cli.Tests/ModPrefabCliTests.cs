@@ -41,7 +41,7 @@ public class ModPrefabCliTests
 
             var bad = Run("mod", "prefab", "red-spot", "Carcharodontosaurus", "--set", "|AnimalPhysics|inputParams.waterlineHeight=deep", "-w", ws);
             Assert.NotEqual(ExitCodes.Ok, bad.Code);
-            Assert.Contains("needs a number", bad.Err);
+            Assert.Contains("needs a finite number", bad.Err);
 
             var file = Path.Combine(ws, "mods", "red-spot", "prefabs", "carcharodontosaurus.json");
             Assert.Equal(ExitCodes.Ok, Run("mod", "prefab", "red-spot", "Carcharodontosaurus", "--reset", "|AnimalPhysics|inputParams.waterlineHeight", "-w", ws).Code);

@@ -7,6 +7,8 @@ public class PrefabFieldSetterTests
     public enum Mode { Walk, Swim, Fly }
     public struct Vec3 { public float x, y, z; }
     public struct Params { public float waterlineHeight; public int steps; public Mode mode; public Vec3 offset; }
+    public struct Hidden { private float secret; public float Secret => secret; }
+    public class HiddenHolder { public Hidden hidden; public Vec3 offset; }
     public class Joint { public float boneLength; }
     public class BaseComponent { protected bool enabledFlag; }
     public class Physics : BaseComponent
@@ -82,6 +84,18 @@ public class PrefabFieldSetterTests
         var p = new Physics();
         Assert.False(PrefabFieldSetter.TrySet(p, "inputParams.offset", new Dictionary<string, object?> { ["x"] = 1.0, ["y"] = 2.0 }, out var error));
         Assert.Contains("z", error);
+    }
+
+    [Fact]
+    public void A_struct_without_public_fields_or_with_an_unknown_key_is_refused()
+    {
+        var h = new HiddenHolder();
+        Assert.False(PrefabFieldSetter.TrySet(h, "hidden", new Dictionary<string, object?> { ["secret"] = 1.0 }, out var error));
+        Assert.Contains("no public fields", error);
+
+        Assert.False(PrefabFieldSetter.TrySet(h, "offset", new Dictionary<string, object?> { ["x"] = 1.0, ["y"] = 2.0, ["z"] = 3.0, ["w"] = 4.0 }, out var unknown));
+        Assert.Contains("It has no field 'w'.", unknown);
+        Assert.Equal(0f, h.offset.x);
     }
 
     [Fact]

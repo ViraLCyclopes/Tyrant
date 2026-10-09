@@ -4,8 +4,11 @@ using Tyrant.Core.Assets;
 
 namespace Tyrant.Core.Models;
 
-/// <summary>A component on a prefab object: its type, which of that type it is, and its serialized fields as JSON.</summary>
-public sealed record PrefabComponent(string Type, string? Namespace, string? Assembly, int Index, string FieldsJson);
+/// <summary>
+/// A component on a prefab object: its type, which of that type it is, and its serialized fields as JSON.
+/// <paramref name="DuplicatePath"/> is true when another GameObject already has this object's path (the game finds the first), so this one cannot be addressed.
+/// </summary>
+public sealed record PrefabComponent(string Type, string? Namespace, string? Assembly, int Index, string FieldsJson, bool DuplicatePath = false);
 
 /// <summary>An object of a prefab by its path from the root ("" is the root), with the components prefab settings can change.</summary>
 public sealed record PrefabObject(string Path, IReadOnlyList<PrefabComponent> Components);
@@ -19,14 +22,16 @@ internal static class PrefabComponentReader
     {
         var rootInfo = file.file.GetAssetInfo(rootGameObjectPathId);
         var root = manager.GetBaseField(file, rootInfo);
-        var found = new List<(string, string, string?, string?, string)>();
-        Walk(manager, file, root, "", found);
+        var found = new List<(string, string, string?, string?, string, bool)>();
+        Walk(manager, file, root, "", found, new HashSet<string>(), false);
         return new PrefabComponents(root["m_Name"].AsString, Group(found));
     }
 
     private static void Walk(AssetsManager manager, AssetsFileInstance file, AssetTypeValueField gameObject, string path,
-        List<(string, string, string?, string?, string)> found)
+        List<(string, string, string?, string?, string, bool)> found, HashSet<string> claimed, bool inheritedDuplicate)
     {
+        // The game finds a child by name (the first one), so a GameObject whose path another already has cannot be addressed.
+        var duplicate = inheritedDuplicate || !claimed.Add(path);
         AssetTypeValueField? transform = null;
         foreach (var entry in gameObject["m_Component.Array"].Children)
         {
@@ -47,14 +52,14 @@ internal static class PrefabComponentReader
                         if (className is null) continue; // a script we cannot resolve is skipped
                         var script = manager.GetExtAsset(ext.file, header["m_Script"]).baseField!;
                         var full = manager.GetBaseField(ext.file, ext.info);
-                        found.Add((path, className, Text(script["m_Namespace"]), Text(script["m_AssemblyName"]), FieldJsonWriter.ToJson(full)));
+                        found.Add((path, className, Text(script["m_Namespace"]), Text(script["m_AssemblyName"]), FieldJsonWriter.ToJson(full), duplicate));
                         break;
                     }
                     case AssetClassID.LODGroup:
-                        found.Add((path, "LODGroup", null, null, FieldJsonWriter.ToJson(manager.GetBaseField(ext.file, ext.info))));
+                        found.Add((path, "LODGroup", null, null, FieldJsonWriter.ToJson(manager.GetBaseField(ext.file, ext.info)), duplicate));
                         break;
                     case AssetClassID.Animator:
-                        found.Add((path, "Animator", null, null, FieldJsonWriter.ToJson(manager.GetBaseField(ext.file, ext.info))));
+                        found.Add((path, "Animator", null, null, FieldJsonWriter.ToJson(manager.GetBaseField(ext.file, ext.info)), duplicate));
                         break;
                 }
             }
@@ -73,7 +78,7 @@ internal static class PrefabComponentReader
                 var childObject = manager.GetExtAsset(childTransform.file, childTransform.baseField["m_GameObject"]);
                 if (childObject.baseField is null) continue;
                 var name = childObject.baseField["m_Name"].AsString;
-                Walk(manager, childObject.file, childObject.baseField, path.Length == 0 ? name : path + "/" + name, found);
+                Walk(manager, childObject.file, childObject.baseField, path.Length == 0 ? name : path + "/" + name, found, claimed, duplicate);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -84,15 +89,15 @@ internal static class PrefabComponentReader
 
     private static string? Text(AssetTypeValueField field) => field.IsDummy ? null : field.AsString;
 
-    internal static IReadOnlyList<PrefabObject> Group(IEnumerable<(string Path, string Type, string? Ns, string? Asm, string Json)> found)
+    internal static IReadOnlyList<PrefabObject> Group(IEnumerable<(string Path, string Type, string? Ns, string? Asm, string Json, bool Duplicate)> found)
     {
         var objects = new List<(string Path, List<PrefabComponent> Components)>();
-        foreach (var (path, type, ns, asm, json) in found)
+        foreach (var (path, type, ns, asm, json, duplicate) in found)
         {
             var at = objects.FindIndex(o => o.Path == path);
             if (at < 0) { objects.Add((path, [])); at = objects.Count - 1; }
             var index = objects[at].Components.Count(c => c.Type == type);
-            objects[at].Components.Add(new PrefabComponent(type, string.IsNullOrEmpty(ns) ? null : ns, asm, index, json));
+            objects[at].Components.Add(new PrefabComponent(type, string.IsNullOrEmpty(ns) ? null : ns, asm, index, json, duplicate));
         }
         return objects.Select(o => new PrefabObject(o.Path, o.Components)).ToList();
     }

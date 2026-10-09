@@ -32,7 +32,7 @@ public sealed partial class ModProject
         var mod = Open(ws, id);
         if (expectedRevision is not null && !string.Equals(mod.Revision(), expectedRevision, StringComparison.OrdinalIgnoreCase))
             throw new TyrantException(TyrantErrorCode.ModChanged,
-                $"'{id}' changed outside this editor (mod.json or animals.db was edited elsewhere). It was reloaded; make your change again.");
+                $"'{id}' changed outside this editor (mod.json, animals.db or prefab settings files were edited elsewhere). It was reloaded; make your change again.");
         return mod;
     }
 
@@ -62,12 +62,13 @@ public sealed partial class ModProject
     /// </summary>
     public static ModProject RestoreSnapshot(Workspace ws, string id, string manifestJson, IReadOnlyDictionary<string, string> prefabs, string expectedRevision)
     {
-        foreach (var (name, text) in prefabs)
+        // Only the names are checked: undo puts back exactly what was there, even a file that cannot be parsed.
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var name in prefabs.Keys)
         {
-            if (Path.GetFileName(name) != name || !name.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+            if (name.Length == 0 || Path.GetFileName(name) != name || !name.EndsWith(".json", StringComparison.OrdinalIgnoreCase)
+                || name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 || !seen.Add(name))
                 throw new TyrantException(TyrantErrorCode.ModInvalid, $"'{name}' is not a prefab settings file name.");
-            try { PrefabOverrides.Parse(text); }
-            catch (ManifestException ex) { throw new TyrantException(TyrantErrorCode.ModInvalid, $"prefabs/{name} cannot be put back: {ex.Message}"); }
         }
         var saved = SaveManifest(ws, id, manifestJson, expectedRevision);
         var folder = Path.Combine(saved.Dir, PrefabOverrides.Folder);

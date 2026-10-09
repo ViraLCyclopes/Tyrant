@@ -8,10 +8,10 @@ or Tyrant's Species database page. It travels with the mod when installed or exp
 > prefab with **Prefab settings** (any field of its components) and give it its own look with **Open in Blender**.
 > A species that already has a Unity bundle keeps loading it.
 
-If you already have a Unity bundle for a species, **Create / show Unity project** still creates a project under
-`<workspace>/authoring/<mod-id>/Unity`, and the bundle can be attached in Tyrant. See the
-[Unity authoring guide](../unity/SpeciesAuthoring/README.md). This pipeline is experimental. Tyrant restores PK's
-script assembly identities when attaching a Unity bundle.
+The app no longer shows **Create / show Unity project** or **Attach Unity prefab bundle** while the Unity path is parked,
+so those steps are not available. A species with an existing Unity bundle keeps loading it. The
+[Unity authoring guide](../unity/SpeciesAuthoring/README.md) is kept for reference; this pipeline is experimental.
+Tyrant restores PK's script assembly identities when loading a Unity bundle.
 
 Recovered shader previews carry `Tyrant/Recovered/` names. When spawning the
 authored animal, Tyrant rebuilds marked materials from the loaded vanilla prefab's

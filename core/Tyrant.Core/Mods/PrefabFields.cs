@@ -8,7 +8,7 @@ namespace Tyrant.Core.Mods;
 /// <summary>A species' prefab settings fields as the game has them, read once per game build and cached in the workspace.</summary>
 public static class PrefabFields
 {
-    private const int CacheVersion = 1;
+    private const int CacheVersion = 2;
 
     /// <param name="species">Must already include the mod's own species (<see cref="ModProject.WithSpecies"/>).</param>
     public static IReadOnlyList<PrefabFieldInfo> Read(Workspace ws, GameInstall install, AssetIndex index, IReadOnlyList<SpeciesSkins> species, IAssetReader reader, string target)

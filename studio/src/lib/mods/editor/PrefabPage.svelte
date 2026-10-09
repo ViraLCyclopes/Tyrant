@@ -48,11 +48,29 @@
     return out;
   });
 
+  // Overrides in the mod's file whose field the game no longer has (after a game update): shown so they can be removed.
+  type Orphan = { object: string; component: string; field: string; value: string };
+  const hasFile = $derived(doc.detail?.prefabTargets?.some((t) => t.target.toLowerCase() === target.toLowerCase()) ?? false);
+  const orphans = $derived.by((): Orphan[] => {
+    if (!ready) return [];
+    const entry = doc.detail?.prefabTargets?.find((t) => t.target.toLowerCase() === target.toLowerCase());
+    const text = entry ? doc.detail?.prefabFiles?.[entry.file] : undefined;
+    if (!text) return [];
+    try {
+      const list = (JSON.parse(text) as { fields?: { object?: string; component?: string; field?: string; value?: unknown }[] }).fields ?? [];
+      return list
+        .filter((o) => !ready.fields.some((f) => f.object === (o.object ?? '') && f.component === o.component && f.field === o.field))
+        .map((o) => ({ object: o.object ?? '', component: String(o.component), field: String(o.field), value: JSON.stringify(o.value) }));
+    } catch {
+      return [];
+    }
+  });
+
   const current = (f: ModPrefabFieldDto) => JSON.parse(f.value ?? f.gameValue) as unknown;
   const address = (f: ModPrefabFieldDto) => ({ target, object: f.object, component: f.component, field: f.field });
 
-  function save(f: ModPrefabFieldDto, value: unknown) {
-    void doc.edit('mods.setPrefabField', { ...address(f), value });
+  function save(f: ModPrefabFieldDto, value: unknown): Promise<boolean> {
+    return doc.edit('mods.setPrefabField', { ...address(f), value });
   }
 
   function saveNumber(f: ModPrefabFieldDto, text: string) {
@@ -66,7 +84,10 @@
     const key = `${f.object}|${f.component}|${f.field}`;
     const next = { ...(pending[key] ?? (current(f) as Record<string, number>)), [part]: n };
     pending[key] = next;
-    save(f, next);
+    // a rejected part must not ride along with the next part's save
+    void save(f, next).then((ok) => {
+      if (!ok) delete pending[key];
+    });
   }
 
   const parts = (kind: string) =>
@@ -90,7 +111,7 @@
   <div class="row">
     <input type="search" aria-label="Find a field" placeholder="Find a field…" bind:value={find} />
     <label class="row"><input type="checkbox" bind:checked={onlyChanged} /> Show only changed</label>
-    <button disabled={changed === 0} onclick={removeAll}>Remove all…</button>
+    <button disabled={!hasFile} onclick={removeAll}>Remove all…</button>
   </div>
 </header>
 
@@ -103,7 +124,9 @@
       {#each g.fields as f (f.field)}
         <div class="field" class:changed={f.value !== null} class:locked={!f.editable}>
           <span class="name">{f.field}</span>
-          {#if !f.editable}
+          {#if f.kind === 'duplicate'}
+            <span class="hint">{f.gameValue} (duplicate path — the game can't address it)</span>
+          {:else if !f.editable}
             <span class="hint">{f.kind === 'reference' ? 'link (read-only)' : `${f.gameValue} items (read-only)`}</span>
           {:else if f.kind === 'number'}
             <input type="number" step="any" aria-label={f.field} value={current(f) as number} onchange={(e) => saveNumber(f, e.currentTarget.value)} />
@@ -133,6 +156,19 @@
   {:else}
     <p class="hint">No fields match.</p>
   {/each}
+  {#if orphans.length > 0}
+    <fieldset class="card" aria-label="No longer in the game">
+      <legend>No longer in the game</legend>
+      <p class="hint">These settings are in your mod but the game has no such field now; they do nothing.</p>
+      {#each orphans as o (`${o.object}|${o.component}|${o.field}`)}
+        <div class="field changed">
+          <span class="name">{o.object === '' ? '(root)' : o.object} {o.component} {o.field}</span>
+          <span class="hint">{o.value}</span>
+          <button class="ghost" aria-label="Reset {o.field}" title="Remove this setting" onclick={() => doc.edit('mods.resetPrefabField', { target, object: o.object, component: o.component, field: o.field })}>↺</button>
+        </div>
+      {/each}
+    </fieldset>
+  {/if}
 {/if}
 
 <style>
