@@ -14,7 +14,12 @@ public sealed record SpeciesTemplateStats(int? Cost, IReadOnlyDictionary<string,
 /// <summary>Reads the inherited side of Tyrant's custom animal database from the player's game dump.</summary>
 public static class SpeciesDatabase
 {
-    public static SpeciesTemplateStats? Template(Workspace ws, string id)
+    public static SpeciesTemplateStats? Template(Workspace ws, string id) => Find(ws, id, withFields: true);
+
+    /// <summary>A template's cost and basic stats only (no full record): what the new-species form shows.</summary>
+    public static SpeciesTemplateStats? TemplateStats(Workspace ws, string id) => Find(ws, id, withFields: false);
+
+    private static SpeciesTemplateStats? Find(Workspace ws, string id, bool withFields)
     {
         try
         {
@@ -22,7 +27,7 @@ public static class SpeciesDatabase
             var type = store.FindType("PrehistoricKingdom.AnimalData");
             foreach (var (_, root) in store.LoadAll(type))
                 if (root.TryGetProperty("speciesID", out var species) && species.GetString() == id)
-                    return Read(root) with { Fields = Capture(store, root) };
+                    return withFields ? Read(root) with { Fields = Capture(store, root) } : Read(root);
         }
         catch (TyrantException ex) when (ex.Code is TyrantErrorCode.DataMissing or TyrantErrorCode.AssetNotFound) { }
         return null;

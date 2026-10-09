@@ -21,8 +21,20 @@ public sealed record ModSetSpeciesParams(string Id, string Revision, string Spec
     int? Cost, IReadOnlyDictionary<string, double> Stats, IReadOnlyDictionary<string, string>? DataFields = null,
     IReadOnlyDictionary<string, string>? Localization = null);
 
+public sealed record ModSpeciesTemplateParams(string Template);
+/// <summary>Found: the game data dump has this species; Cost and Stats are what a new species based on it inherits.</summary>
+public sealed record ModSpeciesTemplateDto(string Template, bool Found, int? Cost, IReadOnlyDictionary<string, double> Stats);
+
 public sealed partial class ModsMethods
 {
+    [RpcMethod("mods.speciesTemplate")]
+    public ModSpeciesTemplateDto SpeciesTemplate(ModSpeciesTemplateParams p)
+    {
+        var (ws, _) = session.Current();
+        var stats = SpeciesDatabase.TemplateStats(ws, p.Template);
+        return new ModSpeciesTemplateDto(p.Template, stats is not null, stats?.Cost, stats?.Stats ?? new Dictionary<string, double>());
+    }
+
     [RpcMethod("mods.createUnityProject")]
     public ModUnityProjectDto CreateUnityProject(ModIdParams p)
     {

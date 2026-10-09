@@ -24,6 +24,28 @@ public class SpeciesCliTests
     }
 
     [Fact]
+    public void Species_stats_prints_a_templates_cost_and_stats_from_the_dump()
+    {
+        using var game = new FakeGame();
+        var ws = IndexedWorkspace(game);
+        var objects = new Tyrant.Dumper.Serialization.DumpResult();
+        objects.Objects.Add(new Tyrant.Dumper.Serialization.DumpObject(typeof(object),
+            new Tyrant.Dumper.Serialization.EngineObjectInfo("PrehistoricKingdom.AnimalData", "Allosaurus", 1),
+            """{"speciesID":"Allosaurus Anax", "cost":20000, "massAverageAdult":4010, "matureMaxAge":{"x":15,"y":40}}"""));
+        Tyrant.Dumper.Serialization.DumpWriter.Write(Path.Combine(ws, "data"), objects, [], new Tyrant.Dumper.Serialization.DumpManifest { RequestId = "r1", BuildGuid = "b" });
+
+        var (code, output, _) = Run("species", "stats", "Allosaurus Anax", "-w", ws);
+        var (missing, _, err) = Run("species", "stats", "Nope", "-w", ws);
+
+        Assert.Equal(ExitCodes.Ok, code);
+        Assert.Contains("Purchase cost: 20000", output);
+        Assert.Contains("Adult mass (kg): 4010", output);
+        Assert.Contains("Lifespan (years): 40", output);
+        Assert.Equal(ExitCodes.Error, missing);
+        Assert.Contains("tyrant species list", err);
+    }
+
+    [Fact]
     public void Species_list_on_install_without_animals_says_so()
     {
         using var game = new FakeGame();

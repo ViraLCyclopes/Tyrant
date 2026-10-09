@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { getSession } from '$lib/stores/session.svelte';
   import { getTab } from '$lib/shell/tab.svelte';
-  import type { ModAnimalDatabase, SpeciesSkinsRow } from '$lib/rpc/types.gen';
+  import type { ModAnimalDatabase, ModSpeciesTemplateDto, SpeciesSkinsRow } from '$lib/rpc/types.gen';
   import OpenInBlender from '$lib/blender/OpenInBlender.svelte';
   import type { ModDoc } from './modDoc.svelte';
 
@@ -69,6 +69,21 @@
     if (source) template = source.base;
   });
 
+  // A new species shows what it inherits from the chosen template, as an existing species does from its own.
+  let templateStats = $state<ModSpeciesTemplateDto | null>(null);
+  $effect(() => {
+    const chosen = creating ? template : '';
+    if (!chosen) {
+      templateStats = null;
+      return;
+    }
+    void tab.quietly(() => session.rpc.call('mods.speciesTemplate', { template: chosen })).then((r) => {
+      if (creating && chosen === template) templateStats = r?.found ? r : null;
+    });
+  });
+  const inheritedCost = $derived(creating ? (templateStats?.cost ?? null) : (animal?.inheritedCost ?? null));
+  const inheritedStats = $derived<Record<string, number>>(creating ? (templateStats?.stats ?? {}) : (animal?.inheritedStats ?? {}));
+
   const validId = $derived(/^[a-z0-9](?:[a-z0-9-]{1,62})[a-z0-9]$/.test(speciesId));
   const canSave = $derived(!!name.trim() && !!genus.trim() && !!epithet.trim() && (!creating || (validId && !!template)));
 
@@ -125,8 +140,8 @@
           <label>Genus <input bind:value={genus} required /></label>
           <label>Species epithet <input bind:value={epithet} required /></label>
           <label>Purchase cost
-            <input type="number" min="0" max="2147483647" step="1" bind:value={cost} placeholder={animal?.inheritedCost?.toString() ?? 'Template value'} />
-            {#if animal?.inheritedCost != null}<span class="hint">Template: {animal.inheritedCost}</span>{/if}
+            <input type="number" min="0" max="2147483647" step="1" bind:value={cost} placeholder={inheritedCost?.toString() ?? 'Template value'} />
+            {#if inheritedCost != null}<span class="hint">Template: {inheritedCost}</span>{/if}
           </label>
         </div>
         <h3>Animal stats</h3>
@@ -134,8 +149,8 @@
           {#each database.fields as field (field.id)}
             <label>{field.label} <span class="unit">({field.unit})</span>
               <input type="number" min={field.min} max={field.max} step="any" bind:value={values[field.id]}
-                placeholder={animal?.inheritedStats[field.id]?.toString() ?? 'Template value'} />
-              {#if animal?.inheritedStats[field.id] != null}<span class="hint">Template: {animal.inheritedStats[field.id]}</span>{/if}
+                placeholder={inheritedStats[field.id]?.toString() ?? 'Template value'} />
+              {#if inheritedStats[field.id] != null}<span class="hint">Template: {inheritedStats[field.id]}</span>{/if}
             </label>
           {/each}
         </div>

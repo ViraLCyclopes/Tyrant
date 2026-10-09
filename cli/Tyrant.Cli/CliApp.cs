@@ -63,6 +63,8 @@ public static class CliApp
                 species.SetDescription("List species and export a species pack.");
                 species.AddCommand<SpeciesListCommand>("list")
                     .WithDescription("List the animals the game ships (park and vivarium).");
+                species.AddCommand<SpeciesStatsCommand>("stats")
+                    .WithDescription("Show a species' purchase cost and basic stats from the game data (what a new species based on it inherits).");
                 species.AddCommand<SpeciesTexturesCommand>("textures")
                     .WithDescription("List a species' skin textures (to replace them in a mod with 'tyrant mod replace').");
                 species.AddCommand<SpeciesIkCommand>("ik")

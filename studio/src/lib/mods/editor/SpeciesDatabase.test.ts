@@ -13,12 +13,13 @@ import SpeciesDatabase from './SpeciesDatabase.svelte';
 const animal = { id: 'new-animal', key: 'tyrant.red-spot.new-animal', base: 'Allosaurus Anax', name: 'New animal', genus: 'Example', epithet: 'animal', cost: null, stats: { adultMassKg: 4500 }, inheritedCost: 20000, inheritedStats: { adultMassKg: 4010, maxAgeYears: 40 }, dataFields: [{ path: '/brain/needs/adult/native/hitPoints', kind: 'number', value: '660', templateValue: '660', editable: true }], localization: { description: 'pack.description' }, icon: null };
 const fields = [{ id: 'adultMassKg', label: 'Adult mass', unit: 'kg', min: 0.001, max: 1000000 }, { id: 'maxAgeYears', label: 'Lifespan', unit: 'years', min: 0.001, max: 10000 }];
 
-async function setup(animals: (typeof animal)[] = [animal], props: { onPrefab?: (t: string) => void } = {}) {
+async function setup(animals: (typeof animal)[] = [animal], props: { onPrefab?: (t: string) => void } = {}, templateFound = true) {
   const rpc = new FakeRpc()
     .on('mods.get', () => modDetail())
     .on('mods.check', () => ({ errors: [], warnings: [], missingCutouts: [] }))
     .on('mods.species', () => ({ hasDump: true, species: [{ speciesId: 'Allosaurus Anax', vivarium: false, skins: [{ index: 0, name: 'Default', male: true, female: true }], prefabGuid: null }] }))
     .on('mods.animalDatabase', () => ({ animals, fields }))
+    .on('mods.speciesTemplate', (p) => (templateFound ? { template: p.template, found: true, cost: 20000, stats: { adultMassKg: 4010, maxAgeYears: 40 } } : { template: p.template, found: false, cost: null, stats: {} }))
     .on('blender.status', () => ({ found: true, exe: 'b.exe', version: '5.2.2', supported: true, missingConfigured: null, addon: 'current', addonInstalled: '0.1.0', addonBundled: '0.1.0', problem: null }));
   const platform = new FakePlatform();
   const session = new Session(rpc, platform, memoryStore());
@@ -31,6 +32,21 @@ async function setup(animals: (typeof animal)[] = [animal], props: { onPrefab?: 
 }
 
 describe('Species database', () => {
+  it("a new species shows its template's cost and stats before it is created", async () => {
+    const { rpc } = await setup([]);
+    await waitFor(() => expect(screen.getByRole('spinbutton', { name: /Adult mass/ })).toHaveAttribute('placeholder', '4010'));
+    expect(rpc.callsTo('mods.speciesTemplate')[0]?.params).toEqual({ template: 'Allosaurus Anax' });
+    expect(screen.getByText('Template: 4010')).toBeInTheDocument();
+    expect(screen.getByRole('spinbutton', { name: /Lifespan/ })).toHaveAttribute('placeholder', '40');
+    expect(screen.getByRole('spinbutton', { name: /Purchase cost/ })).toHaveAttribute('placeholder', '20000');
+  });
+  it('a template the dump does not have keeps the plain placeholders', async () => {
+    const { rpc } = await setup([], {}, false);
+    await waitFor(() => expect(rpc.callsTo('mods.speciesTemplate').length).toBeGreaterThan(0));
+    expect(screen.getByRole('spinbutton', { name: /Adult mass/ })).toHaveAttribute('placeholder', 'Template value');
+    expect(screen.getByRole('spinbutton', { name: /Purchase cost/ })).toHaveAttribute('placeholder', 'Template value');
+    expect(screen.queryByText(/^Template: /)).toBeNull();
+  });
   it('a species has Prefab settings and Open in Blender, and no Unity buttons', async () => {
     const onPrefab = vi.fn();
     await setup([{ ...animal, key: 'tyrant.red-spot.mirabilis' }], { onPrefab });

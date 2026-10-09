@@ -956,6 +956,17 @@ export interface ModSpeciesResult {
   species: SpeciesSkinsRow[];
 }
 
+export interface ModSpeciesTemplateDto {
+  template: string;
+  found: boolean;
+  cost: number | null;
+  stats: Record<string, number>;
+}
+
+export interface ModSpeciesTemplateParams {
+  template: string;
+}
+
 export interface ModSpeciesTexturesParams {
   species: string;
 }
@@ -1308,6 +1319,7 @@ export interface RpcMethods {
   "mods.skinModel": { params: ModSkinModelParams; result: ModSkinModel };
   "mods.skinSlots": { params: void; result: SkinSlotsResult };
   "mods.species": { params: void; result: ModSpeciesResult };
+  "mods.speciesTemplate": { params: ModSpeciesTemplateParams; result: ModSpeciesTemplateDto };
   "mods.speciesTextures": { params: ModSpeciesTexturesParams; result: ModSpeciesTexturesResult };
   "mods.thumbnail": { params: ModThumbnailParams; result: ModThumbnailResult };
   "sounds.forSpecies": { params: SoundsForSpeciesParams; result: SoundsForSpeciesResult };

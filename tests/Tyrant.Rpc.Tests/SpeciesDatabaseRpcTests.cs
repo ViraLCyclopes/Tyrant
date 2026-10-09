@@ -9,6 +9,28 @@ namespace Tyrant.Rpc.Tests;
 public class SpeciesDatabaseRpcTests
 {
     [Fact]
+    public async Task A_templates_stats_and_cost_can_be_read_before_creating_a_species()
+    {
+        using var game = new FakeGame();
+        var (h, ws, _) = await AssetFixtures.Opened(game);
+        var objects = new DumpResult();
+        objects.Objects.Add(new DumpObject(typeof(object), new EngineObjectInfo("PrehistoricKingdom.AnimalData", "Allosaurus", 1), """
+            {"speciesID":"Allosaurus Anax", "cost":20000, "massAverageAdult":4010, "matureMaxAge":{"x":15,"y":40}, "skinsData":[{"skinName":"Default"}]}
+            """));
+        DumpWriter.Write(Path.Combine(ws, "data"), objects, [], new DumpManifest { RequestId = "r1", BuildGuid = "b" });
+
+        var found = await h.Call("mods.speciesTemplate", new { template = "Allosaurus Anax" });
+        var missing = await h.Call("mods.speciesTemplate", new { template = "Nope" });
+
+        Assert.True(found.GetProperty("found").GetBoolean());
+        Assert.Equal(20000, found.GetProperty("cost").GetInt32());
+        Assert.Equal(4010, found.GetProperty("stats").GetProperty("adultMassKg").GetDouble());
+        Assert.Equal(40, found.GetProperty("stats").GetProperty("maxAgeYears").GetDouble());
+        Assert.False(missing.GetProperty("found").GetBoolean());
+        Assert.Empty(missing.GetProperty("stats").EnumerateObject());
+    }
+
+    [Fact]
     public async Task Editor_creates_sqlite_species_edits_stats_and_rejects_external_conflicts()
     {
         using var game = new FakeGame();
