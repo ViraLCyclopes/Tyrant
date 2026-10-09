@@ -73,7 +73,8 @@ internal static class ModCli
             }
         };
         return ModChecker.ForGame(install).Check(mod, index, m.Species.Count > 0 || m.Skins.Count > 0 || m.Sounds.Count > 0 || hasPrefabs ? species : null,
-            m.Sounds.Count > 0 ? TrySounds(ws) : null, RigInfoProvider(ws, install), id => SpeciesDatabase.Template(ws, id), prefabFields);
+            m.Sounds.Count > 0 ? TrySounds(ws) : null, RigInfoProvider(ws, install), id => SpeciesDatabase.Template(ws, id), prefabFields,
+            others: m.Skins.Count > 0 ? OtherModSpecies.Load(ws, new GameMods().List(install), mod.Id) : null);
     }
 
     /// <summary>Rig edits' species skeletons for Check (null without the asset index or the data dump).</summary>
@@ -301,7 +302,7 @@ public sealed class ModAddSkinCommand : Command<ModAddSkinCommand.Settings>
     public sealed class Settings : ModSettings
     {
         [CommandArgument(1, "<SPECIES>")]
-        [Description("The species id as the game data names it, e.g. Carcharodontosaurus.")]
+        [Description("The species id as the game data names it, e.g. Carcharodontosaurus, or a custom species' tyrant.<mod>.<species>.")]
         public string Species { get; set; } = "";
 
         [CommandOption("--name <NAME>")]
@@ -335,7 +336,8 @@ public sealed class ModAddSkinCommand : Command<ModAddSkinCommand.Settings>
         var species = SpeciesSkinsReader.Load(ws);
         var bothWhenNone = !settings.Male && !settings.Female;
         var entry = mod.AddSkin(ws, install, CliServices.LoadIndex(ws, install), new BundleAssetReader(), species, settings.Species, settings.Name,
-            settings.Base, new SkinTemplateOptions(settings.Male || bothWhenNone, settings.Female || bothWhenNone, settings.Maps), settings.Group);
+            settings.Base, new SkinTemplateOptions(settings.Male || bothWhenNone, settings.Female || bothWhenNone, settings.Maps), settings.Group,
+            OtherModSpecies.Load(ws, new GameMods().List(install), mod.Id).Species);
         Console.WriteLine($"Added skin '{entry.Name}' ({entry.Key(mod.Id)}) based on '{entry.Base}':");
         foreach (var (sex, files) in new[] { ("male", entry.Male), ("female", entry.Female) })
             if (files is not null)

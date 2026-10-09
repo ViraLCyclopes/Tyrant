@@ -18,13 +18,18 @@ public sealed class ModShowCommand : Command<ModSettings>
         Console.WriteLine($"Replacements ({m.Replace.Count}):");
         foreach (var r in m.Replace) Console.WriteLine($"  {r.Texture} <- {r.File}");
         Console.WriteLine($"Species ({m.Species.Count}):");
-        foreach (var entry in m.Species) Console.WriteLine($"  {entry.Key(m.Id)}  {entry.Name}  template {entry.Base}");
+        foreach (var entry in m.Species)
+        {
+            var template = ModCli.TrySpecies(ws)?.FirstOrDefault(s => s.SpeciesId == entry.Base)?.Skins.FirstOrDefault(s => s.Index == entry.StartingSkin)?.Name;
+            Console.WriteLine($"  {entry.Key(m.Id)}  {entry.Name}  template {entry.Base}  starting skin {entry.StartingSkin} {entry.StartingSkinName ?? template ?? "?"}{(entry.Swatch is null ? "" : $"  swatch {entry.Swatch}")}");
+        }
         Console.WriteLine($"Skins ({m.Skins.Count}):");
         foreach (var s in m.Skins)
         {
             var files = (s.Male?.Count ?? 0) + (s.Female?.Count ?? 0);
             Console.WriteLine($"  {s.Id}  \"{s.Name}\"  {s.Species}  base {s.Base}  {files} file(s)  colours: {(s.Colors is null ? "no" : "yes")}{(s.Model is null ? "" : $"  model: {s.Model}")}{(s.Group is null ? "" : $"  group: {s.Group}")}");
         }
+        foreach (var use in SpeciesUse.Of(m)) Console.WriteLine($"Uses species from: {use.ModId} ({use.Skins} skin(s))");
         Console.WriteLine($"Models ({m.Models.Count}):");
         foreach (var model in m.Models) Console.WriteLine($"  {model.Target} <- {model.File}");
         Console.WriteLine($"Sounds ({m.Sounds.Count}):");

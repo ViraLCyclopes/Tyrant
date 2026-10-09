@@ -155,4 +155,27 @@ public class SpeciesCliTests
         Assert.Equal(ExitCodes.Error, code);
         Assert.Contains("--all", err);
     }
+
+    [Fact]
+    public void Starting_skin_is_chosen_changed_and_shown()
+    {
+        using var game = new FakeGame();
+        var ws = IndexedWorkspace(game);
+        var objects = new Tyrant.Dumper.Serialization.DumpResult();
+        objects.Objects.Add(new Tyrant.Dumper.Serialization.DumpObject(typeof(object),
+            new Tyrant.Dumper.Serialization.EngineObjectInfo("PrehistoricKingdom.AnimalData", "Allosaurus", 1),
+            """{"speciesID":"Allosaurus Anax", "skinsData":[{"skinName":"Default"},{"skinName":"Albino"}]}"""));
+        Tyrant.Dumper.Serialization.DumpWriter.Write(Path.Combine(ws, "data"), objects, [], new Tyrant.Dumper.Serialization.DumpManifest { RequestId = "r1", BuildGuid = "b" });
+        Assert.Equal(ExitCodes.Ok, Run("mod", "new", "mod-a", "-w", ws).Code);
+
+        Assert.Equal(ExitCodes.Ok, Run("mod", "add-species", "mod-a", "mirabilis", "Allosaurus Anax", "--name", "Mirabilis", "--genus", "E", "--epithet", "m",
+            "--starting-skin", "Albino", "-w", ws).Code);
+        Assert.Contains("starting skin 1 Albino", Run("mod", "show", "mod-a", "-w", ws).Out);
+
+        var (code, _, err) = Run("mod", "set-species-skin", "mod-a", "mirabilis", "--starting-skin", "9", "-w", ws);
+        Assert.Equal(ExitCodes.Error, code);
+        Assert.Contains("no skin number 9", err);
+        Assert.Equal(ExitCodes.Ok, Run("mod", "set-species-skin", "mod-a", "mirabilis", "--starting-skin", "0", "--name", "Ghost", "-w", ws).Code);
+        Assert.Contains("starting skin 0 Ghost", Run("mod", "show", "mod-a", "-w", ws).Out);
+    }
 }
