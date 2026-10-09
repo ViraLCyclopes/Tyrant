@@ -21,6 +21,13 @@ namespace Tyrant.Framework.Core
         /// <summary>Higher numbers in the file are refused: each one below it becomes a skin entry in game.</summary>
         public const int MaxNumber = 9999;
 
+        /// <summary>
+        /// The first number an added skin may get. Vanilla species keep 0-14 free for skins a game update may add; a custom species
+        /// ("tyrant.…") never gets skins from the game, so its added skins follow its own skin directly.
+        /// </summary>
+        public static int FirstFor(string species, int vanillaCount) =>
+            species.StartsWith("tyrant.", StringComparison.Ordinal) ? vanillaCount : Math.Max(vanillaCount, FirstNumber);
+
         private static readonly IReadOnlyDictionary<string, int> None = new Dictionary<string, int>();
         private readonly Dictionary<string, Dictionary<string, int>> _species = new Dictionary<string, Dictionary<string, int>>(StringComparer.Ordinal);
 
@@ -68,14 +75,14 @@ namespace Tyrant.Framework.Core
             }) + "\n";
 
         /// <summary>
-        /// Gives each key without a number the lowest free number at or above max(vanillaCount, FirstNumber), and moves numbers that a grown vanilla
+        /// Gives each key without a number the lowest free number at or above FirstFor(species, vanillaCount), and moves numbers that a grown vanilla
         /// list now covers (a game update added skins). Keys are never removed here. True when anything changed.
         /// </summary>
         public bool Assign(string species, int vanillaCount, IEnumerable<string> keys, List<string> messages)
         {
             if (!_species.TryGetValue(species, out var numbers)) _species[species] = numbers = new Dictionary<string, int>(StringComparer.Ordinal);
             var used = new HashSet<int>(numbers.Values);
-            var first = Math.Max(vanillaCount, FirstNumber);
+            var first = FirstFor(species, vanillaCount);
             var changed = false;
             foreach (var clash in numbers.Where(p => p.Value < vanillaCount).OrderBy(p => p.Value).ToList())
             {
@@ -127,8 +134,11 @@ namespace Tyrant.Framework.Core
 
     public static class SkinLayout
     {
+        /// <summary>Every position from vanillaCount to the highest assigned number, in order, for a vanilla species.</summary>
+        public static List<SkinLayoutEntry> For(IReadOnlyDictionary<string, int> numbers, int vanillaCount) => For("", numbers, vanillaCount);
+
         /// <summary>Every position from vanillaCount to the highest assigned number, in order: what to append to skinsData.</summary>
-        public static List<SkinLayoutEntry> For(IReadOnlyDictionary<string, int> numbers, int vanillaCount)
+        public static List<SkinLayoutEntry> For(string species, IReadOnlyDictionary<string, int> numbers, int vanillaCount)
         {
             var layout = new List<SkinLayoutEntry>();
             if (numbers.Count == 0) return layout;
@@ -136,10 +146,11 @@ namespace Tyrant.Framework.Core
             var byNumber = numbers.Where(p => p.Value >= vanillaCount).GroupBy(p => p.Value)
                 .ToDictionary(g => g.Key, g => g.Select(p => p.Key).OrderBy(k => k, StringComparer.Ordinal).First());
             if (byNumber.Count == 0) return layout;
+            var firstAdded = SkinNumbers.FirstFor(species, vanillaCount);
             for (var n = vanillaCount; n <= byNumber.Keys.Max(); n++)
             {
                 var key = byNumber.TryGetValue(n, out var k) ? k : null;
-                layout.Add(new SkinLayoutEntry(n, key, key == null && n < Math.Max(vanillaCount, SkinNumbers.FirstNumber)));
+                layout.Add(new SkinLayoutEntry(n, key, key == null && n < firstAdded));
             }
             return layout;
         }

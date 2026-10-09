@@ -144,4 +144,32 @@ public class SkinNumbersTests
         Assert.Equal((null, false), (gap.Key, gap.Reserved));
         Assert.False(layout.Single(e => e.Number == 15).Reserved);
     }
+
+    [Fact]
+    public void A_custom_species_numbers_added_skins_right_after_its_one_skin()
+    {
+        var numbers = new SkinNumbers();
+
+        numbers.Assign("tyrant.red-spot.mirabilis", 1, ["red-spot/blue", "other/stripes"], []);
+
+        Assert.Equal(1, SkinNumbers.FirstFor("tyrant.red-spot.mirabilis", 1));
+        Assert.Equal(15, SkinNumbers.FirstFor(Carch, 3));
+        Assert.Equal(new Dictionary<string, int> { ["red-spot/blue"] = 1, ["other/stripes"] = 2 }, numbers.Of("tyrant.red-spot.mirabilis"));
+        var layout = SkinLayout.For("tyrant.red-spot.mirabilis", numbers.Of("tyrant.red-spot.mirabilis"), 1);
+        Assert.Equal([1, 2], layout.Select(l => l.Number));
+        Assert.DoesNotContain(layout, l => l.Reserved);
+    }
+
+    [Fact]
+    public void A_custom_species_keeps_numbers_it_already_has()
+    {
+        var numbers = SkinNumbers.Parse("""{"format":1,"species":{"tyrant.red-spot.mirabilis":{"red-spot/blue":15}}}""");
+
+        numbers.Assign("tyrant.red-spot.mirabilis", 1, ["red-spot/blue", "red-spot/green"], []);
+
+        Assert.Equal(15, numbers.Of("tyrant.red-spot.mirabilis")["red-spot/blue"]);
+        Assert.Equal(1, numbers.Of("tyrant.red-spot.mirabilis")["red-spot/green"]);
+        // Positions 2-14 are gaps left by the old numbering, not reserved for game updates: they show as removed-mod stand-ins.
+        Assert.DoesNotContain(SkinLayout.For("tyrant.red-spot.mirabilis", numbers.Of("tyrant.red-spot.mirabilis"), 1), l => l.Reserved);
+    }
 }
