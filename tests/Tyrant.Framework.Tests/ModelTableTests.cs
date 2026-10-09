@@ -28,6 +28,21 @@ public class ModelTableTests
         """;
 
     [Fact]
+    public void A_species_rig_edits_head_rig_is_kept_and_the_later_mod_wins_it()
+    {
+        const string first = """{"format":1,"id":"mod-a","models":[{"target":"Styracosaurus","rig":{"Head":{"move":[0,0.1,0]}},"headRig":{"lengthScale":1.2,"boomTurn":[0,0,0,1],"headTurn":[0,0,0,1]}}]}""";
+        const string second = """{"format":1,"id":"mod-b","models":[{"target":"Styracosaurus","rig":{"Head":{"move":[0,0.2,0]}},"headRig":{"lengthScale":1.4,"boomTurn":[0,0,0,1],"headTurn":[0,0,0,1]}}]}""";
+
+        var table = ModelTable.Build([Mod("mod-a", first), Mod("mod-b", second)]);
+
+        var set = Assert.Single(table.SpeciesSets);
+        Assert.Equal("mod-b", set.ModId);
+        Assert.Equal(1.4f, set.HeadRig!.LengthScale, 5);
+        var roundtrip = ModManifest.Parse(ModManifest.Parse(second).ToJson());
+        Assert.Equal(1.4f, roundtrip.Models[0].HeadRig!.LengthScale, 5);
+    }
+
+    [Fact]
     public void A_model_for_a_custom_species_identity_is_found()
     {
         var table = ModelTable.Build([Mod("pack", """{"format":1,"id":"pack","models":[{"target":"tyrant.pack.mirabilis","file":"models/a.glb"}]}""")]);

@@ -11,18 +11,23 @@ namespace Tyrant.Framework.Core
     /// </summary>
     public sealed class ModelSet
     {
-        public ModelSet(string modId, string target, IReadOnlyList<string> lodPaths, IReadOnlyDictionary<string, RigOffset>? rig = null)
+        public ModelSet(string modId, string target, IReadOnlyList<string> lodPaths, IReadOnlyDictionary<string, RigOffset>? rig = null,
+            HeadRigCorrection? headRig = null)
         {
             ModId = modId;
             Target = target;
             LodPaths = lodPaths;
             Rig = rig;
+            HeadRig = headRig;
         }
 
         public string ModId { get; }
         public string Target { get; }
         public IReadOnlyList<string> LodPaths { get; }
         public IReadOnlyDictionary<string, RigOffset>? Rig { get; }
+
+        /// <summary>A species-wide rig edit's change to the species' head-look boom; null for a skin's or none.</summary>
+        public HeadRigCorrection? HeadRig { get; }
     }
 
     /// <summary>An enabled mod whose species model or rig edit a later mod in the load order overrides.</summary>
@@ -53,6 +58,9 @@ namespace Tyrant.Framework.Core
 
         public int Count => _species.Count + _skins.Count;
 
+        /// <summary>The species-wide sets (the load order's winner per species): their head-rig corrections go onto the species.</summary>
+        public IEnumerable<ModelSet> SpeciesSets => _species.Values;
+
         public static ModelTable Build(IReadOnlyList<LoadedMod> mods) => Build(mods, out _);
 
         /// <param name="messages">Species whose model or rig edit a later mod overrides, for the log.</param>
@@ -65,8 +73,8 @@ namespace Tyrant.Framework.Core
                 foreach (var model in mod.Manifest.Models)
                 {
                     var set = model.File.Length == 0
-                        ? model.Rig is { Count: > 0 } ? new ModelSet(mod.Manifest.Id, model.Target, Array.Empty<string>(), model.Rig) : null
-                        : SetOf(mod, model.Target, model.File, model.Rig);
+                        ? model.Rig is { Count: > 0 } ? new ModelSet(mod.Manifest.Id, model.Target, Array.Empty<string>(), model.Rig, model.HeadRig) : null
+                        : SetOf(mod, model.Target, model.File, model.Rig, model.HeadRig);
                     if (set == null) continue;
                     if (table._species.TryGetValue(model.Target, out var earlier) && earlier.ModId != set.ModId)
                         messages.Add($"{model.Target}: {set.ModId} sets its model or rig edit, overriding {earlier.ModId} (the later mod in the load order wins; a model and its rig edit go together).");
@@ -105,7 +113,7 @@ namespace Tyrant.Framework.Core
         }
 
         /// <summary>The model's built LOD files, in order; null when it has none or names a file outside its mod.</summary>
-        private static ModelSet? SetOf(LoadedMod mod, string target, string file, IReadOnlyDictionary<string, RigOffset>? rig)
+        private static ModelSet? SetOf(LoadedMod mod, string target, string file, IReadOnlyDictionary<string, RigOffset>? rig, HeadRigCorrection? headRig = null)
         {
             var lods = new List<string>();
             for (var lod = 0; lod < MaxLods; lod++)
@@ -123,7 +131,7 @@ namespace Tyrant.Framework.Core
                 if (!File.Exists(path)) break;
                 lods.Add(path);
             }
-            return lods.Count == 0 ? null : new ModelSet(mod.Manifest.Id, target, lods, rig);
+            return lods.Count == 0 ? null : new ModelSet(mod.Manifest.Id, target, lods, rig, headRig);
         }
     }
 }

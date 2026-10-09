@@ -56,6 +56,9 @@ namespace Tyrant.Framework.Core
 
         /// <summary>The rig edit (bone → offset), null for none; the model's bind poses are built for it.</summary>
         public Dictionary<string, RigOffset>? Rig { get; set; }
+
+        /// <summary>How the rig edit changes the species' head-look boom (Tyrant measures it from the skeleton); null for none.</summary>
+        public HeadRigCorrection? HeadRig { get; set; }
     }
 
     /// <summary>
@@ -254,7 +257,8 @@ namespace Tyrant.Framework.Core
                 var rig = entry.TryGetValue("rig", out var rigJson) && rigJson != null ? RigEdit.Parse(rigJson, $"\"models\" entry {n} ({target})") : null;
                 if (string.IsNullOrWhiteSpace(file) && (rig == null || rig.Count == 0))
                     throw new ManifestException($"\"models\" entry {n} ({target}) has no \"file\" or \"rig\".");
-                manifest.Models.Add(new ModelReplacement { Target = target!, Key = Text(entry, "key"), File = file ?? "", Rig = rig is { Count: > 0 } ? rig : null });
+                var headRig = entry.TryGetValue("headRig", out var headJson) && headJson != null ? HeadRigCorrection.Parse(headJson, $"\"models\" entry {n} ({target})") : null;
+                manifest.Models.Add(new ModelReplacement { Target = target!, Key = Text(entry, "key"), File = file ?? "", Rig = rig is { Count: > 0 } ? rig : null, HeadRig = headRig });
             }
             n = 0;
             foreach (var item in Array(map, "sounds"))
@@ -339,6 +343,7 @@ namespace Tyrant.Framework.Core
                     if (m.Key != null) entry["key"] = m.Key;
                     if (m.File.Length > 0) entry["file"] = m.File;
                     if (m.Rig is { Count: > 0 }) entry["rig"] = RigEdit.ToJson(m.Rig);
+                    if (m.HeadRig != null) entry["headRig"] = m.HeadRig.ToMap();
                     return (object?)entry;
                 }).ToList();
             if (Sounds.Count > 0)
