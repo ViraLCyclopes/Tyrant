@@ -110,6 +110,43 @@ describe('ModSideList skins', () => {
       expect(lastOrder(props)).toEqual([{ id: 'c', group: 'Jurassic Park' }, { id: 'd', group: 'Jurassic Park' }, { id: 'a', group: 'Jurassic Park' }]);
     });
 
+    /** The skins as the list shows them, top to bottom. */
+    const shownSkins = () => screen.getAllByRole('button', { name: /^(Amber|Crimson|Dusk)$/ }).map((b) => b.getAttribute('aria-label'));
+
+    it('while dragging, a copy follows the pointer and the list opens a gap where it lands', async () => {
+      setup();
+      const original = document.elementFromPoint;
+      document.elementFromPoint = () => screen.getByRole('button', { name: 'Dusk' });
+      try {
+        await fireEvent.pointerDown(screen.getByRole('button', { name: 'Amber' }), { button: 0, clientX: 5, clientY: 5, pointerId: 1 });
+        await fireEvent.pointerMove(window, { clientX: 40, clientY: 10, pointerId: 1 });
+        expect(document.querySelector('.ghost')).toHaveTextContent('Amber');
+        expect(shownSkins()).toEqual(['Crimson', 'Dusk', 'Amber']); // live, before letting go
+        await fireEvent.pointerUp(window, { clientX: 40, clientY: 10, pointerId: 1 });
+        expect(document.querySelector('.ghost')).toBeNull();
+      } finally {
+        document.elementFromPoint = original;
+      }
+    });
+
+    it('a drop shows the new order at once and keeps it while it saves; a failed save puts it back', async () => {
+      const { props } = setup();
+      let settle = () => {};
+      props.onArrange.mockImplementation(() => new Promise<void>((resolve) => (settle = resolve)));
+      await drag(screen.getByRole('button', { name: 'Amber' }), screen.getByRole('button', { name: 'Dusk' }));
+      expect(shownSkins()).toEqual(['Crimson', 'Dusk', 'Amber']);
+
+      settle(); // the editor's detail did not change (the save failed): the list follows the detail again
+      await waitFor(() => expect(shownSkins()).toEqual(['Amber', 'Crimson', 'Dusk']));
+    });
+
+    it('Alt+Down shows the move at once too', async () => {
+      const { props } = setup();
+      props.onArrange.mockImplementation(() => new Promise<void>(() => {}));
+      await fireEvent.keyDown(screen.getByRole('button', { name: 'Crimson' }), { key: 'ArrowDown', altKey: true });
+      expect(shownSkins()).toEqual(['Amber', 'Dusk', 'Crimson']);
+    });
+
     it('a press without moving still selects; Escape or a drop outside the list cancels', async () => {
       const { props } = setup();
       await fireEvent.pointerDown(screen.getByRole('button', { name: 'Amber' }), { button: 0, clientX: 5, clientY: 5, pointerId: 1 });

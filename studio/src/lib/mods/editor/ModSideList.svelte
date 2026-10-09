@@ -23,8 +23,8 @@
     selection: Selection;
     onSelect: (s: Selection) => void;
     onAddSkin: (group: string | null) => void;
-    /** Asks for a change to the arrangement; the editor runs the builder on the latest skins, so quick repeats stack. */
-    onArrange?: (build: (skins: ModSkinDto[]) => SkinPlace[] | null) => void;
+    /** Saves a change to the arrangement (the editor runs the builder on its latest skins); the list waits for what it returns. */
+    onArrange?: (build: (skins: ModSkinDto[]) => SkinPlace[] | null) => unknown;
     onRemoveSkin?: (id: string) => void;
     onAddModel?: () => void;
     onAddSound?: () => void;
@@ -41,7 +41,13 @@
   const whoHears = (s: ModSoundDto) => s.species ?? (s.skin ? `skin ${s.skin}` : 'everyone');
 
   const session = getSession();
-  const skinSections = $derived(sections(detail.skins));
+  /**
+   * The skins as the list shows them. A move shows at once: live while dragging, then until its save settles, so the list never
+   * waits for the save; after that it follows the mod again (and so snaps back if the save failed).
+   */
+  let shown = $state.raw<ModSkinDto[] | null>(null);
+  const listed = $derived(shown ?? detail.skins);
+  const skinSections = $derived(sections(listed));
   const ungrouped = $derived(skinSections[0].skins.length);
   const collapsedKey = $derived(`tyrant.mods.collapsedGroups.${detail.id}`);
   let collapsed = $state<string[]>([]);
@@ -62,33 +68,58 @@
     session.store.set(collapsedKey, JSON.stringify(collapsed));
   }
 
+  /** The skins in this order and these groups. */
+  function placed(skins: readonly ModSkinDto[], order: readonly SkinPlace[]): ModSkinDto[] {
+    const byId = new Map(skins.map((k) => [k.id, k]));
+    return order.map((p) => ({ ...byId.get(p.id)!, group: p.group }));
+  }
+
+  let latest = 0; // the newest save: only its end hands the list back to the mod
+  let saving = 0;
+
+  /** Shows the order at once and saves it (the editor runs `build` on its latest skins, so quick repeats stack). */
+  function save(order: SkinPlace[], build: (skins: ModSkinDto[]) => SkinPlace[] | null) {
+    shown = placed(listed, order);
+    const mine = ++latest;
+    saving++;
+    void Promise.resolve(onArrange(build)).finally(() => {
+      saving--;
+      if (mine === latest && !dragging) shown = null;
+    });
+  }
+
+  function arrange(build: (skins: ModSkinDto[]) => SkinPlace[] | null) {
+    const order = build(listed);
+    if (order) save(order, build);
+  }
+
   function skinActions(skin: ModSkinDto): ItemAction[] {
     const current = skin.group ?? null;
     return [
-      { label: 'Move up', run: () => onArrange((skins) => moveSkin(skins, skin.id, -1)), disabled: !moveSkin(detail.skins, skin.id, -1) },
-      { label: 'Move down', run: () => onArrange((skins) => moveSkin(skins, skin.id, 1)), disabled: !moveSkin(detail.skins, skin.id, 1) },
-      ...groupNames(detail.skins)
+      { label: 'Move up', run: () => arrange((skins) => moveSkin(skins, skin.id, -1)), disabled: !moveSkin(listed, skin.id, -1) },
+      { label: 'Move down', run: () => arrange((skins) => moveSkin(skins, skin.id, 1)), disabled: !moveSkin(listed, skin.id, 1) },
+      ...groupNames(listed)
         .filter((g) => g !== current)
-        .map((g) => ({ label: `Move to ${g}`, run: () => onArrange((skins) => setGroup(skins, [skin.id], g)) })),
+        .map((g) => ({ label: `Move to ${g}`, run: () => arrange((skins) => setGroup(skins, [skin.id], g)) })),
       {
         label: 'Move to a new group…',
-        run: () => (naming = { title: 'New group', initial: '', action: 'Move', apply: (name) => onArrange((skins) => setGroup(skins, [skin.id], name)) }),
+        run: () => (naming = { title: 'New group', initial: '', action: 'Move', apply: (name) => arrange((skins) => setGroup(skins, [skin.id], name)) }),
       },
-      ...(current === null ? [] : [{ label: 'Remove from group', run: () => onArrange((skins) => setGroup(skins, [skin.id], null)) }]),
+      ...(current === null ? [] : [{ label: 'Remove from group', run: () => arrange((skins) => setGroup(skins, [skin.id], null)) }]),
       { label: 'Remove skin…', run: () => onRemoveSkin(skin.id) },
     ];
   }
 
   function groupActions(group: string): ItemAction[] {
-    const members = detail.skins.filter((k) => k.group === group).map((k) => k.id);
+    const members = (skins: readonly ModSkinDto[]) => skins.filter((k) => k.group === group).map((k) => k.id);
     return [
       {
         label: 'Rename group…',
-        run: () => (naming = { title: `Rename ${group}`, initial: group, action: 'Rename', apply: (name) => onArrange((skins) => renameGroup(skins, group, name)) }),
+        run: () => (naming = { title: `Rename ${group}`, initial: group, action: 'Rename', apply: (name) => arrange((skins) => renameGroup(skins, group, name)) }),
       },
-      { label: 'Move group up', run: () => onArrange((skins) => moveGroup(skins, group, -1)), disabled: !moveGroup(detail.skins, group, -1) },
-      { label: 'Move group down', run: () => onArrange((skins) => moveGroup(skins, group, 1)), disabled: !moveGroup(detail.skins, group, 1) },
-      { label: 'Ungroup', run: () => onArrange((skins) => setGroup(skins, members, null)) },
+      { label: 'Move group up', run: () => arrange((skins) => moveGroup(skins, group, -1)), disabled: !moveGroup(listed, group, -1) },
+      { label: 'Move group down', run: () => arrange((skins) => moveGroup(skins, group, 1)), disabled: !moveGroup(listed, group, 1) },
+      { label: 'Ungroup', run: () => arrange((skins) => setGroup(skins, members(skins), null)) },
     ];
   }
 
@@ -96,61 +127,95 @@
     if (!e.altKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
     e.preventDefault();
     const delta = e.key === 'ArrowUp' ? -1 : 1;
-    onArrange((skins) => moveSkin(skins, skin.id, delta));
+    arrange((skins) => moveSkin(skins, skin.id, delta));
   }
 
   // Dragging a skin: pointer events, not HTML drag and drop (the Windows webview takes those for file drops). A press only
-  // becomes a drag past a few pixels, so a click still selects.
+  // becomes a drag past a few pixels, so a click still selects. A copy follows the pointer while the list moves the skin to
+  // where it would land; letting go keeps it there and saves.
   const DRAG_START = 5;
-  interface DropTarget {
-    group: string | null;
-    index: number;
-  }
   let press: { id: string; x: number; y: number } | null = null;
-  let dragging = $state<string | null>(null);
-  let target = $state<DropTarget | null>(null);
+  let dragging = $state<ModSkinDto | null>(null);
+  let pointer = $state({ x: 0, y: 0 });
+  let before: { order: string; shown: ModSkinDto[] | null } | null = null; // tells a real move from none, and what to cancel to
+  let inside = false;
   let dragged = false; // swallows the click the browser sends after a drag
   let nav = $state<HTMLElement>();
+  const draggingGroup = $derived(dragging ? (listed.find((k) => k.id === dragging!.id)?.group ?? null) : undefined);
+
+  const orderOf = (skins: readonly ModSkinDto[]) => skins.map((k) => `${k.id}:${k.group ?? ''}`).join('|');
 
   function startPress(e: PointerEvent, skin: ModSkinDto) {
     dragged = false;
-    if (e.button === 0) press = { id: skin.id, x: e.clientX, y: e.clientY };
+    if (e.button !== 0) return;
+    press = { id: skin.id, x: e.clientX, y: e.clientY };
+    // Keeps the pointer's events coming here even if it is let go outside the window.
+    (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
   }
 
-  /** Where a drop at this point goes: a skin row (before it, or after it in its lower half), or a heading (the end of its section). */
-  function dropAt(x: number, y: number): DropTarget | null {
-    const el = document.elementFromPoint?.(x, y)?.closest<HTMLElement>('[data-drop-group]');
-    if (!el || !nav?.contains(el)) return null;
+  /**
+   * What is under the pointer: outside the list; nothing to drop on (a gap, the dragged skin itself); a skin row (before it, or
+   * after it in its lower half); or a heading (the end of its section).
+   */
+  function dropAt(x: number, y: number): { inside: boolean; group?: string | null; index?: number } {
+    const hit = document.elementFromPoint?.(x, y) ?? null;
+    if (!hit || !nav?.contains(hit)) return { inside: false };
+    const el = hit.closest<HTMLElement>('[data-drop-group]');
+    if (!el || el.dataset.skinId === dragging?.id) return { inside: true };
     const group = el.dataset.dropGroup || null;
     const index = Number(el.dataset.dropIndex);
-    if (el.dataset.dropEnd !== undefined) return { group, index };
+    if (el.dataset.dropEnd !== undefined) return { inside: true, group, index };
     const box = el.getBoundingClientRect();
-    return { group, index: y > box.top + box.height / 2 ? index + 1 : index };
+    return { inside: true, group, index: y > box.top + box.height / 2 ? index + 1 : index };
   }
 
   function onPointerMove(e: PointerEvent) {
     if (!press) return;
-    if (!dragging && Math.hypot(e.clientX - press.x, e.clientY - press.y) < DRAG_START) return;
-    dragging = press.id;
-    target = dropAt(e.clientX, e.clientY);
+    if (!dragging) {
+      if (Math.hypot(e.clientX - press.x, e.clientY - press.y) < DRAG_START) return;
+      const id = press.id;
+      dragging = listed.find((k) => k.id === id) ?? null;
+      if (!dragging) {
+        press = null;
+        return;
+      }
+      before = { order: orderOf(listed), shown };
+      shown = listed;
+    }
+    pointer = { x: e.clientX, y: e.clientY };
+    const spot = dropAt(e.clientX, e.clientY);
+    inside = spot.inside;
+    if (spot.index === undefined) return;
+    const next = moveSkinTo(listed, dragging.id, spot.group ?? null, spot.index);
+    if (next) shown = placed(listed, next);
   }
 
   function onPointerUp() {
-    const id = dragging;
-    const drop = target;
     press = null;
+    if (!dragging) return;
     dragging = null;
-    target = null;
-    if (!id) return;
     dragged = true;
-    if (drop) onArrange((skins) => moveSkinTo(skins, id, drop.group, drop.index));
+    if (!inside || orderOf(listed) === before?.order) {
+      cancel();
+      return;
+    }
+    before = null;
+    const order = listed.map((k) => ({ id: k.id, group: k.group ?? null }));
+    save(order, () => order);
+  }
+
+  /** Back to the list as it was before the drag (with any save still running shown). */
+  function cancel() {
+    shown = saving > 0 ? (before?.shown ?? null) : null;
+    before = null;
   }
 
   function cancelDrag() {
-    if (dragging) dragged = true;
     press = null;
+    if (!dragging) return;
     dragging = null;
-    target = null;
+    dragged = true;
+    cancel();
   }
 
   function onKey(e: KeyboardEvent) {
@@ -164,8 +229,6 @@
     }
     onSelect({ kind: 'skin', id: skin.id });
   }
-
-  const isTarget = (group: string | null, index: number) => target !== null && target.group === group && target.index === index;
 </script>
 
 <svelte:window onpointermove={onPointerMove} onpointerup={onPointerUp} onpointercancel={cancelDrag} onkeydown={onKey} />
@@ -174,7 +237,7 @@
   <button class:on={selection.kind === 'details'} onclick={() => onSelect({ kind: 'details' })}>Mod details</button>
   <button class:on={selection.kind === 'speciesDatabase'} onclick={() => onSelect({ kind: 'speciesDatabase' })}>Species database</button>
 
-  <div class="heading" class:drop-into={isTarget(null, ungrouped) && ungrouped === 0} data-drop-group="" data-drop-index={ungrouped} data-drop-end>
+  <div class="heading" data-drop-group="" data-drop-index={ungrouped} data-drop-end>
     <span>Skins ({detail.skins.length})</span>
     <button class="add" aria-label="Add a skin" onclick={() => onAddSkin(null)}>+ Add</button>
   </div>
@@ -183,7 +246,7 @@
     {@const count = section.skins.length}
     {#if section.group !== null}
       {@const group = section.group}
-      <div class="row group" class:drop-into={isTarget(group, count) && (!open || count === 0)} data-drop-group={group} data-drop-index={count} data-drop-end>
+      <div class="row group" class:drop-into={!open && draggingGroup === group} data-drop-group={group} data-drop-index={count} data-drop-end>
         <button class="toggle" aria-label="{group} ({count})" aria-expanded={open} onclick={() => toggle(group)}>{open ? '▾' : '▸'} {group} <span class="species">({count})</span></button>
         <button class="add" aria-label="Add a skin to {group}" onclick={() => onAddSkin(group)}>+</button>
         <ItemMenu label="Actions for group {group}" items={() => groupActions(group)} />
@@ -191,9 +254,8 @@
     {/if}
     {#if open}
       {#each section.skins as skin, i (skin.id)}
-        <div class="row" class:in-group={section.group !== null} class:lifted={dragging === skin.id}
-          class:drop-before={isTarget(section.group, i)} class:drop-after={i === count - 1 && isTarget(section.group, count)}
-          data-drop-group={section.group ?? ''} data-drop-index={i}>
+        <div class="row" class:in-group={section.group !== null} class:placeholder={dragging?.id === skin.id}
+          data-drop-group={section.group ?? ''} data-drop-index={i} data-skin-id={skin.id}>
           <button class="item" class:on={isSkin(skin.id)} aria-label={skin.name} title="{skin.name} · {skin.species} (drag it, or Alt+↑/↓, to move it)"
             onpointerdown={(e) => startPress(e, skin)} onclick={() => select(skin)} onkeydown={(e) => onSkinKey(e, skin)}>
             {skin.name} <span class="species">{skin.species}</span>
@@ -244,6 +306,12 @@
   </button>
 </nav>
 
+{#if dragging}
+  <div class="ghost" style:left="{pointer.x + 14}px" style:top="{pointer.y - 12}px" aria-hidden="true">
+    {dragging.name} <span class="species">{dragging.species}</span>
+  </div>
+{/if}
+
 {#if naming}
   <NameDialog title={naming.title} label="Group name" initial={naming.initial} action={naming.action} onCancel={() => (naming = null)}
     onConfirm={(name) => { const apply = naming?.apply; naming = null; apply?.(name); }} />
@@ -267,9 +335,9 @@
   .species { color: var(--muted); font-size: 11px; }
   .item.on .species { color: inherit; opacity: 0.8; }
   .side.dragging { cursor: grabbing; user-select: none; }
-  .row.lifted { opacity: 0.45; }
-  .row.drop-before { box-shadow: inset 0 2px 0 var(--accent); }
-  .row.drop-after { box-shadow: inset 0 -2px 0 var(--accent); }
+  .row.placeholder { outline: 1px dashed var(--accent); outline-offset: -1px; }
+  .row.placeholder > * { opacity: 0.35; }
+  .ghost { position: fixed; z-index: 60; pointer-events: none; padding: 5px 10px; border-radius: 5px; white-space: nowrap; background: var(--panel-2); border: 1px solid var(--accent); box-shadow: 0 6px 18px #0008; transform: rotate(-1.5deg); }
   .drop-into { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 5px; }
   .count { color: var(--warn-text); }
   .check.on .count { color: inherit; }

@@ -179,7 +179,7 @@
   <div class="editor">
     <ModSideList detail={doc.detail} check={doc.check} {selection} onSelect={(s) => { adding = null; selection = s; }}
       onAddSkin={(group) => { addingGroup = group; adding = 'skin'; }}
-      onArrange={(build) => void doc.edit('mods.arrangeSkins', (d) => { const order = build(d.skins); return order ? { order } : null; })} onRemoveSkin={(id) => (removingSkin = id)} onAddModel={() => (adding = 'model')} onAddSound={() => (adding = 'sound')}
+      onArrange={(build) => doc.edit('mods.arrangeSkins', (d) => { const order = build(d.skins); return order ? { order } : null; })} onRemoveSkin={(id) => (removingSkin = id)} onAddModel={() => (adding = 'model')} onAddSound={() => (adding = 'sound')}
       onAddReplacement={() => (adding = 'texture')} />
     <section class="page">
       {#if adding === 'skin'}
