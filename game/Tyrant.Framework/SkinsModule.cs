@@ -49,6 +49,7 @@ namespace Tyrant.Framework
         private static SkinNumbers _numbers = new SkinNumbers();
         private static bool _canSave = true;
         private static bool _done;
+        private static int _waitedFrames;
         private static Type? _persistentData;
         private static Func<object?>? _instance;
         private static Func<object?>? _animals;
@@ -77,12 +78,14 @@ namespace Tyrant.Framework
             }
         }
 
-        /// <summary>Called every frame until the animal database exists; then adds the skins once.</summary>
+        /// <summary>Called every frame until the animal database exists (and new species registered); then adds the skins once.</summary>
         public static void Tick()
         {
             if (_done || !HasSkins) return;
             var database = AnimalDatabase();
             if (database == null) return;
+            // Skins for new species need them registered first; give up waiting after ~10 s at 60 fps so vanilla skins still come.
+            if (!SpeciesModule.RegistrationSettled && ++_waitedFrames < 600) return;
             _done = true;
             try
             {
@@ -203,7 +206,11 @@ namespace Tyrant.Framework
             }
             if (data == null)
             {
-                foreach (var x in group) FrameworkMod.Log.Warning($"{x.Skin.Key(x.Mod.Manifest.Id)}: species \"{species}\" is not in the game; the skin is skipped.");
+                var owner = species.StartsWith("tyrant.", StringComparison.Ordinal) ? species.Split('.') : null;
+                foreach (var x in group)
+                    FrameworkMod.Log.Warning(owner != null && owner.Length == 3
+                        ? $"{x.Skin.Key(x.Mod.Manifest.Id)}: species \"{species}\" is not loaded (mod '{owner[1]}' missing, off, or the species failed); the skin is skipped."
+                        : $"{x.Skin.Key(x.Mod.Manifest.Id)}: species \"{species}\" is not in the game; the skin is skipped.");
                 return false;
             }
             if (!(Traverse.Create(data).Field("skinsData").GetValue() is IList list) || list.Count == 0) return false;
@@ -213,7 +220,7 @@ namespace Tyrant.Framework
             foreach (var x in group) byKey[x.Skin.Key(x.Mod.Manifest.Id)] = x;
             var standIns = new HashSet<int>();
             int added = 0, reserved = 0, removed = 0;
-            foreach (var slot in SkinLayout.For(numbers.Of(species), vanilla))
+            foreach (var slot in SkinLayout.For(species, numbers.Of(species), vanilla))
             {
                 object? skin = null;
                 if (slot.Key != null && byKey.TryGetValue(slot.Key, out var x))

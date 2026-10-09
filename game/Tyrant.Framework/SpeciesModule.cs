@@ -139,27 +139,19 @@ namespace Tyrant.Framework
                     if (entry.Cost.HasValue) Set(data, "cost", entry.Cost.Value);
                     ApplyStats(data, entry.Stats);
                     ApplyText(data, id, entry.Texts);
-                    if (entry.Icon != null)
-                    {
-                        var path = Path.GetFullPath(Path.Combine(mod.Directory, entry.Icon));
-                        if (!ModPaths.IsInside(path, mod.Directory)) throw new InvalidOperationException("Icon path escapes the mod folder.");
-                        var texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
-                        if (!texture.LoadImage(File.ReadAllBytes(path), false)) { UnityEngine.Object.Destroy(texture); throw new InvalidOperationException("Cannot decode species icon PNG."); }
-                        texture.name = id + ".icon";
-                        var sprite = Sprite.Create(texture, new Rect(0, 0, texture.width, texture.height), new Vector2(0.5f, 0.5f));
-                        sprite.name = texture.name;
-                        Set(data, "heroRender", sprite);
-                    }
+                    if (entry.Icon != null) Set(data, "heroRender", LoadSprite(mod.Directory, entry.Icon, id + ".icon"));
                     var sourceSkins = Field(data, "skinsData") as IList ?? throw new MissingFieldException("skinsData");
                     if (sourceSkins.Count == 0) throw new InvalidOperationException("template has no skins");
+                    if (entry.StartingSkin >= sourceSkins.Count)
+                        throw new InvalidOperationException($"starting skin {entry.StartingSkin} is not in the template (it has {sourceSkins.Count})");
+                    // One skin: the species is its own animal. Mods add more through skins[] entries.
                     var skins = (IList)Activator.CreateInstance(sourceSkins.GetType());
-                    foreach (var sourceSkin in sourceSkins)
-                    {
-                        var skin = Clone.Invoke(sourceSkin, null);
-                        Set(skin, "mainData", data);
-                        // Variation assets remain read-only templates; per-skin colors clone them when changed.
-                        skins.Add(skin);
-                    }
+                    var skin = Clone.Invoke(sourceSkins[entry.StartingSkin], null);
+                    Set(skin, "mainData", data);
+                    // Variation assets remain read-only templates; per-skin colors clone them when changed.
+                    if (entry.StartingSkinName != null) Set(skin, "skinName", entry.StartingSkinName);
+                    if (entry.Swatch != null) Set(skin, "skinThumbnail", LoadSprite(mod.Directory, entry.Swatch, id + ".swatch"));
+                    skins.Add(skin);
                     Set(data, "skinsData", skins);
                     var nativeId = AccessTools.Field(data.GetType(), "NativeSpeciesID") ?? throw new MissingFieldException("NativeSpeciesID");
                     nativeId.SetValue(data, Activator.CreateInstance(nativeId.FieldType, new object[] { (ushort)list.Count }));
@@ -177,6 +169,25 @@ namespace Tyrant.Framework
                 }
             }
         }
+
+        /// <summary>A sprite from a PNG inside the mod folder (species icon or swatch).</summary>
+        private static Sprite LoadSprite(string modDirectory, string file, string name)
+        {
+            var path = Path.GetFullPath(Path.Combine(modDirectory, file));
+            if (!ModPaths.IsInside(path, modDirectory)) throw new InvalidOperationException("PNG path escapes the mod folder: " + file);
+            var texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+            if (!texture.LoadImage(File.ReadAllBytes(path), false)) { UnityEngine.Object.Destroy(texture); throw new InvalidOperationException("Cannot decode PNG: " + file); }
+            texture.name = name;
+            var sprite = Sprite.Create(texture, new Rect(0, 0, texture.width, texture.height), new Vector2(0.5f, 0.5f));
+            sprite.name = name;
+            return sprite;
+        }
+
+        /// <summary>
+        /// True once new species had their chance to register (or there are none): skins for them must not be added before,
+        /// or they are reported missing and lost.
+        /// </summary>
+        public static bool RegistrationSettled => _mods.Count == 0 || Databases.Count > 0;
 
         private static object? Field(object data, string name) => AccessTools.Field(data.GetType(), name)?.GetValue(data);
         private static GameObject LoadPrefab(string directory, SpeciesPrefab reference)
