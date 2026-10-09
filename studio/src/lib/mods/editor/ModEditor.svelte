@@ -6,6 +6,8 @@
   import DeleteModDialog from '../DeleteModDialog.svelte';
   import type { AddedSound } from '$lib/sounds/audio';
   import AddModel from './AddModel.svelte';
+  import AddPrefabTarget from './AddPrefabTarget.svelte';
+  import PrefabPage from './PrefabPage.svelte';
   import AddReplacement from './AddReplacement.svelte';
   import AddSound from './AddSound.svelte';
   import { deleteMod, exportMod, installMod, removeFromGame, restoreCutouts } from '../modActions';
@@ -29,7 +31,7 @@
   let addingGroup = $state<string | null>(null);
   let removingSkin = $state<string | null>(null);
   /** The form shown instead of a page: + Add on Skins, Models or Sounds. */
-  let adding = $state<'skin' | 'model' | 'sound' | 'texture' | null>(null);
+  let adding = $state<'skin' | 'model' | 'sound' | 'texture' | 'prefab' | null>(null);
 
   onMount(() => {
     void load();
@@ -180,7 +182,7 @@
     <ModSideList detail={doc.detail} check={doc.check} {selection} onSelect={(s) => { adding = null; selection = s; }}
       onAddSkin={(group) => { addingGroup = group; adding = 'skin'; }}
       onArrange={(build) => doc.edit('mods.arrangeSkins', (d) => { const order = build(d.skins); return order ? { order } : null; })} onRemoveSkin={(id) => (removingSkin = id)} onAddModel={() => (adding = 'model')} onAddSound={() => (adding = 'sound')}
-      onAddReplacement={() => (adding = 'texture')} />
+      onAddReplacement={() => (adding = 'texture')} onAddPrefab={() => (adding = 'prefab')} />
     <section class="page">
       {#if adding === 'skin'}
         <AddSkin modId={doc.id} group={addingGroup} onDone={skinAdded} />
@@ -190,6 +192,8 @@
         <AddSound modId={doc.id} onDone={soundAdded} onReplaceMany={soundsReplaced} modSkins={doc.detail?.skins ?? []} />
       {:else if adding === 'texture'}
         <AddReplacement modId={doc.id} onDone={replacementAdded} />
+      {:else if adding === 'prefab'}
+        <AddPrefabTarget {doc} onDone={(t) => { adding = null; if (t) selection = { kind: 'prefab', target: t }; }} />
       {:else if selection.kind === 'details'}
         <ModDetailsPage {doc} />
       {:else if selection.kind === 'speciesDatabase'}
@@ -207,6 +211,8 @@
         />
       {:else if selectedReplacement}
         <ReplacementPage {doc} replacement={selectedReplacement} onRemoved={() => (selection = { kind: 'details' })} />
+      {:else if selection.kind === 'prefab'}
+        <PrefabPage {doc} target={selection.target} onRemoved={() => (selection = { kind: 'details' })} />
       {:else if selection.kind === 'check'}
         <CheckPage {doc} />
       {/if}

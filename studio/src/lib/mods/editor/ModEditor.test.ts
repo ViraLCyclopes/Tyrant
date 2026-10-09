@@ -26,6 +26,20 @@ function setup(detail = modDetail()) {
 }
 
 describe('ModEditor', () => {
+  it('Prefab settings has + Add; the species it picks opens the prefab page', async () => {
+    const { rpc } = setup();
+    rpc.on('mods.species', () => ({ hasDump: true, species: [{ speciesId: 'Spinosaurus', vivarium: false, skins: [] }] }))
+      .on('mods.animalDatabase', () => ({ animals: [], fields: [] }))
+      .on('mods.prefabFields', () => ({ target: 'Spinosaurus', fields: [] }));
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Add prefab settings' }));
+    expect(await screen.findByRole('heading', { name: 'Add prefab settings' })).toBeInTheDocument();
+    await screen.findByRole('option', { name: 'Spinosaurus' });
+    await fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+
+    expect(await screen.findByRole('heading', { name: /Prefab settings: Spinosaurus/ })).toBeInTheDocument();
+  });
+
   it('lists species models under Models and opens their page', async () => {
     setup(modDetail({ models: [{ target: 'Carcharodontosaurus', skin: null, file: 'models/carch-1a2b.glb', lods: [], errors: [], warnings: [], stale: false, origin: null, originChanged: false }] }));
 

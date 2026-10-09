@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor, within } from '@testing-library/svelte';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/svelte';
 import { describe, expect, it, vi } from 'vitest';
 import type { ModDetail, ModSkinDto } from '$lib/rpc/types.gen';
 import { memoryStore } from '$lib/storage';
@@ -172,5 +172,26 @@ describe('ModSideList skins', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Add a skin' }));
     expect(props.onAddSkin).toHaveBeenLastCalledWith(null);
     await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
+  });
+});
+
+describe('ModSideList prefab settings', () => {
+  it('lists the prefab targets of the mod and selects one; + Add asks for the form', async () => {
+    const { props } = setup(modDetail({ prefabTargets: [{ target: 'Spinosaurus', file: 'spinosaurus.json', fields: 2 }] }));
+    expect(screen.getByText('Prefab settings (1)')).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Spinosaurus' }));
+    expect(props.onSelect).toHaveBeenCalledWith({ kind: 'prefab', target: 'Spinosaurus' });
+    const onAddPrefab = vi.fn();
+    cleanup();
+    const session = new Session(new FakeRpc(), new FakePlatform(), memoryStore());
+    renderWith(ModSideList, session, { detail: modDetail(), check: null, selection: { kind: 'details' as const }, onSelect: vi.fn(), onAddSkin: vi.fn(), onAddPrefab });
+    await fireEvent.click(screen.getByRole('button', { name: 'Add prefab settings' }));
+    expect(onAddPrefab).toHaveBeenCalled();
+  });
+
+  it('also lists the selected target while it has no file yet', () => {
+    const session = new Session(new FakeRpc(), new FakePlatform(), memoryStore());
+    renderWith(ModSideList, session, { detail: modDetail(), check: null, selection: { kind: 'prefab' as const, target: 'Allosaurus' }, onSelect: vi.fn(), onAddSkin: vi.fn() });
+    expect(screen.getByRole('button', { name: 'Allosaurus' })).toBeInTheDocument();
   });
 });

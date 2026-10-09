@@ -17,6 +17,7 @@
     onAddModel = () => {},
     onAddSound = () => {},
     onAddReplacement = () => {},
+    onAddPrefab = () => {},
   }: {
     detail: ModDetail;
     check: ModCheckReport | null;
@@ -29,6 +30,7 @@
     onAddModel?: () => void;
     onAddSound?: () => void;
     onAddReplacement?: () => void;
+    onAddPrefab?: () => void;
   } = $props();
 
   const problems = $derived((check?.errors.length ?? 0) + (check?.warnings.length ?? 0));
@@ -36,6 +38,10 @@
   const isReplace = (texture: string) => selection.kind === 'replace' && selection.texture === texture;
   const isModel = (target: string) => selection.kind === 'model' && selection.skin === null && selection.target === target;
   const speciesModels = $derived(detail.models.filter((m) => m.skin === null));
+  const prefabTargets = $derived([
+    ...(detail.prefabTargets ?? []).map((t) => t.target),
+    ...(selection.kind === 'prefab' && !(detail.prefabTargets ?? []).some((t) => t.target === selection.target) ? [selection.target] : []),
+  ]);
   const isSound = (s: ModSoundDto) =>
     selection.kind === 'sound' && selection.event === s.event && selection.species === s.species && selection.skin === s.skin;
   const whoHears = (s: ModSoundDto) => s.species ?? (s.skin ? `skin ${s.skin}` : 'everyone');
@@ -285,6 +291,16 @@
     <button class:on={isModel(model.target)} onclick={() => onSelect({ kind: 'model', target: model.target, skin: null })}>
       {model.target}{#if !model.file} <span class="hint">rig edit</span>{:else if model.rig} <span class="hint">+ rig edit</span>{/if}{#if model.errors.length || model.stale}<span class="count">⚠</span>{/if}
     </button>
+  {:else}
+    <p class="empty">None.</p>
+  {/each}
+
+  <div class="heading">
+    <span>Prefab settings ({detail.prefabTargets?.length ?? 0})</span>
+    <button class="add" aria-label="Add prefab settings" onclick={onAddPrefab}>+ Add</button>
+  </div>
+  {#each prefabTargets as t (t)}
+    <button class:on={selection.kind === 'prefab' && selection.target === t} onclick={() => onSelect({ kind: 'prefab', target: t })}>{t}</button>
   {:else}
     <p class="empty">None.</p>
   {/each}
