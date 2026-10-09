@@ -7,7 +7,7 @@
   import RecordTree from './RecordTree.svelte';
   import type { ModDoc } from './modDoc.svelte';
 
-  let { doc, onPrefab = () => {} }: { doc: ModDoc; onPrefab?: (target: string) => void } = $props();
+  let { doc, onPrefab = () => {}, onAddSkin = () => {}, onOpenSkin = () => {} }: { doc: ModDoc; onPrefab?: (target: string) => void; onAddSkin?: (species: string) => void; onOpenSkin?: (id: string) => void } = $props();
   const session = getSession();
   const tab = getTab();
   let database = $state<ModAnimalDatabase | null>(null);
@@ -18,6 +18,7 @@
   let name = $state('');
   let genus = $state('');
   let epithet = $state('');
+  let startingSkin = $state(0);
   let cost = $state<number | undefined>(undefined);
   let values = $state<Record<string, number | undefined>>({});
   let dataValues = $state<Record<string, string>>({});
@@ -29,6 +30,7 @@
   let generation = 0;
   const animal = $derived(database?.animals.find((a) => a.id === selected));
   const creating = $derived(!selected);
+  const templateSkins = $derived(templates.find((t) => t.speciesId === (creating ? template : animal?.base))?.skins ?? []);
 
   onMount(async () => {
     const result = await tab.safely(() => session.rpc.call('mods.species'));
@@ -65,6 +67,12 @@
     if (source) template = source.base;
   });
 
+  // A different template has different skins, so the starting skin goes back to the first.
+  $effect(() => {
+    void template;
+    startingSkin = 0;
+  });
+
   // A new species shows what it inherits from the chosen template, as an existing species does from its own.
   let templateStats = $state<ModSpeciesTemplateDto | null>(null);
   $effect(() => {
@@ -89,12 +97,19 @@
       const stats = Object.fromEntries(Object.entries(values).filter((entry): entry is [string, number] => entry[1] !== undefined));
       const fields = { speciesId, name, genus, epithet, cost: cost ?? null, stats, dataFields: dataValues, localization };
       const added = creating;
-      if (await doc.edit(added ? 'mods.addSpecies' : 'mods.setSpecies', added ? { ...fields, template } : fields, { undoable: false })) {
+      if (await doc.edit(added ? 'mods.addSpecies' : 'mods.setSpecies', added ? { ...fields, template, startingSkin } : fields, { undoable: false })) {
         selected = speciesId;
         await reload();
         tab.info(added ? `Added species '${name}'.` : `Saved '${name}' and its stats.`);
       }
     } finally { busy = false; }
+  }
+  function setStart(skin: number, skinName: string | null) {
+    void doc.edit('mods.setSpeciesStartingSkin', { speciesId: selected, startingSkin: skin, name: skinName }, { undoable: false });
+  }
+  async function pickSwatch() {
+    const png = await session.platform.openFile('Choose a swatch PNG for the starting skin', ['png']);
+    if (png) await doc.edit('mods.setSpeciesSwatch', { speciesId: selected, png }, { undoable: false });
   }
   async function pickIcon() {
     const png = await session.platform.openFile('Choose a species portrait PNG', ['png']);
@@ -130,6 +145,9 @@
               <select bind:value={template} required>
                 {#each templates as source}<option value={source.speciesId}>{source.speciesId}</option>{/each}
               </select>
+            </label>
+            <label>Starting skin
+              <select bind:value={startingSkin}>{#each templateSkins as s (s.index)}<option value={s.index}>{s.name}</option>{/each}</select>
             </label>
           {:else}<p class="hint">Template: {animal?.base}</p>{/if}
           <label>Display name <input bind:value={name} required /></label>
@@ -187,6 +205,33 @@
         {/if}
       </div>
     {/if}
+    {#if animal && !creating}
+      <section class="skins" aria-label="Skins">
+        <h3>Skins</h3>
+        <p class="hint">The species starts with one skin copied from {animal.base}. Add more skins below; other mods can add skins to it too.</p>
+        <div class="grid">
+          <label>Starting skin
+            <select value={animal.startingSkin ?? 0} onchange={(e) => setStart(Number(e.currentTarget.value), animal.startingSkinName ?? null)}>
+              {#each templateSkins as s (s.index)}<option value={s.index}>{s.name}</option>{/each}
+            </select>
+          </label>
+          <label>Starting skin name
+            <input value={animal.startingSkinName ?? ''} placeholder={templateSkins.find((s) => s.index === (animal.startingSkin ?? 0))?.name ?? ''}
+              onchange={(e) => setStart(animal.startingSkin ?? 0, e.currentTarget.value.trim() || null)} />
+          </label>
+        </div>
+        <div class="toolbar">
+          <button type="button" onclick={pickSwatch}>Choose swatch PNG…</button>
+          <button type="button" disabled={!animal.swatch} onclick={() => doc.edit('mods.setSpeciesSwatch', { speciesId: selected, png: null }, { undoable: false })}>Use template swatch</button>
+        </div>
+        <ul class="skin-list">
+          {#each (doc.detail?.skins ?? []).filter((s) => s.species === animal.key) as s (s.id)}
+            <li><button type="button" onclick={() => onOpenSkin(s.id)}>{s.name}</button>{#if s.group}<span class="hint"> · {s.group}</span>{/if}</li>
+          {/each}
+        </ul>
+        <div><button type="button" onclick={() => onAddSkin(animal.key)}>Add skin</button></div>
+      </section>
+    {/if}
     {#if creating && !templates.length}<p class="hint">Run the game's data dump on the Workspace tab to choose a template.</p>{/if}
   {:else}<p class="hint">Loading species…</p>{/if}
 </section>
@@ -202,4 +247,6 @@
   input, select { font: inherit; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 7px 9px; width: 100%; box-sizing: border-box; }
   .unit, .hint { font-size: 12px; }
   .actions { margin-top: 18px; }
+  .skins { display: grid; gap: 12px; }
+  .skin-list { margin: 0; padding-left: 18px; }
 </style>

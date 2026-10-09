@@ -17,6 +17,12 @@ function setup(hasDump = true, mods = [modRow]) {
   const list = { mods, frameworkInstalled: false, frameworkOutdated: false };
   const rpc = new FakeRpc()
     .on('mods.species', () => ({ hasDump, species: hasDump ? [carch] : [] }))
+    .on('mods.customSpecies', () => ({
+      species: [
+        { speciesId: 'tyrant.red-spot.mirabilis', name: 'Mirabilis', modId: 'red-spot', modName: 'Red Spot', own: true, inWorkspace: true, installed: false, enabled: false, skins: [{ index: 0, name: 'Ghost', male: true, female: true }] },
+        { speciesId: 'tyrant.mod-a.rex', name: 'Rex', modId: 'mod-a', modName: 'Mod A', own: false, inWorkspace: false, installed: true, enabled: true, skins: [{ index: 0, name: 'Default', male: true, female: true }] },
+      ],
+    }))
     .on('mods.list', () => list)
     .on('mods.create', () => list)
     .on('mods.addSkin', () => list);
@@ -92,5 +98,27 @@ describe('AddSkin', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Add skin' }));
 
     await waitFor(() => expect(rpc.callsTo('mods.addSkin')[0]?.params).toMatchObject({ id: 'red-spot', group: 'Jurassic Park' }));
+  });
+
+  it('groups base game, this mod and other mods species', async () => {
+    const { rpc, session } = setup();
+    renderWith(AddSkin, session, { modId: 'red-spot' });
+
+    const select = await screen.findByRole('combobox', { name: 'Species' });
+    await waitFor(() => expect(select.querySelectorAll('optgroup')).toHaveLength(3));
+    expect([...select.querySelectorAll('optgroup')].map((g) => g.label)).toEqual(['Base game', "This mod's species", "Other mods' species"]);
+    expect(screen.getByRole('option', { name: 'Rex — Mod A (installed)' })).toBeInTheDocument();
+    expect(rpc.callsTo('mods.customSpecies')[0]?.params).toEqual({ id: 'red-spot' });
+  });
+
+  it('preselects a species and adds a skin to it with its one base skin', async () => {
+    const { rpc, session } = setup();
+    renderWith(AddSkin, session, { modId: 'red-spot', speciesId: 'tyrant.red-spot.mirabilis' });
+
+    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Species' })).toHaveValue('tyrant.red-spot.mirabilis'));
+    expect(screen.getByRole('combobox', { name: 'Base skin' })).toHaveValue('Ghost');
+    await fireEvent.input(screen.getByRole('textbox', { name: 'Skin name' }), { target: { value: 'Blue' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Add skin' }));
+    await waitFor(() => expect(rpc.callsTo('mods.addSkin')[0]?.params).toMatchObject({ id: 'red-spot', species: 'tyrant.red-spot.mirabilis', base: 'Ghost' }));
   });
 });

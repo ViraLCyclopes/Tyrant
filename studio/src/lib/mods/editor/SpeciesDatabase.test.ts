@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from '@testing-library/svelte';
+import { fireEvent, screen, waitFor, within } from '@testing-library/svelte';
 import { describe, expect, it, vi } from 'vitest';
 import { Tab } from '$lib/shell/tab.svelte';
 import { memoryStore } from '$lib/storage';
@@ -13,11 +13,13 @@ import SpeciesDatabase from './SpeciesDatabase.svelte';
 const animal = { id: 'new-animal', key: 'tyrant.red-spot.new-animal', base: 'Allosaurus Anax', name: 'New animal', genus: 'Example', epithet: 'animal', cost: null, stats: { adultMassKg: 4500 }, inheritedCost: 20000, inheritedStats: { adultMassKg: 4010, maxAgeYears: 40 }, dataFields: [{ path: '/brain/needs/adult/native/hitPoints', kind: 'number', value: '660', templateValue: '660', editable: true }], localization: { description: 'pack.description' }, icon: null };
 const fields = [{ id: 'adultMassKg', label: 'Adult mass', unit: 'kg', min: 0.001, max: 1000000 }, { id: 'maxAgeYears', label: 'Lifespan', unit: 'years', min: 0.001, max: 10000 }];
 
-async function setup(animals: (typeof animal)[] = [animal], props: { onPrefab?: (t: string) => void } = {}, templateFound = true) {
+async function setup(animals: (typeof animal)[] = [animal], props: { onPrefab?: (t: string) => void; onAddSkin?: (k: string) => void; onOpenSkin?: (id: string) => void } = {}, templateFound = true, detail = modDetail()) {
   const rpc = new FakeRpc()
-    .on('mods.get', () => modDetail())
+    .on('mods.get', () => detail)
     .on('mods.check', () => ({ errors: [], warnings: [], missingCutouts: [] }))
-    .on('mods.species', () => ({ hasDump: true, species: [{ speciesId: 'Allosaurus Anax', vivarium: false, skins: [{ index: 0, name: 'Default', male: true, female: true }], prefabGuid: null }] }))
+    .on('mods.species', () => ({ hasDump: true, species: [{ speciesId: 'Allosaurus Anax', vivarium: false, skins: [{ index: 0, name: 'Default', male: true, female: true }, { index: 1, name: 'Albino', male: true, female: true }], prefabGuid: null }] }))
+    .on('mods.setSpeciesStartingSkin', () => ({ ...detail, revision: 'r2' }))
+    .on('mods.setSpeciesSwatch', () => ({ ...detail, revision: 'r3' }))
     .on('mods.animalDatabase', () => ({ animals, fields }))
     .on('mods.speciesTemplate', (p) => (templateFound ? { template: p.template, found: true, cost: 20000, stats: { adultMassKg: 4010, maxAgeYears: 40 } } : { template: p.template, found: false, cost: null, stats: {} }))
     .on('blender.status', () => ({ found: true, exe: 'b.exe', version: '5.2.2', supported: true, missingConfigured: null, addon: 'current', addonInstalled: '0.1.0', addonBundled: '0.1.0', problem: null }));
@@ -107,5 +109,39 @@ describe('Species database', () => {
     await fireEvent.input(screen.getByRole('textbox', { name: 'Species epithet' }), { target: { value: 'animal' } });
     await fireEvent.click(screen.getByRole('button', { name: 'Create species' }));
     await waitFor(() => expect(rpc.callsTo('mods.addSpecies')[0]?.params).toMatchObject({ speciesId: 'new-animal', template: 'Allosaurus Anax', stats: {}, revision: 'r1' }));
+  });
+
+  it('a new species starts with the chosen template skin', async () => {
+    const { rpc } = await setup([]);
+    rpc.on('mods.addSpecies', () => modDetail({ revision: 'r2' }));
+    await waitFor(() => expect(within(screen.getByRole('combobox', { name: /Starting skin/ })).getAllByRole('option')).toHaveLength(2));
+    await fireEvent.change(screen.getByRole('combobox', { name: /Starting skin/ }), { target: { value: '1' } });
+    await fireEvent.input(screen.getByRole('textbox', { name: /Species id/ }), { target: { value: 'mirabilis' } });
+    await fireEvent.input(screen.getByRole('textbox', { name: /Display name/ }), { target: { value: 'Mirabilis' } });
+    await fireEvent.input(screen.getByRole('textbox', { name: /Genus/ }), { target: { value: 'Example' } });
+    await fireEvent.input(screen.getByRole('textbox', { name: /Species epithet/ }), { target: { value: 'mirabilis' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Create species' }));
+    await waitFor(() => expect(rpc.callsTo('mods.addSpecies')[0]?.params).toMatchObject({ template: 'Allosaurus Anax', startingSkin: 1 }));
+  });
+
+  it("the Skins section sets the starting skin, its name and swatch, lists the species' skins and adds one", async () => {
+    const onAddSkin = vi.fn();
+    const onOpenSkin = vi.fn();
+    const base = modDetail();
+    const detail = modDetail({ skins: [{ ...base.skins[0], id: 'blue', name: 'Blue', species: 'tyrant.red-spot.new-animal' }] });
+    const { rpc, platform } = await setup([{ ...animal, key: 'tyrant.red-spot.new-animal', startingSkin: 0, startingSkinName: null, swatch: null } as typeof animal], { onAddSkin, onOpenSkin }, true, detail);
+    const skins = screen.getByRole('region', { name: 'Skins' });
+    await waitFor(() => expect(within(within(skins).getByRole('combobox', { name: 'Starting skin' })).getAllByRole('option')).toHaveLength(2));
+    await fireEvent.change(within(skins).getByRole('combobox', { name: 'Starting skin' }), { target: { value: '1' } });
+    await waitFor(() => expect(rpc.callsTo('mods.setSpeciesStartingSkin')[0]?.params).toMatchObject({ speciesId: 'new-animal', startingSkin: 1, name: null }));
+    await fireEvent.change(within(skins).getByRole('textbox', { name: 'Starting skin name' }), { target: { value: 'Ghost' } });
+    await waitFor(() => expect(rpc.callsTo('mods.setSpeciesStartingSkin')[1]?.params).toMatchObject({ name: 'Ghost' }));
+    platform.files.push('C:/s.png');
+    await fireEvent.click(within(skins).getByRole('button', { name: 'Choose swatch PNG…' }));
+    await waitFor(() => expect(rpc.callsTo('mods.setSpeciesSwatch')[0]?.params).toMatchObject({ speciesId: 'new-animal', png: 'C:/s.png' }));
+    await fireEvent.click(within(skins).getByRole('button', { name: 'Blue' }));
+    expect(onOpenSkin).toHaveBeenCalledWith('blue');
+    await fireEvent.click(within(skins).getByRole('button', { name: 'Add skin' }));
+    expect(onAddSkin).toHaveBeenCalledWith('tyrant.red-spot.new-animal');
   });
 });

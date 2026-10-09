@@ -1,18 +1,19 @@
 <script lang="ts">
   import { keyOf } from './species';
   import { onMount } from 'svelte';
-  import type { ModRow, ModSpeciesResult } from '$lib/rpc/types.gen';
+  import type { CustomSpeciesRow, ModRow, ModSpeciesResult } from '$lib/rpc/types.gen';
   import { getTab } from '$lib/shell/tab.svelte';
   import { getSession } from '$lib/stores/session.svelte';
 
-  /** modId: add to this mod (the mod editor) instead of choosing one; onDone: called after adding, or on Cancel. */
-  let { speciesKey = '', modId, group = null, onDone }: { speciesKey?: string; modId?: string; group?: string | null; onDone?: () => void } = $props();
+  /** speciesId: an exact species id to preselect (wins over speciesKey). modId: add to this mod (the mod editor) instead of choosing one; onDone: called after adding, or on Cancel. */
+  let { speciesKey = '', speciesId = '', modId, group = null, onDone }: { speciesKey?: string; speciesId?: string; modId?: string; group?: string | null; onDone?: () => void } = $props();
 
   const NEW = '__new__';
   const session = getSession();
   const tab = getTab();
   let data = $state<ModSpeciesResult | null>(null);
   let mods = $state<ModRow[]>([]);
+  let custom = $state<CustomSpeciesRow[]>([]);
   let species = $state('');
   let name = $state('');
   let base = $state('');
@@ -22,7 +23,12 @@
   let target = $state(NEW);
   let newId = $state('my-skins');
   let unmatched = $state(false);
-  const selected = $derived(data?.species.find((s) => s.speciesId === species) ?? null);
+  // Base game species plus the custom species mods add, so a skin can be added to either.
+  const all = $derived([
+    ...(data?.species ?? []),
+    ...custom.map((c) => ({ speciesId: c.speciesId, vivarium: false, skins: c.skins, prefabGuid: null })),
+  ]);
+  const selected = $derived(all.find((s) => s.speciesId === species) ?? null);
   const baseSkin = $derived(selected?.skins.find((s) => s.name === base) ?? null);
   // A sex the base skin has no textures for cannot be templated: switch it off.
   $effect(() => {
@@ -31,21 +37,27 @@
   });
 
   onMount(async () => {
-    data = await tab.quietly(() => session.rpc.call('mods.species'));
-    const list = await tab.quietly(() => session.rpc.call('mods.list'));
+    // Fetched together so the form does not appear before the lists that preselect it are in.
+    const [speciesResult, list, customRows] = await Promise.all([
+      tab.quietly(() => session.rpc.call('mods.species')),
+      tab.quietly(() => session.rpc.call('mods.list')),
+      tab.quietly(() => session.rpc.call('mods.customSpecies', { id: modId ?? null })),
+    ]);
+    custom = customRows?.species ?? [];
     mods = (list?.mods ?? []).filter((m) => m.state !== 'gameOnly');
+    data = speciesResult;
     target = modId ?? mods[0]?.id ?? NEW;
     // Never guess: a Species tab name that matches no species id leaves the choice to the user.
-    const found = data?.species.find((s) => keyOf(s.speciesId) === speciesKey);
-    unmatched = !!speciesKey && !found && !!data?.hasDump;
-    const match = speciesKey ? found : data?.species[0];
+    const found = all.find((s) => keyOf(s.speciesId) === speciesKey);
+    unmatched = !speciesId && !!speciesKey && !found && !!data?.hasDump;
+    const match = speciesId ? all.find((s) => s.speciesId === speciesId) : speciesKey ? found : all[0];
     species = match?.speciesId ?? '';
     base = match?.skins[0]?.name ?? '';
   });
 
   function chooseSpecies(id: string) {
     species = id;
-    base = data?.species.find((s) => s.speciesId === id)?.skins[0]?.name ?? '';
+    base = all.find((s) => s.speciesId === id)?.skins[0]?.name ?? '';
   }
 
   async function add() {
@@ -83,7 +95,21 @@
       <label>Species
         <select aria-label="Species" value={species} onchange={(e) => chooseSpecies(e.currentTarget.value)}>
           {#if !species}<option value="" disabled>Pick a species…</option>{/if}
-          {#each data.species as s (s.speciesId)}<option value={s.speciesId}>{s.speciesId}{s.vivarium ? ' (vivarium)' : ''}</option>{/each}
+          <optgroup label="Base game">
+            {#each data.species as s (s.speciesId)}<option value={s.speciesId}>{s.speciesId}{s.vivarium ? ' (vivarium)' : ''}</option>{/each}
+          </optgroup>
+          {#if custom.some((c) => c.own)}
+            <optgroup label="This mod's species">
+              {#each custom.filter((c) => c.own) as c (c.speciesId)}<option value={c.speciesId}>{c.name}</option>{/each}
+            </optgroup>
+          {/if}
+          {#if custom.some((c) => !c.own)}
+            <optgroup label="Other mods' species">
+              {#each custom.filter((c) => !c.own) as c (c.speciesId)}
+                <option value={c.speciesId}>{c.name} — {c.modName} ({c.installed ? (c.enabled ? 'installed' : 'installed, off') : 'workspace'})</option>
+              {/each}
+            </optgroup>
+          {/if}
         </select>
       </label>
       <label>Skin name <input aria-label="Skin name" placeholder="e.g. Red spot" bind:value={name} /></label>

@@ -29,6 +29,7 @@
   let selection = $state<Selection>({ kind: 'details' });
   let failed = $state(false);
   let addingGroup = $state<string | null>(null);
+  let addingSpecies = $state<string | null>(null);
   let removingSkin = $state<string | null>(null);
   /** The form shown instead of a page: + Add on Skins, Models or Sounds. */
   let adding = $state<'skin' | 'model' | 'sound' | 'texture' | 'prefab' | null>(null);
@@ -144,6 +145,7 @@
 
   async function skinAdded() {
     adding = null;
+    addingSpecies = null;
     const before = new Set(doc.detail?.skins.map((s) => s.id));
     await doc.reload();
     const added = doc.detail?.skins.find((s) => !before.has(s.id));
@@ -180,12 +182,12 @@
 {:else if doc.detail}
   <div class="editor">
     <ModSideList detail={doc.detail} check={doc.check} {selection} onSelect={(s) => { adding = null; selection = s; }}
-      onAddSkin={(group) => { addingGroup = group; adding = 'skin'; }}
+      onAddSkin={(group) => { addingGroup = group; addingSpecies = null; adding = 'skin'; }}
       onArrange={(build) => doc.edit('mods.arrangeSkins', (d) => { const order = build(d.skins); return order ? { order } : null; })} onRemoveSkin={(id) => (removingSkin = id)} onAddModel={() => (adding = 'model')} onAddSound={() => (adding = 'sound')}
       onAddReplacement={() => (adding = 'texture')} onAddPrefab={() => (adding = 'prefab')} />
     <section class="page">
       {#if adding === 'skin'}
-        <AddSkin modId={doc.id} group={addingGroup} onDone={skinAdded} />
+        <AddSkin modId={doc.id} group={addingGroup} speciesId={addingSpecies ?? undefined} onDone={skinAdded} />
       {:else if adding === 'model'}
         <AddModel {doc} onDone={modelAdded} />
       {:else if adding === 'sound'}
@@ -197,7 +199,8 @@
       {:else if selection.kind === 'details'}
         <ModDetailsPage {doc} />
       {:else if selection.kind === 'speciesDatabase'}
-        <SpeciesDatabase {doc} onPrefab={(t) => (selection = { kind: 'prefab', target: t })} />
+        <SpeciesDatabase {doc} onPrefab={(t) => (selection = { kind: 'prefab', target: t })} onOpenSkin={(id) => (selection = { kind: 'skin', id })}
+          onAddSkin={(k) => { addingGroup = null; addingSpecies = k; adding = 'skin'; }} />
       {:else if selectedSkin}
         <SkinPage {doc} skin={selectedSkin} onOpenModel={(target, skin) => (selection = { kind: 'model', target, skin })} />
       {:else if selectedModel}

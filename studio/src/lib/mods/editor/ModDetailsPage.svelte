@@ -32,6 +32,9 @@
   <label>Author <input bind:value={author} placeholder="optional" onchange={save} /></label>
   <label>Description <textarea rows="3" bind:value={description} placeholder="One or two sentences about the mod (optional)" onchange={save}></textarea></label>
   <p class="hint">Id: <code>{doc.id}</code> — the mod's folder name and its key in the game, so it cannot change.</p>
+  {#each doc.detail?.usesSpeciesFrom ?? [] as use (use.modId)}
+    <p class="hint">Uses species from: {use.modName ?? use.modId}{#if !use.installed || !use.enabled} <span class="warn">({use.installed ? 'off' : 'not installed'} — {use.skins} {use.skins === 1 ? 'skin' : 'skins'} skipped)</span>{/if}</p>
+  {/each}
 </section>
 
 <style>
