@@ -36,13 +36,14 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
     /// <param name="rigInfo">A species' rig info (its skeleton, bones its animations and growth move); null without the index or dump.</param>
     public ModCheckResult Check(ModProject mod, AssetIndex? index, IReadOnlyList<SpeciesSkins>? species = null, SoundCatalog? sounds = null,
         Func<string, Rigging.RigInfo?>? rigInfo = null, Func<string, SpeciesTemplateStats?>? templateStats = null,
-        Func<string, IReadOnlyList<PrefabFieldInfo>?>? prefabFields = null)
+        Func<string, IReadOnlyList<PrefabFieldInfo>?>? prefabFields = null, OtherMods? others = null)
     {
         var errors = new List<string>();
         var warnings = new List<string>();
         foreach (var entry in mod.Manifest.Species)
         {
             if (entry.Icon != null) Image(mod, $"Species {entry.Id} icon", entry.Icon, errors);
+            if (entry.Swatch != null) Image(mod, $"Species {entry.Id} swatch", entry.Swatch, errors);
             if (entry.Prefab != null)
             {
                 var path = Path.GetFullPath(Path.Combine(mod.Dir, entry.Prefab.Bundle));
@@ -69,8 +70,8 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
         if (mod.Manifest.Species.Count > 0)
         {
             warnings.Add("New species support is experimental; spawning and save/reload need an in-game test. Removing the species mod prevents its saved animals from loading.");
-            if (species is not null) species = ModProject.WithSpecies(species, mod.Manifest);
         }
+        if (species is not null) species = ModProject.WithSpecies(species, mod.Manifest, others?.Species);
         if (mod.Manifest.Replace.Count == 0 && mod.Manifest.Skins.Count == 0 && mod.Manifest.Models.Count == 0 && mod.Manifest.Sounds.Count == 0
             && mod.Manifest.Species.Count == 0 && mod.Manifest.Assembly is null && mod.PrefabTargets().Count == 0)
             warnings.Add("The mod does nothing yet: add a texture replacement, a skin, a model or a sound.");
@@ -113,7 +114,13 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
             if (species is not null)
             {
                 var target = species.FirstOrDefault(s => string.Equals(s.SpeciesId, skin.Species, StringComparison.OrdinalIgnoreCase));
-                if (target is null) errors.Add($"{key}: species \"{skin.Species}\" is not in the game data.");
+                if (target is null)
+                {
+                    var owner = SpeciesUse.ModOf(skin.Species);
+                    if (owner is null || owner == mod.Id) errors.Add($"{key}: species \"{skin.Species}\" is not in the game data{(owner is null ? "" : " or this mod")}.");
+                    else if (others is not null && others.Mods.ContainsKey(owner)) errors.Add($"{key}: species \"{skin.Species}\" is not in mod '{owner}'.");
+                    else warnings.Add($"{key}: skins for {skin.Species} will be skipped in game unless mod '{owner}' is installed.");
+                }
                 else if (!string.Equals(target.SpeciesId, skin.Species, StringComparison.Ordinal))
                     errors.Add($"{key}: species \"{skin.Species}\" must be written \"{target.SpeciesId}\" (the game matches the exact spelling).");
                 else

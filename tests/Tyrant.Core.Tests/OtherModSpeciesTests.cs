@@ -106,4 +106,28 @@ public class OtherModSpeciesTests
         Assert.Throws<Tyrant.Core.Errors.TyrantException>(() => b.AddSkin(ws, new GameInstall(game.Root, null), SkinDumps.Index(), new FakeAssetReader(), [Template()],
             "tyrant.mod-a.mirabilis", "Green", null, new SkinTemplateOptions(true, true, false)));
     }
+
+    [Fact]
+    public void Check_accepts_found_species_warns_for_missing_mods_and_rejects_missing_species()
+    {
+        using var game = new FakeGame();
+        var ws = NewWorkspace(game);
+        var a = ModProject.Create(ws, "mod-a", "Mod A", null);
+        a.AddSpecies([Template()], "mirabilis", "Allosaurus Anax", "Mirabilis", "Example", "mirabilis");
+        var b = ModProject.Create(ws, "mod-b", null, null);
+        b.Manifest.Skins.Add(new SkinEntry { Id = "blue", Species = "tyrant.mod-a.mirabilis", Name = "Blue", Base = "0", Male = new() { ["diffuse"] = "skins/x/m.png" } });
+        b.Manifest.Skins.Add(new SkinEntry { Id = "gone", Species = "tyrant.mod-a.nope", Name = "Gone", Base = "0", Male = new() { ["diffuse"] = "skins/x/m.png" } });
+        b.Manifest.Skins.Add(new SkinEntry { Id = "away", Species = "tyrant.mod-z.rex", Name = "Away", Base = "0", Male = new() { ["diffuse"] = "skins/x/m.png" } });
+        b.Manifest.Skins.Add(new SkinEntry { Id = "bad-base", Species = "tyrant.mod-a.mirabilis", Name = "Bad", Base = "1", Male = new() { ["diffuse"] = "skins/x/m.png" } });
+        b.Save();
+        var checker = new ModChecker(_ => null);
+
+        var result = checker.Check(ModProject.Open(ws, b.Id), null, [Template()], others: OtherModSpecies.Load(ws, [], b.Id));
+
+        Assert.DoesNotContain(result.Errors, e => e.StartsWith("mod-b/blue:"));
+        Assert.Contains(result.Errors, e => e.StartsWith("mod-b/gone:") && e.Contains("not in mod 'mod-a'"));
+        Assert.Contains(result.Warnings, w => w.StartsWith("mod-b/away:") && w.Contains("unless mod 'mod-z' is installed"));
+        Assert.DoesNotContain(result.Errors, e => e.StartsWith("mod-b/away:"));
+        Assert.Contains(result.Errors, e => e.StartsWith("mod-b/bad-base:") && e.Contains("base skin"));
+    }
 }
