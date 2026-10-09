@@ -31,6 +31,7 @@ public static class ModSharing
                 foreach (var code in AnimalLocalization.Codes) named.Add($"localization/{code}/{term.Replace('\\', '/')}.txt");
         named.AddRange(m.Species.Select(s => s.Icon));
         named.AddRange(m.Species.Select(s => s.Prefab?.Bundle));
+        named.AddRange(mod.PrefabFiles().Keys.Select(f => PrefabOverrides.Folder + "/" + f));
         named.AddRange(m.Replace.Select(r => r.File));
         foreach (var skin in m.Skins)
         {

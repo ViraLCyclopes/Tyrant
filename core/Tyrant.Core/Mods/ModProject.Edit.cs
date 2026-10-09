@@ -24,7 +24,7 @@ public sealed partial class ModProject
             {
                 var path = AnimalLocalization.FileFor(Dir, code, term);
                 return "\n" + code + "/" + term + "\n" + (File.Exists(path) ? File.ReadAllText(path) : "");
-            }))))));
+            }))) + string.Concat(PrefabFiles().Select(p => "\nprefabs/" + p.Key + "\n" + p.Value)))));
 
     /// <summary>Opens the mod, refusing when its manifest or animal database changed since the editor's revision.</summary>
     public static ModProject Open(Workspace ws, string id, string? expectedRevision)
@@ -54,6 +54,29 @@ public sealed partial class ModProject
         manifest.Species.AddRange(mod.Manifest.Species);
         var saved = new ModProject(mod.Dir, manifest);
         saved.Save();
+        return saved;
+    }
+
+    /// <summary>
+    /// The editor's undo and redo: mod.json (checked like SaveManifest) and the prefabs/ files exactly as they were, by file name.
+    /// </summary>
+    public static ModProject RestoreSnapshot(Workspace ws, string id, string manifestJson, IReadOnlyDictionary<string, string> prefabs, string expectedRevision)
+    {
+        foreach (var (name, text) in prefabs)
+        {
+            if (Path.GetFileName(name) != name || !name.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+                throw new TyrantException(TyrantErrorCode.ModInvalid, $"'{name}' is not a prefab settings file name.");
+            try { PrefabOverrides.Parse(text); }
+            catch (ManifestException ex) { throw new TyrantException(TyrantErrorCode.ModInvalid, $"prefabs/{name} cannot be put back: {ex.Message}"); }
+        }
+        var saved = SaveManifest(ws, id, manifestJson, expectedRevision);
+        var folder = Path.Combine(saved.Dir, PrefabOverrides.Folder);
+        if (Directory.Exists(folder))
+            foreach (var file in Directory.GetFiles(folder, "*.json"))
+                if (!prefabs.ContainsKey(Path.GetFileName(file))) File.Delete(file);
+        if (prefabs.Count > 0) Directory.CreateDirectory(folder);
+        foreach (var (name, text) in prefabs) WriteSafely(Path.Combine(folder, name), text);
+        saved.RemoveEmptyPrefabFolder();
         return saved;
     }
 
