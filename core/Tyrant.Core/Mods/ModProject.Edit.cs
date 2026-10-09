@@ -89,8 +89,9 @@ public sealed partial class ModProject
     }
 
     /// <summary>
-    /// Removes a skin. With <paramref name="deleteFiles"/>, its files are deleted too, except those another skin or a texture
-    /// replacement still uses. Its number in the game stays reserved, so other skins keep theirs.
+    /// Removes a skin. With <paramref name="deleteFiles"/>, its files go to the Recycle Bin too: its PNGs, its own model (with its
+    /// LODs and report) and its Blender project, except files another skin, model or texture replacement still uses. Its number in
+    /// the game stays reserved, so other skins keep theirs. Returns what went to the bin.
     /// </summary>
     public IReadOnlyList<string> RemoveSkin(string skinId, bool deleteFiles)
     {
@@ -98,25 +99,40 @@ public sealed partial class ModProject
         Manifest.Skins.Remove(skin);
         Save();
         if (!deleteFiles) return [];
-        var stillUsed = new HashSet<string>(Manifest.Skins.SelectMany(FilesOf).Concat(Manifest.Replace.Select(r => r.File)).Select(Normal), StringComparer.OrdinalIgnoreCase);
-        var deleted = new List<string>();
-        foreach (var file in FilesOf(skin).Distinct(StringComparer.OrdinalIgnoreCase))
+        var stillUsed = new HashSet<string>(Manifest.Skins.SelectMany(FilesOf)
+            .Concat(Manifest.Replace.Select(r => r.File))
+            .Concat(Manifest.Skins.SelectMany(s => ModSharing.ModelFilesOf(this, s.Model)))
+            .Concat(Manifest.Models.SelectMany(m => ModSharing.ModelFilesOf(this, m.File)))
+            .Select(Normal), StringComparer.OrdinalIgnoreCase);
+        var removed = new List<string>();
+        foreach (var file in FilesOf(skin).Concat(ModSharing.ModelFilesOf(this, skin.Model)).Distinct(StringComparer.OrdinalIgnoreCase))
         {
             var path = Path.GetFullPath(Path.Combine(Dir, file));
             if (stillUsed.Contains(Normal(file)) || !ModPaths.IsInside(path, Dir) || !File.Exists(path)) continue;
-            try
-            {
-                File.Delete(path);
-                deleted.Add(file);
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                // a locked file stays; the skin is already gone from mod.json
-            }
+            if (TryRecycle(path)) removed.Add(Normal(file));
         }
         var folder = Path.Combine(Dir, "skins", skinId);
         try { if (Directory.Exists(folder) && !Directory.EnumerateFileSystemEntries(folder).Any()) Directory.Delete(folder); } catch (IOException) { }
-        return deleted;
+        var blender = Tyrant.Core.Blender.BlenderProjectWriter.FolderOf(WorkspaceDir, Id, skin.Species, skin.Id);
+        if (Directory.Exists(blender) && TryRecycle(blender)) removed.Add(Normal(Path.GetRelativePath(WorkspaceDir, blender)) + "/");
+        return removed;
+    }
+
+    /// <summary>The workspace holding this mod: &lt;workspace&gt;/mods/&lt;id&gt; (see RootOf).</summary>
+    private string WorkspaceDir => Path.GetDirectoryName(Path.GetDirectoryName(Dir)!)!;
+
+    /// <summary>To the Recycle Bin; false when it stays (in use, or no bin): the edit itself is already saved.</summary>
+    private static bool TryRecycle(string path)
+    {
+        try
+        {
+            RecycleBin.Current.Recycle(path);
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
     /// <summary>Sets a skin's colours from the "colors" JSON (null or {} removes them), validated like Check does.</summary>

@@ -11,6 +11,7 @@
     <ProjectReference Include="..\..\game\Tyrant.Dumper.Serialization\Tyrant.Dumper.Serialization.csproj" />
     <Compile Include="..\Tyrant.Core.Tests\FakeGame.cs" Link="FakeGame.cs" />
     <Compile Include="..\Tyrant.Core.Tests\TestTemp.cs" Link="TestTemp.cs" />
+    <Compile Include="..\Tyrant.Core.Tests\TestRecycleBin.cs" Link="TestRecycleBin.cs" />
     <Compile Include="..\Tyrant.Core.Tests\CatalogFixture.cs" Link="CatalogFixture.cs" />
     <Compile Include="..\Tyrant.Core.Tests\ModelFixture.cs" Link="ModelFixture.cs" />
     <Compile Include="..\Tyrant.Core.Tests\FakeAssetReader.cs" Link="FakeAssetReader.cs" />

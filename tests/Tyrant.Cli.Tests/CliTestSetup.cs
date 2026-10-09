@@ -33,6 +33,7 @@ public static class CliTestSetup
 #pragma warning restore CA2255
     internal static void UseFakeLauncher()
     {
+        Tyrant.Core.Tests.TestRecycleBin.Install();
         CliServices.Launcher = new NeverRunning();
         CliServices.Blender = new BlenderEnvironment
         {

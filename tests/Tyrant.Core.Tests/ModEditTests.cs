@@ -302,4 +302,65 @@ public class ModEditTests
     {
         Assert.Equal(expected, ModProject.SkinFileName(sex, slot));
     }
+
+    [Fact]
+    public void Removing_a_skin_with_its_files_recycles_its_model_and_blender_project()
+    {
+        var (game, ws, mod) = Setup();
+        using var _ = game;
+        mod = WithSkins(ws, mod);
+        var models = Path.Combine(mod.Dir, "models");
+        Directory.CreateDirectory(models);
+        foreach (var f in new[] { "carch-blue-1.glb", "carch-blue-1.lod0.tmesh", "carch-blue-1.lod1.tmesh", "carch-blue-1.model.json", "carch-green-2.glb" })
+            File.WriteAllText(Path.Combine(models, f), "x");
+        mod.Skin("blue").Model = "models/carch-blue-1.glb";
+        mod.Skin("green").Model = "models/carch-green-2.glb";
+        mod.Save();
+        var blender = Path.Combine(ws.Dir, "blender", "red-spot", "carcharodontosaurus-blue");
+        Directory.CreateDirectory(blender);
+        File.WriteAllText(Path.Combine(blender, "work.blend"), "x");
+
+        var removed = ModProject.Open(ws, "red-spot").RemoveSkin("blue", deleteFiles: true);
+
+        Assert.Equal(["blender/red-spot/carcharodontosaurus-blue/", "models/carch-blue-1.glb", "models/carch-blue-1.lod0.tmesh",
+            "models/carch-blue-1.lod1.tmesh", "models/carch-blue-1.model.json", "skins/blue/female_D.png", "skins/blue/male_pattern.png"],
+            removed.Order(StringComparer.Ordinal));
+        Assert.True(TestRecycleBin.Instance.Holds(blender));
+        Assert.True(TestRecycleBin.Instance.Holds(Path.Combine(models, "carch-blue-1.glb")));
+        Assert.True(File.Exists(Path.Combine(models, "carch-green-2.glb")));
+        Assert.True(File.Exists(Path.Combine(mod.Dir, "skins", "blue", "male_D.png"))); // green uses it
+    }
+
+    [Fact]
+    public void A_model_another_skin_or_a_species_model_uses_is_kept()
+    {
+        var (game, ws, mod) = Setup();
+        using var _ = game;
+        mod = WithSkins(ws, mod);
+        Directory.CreateDirectory(Path.Combine(mod.Dir, "models"));
+        File.WriteAllText(Path.Combine(mod.Dir, "models", "shared.glb"), "x");
+        mod.Skin("blue").Model = "models/shared.glb";
+        mod.Skin("green").Model = "models/shared.glb";
+        mod.Save();
+
+        var removed = ModProject.Open(ws, "red-spot").RemoveSkin("blue", deleteFiles: true);
+
+        Assert.DoesNotContain("models/shared.glb", removed);
+        Assert.True(File.Exists(Path.Combine(mod.Dir, "models", "shared.glb")));
+    }
+
+    [Fact]
+    public void A_locked_file_stays_and_the_skin_is_still_removed()
+    {
+        var (game, ws, mod) = Setup();
+        using var _ = game;
+        mod = WithSkins(ws, mod);
+        TestRecycleBin.Instance.RefuseUnder(Path.Combine(mod.Dir, "skins", "blue", "female_D.png"));
+
+        var removed = mod.RemoveSkin("blue", deleteFiles: true);
+
+        Assert.Equal(["skins/blue/male_pattern.png"], removed);
+        Assert.True(File.Exists(Path.Combine(mod.Dir, "skins", "blue", "female_D.png")));
+        Assert.Equal(["green"], ModProject.Open(ws, "red-spot").Manifest.Skins.Select(s => s.Id));
+    }
 }

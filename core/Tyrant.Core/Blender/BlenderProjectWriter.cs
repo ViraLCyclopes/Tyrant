@@ -29,6 +29,14 @@ public static class BlenderProjectWriter
 {
     public const string ModelFile = "model.glb";
 
+    /// <summary>&lt;workspace&gt;/blender/&lt;mod, or "game"&gt;: every model of that mod opened in Blender.</summary>
+    public static string ModFolderOf(string workspaceDir, string? modId) =>
+        Path.Combine(workspaceDir, "blender", modId is null ? "game" : TextureExporter.Sanitize(modId));
+
+    /// <summary>One model's Blender project folder: &lt;mod folder&gt;/&lt;species[-suffix]&gt;, lowercased and made safe.</summary>
+    public static string FolderOf(string workspaceDir, string? modId, string speciesId, string? suffix) =>
+        Path.Combine(ModFolderOf(workspaceDir, modId), TextureExporter.Sanitize((speciesId + (suffix is null ? "" : "-" + suffix)).ToLowerInvariant()));
+
     public static BlenderProjectResult Write(BlenderOpenRequest request, Workspace ws, GameInstall install, AssetIndex index,
         IReadOnlyList<SpeciesSkins> species, IAssetReader reader, string tyrantExe)
     {
@@ -54,8 +62,7 @@ public static class BlenderProjectWriter
 
         var kind = mod is null ? "game" : ownSkin is not null ? "skin" : "model";
         var suffix = kind == "game" ? vanilla?.Name : ownSkin?.Id;
-        var leaf = TextureExporter.Sanitize((speciesId + (suffix is null ? "" : "-" + suffix)).ToLowerInvariant());
-        var dir = Path.Combine(ws.Dir, "blender", mod is null ? "game" : TextureExporter.Sanitize(mod.Id), leaf);
+        var dir = FolderOf(ws.Dir, mod?.Id, speciesId, suffix);
         var projectFile = Path.Combine(dir, BlenderProjectFile.FileName);
         var old = File.Exists(projectFile) ? TryRead(projectFile) : null;
         var build = GameFingerprint.Compute(install).BuildGuid;

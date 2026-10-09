@@ -50,7 +50,7 @@ public static class ModSharing
     }
 
     /// <summary>A model's .glb with its built LODs and report (ModelFiles: x.lodN.tmesh, x.model.json).</summary>
-    private static IEnumerable<string> ModelFilesOf(ModProject mod, string? glb)
+    internal static IEnumerable<string> ModelFilesOf(ModProject mod, string? glb)
     {
         if (string.IsNullOrWhiteSpace(glb)) yield break;
         yield return glb;
