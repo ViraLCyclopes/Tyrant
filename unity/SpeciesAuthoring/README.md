@@ -1,5 +1,9 @@
 # Tyrant species authoring (experimental)
 
+> **The Unity path is parked.** Tyrant no longer downloads tools to copy the template into Unity. Tune a species'
+> prefab with **Prefab settings** (any field of its components) and give it its own look with **Open in Blender**.
+> A species that already has a Unity bundle keeps loading it.
+
 Open this folder as a project in **Unity Editor 2022.3.62f3**, matching the current
 PK build. This is an authoring project, not a recreation of the game. Do not use
 Play Mode with PK's components. Unity is needed to build bundles; players do not
@@ -32,16 +36,8 @@ Editor/Windows compatibility flags if an older project imported its DLLs incorre
 ## Author and export
 
 1. Add the project to Unity Hub and open it with 2022.3.62f3.
-2. In Tyrant's Species database, choose **Import template animal into Unity**.
-   Close this Unity project first. Tyrant downloads the pinned official Windows
-   release of [AssetRipper 2.0.0](https://github.com/AssetRipper/AssetRipper/releases/tag/2.0.0)
-   on the first import (about 44 MB), recovers the prefab's bundle dependencies,
-   and imports only assets referenced by the prefab. The plain `TyrantImport.txt`
-   report gives its Project-window path under `Assets/Animals/<species-id>/Template-*`.
-   Each import gets separate GUIDs and a new folder, preserving existing edits.
-   Script references bind to the local PK DLLs; no decompiled scripts are added.
-   CLI: `tyrant unity import-prefab <mod-id> <species-id> --workspace <workspace>`.
-3. Open the imported prefab. It retains the root's `Animal`, `AnimalSetup`, `AnimalAnimationController`,
+2. Create the species prefab in Unity yourself. Tyrant no longer recovers the template prefab for you.
+3. Build a complete PK animal prefab. It needs the root's `Animal`, `AnimalSetup`, `AnimalAnimationController`,
    `AnimalGrowthManager`, and `AnimalAudioComponent`, including their linked assets.
    Animator, meshes, materials, bones, LODs and serialized component settings.
    Edit this copy and keep the root **inactive**. Its animations, species gameplay

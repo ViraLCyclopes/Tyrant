@@ -572,11 +572,6 @@ export interface ModImportResult {
   mods: ModsListResult;
 }
 
-export interface ModImportUnityPrefabParams {
-  id: string;
-  speciesId: string;
-}
-
 export interface ModInstallResult {
   message: string;
   warnings: string[];
@@ -1202,13 +1197,6 @@ export interface SpeciesTextureDto {
   sharedWith: string[];
 }
 
-export interface UnityPrefabImportResult {
-  directory: string;
-  prefab: string;
-  report: string;
-  assets: number;
-}
-
 export interface VanillaSkinRow {
   index: number;
   name: string;
@@ -1287,7 +1275,6 @@ export interface RpcMethods {
   "mods.forgetSkins": { params: ModForgetSkinsParams; result: SkinSlotsResult };
   "mods.get": { params: ModIdParams; result: ModDetail };
   "mods.import": { params: ModImportParams; result: ModImportResult };
-  "mods.importUnityPrefab": { params: ModImportUnityPrefabParams; result: JobStarted };
   "mods.install": { params: ModIdParams; result: JobStarted };
   "mods.list": { params: void; result: ModsListResult };
   "mods.modelPreview": { params: ModModelPreviewParams; result: ModModelPreview };
@@ -1346,7 +1333,6 @@ export interface RpcJobs {
   "dump.install": DumperInstallResult;
   "dump.run": DumpRunResult;
   "mods.export": ModExportResult;
-  "mods.importUnityPrefab": UnityPrefabImportResult;
   "mods.install": ModInstallResult;
   "species.exportAnimations": SpeciesExportAnimationsResult;
   "species.pack": SpeciesPackRunResult;

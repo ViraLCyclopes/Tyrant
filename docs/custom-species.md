@@ -4,18 +4,14 @@ Each mod's animal definitions live in a real **SQLite database named `animals.db
 They are not stored in `mod.json`. The file can be edited with SQL, a SQLite editor
 or Tyrant's Species database page. It travels with the mod when installed or exported.
 
-For an authored Unity prefab, use **Create / show Unity project** on an existing
-species. This creates a project under `<workspace>/authoring/<mod-id>/Unity`, outside
-the shared mod. **Import template animal into Unity** recovers the vanilla prefab
-and its linked assets with a pinned local AssetRipper helper. It forks asset GUIDs,
-binds scripts to the project's PK references and disables the prefab root. Existing
-authoring files are preserved. Follow its README, build a bundle in Unity 2022.3.62f3, then enter
-the export report's asset path and attach the bundle in Tyrant. See the
-[Unity authoring guide](../unity/SpeciesAuthoring/README.md). This pipeline is
-experimental. Unity compilation, PK component serialization and bundle build/load
-checks pass for the recovered Spinosaurus prefab; it still needs an in-game test. Tyrant prepares
-local authoring DLLs automatically and restores PK's script assembly identities
-when attaching a Unity bundle.
+> **The Unity path is parked.** Tyrant no longer downloads tools to copy the template into Unity. Tune a species'
+> prefab with **Prefab settings** (any field of its components) and give it its own look with **Open in Blender**.
+> A species that already has a Unity bundle keeps loading it.
+
+If you already have a Unity bundle for a species, **Create / show Unity project** still creates a project under
+`<workspace>/authoring/<mod-id>/Unity`, and the bundle can be attached in Tyrant. See the
+[Unity authoring guide](../unity/SpeciesAuthoring/README.md). This pipeline is experimental. Tyrant restores PK's
+script assembly identities when attaching a Unity bundle.
 
 Recovered shader previews carry `Tyrant/Recovered/` names. When spawning the
 authored animal, Tyrant rebuilds marked materials from the loaded vanilla prefab's

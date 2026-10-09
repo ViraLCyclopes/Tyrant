@@ -101,16 +101,6 @@
       tab.info(`Unity project: ${project.directory}. Add this folder in Unity Hub using Editor 2022.3.62f3. Read README.md for local PK references and prefab setup.`);
     }
   }
-  async function importUnityPrefab() {
-    busy = true;
-    try {
-      const result = await session.runJob('mods.importUnityPrefab', { id: doc.id, speciesId: selected }, 'Import Unity animal prefab', tab);
-      if (result) {
-        await session.platform.reveal(result.report);
-        tab.info(`Imported ${result.assets} assets. Open ${result.prefab} in Unity project ${result.directory}, then use Tyrant / Species prefab exporter.`);
-      }
-    } finally { busy = false; }
-  }
 </script>
 
 <section class="database" aria-label="Species database">
@@ -163,8 +153,6 @@
         </div>
         {#if !creating}
           <h3>Unity animal prefab (experimental)</h3>
-          <p class="hint">Import an editable copy of the template animal and its linked assets. Close its Unity project first. The first import downloads AssetRipper (about 44 MB).</p>
-          <button type="button" onclick={importUnityPrefab}>Import template animal into Unity…</button>
           <p class="hint">{animal?.prefab?.bundle ?? 'Using the template prefab'}. Attach a complete PK animal prefab built with Unity 2022.3.62f3. Copy its lowercase Asset path from the exporter report. Database settings still inherit from the selected animal template.</p>
           <label>Prefab asset path <input bind:value={prefabAsset} placeholder="assets/animals/mirabilis.prefab" /></label>
           <div class="toolbar">

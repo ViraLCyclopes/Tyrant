@@ -144,6 +144,48 @@ and on a skin: `"model": "models/carcharodontosaurus-spiked-5e6f7a8b.glb"`.
 - `file` must lie inside the mod; a path that leads outside it is an error, and Tyrant builds nothing for it.
 - Check and Install rebuild the converted files when the `.glb` in the mod changed. Tyrant also remembers the file you added the model from; when you export it again, Check warns and the model's page offers **Re-import** (or run `tyrant mod replace-model` again).
 
+## Prefab settings
+
+A mod can change any serialized field of a species' prefab components (physics, IK, LODs and so on) without replacing
+the prefab. Each target gets one file in the mod's `prefabs/` folder. `mod.json` does not list these files; Tyrant
+finds them by folder.
+
+```json
+{
+  "format": 1,
+  "target": "Spinosaurus",
+  "fields": [
+    { "object": "", "component": "AnimalPhysics", "field": "inputParams.waterlineHeight", "value": 3.5 },
+    { "object": "IK/LegFrontL", "component": "FABRIKComponentAnimal", "field": "core.influence", "value": 0.8 },
+    { "object": "", "component": "LODGroup", "field": "lods[1].screenRelativeTransitionHeight", "value": 0.2 }
+  ]
+}
+```
+
+- `target`: a base-game species id (`Spinosaurus`) or a custom species identity (`tyrant.<mod-id>.<species-id>`).
+  The file name is only a filesystem-safe form of the target; readers use `target` from the content.
+- `object`: the GameObject's path from the prefab root, names joined by `/`. `""` is the root. With duplicate sibling
+  names the path takes the first one.
+- `component`: the type's simple name (the script class, or `LODGroup` / `Animator`). For two components of the same
+  type, `#n` picks the n-th, counting from 0 (`FABRIKComponentAnimal#1`).
+- `field`: serialized field names joined by `.`, with `[i]` for list or array elements (`chain[2].boneLength`).
+- `value`: a JSON value of the field's type: a number, true/false, a string, an enum name (or its number),
+  `{"x":..,"y":..,"z":..}` (plus `"w"`) for vectors and quaternions, `{"r":..,"g":..,"b":..,"a":..}` for colours.
+
+If several mods set the same field on the same target, the later mod in load order wins, per field. Fields the other
+mods set are kept. A file with no fields is deleted. Mod Check errors on two files with the same target or an unknown
+target, and warns on a field the template prefab does not have or a value of the wrong type.
+
+**Editable fields:**
+
+- Every serialized field of a game MonoBehaviour on any object in the prefab, if its type is a number, bool, enum,
+  string, Vector2/3/4, Quaternion or Color, or a struct, class or list of these. List lengths are read-only; only
+  existing elements can be edited. Object references are read-only.
+- `LODGroup`: `lods[i].screenRelativeTransitionHeight`.
+- `Animator`: `applyRootMotion` and `cullingMode`.
+- Not editable: `Transform` (use rig edits), renderers, meshes, materials, the Animator's controller and avatar, and
+  Unity's internal `m_*` fields on other built-in components.
+
 ## Rig edits (changing an animal's skeleton)
 
 ```json

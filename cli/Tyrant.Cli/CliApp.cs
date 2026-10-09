@@ -23,11 +23,6 @@ public static class CliApp
             config.SetApplicationName("tyrant");
             config.ConfigureConsole(AnsiConsole.Create(new AnsiConsoleSettings { Out = new AnsiConsoleOutput(Console.Out) })); // help goes to the current output
             config.PropagateExceptions();
-            config.AddBranch("unity", unity =>
-            {
-                unity.AddCommand<UnityPrepareCommand>("prepare").WithDescription("Prepare local PK DLL references for a Unity authoring project.");
-                unity.AddCommand<UnityImportPrefabCommand>("import-prefab").WithDescription("Recover a species template as an editable Unity prefab with its dependencies.");
-            });
             config.AddBranch("install", install =>
             {
                 install.SetDescription("Find the game install.");

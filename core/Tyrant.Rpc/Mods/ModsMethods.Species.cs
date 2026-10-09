@@ -13,7 +13,6 @@ public sealed record ModAnimalFieldDto(string Path, string Kind, string Value, s
 public sealed record ModSetSpeciesIconParams(string Id, string Revision, string SpeciesId, string? Png = null);
 public sealed record ModSetSpeciesPrefabParams(string Id, string Revision, string SpeciesId, string? Bundle = null, string? Asset = null);
 public sealed record ModUnityProjectDto(string Directory, string Readme);
-public sealed record ModImportUnityPrefabParams(string Id, string SpeciesId);
 public sealed record ModStatDto(string Id, string Label, string Unit, double Min, double Max);
 public sealed record ModAnimalDatabase(IReadOnlyList<ModAnimalDto> Animals, IReadOnlyList<ModStatDto> Fields);
 public sealed record ModAddSpeciesParams(string Id, string Revision, string SpeciesId, string Template, string Name,
@@ -24,21 +23,6 @@ public sealed record ModSetSpeciesParams(string Id, string Revision, string Spec
 
 public sealed partial class ModsMethods
 {
-    [RpcMethod("mods.importUnityPrefab", JobResult = typeof(UnityPrefabImportResult))]
-    public JobStarted ImportUnityPrefab(ModImportUnityPrefabParams p)
-    {
-        var (ws, install) = session.Current();
-        var species = ModProject.Open(ws, p.Id).Manifest.Species.FirstOrDefault(s => s.Id == p.SpeciesId)
-            ?? throw new TyrantException(TyrantErrorCode.TargetNotFound, "Species not found: " + p.SpeciesId);
-        var index = RequireIndex(ws);
-        var template = RequireSpecies(ws).FirstOrDefault(s => s.SpeciesId == species.Base);
-        if (template?.PrefabGuid is null) throw new TyrantException(TyrantErrorCode.AssetNotFound, "The template has no indexed animal prefab.");
-        var prefab = index.Resolve(template.PrefabGuid, "GameObject");
-        var directory = UnitySpeciesProject.Create(ws, p.Id, Path.Combine(AppContext.BaseDirectory, "unity", "SpeciesAuthoring"));
-        return jobs.Start("Import " + species.Base + " Unity prefab", (progress, ct) =>
-            UnityPrefabImport.Run(ws, install, index, prefab, directory, species.Id, species.Name, progress, ct));
-    }
-
     [RpcMethod("mods.createUnityProject")]
     public ModUnityProjectDto CreateUnityProject(ModIdParams p)
     {
