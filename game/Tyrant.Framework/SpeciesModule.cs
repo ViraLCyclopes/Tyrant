@@ -16,6 +16,12 @@ namespace Tyrant.Framework
         private static readonly HashSet<object> Databases = new HashSet<object>(ReferenceComparer.Instance);
         private static readonly Dictionary<object, string> Added = new Dictionary<object, string>(ReferenceComparer.Instance);
         private static readonly HashSet<string> Ids = new HashSet<string>(StringComparer.Ordinal);
+        /// <summary>Each added species' template: it is unlocked when its template is.</summary>
+        private static readonly Dictionary<string, string> Templates = new Dictionary<string, string>(StringComparer.Ordinal);
+        /// <summary>Each added species' scientific name, its place in the game's alphabetical animal list (<see cref="NurseryOrder"/>).</summary>
+        private static readonly Dictionary<string, string> SortNames = new Dictionary<string, string>(StringComparer.Ordinal);
+        private static MethodInfo? _isUnlocked;
+        private static MethodInfo? _unlockProgress;
         private static readonly Dictionary<object, List<AnimalText>> Texts = new Dictionary<object, List<AnimalText>>(ReferenceComparer.Instance);
         private static readonly Dictionary<object, GameObject> Prefabs = new Dictionary<object, GameObject>(ReferenceComparer.Instance);
         private static readonly Dictionary<string, AssetBundle> Bundles = new Dictionary<string, AssetBundle>(StringComparer.OrdinalIgnoreCase);
@@ -59,8 +65,13 @@ namespace Tyrant.Framework
                 harmony.Patch(database, prefix: new HarmonyMethod(typeof(SpeciesModule), nameof(DatabaseInit)));
                 harmony.Patch(manager, prefix: new HarmonyMethod(typeof(SpeciesModule), nameof(EnsureReady)));
                 harmony.Patch(native, prefix: new HarmonyMethod(typeof(SpeciesModule), nameof(EnsureReady)));
+                (_isUnlocked, _unlockProgress) = (unlocked, progress);
                 harmony.Patch(unlocked, postfix: new HarmonyMethod(typeof(SpeciesModule), nameof(Unlocked)));
                 harmony.Patch(progress, postfix: new HarmonyMethod(typeof(SpeciesModule), nameof(UnlockProgress)));
+                // Display order only: a missing method leaves custom species at the end of the Alphabet sort.
+                var rebuildAll = AccessTools.Method(RequireType("PrehistoricKingdom.AnimalDatabase"), "RebuildAllAnimalDataAssets");
+                if (rebuildAll != null) harmony.Patch(rebuildAll, postfix: new HarmonyMethod(typeof(SpeciesModule), nameof(AllAnimalsRebuilt)));
+                else FrameworkMod.Log.Warning("AnimalDatabase.RebuildAllAnimalDataAssets not found; new species are listed last in the Nursery's Alphabet sort.");
                 harmony.Patch(displayName, postfix: new HarmonyMethod(typeof(SpeciesModule), nameof(LocalizedName)));
             }
             catch (Exception ex)
@@ -160,6 +171,8 @@ namespace Tyrant.Framework
                     if (prefab != null) Prefabs[data] = prefab;
                     Texts[data] = entry.Texts;
                     Ids.Add(id);
+                    Templates[id] = entry.Base;
+                    SortNames[id] = entry.Genus.Trim() + " " + entry.Epithet.Trim();
                     FrameworkMod.Log.Msg($"Added species {entry.Name} ({id}), template {entry.Base}." + (prefab == null ? "" : " Using Unity prefab " + entry.Prefab!.Asset + "."));
                 }
                 catch (Exception ex)
@@ -336,14 +349,33 @@ namespace Tyrant.Framework
             TemplateAssets.Clear();
         }
 
-        // First version: added species are always available, in new and existing parks.
-        private static void Unlocked(string __0, ref bool __result)
+        // An added species is unlocked, and as far researched, as its template: the Nursery's unlocked-first sorts then place it
+        // among the animals the player has, and in career it waits for the template's research. Asking for the template runs
+        // these postfixes again with the template's id, which is not an added species, so they leave its answer alone.
+        private static void Unlocked(object __instance, string __0, ref bool __result)
         {
-            if (Ids.Contains(__0)) __result = true;
+            if (_isUnlocked != null && Templates.TryGetValue(__0, out var template)) __result = (bool)_isUnlocked.Invoke(__instance, new object[] { template });
         }
-        private static void UnlockProgress(string __0, ref float __result)
+        private static void UnlockProgress(object __instance, string __0, ref float __result)
         {
-            if (Ids.Contains(__0)) __result = 1f;
+            if (_unlockProgress != null && Templates.TryGetValue(__0, out var template)) __result = (float)_unlockProgress.Invoke(__instance, new object[] { template });
+        }
+
+        /// <summary>The game sorts its all-animals list by species id; added species go by their scientific name instead.</summary>
+        private static void AllAnimalsRebuilt(object __instance)
+        {
+            if (SortNames.Count == 0) return;
+            try
+            {
+                if (!(AccessTools.Field(__instance.GetType(), "allAnimalDataAssets")?.GetValue(__instance) is IList list)) return;
+                var sorted = list.Cast<object>().ToList();
+                sorted.Sort((a, b) => NurseryOrder.Compare(Field(a, "speciesID") as string ?? "", Field(b, "speciesID") as string ?? "", SortNames));
+                for (var i = 0; i < sorted.Count; i++) list[i] = sorted[i];
+            }
+            catch (Exception ex)
+            {
+                FrameworkMod.Log.Warning("New species could not be placed in the Nursery's alphabetical list: " + ex.GetBaseException().Message);
+            }
         }
     }
 }

@@ -40,7 +40,9 @@ press **Save species** to apply the reset. Database edits currently clear the mo
 editor's undo history, because its undo snapshots cover `mod.json` rather than SQLite.
 
 The template supplies the skeleton, animations, growth and behavior. The new species
-has its own stable identity and is always unlocked in the first version. Vivarium
+has its own stable identity and is unlocked when its template is (in career, research
+the template to unlock it). In the Nursery it sorts by its scientific name, so a
+Giganotosaurus based on Carcharodontosaurus sits with the G's. Vivarium
 templates are not supported. Templates and ids are fixed in the form after creation.
 
 ## Outside Tyrant: SQL
