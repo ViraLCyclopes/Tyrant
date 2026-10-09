@@ -104,4 +104,22 @@ public class SkinsManifestTests
         Assert.Contains("colour", Assert.Single(skipped));
         Assert.Throws<ManifestException>(() => ModManifest.Parse(OneBadSkin)); // Tyrant's Check stays strict
     }
+
+    [Fact]
+    public void A_skins_group_is_read_trimmed_and_cut_and_written_back()
+    {
+        var json = """
+            { "format": 1, "id": "red-spot-carcharo", "skins": [
+              { "id": "red-spot", "species": "Carcharodontosaurus", "group": "  Jurassic Park ", "male": { "diffuse": "a.png" } },
+              { "id": "blank", "species": "Carcharodontosaurus", "group": " ", "male": { "diffuse": "b.png" } },
+              { "id": "long", "species": "Carcharodontosaurus", "group": "LONG", "male": { "diffuse": "c.png" } },
+              { "id": "number", "species": "Carcharodontosaurus", "group": 3, "male": { "diffuse": "d.png" } } ] }
+            """.Replace("\"LONG\"", "\"" + new string('x', 80) + "\"");
+
+        var m = ModManifest.Parse(json);
+
+        Assert.Equal(["Jurassic Park", null, new string('x', 64), null], m.Skins.Select(s => s.Group));
+        Assert.Equal("Jurassic Park", ModManifest.Parse(m.ToJson()).Skins[0].Group);
+        Assert.DoesNotContain("\"group\"", ModManifest.Parse(WithSkins).ToJson()); // no group: no key
+    }
 }

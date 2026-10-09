@@ -140,6 +140,19 @@ namespace Tyrant.Framework.Core
         /// <summary>The skin's rig edit (bone → offset), null for none; with it the skin overrides the species' model and rig.</summary>
         public Dictionary<string, RigOffset>? Rig { get; set; }
 
+        /// <summary>Tyrant's own grouping of a mod's skins in the mod editor ("Jurassic Park"); the game ignores it.</summary>
+        public string? Group { get; set; }
+
+        public const int MaxGroupLength = 64;
+
+        /// <summary>A group name as saved: trimmed and at most 64 characters; empty is no group.</summary>
+        public static string? GroupName(string? name)
+        {
+            var trimmed = name?.Trim();
+            if (string.IsNullOrEmpty(trimmed)) return null;
+            return trimmed!.Length > MaxGroupLength ? trimmed.Substring(0, MaxGroupLength) : trimmed;
+        }
+
         /// <summary>The skin's permanent key in skin-slots.json.</summary>
         public string Key(string modId) => modId + "/" + Id;
     }
@@ -295,6 +308,7 @@ namespace Tyrant.Framework.Core
                     Colors = entry.TryGetValue("colors", out var colors) && colors != null ? SkinColors.Parse(colors, skinId) : null,
                     Model = Text(entry, "model"),
                     Rig = entry.TryGetValue("rig", out var rig) && rig != null && RigEdit.Parse(rig, $"Skin \"{skinId}\"") is { Count: > 0 } parsed ? parsed : null,
+                    Group = SkinEntry.GroupName(Text(entry, "group")),
                 };
                 if ((skin.Male?.Count ?? 0) == 0 && (skin.Female?.Count ?? 0) == 0)
                     throw new ManifestException($"Skin \"{skinId}\" needs \"male\" or \"female\" textures.");
@@ -343,6 +357,7 @@ namespace Tyrant.Framework.Core
                 map["skins"] = Skins.Select(s =>
                 {
                     var entry = new Dictionary<string, object?> { ["id"] = s.Id, ["species"] = s.Species, ["name"] = s.Name, ["base"] = s.Base };
+                    if (s.Group != null) entry["group"] = s.Group;
                     if (s.Thumbnail != null) entry["thumbnail"] = s.Thumbnail;
                     if (s.Male != null) entry["male"] = Ordered(s.Male);
                     if (s.Female != null) entry["female"] = Ordered(s.Female);
