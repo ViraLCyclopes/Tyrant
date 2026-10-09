@@ -290,4 +290,24 @@ public class ModCheckerTests
 
         Assert.DoesNotContain(Checker.Check(mod, Index).Warnings, w => w.Contains("does nothing"));
     }
+
+    [Fact]
+    public void Prefab_settings_for_an_unknown_species_or_field_are_reported()
+    {
+        var (game, ws, mod) = Setup();
+        using var _ = game;
+        var dir = Directory.CreateDirectory(Path.Combine(mod.Dir, "prefabs")).FullName;
+        File.WriteAllText(Path.Combine(dir, "a.json"), """{"format":1,"target":"Nope","fields":[{"object":"","component":"AnimalPhysics","field":"inputParams.waterlineHeight","value":3}]}""");
+        File.WriteAllText(Path.Combine(dir, "b.json"), """{"format":1,"target":"Carcharodontosaurus","fields":[{"object":"","component":"AnimalPhysics","field":"inputParams.gone","value":3}]}""");
+        File.WriteAllText(Path.Combine(dir, "c.json"), """{"format":1,"target":"Carcharodontosaurus","fields":[]}""");
+        SkinDumps.Write(ws.DataDir);
+        var species = SpeciesSkinsReader.Load(ws);
+
+        var result = Checker.Check(mod, Index, species, prefabFields: t => t == "Carcharodontosaurus"
+            ? [new PrefabFieldInfo("", "AnimalPhysics", "inputParams.waterlineHeight", "number", "2", true)] : null);
+
+        Assert.Contains(result.Errors, e => e.Contains("Nope") && e.Contains("not a species"));
+        Assert.Contains(result.Errors, e => e.Contains("c.json") && e.Contains("b.json"));
+        Assert.Contains(result.Warnings, w => w.Contains("inputParams.gone"));
+    }
 }

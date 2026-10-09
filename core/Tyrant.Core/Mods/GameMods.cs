@@ -129,8 +129,10 @@ public sealed class GameMods(Func<GameInstall, bool>? isGameRunning = null)
             .Concat(manifests.Keys.Where(id => entries.All(e => e.Id != id)).Order(StringComparer.Ordinal))
             .Select(id => (id, manifests[id])).ToList();
         var clashes = ModelTable.Clashes(order);
-        return result.Select(m => clashes.Any(c => c.Loser == m.Id)
-            ? m with { Clashes = clashes.Where(c => c.Loser == m.Id).Select(c => c.Message).ToList() } : m).ToList();
+        var prefabClashes = PrefabTable.Clashes(order.Select(o => (o.id, Path.Combine(root, o.id))).ToList());
+        IEnumerable<string> ClashesOf(string id) =>
+            clashes.Where(c => c.Loser == id).Select(c => c.Message).Concat(prefabClashes.Where(c => c.Loser == id).Select(c => c.Message));
+        return result.Select(m => ClashesOf(m.Id).Any() ? m with { Clashes = ClashesOf(m.Id).ToList() } : m).ToList();
     }
 
     public ModInstallState StateOf(GameInstall install, ModProject mod)

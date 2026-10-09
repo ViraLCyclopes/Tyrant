@@ -73,7 +73,20 @@ public sealed partial class ModsMethods
                 return null;
             }
         };
-        return ModChecker.ForGame(install).Check(mod, index, m.Species.Count > 0 || m.Skins.Count > 0 || m.Sounds.Count > 0 ? species : null,
-            m.Sounds.Count > 0 ? TrySounds(ws) : null, rigInfo, id => SpeciesDatabase.Template(ws, id));
+        var hasPrefabs = mod.PrefabTargets().Count > 0;
+        var checkSpecies = m.Species.Count > 0 || m.Skins.Count > 0 || m.Sounds.Count > 0 || hasPrefabs ? species : null;
+        Func<string, IReadOnlyList<PrefabFieldInfo>?>? prefabFields = !hasPrefabs || index is null || species is null ? null : target =>
+        {
+            try
+            {
+                return PrefabFields.Read(ws, install, index, ModProject.WithSpecies(species, m), Options.AssetReader, target);
+            }
+            catch (TyrantException)
+            {
+                return null;
+            }
+        };
+        return ModChecker.ForGame(install).Check(mod, index, checkSpecies,
+            m.Sounds.Count > 0 ? TrySounds(ws) : null, rigInfo, id => SpeciesDatabase.Template(ws, id), prefabFields);
     }
 }

@@ -35,7 +35,8 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
 
     /// <param name="rigInfo">A species' rig info (its skeleton, bones its animations and growth move); null without the index or dump.</param>
     public ModCheckResult Check(ModProject mod, AssetIndex? index, IReadOnlyList<SpeciesSkins>? species = null, SoundCatalog? sounds = null,
-        Func<string, Rigging.RigInfo?>? rigInfo = null, Func<string, SpeciesTemplateStats?>? templateStats = null)
+        Func<string, Rigging.RigInfo?>? rigInfo = null, Func<string, SpeciesTemplateStats?>? templateStats = null,
+        Func<string, IReadOnlyList<PrefabFieldInfo>?>? prefabFields = null)
     {
         var errors = new List<string>();
         var warnings = new List<string>();
@@ -71,7 +72,7 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
             if (species is not null) species = ModProject.WithSpecies(species, mod.Manifest);
         }
         if (mod.Manifest.Replace.Count == 0 && mod.Manifest.Skins.Count == 0 && mod.Manifest.Models.Count == 0 && mod.Manifest.Sounds.Count == 0
-            && mod.Manifest.Species.Count == 0 && mod.Manifest.Assembly is null)
+            && mod.Manifest.Species.Count == 0 && mod.Manifest.Assembly is null && mod.PrefabTargets().Count == 0)
             warnings.Add("The mod does nothing yet: add a texture replacement, a skin, a model or a sound.");
         if (index is null && mod.Manifest.Replace.Count > 0)
             warnings.Add("There is no asset index, so the target textures were not checked. Click Index assets on the Workspace tab.");
@@ -143,6 +144,7 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
         ModelProblems(mod, species, errors, warnings);
         RigProblems(mod, rigInfo, errors, warnings);
         SoundProblems(mod, species, sounds, errors, warnings);
+        PrefabProblems(mod, species, prefabFields, errors, warnings);
         var missing = index is null || pixelsOf is null ? [] : MissingCutouts(mod, index, species, warnings);
         return new ModCheckResult(errors, warnings) { MissingCutouts = missing };
     }
@@ -268,6 +270,30 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
             if (Tyrant.Core.ModelReplacements.ModelBuilder.OriginChanged(report))
                 warnings.Add($"Model of {speciesId}: your file {report.Origin} changed since you added it; to use the new version click Re-import on the model's page (Mods tab → open the mod → Models), or run 'tyrant mod replace-model' again.");
         }
+    }
+
+    private static void PrefabProblems(ModProject mod, IReadOnlyList<SpeciesSkins>? species, Func<string, IReadOnlyList<PrefabFieldInfo>?>? prefabFields,
+        List<string> errors, List<string> warnings)
+    {
+        var problems = new List<string>();
+        foreach (var (file, overrides) in Tyrant.Framework.Core.PrefabOverrides.ReadFolder(mod.Dir, problems))
+        {
+            if (species is not null && !species.Any(s => string.Equals(s.SpeciesId, overrides.Target, StringComparison.OrdinalIgnoreCase)))
+            {
+                errors.Add($"prefabs/{file}: {overrides.Target} is not a species of the game or of this mod; fix the target or remove the file.");
+                continue;
+            }
+            var fields = prefabFields?.Invoke(overrides.Target);
+            if (fields is null) continue;
+            foreach (var field in overrides.Fields)
+            {
+                var info = fields.FirstOrDefault(f => f.Object == field.Object && f.Component == field.Component && f.Field == field.Field);
+                if (info is null) { warnings.Add($"prefabs/{file}: {overrides.Target}'s prefab has no {field.Label} any more (a game update?); the game skips it."); continue; }
+                using var value = System.Text.Json.JsonDocument.Parse(Tyrant.Framework.Core.Json.Write(field.Value));
+                if (PrefabFieldTree.CheckValue(info, value.RootElement) is { } problem) warnings.Add($"prefabs/{file}: {problem} The game skips it.");
+            }
+        }
+        errors.AddRange(problems);
     }
 
     private List<string> MissingCutouts(ModProject mod, AssetIndex index, IReadOnlyList<SpeciesSkins>? species, List<string> warnings)

@@ -259,4 +259,26 @@ public class GameModsTests
         new GameMods().SetEnabled(install, "bbb-short", false);
         Assert.Empty(new GameMods().List(install).Single(m => m.Id == "aaa-long").Clashes);
     }
+
+    private static ModProject PrefabMod(Workspace ws, string id)
+    {
+        var mod = Mod(ws, id, "T_A_D.png");
+        Directory.CreateDirectory(Path.Combine(mod.Dir, "prefabs"));
+        File.WriteAllText(Path.Combine(mod.Dir, "prefabs", "x.json"), """{"format":1,"target":"Spinosaurus","fields":[{"object":"","component":"AnimalPhysics","field":"inputParams.waterlineHeight","value":3}]}""");
+        return mod;
+    }
+
+    [Fact]
+    public void An_installed_mod_whose_prefab_setting_a_later_one_overrides_says_so()
+    {
+        var (game, install, ws) = Setup();
+        using var _ = game;
+        new GameMods().Install(install, PrefabMod(ws, "aaa-long"));
+        new GameMods().Install(install, PrefabMod(ws, "bbb-short"));
+
+        var list = new GameMods().List(install).ToDictionary(m => m.Id);
+
+        Assert.Contains(list["aaa-long"].Clashes, c => c.Contains("Spinosaurus") && c.Contains("wins"));
+        Assert.Empty(list["bbb-short"].Clashes);
+    }
 }

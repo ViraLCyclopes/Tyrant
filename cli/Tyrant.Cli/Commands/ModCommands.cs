@@ -58,8 +58,22 @@ internal static class ModCli
     public static ModCheckResult Check(Workspace ws, GameInstall install, ModProject mod)
     {
         var m = mod.Manifest;
-        return ModChecker.ForGame(install).Check(mod, TryIndex(ws), m.Species.Count > 0 || m.Skins.Count > 0 || m.Sounds.Count > 0 ? TrySpecies(ws) : null,
-            m.Sounds.Count > 0 ? TrySounds(ws) : null, RigInfoProvider(ws, install), id => SpeciesDatabase.Template(ws, id));
+        var index = TryIndex(ws);
+        var species = TrySpecies(ws);
+        var hasPrefabs = mod.PrefabTargets().Count > 0;
+        Func<string, IReadOnlyList<PrefabFieldInfo>?>? prefabFields = !hasPrefabs || index is null || species is null ? null : target =>
+        {
+            try
+            {
+                return PrefabFields.Read(ws, install, index, ModProject.WithSpecies(species, m), CliServices.AssetReader, target);
+            }
+            catch (TyrantException)
+            {
+                return null;
+            }
+        };
+        return ModChecker.ForGame(install).Check(mod, index, m.Species.Count > 0 || m.Skins.Count > 0 || m.Sounds.Count > 0 || hasPrefabs ? species : null,
+            m.Sounds.Count > 0 ? TrySounds(ws) : null, RigInfoProvider(ws, install), id => SpeciesDatabase.Template(ws, id), prefabFields);
     }
 
     /// <summary>Rig edits' species skeletons for Check (null without the asset index or the data dump).</summary>
