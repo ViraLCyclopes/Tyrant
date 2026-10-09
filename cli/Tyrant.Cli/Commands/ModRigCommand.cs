@@ -41,7 +41,9 @@ public sealed class ModRigCommand : Command<ModRigCommand.Settings>
             : mod.Manifest.Models.Any(m => string.Equals(m.Target, species, StringComparison.Ordinal) && m.File.Length > 0);
         if (settings.Clear)
         {
-            var report = mod.SetRig(install, CliServices.LoadIndex(ws, install), ModCli.RequireSpeciesFor(ws, install, mod), CliServices.AssetReader, species, skin?.Id, null);
+            var (index, all) = (CliServices.LoadIndex(ws, install), ModCli.RequireSpeciesFor(ws, install, mod));
+            var report = mod.SetRig(install, index, all, CliServices.AssetReader, species, skin?.Id, null);
+            mod.RefreshHeadRigs(ws, install, index, all, CliServices.AssetReader);
             Console.WriteLine($"Cleared the rig edit of {what}.");
             if (report is not null)
                 Console.WriteLine("  WARN   The model was made for the edited skeleton; send it again from Blender (or add it again) so it fits the game's skeleton.");
@@ -52,7 +54,7 @@ public sealed class ModRigCommand : Command<ModRigCommand.Settings>
         var where = skin is null ? $"Rig edit of {species}" : $"Skin '{skin.Id}'";
         if (ModCli.RigInfoProvider(ws, install, ModCli.TrySpeciesFor(ws, install, mod))?.Invoke(species) is { } info)
         {
-            var (errors, warnings) = RigRules.Problems(rig, info, hasModel, where);
+            var (errors, warnings) = RigRules.Problems(rig, info, hasModel, where, perSkin: skin is not null);
             foreach (var e in errors) Console.WriteLine($"  ERROR  {e}");
             foreach (var w in warnings) Console.WriteLine($"  WARN   {w}");
         }

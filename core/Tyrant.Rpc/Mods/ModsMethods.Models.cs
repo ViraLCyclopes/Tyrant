@@ -109,11 +109,14 @@ public sealed partial class ModsMethods
     /// <summary>Before Check and Install: models whose .glb changed are built again (needs the index and the data dump).</summary>
     private void RebuildStaleModels(Workspace ws, GameInstall install, ModProject mod)
     {
-        if (!mod.ModelEntries().Any() || TryIndex(ws) is not { } index || TrySpeciesFor(ws, install, mod) is not { } species) return;
+        if (!mod.ModelEntries().Any() && !mod.Manifest.Models.Any(m => m.Rig is { Count: > 0 } || m.HeadRig is not null)) return;
+        if (TryIndex(ws) is not { } index || TrySpeciesFor(ws, install, mod) is not { } species) return;
         try
         {
             foreach (var file in mod.RebuildStaleModels(install, index, species, Options.AssetReader))
                 session.Log($"'{mod.Id}': rebuilt {file} (it changed since it was built).");
+            if (mod.RefreshHeadRigs(ws, install, index, species, Options.AssetReader))
+                session.Log($"'{mod.Id}': re-measured the head look of its species-wide rig edits.");
         }
         catch (TyrantException ex)
         {

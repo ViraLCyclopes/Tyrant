@@ -223,7 +223,7 @@ public sealed class BlenderService(BlenderEnvironment env)
                 // Checked before anything is written (or a new mod made): a refused rig edit leaves everything as it was.
                 var info = Rigging.RigInfoService.For(ws, install, index, species, reader, destination.Species);
                 var where = destination.Skin is null ? $"Rig edit of {destination.Species}" : $"Skin '{destination.Skin}'";
-                var (rigErrors, warnings) = Rigging.RigRules.Problems(rig, info, hasModel: !rigOnly, where);
+                var (rigErrors, warnings) = Rigging.RigRules.Problems(rig, info, hasModel: !rigOnly, where, perSkin: destination.Skin is not null);
                 if (rigErrors.Count > 0) return new BlenderSendResult(false, rigErrors, warnings, [], destination);
                 rigWarnings.AddRange(warnings);
             }
@@ -240,6 +240,7 @@ public sealed class BlenderService(BlenderEnvironment env)
                 report = null;
             }
             else report = mod.ReplaceModel(install, index, species, reader, glb, destination.Skin is null ? destination.Species : null, null, destination.Skin, rig: rig);
+            mod.RefreshHeadRigs(ws, install, index, species, reader); // a species-wide rig edit re-aims the species' head look
             BlenderProjectFile.Write(projectFile, project with { Destination = destination });
             // Only after the model went in: a refused model leaves the mod as it was.
             var pictures = BlenderImages.Apply(mod, ws, index, species, destination, images ?? [], sex, project.Source.Kind == "game" ? project.Source.Skin : null);

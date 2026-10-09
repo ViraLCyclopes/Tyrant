@@ -12,11 +12,15 @@ public static class RigLimits
 /// <summary>What Check, Send and the panels say about a rig edit, from the species' rig info.</summary>
 public static class RigRules
 {
+    /// <param name="perSkin">The edit is a skin's: the game's head look is tuned per species, so a skin's neck or head edit cannot re-aim it.</param>
     public static (List<string> Errors, List<string> Warnings) Problems(IReadOnlyDictionary<string, Tyrant.Framework.Core.RigOffset> rig, RigInfo info,
-        bool hasModel, string where)
+        bool hasModel, string where, bool perSkin = false)
     {
         var errors = new List<string>();
         var warnings = new List<string>();
+        var head = (info.HeadLook ?? []).Where(rig.ContainsKey).ToList();
+        if (perSkin && head.Count > 0)
+            warnings.Add($"{where}: the rig edit moves {string.Join(", ", head)}, but the game's head look is tuned per species, so this skin's head may not line up when it looks around. Put the edit on the whole species, or make a custom species for it.");
         var bones = info.Bones.ToHashSet(StringComparer.Ordinal);
         static string Are(List<string> names) => names.Count == 1 ? "is" : "are";
 

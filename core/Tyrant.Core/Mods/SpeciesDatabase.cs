@@ -33,6 +33,27 @@ public static class SpeciesDatabase
         return null;
     }
 
+    /// <summary>
+    /// Whether the game species walks on four legs (its animation table's locomotion style): the head look then measures
+    /// from the first neck bone, else from the bone above it. Null when the data dump does not say.
+    /// </summary>
+    public static bool? IsQuadrupedal(Workspace ws, string id)
+    {
+        try
+        {
+            var store = DataStore.Open(ws);
+            foreach (var (_, root) in store.LoadAll(store.FindType("PrehistoricKingdom.AnimalData")))
+            {
+                if (!(root.TryGetProperty("speciesID", out var species) && species.GetString() == id)) continue;
+                if (!root.TryGetProperty("animationTable", out var table) || !table.TryGetProperty("$ref", out var reference)) return null;
+                var data = store.Load(store.FindType("PrehistoricKingdom.AnimationV2.AnimationTableV2"), reference.GetProperty("name").GetString()!);
+                return data.TryGetProperty("locomotionStyle", out var style) ? style.GetString() == "Quadrupedal" : null;
+            }
+        }
+        catch (TyrantException ex) when (ex.Code is TyrantErrorCode.DataMissing or TyrantErrorCode.AssetNotFound or TyrantErrorCode.AssetAmbiguous) { }
+        return null;
+    }
+
     public static SpeciesTemplateStats Read(JsonElement root)
     {
         var result = new Dictionary<string, double>();

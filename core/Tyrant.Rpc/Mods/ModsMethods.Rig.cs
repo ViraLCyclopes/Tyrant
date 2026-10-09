@@ -34,7 +34,7 @@ public sealed partial class ModsMethods
         }
         var (errors, warnings) = info is null
             ? ([], hasModel ? [] : [$"{where}: the rig edit has no model of its own: the game's mesh stretches with the moved bones."])
-            : RigRules.Problems(rig, info, hasModel, where);
+            : RigRules.Problems(rig, info, hasModel, where, perSkin: skin is not null);
         return new ModRigView(ModRigBone.Of(rig)!, hasModel, errors, warnings);
     }
 
@@ -42,7 +42,12 @@ public sealed partial class ModsMethods
     public ModDetail ClearRig(ModClearRigParams p)
     {
         var (ws, install) = session.Current();
-        return Edit(p.Id, p.Revision, mod => mod.SetRig(install, RequireIndex(ws), mod.SpeciesFor(ws, install, RequireSpecies(ws)), Options.AssetReader, p.Skin is null ? p.Target : mod.Skin(p.Skin).Species, p.Skin, null),
+        return Edit(p.Id, p.Revision, mod =>
+            {
+                var (index, species) = (RequireIndex(ws), mod.SpeciesFor(ws, install, RequireSpecies(ws)));
+                mod.SetRig(install, index, species, Options.AssetReader, p.Skin is null ? p.Target : mod.Skin(p.Skin).Species, p.Skin, null);
+                mod.RefreshHeadRigs(ws, install, index, species, Options.AssetReader);
+            },
             p.Skin is null ? $"cleared the rig edit of {p.Target}" : $"cleared the rig edit of skin '{p.Skin}'");
     }
 }

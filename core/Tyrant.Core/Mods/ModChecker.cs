@@ -228,12 +228,12 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
     private static void RigProblems(ModProject mod, Func<string, Rigging.RigInfo?>? rigInfo, List<string> errors, List<string> warnings)
     {
         var rigs = mod.Manifest.Models.Where(m => m.Rig is { Count: > 0 })
-            .Select(m => (Species: m.Target, Where: $"Rig edit of {m.Target}", Rig: m.Rig!, HasModel: m.File.Length > 0))
+            .Select(m => (Species: m.Target, Where: $"Rig edit of {m.Target}", Rig: m.Rig!, HasModel: m.File.Length > 0, PerSkin: false))
             .Concat(mod.Manifest.Skins.Where(s => s.Rig is { Count: > 0 })
-                .Select(s => (Species: s.Species, Where: $"Skin '{s.Id}'", Rig: s.Rig!, HasModel: s.Model is not null)))
+                .Select(s => (Species: s.Species, Where: $"Skin '{s.Id}'", Rig: s.Rig!, HasModel: s.Model is not null, PerSkin: true)))
             .ToList();
         var notChecked = false;
-        foreach (var (speciesId, where, rig, hasModel) in rigs)
+        foreach (var (speciesId, where, rig, hasModel, perSkin) in rigs)
         {
             if (rigInfo?.Invoke(speciesId) is not { } info)
             {
@@ -241,7 +241,7 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
                 if (!hasModel) warnings.Add($"{where}: the rig edit has no model of its own: the game's mesh stretches with the moved bones.");
                 continue;
             }
-            var (rigErrors, rigWarnings) = Rigging.RigRules.Problems(rig, info, hasModel, where);
+            var (rigErrors, rigWarnings) = Rigging.RigRules.Problems(rig, info, hasModel, where, perSkin);
             errors.AddRange(rigErrors);
             warnings.AddRange(rigWarnings);
         }

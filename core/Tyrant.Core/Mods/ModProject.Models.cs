@@ -162,6 +162,57 @@ public sealed partial class ModProject
         return rebuilt;
     }
 
+    /// <summary>
+    /// Measures how each species-wide rig edit changes its species' head-look boom and keeps it on the entry ("headRig"),
+    /// which the framework puts onto the species. Run after a rig edit is set and before install (mods made before this).
+    /// quadrupedalOf gives a game species' locomotion from the data dump (null: unknown, the entry is left as it is).
+    /// True when an entry changed (the mod is saved then).
+    /// </summary>
+    public bool RefreshHeadRigs(GameInstall install, AssetIndex index, IReadOnlyList<SpeciesSkins> species, IAssetReader reader,
+        Func<string, bool?> quadrupedalOf)
+    {
+        species = WithSpecies(species, Manifest);
+        var changed = false;
+        foreach (var entry in Manifest.Models)
+        {
+            HeadRigCorrection? correction = null;
+            if (entry.Rig is { Count: > 0 })
+            {
+                // A custom species walks like its template.
+                var template = Manifest.Species.FirstOrDefault(s => s.Key(Id) == entry.Target)?.Base ?? entry.Target;
+                if (quadrupedalOf(template) is not { } quadrupedal) continue;
+                try
+                {
+                    var (_, prefab) = ResolveModelTarget(index, species, entry.Target, null);
+                    correction = Rigging.HeadRigMeasure.For(reader.ReadPrefabModel(install, prefab), entry.Rig, quadrupedal);
+                }
+                catch (TyrantException)
+                {
+                    continue; // the prefab cannot be read here: keep what the entry has
+                }
+            }
+            if (SameHeadRig(entry.HeadRig, correction)) continue;
+            entry.HeadRig = correction;
+            changed = true;
+        }
+        if (changed) Save();
+        return changed;
+    }
+
+    /// <summary><see cref="RefreshHeadRigs(GameInstall, AssetIndex, IReadOnlyList{SpeciesSkins}, IAssetReader, Func{string, bool?})"/> with the locomotion from the workspace's data dump.</summary>
+    public bool RefreshHeadRigs(Workspaces.Workspace ws, GameInstall install, AssetIndex index, IReadOnlyList<SpeciesSkins> species, IAssetReader reader)
+    {
+        if (!Manifest.Models.Any(m => m.Rig is { Count: > 0 } || m.HeadRig is not null)) return false;
+        var known = new Dictionary<string, bool?>(StringComparer.Ordinal);
+        return RefreshHeadRigs(install, index, species, reader, id => known.TryGetValue(id, out var q) ? q : known[id] = SpeciesDatabase.IsQuadrupedal(ws, id));
+    }
+
+    private static bool SameHeadRig(HeadRigCorrection? a, HeadRigCorrection? b) =>
+        a is null || b is null ? a is null && b is null
+        : Math.Abs(a.LengthScale - b.LengthScale) < 1e-5f
+          && Math.Abs(RigQuaternion.Dot(a.BoomTurn, b.BoomTurn)) > 1f - 1e-6f
+          && Math.Abs(RigQuaternion.Dot(a.HeadTurn, b.HeadTurn)) > 1f - 1e-6f;
+
     /// <summary>Every (species, .glb file) the mod uses whose file lies inside the mod: species replacements and skin models.</summary>
     public IEnumerable<(string Species, string File)> ModelEntries() => AllModelEntries().Where(e => IsInsideMod(e.File));
 

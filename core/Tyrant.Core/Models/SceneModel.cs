@@ -61,6 +61,9 @@ public sealed record PrefabModel(string Name, SkeletonNode Root, IReadOnlyList<R
 
     /// <summary>IK components that could not be read; the model is unaffected.</summary>
     public IReadOnlyList<string> IkFailures { get; init; } = [];
+
+    /// <summary>The game's AnimalSetup head and neck bones (head look); null for objects and when it cannot be read.</summary>
+    public AnimalSetupBones? Setup { get; init; }
 }
 
 /// <summary>A FABRIK chain's kind in the game: a leg (its foot raycasts to the ground) or the head and neck (aims at a target).</summary>

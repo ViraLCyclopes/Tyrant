@@ -16,12 +16,13 @@ namespace Tyrant.Core.Rigging;
 /// What a species' skeleton does in game, for rig editing's warnings: its bones, the bones its animations move (not only
 /// hold), and the bones its growth positions or scales. Failures says what could not be read (the lists are then partial).
 /// </summary>
+/// <param name="HeadLook">The bones the game's head look is measured on (the bone above the first neck, the neck, the head).</param>
 public sealed record RigInfo(IReadOnlyList<string> Bones, IReadOnlyList<string> ClipMoved, IReadOnlyList<string> GrowthMoved,
-    IReadOnlyList<string> GrowthScaled, IReadOnlyList<string> Failures);
+    IReadOnlyList<string> GrowthScaled, IReadOnlyList<string> Failures, IReadOnlyList<string>? HeadLook = null);
 
 public static class RigInfoService
 {
-    private const int CacheVersion = 1;
+    private const int CacheVersion = 2;
 
     private static readonly JsonSerializerOptions Json = new(DataStore.ReadableJson) { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
@@ -64,7 +65,7 @@ public static class RigInfoService
         var info = new RigInfo(names, clipMoved,
             growth?.Bones.Where(b => b.Translation && inSkeleton.Contains(b.Name)).Select(b => b.Name).ToList() ?? [],
             growth?.Bones.Where(b => b.Scale && inSkeleton.Contains(b.Name)).Select(b => b.Name).ToList() ?? [],
-            failures);
+            failures, HeadRigMeasure.Bones(model, quadrupedal: false));
         if (failures.Count == 0)
         {
             Directory.CreateDirectory(Path.GetDirectoryName(cache)!);

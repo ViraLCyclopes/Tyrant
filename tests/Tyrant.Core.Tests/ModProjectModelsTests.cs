@@ -332,6 +332,36 @@ public class ModProjectModelsTests
     }
 
     [Fact]
+    public void A_species_rig_edit_that_stretches_the_neck_keeps_its_head_look_correction()
+    {
+        var (game, ws, install, mod, reader, _) = Setup();
+        using var _1 = game;
+        // Spine → Neck.001 → Neck.002 → Neck.003 → Head, 0.3 apart; AnimalSetup lists the necks.
+        var root = new SkeletonNode("Carch", System.Numerics.Vector3.Zero, System.Numerics.Quaternion.Identity, System.Numerics.Vector3.One);
+        SkeletonNode Add(SkeletonNode parent, string name, float y, float z)
+        {
+            var node = new SkeletonNode(name, new System.Numerics.Vector3(0, y, z), System.Numerics.Quaternion.Identity, System.Numerics.Vector3.One, parent);
+            parent.Children.Add(node);
+            return node;
+        }
+        var spine = Add(root, "Spine", 1, 0);
+        var n1 = Add(spine, "Neck.001", 0.1f, 0.3f);
+        var n2 = Add(n1, "Neck.002", 0, 0.3f);
+        var n3 = Add(n2, "Neck.003", 0, 0.3f);
+        var head = Add(n3, "Head", 0, 0.3f);
+        reader.PrefabModelToReturn = new PrefabModel("Carch", root, [], []) { Setup = new AnimalSetupBones(head, [n1, n2, n3]) };
+        var stretch = new Dictionary<string, RigOffset> { ["Neck.003"] = RigOffset.Identity with { Move = new RigVector3(0, 0, 0.3f) } };
+        mod.SetRig(install, Index(), SpeciesSkinsReader.Load(ws), reader, "Carcharodontosaurus", null, stretch);
+
+        Assert.False(mod.RefreshHeadRigs(install, Index(), SpeciesSkinsReader.Load(ws), reader, _ => null)); // locomotion unknown: left alone
+        Assert.True(mod.RefreshHeadRigs(install, Index(), SpeciesSkinsReader.Load(ws), reader, _ => true));
+
+        var saved = Assert.Single(ModProject.Open(ws, "big-carch").Manifest.Models);
+        Assert.Equal(1.2f / 0.9f, saved.HeadRig!.LengthScale, 4);
+        Assert.False(mod.RefreshHeadRigs(install, Index(), SpeciesSkinsReader.Load(ws), reader, _ => true)); // already up to date
+    }
+
+    [Fact]
     public void A_species_rig_without_a_model_is_its_own_entry_with_no_model_file()
     {
         var (game, ws, install, mod, reader, _) = Setup();

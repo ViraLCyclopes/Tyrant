@@ -39,6 +39,7 @@ internal static class PrefabReader
             MaterialFailures = materialFailures,
             IkChains = ikChains,
             IkFailures = ikFailures,
+            Setup = AnimalSetupReader.Read(manager, file, transformByGameObject, nodes),
         };
     }
 
