@@ -224,6 +224,9 @@ public class BlenderServiceTests
 
         Assert.True(sent.Ok, string.Join(" ", sent.Errors));
         Assert.Contains(ModProject.Open(ws, "pack").Manifest.Models, m => m.Target == identity);
+
+        var withRig = BlenderService.Send(ws, install, index, species, reader, project.ProjectFile, glb, null, null, rig: RigOn("Tail"));
+        Assert.True(withRig.Ok, string.Join(" ", withRig.Errors));
     }
 
     [Fact]

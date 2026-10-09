@@ -1,5 +1,6 @@
 using Tyrant.Core.Assets;
 using Tyrant.Core.Blender;
+using Tyrant.Core.Errors;
 using Tyrant.Core.Install;
 using Tyrant.Core.Models;
 using Tyrant.Core.Mods;
@@ -42,6 +43,26 @@ public class BlenderProjectTests
             ModProject.WithSpecies(c.Species, mod.Manifest), c.Reader, "t.exe");
 
         Assert.Equal(new BlenderDestination("pack", identity, null), BlenderProjectFile.Read(result.ProjectFile).Destination);
+    }
+
+    [Fact]
+    public void Another_mods_custom_species_is_refused()
+    {
+        using var c = Setup();
+        var pack = ModProject.Create(c.Ws, "pack", null, null);
+        pack.AddSpecies(c.Species, "mirabilis", "Carcharodontosaurus", "Mirabilis", "Tyrantus", "mirabilis");
+        var other = ModProject.Create(c.Ws, "other", null, null);
+        var foreign = other.AddSpecies(c.Species, "rex", "Carcharodontosaurus", "Rex", "Tyrantus", "rex").Key(other.Id);
+        var request = new BlenderOpenRequest(foreign, null, "pack", false, false);
+
+        var viaRpc = Assert.Throws<TyrantException>(() => BlenderProjectWriter.Write(request, c.Ws, c.Install, c.Index,
+            ModProject.WithSpecies(c.Species, pack.Manifest), c.Reader, "t.exe"));
+        Assert.Equal(TyrantErrorCode.TargetNotFound, viaRpc.Code);
+
+        var both = ModProject.WithSpecies(ModProject.WithSpecies(c.Species, pack.Manifest), other.Manifest);
+        var direct = Assert.Throws<TyrantException>(() => BlenderProjectWriter.Write(request, c.Ws, c.Install, c.Index, both, c.Reader, "t.exe"));
+        Assert.Equal(TyrantErrorCode.TargetNotFound, direct.Code);
+        Assert.Contains("does not replace", direct.Message);
     }
 
     [Fact]
