@@ -18,9 +18,10 @@ public sealed class ModShowCommand : Command<ModSettings>
         Console.WriteLine($"Replacements ({m.Replace.Count}):");
         foreach (var r in m.Replace) Console.WriteLine($"  {r.Texture} <- {r.File}");
         Console.WriteLine($"Species ({m.Species.Count}):");
+        var dump = m.Species.Count > 0 ? ModCli.TrySpecies(ws) : null; // read once, for the template skins' names
         foreach (var entry in m.Species)
         {
-            var template = ModCli.TrySpecies(ws)?.FirstOrDefault(s => s.SpeciesId == entry.Base)?.Skins.FirstOrDefault(s => s.Index == entry.StartingSkin)?.Name;
+            var template = dump?.FirstOrDefault(s => s.SpeciesId == entry.Base)?.Skins.FirstOrDefault(s => s.Index == entry.StartingSkin)?.Name;
             Console.WriteLine($"  {entry.Key(m.Id)}  {entry.Name}  template {entry.Base}  starting skin {entry.StartingSkin} {entry.StartingSkinName ?? template ?? "?"}{(entry.Swatch is null ? "" : $"  swatch {entry.Swatch}")}");
         }
         Console.WriteLine($"Skins ({m.Skins.Count}):");
