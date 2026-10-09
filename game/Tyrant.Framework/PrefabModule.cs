@@ -46,7 +46,9 @@ namespace Tyrant.Framework
             if (transform == null) return $"the prefab has no object '{field.Object}'.";
             var hash = field.Component.IndexOf('#');
             var type = hash < 0 ? field.Component : field.Component.Substring(0, hash);
-            var nth = hash < 0 ? 0 : int.Parse(field.Component.Substring(hash + 1));
+            var nth = 0;
+            if (hash >= 0 && (!int.TryParse(field.Component.Substring(hash + 1), out nth) || nth < 0))
+                return $"'{field.Component}' is not a valid component; use <Type> or <Type>#n with n from 0.";
             var component = transform.GetComponents<Component>().Where(c => c != null && c.GetType().Name == type).Skip(nth).FirstOrDefault();
             if (component == null) return $"'{(field.Object.Length == 0 ? "the root" : field.Object)}' has no {field.Component}.";
             switch (component)

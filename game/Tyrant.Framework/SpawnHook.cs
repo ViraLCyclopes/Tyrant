@@ -11,27 +11,50 @@ namespace Tyrant.Framework
     internal static class SpawnHook
     {
         private static bool _started;
+        private static bool _warnedMissing;
+        private static System.Reflection.MethodInfo? _instantiateToInstance;
 
         public static void Start(HarmonyLib.Harmony harmony)
         {
             if (_started || (!SpeciesModule.HasSpecies && !PrefabModule.HasOverrides)) return;
-            var spawn = AccessTools.Method(AccessTools.TypeByName("PrehistoricKingdom.AddrAnimals"), "InstantiateInternal");
-            if (spawn == null || spawn.GetParameters().Length != 3)
+            try
             {
-                FrameworkMod.Log.Error("AddrAnimals.InstantiateInternal changed: custom species and prefab settings are off.");
-                return;
+                var spawn = AccessTools.Method(AccessTools.TypeByName("PrehistoricKingdom.AddrAnimals"), "InstantiateInternal")
+                    ?? throw new MissingMethodException("AddrAnimals.InstantiateInternal");
+                var parameters = spawn.GetParameters();
+                if (parameters.Length != 3 || parameters[2].ParameterType != typeof(bool))
+                    throw new MissingMethodException("signature changed");
+                _instantiateToInstance = AccessTools.Method(parameters[1].ParameterType, "InstantiateToInstance", new[] { typeof(Func<GameObject, GameObject>) })
+                    ?? throw new MissingMethodException("InstantiateToInstance");
+                harmony.Patch(spawn, prefix: new HarmonyMethod(typeof(SpawnHook), nameof(Spawn)));
+                _started = true;
             }
-            harmony.Patch(spawn, prefix: new HarmonyMethod(typeof(SpawnHook), nameof(Spawn)));
-            _started = true;
+            catch (Exception ex)
+            {
+                _instantiateToInstance = null;
+                FrameworkMod.Log.Error($"AddrAnimals.InstantiateInternal changed ({ex.Message}): custom species and prefab settings are off.");
+            }
         }
 
         private static bool Spawn(object __0, object __1, bool __2)
         {
             var custom = SpeciesModule.TryCustom(__0, out var id, out var authored);
-            var target = custom ? id : SpeciesOf(__0);
+            var target = custom ? id : (PrefabModule.HasOverrides ? SpeciesOf(__0) : null);
             var fields = PrefabModule.For(target);
+            if (fields != null && fields.Count == 0) fields = null;
             if (!custom && fields == null) return true;
-            var instantiate = AccessTools.Method(__1.GetType(), "InstantiateToInstance", new[] { typeof(Func<GameObject, GameObject>) });
+            var instantiate = _instantiateToInstance;
+            if (instantiate == null || !instantiate.DeclaringType!.IsInstanceOfType(__1))
+                instantiate = AccessTools.Method(__1.GetType(), "InstantiateToInstance", new[] { typeof(Func<GameObject, GameObject>) });
+            if (instantiate == null)
+            {
+                if (!_warnedMissing)
+                {
+                    _warnedMissing = true;
+                    FrameworkMod.Log.Error("InstantiateToInstance is missing: Tyrant spawning is skipped and the game's own spawn runs.");
+                }
+                return true;
+            }
             Func<GameObject, GameObject> create = template =>
             {
                 var prefab = template;
