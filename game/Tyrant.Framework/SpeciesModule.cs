@@ -59,7 +59,6 @@ namespace Tyrant.Framework
                 harmony.Patch(database, prefix: new HarmonyMethod(typeof(SpeciesModule), nameof(DatabaseInit)));
                 harmony.Patch(manager, prefix: new HarmonyMethod(typeof(SpeciesModule), nameof(EnsureReady)));
                 harmony.Patch(native, prefix: new HarmonyMethod(typeof(SpeciesModule), nameof(EnsureReady)));
-                harmony.Patch(spawn, prefix: new HarmonyMethod(typeof(SpeciesModule), nameof(Spawn)));
                 harmony.Patch(unlocked, postfix: new HarmonyMethod(typeof(SpeciesModule), nameof(Unlocked)));
                 harmony.Patch(progress, postfix: new HarmonyMethod(typeof(SpeciesModule), nameof(UnlockProgress)));
                 harmony.Patch(displayName, postfix: new HarmonyMethod(typeof(SpeciesModule), nameof(LocalizedName)));
@@ -272,42 +271,37 @@ namespace Tyrant.Framework
             }
         }
 
-        // Unlike the original method, the clone stays inactive until ObjectID and its data cache are set.
-        private static bool Spawn(object __0, object __1, bool __2)
+        public static bool HasSpecies => Added.Count > 0 || _mods.Count > 0;
+
+        public static bool TryCustom(object data, out string id, out GameObject? authored)
         {
-            if (!Added.TryGetValue(__0, out var id)) return true;
-            var instantiate = AccessTools.Method(__1.GetType(), "InstantiateToInstance", new[] { typeof(Func<GameObject, GameObject>) });
-            Func<GameObject, GameObject> create = prefab =>
-            {
-                if (Prefabs.TryGetValue(__0, out var authored))
-                {
-                    RetainTemplateAssets(authored, __1);
-                    RecoveredMaterials.Restore(authored, prefab, message => FrameworkMod.Log.Msg(message));
-                    prefab = authored;
-                }
-                GameObject? instance = null;
-                var active = prefab.activeSelf;
-                try
-                {
-                    prefab.SetActive(false);
-                    instance = UnityEngine.Object.Instantiate(prefab);
-                    var component = instance.GetComponent(_animal!);
-                    if (component == null) throw new InvalidOperationException("template prefab has no Animal component");
-                    _objectId!.SetValue(component, id);
-                    _animalData!.SetValue(component, __0);
-                    instance.SetActive(__2);
-                    if (Prefabs.ContainsKey(__0)) SpeciesMaterialDiagnostics.Track(instance, component, id);
-                    return instance;
-                }
-                catch
-                {
-                    if (instance != null) UnityEngine.Object.Destroy(instance);
-                    throw;
-                }
-                finally { prefab.SetActive(active); }
-            };
-            instantiate.Invoke(__1, new object[] { create });
-            return false;
+            authored = null;
+            if (!Added.TryGetValue(data, out id!)) return false;
+            Prefabs.TryGetValue(data, out authored);
+            return true;
+        }
+
+        /// <summary>An authored prefab borrows the template's assets and gets its materials rebuilt before it is cloned.</summary>
+        public static void PrepareAuthored(GameObject authored, GameObject template, object user)
+        {
+            RetainTemplateAssets(authored, user);
+            RecoveredMaterials.Restore(authored, template, message => FrameworkMod.Log.Msg(message));
+        }
+
+        /// <summary>Gives a custom species' fresh, inactive instance its identity before it wakes.</summary>
+        public static void Identify(GameObject instance, object data, string id)
+        {
+            var component = instance.GetComponent(_animal!);
+            if (component == null) throw new InvalidOperationException("template prefab has no Animal component");
+            _objectId!.SetValue(component, id);
+            _animalData!.SetValue(component, data);
+        }
+
+        /// <summary>Starts material diagnostics for an authored-prefab instance once it is awake.</summary>
+        public static void Activated(GameObject instance, object data, string id)
+        {
+            if (!Prefabs.ContainsKey(data)) return;
+            SpeciesMaterialDiagnostics.Track(instance, instance.GetComponent(_animal!), id);
         }
 
         private static void RetainTemplateAssets(GameObject authored, object user)

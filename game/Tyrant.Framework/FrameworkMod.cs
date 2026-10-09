@@ -78,6 +78,8 @@ namespace Tyrant.Framework
                 if (mod.Manifest.Assembly != null) CodeModLoader.Load(mod, CodeMods); // logs and skips a broken code mod
             }
             SpeciesModule.Start(plan.Mods, HarmonyInstance);
+            PrefabModule.Start(plan.Mods);
+            SpawnHook.Start(HarmonyInstance);
             SkinsModule.Prepare(plan.Mods);
             ModelModule.Start(plan.Mods);
             if (ModelModule.HasModels) RigModule.Start(HarmonyInstance);
