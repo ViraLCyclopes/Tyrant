@@ -80,6 +80,33 @@ public class ModModelCliTests
     }
 
     [Fact]
+    public void Skin_file_copy_base_works_for_a_skin_on_another_mods_species()
+    {
+        using var game = new FakeGame();
+        var (ws, _) = Setup(game);
+        try
+        {
+            Assert.Equal(ExitCodes.Ok, Run("mod", "new", "mod-a", "-w", ws).Code);
+            var added = Run("mod", "add-species", "mod-a", "anax", "Carcharodontosaurus", "--name", "Anax", "--genus", "E", "--epithet", "a", "--starting-skin", "1", "-w", ws);
+            Assert.True(added.Code == ExitCodes.Ok, added.Err + added.Out);
+            var dir = Path.Combine(ws, "mods", "big-carch");
+            Directory.CreateDirectory(Path.Combine(dir, "skins", "spiked"));
+            File.WriteAllText(Path.Combine(dir, "skins", "spiked", "male_D.png"), "png");
+            File.WriteAllText(Path.Combine(dir, "mod.json"), // base "0": mod-a's starting skin, the template's "Alt 1"
+                "{\"format\":1,\"id\":\"big-carch\",\"name\":\"Big Carch\",\"version\":\"1.0.0\",\"replace\":[],\"skins\":[{\"id\":\"spiked\",\"species\":\"tyrant.mod-a.anax\",\"name\":\"Spiked\",\"base\":\"0\",\"male\":{\"diffuse\":\"skins/spiked/male_D.png\"}}]}");
+
+            var copy = Run("mod", "skin-file", "big-carch", "spiked", "male", "normal", "--copy-base", "-w", ws);
+
+            Assert.True(copy.Code == ExitCodes.Ok, copy.Err + copy.Out);
+            Assert.Contains("skins/spiked/male_N.png", File.ReadAllText(Path.Combine(ws, "mods", "big-carch", "mod.json")));
+        }
+        finally
+        {
+            CliServices.AssetReader = new BundleAssetReader();
+        }
+    }
+
+    [Fact]
     public void Replace_model_and_remove_model_work_from_the_command_line()
     {
         using var game = new FakeGame();

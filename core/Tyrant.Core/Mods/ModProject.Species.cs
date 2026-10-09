@@ -1,4 +1,6 @@
 using Tyrant.Core.Errors;
+using Tyrant.Core.Install;
+using Tyrant.Core.Workspaces;
 using Tyrant.Framework.Core;
 
 namespace Tyrant.Core.Mods;
@@ -167,6 +169,13 @@ public sealed partial class ModProject
             throw;
         }
     }
+
+    /// <summary>
+    /// The species this mod's skins and models are looked up in: <see cref="WithSpecies"/> with this mod's custom species and,
+    /// when its skins use other mods' (<see cref="SpeciesUse"/>), those from the workspace and the game's installed mods.
+    /// </summary>
+    public IReadOnlyList<SpeciesSkins> SpeciesFor(Workspace ws, GameInstall install, IReadOnlyList<SpeciesSkins> dump) =>
+        WithSpecies(dump, Manifest, SpeciesUse.Of(Manifest).Count > 0 ? OtherModSpecies.Load(ws, new GameMods().List(install), Id).Species : null);
 
     /// <summary>
     /// The game's species plus custom ones (this mod's, then other mods'), each a copy of its template's row with only its

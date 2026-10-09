@@ -69,7 +69,7 @@ public sealed class BlenderMethods(StudioSession session)
             throw new TyrantException(TyrantErrorCode.DataMissing,
                 "Open in Blender needs the game's data: on the Workspace tab click Run data dump (or run 'tyrant dump run').", FixAction.RefreshWorkspace, ex);
         }
-        if (p.Mod is not null) species = ModProject.WithSpecies(species, ModProject.Open(ws, p.Mod).Manifest);
+        if (p.Mod is not null) species = ModProject.Open(ws, p.Mod).SpeciesFor(ws, install, species);
         var result = service.Open(ws, install, index, species, session.Options.AssetReader, new BlenderOpenRequest(p.Species, p.Skin, p.Mod, p.Fresh, p.Lods, p.Sex) { PrefabRef = p.PrefabRef, Ik = p.Ik, Animations = p.Animations ?? [] });
         var what = p.PrefabRef is not null ? "the object" : p.Mod is null ? p.Species + (p.Skin is null ? "" : $" ({p.Skin})") : $"{p.Skin ?? p.Species} from '{p.Mod}'";
         session.Log(result.How == "running" ? $"Opened {what} in the running Blender." : $"Started Blender with {what}.");

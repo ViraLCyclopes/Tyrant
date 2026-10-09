@@ -111,7 +111,7 @@ public sealed class BlenderOpenCommand : Command<BlenderOpenCommand.Settings>
         if (!settings.NoLaunch) service.CheckReady(ws); // before the index and data, so a missing Blender is said first
         var index = CliServices.LoadIndex(ws, install);
         var species = ModCli.RequireSpecies(ws);
-        if (settings.Mod is not null) species = ModProject.WithSpecies(species, ModProject.Open(ws, settings.Mod).Manifest);
+        if (settings.Mod is not null) species = ModProject.Open(ws, settings.Mod).SpeciesFor(ws, install, species);
         if (settings.NoLaunch)
         {
             var written = BlenderProjectWriter.Write(request, ws, install, index, species, CliServices.AssetReader, CliServices.Blender.TyrantExe);

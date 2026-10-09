@@ -214,7 +214,7 @@ public sealed class BlenderService(BlenderEnvironment env)
                 return new BlenderSendResult(false, [gone], [], [], null);
             }
             if (ModProject.Ids(ws).Contains(destination.Mod, StringComparer.Ordinal))
-                species = ModProject.WithSpecies(species, ModProject.Open(ws, destination.Mod).Manifest); // the mod's own custom species resolve too
+                species = ModProject.Open(ws, destination.Mod).SpeciesFor(ws, install, species); // custom species (the mod's own and other mods') resolve too
             var rigWarnings = new List<string>();
             if (rigOnly && rig is not { Count: > 0 })
                 return new BlenderSendResult(false, ["Rig edit only sends a rig edit, and this armature has none: make one with Start rig edit and Apply rig edit, or untick Rig edit only."], [], [], destination);

@@ -188,8 +188,9 @@ public sealed class ModSkinFileCommand : Command<ModSkinFileCommand.Settings>
         if (settings.CopyBase)
         {
             var (workspace, install) = CliServices.OpenWorkspace(settings);
-            var copied = ModProject.Open(workspace, settings.Id).CopyBaseFile(install, CliServices.LoadIndex(workspace, install), CliServices.AssetReader,
-                ModCli.RequireSpecies(workspace), settings.Skin, settings.Sex, settings.Slot);
+            var mod = ModProject.Open(workspace, settings.Id);
+            var copied = mod.CopyBaseFile(install, CliServices.LoadIndex(workspace, install), CliServices.AssetReader,
+                ModCli.RequireSpeciesFor(workspace, install, mod), settings.Skin, settings.Sex, settings.Slot);
             Console.WriteLine($"  {settings.Sex} {settings.Slot} <- {copied} (a copy of the base skin's texture, to edit)");
             return ExitCodes.Ok;
         }

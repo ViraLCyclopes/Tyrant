@@ -30,6 +30,10 @@ internal static class ModCli
         }
     }
 
+    /// <summary>The data dump's species plus the custom ones the mod's skins can be for (<see cref="ModProject.SpeciesFor"/>); null without the dump.</summary>
+    public static IReadOnlyList<SpeciesSkins>? TrySpeciesFor(Workspace ws, GameInstall install, ModProject mod) =>
+        TrySpecies(ws) is { } dump ? mod.SpeciesFor(ws, install, dump) : null;
+
     public static AssetIndex? TryIndex(Workspace ws)
     {
         try
@@ -45,10 +49,13 @@ internal static class ModCli
     public static IReadOnlyList<SpeciesSkins> RequireSpecies(Workspace ws) => TrySpecies(ws) ?? throw new TyrantException(TyrantErrorCode.DataMissing,
         "Model replacements need the game's data: on the Workspace tab click Run data dump, or run 'tyrant dump run'.", FixAction.RefreshWorkspace);
 
+    /// <summary><see cref="RequireSpecies"/> plus the custom species the mod's skins can be for (<see cref="ModProject.SpeciesFor"/>).</summary>
+    public static IReadOnlyList<SpeciesSkins> RequireSpeciesFor(Workspace ws, GameInstall install, ModProject mod) => mod.SpeciesFor(ws, install, RequireSpecies(ws));
+
     /// <summary>Before Check and Install: models whose .glb changed are built again (needs the index and the data dump).</summary>
     public static void RebuildStaleModels(Workspace ws, GameInstall install, ModProject mod)
     {
-        if (!mod.ModelEntries().Any() || TryIndex(ws) is not { } index || TrySpecies(ws) is not { } species) return;
+        if (!mod.ModelEntries().Any() || TryIndex(ws) is not { } index || TrySpeciesFor(ws, install, mod) is not { } species) return;
         foreach (var file in mod.RebuildStaleModels(install, index, species, CliServices.AssetReader))
             Console.WriteLine($"  rebuilt  {file} (it changed since it was built)");
     }
@@ -61,6 +68,7 @@ internal static class ModCli
         var index = TryIndex(ws);
         var species = TrySpecies(ws);
         var hasPrefabs = mod.PrefabTargets().Count > 0;
+        var others = m.Skins.Count > 0 ? OtherModSpecies.Load(ws, new GameMods().List(install), mod.Id) : null;
         Func<string, IReadOnlyList<PrefabFieldInfo>?>? prefabFields = !hasPrefabs || index is null || species is null ? null : target =>
         {
             try
@@ -73,19 +81,23 @@ internal static class ModCli
             }
         };
         return ModChecker.ForGame(install).Check(mod, index, m.Species.Count > 0 || m.Skins.Count > 0 || m.Sounds.Count > 0 || hasPrefabs ? species : null,
-            m.Sounds.Count > 0 ? TrySounds(ws) : null, RigInfoProvider(ws, install), id => SpeciesDatabase.Template(ws, id), prefabFields,
-            others: m.Skins.Count > 0 ? OtherModSpecies.Load(ws, new GameMods().List(install), mod.Id) : null);
+            m.Sounds.Count > 0 ? TrySounds(ws) : null,
+            RigInfoProvider(ws, install, species is null ? null : ModProject.WithSpecies(species, m, others?.Species)), // a skin's rig edit may be on a custom species
+            id => SpeciesDatabase.Template(ws, id), prefabFields, others: others);
     }
 
-    /// <summary>Rig edits' species skeletons for Check (null without the asset index or the data dump).</summary>
-    public static Func<string, Tyrant.Core.Rigging.RigInfo?>? RigInfoProvider(Workspace ws, GameInstall install)
+    /// <summary>
+    /// Rig edits' species skeletons for Check (null without the asset index or the data dump). <paramref name="species"/>: where
+    /// species are looked up (default: the data dump; give <see cref="TrySpeciesFor"/>'s for a mod's custom species).
+    /// </summary>
+    public static Func<string, Tyrant.Core.Rigging.RigInfo?>? RigInfoProvider(Workspace ws, GameInstall install, IReadOnlyList<SpeciesSkins>? species = null)
     {
-        if (TryIndex(ws) is not { } index || TrySpecies(ws) is not { } species) return null;
+        if (TryIndex(ws) is not { } index || (species ?? TrySpecies(ws)) is not { } lookup) return null;
         return id =>
         {
             try
             {
-                return Tyrant.Core.Rigging.RigInfoService.For(ws, install, index, species, CliServices.AssetReader, id);
+                return Tyrant.Core.Rigging.RigInfoService.For(ws, install, index, lookup, CliServices.AssetReader, id);
             }
             catch (TyrantException)
             {
@@ -183,7 +195,7 @@ public sealed class ModRestoreCutoutsCommand : Command<ModSettings>
         var (ws, install) = CliServices.OpenWorkspace(settings);
         var mod = ModProject.Open(ws, settings.Id);
         var index = CliServices.LoadIndex(ws, install); // errors when there is no index: the game textures would be unknown
-        var result = new CutoutRestorer(Cutouts.GamePixels(install, new BundleAssetReader())).Restore(mod, index, ModCli.TrySpecies(ws));
+        var result = new CutoutRestorer(Cutouts.GamePixels(install, new BundleAssetReader())).Restore(mod, index, ModCli.TrySpeciesFor(ws, install, mod));
         foreach (var file in result.Restored) Console.WriteLine($"  restored  {Path.Combine(mod.Dir, file.Replace('/', Path.DirectorySeparatorChar))}");
         foreach (var problem in result.Problems) Console.WriteLine($"  WARN      {problem}");
         if (result.Restored.Count == 0 && result.Problems.Count == 0) Console.WriteLine("No colour PNGs need their see-through parts restored.");

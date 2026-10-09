@@ -21,7 +21,7 @@ public sealed partial class ModsMethods
         if (rig is not { Count: > 0 }) return new ModRigView([], hasModel, [], []);
         var where = skin is null ? $"Rig edit of {species}" : $"Skin '{skin.Id}'";
         RigInfo? info = null;
-        if (TryIndex(ws) is { } index && TrySpecies(ws) is { } all)
+        if (TryIndex(ws) is { } index && TrySpeciesFor(ws, install, mod) is { } all)
         {
             try
             {
@@ -42,7 +42,7 @@ public sealed partial class ModsMethods
     public ModDetail ClearRig(ModClearRigParams p)
     {
         var (ws, install) = session.Current();
-        return Edit(p.Id, p.Revision, mod => mod.SetRig(install, RequireIndex(ws), RequireSpecies(ws), Options.AssetReader, p.Skin is null ? p.Target : mod.Skin(p.Skin).Species, p.Skin, null),
+        return Edit(p.Id, p.Revision, mod => mod.SetRig(install, RequireIndex(ws), mod.SpeciesFor(ws, install, RequireSpecies(ws)), Options.AssetReader, p.Skin is null ? p.Target : mod.Skin(p.Skin).Species, p.Skin, null),
             p.Skin is null ? $"cleared the rig edit of {p.Target}" : $"cleared the rig edit of skin '{p.Skin}'");
     }
 }

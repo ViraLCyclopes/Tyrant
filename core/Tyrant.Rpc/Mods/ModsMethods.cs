@@ -59,7 +59,8 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
     {
         var (ws, install) = session.Current();
         var index = AssetIndex.Load(AssetIndex.PathIn(ws)); // without it the game textures are unknown: say so, not "nothing to restore"
-        var result = new CutoutRestorer(Cutouts.GamePixels(install, Options.AssetReader)).Restore(ModProject.Open(ws, p.Id), index, TrySpecies(ws));
+        var mod = ModProject.Open(ws, p.Id);
+        var result = new CutoutRestorer(Cutouts.GamePixels(install, Options.AssetReader)).Restore(mod, index, TrySpeciesFor(ws, install, mod));
         if (result.Restored.Count > 0) session.Log($"'{p.Id}': restored the see-through parts of {string.Join(", ", result.Restored)}.");
         return new ModRestoreCutoutsResult(result.Restored, result.Problems);
     }
@@ -221,11 +222,11 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
     public ModDetail CopyBaseFile(ModCopyBaseFileParams p)
     {
         var (ws, install) = session.Current();
-        var species = TrySpecies(ws) ?? throw new TyrantException(TyrantErrorCode.DataMissing,
+        var dump = TrySpecies(ws) ?? throw new TyrantException(TyrantErrorCode.DataMissing,
             "Copying a base texture needs the game's data: on the Workspace tab click Run data dump (or run 'tyrant dump run').", FixAction.RefreshWorkspace);
         var index = TryIndex(ws) ?? throw new TyrantException(TyrantErrorCode.AssetIndexMissing,
             "Copying a base texture needs the asset index: on the Workspace tab click Index assets (or run 'tyrant assets index').", FixAction.ReindexAssets);
-        return Edit(p.Id, p.Revision, mod => mod.CopyBaseFile(install, index, Options.AssetReader, species, p.Skin, p.Sex, p.Slot),
+        return Edit(p.Id, p.Revision, mod => mod.CopyBaseFile(install, index, Options.AssetReader, mod.SpeciesFor(ws, install, dump), p.Skin, p.Sex, p.Slot),
             $"'{p.Skin}' {p.Sex} {p.Slot} is now a copy of the base skin's texture, to edit");
     }
 
@@ -241,7 +242,7 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
         var (ws, install) = session.Current();
         var mod = ModProject.Open(ws, p.Id);
         return new ModPreviewFiles(Images(install).ColorPreview(mod, p.Skin, p.Colors, p.Variant, p.Sex, p.Seed, p.Count, Math.Clamp(p.Size, 16, 512),
-            PreviewsDir(ws, "colors"), TryIndex(ws), TrySpecies(ws)));
+            PreviewsDir(ws, "colors"), TryIndex(ws), TrySpeciesFor(ws, install, mod)));
     }
 
     [RpcMethod("mods.sampleColors")]
@@ -270,7 +271,7 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
         var (ws, install) = session.Current();
         var mod = ModProject.Open(ws, p.Id);
         var skin = mod.Skin(p.Skin);
-        var species = TrySpecies(ws) ?? throw new TyrantException(TyrantErrorCode.DataMissing,
+        var species = TrySpeciesFor(ws, install, mod) ?? throw new TyrantException(TyrantErrorCode.DataMissing,
             "The 3D view needs the game's data: on the Workspace tab click Run data dump (or run 'tyrant dump run').", FixAction.RefreshWorkspace);
         var index = TryIndex(ws) ?? throw new TyrantException(TyrantErrorCode.AssetIndexMissing,
             "The 3D view needs the asset index: on the Workspace tab click Index assets (or run 'tyrant assets index').", FixAction.ReindexAssets);
@@ -417,6 +418,10 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
             return null;
         }
     }
+
+    /// <summary>The data dump's species plus the custom ones the mod's skins can be for (<see cref="ModProject.SpeciesFor"/>); null without the dump.</summary>
+    private static IReadOnlyList<SpeciesSkins>? TrySpeciesFor(Workspace ws, GameInstall install, ModProject mod) =>
+        TrySpecies(ws) is { } dump ? mod.SpeciesFor(ws, install, dump) : null;
 
     private static AssetIndex? TryIndex(Workspace ws)
     {

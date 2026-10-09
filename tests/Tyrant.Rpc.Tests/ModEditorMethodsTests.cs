@@ -112,6 +112,41 @@ public class ModEditorMethodsTests
         Assert.EndsWith(SkinDumps.MaleDiffuse + ".png", diffuse); // "Alt 1"'s male diffuse
     }
 
+    /// <summary>
+    /// <see cref="WithSkinAndPrefab"/> plus a custom species "tyrant.{speciesMod}.anax" (template Carcharodontosaurus, starting skin
+    /// "Alt 1") made in <paramref name="speciesMod"/>, and red-spot's skin "blue" on it, based on its one skin ("0").
+    /// </summary>
+    private static async Task<(RpcHarness H, string Ws)> WithCustomSpeciesSkin(FakeGame game, string speciesMod)
+    {
+        var (h, ws, _) = await WithSkinAndPrefab(game);
+        if (speciesMod != "red-spot") await h.Call("mods.create", new { id = speciesMod, name = "Mod A" });
+        var detail = await h.Call("mods.get", new { id = speciesMod });
+        await h.Call("mods.addSpecies", new
+        {
+            id = speciesMod, revision = Rev(detail), speciesId = "anax", template = "Carcharodontosaurus", name = "Anax", genus = "Example", epithet = "anax", startingSkin = 1,
+        });
+        File.WriteAllText(Path.Combine(ws, "mods", "red-spot", "mod.json"),
+            $"{{\"format\":1,\"id\":\"red-spot\",\"name\":\"Red spot\",\"version\":\"1.0.0\",\"replace\":[],\"skins\":[{{\"id\":\"blue\",\"species\":\"tyrant.{speciesMod}.anax\",\"name\":\"Blue\",\"base\":\"0\",\"male\":{{\"diffuse\":\"skins/blue/male_D.png\"}}}}]}}");
+        return (h, ws);
+    }
+
+    [Theory]
+    [InlineData("red-spot")] // the mod's own species
+    [InlineData("mod-a")] // another mod's species
+    public async Task A_custom_species_skin_has_its_templates_model_and_base_textures(string speciesMod)
+    {
+        using var game = new FakeGame();
+        var (h, _) = await WithCustomSpeciesSkin(game, speciesMod);
+
+        var model = await h.Call("mods.skinModel", new { id = "red-spot", skin = "blue", sex = "male" });
+        var detail = await h.Call("mods.get", new { id = "red-spot" });
+        var after = await h.Call("mods.copyBaseFile", new { id = "red-spot", revision = Rev(detail), skin = "blue", sex = "male", slot = "normal" });
+
+        Assert.Equal(SkinDumps.Prefab.Ref, model.GetProperty("prefabRef").GetString()); // the template's prefab
+        Assert.EndsWith(SkinDumps.MaleNormal + ".png", model.GetProperty("maps").GetProperty("normal").GetString()); // base "0" is the template's "Alt 1"
+        Assert.Equal("skins/blue/male_N.png", after.GetProperty("skins")[0].GetProperty("male").GetProperty("normal").GetString());
+    }
+
     [Fact]
     public async Task Skin_model_without_a_data_dump_says_how_to_get_one()
     {

@@ -62,11 +62,13 @@ public sealed partial class ModsMethods
         var m = mod.Manifest;
         var index = TryIndex(ws);
         var species = TrySpecies(ws);
-        Func<string, Tyrant.Core.Rigging.RigInfo?>? rigInfo = index is null || species is null ? null : id =>
+        var others = m.Skins.Count > 0 ? OtherModSpecies.Load(ws, Game.List(install), m.Id) : null;
+        var rigSpecies = species is null ? null : ModProject.WithSpecies(species, m, others?.Species); // a skin's rig edit may be on a custom species
+        Func<string, Tyrant.Core.Rigging.RigInfo?>? rigInfo = index is null || rigSpecies is null ? null : id =>
         {
             try
             {
-                return Tyrant.Core.Rigging.RigInfoService.For(ws, install, index, species, Options.AssetReader, id);
+                return Tyrant.Core.Rigging.RigInfoService.For(ws, install, index, rigSpecies, Options.AssetReader, id);
             }
             catch (TyrantException)
             {
@@ -88,6 +90,6 @@ public sealed partial class ModsMethods
         };
         return ModChecker.ForGame(install).Check(mod, index, checkSpecies,
             m.Sounds.Count > 0 ? TrySounds(ws) : null, rigInfo, id => SpeciesDatabase.Template(ws, id), prefabFields,
-            m.Skins.Count > 0 ? OtherModSpecies.Load(ws, Game.List(install), m.Id) : null);
+            others);
     }
 }

@@ -19,7 +19,7 @@ public sealed partial class ModsMethods
     {
         var (ws, install) = session.Current();
         var mod = ModProject.Open(ws, p.Id, p.Revision);
-        var report = mod.ReplaceModel(install, RequireIndex(ws), RequireSpecies(ws), Options.AssetReader, p.File, p.Target, p.PrefabRef, p.Skin,
+        var report = mod.ReplaceModel(install, RequireIndex(ws), mod.SpeciesFor(ws, install, RequireSpecies(ws)), Options.AssetReader, p.File, p.Target, p.PrefabRef, p.Skin,
             () => new BlenderService(Options.Blender).Converter(ws));
         session.Log($"'{p.Id}' replaces a model with {Path.GetFileName(p.File)} ({report.Lods.Count} LOD(s)){(report.Warnings.Count == 0 ? "" : ": " + string.Join(" ", report.Warnings))}.");
         return DetailOf(ws, mod);
@@ -37,7 +37,7 @@ public sealed partial class ModsMethods
         var (ws, install) = session.Current();
         var mod = ModProject.Open(ws, p.Id, p.Revision);
         var index = RequireIndex(ws);
-        var species = RequireSpecies(ws);
+        var species = mod.SpeciesFor(ws, install, RequireSpecies(ws));
         foreach (var (speciesId, file) in mod.ModelEntries()) // only files inside the mod
             ModelBuilder.Build(mod.Dir, file, Options.AssetReader.ReadPrefabModel(install, ModProject.ResolveModelTarget(index, species, speciesId, null).Prefab), null, mod.RigOfFile(file));
         session.Log($"'{p.Id}': rebuilt its models and their levels of detail.");
@@ -109,7 +109,7 @@ public sealed partial class ModsMethods
     /// <summary>Before Check and Install: models whose .glb changed are built again (needs the index and the data dump).</summary>
     private void RebuildStaleModels(Workspace ws, GameInstall install, ModProject mod)
     {
-        if (!mod.ModelEntries().Any() || TryIndex(ws) is not { } index || TrySpecies(ws) is not { } species) return;
+        if (!mod.ModelEntries().Any() || TryIndex(ws) is not { } index || TrySpeciesFor(ws, install, mod) is not { } species) return;
         try
         {
             foreach (var file in mod.RebuildStaleModels(install, index, species, Options.AssetReader))
