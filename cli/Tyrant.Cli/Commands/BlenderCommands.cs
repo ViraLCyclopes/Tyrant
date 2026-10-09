@@ -3,6 +3,7 @@ using System.Text.Json;
 using Spectre.Console.Cli;
 using Tyrant.Core.Blender;
 using Tyrant.Core.Errors;
+using Tyrant.Core.Mods;
 
 namespace Tyrant.Cli.Commands;
 
@@ -110,6 +111,7 @@ public sealed class BlenderOpenCommand : Command<BlenderOpenCommand.Settings>
         if (!settings.NoLaunch) service.CheckReady(ws); // before the index and data, so a missing Blender is said first
         var index = CliServices.LoadIndex(ws, install);
         var species = ModCli.RequireSpecies(ws);
+        if (settings.Mod is not null) species = ModProject.WithSpecies(species, ModProject.Open(ws, settings.Mod).Manifest);
         if (settings.NoLaunch)
         {
             var written = BlenderProjectWriter.Write(request, ws, install, index, species, CliServices.AssetReader, CliServices.Blender.TyrantExe);

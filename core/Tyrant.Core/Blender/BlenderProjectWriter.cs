@@ -53,7 +53,8 @@ public static class BlenderProjectWriter
         var (speciesId, prefabRecord) = ModProject.ResolveModelTarget(index, species, ownSkin?.Species ?? request.Species, null);
         var speciesEntry = mod?.Manifest.Models.FirstOrDefault(m => string.Equals(m.Target, speciesId, StringComparison.Ordinal));
         var modReplacement = speciesEntry is { File.Length: > 0 } ? speciesEntry.File : null;
-        if (mod is not null && ownSkin is null && speciesEntry is null)
+        var customOfMod = mod is not null && mod.Manifest.Species.Any(s => s.Key(mod.Id) == speciesId);
+        if (mod is not null && ownSkin is null && speciesEntry is null && !customOfMod)
             throw new TyrantException(TyrantErrorCode.TargetNotFound,
                 $"'{mod.Id}' does not replace {speciesId}'s model; open it from the species instead (Assets → Species → Open in Blender).");
         var vanilla = ownSkin is not null ? SkinMaps.BaseOf(species, ownSkin) : SkinMaps.Vanilla(species, speciesId, request.Skin);

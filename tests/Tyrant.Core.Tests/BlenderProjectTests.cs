@@ -31,6 +31,20 @@ public class BlenderProjectTests
     }
 
     [Fact]
+    public void A_custom_species_opens_on_its_template_with_the_mod_as_destination()
+    {
+        using var c = Setup();
+        var mod = ModProject.Create(c.Ws, "pack", null, null);
+        var entry = mod.AddSpecies(c.Species, "mirabilis", "Carcharodontosaurus", "Mirabilis", "Tyrantus", "mirabilis");
+        var identity = entry.Key(mod.Id);
+
+        var result = BlenderProjectWriter.Write(new BlenderOpenRequest(identity, null, "pack", false, false), c.Ws, c.Install, c.Index,
+            ModProject.WithSpecies(c.Species, mod.Manifest), c.Reader, "t.exe");
+
+        Assert.Equal(new BlenderDestination("pack", identity, null), BlenderProjectFile.Read(result.ProjectFile).Destination);
+    }
+
+    [Fact]
     public void A_game_species_gets_a_project_with_lod0_maps_growth_and_rest()
     {
         using var c = Setup();

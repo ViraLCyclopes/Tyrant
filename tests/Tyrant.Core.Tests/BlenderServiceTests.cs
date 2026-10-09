@@ -208,6 +208,25 @@ public class BlenderServiceTests
     }
 
     [Fact]
+    public void Send_to_a_custom_species_identity_replaces_the_model_for_that_identity()
+    {
+        var ws = Ws(out var game);
+        using var _ = game;
+        var (install, index, species, reader, prefab) = Game(ws, game);
+        var mod = ModProject.Create(ws, "pack", null, null);
+        var identity = mod.AddSpecies(species, "mirabilis", "Carcharodontosaurus", "Mirabilis", "Tyrantus", "mirabilis").Key("pack");
+        var project = BlenderProjectWriter.Write(new BlenderOpenRequest(identity, null, "pack", false, false), ws, install, index,
+            ModProject.WithSpecies(species, mod.Manifest), reader, "t.exe");
+        var glb = Path.Combine(project.Dir, "send.glb");
+        GltfModelWriter.WriteGlb(prefab, prefab.Renderers[0], glb, [new GltfMaterial("Carch")]);
+
+        var sent = BlenderService.Send(ws, install, index, species, reader, project.ProjectFile, glb, null, null);
+
+        Assert.True(sent.Ok, string.Join(" ", sent.Errors));
+        Assert.Contains(ModProject.Open(ws, "pack").Manifest.Models, m => m.Target == identity);
+    }
+
+    [Fact]
     public void Send_to_a_mod_that_was_deleted_says_so_and_asks_again()
     {
         var ws = Ws(out var game);

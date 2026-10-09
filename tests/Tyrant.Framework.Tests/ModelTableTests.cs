@@ -28,6 +28,14 @@ public class ModelTableTests
         """;
 
     [Fact]
+    public void A_model_for_a_custom_species_identity_is_found()
+    {
+        var table = ModelTable.Build([Mod("pack", """{"format":1,"id":"pack","models":[{"target":"tyrant.pack.mirabilis","file":"models/a.glb"}]}""")]);
+        Assert.True(table.TryChoose("tyrant.pack.mirabilis", null, out var set));
+        Assert.Equal("tyrant.pack.mirabilis", set.Target);
+    }
+
+    [Fact]
     public void A_skin_model_wins_over_the_species_model()
     {
         var table = ModelTable.Build([Mod("big-carch", Species), Mod("spiked-carch", SkinModel)]);
