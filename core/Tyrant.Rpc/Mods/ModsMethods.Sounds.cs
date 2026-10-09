@@ -81,7 +81,7 @@ public sealed partial class ModsMethods
             {
                 return PrefabFields.Read(ws, install, index, ModProject.WithSpecies(species, m), Options.AssetReader, target);
             }
-            catch (TyrantException)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 return null;
             }

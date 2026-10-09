@@ -67,7 +67,7 @@ internal static class ModCli
             {
                 return PrefabFields.Read(ws, install, index, ModProject.WithSpecies(species, m), CliServices.AssetReader, target);
             }
-            catch (TyrantException)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 return null;
             }

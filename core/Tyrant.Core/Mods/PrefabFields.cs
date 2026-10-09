@@ -20,7 +20,7 @@ public static class PrefabFields
         {
             try
             {
-                return JsonSerializer.Deserialize<List<PrefabFieldInfo>>(File.ReadAllText(cache)) ?? [];
+                if (JsonSerializer.Deserialize<List<PrefabFieldInfo>>(File.ReadAllText(cache)) is { } cached) return cached;
             }
             catch (Exception ex) when (ex is JsonException or IOException)
             {
@@ -30,8 +30,18 @@ public static class PrefabFields
         var components = reader.ReadPrefabComponents(install, prefab);
         using var enums = new PrefabEnumNames(install.ManagedDir);
         var tree = PrefabFieldTree.Build(components, enums.For);
-        Directory.CreateDirectory(Path.GetDirectoryName(cache)!);
-        File.WriteAllText(cache, JsonSerializer.Serialize(tree));
+        var temp = cache + ".tmp-" + Guid.NewGuid().ToString("N");
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(cache)!);
+            File.WriteAllText(temp, JsonSerializer.Serialize(tree));
+            File.Move(temp, cache, overwrite: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // the cache is only a speed-up
+            try { File.Delete(temp); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+        }
         return tree;
     }
 }

@@ -47,4 +47,41 @@ public class PrefabFieldsTests
         Assert.Equal(["A", "B"], back.EnumNames);
         Assert.Equal([0L, 1L], back.EnumValues);
     }
+
+    private static (Workspace Ws, GameInstall Install, AssetIndex Index, IReadOnlyList<SpeciesSkins> Species, FakeAssetReader Reader, FakeGame Game) Arrange()
+    {
+        var ws = Ws(out var game);
+        return (ws, new GameInstall(game.Root, null), new AssetIndex { Assets = [.. SkinDumps.Textures, SkinDumps.Prefab] }, SpeciesSkinsReader.Load(ws),
+            new FakeAssetReader { PrefabComponentsToReturn = new("Carch", [new PrefabObject("", [new PrefabComponent("AnimalPhysics", null, null, 0, """{"a":1}""")])]) }, game);
+    }
+
+    private static string CacheFile(Workspace ws) => Directory.GetFiles(Path.Combine(ws.CacheDir, "prefab-fields"), "*.json").Single();
+
+    [Fact]
+    public void A_cache_file_holding_null_is_a_miss()
+    {
+        var (ws, install, index, species, reader, game) = Arrange();
+        using var _ = game;
+        PrefabFields.Read(ws, install, index, species, reader, "Carcharodontosaurus");
+        File.WriteAllText(CacheFile(ws), "null");
+        reader.PrefabComponentsToReturn = null;
+
+        Assert.Throws<InvalidOperationException>(() => PrefabFields.Read(ws, install, index, species, reader, "Carcharodontosaurus")); // the reader was asked again
+    }
+
+    [Fact]
+    public void A_cache_that_cannot_be_written_still_returns_the_tree()
+    {
+        var (ws, install, index, species, reader, game) = Arrange();
+        using var _ = game;
+        PrefabFields.Read(ws, install, index, species, reader, "Carcharodontosaurus");
+        var file = CacheFile(ws);
+        File.Delete(file);
+        Directory.CreateDirectory(file); // the Move onto it fails
+
+        var tree = PrefabFields.Read(ws, install, index, species, reader, "Carcharodontosaurus");
+
+        Assert.Equal("a", Assert.Single(tree).Field);
+        Assert.Empty(Directory.GetFiles(Path.GetDirectoryName(file)!, "*.tmp-*"));
+    }
 }
