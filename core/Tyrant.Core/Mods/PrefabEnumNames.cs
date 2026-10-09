@@ -6,9 +6,10 @@ namespace Tyrant.Core.Mods;
 /// <summary>Enum names of a game script's fields, read from the game's DLLs (Managed folder) with Cecil; null when not an enum.</summary>
 public sealed class PrefabEnumNames(string managedDir) : IDisposable
 {
+    private readonly DefaultAssemblyResolver _resolver = CreateResolver(managedDir);
     private readonly Dictionary<string, AssemblyDefinition?> _assemblies = new(StringComparer.OrdinalIgnoreCase);
 
-    public IReadOnlyList<string>? For(PrefabComponent component, string fieldPath)
+    public IReadOnlyList<PrefabEnumValue>? For(PrefabComponent component, string fieldPath)
     {
         if (component.Assembly is null) return null;
         var type = Find(component.Assembly, component.Namespace, component.Type);
@@ -23,7 +24,14 @@ public sealed class PrefabEnumNames(string managedDir) : IDisposable
             type = Resolve(fieldType);
         }
         if (type is null || !type.IsEnum) return null;
-        return type.Fields.Where(f => f.IsStatic && f.HasConstant).OrderBy(f => Convert.ToInt64(f.Constant)).Select(f => f.Name).ToList();
+        return type.Fields.Where(f => f.IsStatic && f.HasConstant).OrderBy(f => Convert.ToInt64(f.Constant)).Select(f => new PrefabEnumValue(f.Name, Convert.ToInt64(f.Constant))).ToList();
+    }
+
+    private static DefaultAssemblyResolver CreateResolver(string dir)
+    {
+        var resolver = new DefaultAssemblyResolver();
+        resolver.AddSearchDirectory(dir);
+        return resolver;
     }
 
     private static IEnumerable<FieldDefinition> Fields(TypeDefinition type)
@@ -35,7 +43,7 @@ public sealed class PrefabEnumNames(string managedDir) : IDisposable
     private static TypeDefinition? Resolve(TypeReference? reference)
     {
         try { return reference?.Resolve(); }
-        catch (AssemblyResolutionException) { return null; }
+        catch (Exception e) when (e is not OperationCanceledException) { return null; }
     }
 
     private TypeDefinition? Find(string assembly, string? ns, string name)
@@ -44,9 +52,9 @@ public sealed class PrefabEnumNames(string managedDir) : IDisposable
         if (!_assemblies.TryGetValue(file, out var definition))
         {
             var path = Path.Combine(managedDir, file);
-            var resolver = new DefaultAssemblyResolver();
-            resolver.AddSearchDirectory(managedDir);
-            _assemblies[file] = definition = File.Exists(path) ? AssemblyDefinition.ReadAssembly(path, new ReaderParameters { AssemblyResolver = resolver }) : null;
+            try { definition = File.Exists(path) ? AssemblyDefinition.ReadAssembly(path, new ReaderParameters { AssemblyResolver = _resolver }) : null; }
+            catch (Exception e) when (e is not OperationCanceledException) { definition = null; }
+            _assemblies[file] = definition;
         }
         return definition?.MainModule.Types.FirstOrDefault(t => t.Name == name && (ns is null || t.Namespace == ns));
     }
@@ -54,5 +62,6 @@ public sealed class PrefabEnumNames(string managedDir) : IDisposable
     public void Dispose()
     {
         foreach (var a in _assemblies.Values) a?.Dispose();
+        _resolver.Dispose();
     }
 }

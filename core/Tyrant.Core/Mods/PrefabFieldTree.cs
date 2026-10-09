@@ -4,15 +4,18 @@ using Tyrant.Core.Models;
 namespace Tyrant.Core.Mods;
 
 /// <summary>One field of a prefab component as prefab settings shows it: where, what kind, the game's value, whether it can change.</summary>
-public sealed record PrefabFieldInfo(string Object, string Component, string Field, string Kind, string Value, bool Editable, IReadOnlyList<string>? EnumNames = null);
+public sealed record PrefabFieldInfo(string Object, string Component, string Field, string Kind, string Value, bool Editable, IReadOnlyList<string>? EnumNames = null, IReadOnlyList<long>? EnumValues = null);
+
+/// <summary>One enum member: its name and real numeric value.</summary>
+public sealed record PrefabEnumValue(string Name, long Value);
 
 /// <summary>Flattens a prefab's components into the fields prefab settings lists, and checks a new value against a field.</summary>
 public static class PrefabFieldTree
 {
     private static readonly string[] Header = ["m_GameObject", "m_Enabled", "m_Script", "m_Name", "m_EditorHideFlags", "m_EditorClassIdentifier"];
-    private static readonly string[] CullingModes = ["AlwaysAnimate", "CullUpdateTransforms", "CullCompletely"];
+    private static readonly PrefabEnumValue[] CullingModes = [new("AlwaysAnimate", 0), new("CullUpdateTransforms", 1), new("CullCompletely", 2)];
 
-    public static IReadOnlyList<PrefabFieldInfo> Build(PrefabComponents prefab, Func<PrefabComponent, string, IReadOnlyList<string>?> enumNames)
+    public static IReadOnlyList<PrefabFieldInfo> Build(PrefabComponents prefab, Func<PrefabComponent, string, IReadOnlyList<PrefabEnumValue>?> enumNames)
     {
         var result = new List<PrefabFieldInfo>();
         foreach (var obj in prefab.Objects)
@@ -25,15 +28,16 @@ public static class PrefabFieldTree
                 {
                     if (root.TryGetProperty("m_LODs", out var lods) && lods.ValueKind == JsonValueKind.Array)
                         for (var i = 0; i < lods.GetArrayLength(); i++)
-                            result.Add(new(obj.Path, name, $"lods[{i}].screenRelativeTransitionHeight", "number", lods[i].GetProperty("screenRelativeHeight").GetRawText(), true));
+                            if (lods[i].ValueKind == JsonValueKind.Object && lods[i].TryGetProperty("screenRelativeHeight", out var height))
+                                result.Add(new(obj.Path, name, $"lods[{i}].screenRelativeTransitionHeight", "number", height.GetRawText(), true));
                     continue;
                 }
                 if (component.Type == "Animator")
                 {
                     if (root.TryGetProperty("m_ApplyRootMotion", out var motion))
-                        result.Add(new(obj.Path, name, "applyRootMotion", "bool", motion.GetInt32() != 0 ? "true" : "false", true));
+                        result.Add(new(obj.Path, name, "applyRootMotion", "bool", (motion.ValueKind == JsonValueKind.True || (motion.ValueKind == JsonValueKind.Number && motion.TryGetDouble(out var m) && m != 0)) ? "true" : "false", true));
                     if (root.TryGetProperty("m_CullingMode", out var culling))
-                        result.Add(new(obj.Path, name, "cullingMode", "enum", culling.GetRawText(), true, CullingModes));
+                        result.Add(new(obj.Path, name, "cullingMode", "enum", culling.GetRawText(), true, CullingModes.Select(c => c.Name).ToList(), CullingModes.Select(c => c.Value).ToList()));
                     continue;
                 }
                 foreach (var property in root.EnumerateObject())
@@ -43,13 +47,13 @@ public static class PrefabFieldTree
         return result;
     }
 
-    private static void Flatten(string obj, string component, string path, JsonElement value, List<PrefabFieldInfo> into, Func<string, IReadOnlyList<string>?> enums)
+    private static void Flatten(string obj, string component, string path, JsonElement value, List<PrefabFieldInfo> into, Func<string, IReadOnlyList<PrefabEnumValue>?> enums)
     {
         switch (value.ValueKind)
         {
             case JsonValueKind.Number:
                 var names = enums(Strip(path));
-                into.Add(new(obj, component, path, names is null ? "number" : "enum", value.GetRawText(), true, names));
+                into.Add(new(obj, component, path, names is null ? "number" : "enum", value.GetRawText(), true, names?.Select(n => n.Name).ToList(), names?.Select(n => n.Value).ToList()));
                 return;
             case JsonValueKind.True or JsonValueKind.False:
                 into.Add(new(obj, component, path, "bool", value.GetRawText(), true));
@@ -94,7 +98,7 @@ public static class PrefabFieldTree
             case "enum":
                 var names = field.EnumNames ?? [];
                 var ok = value.ValueKind == JsonValueKind.String ? names.Contains(value.GetString())
-                    : value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var n) && n >= 0 && n < names.Count;
+                    : value.ValueKind == JsonValueKind.Number && value.TryGetInt64(out var n) && (field.EnumValues?.Contains(n) ?? false);
                 return ok ? null : $"{field.Field} needs one of {string.Join(", ", names)}.";
             default:
                 var parts = Parts(field.Kind);

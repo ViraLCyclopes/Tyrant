@@ -26,7 +26,7 @@ public class PrefabFieldTreeTests
     ]);
 
     private static IReadOnlyList<PrefabFieldInfo> Tree() =>
-        PrefabFieldTree.Build(Prefab, (c, path) => c.Type == "AnimalPhysics" && path == "inputParams.mode" ? ["Walk", "Swim"] : null);
+        PrefabFieldTree.Build(Prefab, (c, path) => c.Type == "AnimalPhysics" && path == "inputParams.mode" ? [new("Walk", 0), new("Swim", 1)] : null);
 
     private static PrefabFieldInfo Get(string obj, string component, string field) =>
         Tree().Single(f => f.Object == obj && f.Component == component && f.Field == field);
@@ -62,6 +62,7 @@ public class PrefabFieldTreeTests
         Assert.Equal(["applyRootMotion", "cullingMode"], tree.Where(f => f.Component == "Animator").Select(f => f.Field));
         Assert.Equal("true", Get("", "Animator", "applyRootMotion").Value);
         Assert.Equal(["AlwaysAnimate", "CullUpdateTransforms", "CullCompletely"], Get("", "Animator", "cullingMode").EnumNames);
+        Assert.Equal([0L, 1L, 2L], Get("", "Animator", "cullingMode").EnumValues);
     }
 
     [Fact]
@@ -69,6 +70,18 @@ public class PrefabFieldTreeTests
     {
         Assert.Equal("1", Get("IK/LegL", "FABRIKComponentAnimal", "core.influence").Value);
         Assert.Equal("0.5", Get("IK/LegL", "FABRIKComponentAnimal#1", "core.influence").Value);
+    }
+
+    [Fact]
+    public void Enum_numbers_are_checked_as_real_values_not_positions()
+    {
+        var tree = PrefabFieldTree.Build(Prefab, (c, path) => path == "inputParams.mode" ? [new("Walk", 0), new("Swim", 2)] : null);
+        var field = tree.Single(f => f.Component == "AnimalPhysics" && f.Field == "inputParams.mode");
+        using var two = JsonDocument.Parse("2");
+        using var one = JsonDocument.Parse("1");
+
+        Assert.Null(PrefabFieldTree.CheckValue(field, two.RootElement));
+        Assert.Contains("Walk, Swim", PrefabFieldTree.CheckValue(field, one.RootElement));
     }
 
     [Theory]
@@ -113,8 +126,9 @@ public class PrefabEnumNamesTests
         using var names = new PrefabEnumNames(Path.GetDirectoryName(asm.Location)!);
         var component = new PrefabComponent("PrefabTestHolder", "Tyrant.Core.Tests", asm.GetName().Name, 0, "{}");
 
-        Assert.Equal(["Walk", "Swim", "Run"], names.For(component, "gaits"));
-        Assert.Equal(["Walk", "Swim", "Run"], names.For(component, "baseGaits"));
+        PrefabEnumValue[] expected = [new("Walk", 0), new("Swim", 2), new("Run", 5)];
+        Assert.Equal(expected, names.For(component, "gaits"));
+        Assert.Equal(expected, names.For(component, "baseGaits"));
         Assert.Null(names.For(component, "plain"));
         Assert.Null(names.For(component, "missing"));
     }
