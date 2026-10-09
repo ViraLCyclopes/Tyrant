@@ -12,15 +12,21 @@
   let list = $state<ModsListResult | null>(null);
   let deleting = $state<ModRow | null>(null);
   let deleteError = $state<string | null>(null);
+  let deletingBusy = $state(false);
 
   async function confirmDelete(removeFromGame: boolean) {
     const row = deleting;
-    if (!row) return;
-    const r = await deleteMod(session, tab, row.id, row.name, removeFromGame);
-    if ('error' in r) deleteError = r.error;
-    else {
-      list = r.list;
-      deleting = null;
+    if (!row || deletingBusy) return;
+    deletingBusy = true;
+    try {
+      const r = await deleteMod(session, tab, row.id, row.name, removeFromGame);
+      if ('error' in r) deleteError = r.error;
+      else {
+        list = r.list;
+        deleting = null;
+      }
+    } finally {
+      deletingBusy = false;
     }
   }
   let cleaning = $state(false);
@@ -171,7 +177,7 @@
 {/if}
 
 {#if deleting}
-  <DeleteModDialog name={deleting.name} installed={deleting.state !== 'notInstalled'} error={deleteError} onCancel={() => (deleting = null)} onConfirm={confirmDelete} />
+  <DeleteModDialog name={deleting.name} installed={deleting.state !== 'notInstalled'} error={deleteError} busy={deletingBusy} onCancel={() => (deleting = null)} onConfirm={confirmDelete} />
 {/if}
 
 <style>

@@ -76,4 +76,22 @@ describe('mod sharing actions', () => {
     expect(await deleteMod(session, tab, 'red-spot', 'Red spot', true)).toEqual({ error: 'Close the game first: removing a mod while it runs is refused.' });
     expect(closed).toHaveLength(1); // a failed delete keeps the tab
   });
+
+  it('deleteMod keeps its confirmation in the log when closing the tab clears the tab', async () => {
+    const { rpc, session } = setup();
+    rpc.on('mods.delete', () => ({ mods: [], frameworkInstalled: false, frameworkOutdated: false }));
+    const host: ConstructorParameters<typeof Tab>[2] = {
+      retitle: () => {},
+      openTool: () => null,
+      closeTool: () => {
+        tab.detach();
+        session.log.clear('tab-test'); // what ShellState.close does with the closed tab
+      },
+    };
+    const tab = new Tab('tab-test', session.log, host);
+
+    await deleteMod(session, tab, 'red-spot', 'Red spot', false);
+
+    expect(messages(session, null).join(' ')).toContain('Recycle Bin');
+  });
 });

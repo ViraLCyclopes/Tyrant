@@ -197,6 +197,28 @@ describe('ModsView', () => {
     expect(screen.queryByText('Red spot')).toBeNull();
   });
 
+  it('a delete confirmed twice in a row sends one mods.delete', async () => {
+    const { rpc, session } = setup([row()]);
+    let finish: (v: unknown) => void = () => {};
+    rpc.on('mods.delete', () => new Promise((resolve) => (finish = resolve)));
+    renderWith(ModsView, session);
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Delete Red spot' }));
+    const dialog = screen.getByRole('dialog', { name: 'Delete Red spot' });
+    const delete1 = within(dialog).getByRole('button', { name: 'Delete mod' });
+    await fireEvent.click(delete1);
+    await fireEvent.click(delete1);
+    await fireEvent.keyDown(window, { key: 'Escape' });
+
+    expect(rpc.callsTo('mods.delete')).toHaveLength(1);
+    expect(within(dialog).getByRole('button', { name: 'Deleting…' })).toBeDisabled();
+    expect(within(dialog).getByRole('button', { name: 'Cancel' })).toBeDisabled();
+    expect(screen.getByRole('dialog', { name: 'Delete Red spot' })).toBeInTheDocument();
+    finish({ mods: [], frameworkInstalled: false, frameworkOutdated: false });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(rpc.callsTo('mods.delete')).toHaveLength(1);
+  });
+
   it('a mod only in the game has no Delete, and a mod not installed has no game checkbox', async () => {
     const { session } = setup([row(), row({ id: 'other', name: 'Other', state: 'gameOnly' })]);
     renderWith(ModsView, session);

@@ -317,14 +317,15 @@ public class ModEditTests
         mod.Skin("green").Model = "models/carch-green-2.glb";
         mod.Save();
         var blender = Path.Combine(ws.Dir, "blender", "red-spot", "carcharodontosaurus-blue");
-        Directory.CreateDirectory(blender);
+        BlenderTestProject.Make(blender, "red-spot", "Carcharodontosaurus", "blue");
         File.WriteAllText(Path.Combine(blender, "work.blend"), "x");
 
         var removed = ModProject.Open(ws, "red-spot").RemoveSkin("blue", deleteFiles: true);
 
-        Assert.Equal(["blender/red-spot/carcharodontosaurus-blue/", "models/carch-blue-1.glb", "models/carch-blue-1.lod0.tmesh",
+        Assert.Equal(["models/carch-blue-1.glb", "models/carch-blue-1.lod0.tmesh",
             "models/carch-blue-1.lod1.tmesh", "models/carch-blue-1.model.json", "skins/blue/female_D.png", "skins/blue/male_pattern.png"],
-            removed.Recycled.Order(StringComparer.Ordinal));
+            removed.Recycled.Where(r => r != blender).Order(StringComparer.Ordinal));
+        Assert.Contains(blender, removed.Recycled);
         Assert.True(TestRecycleBin.Instance.Holds(blender));
         Assert.True(TestRecycleBin.Instance.Holds(Path.Combine(models, "carch-blue-1.glb")));
         Assert.True(File.Exists(Path.Combine(models, "carch-green-2.glb")));
@@ -347,6 +348,40 @@ public class ModEditTests
 
         Assert.DoesNotContain("models/shared.glb", removed.Recycled);
         Assert.True(File.Exists(Path.Combine(mod.Dir, "models", "shared.glb")));
+    }
+
+    [Fact]
+    public void A_model_a_species_models_entry_uses_is_kept()
+    {
+        var (game, ws, mod) = Setup();
+        using var _ = game;
+        mod = WithSkins(ws, mod);
+        Directory.CreateDirectory(Path.Combine(mod.Dir, "models"));
+        File.WriteAllText(Path.Combine(mod.Dir, "models", "shared.glb"), "x");
+        mod.Skin("blue").Model = "models/shared.glb";
+        mod.Manifest.Models.Add(new ModelReplacement { Target = "Carcharodontosaurus", File = "models/shared.glb" });
+        mod.Save();
+
+        var removed = ModProject.Open(ws, "red-spot").RemoveSkin("blue", deleteFiles: true);
+
+        Assert.DoesNotContain("models/shared.glb", removed.Recycled);
+        Assert.True(File.Exists(Path.Combine(mod.Dir, "models", "shared.glb")));
+    }
+
+    [Fact]
+    public void A_blender_folder_that_is_not_this_skins_project_is_left_alone()
+    {
+        var (game, ws, mod) = Setup();
+        using var _ = game;
+        mod = WithSkins(ws, mod);
+        // a custom species "carcharodontosaurus-blue" has its model project where this skin's would be
+        var other = BlenderTestProject.Make(Path.Combine(ws.Dir, "blender", "red-spot", "carcharodontosaurus-blue"), "red-spot", "Carcharodontosaurus-blue", null);
+
+        var removed = mod.RemoveSkin("blue", deleteFiles: true);
+
+        Assert.True(Directory.Exists(other));
+        Assert.DoesNotContain(other, removed.Recycled);
+        Assert.Contains($"{other}: it is not this skin's Blender project, so it was left alone.", removed.Kept);
     }
 
     [Fact]

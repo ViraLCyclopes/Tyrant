@@ -5,9 +5,10 @@
     name,
     installed,
     error = null,
+    busy = false,
     onConfirm,
     onCancel,
-  }: { name: string; installed: boolean; error?: string | null; onConfirm: (removeFromGame: boolean) => void; onCancel: () => void } = $props();
+  }: { name: string; installed: boolean; error?: string | null; busy?: boolean; onConfirm: (removeFromGame: boolean) => void; onCancel: () => void } = $props();
   let removeFromGame = $state(true);
   let dialog = $state<HTMLElement>();
 
@@ -18,13 +19,13 @@
   });
 
   function onKey(e: KeyboardEvent) {
-    if (e.key === 'Escape') onCancel();
+    if (e.key === 'Escape' && !busy) onCancel();
   }
 </script>
 
 <svelte:window onkeydown={onKey} />
 
-<div class="scrim" role="presentation" onclick={onCancel}>
+<div class="scrim" role="presentation" onclick={() => !busy && onCancel()}>
   <div class="dialog" role="dialog" aria-modal="true" aria-label="Delete {name}" tabindex="-1" bind:this={dialog} onclick={(e) => e.stopPropagation()} onkeydown={() => {}}>
     <h2>Delete '{name}'?</h2>
     <p>
@@ -34,8 +35,8 @@
     {#if installed}<label class="row"><input type="checkbox" bind:checked={removeFromGame} /> Also remove it from the game</label>{/if}
     {#if error}<p class="warn" role="alert">{error}</p>{/if}
     <div class="actions">
-      <button onclick={onCancel}>Cancel</button>
-      <button class="primary" onclick={() => onConfirm(installed && removeFromGame)}>Delete mod</button>
+      <button onclick={onCancel} disabled={busy}>Cancel</button>
+      <button class="primary" onclick={() => onConfirm(installed && removeFromGame)} disabled={busy}>{busy ? 'Deleting…' : 'Delete mod'}</button>
     </div>
   </div>
 </div>

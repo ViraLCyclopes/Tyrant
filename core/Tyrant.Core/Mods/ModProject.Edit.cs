@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using Tyrant.Core.Blender;
 using Tyrant.Core.Errors;
 using Tyrant.Core.Workspaces;
 using Tyrant.Framework.Core;
@@ -119,13 +120,17 @@ public sealed partial class ModProject
         }
         var folder = Path.Combine(Dir, "skins", skinId);
         try { if (Directory.Exists(folder) && !Directory.EnumerateFileSystemEntries(folder).Any()) Directory.Delete(folder); } catch (IOException) { }
-        var blender = Tyrant.Core.Blender.BlenderProjectWriter.FolderOf(WorkspaceDir, Id, skin.Species, skin.Id);
+        var blender = BlenderProjectWriter.FolderOf(WorkspaceDir, Id, skin.Species, skin.Id);
         if (Directory.Exists(blender))
         {
-            var blenderRel = Normal(Path.GetRelativePath(WorkspaceDir, blender)) + "/";
-            var why = TryRecycle(blender);
-            if (why is null) removed.Add(blenderRel);
-            else kept.Add($"{blenderRel}: {why}");
+            if (!BlenderProjectFile.Belongs(blender, Id, skin.Id, skin.Species))
+                kept.Add($"{blender}: it is not this skin's Blender project, so it was left alone.");
+            else
+            {
+                var why = TryRecycle(blender);
+                if (why is null) removed.Add(blender);
+                else kept.Add($"{blender}: {why}");
+            }
         }
         return new RemovedFiles(removed, kept);
     }

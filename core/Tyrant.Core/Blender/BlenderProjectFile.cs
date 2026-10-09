@@ -109,6 +109,22 @@ public static class BlenderProjectFile
         }
     }
 
+    /// <summary>
+    /// Whether <paramref name="folder"/> holds a Blender project made for mod <paramref name="mod"/> (ordinal), and, when given,
+    /// its skin (ordinal) and species (ignoring case). A folder without a readable tyrant-blender.json belongs to nobody.
+    /// </summary>
+    public static bool Belongs(string folder, string mod, string? skin = null, string? species = null)
+    {
+        var file = Path.Combine(folder, FileName);
+        if (!File.Exists(file)) return false;
+        BlenderSource source;
+        try { source = Read(file).Source; }
+        catch (TyrantException) { return false; }
+        return source.Mod == mod
+            && (skin is null || source.Skin == skin)
+            && (species is null || string.Equals(source.Species, species, StringComparison.OrdinalIgnoreCase));
+    }
+
     public static void Write(string path, BlenderProject project)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);

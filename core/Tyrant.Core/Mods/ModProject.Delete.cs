@@ -45,14 +45,21 @@ public sealed partial class ModProject
         var blender = BlenderProjectWriter.ModFolderOf(ws.Dir, id);
         if (Directory.Exists(blender))
         {
-            try
+            // The folder is named after the id, so "game" is also where the vanilla projects live: only what says it is this mod's goes.
+            var subfolders = Directory.GetDirectories(blender);
+            var mine = subfolders.Where(f => BlenderProjectFile.Belongs(f, id)).ToList();
+            var all = Directory.GetFiles(blender).Length == 0 && mine.Count == subfolders.Length;
+            foreach (var folder in all ? [blender] : mine)
             {
-                RecycleBin.Current.Recycle(blender);
-                recycled.Add(blender);
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                kept.Add($"{blender}: {ex.Message}");
+                try
+                {
+                    RecycleBin.Current.Recycle(folder);
+                    recycled.Add(folder);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    kept.Add($"{folder}: {ex.Message}");
+                }
             }
         }
         return new RemovedFiles(recycled, kept);

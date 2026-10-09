@@ -201,6 +201,22 @@ describe('ModEditor', () => {
     expect(messages(session, tab).join('\n')).toContain('no mod');
   });
 
+  it('removing the open skin from the side list shows the details page', async () => {
+    const detail = modDetail();
+    const { rpc } = setup(detail);
+    rpc.on('mods.removeSkin', () => modDetail({ revision: 'r2', skins: detail.skins.filter((k) => k.id !== 'blue') }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Blue-green stripes' }));
+    expect(await screen.findByRole('heading', { name: 'Files' })).toBeInTheDocument();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Actions for Blue-green stripes' }));
+    await fireEvent.click(within(screen.getByRole('menu')).getByRole('menuitem', { name: 'Remove skin…' }));
+    await fireEvent.click(within(await screen.findByRole('dialog', { name: 'Remove Blue-green stripes' })).getByRole('button', { name: 'Remove skin' }));
+
+    await waitFor(() => expect(rpc.callsTo('mods.removeSkin')).toHaveLength(1));
+    expect(await screen.findByRole('textbox', { name: 'Name' })).toBeInTheDocument(); // Mod details
+    expect(screen.queryByRole('heading', { name: 'Files' })).toBeNull();
+  });
+
   it('Mod → Delete mod… deletes it and closes the tab', async () => {
     const rpc = new FakeRpc()
       .on('mods.get', () => modDetail())

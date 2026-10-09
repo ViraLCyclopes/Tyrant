@@ -83,6 +83,7 @@
 
   let deleting = $state<{ installed: boolean } | null>(null);
   let deleteError = $state<string | null>(null);
+  let deletingBusy = $state(false);
 
   async function askDelete() {
     const list = await tab.quietly(() => session.rpc.call('mods.list'));
@@ -92,10 +93,15 @@
   }
 
   async function confirmDelete(removeFromGame: boolean) {
-    if (!doc.detail) return;
-    const r = await deleteMod(session, tab, doc.id, doc.detail.name, removeFromGame);
-    if ('error' in r) deleteError = r.error;
-    else deleting = null; // deleteMod closed this tab
+    if (!doc.detail || deletingBusy) return;
+    deletingBusy = true;
+    try {
+      const r = await deleteMod(session, tab, doc.id, doc.detail.name, removeFromGame);
+      if ('error' in r) deleteError = r.error;
+      else deleting = null; // deleteMod closed this tab
+    } finally {
+      deletingBusy = false;
+    }
   }
 
   async function install() {
@@ -173,7 +179,7 @@
   <div class="editor">
     <ModSideList detail={doc.detail} check={doc.check} {selection} onSelect={(s) => { adding = null; selection = s; }}
       onAddSkin={(group) => { addingGroup = group; adding = 'skin'; }}
-      onArrange={(order) => void doc.edit('mods.arrangeSkins', { order })} onRemoveSkin={(id) => (removingSkin = id)} onAddModel={() => (adding = 'model')} onAddSound={() => (adding = 'sound')}
+      onArrange={(build) => void doc.edit('mods.arrangeSkins', (d) => { const order = build(d.skins); return order ? { order } : null; })} onRemoveSkin={(id) => (removingSkin = id)} onAddModel={() => (adding = 'model')} onAddSound={() => (adding = 'sound')}
       onAddReplacement={() => (adding = 'texture')} />
     <section class="page">
       {#if adding === 'skin'}
@@ -215,13 +221,13 @@
 {/if}
 
 {#if deleting && doc.detail}
-  <DeleteModDialog name={doc.detail.name} installed={deleting.installed} error={deleteError} onCancel={() => (deleting = null)} onConfirm={confirmDelete} />
+  <DeleteModDialog name={doc.detail.name} installed={deleting.installed} error={deleteError} busy={deletingBusy} onCancel={() => (deleting = null)} onConfirm={confirmDelete} />
 {/if}
 
 {#if removingSkin && doc.detail}
   {@const skin = doc.detail.skins.find((k) => k.id === removingSkin)}
   {#if skin}
-    <RemoveSkinDialog name={skin.name} onCancel={() => (removingSkin = null)} onConfirm={(deleteFiles) => { removingSkin = null; void doc.removeSkin(skin.id, deleteFiles); }} />
+    <RemoveSkinDialog name={skin.name} onCancel={() => (removingSkin = null)} onConfirm={(deleteFiles) => { const id = skin.id; removingSkin = null; void doc.removeSkin(id, deleteFiles); }} />
   {/if}
 {/if}
 

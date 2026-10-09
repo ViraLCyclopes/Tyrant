@@ -19,6 +19,9 @@ function setup(detail: ModDetail = modDetail({ skins: [skin('a', 'Amber'), skin(
   return { session, props };
 }
 
+/** The order the last arrange request builds from the current skins (the editor runs the builder on its latest detail). */
+const lastOrder = (props: { detail: ModDetail; onArrange: ReturnType<typeof vi.fn> }) => props.onArrange.mock.lastCall![0](props.detail.skins);
+
 describe('ModSideList skins', () => {
   it('shows ungrouped skins, then each group under its heading with its species', () => {
     setup();
@@ -38,11 +41,11 @@ describe('ModSideList skins', () => {
     const { props } = setup();
     await fireEvent.click(screen.getByRole('button', { name: 'Actions for Dusk' }));
     await fireEvent.click(within(screen.getByRole('menu')).getByRole('menuitem', { name: 'Move up' }));
-    expect(props.onArrange).toHaveBeenLastCalledWith([{ id: 'a', group: null }, { id: 'd', group: 'Jurassic Park' }, { id: 'c', group: 'Jurassic Park' }]);
+    expect(lastOrder(props)).toEqual([{ id: 'a', group: null }, { id: 'd', group: 'Jurassic Park' }, { id: 'c', group: 'Jurassic Park' }]);
 
     await fireEvent.click(screen.getByRole('button', { name: 'Actions for Amber' }));
     await fireEvent.click(within(screen.getByRole('menu')).getByRole('menuitem', { name: 'Move to Jurassic Park' }));
-    expect(props.onArrange).toHaveBeenLastCalledWith([{ id: 'c', group: 'Jurassic Park' }, { id: 'd', group: 'Jurassic Park' }, { id: 'a', group: 'Jurassic Park' }]);
+    expect(lastOrder(props)).toEqual([{ id: 'c', group: 'Jurassic Park' }, { id: 'd', group: 'Jurassic Park' }, { id: 'a', group: 'Jurassic Park' }]);
   });
 
   it('New group… asks for a name', async () => {
@@ -52,7 +55,7 @@ describe('ModSideList skins', () => {
     const dialog = screen.getByRole('dialog', { name: 'New group' });
     await fireEvent.input(within(dialog).getByRole('textbox', { name: 'Group name' }), { target: { value: 'Isla Sorna' } });
     await fireEvent.click(within(dialog).getByRole('button', { name: 'Move' }));
-    expect(props.onArrange).toHaveBeenLastCalledWith([
+    expect(lastOrder(props)).toEqual([
       { id: 'c', group: 'Jurassic Park' }, { id: 'd', group: 'Jurassic Park' }, { id: 'a', group: 'Isla Sorna' },
     ]);
   });
@@ -60,7 +63,7 @@ describe('ModSideList skins', () => {
   it('Alt+Down moves the skin; Remove skin… asks the editor', async () => {
     const { props } = setup();
     await fireEvent.keyDown(screen.getByRole('button', { name: 'Crimson' }), { key: 'ArrowDown', altKey: true });
-    expect(props.onArrange).toHaveBeenLastCalledWith([{ id: 'a', group: null }, { id: 'd', group: 'Jurassic Park' }, { id: 'c', group: 'Jurassic Park' }]);
+    expect(lastOrder(props)).toEqual([{ id: 'a', group: null }, { id: 'd', group: 'Jurassic Park' }, { id: 'c', group: 'Jurassic Park' }]);
 
     await fireEvent.click(screen.getByRole('button', { name: 'Actions for Crimson' }));
     await fireEvent.click(within(screen.getByRole('menu')).getByRole('menuitem', { name: 'Remove skin…' }));
@@ -71,7 +74,7 @@ describe('ModSideList skins', () => {
     const { props } = setup();
     await fireEvent.click(screen.getByRole('button', { name: 'Actions for group Jurassic Park' }));
     await fireEvent.click(within(screen.getByRole('menu')).getByRole('menuitem', { name: 'Ungroup' }));
-    expect(props.onArrange).toHaveBeenLastCalledWith([{ id: 'a', group: null }, { id: 'c', group: null }, { id: 'd', group: null }]);
+    expect(lastOrder(props)).toEqual([{ id: 'a', group: null }, { id: 'c', group: null }, { id: 'd', group: null }]);
 
     await fireEvent.click(screen.getByRole('button', { name: 'Add a skin to Jurassic Park' }));
     expect(props.onAddSkin).toHaveBeenCalledWith('Jurassic Park');

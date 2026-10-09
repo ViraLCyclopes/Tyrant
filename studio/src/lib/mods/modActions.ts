@@ -79,8 +79,9 @@ export async function deleteMod(
 ): Promise<{ list: ModsListResult } | { error: string }> {
   try {
     const list = await session.rpc.call('mods.delete', { id, removeFromGame });
-    tab.info(`'${name}' went to the Recycle Bin${removeFromGame ? ' and is out of the game' : ''}. Its skin numbers stay reserved: Clean up skin numbers… frees them.`);
+    // Close first: a closed tab's log goes with it, and the closed tab then logs to every tab, so the message stays.
     tab.closeTool('mod', id);
+    tab.info(`'${name}' went to the Recycle Bin${removeFromGame ? ' and is out of the game' : ''}. Its skin numbers stay reserved: Clean up skin numbers… frees them.`);
     return { list };
   } catch (e) {
     const error = asRpcError(e);

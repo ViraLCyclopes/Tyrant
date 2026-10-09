@@ -1,6 +1,6 @@
-using Tyrant.Core.Dumping;
 using System.Text.Json;
 using Tyrant.Core.Assets;
+using Tyrant.Core.Dumping;
 using Tyrant.Core.Install;
 using Tyrant.Core.Tests;
 
@@ -309,7 +309,4 @@ public class ModsMethodsTests
             .Select(s => (s.GetProperty("id").GetString(), s.GetProperty("group").GetString())).ToArray();
         Assert.Equal(new (string?, string?)[] { ("tan", null), ("red-spot", "Jurassic Park") }, skins);
     }
-
-public sealed record ModAddSkinParams(string Id, string Species, string Name, string? Base = null, bool Male = true, bool Female = true, bool Maps = false,
-    string? Group = null);
 }

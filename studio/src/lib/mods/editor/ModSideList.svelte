@@ -23,7 +23,8 @@
     selection: Selection;
     onSelect: (s: Selection) => void;
     onAddSkin: (group: string | null) => void;
-    onArrange?: (order: SkinPlace[]) => void;
+    /** Asks for a change to the arrangement; the editor runs the builder on the latest skins, so quick repeats stack. */
+    onArrange?: (build: (skins: ModSkinDto[]) => SkinPlace[] | null) => void;
     onRemoveSkin?: (id: string) => void;
     onAddModel?: () => void;
     onAddSound?: () => void;
@@ -60,23 +61,19 @@
     session.store.set(collapsedKey, JSON.stringify(collapsed));
   }
 
-  function arrange(order: SkinPlace[] | null) {
-    if (order) onArrange(order);
-  }
-
   function skinActions(skin: ModSkinDto): ItemAction[] {
     const current = skin.group ?? null;
     return [
-      { label: 'Move up', run: () => arrange(moveSkin(detail.skins, skin.id, -1)), disabled: !moveSkin(detail.skins, skin.id, -1) },
-      { label: 'Move down', run: () => arrange(moveSkin(detail.skins, skin.id, 1)), disabled: !moveSkin(detail.skins, skin.id, 1) },
+      { label: 'Move up', run: () => onArrange((skins) => moveSkin(skins, skin.id, -1)), disabled: !moveSkin(detail.skins, skin.id, -1) },
+      { label: 'Move down', run: () => onArrange((skins) => moveSkin(skins, skin.id, 1)), disabled: !moveSkin(detail.skins, skin.id, 1) },
       ...groupNames(detail.skins)
         .filter((g) => g !== current)
-        .map((g) => ({ label: `Move to ${g}`, run: () => arrange(setGroup(detail.skins, [skin.id], g)) })),
+        .map((g) => ({ label: `Move to ${g}`, run: () => onArrange((skins) => setGroup(skins, [skin.id], g)) })),
       {
         label: 'Move to a new group…',
-        run: () => (naming = { title: 'New group', initial: '', action: 'Move', apply: (name) => arrange(setGroup(detail.skins, [skin.id], name)) }),
+        run: () => (naming = { title: 'New group', initial: '', action: 'Move', apply: (name) => onArrange((skins) => setGroup(skins, [skin.id], name)) }),
       },
-      ...(current === null ? [] : [{ label: 'Remove from group', run: () => arrange(setGroup(detail.skins, [skin.id], null)) }]),
+      ...(current === null ? [] : [{ label: 'Remove from group', run: () => onArrange((skins) => setGroup(skins, [skin.id], null)) }]),
       { label: 'Remove skin…', run: () => onRemoveSkin(skin.id) },
     ];
   }
@@ -86,18 +83,19 @@
     return [
       {
         label: 'Rename group…',
-        run: () => (naming = { title: `Rename ${group}`, initial: group, action: 'Rename', apply: (name) => arrange(renameGroup(detail.skins, group, name)) }),
+        run: () => (naming = { title: `Rename ${group}`, initial: group, action: 'Rename', apply: (name) => onArrange((skins) => renameGroup(skins, group, name)) }),
       },
-      { label: 'Move group up', run: () => arrange(moveGroup(detail.skins, group, -1)), disabled: !moveGroup(detail.skins, group, -1) },
-      { label: 'Move group down', run: () => arrange(moveGroup(detail.skins, group, 1)), disabled: !moveGroup(detail.skins, group, 1) },
-      { label: 'Ungroup', run: () => arrange(setGroup(detail.skins, members, null)) },
+      { label: 'Move group up', run: () => onArrange((skins) => moveGroup(skins, group, -1)), disabled: !moveGroup(detail.skins, group, -1) },
+      { label: 'Move group down', run: () => onArrange((skins) => moveGroup(skins, group, 1)), disabled: !moveGroup(detail.skins, group, 1) },
+      { label: 'Ungroup', run: () => onArrange((skins) => setGroup(skins, members, null)) },
     ];
   }
 
   function onSkinKey(e: KeyboardEvent, skin: ModSkinDto) {
     if (!e.altKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
     e.preventDefault();
-    arrange(moveSkin(detail.skins, skin.id, e.key === 'ArrowUp' ? -1 : 1));
+    const delta = e.key === 'ArrowUp' ? -1 : 1;
+    onArrange((skins) => moveSkin(skins, skin.id, delta));
   }
 </script>
 

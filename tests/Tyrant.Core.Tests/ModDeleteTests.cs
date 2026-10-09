@@ -1,3 +1,4 @@
+using Tyrant.Core.Blender;
 using Tyrant.Core.Dumping;
 using Tyrant.Core.Errors;
 using Tyrant.Core.Install;
@@ -6,6 +7,19 @@ using Tyrant.Core.Workspaces;
 using Tyrant.Framework.Core;
 
 namespace Tyrant.Core.Tests;
+
+/// <summary>A minimal tyrant-blender.json in a project folder, saying which mod (and skin) it was made for.</summary>
+internal static class BlenderTestProject
+{
+    public static string Make(string folder, string? mod, string species, string? skin)
+    {
+        Directory.CreateDirectory(folder);
+        BlenderProjectFile.Write(Path.Combine(folder, BlenderProjectFile.FileName), new BlenderProject(1, "ws", "t.exe", "b",
+            new BlenderSource(mod is null ? "game" : skin is null ? "model" : "skin", species, skin, mod),
+            null, new Dictionary<string, BlenderMaterial>(), null, [], null, false));
+        return folder;
+    }
+}
 
 public class ModDeleteTests
 {
@@ -28,8 +42,26 @@ public class ModDeleteTests
     private static string BlenderProjects(Workspace ws)
     {
         var dir = Path.Combine(ws.Dir, "blender", "red-spot");
-        Directory.CreateDirectory(Path.Combine(dir, "carcharodontosaurus-blue"));
+        BlenderTestProject.Make(Path.Combine(dir, "carcharodontosaurus-blue"), "red-spot", "Carcharodontosaurus", "blue");
         return dir;
+    }
+
+    [Fact]
+    public void A_mod_named_game_leaves_the_vanilla_blender_projects_alone()
+    {
+        var (game, install, ws, _) = Setup();
+        using var _1 = game;
+        ModProject.Create(ws, "game", "Game", null);
+        var vanilla = BlenderTestProject.Make(Path.Combine(ws.Dir, "blender", "game", "carcharodontosaurus"), null, "Carcharodontosaurus", null);
+        var mine = BlenderTestProject.Make(Path.Combine(ws.Dir, "blender", "game", "allosaurus-red"), "game", "Allosaurus", "red");
+
+        var removed = ModProject.Delete(ws, install, "game", removeFromGame: false, new GameMods());
+
+        Assert.True(Directory.Exists(vanilla));
+        Assert.DoesNotContain(vanilla, removed.Recycled);
+        Assert.Contains(mine, removed.Recycled);
+        Assert.False(Directory.Exists(mine));
+        Assert.Empty(removed.Kept);
     }
 
     [Fact]
