@@ -34,6 +34,22 @@ public class OtherModSpeciesTests
     }
 
     [Fact]
+    public void A_workspace_mod_that_cannot_be_read_is_skipped()
+    {
+        using var game = new FakeGame();
+        var ws = NewWorkspace(game);
+        var a = ModProject.Create(ws, "mod-a", "Mod A", null);
+        a.AddSpecies([Template()], "mirabilis", "Allosaurus Anax", "Mirabilis", "Example", "mirabilis");
+        var b = ModProject.Create(ws, "mod-b", null, null);
+        using var locked = new FileStream(Path.Combine(a.Dir, ModManifest.FileName), FileMode.Open, FileAccess.Read, FileShare.None);
+
+        var others = OtherModSpecies.Load(ws, [], b.Id);
+
+        Assert.Empty(others.Species);
+        Assert.False(others.Mods.ContainsKey("mod-a"));
+    }
+
+    [Fact]
     public void Installed_mods_count_as_found_and_the_workspace_copy_wins()
     {
         using var game = new FakeGame();

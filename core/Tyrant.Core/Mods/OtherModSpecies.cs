@@ -20,7 +20,7 @@ public static class OtherModSpecies
         {
             ModProject mod;
             try { mod = ModProject.Open(ws, id); }
-            catch (TyrantException) { continue; } // an unreadable mod offers nothing; its own page reports why
+            catch (Exception ex) when (ex is TyrantException or IOException or UnauthorizedAccessException) { continue; } // an unreadable mod offers nothing; its own page reports why
             mods[id] = new OtherModState(mod.Manifest.Name, true, false, false);
             foreach (var entry in mod.Manifest.Species) species[entry.Key(id)] = new OtherSpecies(entry.Key(id), id, mod.Manifest.Name, entry);
         }
