@@ -77,9 +77,9 @@ A mod can add new skins next to the vanilla ones; nothing vanilla changes. Make 
 | Field | Meaning |
 |---|---|
 | `id` | Unique within the mod (lowercase letters, digits, `-`). |
-| `species` | The game's species id (Tyrant fills it in). |
+| `species` | The game's species id, or a custom species' `tyrant.<mod-id>.<species-id>` (from this mod or another). Tyrant fills it in. |
 | `name` | Shown in the Nursery. |
-| `base` | The vanilla skin to start from (name or number). Everything the skin doesn't provide comes from it. |
+| `base` | The vanilla skin to start from (name or number). Everything the skin doesn't provide comes from it. For a custom species, `0` (its starting skin). |
 | `group` | Optional. Groups the skin in Tyrant's mod editor (e.g. `"Jurassic Park"`); the game ignores it, and the order of `skins` too. |
 | `thumbnail` | Optional swatch; otherwise cut from the diffuse. |
 | `male` / `female` | Slots to PNGs: `diffuse`, `normal`, `extra`, `pattern`, `fur`, `infantDiffuse`, `infantNormal`, `infantExtra`, `infantPattern`, `infantFur`. Leave a sex out for a single-sex skin (that sex looks like the base). |

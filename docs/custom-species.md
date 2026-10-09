@@ -22,7 +22,7 @@ The framework retains one native template addressable user per cached authored
 prefab until shutdown. The native shader belongs to that dependency graph;
 cloning a material alone does not keep its asset bundle loaded after previews
 are disposed or replaced.
-The animal continues to inherit template animation, gameplay and skin data.
+The animal inherits the template's animation and gameplay data and starts with **one** skin: a copy of the template skin you choose.
 
 The runtime species implementation is experimental: spawning, AI and save/reload
 still need an in-game test before this is ready for normal parks. Removing the mod
@@ -57,7 +57,7 @@ Export and installation use SQLite snapshots, including committed edits in a WAL
 The running game uses the installed copy; install the mod again and restart the
 game to apply workspace edits.
 
-The database has six tables:
+The database has seven tables:
 
 | Table | Columns | Purpose |
 |---|---|---|
@@ -67,8 +67,9 @@ The database has six tables:
 | `animal_localization` | `species_id`, `slot`, `term` | Localization keys, with text in separate language files |
 | `animal_assets` | `species_id`, `slot`, `file` | Custom icon PNG paths |
 | `animal_prefabs` | `species_id`, `bundle`, `asset` | Optional Unity AssetBundle and lowercase prefab asset path |
+| `animal_starting_skin` | `species_id`, `skin`, `name`, `swatch` | Starting skin: the template skin number, optional name and swatch PNG (see [Skins](#skins)) |
 
-`PRAGMA user_version` is `3`. Existing v1/v2 databases upgrade on their next save. Species ids are unique; a stat references its species
+`PRAGMA user_version` is `4`. Existing v1–v3 databases upgrade on their next save. Species ids are unique; a stat references its species
 id. Enable foreign keys when editing. If you create the database manually, use the
 schema in [animal-database-schema.sql](animal-database-schema.sql).
 
@@ -178,7 +179,7 @@ but new species write one plain text file per field.
 Choose **Choose icon PNG…** in the species editor. Tyrant copies the PNG to
 `icons/<species-id>.png` and records its path in `animal_assets` with `slot = 'icon'`.
 It replaces that species' `heroRender`, used by the Nursery species button and info
-preview. Transparent PNGs are supported. Skin swatches, animal-info-sign backgrounds,
+preview. Transparent PNGs are supported. Skin swatches (a species' starting skin swatch is set under [Skins](#skins)), animal-info-sign backgrounds,
 and sex/growth portrait assets remain separate template assets. **Use template icon**
 removes the override. SQL users may supply another relative PNG path inside the mod.
 Language files and icon PNGs are included in mod exports and installs.
@@ -187,12 +188,33 @@ At runtime Tyrant reads `animals.db`, clones the template's animal data, applies
 the overrides and registers the result in PK's in-memory animal database before
 AI tables initialize. PK's game database files are not modified.
 
+## Skins
+
+A new species starts with one skin, copied from the template skin chosen as **Starting skin** on the
+new-species form (default: the template's first). Change it, rename it, or give it its own swatch PNG
+(the round picture in the skin picker) in the species page's **Skins** section. These live in
+`animals.db`'s `animal_starting_skin` table (`skin` = the template skin's number, `name`, `swatch`).
+
+Add more skins with **Add skin** on that section, or from the mod's side list: they are ordinary
+`skins[]` entries whose `species` is the species' id (`tyrant.<mod-id>.<species-id>`) and whose `base` is
+`"0"` (the starting skin). Added skins are numbered from 1.
+
+Another mod can add skins to your species the same way: its Add skin lists "Other mods' species" (mods in
+the workspace and mods installed in the game). In game, if your mod is missing or off, only those skins are
+skipped; the rest of the other mod still loads. Tyrant's mod details and Mods list say so.
+
 ## CLI
 
 ```powershell
 tyrant mod add-species my-animal-pack example-animal "Allosaurus Anax" --name "Example animal" --genus Example --epithet animal --cost 25000 -w <workspace>
 tyrant mod show my-animal-pack -w <workspace>
 tyrant mod check my-animal-pack -w <workspace>
+```
+
+```powershell
+tyrant mod add-species my-animal-pack example-animal "Allosaurus Anax" --name "Example animal" --genus Example --epithet animal --starting-skin Albino -w <workspace>
+tyrant mod set-species-skin my-animal-pack example-animal --starting-skin 0 --name "Mirabilis" --swatch swatch.png -w <workspace>
+tyrant mod add-skin other-pack tyrant.my-animal-pack.example-animal --name "Blue" -w <workspace>
 ```
 
 Use the app or SQL for other stats. The CLI's `mod add-skin` and `mod replace-model`
