@@ -73,7 +73,7 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
         return jobs.Start($"Install {p.Id}", (progress, ct) =>
         {
             progress.Report(new JobProgress(0.05, $"Checking {p.Id}"));
-            RebuildStaleModels(ws, install, mod);
+            RebuildStaleModels(ws, install, mod, measureHeadRigs: true);
             var check = CheckMod(ws, install, mod);
             if (!check.Ok)
                 throw new TyrantException(TyrantErrorCode.ModInvalid, $"'{p.Id}' has problems, so it was not installed: {string.Join(" ", check.Errors)}");

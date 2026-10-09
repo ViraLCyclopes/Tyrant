@@ -20,7 +20,7 @@ public sealed class ModExportCommand : Command<ModExportCommand.Settings>
     {
         var (ws, install) = CliServices.OpenWorkspace(settings);
         var mod = ModProject.Open(ws, settings.Id);
-        ModCli.RebuildStaleModels(ws, install, mod);
+        ModCli.RebuildStaleModels(ws, install, mod, measureHeadRigs: true);
         var check = ModCli.Check(ws, install, mod);
         if (!check.Ok)
         {

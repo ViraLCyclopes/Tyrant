@@ -70,8 +70,11 @@ public sealed partial class ModProject
         }
         else
         {
+            var previous = Manifest.Models.FirstOrDefault(m => string.Equals(m.Target, speciesId, StringComparison.Ordinal));
+            // The head-look correction belongs to the rig edit: it stays while the rig edit does.
+            var headRig = previous?.HeadRig is { } kept && kept.RigHash == RigEdit.Hash(effective) ? kept : null;
             Manifest.Models.RemoveAll(m => string.Equals(m.Target, speciesId, StringComparison.Ordinal));
-            Manifest.Models.Add(new ModelReplacement { Target = speciesId, Key = prefab.ContainerPath, File = file, Rig = effective });
+            Manifest.Models.Add(new ModelReplacement { Target = speciesId, Key = prefab.ContainerPath, File = file, Rig = effective, HeadRig = headRig });
         }
         Save();
         return report;
@@ -178,6 +181,7 @@ public sealed partial class ModProject
             HeadRigCorrection? correction = null;
             if (entry.Rig is { Count: > 0 })
             {
+                if (entry.HeadRig is { } measured && measured.RigHash == RigEdit.Hash(entry.Rig)) continue; // measured for this rig edit
                 // A custom species walks like its template.
                 var template = Manifest.Species.FirstOrDefault(s => s.Key(Id) == entry.Target)?.Base ?? entry.Target;
                 if (quadrupedalOf(template) is not { } quadrupedal) continue;
@@ -186,9 +190,9 @@ public sealed partial class ModProject
                     var (_, prefab) = ResolveModelTarget(index, species, entry.Target, null);
                     correction = Rigging.HeadRigMeasure.For(reader.ReadPrefabModel(install, prefab), entry.Rig, quadrupedal);
                 }
-                catch (TyrantException)
+                catch (Exception ex) when (ex is TyrantException or ArgumentException or InvalidDataException)
                 {
-                    continue; // the prefab cannot be read here: keep what the entry has
+                    continue; // the prefab cannot be read or measured here: keep what the entry has
                 }
             }
             if (SameHeadRig(entry.HeadRig, correction)) continue;

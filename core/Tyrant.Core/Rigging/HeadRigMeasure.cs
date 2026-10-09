@@ -19,9 +19,17 @@ public static class HeadRigMeasure
         if (edited.Count == 0) return null;
         RigPose Rest(SkeletonNode n) => World(n, null);
         RigPose Edit(SkeletonNode n) => World(n, edited);
-        var correction = HeadRig.Measure(Rest(baseParent), Rest(boomBase).Position, Rest(setup.Head),
-            Edit(baseParent), Edit(boomBase).Position, Edit(setup.Head));
-        return correction.IsIdentity() ? null : correction;
+        HeadRigCorrection correction;
+        try
+        {
+            correction = HeadRig.Measure(Rest(baseParent), Rest(boomBase).Position, Rest(setup.Head),
+                Edit(baseParent), Edit(boomBase).Position, Edit(setup.Head));
+        }
+        catch (ArgumentException)
+        {
+            return null; // the edit puts the head on the boom base: nothing sensible to aim
+        }
+        return correction.IsIdentity() ? null : correction.For(RigEdit.Hash(rig));
     }
 
     /// <summary>The bones whose edit changes the head look: the boom base, the neck between it and the head, and the head.</summary>
@@ -48,6 +56,7 @@ public static class HeadRigMeasure
         return result;
     }
 
+    /// <summary>The bone's rest pose in the prefab; exact for uniform scales (a non-uniform scale on an ancestor skews in Unity).</summary>
     private static RigPose World(SkeletonNode node, Dictionary<SkeletonNode, RigOffset>? edits)
     {
         var position = new RigVector3(node.LocalPosition.X, node.LocalPosition.Y, node.LocalPosition.Z);

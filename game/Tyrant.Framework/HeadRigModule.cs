@@ -23,9 +23,18 @@ namespace Tyrant.Framework
 
         public static void Start(IReadOnlyList<LoadedMod> mods, HarmonyLib.Harmony harmony)
         {
-            foreach (var set in ModelTable.Build(mods).SpeciesSets)
-                if (set.HeadRig != null) Corrections[set.Target] = (set.HeadRig, set.ModId);
+            var table = ModelTable.Build(mods);
+            foreach (var set in table.SpeciesSets)
+                if (set.HeadRig != null && !set.HeadRig.IsIdentity()) Corrections[set.Target] = (set.HeadRig, set.ModId);
             if (Corrections.Count == 0) return;
+            if (!RigModule.Active)
+            {
+                FrameworkMod.Log.Warning("Rig edits are off, so species rig edits do not re-aim the head look either.");
+                return;
+            }
+            foreach (var pair in Corrections)
+                if (table.SkinCount(pair.Key) > 0)
+                    FrameworkMod.Log.Msg($"{pair.Key}: skins with their own model or rig edit keep their own neck but use the species' re-aimed head look.");
             var native = AccessTools.Method(AccessTools.TypeByName("PrehistoricKingdom.AnimalsV2.AI.AnimalsGlobal"), "InitializeNativeData");
             if (native == null)
             {
@@ -36,13 +45,16 @@ namespace Tyrant.Framework
             harmony.Patch(native, prefix: new HarmonyMethod(typeof(HeadRigModule), nameof(BeforeNativeData)) { priority = Priority.Low });
         }
 
-        private static void BeforeNativeData()
+        // __0: the game's own list of animal data (AnimalsGlobal.InitializeNativeData(List<AnimalData>)).
+        private static void BeforeNativeData(object __0)
         {
             try
             {
-                var persistent = AccessTools.TypeByName("PrehistoricKingdom.PKPersistentData");
-                var database = AccessTools.Property(persistent, "Animals")?.GetValue(null, null);
-                if (database == null || !(AccessTools.Field(database.GetType(), "AnimalDataAssets")?.GetValue(database) is IList list)) return;
+                if (!(__0 is IList list))
+                {
+                    FrameworkMod.Log.Warning("InitializeNativeData's animal list is not a list (game updated?); species rig edits keep the game's head look.");
+                    return;
+                }
                 foreach (var data in list.Cast<object>())
                 {
                     if (data == null || Applied.Contains(data)) continue;

@@ -52,6 +52,9 @@ namespace Tyrant.Framework
         private static Type? _float3;
         private static object? _rootBone;
 
+        /// <summary>True once rig edits are hooked into the game (false: they are off, e.g. after a game update).</summary>
+        public static bool Active { get; private set; }
+
         public static void Start(HarmonyLib.Harmony harmony)
         {
             if (_patched) return;
@@ -63,6 +66,7 @@ namespace Tyrant.Framework
                 return;
             }
             harmony.Patch(before, prefix: new HarmonyMethod(typeof(RigModule), nameof(AfterAnimation)));
+            Active = true;
             var final = AccessTools.Method(scheduler, "OnAfterPostLateUpdate");
             if (final != null) harmony.Patch(final, postfix: new HarmonyMethod(typeof(RigModule), nameof(AfterWriteBack)));
             var growth = AccessTools.Method(scheduler, "OnAfterLateUpdate");

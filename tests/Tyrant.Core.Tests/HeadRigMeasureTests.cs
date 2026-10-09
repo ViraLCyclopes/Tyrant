@@ -63,6 +63,15 @@ public class HeadRigMeasureTests
     }
 
     [Fact]
+    public void Moving_the_head_onto_the_boom_base_gives_no_correction_rather_than_a_broken_one()
+    {
+        // Neck.002, Neck.003 and Head pulled back onto Neck.001: the edited boom has no length.
+        var rig = new Dictionary<string, RigOffset> { ["Neck.002"] = Move(0, 0, -0.3f), ["Neck.003"] = Move(0, 0, -0.3f), ["Head"] = Move(0, 0, -0.3f) };
+
+        Assert.Null(HeadRigMeasure.For(Animal(), rig, quadrupedal: true));
+    }
+
+    [Fact]
     public void The_head_look_bones_run_from_the_boom_base_to_the_head()
     {
         Assert.Equal(["Neck.001", "Neck.002", "Neck.003", "Head"], HeadRigMeasure.Bones(Animal(), quadrupedal: true));

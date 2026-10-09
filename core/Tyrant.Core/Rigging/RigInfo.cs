@@ -22,7 +22,7 @@ public sealed record RigInfo(IReadOnlyList<string> Bones, IReadOnlyList<string> 
 
 public static class RigInfoService
 {
-    private const int CacheVersion = 2;
+    private const int CacheVersion = 3;
 
     private static readonly JsonSerializerOptions Json = new(DataStore.ReadableJson) { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
@@ -65,7 +65,7 @@ public static class RigInfoService
         var info = new RigInfo(names, clipMoved,
             growth?.Bones.Where(b => b.Translation && inSkeleton.Contains(b.Name)).Select(b => b.Name).ToList() ?? [],
             growth?.Bones.Where(b => b.Scale && inSkeleton.Contains(b.Name)).Select(b => b.Name).ToList() ?? [],
-            failures, HeadRigMeasure.Bones(model, quadrupedal: false));
+            failures, HeadRigMeasure.Bones(model, quadrupedal: Mods.SpeciesDatabase.IsQuadrupedal(ws, id) ?? false));
         if (failures.Count == 0)
         {
             Directory.CreateDirectory(Path.GetDirectoryName(cache)!);

@@ -19,8 +19,10 @@ public sealed partial class ModsMethods
     {
         var (ws, install) = session.Current();
         var mod = ModProject.Open(ws, p.Id, p.Revision);
-        var report = mod.ReplaceModel(install, RequireIndex(ws), mod.SpeciesFor(ws, install, RequireSpecies(ws)), Options.AssetReader, p.File, p.Target, p.PrefabRef, p.Skin,
+        var (index, species) = (RequireIndex(ws), mod.SpeciesFor(ws, install, RequireSpecies(ws)));
+        var report = mod.ReplaceModel(install, index, species, Options.AssetReader, p.File, p.Target, p.PrefabRef, p.Skin,
             () => new BlenderService(Options.Blender).Converter(ws));
+        mod.RefreshHeadRigs(ws, install, index, species, Options.AssetReader);
         session.Log($"'{p.Id}' replaces a model with {Path.GetFileName(p.File)} ({report.Lods.Count} LOD(s)){(report.Warnings.Count == 0 ? "" : ": " + string.Join(" ", report.Warnings))}.");
         return DetailOf(ws, mod);
     }
@@ -106,8 +108,12 @@ public sealed partial class ModsMethods
             report?.Origin, report is not null && ModelBuilder.OriginChanged(report), ModRigBone.Of(mod.RigOfFile(file)));
     }
 
-    /// <summary>Before Check and Install: models whose .glb changed are built again (needs the index and the data dump).</summary>
-    private void RebuildStaleModels(Workspace ws, GameInstall install, ModProject mod)
+    /// <summary>
+    /// Before Check and Install: models whose .glb changed are built again (needs the index and the data dump). With
+    /// measureHeadRigs (Install, Export), species rig edits measured for another rig edit (or never) are measured again;
+    /// Check leaves mod.json alone, so an editor's undo history stays.
+    /// </summary>
+    private void RebuildStaleModels(Workspace ws, GameInstall install, ModProject mod, bool measureHeadRigs = false)
     {
         if (!mod.ModelEntries().Any() && !mod.Manifest.Models.Any(m => m.Rig is { Count: > 0 } || m.HeadRig is not null)) return;
         if (TryIndex(ws) is not { } index || TrySpeciesFor(ws, install, mod) is not { } species) return;
@@ -115,7 +121,7 @@ public sealed partial class ModsMethods
         {
             foreach (var file in mod.RebuildStaleModels(install, index, species, Options.AssetReader))
                 session.Log($"'{mod.Id}': rebuilt {file} (it changed since it was built).");
-            if (mod.RefreshHeadRigs(ws, install, index, species, Options.AssetReader))
+            if (measureHeadRigs && mod.RefreshHeadRigs(ws, install, index, species, Options.AssetReader))
                 session.Log($"'{mod.Id}': re-measured the head look of its species-wide rig edits.");
         }
         catch (TyrantException ex)

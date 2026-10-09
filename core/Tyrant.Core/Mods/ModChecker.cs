@@ -245,6 +245,12 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
             errors.AddRange(rigErrors);
             warnings.AddRange(rigWarnings);
         }
+        foreach (var entry in mod.Manifest.Models.Where(m => m.HeadRig is not null))
+        {
+            var own = mod.Manifest.Skins.Where(s => s.Species == entry.Target && (s.Model is not null || s.Rig is { Count: > 0 })).Select(s => s.Id).ToList();
+            if (own.Count > 0)
+                warnings.Add($"Rig edit of {entry.Target}: it re-aims the species' head look, but skin(s) {string.Join(", ", own)} have their own model or rig edit and keep their own neck, so their heads may not line up when they look around.");
+        }
         if (notChecked)
             warnings.Add("Rig edits were not checked against the game's skeleton: on the Workspace tab click Index assets and Run data dump (or 'tyrant assets index' and 'tyrant dump run').");
     }

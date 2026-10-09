@@ -53,13 +53,14 @@ internal static class ModCli
     public static IReadOnlyList<SpeciesSkins> RequireSpeciesFor(Workspace ws, GameInstall install, ModProject mod) => mod.SpeciesFor(ws, install, RequireSpecies(ws));
 
     /// <summary>Before Check and Install: models whose .glb changed are built again (needs the index and the data dump).</summary>
-    public static void RebuildStaleModels(Workspace ws, GameInstall install, ModProject mod)
+    /// <param name="measureHeadRigs">Install and Export measure species rig edits' head look again when out of date; Check does not write.</param>
+    public static void RebuildStaleModels(Workspace ws, GameInstall install, ModProject mod, bool measureHeadRigs = false)
     {
         if (!mod.ModelEntries().Any() && !mod.Manifest.Models.Any(m => m.Rig is { Count: > 0 } || m.HeadRig is not null)) return;
         if (TryIndex(ws) is not { } index || TrySpeciesFor(ws, install, mod) is not { } species) return;
         foreach (var file in mod.RebuildStaleModels(install, index, species, CliServices.AssetReader))
             Console.WriteLine($"  rebuilt  {file} (it changed since it was built)");
-        if (mod.RefreshHeadRigs(ws, install, index, species, CliServices.AssetReader))
+        if (measureHeadRigs && mod.RefreshHeadRigs(ws, install, index, species, CliServices.AssetReader))
             Console.WriteLine("  re-measured the head look of its species-wide rig edits");
     }
 
@@ -220,7 +221,7 @@ public sealed class ModInstallCommand : Command<ModInstallCommand.Settings>
     {
         var (ws, install) = CliServices.OpenWorkspace(settings);
         var mod = ModProject.Open(ws, settings.Id);
-        ModCli.RebuildStaleModels(ws, install, mod);
+        ModCli.RebuildStaleModels(ws, install, mod, measureHeadRigs: true);
         if (!ModCli.Print(ModCli.Check(ws, install, mod)))
         {
             Console.WriteLine("Fix the errors above, then install again.");

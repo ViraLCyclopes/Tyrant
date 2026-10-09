@@ -26,12 +26,18 @@ namespace Tyrant.Framework.Core
     /// </summary>
     public sealed class HeadRigCorrection
     {
-        public HeadRigCorrection(float lengthScale, RigQuaternion boomTurn, RigQuaternion headTurn)
+        public HeadRigCorrection(float lengthScale, RigQuaternion boomTurn, RigQuaternion headTurn, string rigHash = "")
         {
             LengthScale = lengthScale;
             BoomTurn = boomTurn;
             HeadTurn = headTurn;
+            RigHash = rigHash;
         }
+
+        /// <summary>RigEdit.Hash of the rig edit it was measured for ("" unknown): a changed rig edit is measured again.</summary>
+        public string RigHash { get; }
+
+        public HeadRigCorrection For(string rigHash) => new HeadRigCorrection(LengthScale, BoomTurn, HeadTurn, rigHash);
 
         public float LengthScale { get; }
         public RigQuaternion BoomTurn { get; }
@@ -47,6 +53,7 @@ namespace Tyrant.Framework.Core
             ["lengthScale"] = (double)LengthScale,
             ["boomTurn"] = List(BoomTurn),
             ["headTurn"] = List(HeadTurn),
+            ["rigHash"] = RigHash,
         };
 
         public static HeadRigCorrection Parse(object? json, string where)
@@ -54,7 +61,8 @@ namespace Tyrant.Framework.Core
             if (!(json is Dictionary<string, object?> map)) throw new ManifestException($"{where}: \"headRig\" must be an object.");
             var scale = map.TryGetValue("lengthScale", out var s) && s is double d ? (float)d : throw new ManifestException($"{where}: \"headRig.lengthScale\" must be a number.");
             if (!(scale > 0) || float.IsInfinity(scale)) throw new ManifestException($"{where}: \"headRig.lengthScale\" must be above 0.");
-            return new HeadRigCorrection(scale, Turn(map, "boomTurn", where), Turn(map, "headTurn", where));
+            var hash = map.TryGetValue("rigHash", out var h) && h is string text ? text : "";
+            return new HeadRigCorrection(scale, Turn(map, "boomTurn", where), Turn(map, "headTurn", where), hash);
         }
 
         private static RigQuaternion Turn(Dictionary<string, object?> map, string name, string where)
@@ -88,7 +96,7 @@ namespace Tyrant.Framework.Core
             var d0 = Local(baseParent0, head0.Position - base0);
             var d1 = Local(baseParent1, head1.Position - base1);
             var l0 = d0.Length();
-            if (l0 < 1e-6f) throw new ArgumentException("the head sits on the boom base; the boom has no length");
+            if (l0 < 1e-6f || d1.Length() < 1e-6f) throw new ArgumentException("the head sits on the boom base; the boom has no length");
             var headTurn = baseParent1.Rotation.Inverse() * head1.Rotation * head0.Rotation.Inverse() * baseParent0.Rotation;
             return new HeadRigCorrection(d1.Length() / l0, FromTo(d0, d1), headTurn.Normalized());
         }

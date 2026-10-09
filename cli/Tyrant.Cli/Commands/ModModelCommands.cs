@@ -28,9 +28,11 @@ public sealed class ModReplaceModelCommand : Command<ModReplaceModelCommand.Sett
     {
         var (ws, install) = CliServices.OpenWorkspace(settings);
         var mod = ModProject.Open(ws, settings.Id);
-        var report = mod.ReplaceModel(install, CliServices.LoadIndex(ws, install), ModCli.RequireSpeciesFor(ws, install, mod), CliServices.AssetReader,
+        var (index, species) = (CliServices.LoadIndex(ws, install), ModCli.RequireSpeciesFor(ws, install, mod));
+        var report = mod.ReplaceModel(install, index, species, CliServices.AssetReader,
             Path.GetFullPath(settings.File), settings.Skin is null ? settings.Target : null, null, settings.Skin,
             () => new Tyrant.Core.Blender.BlenderService(CliServices.Blender).Converter(ws));
+        mod.RefreshHeadRigs(ws, install, index, species, CliServices.AssetReader);
         Console.WriteLine($"Added the model to '{settings.Id}': {string.Join(", ", report.Lods.Select((l, i) => $"LOD {i} {l.Vertices:N0} vertices"))}.");
         foreach (var warning in report.Warnings) Console.WriteLine($"  WARN   {warning}");
         return ExitCodes.Ok;

@@ -58,6 +58,9 @@ namespace Tyrant.Framework.Core
 
         public int Count => _species.Count + _skins.Count;
 
+        /// <summary>How many skins of the species have their own model or rig edit (they do not wear the species' rig edit).</summary>
+        public int SkinCount(string species) => _skins.Values.Count(s => string.Equals(s.Target, species, StringComparison.Ordinal));
+
         /// <summary>The species-wide sets (the load order's winner per species): their head-rig corrections go onto the species.</summary>
         public IEnumerable<ModelSet> SpeciesSets => _species.Values;
 

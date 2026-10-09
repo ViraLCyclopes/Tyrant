@@ -358,7 +358,32 @@ public class ModProjectModelsTests
 
         var saved = Assert.Single(ModProject.Open(ws, "big-carch").Manifest.Models);
         Assert.Equal(1.2f / 0.9f, saved.HeadRig!.LengthScale, 4);
-        Assert.False(mod.RefreshHeadRigs(install, Index(), SpeciesSkinsReader.Load(ws), reader, _ => true)); // already up to date
+        Assert.Equal(RigEdit.Hash(stretch), saved.HeadRig.RigHash);
+
+        // Measured for this rig edit: not measured again (a prefab without AnimalSetup would otherwise clear it).
+        reader.PrefabModelToReturn = reader.PrefabModelToReturn with { Setup = null };
+        Assert.False(mod.RefreshHeadRigs(install, Index(), SpeciesSkinsReader.Load(ws), reader, _ => true));
+        Assert.NotNull(Assert.Single(mod.Manifest.Models).HeadRig);
+
+        // A Check warns about this mod's skins with their own model or rig: they keep their own neck.
+        mod.Manifest.Skins.Add(new SkinEntry { Id = "plain", Species = "Carcharodontosaurus", Name = "Plain", Base = "0", Male = new() { ["diffuse"] = "skins/plain/male_D.png" }, Rig = new() { ["Tail"] = RigOffset.Identity } });
+        var check = new ModChecker(_ => null).Check(mod, null, null);
+        Assert.Contains(check.Warnings, w => w.Contains("Rig edit of Carcharodontosaurus") && w.Contains("plain"));
+    }
+
+    [Fact]
+    public void Replacing_the_model_of_a_species_rig_edit_keeps_its_head_look_correction()
+    {
+        var (game, ws, install, mod, reader, glb) = Setup();
+        using var _1 = game;
+        var rig = TailRig();
+        var correction = new HeadRigCorrection(1.25f, RigQuaternion.Identity, RigQuaternion.Identity, RigEdit.Hash(rig));
+        mod.SetRig(install, Index(), SpeciesSkinsReader.Load(ws), reader, "Carcharodontosaurus", null, rig);
+        mod.Manifest.Models[0].HeadRig = correction;
+
+        mod.ReplaceModel(install, Index(), SpeciesSkinsReader.Load(ws), reader, glb, "Carcharodontosaurus", null, null);
+
+        Assert.Equal(1.25f, Assert.Single(ModProject.Open(ws, "big-carch").Manifest.Models).HeadRig!.LengthScale, 5);
     }
 
     [Fact]

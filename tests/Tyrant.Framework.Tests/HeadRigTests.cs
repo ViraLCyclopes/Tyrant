@@ -114,13 +114,14 @@ public class HeadRigTests
     [Fact]
     public void The_correction_roundtrips_through_mod_json()
     {
-        var c = new HeadRigCorrection(1.25f, AxisAngle(1, 0, 0, 10), AxisAngle(0, 1, 0, -5));
+        var c = new HeadRigCorrection(1.25f, AxisAngle(1, 0, 0, 10), AxisAngle(0, 1, 0, -5), "abc123");
 
         var back = HeadRigCorrection.Parse(Json.Parse(Json.Write(c.ToMap())), "headRig");
 
         Assert.Equal(1.25f, back.LengthScale, 5);
         Same(c.BoomTurn, back.BoomTurn);
         Same(c.HeadTurn, back.HeadTurn);
+        Assert.Equal("abc123", back.RigHash);
     }
 
     private static float Angle(RigVector3 a, RigVector3 b)

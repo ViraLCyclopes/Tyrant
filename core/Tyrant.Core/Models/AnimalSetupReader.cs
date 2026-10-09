@@ -32,7 +32,7 @@ public static class AnimalSetupReader
                 using var json = JsonDocument.Parse(FieldJsonWriter.ToJson(manager.GetBaseField(file, info)));
                 return Parse(json.RootElement, id => nodes.GetValueOrDefault(id));
             }
-            catch (Exception ex) when (ex is JsonException or KeyNotFoundException or InvalidOperationException or FormatException)
+            catch (Exception ex) when (ex is JsonException or KeyNotFoundException or InvalidOperationException or FormatException or InvalidDataException)
             {
                 return null; // the head look correction is skipped; nothing else depends on it
             }
