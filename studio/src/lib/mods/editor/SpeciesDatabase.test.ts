@@ -17,7 +17,8 @@ async function setup(animals: (typeof animal)[] = [animal], props: { onPrefab?: 
   const rpc = new FakeRpc()
     .on('mods.get', () => detail)
     .on('mods.check', () => ({ errors: [], warnings: [], missingCutouts: [] }))
-    .on('mods.species', () => ({ hasDump: true, species: [{ speciesId: 'Allosaurus Anax', vivarium: false, skins: [{ index: 0, name: 'Default', male: true, female: true }, { index: 1, name: 'Albino', male: true, female: true }], prefabGuid: null }] }))
+    .on('mods.species', () => ({ hasDump: true, species: [{ speciesId: 'Allosaurus Anax', vivarium: false, skins: [{ index: 0, name: 'Default', male: true, female: true }, { index: 1, name: 'Albino', male: true, female: true }], prefabGuid: null },
+      { speciesId: 'Carcharodontosaurus', vivarium: false, skins: [{ index: 0, name: 'Base', male: true, female: true }, { index: 1, name: 'Alt 1', male: true, female: true }, { index: 2, name: 'Alt 2', male: true, female: true }], prefabGuid: null }] }))
     .on('mods.setSpeciesStartingSkin', () => ({ ...detail, revision: 'r2' }))
     .on('mods.setSpeciesSwatch', () => ({ ...detail, revision: 'r3' }))
     .on('mods.animalDatabase', () => ({ animals, fields }))
@@ -122,6 +123,20 @@ describe('Species database', () => {
     await fireEvent.input(screen.getByRole('textbox', { name: /Species epithet/ }), { target: { value: 'mirabilis' } });
     await fireEvent.click(screen.getByRole('button', { name: 'Create species' }));
     await waitFor(() => expect(rpc.callsTo('mods.addSpecies')[0]?.params).toMatchObject({ template: 'Allosaurus Anax', startingSkin: 1 }));
+  });
+
+  it('changing the template puts the starting skin back to its first skin', async () => {
+    await setup([]);
+    const starting = () => screen.getByRole('combobox', { name: /Starting skin/ }) as HTMLSelectElement;
+    await waitFor(() => expect(within(starting()).getAllByRole('option')).toHaveLength(2));
+    await fireEvent.change(starting(), { target: { value: '1' } });
+    expect(starting().value).toBe('1');
+
+    await fireEvent.change(screen.getByRole('combobox', { name: /Template/ }), { target: { value: 'Carcharodontosaurus' } });
+
+    await waitFor(() => expect(within(starting()).getAllByRole('option')).toHaveLength(3));
+    expect(starting().value).toBe('0');
+    expect(within(starting()).getByRole('option', { name: 'Base' })).toHaveProperty('selected', true);
   });
 
   it("the Skins section sets the starting skin, its name and swatch, lists the species' skins and adds one", async () => {
