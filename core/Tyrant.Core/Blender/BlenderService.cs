@@ -181,6 +181,16 @@ public sealed class BlenderService(BlenderEnvironment env)
         return list.Count;
     }
 
+    /// <summary>Why a destination saved in a project no longer exists (its mod was deleted or its skin removed), or null.</summary>
+    private static string? Gone(Workspace ws, BlenderDestination d)
+    {
+        const string again = " Send again to choose where it goes.";
+        if (!ModProject.Ids(ws).Contains(d.Mod, StringComparer.Ordinal)) return $"'{d.Mod}' is no longer in this workspace." + again;
+        if (d.Skin is not null && ModProject.Open(ws, d.Mod).Manifest.Skins.All(s => s.Id != d.Skin))
+            return $"Skin '{d.Skin}' is no longer in '{d.Mod}'." + again;
+        return null;
+    }
+
     /// <summary>
     /// Adds the exported .glb to the project's destination (or the one chosen now, saved into the project), creating the mod
     /// when newModName is given. Never throws for Tyrant's own errors: they come back in the result for Blender's panel.
@@ -198,6 +208,11 @@ public sealed class BlenderService(BlenderEnvironment env)
             destination = choose ?? project.Destination;
             if (destination is null)
                 return new BlenderSendResult(false, ["Choose where to send it first: a mod, and the species model or one of its skins."], [], [], null);
+            if (choose is null && Gone(ws, destination) is { } gone)
+            {
+                BlenderProjectFile.Write(projectFile, project with { Destination = null }); // the add-on's next Send asks where it goes
+                return new BlenderSendResult(false, [gone], [], [], null);
+            }
             var rigWarnings = new List<string>();
             if (rigOnly && rig is not { Count: > 0 })
                 return new BlenderSendResult(false, ["Rig edit only sends a rig edit, and this armature has none: make one with Start rig edit and Apply rig edit, or untick Rig edit only."], [], [], destination);

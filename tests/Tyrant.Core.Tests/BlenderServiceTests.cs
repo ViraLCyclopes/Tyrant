@@ -208,6 +208,47 @@ public class BlenderServiceTests
     }
 
     [Fact]
+    public void Send_to_a_mod_that_was_deleted_says_so_and_asks_again()
+    {
+        var ws = Ws(out var game);
+        using var _ = game;
+        var (install, index, species, reader, prefab) = Game(ws, game);
+        var project = BlenderProjectWriter.Write(new BlenderOpenRequest("Carcharodontosaurus", null, null, false, false), ws, install, index, species, reader, "t.exe");
+        var glb = Path.Combine(project.Dir, "send.glb");
+        GltfModelWriter.WriteGlb(prefab, prefab.Renderers[0], glb, [new GltfMaterial("Carch")]);
+        Assert.True(BlenderService.Send(ws, install, index, species, reader, project.ProjectFile, glb, new BlenderDestination("new-carch", "Carcharodontosaurus", null), "New Carch").Ok);
+        ModProject.Delete(ws, install, "new-carch", removeFromGame: false, new GameMods());
+
+        var gone = BlenderService.Send(ws, install, index, species, reader, project.ProjectFile, glb, null, null);
+
+        Assert.False(gone.Ok);
+        Assert.Equal("'new-carch' is no longer in this workspace. Send again to choose where it goes.", Assert.Single(gone.Errors));
+        Assert.Null(BlenderProjectFile.Read(project.ProjectFile).Destination);
+    }
+
+    [Fact]
+    public void Send_to_a_skin_that_was_removed_says_so_and_asks_again()
+    {
+        var ws = Ws(out var game);
+        using var _ = game;
+        var (install, index, species, reader, prefab) = Game(ws, game);
+        var project = BlenderProjectWriter.Write(new BlenderOpenRequest("Carcharodontosaurus", null, null, false, false), ws, install, index, species, reader, "t.exe");
+        var glb = Path.Combine(project.Dir, "send.glb");
+        GltfModelWriter.WriteGlb(prefab, prefab.Renderers[0], glb, [new GltfMaterial("Carch")]);
+        var mod = ModProject.Create(ws, "reds", null, null);
+        mod.Manifest.Skins.Add(new SkinEntry { Id = "red", Species = "Carcharodontosaurus", Name = "Red", Male = new() { ["diffuse"] = "skins/red/male_D.png" } });
+        mod.Save();
+        BlenderProjectFile.Write(project.ProjectFile, BlenderProjectFile.Read(project.ProjectFile) with { Destination = new BlenderDestination("reds", "Carcharodontosaurus", "red") });
+        mod.RemoveSkin("red", deleteFiles: false);
+
+        var gone = BlenderService.Send(ws, install, index, species, reader, project.ProjectFile, glb, null, null);
+
+        Assert.False(gone.Ok);
+        Assert.Equal("Skin 'red' is no longer in 'reds'. Send again to choose where it goes.", Assert.Single(gone.Errors));
+        Assert.Null(BlenderProjectFile.Read(project.ProjectFile).Destination);
+    }
+
+    [Fact]
     public void Destinations_list_mods_with_that_species_skins()
     {
         var ws = Ws(out var game);
