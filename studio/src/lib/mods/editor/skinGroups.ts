@@ -57,6 +57,25 @@ export function moveSkin(skins: readonly ModSkinDto[], id: string, delta: -1 | 1
   return flatten(list);
 }
 
+/**
+ * A dragged skin dropped into a section (group null: the ungrouped skins) before the skin now at `index` there, or at its end
+ * (index = its length). Null when that changes nothing, or the skin or group is not there.
+ */
+export function moveSkinTo(skins: readonly ModSkinDto[], id: string, group: string | null, index: number): SkinPlace[] | null {
+  const list = sections(skins);
+  const from = list.find((s) => s.skins.some((k) => k.id === id));
+  const to = list.find((s) => same(s.group, group));
+  if (!from || !to) return null;
+  const at = from.skins.findIndex((k) => k.id === id);
+  const skin = from.skins[at];
+  let place = Math.max(0, Math.min(index, to.skins.length));
+  if (from === to && at < place) place--; // the list closes up where it left
+  if (from === to && at === place) return null;
+  from.skins = from.skins.filter((k) => k.id !== id);
+  to.skins = [...to.skins.slice(0, place), skin, ...to.skins.slice(place)];
+  return flatten(list);
+}
+
 /** Moves a group past its neighbour (-1 up, 1 down); null at either end (the ungrouped skins always come first). */
 export function moveGroup(skins: readonly ModSkinDto[], group: string, delta: -1 | 1): SkinPlace[] | null {
   const list = sections(skins);

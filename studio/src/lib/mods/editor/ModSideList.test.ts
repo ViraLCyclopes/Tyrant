@@ -70,6 +70,60 @@ describe('ModSideList skins', () => {
     expect(props.onRemoveSkin).toHaveBeenCalledWith('c');
   });
 
+  describe('dragging', () => {
+    /** Presses on a skin, moves past the threshold, and lets go over `over` (clientY 10 is its lower half: jsdom rects are 0 high). */
+    async function drag(from: HTMLElement, over: Element | null, { y = 10, cancel = false } = {}) {
+      const original = document.elementFromPoint;
+      document.elementFromPoint = () => over;
+      try {
+        await fireEvent.pointerDown(from, { button: 0, clientX: 5, clientY: 5, pointerId: 1 });
+        await fireEvent.pointerMove(window, { clientX: 5, clientY: 30, pointerId: 1 });
+        await fireEvent.pointerMove(window, { clientX: 5, clientY: y, pointerId: 1 });
+        if (cancel) await fireEvent.keyDown(window, { key: 'Escape' });
+        await fireEvent.pointerUp(window, { clientX: 5, clientY: y, pointerId: 1 });
+        await fireEvent.click(from); // the browser's click after the press; a drag must not select
+      } finally {
+        document.elementFromPoint = original;
+      }
+    }
+
+    it('dropping a skin on the lower half of another puts it after that skin, in its group', async () => {
+      const { props } = setup();
+      await drag(screen.getByRole('button', { name: 'Amber' }), screen.getByRole('button', { name: 'Dusk' }));
+      expect(lastOrder(props)).toEqual([{ id: 'c', group: 'Jurassic Park' }, { id: 'd', group: 'Jurassic Park' }, { id: 'a', group: 'Jurassic Park' }]);
+      expect(props.onSelect).not.toHaveBeenCalled();
+    });
+
+    it('dropping on the upper half puts it before that skin', async () => {
+      const { props } = setup();
+      await drag(screen.getByRole('button', { name: 'Dusk' }), screen.getByRole('button', { name: 'Crimson' }), { y: -10 });
+      expect(lastOrder(props)).toEqual([{ id: 'a', group: null }, { id: 'd', group: 'Jurassic Park' }, { id: 'c', group: 'Jurassic Park' }]);
+    });
+
+    it('dropping on the Skins heading takes it out of its group; on a folded group heading puts it at that group end', async () => {
+      const { props } = setup();
+      await drag(screen.getByRole('button', { name: 'Dusk' }), screen.getByText(/^Skins \(/));
+      expect(lastOrder(props)).toEqual([{ id: 'a', group: null }, { id: 'd', group: null }, { id: 'c', group: 'Jurassic Park' }]);
+
+      await fireEvent.click(screen.getByRole('button', { name: 'Jurassic Park (2)' })); // fold it
+      await drag(screen.getByRole('button', { name: 'Amber' }), screen.getByRole('button', { name: 'Jurassic Park (2)' }));
+      expect(lastOrder(props)).toEqual([{ id: 'c', group: 'Jurassic Park' }, { id: 'd', group: 'Jurassic Park' }, { id: 'a', group: 'Jurassic Park' }]);
+    });
+
+    it('a press without moving still selects; Escape or a drop outside the list cancels', async () => {
+      const { props } = setup();
+      await fireEvent.pointerDown(screen.getByRole('button', { name: 'Amber' }), { button: 0, clientX: 5, clientY: 5, pointerId: 1 });
+      await fireEvent.pointerUp(window, { clientX: 6, clientY: 6, pointerId: 1 });
+      await fireEvent.click(screen.getByRole('button', { name: 'Amber' }));
+      expect(props.onSelect).toHaveBeenCalledWith({ kind: 'skin', id: 'a' });
+
+      await drag(screen.getByRole('button', { name: 'Amber' }), screen.getByRole('button', { name: 'Dusk' }), { cancel: true });
+      await drag(screen.getByRole('button', { name: 'Amber' }), document.body);
+      expect(props.onArrange).not.toHaveBeenCalled();
+      expect(props.onSelect).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it("a group's menu renames and ungroups; + on a group adds into it", async () => {
     const { props } = setup();
     await fireEvent.click(screen.getByRole('button', { name: 'Actions for group Jurassic Park' }));

@@ -3,7 +3,7 @@
   import { getSession } from '$lib/stores/session.svelte';
   import ItemMenu, { type ItemAction } from './ItemMenu.svelte';
   import NameDialog from './NameDialog.svelte';
-  import { groupNames, moveGroup, moveSkin, renameGroup, sections, setGroup, type SkinPlace } from './skinGroups';
+  import { groupNames, moveGroup, moveSkin, moveSkinTo, renameGroup, sections, setGroup, type SkinPlace } from './skinGroups';
   import type { Selection } from './selection';
 
   let {
@@ -42,6 +42,7 @@
 
   const session = getSession();
   const skinSections = $derived(sections(detail.skins));
+  const ungrouped = $derived(skinSections[0].skins.length);
   const collapsedKey = $derived(`tyrant.mods.collapsedGroups.${detail.id}`);
   let collapsed = $state<string[]>([]);
   let naming = $state<{ title: string; initial: string; action: string; apply: (name: string) => void } | null>(null);
@@ -97,31 +98,104 @@
     const delta = e.key === 'ArrowUp' ? -1 : 1;
     onArrange((skins) => moveSkin(skins, skin.id, delta));
   }
+
+  // Dragging a skin: pointer events, not HTML drag and drop (the Windows webview takes those for file drops). A press only
+  // becomes a drag past a few pixels, so a click still selects.
+  const DRAG_START = 5;
+  interface DropTarget {
+    group: string | null;
+    index: number;
+  }
+  let press: { id: string; x: number; y: number } | null = null;
+  let dragging = $state<string | null>(null);
+  let target = $state<DropTarget | null>(null);
+  let dragged = false; // swallows the click the browser sends after a drag
+  let nav = $state<HTMLElement>();
+
+  function startPress(e: PointerEvent, skin: ModSkinDto) {
+    dragged = false;
+    if (e.button === 0) press = { id: skin.id, x: e.clientX, y: e.clientY };
+  }
+
+  /** Where a drop at this point goes: a skin row (before it, or after it in its lower half), or a heading (the end of its section). */
+  function dropAt(x: number, y: number): DropTarget | null {
+    const el = document.elementFromPoint?.(x, y)?.closest<HTMLElement>('[data-drop-group]');
+    if (!el || !nav?.contains(el)) return null;
+    const group = el.dataset.dropGroup || null;
+    const index = Number(el.dataset.dropIndex);
+    if (el.dataset.dropEnd !== undefined) return { group, index };
+    const box = el.getBoundingClientRect();
+    return { group, index: y > box.top + box.height / 2 ? index + 1 : index };
+  }
+
+  function onPointerMove(e: PointerEvent) {
+    if (!press) return;
+    if (!dragging && Math.hypot(e.clientX - press.x, e.clientY - press.y) < DRAG_START) return;
+    dragging = press.id;
+    target = dropAt(e.clientX, e.clientY);
+  }
+
+  function onPointerUp() {
+    const id = dragging;
+    const drop = target;
+    press = null;
+    dragging = null;
+    target = null;
+    if (!id) return;
+    dragged = true;
+    if (drop) onArrange((skins) => moveSkinTo(skins, id, drop.group, drop.index));
+  }
+
+  function cancelDrag() {
+    if (dragging) dragged = true;
+    press = null;
+    dragging = null;
+    target = null;
+  }
+
+  function onKey(e: KeyboardEvent) {
+    if (e.key === 'Escape' && dragging) cancelDrag();
+  }
+
+  function select(skin: ModSkinDto) {
+    if (dragged) {
+      dragged = false;
+      return;
+    }
+    onSelect({ kind: 'skin', id: skin.id });
+  }
+
+  const isTarget = (group: string | null, index: number) => target !== null && target.group === group && target.index === index;
 </script>
 
-<nav class="side" aria-label="Mod contents">
+<svelte:window onpointermove={onPointerMove} onpointerup={onPointerUp} onpointercancel={cancelDrag} onkeydown={onKey} />
+
+<nav class="side" class:dragging={dragging !== null} aria-label="Mod contents" bind:this={nav}>
   <button class:on={selection.kind === 'details'} onclick={() => onSelect({ kind: 'details' })}>Mod details</button>
   <button class:on={selection.kind === 'speciesDatabase'} onclick={() => onSelect({ kind: 'speciesDatabase' })}>Species database</button>
 
-  <div class="heading">
+  <div class="heading" class:drop-into={isTarget(null, ungrouped) && ungrouped === 0} data-drop-group="" data-drop-index={ungrouped} data-drop-end>
     <span>Skins ({detail.skins.length})</span>
     <button class="add" aria-label="Add a skin" onclick={() => onAddSkin(null)}>+ Add</button>
   </div>
   {#each skinSections as section (section.group ?? '')}
+    {@const open = section.group === null || !collapsed.includes(section.group)}
+    {@const count = section.skins.length}
     {#if section.group !== null}
       {@const group = section.group}
-      {@const open = !collapsed.includes(group)}
-      <div class="row group">
-        <button class="toggle" aria-label="{group} ({section.skins.length})" aria-expanded={open} onclick={() => toggle(group)}>{open ? '▾' : '▸'} {group} <span class="species">({section.skins.length})</span></button>
+      <div class="row group" class:drop-into={isTarget(group, count) && (!open || count === 0)} data-drop-group={group} data-drop-index={count} data-drop-end>
+        <button class="toggle" aria-label="{group} ({count})" aria-expanded={open} onclick={() => toggle(group)}>{open ? '▾' : '▸'} {group} <span class="species">({count})</span></button>
         <button class="add" aria-label="Add a skin to {group}" onclick={() => onAddSkin(group)}>+</button>
         <ItemMenu label="Actions for group {group}" items={() => groupActions(group)} />
       </div>
     {/if}
-    {#if section.group === null || !collapsed.includes(section.group)}
-      {#each section.skins as skin (skin.id)}
-        <div class="row" class:in-group={section.group !== null}>
-          <button class="item" class:on={isSkin(skin.id)} aria-label={skin.name} title="{skin.name} · {skin.species} (Alt+↑/↓ moves it)"
-            onclick={() => onSelect({ kind: 'skin', id: skin.id })} onkeydown={(e) => onSkinKey(e, skin)}>
+    {#if open}
+      {#each section.skins as skin, i (skin.id)}
+        <div class="row" class:in-group={section.group !== null} class:lifted={dragging === skin.id}
+          class:drop-before={isTarget(section.group, i)} class:drop-after={i === count - 1 && isTarget(section.group, count)}
+          data-drop-group={section.group ?? ''} data-drop-index={i}>
+          <button class="item" class:on={isSkin(skin.id)} aria-label={skin.name} title="{skin.name} · {skin.species} (drag it, or Alt+↑/↓, to move it)"
+            onpointerdown={(e) => startPress(e, skin)} onclick={() => select(skin)} onkeydown={(e) => onSkinKey(e, skin)}>
             {skin.name} <span class="species">{skin.species}</span>
           </button>
           <ItemMenu label="Actions for {skin.name}" items={() => skinActions(skin)} />
@@ -192,6 +266,11 @@
   .row.group .toggle { font-weight: 600; }
   .species { color: var(--muted); font-size: 11px; }
   .item.on .species { color: inherit; opacity: 0.8; }
+  .side.dragging { cursor: grabbing; user-select: none; }
+  .row.lifted { opacity: 0.45; }
+  .row.drop-before { box-shadow: inset 0 2px 0 var(--accent); }
+  .row.drop-after { box-shadow: inset 0 -2px 0 var(--accent); }
+  .drop-into { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 5px; }
   .count { color: var(--warn-text); }
   .check.on .count { color: inherit; }
 </style>
