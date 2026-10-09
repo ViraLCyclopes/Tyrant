@@ -10,7 +10,7 @@
   import PrefabPage from './PrefabPage.svelte';
   import AddReplacement from './AddReplacement.svelte';
   import AddSound from './AddSound.svelte';
-  import { deleteMod, exportMod, installMod, removeFromGame, restoreCutouts } from '../modActions';
+  import { deleteMod, exportMod, installLabel, installMod, removeFromGame, restoreCutouts } from '../modActions';
   import CheckPage from './CheckPage.svelte';
   import ModDetailsPage from './ModDetailsPage.svelte';
   import ModelPage from './ModelPage.svelte';
@@ -69,7 +69,7 @@
     {
       label: 'Mod',
       items: () => [
-        { label: 'Install to game', run: () => void install(), enabled: () => !!doc.detail && !session.busy },
+        { label: installLabel(installState), run: () => void install(), enabled: () => !!doc.detail && !session.busy },
         { label: 'Check', run: () => void doc.runCheck(), enabled: () => !!doc.detail },
         {
           label: 'Export for sharing…',
@@ -107,8 +107,18 @@
     }
   }
 
+  // Where the mod stands in the game, for the install button's words; looked up again after every edit and install.
+  let installState = $state<string | null>(null);
+  async function refreshInstallState() {
+    const list = await tab.quietly(() => session.rpc.call('mods.list'));
+    installState = list?.mods.find((m) => m.id === doc.id)?.state ?? null;
+  }
+  $effect(() => {
+    if (doc.detail?.revision) void refreshInstallState();
+  });
+
   async function install() {
-    if (doc.detail) await installMod(session, tab, doc.id, doc.detail.name);
+    if (doc.detail && (await installMod(session, tab, doc.id, doc.detail.name))) await refreshInstallState();
   }
 
   async function restore() {
@@ -220,7 +230,7 @@
         <CheckPage {doc} />
       {/if}
       <div class="actions">
-        <button class="primary" onclick={install} disabled={session.busy}>Install to game</button>
+        <button class="primary" onclick={install} disabled={session.busy}>{installLabel(installState)}</button>
         <button onclick={() => { adding = null; selection = { kind: 'check' }; }}>Show Check</button>
       </div>
     </section>

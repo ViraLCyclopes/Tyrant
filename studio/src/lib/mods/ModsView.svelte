@@ -5,7 +5,7 @@
   import { getSession } from '$lib/stores/session.svelte';
   import CleanSkins from './CleanSkins.svelte';
   import DeleteModDialog from './DeleteModDialog.svelte';
-  import { deleteMod, importModZip, installMod, removeFromGame, restoreCutouts as restoreModCutouts } from './modActions';
+  import { deleteMod, importModZip, installAria, installLabel, installMod, removeFromGame, restoreCutouts as restoreModCutouts } from './modActions';
 
   const session = getSession();
   const tab = getTab();
@@ -146,7 +146,7 @@
             {#if row.state !== 'gameOnly'}
               <button class="primary" aria-label="Open {row.name}" onclick={() => open(row.id, row.name)}>Open</button>
               <button aria-label="Check {row.name}" onclick={() => check(row)}>Check</button>
-              <button aria-label="Install {row.name} to the game" onclick={() => install(row)} disabled={session.busy}>Install to game</button>
+              <button aria-label={installAria(row.state, row.name)} onclick={() => install(row)} disabled={session.busy}>{installLabel(row.state)}</button>
             {/if}
             {#if row.state !== 'notInstalled'}
               <button aria-label="Remove {row.name} from the game" onclick={() => remove(row)} disabled={session.busy}>Remove from game</button>

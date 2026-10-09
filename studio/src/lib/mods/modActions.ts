@@ -5,12 +5,28 @@ import type { Session } from '$lib/stores/session.svelte';
 
 // Mod actions shared by the Mods list and a mod's editor tab (its Mod menu), so both ask and report the same way.
 
+/** The install action's words for where the mod stands in the game: not there, edited since, or up to date. */
+export function installLabel(state: string | null | undefined): string {
+  return state === 'changed' ? 'Update in game' : state === 'installed' ? 'Refresh in game' : 'Install to game';
+}
+
+/** The same action for a screen reader, naming the mod: "Install Red spot to the game", "Update Red spot in the game". */
+export function installAria(state: string | null | undefined, name: string): string {
+  return state === 'changed' ? `Update ${name} in the game` : state === 'installed' ? `Refresh ${name} in the game` : `Install ${name} to the game`;
+}
+
 export async function installMod(session: Session, tab: Tab, id: string, name: string): Promise<boolean> {
   const list = await tab.quietly(() => session.rpc.call('mods.list'));
-  const message = list?.frameworkInstalled
-    ? `Copy '${name}' into the game (UserData\\Tyrant\\Mods\\${id})? No game file is replaced; Remove from game undoes it.`
-    : `Install '${name}' into the game? This also installs MelonLoader (if needed) and Tyrant's framework. No game file is replaced; Uninstall from game on the Workspace tab undoes everything.`;
-  if (!(await session.platform.confirm(message, 'Install to game'))) return false;
+  const state = list?.mods.find((m) => m.id === id)?.state;
+  const where = `UserData\\Tyrant\\Mods\\${id}`;
+  const message = !list?.frameworkInstalled
+    ? `Install '${name}' into the game? This also installs MelonLoader (if needed) and Tyrant's framework. No game file is replaced; Uninstall from game on the Workspace tab undoes everything.`
+    : state === 'changed'
+      ? `Copy your changes to '${name}' into the game (${where})? No game file is replaced; Remove from game undoes it.`
+      : state === 'installed'
+        ? `'${name}' is already in the game and up to date. Copy it again (${where})?`
+        : `Copy '${name}' into the game (${where})? No game file is replaced; Remove from game undoes it.`;
+  if (!(await session.platform.confirm(message, installLabel(state)))) return false;
   const r = await session.runJob('mods.install', { id }, `Install ${id}`, tab);
   if (!r) return false;
   tab.info(r.message);

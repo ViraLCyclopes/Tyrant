@@ -231,6 +231,23 @@ describe('ModEditor', () => {
     expect(screen.queryByRole('heading', { name: 'Files' })).toBeNull();
   });
 
+  it('the install button says Update once the mod in the game is older than the workspace copy', async () => {
+    const rpc = new FakeRpc()
+      .on('mods.get', () => modDetail())
+      .on('mods.check', () => ({ errors: [], warnings: [], missingCutouts: [] }))
+      .on('mods.thumbnail', () => ({ file: null }))
+      .on('mods.colorPreview', () => ({ files: [] }))
+      .on('mods.list', () => ({ mods: [{ id: 'red-spot', name: 'Carch pack', version: '1.0.0', author: null, replacements: 1, skins: 2, state: 'changed', enabled: true, dir: 'D:\ws\mods\red-spot', error: null }], frameworkInstalled: true, frameworkOutdated: false }));
+    const session = new Session(rpc, new FakePlatform(), memoryStore());
+    const tab = new Tab('tab-mod', session.log, { retitle: () => {}, openTool: () => null });
+    tab.key = 'red-spot';
+    renderWith(ModEditor, session, {}, tab);
+
+    expect(await screen.findByRole('button', { name: 'Update in game' })).toBeInTheDocument();
+    const items = tab.menus[0]!.items;
+    expect((typeof items === 'function' ? items() : items).some((i) => 'label' in i && i.label === 'Update in game')).toBe(true);
+  });
+
   it('Mod → Delete mod… deletes it and closes the tab', async () => {
     const rpc = new FakeRpc()
       .on('mods.get', () => modDetail())

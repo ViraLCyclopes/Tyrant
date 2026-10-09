@@ -107,6 +107,20 @@ describe('ModsView', () => {
     expect(rpc.callsTo('mods.install')[0]?.params).toEqual({ id: 'red-spot' });
   });
 
+  it('says Update for a mod edited since it was installed and Refresh for one that is up to date', async () => {
+    const { rpc, platform, session } = setup([row({ state: 'changed', enabled: true }), row({ id: 'blue', name: 'Blue', state: 'installed', enabled: true })], true);
+    rpc.on('mods.install', () => ({ message: 'Installed.', warnings: [] }));
+    renderWith(ModsView, session);
+
+    expect(await screen.findByRole('button', { name: 'Update Red spot in the game' })).toHaveTextContent('Update in game');
+    expect(screen.getByRole('button', { name: 'Refresh Blue in the game' })).toHaveTextContent('Refresh in game');
+    await fireEvent.click(screen.getByRole('button', { name: 'Update Red spot in the game' }));
+
+    await waitFor(() => expect(platform.confirms[0]).toContain('Copy your changes'));
+    await fireEvent.click(screen.getByRole('button', { name: 'Refresh Blue in the game' }));
+    await waitFor(() => expect(platform.confirms[1]).toContain('already in the game and up to date'));
+  });
+
   it('does not install when the confirmation is declined', async () => {
     const { rpc, platform, session } = setup([row()]);
     platform.confirmAnswer = false;
