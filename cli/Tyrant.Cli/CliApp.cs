@@ -132,6 +132,7 @@ public static class CliApp
                 mod.AddCommand<ModImportCommand>("import").WithDescription("Add a mod from a zip to the workspace.");
                 mod.AddCommand<ModInstallCommand>("install").WithDescription("Install a mod into the game (and Tyrant's framework, if needed).");
                 mod.AddCommand<ModRemoveCommand>("remove").WithDescription("Remove a mod from the game.");
+                mod.AddCommand<ModDeleteCommand>("delete").WithDescription("Delete a mod from the workspace (to the Recycle Bin), and from the game unless --keep-in-game.");
                 mod.AddCommand<ModEnableCommand>("enable").WithDescription("Turn an installed mod on.");
                 mod.AddCommand<ModDisableCommand>("disable").WithDescription("Turn an installed mod off.");
                 mod.AddCommand<ModAddSkinCommand>("add-skin").WithDescription("Add a new skin to a species, starting from a vanilla skin's textures.");
@@ -142,6 +143,8 @@ public static class CliApp
                 mod.AddCommand<ModSetCommand>("set").WithDescription("Change a mod's name, version, author or description.");
                 mod.AddCommand<ModRenameSkinCommand>("rename-skin").WithDescription("Change a skin's shown name (its id stays).");
                 mod.AddCommand<ModRemoveSkinCommand>("remove-skin").WithDescription("Remove a skin from a mod, optionally with its files.");
+                mod.AddCommand<ModGroupCommand>("group").WithDescription("Put skins in a group in the mod editor (Tyrant only), or take them out.");
+                mod.AddCommand<ModMoveSkinCommand>("move-skin").WithDescription("Move a skin up, down or to a place within its group.");
                 mod.AddCommand<ModColorsCommand>("colors").WithDescription("Show, set (from a JSON file) or clear a skin's colours.");
                 mod.AddCommand<ModSkinFileCommand>("skin-file").WithDescription("Use your PNG for one slot of a skin, or the base skin's texture.");
                 mod.AddCommand<ModThumbnailCommand>("thumbnail").WithDescription("Set a skin's swatch PNG, or let the game make one.");

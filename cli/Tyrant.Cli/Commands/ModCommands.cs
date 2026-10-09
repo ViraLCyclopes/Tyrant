@@ -307,6 +307,10 @@ public sealed class ModAddSkinCommand : Command<ModAddSkinCommand.Settings>
         [CommandOption("--maps")]
         [Description("Also export the base normal, extra, pattern and fur maps to edit (the babies' colour map always comes).")]
         public bool Maps { get; set; }
+
+        [CommandOption("--group <NAME>")]
+        [Description("Put it in this group in the mod editor, e.g. \"Jurassic Park\" (Tyrant only).")]
+        public string? Group { get; set; }
     }
 
     public override int Execute(CommandContext context, Settings settings)
@@ -317,7 +321,7 @@ public sealed class ModAddSkinCommand : Command<ModAddSkinCommand.Settings>
         var species = SpeciesSkinsReader.Load(ws);
         var bothWhenNone = !settings.Male && !settings.Female;
         var entry = mod.AddSkin(ws, install, CliServices.LoadIndex(ws, install), new BundleAssetReader(), species, settings.Species, settings.Name,
-            settings.Base, new SkinTemplateOptions(settings.Male || bothWhenNone, settings.Female || bothWhenNone, settings.Maps));
+            settings.Base, new SkinTemplateOptions(settings.Male || bothWhenNone, settings.Female || bothWhenNone, settings.Maps), settings.Group);
         Console.WriteLine($"Added skin '{entry.Name}' ({entry.Key(mod.Id)}) based on '{entry.Base}':");
         foreach (var (sex, files) in new[] { ("male", entry.Male), ("female", entry.Female) })
             if (files is not null)

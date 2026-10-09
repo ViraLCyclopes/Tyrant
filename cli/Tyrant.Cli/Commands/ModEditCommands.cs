@@ -23,7 +23,7 @@ public sealed class ModShowCommand : Command<ModSettings>
         foreach (var s in m.Skins)
         {
             var files = (s.Male?.Count ?? 0) + (s.Female?.Count ?? 0);
-            Console.WriteLine($"  {s.Id}  \"{s.Name}\"  {s.Species}  base {s.Base}  {files} file(s)  colours: {(s.Colors is null ? "no" : "yes")}{(s.Model is null ? "" : $"  model: {s.Model}")}");
+            Console.WriteLine($"  {s.Id}  \"{s.Name}\"  {s.Species}  base {s.Base}  {files} file(s)  colours: {(s.Colors is null ? "no" : "yes")}{(s.Model is null ? "" : $"  model: {s.Model}")}{(s.Group is null ? "" : $"  group: {s.Group}")}");
         }
         Console.WriteLine($"Models ({m.Models.Count}):");
         foreach (var model in m.Models) Console.WriteLine($"  {model.Target} <- {model.File}");
