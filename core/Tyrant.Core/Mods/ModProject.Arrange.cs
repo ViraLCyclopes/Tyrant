@@ -19,7 +19,7 @@ public sealed partial class ModProject
         if (order.Count != current.Count || order.Select(p => p.Id).Distinct(StringComparer.Ordinal).Count() != order.Count
             || order.Any(p => !current.ContainsKey(p.Id)))
             throw new TyrantException(TyrantErrorCode.ModInvalid,
-                $"That order does not name each of '{Id}''s skins once ({string.Join(", ", current.Keys)}); reload the mod and try again.");
+                $"That order does not name each skin of '{Id}' once ({string.Join(", ", current.Keys)}); reload the mod and try again.");
         foreach (var place in order) current[place.Id].Group = SkinEntry.GroupName(place.Group);
         var arranged = Arranged(order.Select(p => current[p.Id]));
         Manifest.Skins.Clear();

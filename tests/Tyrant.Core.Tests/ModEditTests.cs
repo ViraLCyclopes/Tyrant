@@ -402,6 +402,7 @@ public class ModEditTests
 
         Assert.Equal(TyrantErrorCode.ModInvalid, ex.Code);
         Assert.Contains("reload", ex.Message);
+        Assert.Contains("each skin of 'red-spot' once", ex.Message);
         Assert.Equal(["blue", "green"], ModProject.Open(ws, "red-spot").Manifest.Skins.Select(s => s.Id));
         Assert.All(ModProject.Open(ws, "red-spot").Manifest.Skins, s => Assert.Null(s.Group));
     }
