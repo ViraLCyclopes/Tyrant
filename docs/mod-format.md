@@ -86,7 +86,7 @@ A mod can add new skins next to the vanilla ones; nothing vanilla changes. Make 
 
 **Numbers and removal:**
 - Each added skin gets a permanent number in `<game>/UserData/Tyrant/skin-slots.json`, so saved animals keep their skin whatever mods you add, remove or reorder.
-- Added skins are numbered from 15 (or after the vanilla skins, if a species has more), never right after the vanilla ones, so a game update that adds vanilla skins does not collide with them. The numbers in between are hidden stand-ins.
+- Added skins are numbered from 15 (or after the vanilla skins, if a species has more), never right after the vanilla ones, so a game update that adds vanilla skins does not collide with them. The numbers in between are hidden stand-ins. For a custom species (`tyrant.<mod-id>.<species-id>`) numbering starts at its skin count, normally 1.
 - When a skin's mod is removed, its animals look like their species' first skin until the mod comes back.
 - **Clean up skin numbers…** (Mods tab) frees numbers of mods you won't use again.
 

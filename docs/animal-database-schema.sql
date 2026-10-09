@@ -1,4 +1,4 @@
--- SQLite animal database v3. Save this database as animals.db alongside mod.json.
+-- SQLite animal database v4. Save this database as animals.db alongside mod.json.
 PRAGMA foreign_keys = ON;
 BEGIN;
 CREATE TABLE animal_species (
@@ -41,5 +41,11 @@ CREATE TABLE animal_prefabs (
     bundle TEXT NOT NULL,
     asset TEXT NOT NULL
 );
-PRAGMA user_version = 3;
+CREATE TABLE animal_starting_skin (
+    species_id TEXT PRIMARY KEY NOT NULL REFERENCES animal_species(id) ON DELETE CASCADE,
+    skin INTEGER NOT NULL CHECK(skin >= 0),
+    name TEXT,
+    swatch TEXT
+);
+PRAGMA user_version = 4;
 COMMIT;
