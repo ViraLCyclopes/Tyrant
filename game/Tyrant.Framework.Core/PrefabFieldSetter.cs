@@ -41,6 +41,11 @@ namespace Tyrant.Framework.Core
                 error = ex.Message;
                 return false;
             }
+            catch (Exception ex)
+            {
+                error = $"It could not be set ({ex.Message}).";
+                return false;
+            }
         }
 
         // Returns the container (boxed if it is a struct) after setting, so the caller writes a struct back.
@@ -94,6 +99,12 @@ namespace Tyrant.Framework.Core
                 error = ex.Message;
                 return false;
             }
+            catch (Exception ex)
+            {
+                result = null;
+                error = $"It could not be set ({ex.Message}).";
+                return false;
+            }
         }
 
         private static object? Convert(object? value, Type type)
@@ -113,10 +124,17 @@ namespace Tyrant.Framework.Core
                 }
                 throw new InvalidOperationException($"It needs one of {string.Join(", ", Enum.GetNames(type))}.");
             }
+            if (type == typeof(char) || type == typeof(IntPtr) || type == typeof(UIntPtr))
+                throw new InvalidOperationException($"A {Describe(type)} cannot be set from a prefab setting.");
             if (type.IsPrimitive)
             {
                 if (!(value is double number)) throw new InvalidOperationException("It needs a number.");
-                if (type == typeof(float)) return (float)number;
+                if (type == typeof(float))
+                {
+                    if (!double.IsInfinity(number) && !double.IsNaN(number) && Math.Abs(number) > float.MaxValue)
+                        throw new InvalidOperationException($"{number} is out of range for a Single.");
+                    return (float)number;
+                }
                 if (type == typeof(double)) return number;
                 if (number != Math.Floor(number)) throw new InvalidOperationException($"It needs a whole number, not {number}.");
                 try

@@ -16,6 +16,8 @@ public class PrefabFieldSetterTests
         public List<Joint> chain = [new Joint(), new Joint()];
         public float[] weights = [1f, 2f];
         public Params[] presets = [new Params(), new Params()];
+        public char letter;
+        public float[,] grid = new float[2, 2];
         public string Label => label;
         public bool Enabled => enabledFlag;
     }
@@ -80,5 +82,38 @@ public class PrefabFieldSetterTests
         var p = new Physics();
         Assert.False(PrefabFieldSetter.TrySet(p, "inputParams.offset", new Dictionary<string, object?> { ["x"] = 1.0, ["y"] = 2.0 }, out var error));
         Assert.Contains("z", error);
+    }
+
+    [Fact]
+    public void A_char_field_is_refused_without_throwing()
+    {
+        var p = new Physics();
+
+        Assert.False(PrefabFieldSetter.TrySet(p, "letter", 65.0, out var error));
+
+        Assert.Contains("Char", error);
+        Assert.Equal('\0', p.letter);
+    }
+
+    [Fact]
+    public void A_multi_dimensional_array_item_is_refused_without_throwing()
+    {
+        var p = new Physics();
+
+        Assert.False(PrefabFieldSetter.TrySet(p, "grid[0]", 1.0, out var error));
+
+        Assert.NotNull(error);
+        Assert.Equal(0f, p.grid[0, 0]);
+    }
+
+    [Fact]
+    public void A_float_out_of_single_range_is_refused()
+    {
+        var p = new Physics();
+
+        Assert.False(PrefabFieldSetter.TrySet(p, "inputParams.waterlineHeight", 1e300, out var error));
+
+        Assert.Contains("out of range", error);
+        Assert.Equal(0f, p.inputParams.waterlineHeight);
     }
 }
