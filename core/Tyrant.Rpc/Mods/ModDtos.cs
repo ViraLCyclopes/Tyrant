@@ -44,7 +44,8 @@ public sealed record SpeciesSkinsRow(string SpeciesId, bool Vivarium, IReadOnlyL
 /// <summary>Species and their vanilla skins from the data dump; HasDump false when there is none yet.</summary>
 public sealed record ModSpeciesResult(bool HasDump, IReadOnlyList<SpeciesSkinsRow> Species);
 
-public sealed record ModAddSkinParams(string Id, string Species, string Name, string? Base = null, bool Male = true, bool Female = true, bool Maps = false);
+public sealed record ModAddSkinParams(string Id, string Species, string Name, string? Base = null, bool Male = true, bool Female = true, bool Maps = false,
+    string? Group = null);
 
 public sealed record OrphanSkinRow(string Species, string Key, int Number);
 
@@ -55,7 +56,8 @@ public sealed record ModForgetSkinsParams(IReadOnlyList<string> Keys);
 /// <summary>One added skin as the mod editor shows it. BaseMaleSlots / BaseFemaleSlots: the base skin's slots (null without a data dump).</summary>
 public sealed record ModSkinDto(string Id, string Key, string Species, string Name, string Base, string? Thumbnail,
     IReadOnlyDictionary<string, string>? Male, IReadOnlyDictionary<string, string>? Female, string? ColorsJson,
-    IReadOnlyList<string>? BaseMaleSlots, IReadOnlyList<string>? BaseFemaleSlots, string? Model = null, IReadOnlyList<ModRigBone>? Rig = null);
+    IReadOnlyList<string>? BaseMaleSlots, IReadOnlyList<string>? BaseFemaleSlots, string? Model = null, IReadOnlyList<ModRigBone>? Rig = null,
+    string? Group = null);
 
 /// <summary>One bone of a rig edit (Unity space, parent-relative): move x,y,z; rotate x,y,z,w; scale x,y,z.</summary>
 public sealed record ModRigBone(string Bone, float[] Move, float[] Rotate, float[] Scale)
@@ -131,6 +133,15 @@ public sealed record ModSetDetailsParams(string Id, string Revision, string Name
 public sealed record ModRenameSkinParams(string Id, string Revision, string Skin, string Name);
 
 public sealed record ModRemoveSkinParams(string Id, string Revision, string Skin, bool DeleteFiles = false);
+
+/// <summary>One skin's place in the editor's list: its id and group (null: none).</summary>
+public sealed record ModSkinPlace(string Id, string? Group = null);
+
+/// <summary>Order: every skin of the mod once, in the new order (mods.arrangeSkins).</summary>
+public sealed record ModArrangeSkinsParams(string Id, string Revision, IReadOnlyList<ModSkinPlace> Order);
+
+/// <summary>RemoveFromGame: also remove the installed copy (refused while the game runs).</summary>
+public sealed record ModDeleteParams(string Id, bool RemoveFromGame = true);
 
 /// <summary>Colors: the skin's "colors" JSON, or null to remove them.</summary>
 public sealed record ModSetColorsParams(string Id, string Revision, string Skin, string? Colors = null);

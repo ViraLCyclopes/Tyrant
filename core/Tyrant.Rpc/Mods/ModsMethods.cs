@@ -157,7 +157,7 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
     {
         var (ws, install) = session.Current();
         var entry = ModProject.Open(ws, p.Id).AddSkin(ws, install, AssetIndex.Load(AssetIndex.PathIn(ws)), Options.AssetReader, SpeciesSkinsReader.Load(ws),
-            p.Species, p.Name, p.Base, new SkinTemplateOptions(p.Male, p.Female, p.Maps));
+            p.Species, p.Name, p.Base, new SkinTemplateOptions(p.Male, p.Female, p.Maps), p.Group);
         session.Log($"'{p.Id}' adds skin '{entry.Name}' to {entry.Species}.");
         return ListOf(ws, install);
     }
@@ -368,7 +368,7 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
                 return new ModSkinDto(s.Id, s.Key(m.Id), s.Species, s.Name, s.Base, s.Thumbnail, s.Male, s.Female,
                     s.Colors is null ? null : Tyrant.Framework.Core.Json.Write(s.Colors.ToJson()),
                     based is null ? null : ShaderSlots.Shown(based.Male.Keys.ToList(), shader),
-                    based is null ? null : ShaderSlots.Shown(based.Female.Keys.ToList(), shader), s.Model, ModRigBone.Of(s.Rig));
+                    based is null ? null : ShaderSlots.Shown(based.Female.Keys.ToList(), shader), s.Model, ModRigBone.Of(s.Rig), s.Group);
             }).ToList(),
             m.Models.Select(x => x.File.Length == 0
                     ? new ModModelDto(x.Target, null, "", [], [], [], false, null, false, ModRigBone.Of(x.Rig))

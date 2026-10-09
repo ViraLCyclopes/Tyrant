@@ -1,3 +1,4 @@
+using Tyrant.Core.Dumping;
 using System.Text.Json;
 using Tyrant.Core.Assets;
 using Tyrant.Core.Install;
@@ -252,4 +253,63 @@ public class ModsMethodsTests
         Assert.Equal(0, restoredNothing.GetProperty("problems").GetArrayLength());
         Assert.Equal("ASSET_INDEX_MISSING", withoutIndex.DataCode); // not a silent "nothing to restore"
     }
+
+    private sealed class AlwaysRunning : IGameLauncher
+    {
+        public bool IsRunning(GameInstall install) => true;
+        public void Launch(GameInstall install) { }
+    }
+
+    [Fact]
+    public async Task Delete_recycles_the_mod_and_removes_it_from_the_game_when_asked()
+    {
+        using var game = new FakeGame();
+        var (h, ws) = await Opened(game);
+        await h.Call("mods.create", new { id = "red-spot" });
+        await h.Call("mods.create", new { id = "blue-pack" });
+        var inGame = Path.Combine(ModLoaderInstaller.ModsDir(new GameInstall(game.Root, null)), "red-spot");
+        Directory.CreateDirectory(inGame);
+        File.WriteAllText(Path.Combine(inGame, "mod.json"), "{\"format\":1,\"id\":\"red-spot\",\"name\":\"Red spot\",\"version\":\"1.0.0\",\"replace\":[]}");
+
+        var list = await h.Call("mods.delete", new { id = "red-spot", removeFromGame = true });
+
+        Assert.Equal(["blue-pack"], list.GetProperty("mods").EnumerateArray().Select(m => m.GetProperty("id").GetString()));
+        Assert.False(Directory.Exists(Path.Combine(ws, "mods", "red-spot")));
+        Assert.False(Directory.Exists(inGame));
+    }
+
+    [Fact]
+    public async Task Delete_is_refused_while_the_game_runs()
+    {
+        using var game = new FakeGame();
+        var h = new RpcHarness(TestStudio.Options(launcher: new AlwaysRunning(), dumperDir: TestStudio.FakeGameModsDir()));
+        var ws = TestStudio.TempDir();
+        await h.Call("workspace.create", new { dir = ws, gamePath = game.Root });
+        await h.Call("mods.create", new { id = "red-spot" });
+
+        var ex = await Assert.ThrowsAsync<RpcCallException>(() => h.Call("mods.delete", new { id = "red-spot", removeFromGame = true }));
+
+        Assert.Equal("GAME_RUNNING", ex.DataCode);
+        Assert.True(Directory.Exists(Path.Combine(ws, "mods", "red-spot")));
+    }
+
+    [Fact]
+    public async Task Add_skin_can_put_the_new_skin_in_a_group()
+    {
+        using var game = new FakeGame();
+        var (h, ws) = await Opened(game);
+        SkinDumps.Write(Path.Combine(ws, "data"));
+        AssetFixtures.WriteIndex(ws, SkinDumps.Textures, GameFingerprint.Compute(new GameInstall(game.Root, null)));
+        await h.Call("mods.create", new { id = "red-spot" });
+
+        await h.Call("mods.addSkin", new { id = "red-spot", species = "Carcharodontosaurus", name = "Red spot", @base = "Alt 1", male = true, female = false, maps = false, group = "Jurassic Park" });
+        await h.Call("mods.addSkin", new { id = "red-spot", species = "Carcharodontosaurus", name = "Tan", @base = "Alt 1", male = true, female = false, maps = false });
+
+        var skins = (await h.Call("mods.get", new { id = "red-spot" })).GetProperty("skins").EnumerateArray()
+            .Select(s => (s.GetProperty("id").GetString(), s.GetProperty("group").GetString())).ToArray();
+        Assert.Equal(new (string?, string?)[] { ("tan", null), ("red-spot", "Jurassic Park") }, skins);
+    }
+
+public sealed record ModAddSkinParams(string Id, string Species, string Name, string? Base = null, bool Male = true, bool Female = true, bool Maps = false,
+    string? Group = null);
 }

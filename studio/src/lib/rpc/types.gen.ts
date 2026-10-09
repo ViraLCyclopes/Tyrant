@@ -426,6 +426,7 @@ export interface ModAddSkinParams {
   male?: boolean;
   female?: boolean;
   maps?: boolean;
+  group?: string | null;
 }
 
 export interface ModAddSpeciesParams {
@@ -470,6 +471,12 @@ export interface ModAnimalFieldDto {
   editable: boolean;
 }
 
+export interface ModArrangeSkinsParams {
+  id: string;
+  revision: string;
+  order: ModSkinPlace[];
+}
+
 export interface ModCheckReport {
   errors: string[];
   warnings: string[];
@@ -506,6 +513,11 @@ export interface ModCreateParams {
   id: string;
   name?: string | null;
   author?: string | null;
+}
+
+export interface ModDeleteParams {
+  id: string;
+  removeFromGame?: boolean;
 }
 
 export interface ModDetail {
@@ -846,6 +858,7 @@ export interface ModSkinDto {
   baseFemaleSlots: string[] | null;
   model?: string | null;
   rig?: ModRigBone[] | null;
+  group?: string | null;
 }
 
 export interface ModSkinModel {
@@ -863,6 +876,11 @@ export interface ModSkinModelParams {
 export interface ModSkinOwnModel {
   file: string;
   materials: PreviewMaterial[];
+}
+
+export interface ModSkinPlace {
+  id: string;
+  group?: string | null;
 }
 
 export interface ModSoundDto {
@@ -1200,12 +1218,14 @@ export interface RpcMethods {
   "mods.addSkin": { params: ModAddSkinParams; result: ModsListResult };
   "mods.addSpecies": { params: ModAddSpeciesParams; result: ModDetail };
   "mods.animalDatabase": { params: ModIdParams; result: ModAnimalDatabase };
+  "mods.arrangeSkins": { params: ModArrangeSkinsParams; result: ModDetail };
   "mods.check": { params: ModIdParams; result: ModCheckReport };
   "mods.clearRig": { params: ModClearRigParams; result: ModDetail };
   "mods.colorPreview": { params: ModColorPreviewParams; result: ModPreviewFiles };
   "mods.copyBaseFile": { params: ModCopyBaseFileParams; result: ModDetail };
   "mods.create": { params: ModCreateParams; result: ModsListResult };
   "mods.createUnityProject": { params: ModIdParams; result: ModUnityProjectDto };
+  "mods.delete": { params: ModDeleteParams; result: ModsListResult };
   "mods.enable": { params: ModEnableParams; result: ModsListResult };
   "mods.export": { params: ModExportParams; result: JobStarted };
   "mods.forgetSkins": { params: ModForgetSkinsParams; result: SkinSlotsResult };

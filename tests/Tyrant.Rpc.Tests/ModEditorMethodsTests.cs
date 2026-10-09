@@ -288,4 +288,20 @@ public class ModEditorMethodsTests
         Assert.StartsWith(previews, thumb.GetProperty("file").GetString());
         Assert.Equal(JsonValueKind.Null, (await h.Call("mods.thumbnail", new { id = "red-spot", file = "skins/nope.png" })).GetProperty("file").ValueKind);
     }
+
+    [Fact]
+    public async Task Arranging_skins_saves_their_group_and_an_old_revision_is_refused()
+    {
+        using var game = new FakeGame();
+        var (h, ws) = await Opened(game);
+        var detail = await WithSkin(h, ws);
+
+        var arranged = await h.Call("mods.arrangeSkins", new { id = "red-spot", revision = Rev(detail), order = new[] { new { id = "blue", group = "Jurassic Park" } } });
+        var stale = await Assert.ThrowsAsync<RpcCallException>(() =>
+            h.Call("mods.arrangeSkins", new { id = "red-spot", revision = Rev(detail), order = new[] { new { id = "blue", group = (string?)null } } }));
+
+        Assert.Equal("Jurassic Park", arranged.GetProperty("skins")[0].GetProperty("group").GetString());
+        Assert.Equal("MOD_CHANGED", stale.DataCode);
+        Assert.Equal("Jurassic Park", (await h.Call("mods.get", new { id = "red-spot" })).GetProperty("skins")[0].GetProperty("group").GetString());
+    }
 }
