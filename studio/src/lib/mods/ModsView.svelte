@@ -133,7 +133,7 @@
     <tbody>
       {#each list.mods as row (row.id)}
         <tr>
-          <td><strong>{row.name}</strong>{#if row.name !== row.id} <span class="hint">{row.id}</span>{/if}{#if row.error}<div class="warn">{row.error}</div>{/if}{#each row.clashes ?? [] as clash (clash)}<div class="hint">{clash}</div>{/each}{#if row.needsMods?.length}<div class="warn">Needs {row.needsMods.join(', ')} for some skins (not installed or off; those skins are skipped).</div>{/if}</td>
+          <td><strong>{row.name}</strong>{#if row.name !== row.id} <span class="hint">{row.id}</span>{/if}{#if row.error}<div class="warn">{row.error}</div>{/if}{#each row.clashes ?? [] as clash (clash)}<div class="hint">{clash}</div>{/each}{#each row.usesSpeciesFrom ?? [] as use (use.modId)}<div class="hint">Uses species from: {use.modName ?? use.modId}{#if !use.installed || !use.enabled} <span class="warn">({use.installed ? 'off' : 'not installed'} — {use.skins} {use.skins === 1 ? 'skin' : 'skins'} skipped)</span>{/if}</div>{/each}</td>
           <td>{row.version}</td>
           <td>{summary(row)}</td>
           <td>{STATE_LABEL[row.state] ?? row.state}</td>

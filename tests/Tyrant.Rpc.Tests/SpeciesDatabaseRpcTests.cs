@@ -123,6 +123,9 @@ public class SpeciesDatabaseRpcTests
         Assert.Equal(("mod-a", 1, true, false), (use.GetProperty("modId").GetString(), use.GetProperty("skins").GetInt32(), use.GetProperty("inWorkspace").GetBoolean(), use.GetProperty("installed").GetBoolean()));
         var list = await h.Call("mods.list", new { });
         var rowB = list.GetProperty("mods").EnumerateArray().Single(m => m.GetProperty("id").GetString() == "mod-b");
-        Assert.Equal(["mod-a"], rowB.GetProperty("needsMods").EnumerateArray().Select(x => x.GetString()));
+        var rowUse = Assert.Single(rowB.GetProperty("usesSpeciesFrom").EnumerateArray());
+        Assert.Equal(("mod-a", "Mod A", 1, true, false, false), (rowUse.GetProperty("modId").GetString(), rowUse.GetProperty("modName").GetString(),
+            rowUse.GetProperty("skins").GetInt32(), rowUse.GetProperty("inWorkspace").GetBoolean(), rowUse.GetProperty("installed").GetBoolean(), rowUse.GetProperty("enabled").GetBoolean()));
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, list.GetProperty("mods").EnumerateArray().Single(m => m.GetProperty("id").GetString() == "mod-a").GetProperty("usesSpeciesFrom").ValueKind);
     }
 }

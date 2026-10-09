@@ -115,8 +115,9 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
     private ModsListResult ListOf(Workspace ws, GameInstall install)
     {
         var game = Game;
-        var installed = game.List(install).ToDictionary(m => m.Id);
-        var everyone = OtherModSpecies.Load(ws, installed.Values.ToList(), null);
+        var snapshot = game.List(install);
+        var installed = snapshot.ToDictionary(m => m.Id);
+        OtherMods? everyone = null; // read only when a mod's skins use other mods' species
         var rows = new List<ModRow>();
         foreach (var id in ModProject.Ids(ws))
         {
@@ -124,10 +125,10 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
             try
             {
                 var mod = ModProject.Open(ws, id);
-                var needs = SpeciesUse.Of(mod.Manifest)
-                    .Where(u => !(everyone.Mods.TryGetValue(u.ModId, out var s) && s.Installed && s.Enabled)).Select(u => u.ModId).ToList();
+                var uses = SpeciesUse.Of(mod.Manifest);
+                if (uses.Count > 0) everyone ??= OtherModSpecies.Load(ws, snapshot, null);
                 rows.Add(new ModRow(id, mod.Manifest.Name, mod.Manifest.Version, mod.Manifest.Author, mod.Manifest.Replace.Count, mod.Manifest.Skins.Count,
-                    Wire(game.StateOf(install, mod)), inGame?.Enabled, mod.Dir, null, inGame?.Clashes, needs.Count > 0 ? needs : null));
+                    Wire(game.StateOf(install, mod)), inGame?.Enabled, mod.Dir, null, inGame?.Clashes, UsesOf(uses, everyone)));
             }
             catch (TyrantException ex)
             {
@@ -377,10 +378,14 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
             m.Sounds.Select(SoundDto).ToList(), mod.FilesStamp(),
             PrefabFiles: mod.PrefabFiles(),
             PrefabTargets: mod.PrefabTargets().Select(t => new ModPrefabTargetDto(t.Overrides.Target, t.File, t.Overrides.Fields.Count)).ToList(),
-            UsesSpeciesFrom: uses.Count == 0 ? null : uses.Select(u => others!.Mods.TryGetValue(u.ModId, out var s)
-                ? new ModSpeciesUseDto(u.ModId, s.Name, u.Skins, s.InWorkspace, s.Installed, s.Enabled)
-                : new ModSpeciesUseDto(u.ModId, null, u.Skins, false, false, false)).ToList());
+            UsesSpeciesFrom: UsesOf(uses, others));
     }
+
+    /// <summary>The other mods whose species the skins use, with whether each is here, installed and on; null for none.</summary>
+    private static IReadOnlyList<ModSpeciesUseDto>? UsesOf(IReadOnlyList<SpeciesUseCount> uses, OtherMods? others) =>
+        uses.Count == 0 ? null : uses.Select(u => others is not null && others.Mods.TryGetValue(u.ModId, out var s)
+            ? new ModSpeciesUseDto(u.ModId, s.Name, u.Skins, s.InWorkspace, s.Installed, s.Enabled)
+            : new ModSpeciesUseDto(u.ModId, null, u.Skins, false, false, false)).ToList();
 
     /// <summary>Game build + species → the slots its shader uses (null: unknown). Reading a prefab costs a bundle load, so it is cached.</summary>
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, IReadOnlyList<string>?> ShaderSlotCache = new(StringComparer.OrdinalIgnoreCase);

@@ -67,6 +67,22 @@ describe('ModsView', () => {
     expect(await screen.findByText(clash)).toBeInTheDocument();
   });
 
+  it('says which mods it uses species from and how many skins are skipped without them', async () => {
+    const { session } = setup([row({
+      id: 'mod-b', name: 'Mod B', usesSpeciesFrom: [
+        { modId: 'mod-a', modName: 'Mod A', skins: 3, inWorkspace: true, installed: false, enabled: false },
+        { modId: 'mod-c', modName: 'Mod C', skins: 1, inWorkspace: false, installed: true, enabled: false },
+        { modId: 'mod-d', modName: 'Mod D', skins: 2, inWorkspace: false, installed: true, enabled: true },
+      ],
+    })]);
+    renderWith(ModsView, session);
+
+    expect(await screen.findByText(/Uses species from: Mod A/)).toBeInTheDocument();
+    expect(screen.getByText('(not installed — 3 skins skipped)')).toBeInTheDocument();
+    expect(screen.getByText('(off — 1 skin skipped)')).toBeInTheDocument();
+    expect(screen.getByText('Uses species from: Mod D')).toBeInTheDocument(); // installed and on: nothing skipped
+  });
+
   it('creates a mod', async () => {
     const { rpc, session } = setup([]);
     rpc.on('mods.create', () => ({ mods: [row({ id: 'blue-stripes', name: 'blue-stripes' })], frameworkInstalled: false, frameworkOutdated: false }));

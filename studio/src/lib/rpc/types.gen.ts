@@ -813,7 +813,7 @@ export interface ModRow {
   dir: string | null;
   error: string | null;
   clashes?: string[] | null;
-  needsMods?: string[] | null;
+  usesSpeciesFrom?: ModSpeciesUseDto[] | null;
 }
 
 export interface ModSampleColorsParams {

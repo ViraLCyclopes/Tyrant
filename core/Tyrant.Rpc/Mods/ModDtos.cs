@@ -4,9 +4,12 @@ namespace Tyrant.Rpc.Mods;
 /// A mod in the workspace or the game. State: notInstalled, installed, changed (edited since install) or gameOnly
 /// (installed, but not in this workspace). Enabled is null when the mod is not installed.
 /// </summary>
-/// <summary>Clashes: species whose model or rig edit a later enabled mod in the load order overrides (the game uses the later one).</summary>
+/// <summary>
+/// Clashes: species whose model or rig edit a later enabled mod in the load order overrides (the game uses the later one).
+/// UsesSpeciesFrom: the other mods whose custom species its skins are for (as <see cref="ModDetail.UsesSpeciesFrom"/>); null for none.
+/// </summary>
 public sealed record ModRow(string Id, string Name, string Version, string? Author, int Replacements, int Skins, string State, bool? Enabled, string? Dir, string? Error,
-    IReadOnlyList<string>? Clashes = null, IReadOnlyList<string>? NeedsMods = null);
+    IReadOnlyList<string>? Clashes = null, IReadOnlyList<ModSpeciesUseDto>? UsesSpeciesFrom = null);
 
 public sealed record ModsListResult(IReadOnlyList<ModRow> Mods, bool FrameworkInstalled, bool FrameworkOutdated = false);
 
