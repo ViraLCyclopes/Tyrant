@@ -65,6 +65,8 @@ describe('Species database', () => {
   it('saves full fields and localization keys and imports a custom icon', async () => {
     const { rpc, platform } = await setup();
     rpc.on('mods.setSpecies', () => modDetail({ revision: 'r2' }));
+    expect(screen.queryByRole('textbox', { name: '/brain/needs/adult/native/hitPoints' })).toBeNull();
+    for (const folder of ['brain', 'needs', 'adult', 'native']) await fireEvent.click(screen.getByRole('button', { name: new RegExp(`^${folder} `) }));
     await fireEvent.input(screen.getByRole('textbox', { name: '/brain/needs/adult/native/hitPoints' }), { target: { value: '800' } });
     await fireEvent.input(screen.getByRole('textbox', { name: 'description key' }), { target: { value: 'pack.mirabilis.description' } });
     await fireEvent.click(screen.getByRole('button', { name: 'Save species' }));

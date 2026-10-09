@@ -4,6 +4,7 @@
   import { getTab } from '$lib/shell/tab.svelte';
   import type { ModAnimalDatabase, ModSpeciesTemplateDto, SpeciesSkinsRow } from '$lib/rpc/types.gen';
   import OpenInBlender from '$lib/blender/OpenInBlender.svelte';
+  import RecordTree from './RecordTree.svelte';
   import type { ModDoc } from './modDoc.svelte';
 
   let { doc, onPrefab = () => {} }: { doc: ModDoc; onPrefab?: (target: string) => void } = $props();
@@ -22,17 +23,12 @@
   let dataValues = $state<Record<string, string>>({});
   let localization = $state<Record<string, string>>({});
   let textLanguage = $state('en-US');
-  let search = $state('');
-  let page = $state(0);
   let busy = $state(false);
   let failed = $state(false);
   let initialized = false;
   let generation = 0;
   const animal = $derived(database?.animals.find((a) => a.id === selected));
   const creating = $derived(!selected);
-  const matchingFields = $derived((animal?.dataFields ?? []).filter(f => f.path.toLowerCase().includes(search.toLowerCase())));
-  const visibleFields = $derived(matchingFields.slice(page * 60, (page + 1) * 60));
-  $effect(() => { search; selected; page = 0; });
 
   onMount(async () => {
     const result = await tab.safely(() => session.rpc.call('mods.species'));
@@ -172,25 +168,7 @@
           </div>
           <h3>Full animal record</h3>
           <p class="hint">Stored in animal_fields. Edit numbers, booleans, enum names and text here or with SQL. Paths follow the game's fields; reference and structural rows describe inherited assets and arrays. Purchase cost is in animal_species; the basic stats above are in animal_stats.</p>
-          <label>Search fields <input bind:value={search} placeholder="brain/needs, social, diet, growth…" /></label>
-          <p class="hint">{matchingFields.length} fields</p>
-          <div class="record">
-            {#each visibleFields as field (field.path)}
-              <label class="field"><span class="path">{field.path}</span>
-                {#if field.editable}
-                  {#if field.kind === 'boolean'}
-                    <select bind:value={dataValues[field.path]}><option value="true">true</option><option value="false">false</option></select>
-                  {:else}<input bind:value={dataValues[field.path]} aria-label={field.path} />{/if}
-                  <span class="hint">Template: {field.templateValue}</span>
-                {:else}<span class="hint reference">{field.kind}: {field.value}</span>{/if}
-              </label>
-            {/each}
-          </div>
-          <div class="toolbar">
-            <button type="button" disabled={page === 0} onclick={() => page--}>Previous fields</button>
-            <span class="hint">Page {page + 1} / {Math.max(1, Math.ceil(matchingFields.length / 60))}</span>
-            <button type="button" disabled={(page + 1) * 60 >= matchingFields.length} onclick={() => page++}>Next fields</button>
-          </div>
+          <RecordTree fields={animal?.dataFields ?? []} bind:values={dataValues} />
         {/if}
         <div class="actions">
           <button type="submit" class="primary" disabled={!canSave}>{busy ? 'Saving…' : creating ? 'Create species' : 'Save species'}</button>
@@ -224,7 +202,4 @@
   input, select { font: inherit; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 7px 9px; width: 100%; box-sizing: border-box; }
   .unit, .hint { font-size: 12px; }
   .actions { margin-top: 18px; }
-  .record { display: grid; gap: 12px; margin: 12px 0; }
-  .path { font-family: monospace; overflow-wrap: anywhere; color: var(--text); }
-  .reference { overflow-wrap: anywhere; white-space: pre-wrap; }
 </style>
