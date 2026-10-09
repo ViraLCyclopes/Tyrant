@@ -8,16 +8,16 @@ import { FakeRpc } from '$lib/test/fakeRpc';
 import { renderWith } from '$lib/test/fixtures';
 import AddPrefabTarget from './AddPrefabTarget.svelte';
 
-function setup() {
+function setup(hasDump = true) {
   const rpc = new FakeRpc()
     .on('mods.species', () => ({
-      hasDump: true,
-      species: [
+      hasDump,
+      species: hasDump ? [
         { speciesId: 'Spinosaurus', vivarium: false, skins: [] },
         { speciesId: 'Allosaurus Anax', vivarium: true, skins: [] },
-      ],
+      ] : [],
     }))
-    .on('mods.animalDatabase', () => ({ animals: [{ id: 'a1', key: 'red-spot/dino', base: 'Spinosaurus' }], fields: [] }));
+    .on('mods.animalDatabase', () => ({ animals: hasDump ? [{ id: 'a1', key: 'red-spot/dino', base: 'Spinosaurus' }] : [], fields: [] }));
   const session = new Session(rpc, new FakePlatform(), memoryStore());
   const tab = new Tab('tab-mod', session.log, { retitle: () => {}, openTool: () => null });
   const onDone = vi.fn();
@@ -41,5 +41,10 @@ describe('AddPrefabTarget', () => {
     const { onDone } = setup();
     await fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
     expect(onDone).toHaveBeenCalledWith(null);
+  });
+
+  it('says so when there is no data dump', async () => {
+    setup(false);
+    expect(await screen.findByText(/Run data dump/)).toBeInTheDocument();
   });
 });

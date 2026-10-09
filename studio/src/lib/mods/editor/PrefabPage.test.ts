@@ -29,9 +29,9 @@ async function setup() {
   tab.key = 'red-spot';
   const doc = new ModDoc('red-spot', rpc, tab, () => {});
   await doc.load();
-  renderWith(PrefabPage, session, { doc, target: 'Spinosaurus' }, tab);
+  const view = renderWith(PrefabPage, session, { doc, target: 'Spinosaurus' }, tab);
   await screen.findByText('inputParams.waterlineHeight');
-  return { rpc };
+  return { rpc, view };
 }
 
 describe('PrefabPage', () => {
@@ -73,5 +73,22 @@ describe('PrefabPage', () => {
     await fireEvent.click(screen.getByRole('checkbox', { name: 'Show only changed' }));
     expect(screen.getByText('inputParams.waterlineHeight')).toBeInTheDocument();
     expect(screen.queryByText('swims')).toBeNull();
+  });
+
+  it('shows the loading line, not the old fields, while another target loads', async () => {
+    const { rpc, view } = await setup();
+    rpc.on('mods.prefabFields', () => new Promise(() => {}));
+    await view.rerender({ target: 'Allosaurus' });
+    expect(screen.getByText('Reading the prefab…')).toBeInTheDocument();
+    expect(screen.queryByText('inputParams.waterlineHeight')).toBeNull();
+  });
+
+  it('a failed read says so', async () => {
+    const { rpc, view } = await setup();
+    rpc.on('mods.prefabFields', () => {
+      throw new Error('boom');
+    });
+    await view.rerender({ target: 'Allosaurus' });
+    expect(await screen.findByText('The prefab could not be read; the log says why.')).toBeInTheDocument();
   });
 });

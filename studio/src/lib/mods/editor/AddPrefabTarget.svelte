@@ -32,23 +32,34 @@
   <h2>Add prefab settings</h2>
   {#if !loaded}
     <p class="hint">Loading the species…</p>
+  {:else if species && !species.hasDump && mine.length === 0}
+    <p class="hint">Prefab settings for game species need the game's data: on the Workspace tab click Run data dump, then try again.</p>
+    <div class="row"><button onclick={() => onDone(null)}>Cancel</button></div>
   {:else}
+    {#if species && !species.hasDump}
+      <p class="hint">The game's species need the game's data: on the Workspace tab click Run data dump.</p>
+    {/if}
     <div class="row">
       <label>
         Species
         <select aria-label="Species" bind:value={target}>
-          <optgroup label="This mod's species">
-            {#each mine as key (key)}<option value={key}>{key}</option>{/each}
-          </optgroup>
-          <optgroup label="Game species">
-            {#each game as id (id)}<option value={id}>{id}</option>{/each}
-          </optgroup>
+          {#if mine.length}
+            <optgroup label="This mod's species">
+              {#each mine as key (key)}<option value={key}>{key}</option>{/each}
+            </optgroup>
+          {/if}
+          {#if game.length}
+            <optgroup label="Game species">
+              {#each game as id (id)}<option value={id}>{id}</option>{/each}
+            </optgroup>
+          {/if}
         </select>
       </label>
     </div>
     <div class="row">
       <button class="primary" disabled={!target} onclick={() => onDone(target)}>Open</button>
       <button onclick={() => onDone(null)}>Cancel</button>
+      {#if !target}<span class="hint">There are no species to choose from.</span>{/if}
     </div>
     <p class="hint">Opens the animal's prefab fields. Nothing is saved until you change one.</p>
   {/if}

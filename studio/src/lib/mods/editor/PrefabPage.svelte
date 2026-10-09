@@ -11,18 +11,29 @@
   let find = $state('');
   let onlyChanged = $state(false);
 
+  let loads = 0; // the newest request: older replies (another target, or out of order) are dropped
+  let failed = $state(false);
+  let pending: Record<string, Record<string, number>> = {}; // vector/colour edits not yet reloaded, so a quick second part keeps the first
+
   // Reload the list when the target or the mod's prefab files change (an edit, undo, or an outside change).
   $effect(() => {
     void doc.detail?.prefabFiles;
     const t = target;
+    const mine = ++loads;
     void tab.quietly(() => session.rpc.call('mods.prefabFields', { id: doc.id, target: t })).then((r) => {
-      if (r && t === target) data = r;
+      if (mine !== loads) return;
+      failed = r === null;
+      if (r && r.target === target) {
+        pending = {};
+        data = r;
+      }
     });
   });
+  const ready = $derived(data?.target === target ? data : null);
 
-  const changed = $derived(data?.fields.filter((f) => f.value !== null).length ?? 0);
+  const changed = $derived(ready?.fields.filter((f) => f.value !== null).length ?? 0);
   const shown = $derived(
-    (data?.fields ?? []).filter(
+    (ready?.fields ?? []).filter(
       (f) => (!onlyChanged || f.value !== null) && (!find.trim() || `${f.object} ${f.component} ${f.field}`.toLowerCase().includes(find.trim().toLowerCase())),
     ),
   );
@@ -52,7 +63,10 @@
   function savePart(f: ModPrefabFieldDto, part: string, text: string) {
     const n = Number(text);
     if (!Number.isFinite(n)) return;
-    save(f, { ...(current(f) as Record<string, number>), [part]: n });
+    const key = `${f.object}|${f.component}|${f.field}`;
+    const next = { ...(pending[key] ?? (current(f) as Record<string, number>)), [part]: n };
+    pending[key] = next;
+    save(f, next);
   }
 
   const parts = (kind: string) =>
@@ -80,8 +94,8 @@
   </div>
 </header>
 
-{#if !data}
-  <p class="hint">Reading the prefab…</p>
+{#if !ready}
+  <p class="hint">{failed ? 'The prefab could not be read; the log says why.' : 'Reading the prefab…'}</p>
 {:else}
   {#each groups as g (g.label)}
     <fieldset class="card" aria-label={g.label}>
@@ -99,6 +113,7 @@
             <input aria-label={f.field} value={current(f) as string} onchange={(e) => save(f, e.currentTarget.value)} />
           {:else if f.kind === 'enum'}
             <select aria-label={f.field} value={enumValue(f)} onchange={(e) => save(f, e.currentTarget.value)}>
+              {#if typeof current(f) === 'number' && (f.enumValues?.indexOf(current(f) as number) ?? -1) < 0}<option value={enumValue(f)}>{enumValue(f)}</option>{/if}
               {#each f.enumNames ?? [] as name (name)}<option value={name}>{name}</option>{/each}
             </select>
           {:else}
