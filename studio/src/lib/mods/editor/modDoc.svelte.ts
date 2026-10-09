@@ -23,7 +23,10 @@ export type EditMethod =
   | 'mods.replaceSound'
   | 'mods.replaceSounds'
   | 'mods.removeSound'
-  | 'mods.setSound';
+  | 'mods.setSound'
+  | 'mods.setPrefabField'
+  | 'mods.resetPrefabField'
+  | 'mods.removePrefabTarget';
 
 /** Params for an edit, or a function building them from the mod as it is when the edit's turn comes (null: nothing to save). */
 export type EditParams = Record<string, unknown> | ((detail: ModDetail) => Record<string, unknown> | null);
@@ -32,6 +35,14 @@ export interface EditOptions {
   /** False for a change undo cannot put back (deleted files): the history is forgotten. */
   undoable?: boolean;
 }
+
+/** What undo puts back: mod.json and the prefab settings files (file name to content). */
+interface Snapshot {
+  manifest: string;
+  prefabs: Record<string, string>;
+}
+
+const snapshotOf = (d: ModDetail): Snapshot => ({ manifest: d.manifestJson, prefabs: d.prefabFiles ?? {} });
 
 const CHECK_DELAY = 1000;
 const MAX_UNDO = 100;
@@ -42,8 +53,8 @@ export class ModDoc {
   check = $state.raw<ModCheckReport | null>(null);
   canUndo = $state(false);
   canRedo = $state(false);
-  private undoStack: string[] = [];
-  private redoStack: string[] = [];
+  private undoStack: Snapshot[] = [];
+  private redoStack: Snapshot[] = [];
   private checkGeneration = 0;
   /** Edits, undo and redo run one at a time, each with the revision the previous one produced. */
   private queue: Promise<unknown> = Promise.resolve();
@@ -73,7 +84,7 @@ export class ModDoc {
       try {
         const next = (await this.rpc.call(method, { id: this.id, revision: before.revision, ...values } as never)) as ModDetail;
         if (options.undoable === false) this.undoStack = [];
-        else this.push(this.undoStack, before.manifestJson);
+        else this.push(this.undoStack, snapshotOf(before));
         this.redoStack = [];
         this.detail = next;
         this.sync();
@@ -150,14 +161,14 @@ export class ModDoc {
     }, ms);
   }
 
-  private async restore(from: string[], to: string[]): Promise<void> {
+  private async restore(from: Snapshot[], to: Snapshot[]): Promise<void> {
     const current = this.detail;
     const target = from.at(-1);
     if (!current || target === undefined) return;
     try {
-      const next = await this.rpc.call('mods.restoreSnapshot', { id: this.id, revision: current.revision, manifest: target, prefabs: {} });
+      const next = await this.rpc.call('mods.restoreSnapshot', { id: this.id, revision: current.revision, manifest: target.manifest, prefabs: target.prefabs });
       from.pop();
-      this.push(to, current.manifestJson);
+      this.push(to, snapshotOf(current));
       this.detail = next;
       this.sync();
       this.scheduleCheck(CHECK_DELAY);
@@ -184,8 +195,8 @@ export class ModDoc {
     this.scheduleCheck(0);
   }
 
-  private push(stack: string[], manifest: string): void {
-    stack.push(manifest);
+  private push(stack: Snapshot[], snapshot: Snapshot): void {
+    stack.push(snapshot);
     if (stack.length > MAX_UNDO) stack.shift();
   }
 

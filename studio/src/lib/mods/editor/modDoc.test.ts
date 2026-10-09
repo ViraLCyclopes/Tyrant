@@ -16,7 +16,26 @@ function setup() {
   return { rpc, log, tab, doc, timers };
 }
 
+async function setupWith(detail: ReturnType<typeof modDetail>) {
+  const ctx = setup();
+  ctx.rpc.on('mods.get', () => detail);
+  await ctx.doc.load();
+  return ctx;
+}
+
 describe('ModDoc', () => {
+  it('undo of a prefab edit puts the prefab files back as they were', async () => {
+    const before = modDetail({ revision: 'r1', prefabFiles: {} });
+    const after = modDetail({ revision: 'r2', prefabFiles: { 'spinosaurus.json': '{"format":1}' } });
+    const { rpc, doc } = await setupWith(before);
+    rpc.on('mods.setPrefabField', () => after).on('mods.restoreSnapshot', () => before);
+
+    await doc.edit('mods.setPrefabField', { target: 'Spinosaurus', object: '', component: 'AnimalPhysics', field: 'inputParams.waterlineHeight', value: 3.5 });
+    await doc.undo();
+
+    expect(rpc.callsTo('mods.restoreSnapshot')[0]?.params).toEqual({ id: 'red-spot', revision: 'r2', manifest: before.manifestJson, prefabs: {} });
+  });
+
   it('loads the mod and checks it', async () => {
     const { rpc, doc, timers } = setup();
     rpc.on('mods.get', () => modDetail());
