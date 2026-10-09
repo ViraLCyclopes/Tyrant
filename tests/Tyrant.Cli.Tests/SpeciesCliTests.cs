@@ -178,4 +178,80 @@ public class SpeciesCliTests
         Assert.Equal(ExitCodes.Ok, Run("mod", "set-species-skin", "mod-a", "mirabilis", "--starting-skin", "0", "--name", "Ghost", "-w", ws).Code);
         Assert.Contains("starting skin 0 Ghost", Run("mod", "show", "mod-a", "-w", ws).Out);
     }
+
+    private static string SeedAllosaurus(FakeGame game)
+    {
+        var ws = IndexedWorkspace(game);
+        var objects = new Tyrant.Dumper.Serialization.DumpResult();
+        objects.Objects.Add(new Tyrant.Dumper.Serialization.DumpObject(typeof(object),
+            new Tyrant.Dumper.Serialization.EngineObjectInfo("PrehistoricKingdom.AnimalData", "Allosaurus", 1),
+            """{"speciesID":"Allosaurus Anax", "skinsData":[{"skinName":"Default"},{"skinName":"Albino"}]}"""));
+        Tyrant.Dumper.Serialization.DumpWriter.Write(Path.Combine(ws, "data"), objects, [], new Tyrant.Dumper.Serialization.DumpManifest { RequestId = "r1", BuildGuid = "b" });
+        Assert.Equal(ExitCodes.Ok, Run("mod", "new", "mod-a", "-w", ws).Code);
+        Assert.Equal(ExitCodes.Ok, Run("mod", "add-species", "mod-a", "mirabilis", "Allosaurus Anax", "--name", "Mirabilis", "--genus", "E", "--epithet", "m", "-w", ws).Code);
+        return ws;
+    }
+
+    [Fact]
+    public void Set_species_skin_sets_clears_and_rejects_conflicting_swatch_options()
+    {
+        using var game = new FakeGame();
+        var ws = SeedAllosaurus(game);
+        var png = Path.Combine(ws, "swatch.png");
+        File.WriteAllBytes(png, [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 0]);
+
+        Assert.Equal(ExitCodes.Ok, Run("mod", "set-species-skin", "mod-a", "mirabilis", "--swatch", png, "-w", ws).Code);
+        Assert.Contains("swatch icons/mirabilis.swatch.png", Run("mod", "show", "mod-a", "-w", ws).Out);
+
+        var (code, _, err) = Run("mod", "set-species-skin", "mod-a", "mirabilis", "--swatch", png, "--no-swatch", "-w", ws);
+        Assert.Equal(ExitCodes.Error, code);
+        Assert.Contains("not both", err);
+
+        Assert.Equal(ExitCodes.Ok, Run("mod", "set-species-skin", "mod-a", "mirabilis", "--no-swatch", "-w", ws).Code);
+        Assert.DoesNotContain("swatch", Run("mod", "show", "mod-a", "-w", ws).Out);
+    }
+
+    [Fact]
+    public void Set_species_skin_with_an_empty_name_goes_back_to_the_template_skin_name()
+    {
+        using var game = new FakeGame();
+        var ws = SeedAllosaurus(game);
+
+        Assert.Equal(ExitCodes.Ok, Run("mod", "set-species-skin", "mod-a", "mirabilis", "--starting-skin", "1", "--name", "Ghost", "-w", ws).Code);
+        Assert.Contains("starting skin 1 Ghost", Run("mod", "show", "mod-a", "-w", ws).Out);
+
+        Assert.Equal(ExitCodes.Ok, Run("mod", "set-species-skin", "mod-a", "mirabilis", "--name", "", "-w", ws).Code);
+        Assert.Contains("starting skin 1 Albino", Run("mod", "show", "mod-a", "-w", ws).Out);
+    }
+
+    [Fact]
+    public void Set_species_skin_with_an_unknown_skin_name_lists_the_skins()
+    {
+        using var game = new FakeGame();
+        var ws = SeedAllosaurus(game);
+
+        var (code, _, err) = Run("mod", "set-species-skin", "mod-a", "mirabilis", "--starting-skin", "Purple", "-w", ws);
+
+        Assert.Equal(ExitCodes.Error, code);
+        Assert.Contains("no skin 'Purple'", err);
+        Assert.Contains("0 Default", err);
+        Assert.Contains("1 Albino", err);
+    }
+
+    [Fact]
+    public void Mod_show_names_the_mods_whose_species_a_skin_is_for()
+    {
+        // add-skin itself needs the template's game textures (not in the fake game), so the skin entry is written to the manifest directly.
+        using var game = new FakeGame();
+        var ws = SeedAllosaurus(game);
+        Assert.Equal(ExitCodes.Ok, Run("mod", "new", "mod-b", "-w", ws).Code);
+        var other = Tyrant.Core.Mods.ModProject.Open(Tyrant.Core.Workspaces.Workspace.Open(ws), "mod-b");
+        other.Manifest.Skins.Add(new Tyrant.Framework.Core.SkinEntry { Id = "red", Species = "tyrant.mod-a.mirabilis", Name = "Red", Male = new() { ["diffuse"] = "skins/red/male_diffuse.png" } });
+        Directory.CreateDirectory(Path.Combine(other.Dir, "skins", "red"));
+        File.WriteAllBytes(Path.Combine(other.Dir, "skins", "red", "male_diffuse.png"), [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 0]);
+        other.Save();
+
+        var shown = Run("mod", "show", "mod-b", "-w", ws);
+        Assert.Contains("Uses species from: mod-a (1 skin(s))", shown.Out + shown.Err);
+    }
 }
