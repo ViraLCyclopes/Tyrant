@@ -19,6 +19,12 @@ namespace Tyrant.Framework.Core
         public Dictionary<string, string> Localization { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
         public string? Icon { get; set; }
         public SpeciesPrefab? Prefab { get; set; }
+        /// <summary>The template skin (its index in the template's skinsData) the species starts with: its only skin before mods add theirs.</summary>
+        public int StartingSkin { get; set; }
+        /// <summary>The starting skin's name in game; null keeps the template skin's name.</summary>
+        public string? StartingSkinName { get; set; }
+        /// <summary>The starting skin's swatch (skin picker thumbnail), a PNG path inside the mod; null keeps the template's.</summary>
+        public string? Swatch { get; set; }
 
         /// <summary>Stable save identity, independent of display names and mod load order.</summary>
         public string Key(string modId) => "tyrant." + modId + "." + Id;
@@ -35,6 +41,9 @@ namespace Tyrant.Framework.Core
             if (Localization.Count > 0) map["localization"] = Localization.OrderBy(p => p.Key, StringComparer.Ordinal).ToDictionary(p => p.Key, p => (object?)p.Value);
             if (Icon != null) map["icon"] = Icon;
             if (Prefab != null) map["prefab"] = new Dictionary<string, object?> { ["bundle"] = Prefab.Bundle, ["asset"] = Prefab.Asset };
+            if (StartingSkin != 0) map["startingSkin"] = StartingSkin;
+            if (StartingSkinName != null) map["startingSkinName"] = StartingSkinName;
+            if (Swatch != null) map["swatch"] = Swatch;
             return map;
         }
     }
