@@ -157,7 +157,6 @@ public sealed record ModSetThumbnailParams(string Id, string Revision, string Sk
 
 public sealed record ModRemoveReplacementParams(string Id, string Revision, string Texture);
 
-
 /// <summary>Variant: normal, albino, melanistic or leucistic. Colors null: the skin's saved colours.</summary>
 public sealed record ModColorPreviewParams(string Id, string Skin, string? Colors = null, string Variant = "normal", string Sex = "male", int Seed = 1, int Count = 6, int Size = 256);
 

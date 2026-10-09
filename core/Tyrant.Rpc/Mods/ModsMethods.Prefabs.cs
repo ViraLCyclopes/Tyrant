@@ -25,7 +25,7 @@ public sealed partial class ModsMethods
         var tree = TreeOf(ws, install, mod, p.Target);
         var overrides = mod.PrefabTargets().FirstOrDefault(t => string.Equals(t.Overrides.Target, p.Target, StringComparison.OrdinalIgnoreCase)).Overrides;
         string? ValueOf(PrefabFieldInfo f) =>
-            overrides?.Fields.FirstOrDefault(o => o.Object == f.Object && o.Component == f.Component && o.Field == f.Field) is { } o ? Tyrant.Framework.Core.Json.Write(o.Value).Trim() : null;
+            overrides?.Fields.FirstOrDefault(o => o.Object == f.Object && o.Component == f.Component && o.Field == f.Field) is { } o ? JsonSerializer.Serialize(JsonDocument.Parse(Tyrant.Framework.Core.Json.Write(o.Value)).RootElement) : null;
         return new ModPrefabFields(p.Target, tree.Select(f => new ModPrefabFieldDto(f.Object, f.Component, f.Field, f.Kind, f.Value, ValueOf(f), f.Editable, f.EnumNames, f.EnumValues)).ToList());
     }
 

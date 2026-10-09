@@ -70,4 +70,19 @@ public class ModPrefabsMethodsTests
         var restored = await h.Call("mods.restoreSnapshot", new { id = "red-spot", revision = Rev(afterSet), manifest = before.GetProperty("manifestJson").GetString(), prefabs = new Dictionary<string, string>() });
         Assert.Equal(0, restored.GetProperty("prefabTargets").GetArrayLength());
     }
+
+    [Fact]
+    public async Task A_vector_override_is_shown_compact_like_the_game_value()
+    {
+        using var game = new FakeGame();
+        var (h, _, reader) = await WithSkinAndPrefab(game);
+        reader.PrefabComponentsToReturn = new("Carch", [new PrefabObject("", [new PrefabComponent("AnimalPhysics", null, null, 0, """{"offset":{"x":0,"y":1,"z":0}}""")])]);
+        var detail = await h.Call("mods.get", new { id = "red-spot" });
+
+        await h.Call("mods.setPrefabField", new { id = "red-spot", revision = Rev(detail), target = "Carcharodontosaurus", @object = "", component = "AnimalPhysics", field = "offset", value = new { x = 1, y = 2, z = 3 } });
+        var f = (await h.Call("mods.prefabFields", new { id = "red-spot", target = "Carcharodontosaurus" })).GetProperty("fields")[0];
+
+        Assert.Equal("{\"x\":1,\"y\":2,\"z\":3}", f.GetProperty("value").GetString());
+        Assert.Equal("{\"x\":0,\"y\":1,\"z\":0}", f.GetProperty("gameValue").GetString());
+    }
 }
