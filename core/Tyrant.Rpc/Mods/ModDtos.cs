@@ -106,7 +106,8 @@ public sealed record ModReplacementDto(string Texture, string? Key, string? Guid
 /// <summary>A whole mod for the editor. Revision: SHA-256 of mod.json, sent back with every change; ManifestJson: the file itself (undo).</summary>
 public sealed record ModDetail(string Id, string Name, string Version, string? Author, string? Description, string Dir, string Revision,
     string ManifestJson, IReadOnlyList<ModReplacementDto> Replace, IReadOnlyList<ModSkinDto> Skins, IReadOnlyList<ModModelDto> Models,
-    IReadOnlyList<ModSoundDto> Sounds, string FilesStamp = "");
+    IReadOnlyList<ModSoundDto> Sounds, string FilesStamp = "", IReadOnlyDictionary<string, string>? PrefabFiles = null,
+    IReadOnlyList<ModPrefabTargetDto>? PrefabTargets = null);
 
 /// <summary>A sound replacement: Species or Skin set = only that species or skin hears it; neither = everyone.</summary>
 public sealed record ModSoundDto(string Event, string Name, string Group, string? Species, string? Skin, IReadOnlyList<string> Files, double Volume, double AgePitch,
@@ -156,7 +157,6 @@ public sealed record ModSetThumbnailParams(string Id, string Revision, string Sk
 
 public sealed record ModRemoveReplacementParams(string Id, string Revision, string Texture);
 
-public sealed record ModSaveManifestParams(string Id, string Revision, string Manifest);
 
 /// <summary>Variant: normal, albino, melanistic or leucistic. Colors null: the skin's saved colours.</summary>
 public sealed record ModColorPreviewParams(string Id, string Skin, string? Colors = null, string Variant = "normal", string Sex = "male", int Seed = 1, int Count = 6, int Size = 256);

@@ -44,19 +44,19 @@ describe('ModDoc', () => {
     const { rpc, doc } = setup();
     rpc.on('mods.get', () => modDetail());
     rpc.on('mods.setDetails', () => modDetail({ name: 'Red spots', revision: 'r2', manifestJson: '{"name":"Red spots"}' }));
-    rpc.on('mods.saveManifest', (p) =>
+    rpc.on('mods.restoreSnapshot', (p) =>
       modDetail(p.manifest.includes('spots') ? { name: 'Red spots', revision: 'r4', manifestJson: p.manifest } : { revision: 'r3', manifestJson: p.manifest }),
     );
     await doc.load();
     await doc.edit('mods.setDetails', { name: 'Red spots', version: '1.0.0' });
 
     await doc.undo();
-    expect(rpc.callsTo('mods.saveManifest')[0].params).toEqual({ id: 'red-spot', revision: 'r2', manifest: '{"name":"Carch pack"}' });
+    expect(rpc.callsTo('mods.restoreSnapshot')[0].params).toEqual({ id: 'red-spot', revision: 'r2', manifest: '{"name":"Carch pack"}', prefabs: {} });
     expect(doc.detail?.name).toBe('Carch pack');
     expect(doc.canRedo).toBe(true);
 
     await doc.redo();
-    expect(rpc.callsTo('mods.saveManifest')[1].params).toEqual({ id: 'red-spot', revision: 'r3', manifest: '{"name":"Red spots"}' });
+    expect(rpc.callsTo('mods.restoreSnapshot')[1].params).toEqual({ id: 'red-spot', revision: 'r3', manifest: '{"name":"Red spots"}', prefabs: {} });
     expect(doc.detail?.name).toBe('Red spots');
     expect(doc.canUndo).toBe(true);
   });
@@ -161,7 +161,7 @@ describe('ModDoc', () => {
       n += 1;
       return modDetail({ revision: `r${n}`, manifestJson: `m${n}` });
     });
-    rpc.on('mods.saveManifest', async (p) => {
+    rpc.on('mods.restoreSnapshot', async (p) => {
       await new Promise((r) => setTimeout(r, 5));
       n += 1;
       return modDetail({ revision: `r${n}`, manifestJson: p.manifest });
@@ -172,7 +172,7 @@ describe('ModDoc', () => {
 
     await Promise.all([doc.undo(), doc.undo()]);
 
-    expect(rpc.callsTo('mods.saveManifest').map((c) => (c.params as { manifest: string }).manifest)).toEqual(['m2', 'm1']);
+    expect(rpc.callsTo('mods.restoreSnapshot').map((c) => (c.params as { manifest: string }).manifest)).toEqual(['m2', 'm1']);
     expect(doc.detail?.manifestJson).toBe('m1');
     expect(doc.canUndo).toBe(false);
     expect(doc.canRedo).toBe(true);

@@ -534,6 +534,8 @@ export interface ModDetail {
   models: ModModelDto[];
   sounds: ModSoundDto[];
   filesStamp?: string;
+  prefabFiles?: Record<string, string> | null;
+  prefabTargets?: ModPrefabTargetDto[] | null;
 }
 
 export interface ModEnableParams {
@@ -617,6 +619,34 @@ export interface ModModelPreviewParams {
   skin?: string | null;
 }
 
+export interface ModPrefabFieldDto {
+  object: string;
+  component: string;
+  field: string;
+  kind: string;
+  gameValue: string;
+  value: string | null;
+  editable: boolean;
+  enumNames: string[] | null;
+  enumValues: number[] | null;
+}
+
+export interface ModPrefabFields {
+  target: string;
+  fields: ModPrefabFieldDto[];
+}
+
+export interface ModPrefabFieldsParams {
+  id: string;
+  target: string;
+}
+
+export interface ModPrefabTargetDto {
+  target: string;
+  file: string;
+  fields: number;
+}
+
 export interface ModPreviewFiles {
   files: string[];
 }
@@ -631,6 +661,12 @@ export interface ModRemoveModelParams {
   revision: string;
   target: string;
   skin?: string | null;
+}
+
+export interface ModRemovePrefabTargetParams {
+  id: string;
+  revision: string;
+  target: string;
 }
 
 export interface ModRemoveReplacementParams {
@@ -704,9 +740,25 @@ export interface ModReplacementDto {
   file: string;
 }
 
+export interface ModResetPrefabFieldParams {
+  id: string;
+  revision: string;
+  target: string;
+  object: string;
+  component: string;
+  field: string;
+}
+
 export interface ModRestoreCutoutsResult {
   restored: string[];
   problems: string[];
+}
+
+export interface ModRestoreSnapshotParams {
+  id: string;
+  revision: string;
+  manifest: string;
+  prefabs: Record<string, string>;
 }
 
 export interface ModRigBone {
@@ -763,12 +815,6 @@ export interface ModSampledColors {
   value: number;
 }
 
-export interface ModSaveManifestParams {
-  id: string;
-  revision: string;
-  manifest: string;
-}
-
 export interface ModSetColorsParams {
   id: string;
   revision: string;
@@ -783,6 +829,16 @@ export interface ModSetDetailsParams {
   version: string;
   author?: string | null;
   description?: string | null;
+}
+
+export interface ModSetPrefabFieldParams {
+  id: string;
+  revision: string;
+  target: string;
+  object: string;
+  component: string;
+  field: string;
+  value: unknown;
 }
 
 export interface ModSetSkinFileParams {
@@ -1235,9 +1291,11 @@ export interface RpcMethods {
   "mods.install": { params: ModIdParams; result: JobStarted };
   "mods.list": { params: void; result: ModsListResult };
   "mods.modelPreview": { params: ModModelPreviewParams; result: ModModelPreview };
+  "mods.prefabFields": { params: ModPrefabFieldsParams; result: ModPrefabFields };
   "mods.rebuildModels": { params: ModRebuildModelsParams; result: ModDetail };
   "mods.remove": { params: ModIdParams; result: ModsListResult };
   "mods.removeModel": { params: ModRemoveModelParams; result: ModDetail };
+  "mods.removePrefabTarget": { params: ModRemovePrefabTargetParams; result: ModDetail };
   "mods.removeReplacement": { params: ModRemoveReplacementParams; result: ModDetail };
   "mods.removeSkin": { params: ModRemoveSkinParams; result: ModDetail };
   "mods.removeSound": { params: ModRemoveSoundParams; result: ModDetail };
@@ -1246,12 +1304,14 @@ export interface RpcMethods {
   "mods.replaceModel": { params: ModReplaceModelParams; result: ModDetail };
   "mods.replaceSound": { params: ModReplaceSoundParams; result: ModDetail };
   "mods.replaceSounds": { params: ModReplaceSoundsParams; result: ModDetail };
+  "mods.resetPrefabField": { params: ModResetPrefabFieldParams; result: ModDetail };
   "mods.restoreCutouts": { params: ModIdParams; result: ModRestoreCutoutsResult };
+  "mods.restoreSnapshot": { params: ModRestoreSnapshotParams; result: ModDetail };
   "mods.rig": { params: ModRigParams; result: ModRigView };
   "mods.sampleColors": { params: ModSampleColorsParams; result: ModSampledColors };
-  "mods.saveManifest": { params: ModSaveManifestParams; result: ModDetail };
   "mods.setColors": { params: ModSetColorsParams; result: ModDetail };
   "mods.setDetails": { params: ModSetDetailsParams; result: ModDetail };
+  "mods.setPrefabField": { params: ModSetPrefabFieldParams; result: ModDetail };
   "mods.setSkinFile": { params: ModSetSkinFileParams; result: ModDetail };
   "mods.setSound": { params: ModSetSoundParams; result: ModDetail };
   "mods.setSpecies": { params: ModSetSpeciesParams; result: ModDetail };

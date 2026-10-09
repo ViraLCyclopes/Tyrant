@@ -231,15 +231,6 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
     [RpcMethod("mods.removeReplacement")]
     public ModDetail RemoveReplacement(ModRemoveReplacementParams p) => Edit(p.Id, p.Revision, mod => mod.RemoveReplacement(p.Texture), $"no longer replaces {p.Texture}");
 
-    [RpcMethod("mods.saveManifest")]
-    public ModDetail SaveManifest(ModSaveManifestParams p)
-    {
-        var (ws, _) = session.Current();
-        var mod = ModProject.SaveManifest(ws, p.Id, p.Manifest, p.Revision);
-        session.Log($"'{p.Id}': mod.json put back to an earlier version (undo/redo).");
-        return DetailOf(ws, mod);
-    }
-
     [RpcMethod("mods.colorPreview")]
     public ModPreviewFiles ColorPreview(ModColorPreviewParams p)
     {
@@ -375,7 +366,9 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
                     : ModelDto(mod, x.Target, null, x.File))
                 .Concat(m.Skins.Where(s => s.Model is not null).Select(s => ModelDto(mod, s.Species, s.Id, s.Model!)))
                 .ToList(),
-            m.Sounds.Select(SoundDto).ToList(), mod.FilesStamp());
+            m.Sounds.Select(SoundDto).ToList(), mod.FilesStamp(),
+            PrefabFiles: mod.PrefabFiles(),
+            PrefabTargets: mod.PrefabTargets().Select(t => new ModPrefabTargetDto(t.Overrides.Target, t.File, t.Overrides.Fields.Count)).ToList());
     }
 
     /// <summary>Game build + species → the slots its shader uses (null: unknown). Reading a prefab costs a bundle load, so it is cached.</summary>

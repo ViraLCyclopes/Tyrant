@@ -155,7 +155,7 @@ export class ModDoc {
     const target = from.at(-1);
     if (!current || target === undefined) return;
     try {
-      const next = await this.rpc.call('mods.saveManifest', { id: this.id, revision: current.revision, manifest: target });
+      const next = await this.rpc.call('mods.restoreSnapshot', { id: this.id, revision: current.revision, manifest: target, prefabs: {} });
       from.pop();
       this.push(to, current.manifestJson);
       this.detail = next;

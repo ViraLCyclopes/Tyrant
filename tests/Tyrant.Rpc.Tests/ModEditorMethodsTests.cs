@@ -196,14 +196,14 @@ public class ModEditorMethodsTests
     }
 
     [Fact]
-    public async Task Save_manifest_puts_an_earlier_version_back()
+    public async Task Restore_snapshot_puts_an_earlier_version_back()
     {
         using var game = new FakeGame();
         var (h, ws) = await Opened(game);
         var before = await WithSkin(h, ws);
         var after = await h.Call("mods.renameSkin", new { id = "red-spot", revision = Rev(before), skin = "blue", name = "Ocean" });
 
-        var undone = await h.Call("mods.saveManifest", new { id = "red-spot", revision = Rev(after), manifest = before.GetProperty("manifestJson").GetString() });
+        var undone = await h.Call("mods.restoreSnapshot", new { id = "red-spot", revision = Rev(after), manifest = before.GetProperty("manifestJson").GetString(), prefabs = new Dictionary<string, string>() });
 
         Assert.Equal("Blue", undone.GetProperty("skins")[0].GetProperty("name").GetString());
     }
