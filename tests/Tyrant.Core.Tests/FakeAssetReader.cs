@@ -170,6 +170,10 @@ public sealed class FakeAssetReader : IAssetReader
             TextureFiles = textureFiles, MaterialFailures = ModelMaterialFailures };
     }
 
+    public PrefabComponents? PrefabComponentsToReturn { get; set; }
+    public PrefabComponents ReadPrefabComponents(GameInstall install, AssetRecord prefab) =>
+        PrefabComponentsToReturn ?? throw new InvalidOperationException("FakeAssetReader: no PrefabComponentsToReturn.");
+
     public void WriteJson(GameInstall install, AssetRecord asset, string jsonPath)
     {
         Interlocked.Increment(ref _json);

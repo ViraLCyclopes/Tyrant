@@ -181,6 +181,20 @@ public sealed class BundleAssetReader : IAssetReader
         return model.Renderers.SelectMany(r => r.Materials).Where(m => m.Name.Length > 0).DistinctBy(m => m.Name).ToList();
     }
 
+    public PrefabComponents ReadPrefabComponents(GameInstall install, AssetRecord prefab)
+    {
+        using var lease = Session(install, out var session);
+        var (file, _) = session.Open(prefab);
+        try
+        {
+            return PrefabComponentReader.Read(session.Manager, file, prefab.PathId);
+        }
+        catch (Exception ex) when (ex is not TyrantException and not OperationCanceledException)
+        {
+            throw new TyrantException(TyrantErrorCode.AssetUnreadable, $"The prefab '{prefab.Name}' could not be read ({ex.Message}); re-index the assets and try again.", FixAction.ReindexAssets, ex);
+        }
+    }
+
     public void WriteJson(GameInstall install, AssetRecord asset, string jsonPath)
     {
         using var lease = Session(install, out var session);
