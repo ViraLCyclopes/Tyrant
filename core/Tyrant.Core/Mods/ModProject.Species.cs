@@ -7,7 +7,7 @@ public sealed partial class ModProject
 {
     public SpeciesEntry AddSpecies(IReadOnlyList<SpeciesSkins> vanilla, string id, string template,
         string name, string genus, string epithet, int? cost = null, IReadOnlyDictionary<string, double>? stats = null,
-        SpeciesTemplateStats? templateStats = null)
+        SpeciesTemplateStats? templateStats = null, int startingSkin = 0)
     {
         if (!ModId.IsValid(id)) throw new TyrantException(TyrantErrorCode.ModInvalid, "Species id must be 3–64 lowercase letters, digits or '-'.");
         if (Manifest.Species.Any(s => s.Id == id)) throw new TyrantException(TyrantErrorCode.ModInvalid, $"Species '{id}' already exists in this mod.");
@@ -20,13 +20,15 @@ public sealed partial class ModProject
         if (source == null || source.Vivarium || source.SpeciesId.StartsWith("tyrant.", StringComparison.Ordinal))
             throw new TyrantException(TyrantErrorCode.TargetNotFound, $"'{template}' must be a vanilla regular animal from the data dump.");
         if (source.Skins.Count == 0) throw new TyrantException(TyrantErrorCode.ModInvalid, "The template has no skins.");
+        if (!source.Skins.Any(s => s.Index == startingSkin))
+            throw new TyrantException(TyrantErrorCode.ModInvalid, $"{source.SpeciesId} has no skin number {startingSkin}. Its skins: {string.Join(", ", source.Skins.Select(s => $"{s.Index} {s.Name}"))}.");
         var copiedStats = templateStats is null ? new Dictionary<string, double>() : new Dictionary<string, double>(templateStats.Stats);
         foreach (var value in stats ?? new Dictionary<string, double>()) copiedStats[value.Key] = value.Value;
         try { SpeciesStats.Validate(copiedStats); }
         catch (ManifestException ex) { throw new TyrantException(TyrantErrorCode.ModInvalid, ex.Message); }
         var entry = new SpeciesEntry
         {
-            Id = id, Base = source.SpeciesId, Name = name.Trim(), Genus = genus.Trim(), Epithet = epithet.Trim(), Cost = cost ?? templateStats?.Cost,
+            Id = id, Base = source.SpeciesId, Name = name.Trim(), Genus = genus.Trim(), Epithet = epithet.Trim(), Cost = cost ?? templateStats?.Cost, StartingSkin = startingSkin,
             Stats = copiedStats,
             Fields = templateStats?.Fields.Select(f => f.Copy()).ToList() ?? [],
             Localization = AnimalText.Keys.ToDictionary(k => k, k => id + "/" + k),
@@ -64,6 +66,7 @@ public sealed partial class ModProject
             Localization = new Dictionary<string, string>(localization ?? old.Localization),
             Icon = old.Icon,
             Prefab = old.Prefab,
+            StartingSkin = old.StartingSkin, StartingSkinName = old.StartingSkinName, Swatch = old.Swatch,
         };
         try { EnsureLocalizationFiles(Manifest.Species[index]); SaveSpecies(); }
         catch { Manifest.Species[index] = old; throw; }
@@ -107,6 +110,35 @@ public sealed partial class ModProject
         catch { entry.Icon = old; throw; }
     }
 
+    /// <summary>Which template skin the species starts with, and its name in game (blank = the template skin's name).</summary>
+    public void SetSpeciesStartingSkin(IReadOnlyList<SpeciesSkins> vanilla, string id, int startingSkin, string? name)
+    {
+        var entry = Manifest.Species.FirstOrDefault(s => s.Id == id)
+            ?? throw new TyrantException(TyrantErrorCode.TargetNotFound, "Species not found: " + id);
+        var template = vanilla.FirstOrDefault(s => s.SpeciesId == entry.Base && !s.Vivarium)
+            ?? throw new TyrantException(TyrantErrorCode.DataMissing, $"'{entry.Base}' is not in the game data dump; run the data dump first.");
+        if (!template.Skins.Any(s => s.Index == startingSkin))
+            throw new TyrantException(TyrantErrorCode.ModInvalid, $"{template.SpeciesId} has no skin number {startingSkin}. Its skins: {string.Join(", ", template.Skins.Select(s => $"{s.Index} {s.Name}"))}.");
+        var (oldSkin, oldName) = (entry.StartingSkin, entry.StartingSkinName);
+        entry.StartingSkin = startingSkin;
+        entry.StartingSkinName = string.IsNullOrWhiteSpace(name) ? null : name.Trim();
+        try { SaveSpecies(); }
+        catch { (entry.StartingSkin, entry.StartingSkinName) = (oldSkin, oldName); throw; }
+    }
+
+    /// <summary>The starting skin's swatch PNG (copied to icons/&lt;id&gt;.swatch.png); null goes back to the template's.</summary>
+    public void SetSpeciesSwatch(string id, string? png)
+    {
+        var entry = Manifest.Species.FirstOrDefault(s => s.Id == id)
+            ?? throw new TyrantException(TyrantErrorCode.TargetNotFound, "Species not found: " + id);
+        var old = entry.Swatch;
+        var file = png == null ? null : $"icons/{id}.swatch.png";
+        if (png != null) CopyPng(png, file!);
+        entry.Swatch = file;
+        try { SaveSpecies(); }
+        catch { entry.Swatch = old; throw; }
+    }
+
     public void SetSpeciesPrefab(string id, string? bundle, string? asset)
     {
         var entry = Manifest.Species.FirstOrDefault(s => s.Id == id)
@@ -136,16 +168,22 @@ public sealed partial class ModProject
         }
     }
 
-    /// <summary>Use the template's prefab and maps while retaining the new species' runtime identity.</summary>
-    public static IReadOnlyList<SpeciesSkins> WithSpecies(IReadOnlyList<SpeciesSkins> vanilla, ModManifest manifest)
+    /// <summary>
+    /// The game's species plus custom ones (this mod's, then other mods'), each a copy of its template's row with only its
+    /// starting skin, renumbered 0: the one skin the species has in game before mods add theirs.
+    /// </summary>
+    public static IReadOnlyList<SpeciesSkins> WithSpecies(IReadOnlyList<SpeciesSkins> vanilla, ModManifest manifest, IEnumerable<OtherSpecies>? others = null)
     {
         var result = vanilla.ToList();
-        foreach (var entry in manifest.Species)
+        void Add(string key, SpeciesEntry entry)
         {
             var template = vanilla.FirstOrDefault(s => s.SpeciesId == entry.Base && !s.Vivarium);
-            var id = entry.Key(manifest.Id);
-            if (template != null && !result.Any(s => s.SpeciesId == id)) result.Add(template with { SpeciesId = id });
+            var start = template?.Skins.FirstOrDefault(s => s.Index == entry.StartingSkin);
+            if (template is null || start is null || result.Any(s => s.SpeciesId == key)) return;
+            result.Add(template with { SpeciesId = key, Skins = [start with { Index = 0, Name = entry.StartingSkinName ?? start.Name }] });
         }
+        foreach (var entry in manifest.Species) Add(entry.Key(manifest.Id), entry);
+        foreach (var other in others ?? []) Add(other.Key, other.Entry);
         return result;
     }
 }

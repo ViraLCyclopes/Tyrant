@@ -151,12 +151,12 @@ public sealed partial class ModProject
     /// </summary>
     /// <param name="group">The editor group it joins (null: none).</param>
     public SkinEntry AddSkin(Workspace ws, GameInstall install, AssetIndex index, IAssetReader reader, IReadOnlyList<SpeciesSkins> species,
-        string speciesId, string name, string? baseSkin, SkinTemplateOptions options, string? group = null)
+        string speciesId, string name, string? baseSkin, SkinTemplateOptions options, string? group = null, IEnumerable<OtherSpecies>? others = null)
     {
-        species = WithSpecies(species, Manifest);
+        species = WithSpecies(species, Manifest, others);
         if (!options.Male && !options.Female) throw new TyrantException(TyrantErrorCode.ModInvalid, "Choose male, female or both for the new skin.");
         var target = species.FirstOrDefault(s => string.Equals(s.SpeciesId, speciesId, StringComparison.OrdinalIgnoreCase))
-            ?? throw new TyrantException(TyrantErrorCode.TargetNotFound, $"No species '{speciesId}' in the game data. Pick one from the list (Species tab).");
+            ?? throw new TyrantException(TyrantErrorCode.TargetNotFound, $"No species '{speciesId}' in the game data, this mod or the other mods Tyrant can see. Pick one from the list.");
         if (target.Skins.Count == 0) throw new TyrantException(TyrantErrorCode.TargetNotFound, $"{target.SpeciesId} has no skins in the game data to start from.");
         var based = baseSkin is null ? target.Skins[0]
             : int.TryParse(baseSkin, out var number) ? target.Skins.FirstOrDefault(s => s.Index == number)
@@ -166,7 +166,8 @@ public sealed partial class ModProject
 
         var id = SkinId(name);
         // By name when that is unambiguous (readable in mod.json); by number when the name repeats or the game left it empty.
-        var named = based.Name != $"Skin {based.Index}" && target.Skins.Count(s => string.Equals(s.Name, based.Name, StringComparison.OrdinalIgnoreCase)) == 1;
+        var custom = target.SpeciesId.StartsWith("tyrant.", StringComparison.Ordinal);
+        var named = !custom && based.Name != $"Skin {based.Index}" && target.Skins.Count(s => string.Equals(s.Name, based.Name, StringComparison.OrdinalIgnoreCase)) == 1;
         var entry = new SkinEntry { Id = id, Species = target.SpeciesId, Name = name.Trim(), Base = named ? based.Name : based.Index.ToString(System.Globalization.CultureInfo.InvariantCulture) };
         var slots = options.Maps ? TemplateSlots : TemplateSlots[..1];
         var infantSlots = options.Maps ? InfantTemplateSlots : InfantTemplateSlots[..1];

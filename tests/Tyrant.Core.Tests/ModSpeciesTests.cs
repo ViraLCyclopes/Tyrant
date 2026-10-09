@@ -84,7 +84,39 @@ public class ModSpeciesTests
     }
 
     private static SpeciesSkins Template(bool vivarium = false) => new("Allosaurus Anax", vivarium,
-        [new VanillaSkin(0, "Default", new Dictionary<string, string>(), new Dictionary<string, string>())]) { PrefabGuid = "template-prefab" };
+        [new VanillaSkin(0, "Default", new Dictionary<string, string>(), new Dictionary<string, string>()),
+         new VanillaSkin(1, "Albino", new Dictionary<string, string>(), new Dictionary<string, string>())]) { PrefabGuid = "template-prefab" };
+
+    [Fact]
+    public void A_species_starts_with_one_chosen_template_skin_and_keeps_it_through_edits()
+    {
+        using var game = new FakeGame();
+        var ws = Workspace.Create(Path.Combine(game.LibraryRoot, "workspace"), new GameInstall(game.Root, null));
+        var mod = ModProject.Create(ws, "animal-pack", null, null);
+        Assert.Throws<TyrantException>(() => mod.AddSpecies([Template()], "new-animal", "Allosaurus Anax", "Animal", "Example", "animal", startingSkin: 5));
+        var entry = mod.AddSpecies([Template()], "new-animal", "Allosaurus Anax", "Animal", "Example", "animal", startingSkin: 1);
+
+        var row = ModProject.WithSpecies([Template()], mod.Manifest).Single(s => s.SpeciesId == entry.Key(mod.Id));
+        var only = Assert.Single(row.Skins);
+        Assert.Equal((0, "Albino"), (only.Index, only.Name));
+
+        mod.SetSpeciesStartingSkin([Template()], entry.Id, 0, " Mirabilis ");
+        var png = Path.Combine(ws.Dir, "swatch.png");
+        File.WriteAllBytes(png, Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jWWQAAAAASUVORK5CYII="));
+        mod.SetSpeciesSwatch(entry.Id, png);
+        var reopened = ModProject.Open(ws, mod.Id);
+        reopened.SetSpecies(entry.Id, "New name", "Example", "animal", 2000, new Dictionary<string, double>());
+
+        var saved = Assert.Single(AnimalDatabaseFile.Read(mod.DatabasePath));
+        Assert.Equal((0, "Mirabilis", "icons/new-animal.swatch.png"), (saved.StartingSkin, saved.StartingSkinName, saved.Swatch));
+        Assert.Contains("icons/new-animal.swatch.png", ModSharing.SharedFiles(reopened));
+        Assert.Equal("Mirabilis", ModProject.WithSpecies([Template()], reopened.Manifest).Single(s => s.SpeciesId == entry.Key(mod.Id)).Skins[0].Name);
+        Assert.Throws<TyrantException>(() => reopened.SetSpeciesStartingSkin([Template()], entry.Id, 7, null));
+        reopened.SetSpeciesStartingSkin([Template()], entry.Id, 0, "  ");
+        Assert.Null(Assert.Single(AnimalDatabaseFile.Read(mod.DatabasePath)).StartingSkinName);
+        reopened.SetSpeciesSwatch(entry.Id, null);
+        Assert.Null(Assert.Single(AnimalDatabaseFile.Read(mod.DatabasePath)).Swatch);
+    }
 
     [Fact]
     public void Icon_and_language_files_ship_with_database_keys_and_survive_other_species_edits()

@@ -282,7 +282,7 @@ public sealed partial class ModProject
     public string FilesStamp()
     {
         var files = Manifest.Replace.Select(r => r.File).Concat(Manifest.Skins.SelectMany(FilesOf)).Concat(Manifest.Skins.Select(s => s.Model))
-            .Concat(Manifest.Models.Select(m => m.File)).Concat(Manifest.Sounds.SelectMany(s => s.Files)).Concat(Manifest.Species.Select(s => s.Icon)).OfType<string>()
+            .Concat(Manifest.Models.Select(m => m.File)).Concat(Manifest.Sounds.SelectMany(s => s.Files)).Concat(Manifest.Species.SelectMany(s => new[] { s.Icon, s.Swatch })).OfType<string>()
             .Select(Normal).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(f => f, StringComparer.Ordinal);
         var text = new System.Text.StringBuilder();
         foreach (var file in files)
