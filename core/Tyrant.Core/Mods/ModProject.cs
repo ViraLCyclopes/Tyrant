@@ -149,8 +149,9 @@ public sealed partial class ModProject
     /// Adds a new skin based on a vanilla skin: exports the base textures (diffuse; with Maps also normal, extra and pattern) into
     /// skins/&lt;skin id&gt;/ as an editable template and records the skin in mod.json.
     /// </summary>
+    /// <param name="group">The editor group it joins (null: none).</param>
     public SkinEntry AddSkin(Workspace ws, GameInstall install, AssetIndex index, IAssetReader reader, IReadOnlyList<SpeciesSkins> species,
-        string speciesId, string name, string? baseSkin, SkinTemplateOptions options)
+        string speciesId, string name, string? baseSkin, SkinTemplateOptions options, string? group = null)
     {
         species = WithSpecies(species, Manifest);
         if (!options.Male && !options.Female) throw new TyrantException(TyrantErrorCode.ModInvalid, "Choose male, female or both for the new skin.");
@@ -189,7 +190,10 @@ public sealed partial class ModProject
             catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
             throw;
         }
-        Manifest.Skins.Add(entry);
+        entry.Group = SkinEntry.GroupName(group);
+        var arranged = Arranged([.. Manifest.Skins, entry]); // a grouped skin joins the end of its group
+        Manifest.Skins.Clear();
+        Manifest.Skins.AddRange(arranged);
         Save();
         return entry;
     }

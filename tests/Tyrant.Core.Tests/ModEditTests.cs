@@ -365,4 +365,44 @@ public class ModEditTests
         Assert.True(File.Exists(Path.Combine(mod.Dir, "skins", "blue", "female_D.png")));
         Assert.Equal(["green"], ModProject.Open(ws, "red-spot").Manifest.Skins.Select(s => s.Id));
     }
+
+    private static void AddPlain(ModProject mod, string id)
+    {
+        mod.Manifest.Skins.Add(new SkinEntry { Id = id, Species = "Carcharodontosaurus", Name = id, Male = new() { ["diffuse"] = "skins/blue/male_D.png" } });
+        mod.Save();
+    }
+
+    [Fact]
+    public void Arranging_puts_ungrouped_skins_first_and_keeps_each_group_together()
+    {
+        var (game, ws, mod) = Setup();
+        using var _ = game;
+        mod = WithSkins(ws, mod); // blue, green
+        AddPlain(mod, "red");
+        AddPlain(mod, "tan");
+
+        mod.ArrangeSkins([new("blue", " Jurassic Park"), new("tan", "Isla Sorna"), new("red", null), new("green", "jurassic park")]);
+
+        var skins = ModProject.Open(ws, "red-spot").Manifest.Skins;
+        Assert.Equal(["red", "blue", "green", "tan"], skins.Select(s => s.Id));
+        Assert.Equal([null, "Jurassic Park", "Jurassic Park", "Isla Sorna"], skins.Select(s => s.Group));
+    }
+
+    [Theory]
+    [InlineData("blue")]
+    [InlineData("blue,blue")]
+    [InlineData("blue,nope")]
+    public void Arranging_refuses_an_order_that_misses_repeats_or_invents_a_skin(string ids)
+    {
+        var (game, ws, mod) = Setup();
+        using var _ = game;
+        mod = WithSkins(ws, mod);
+
+        var ex = Assert.Throws<TyrantException>(() => mod.ArrangeSkins(ids.Split(',').Select(id => new SkinPlace(id, "G")).ToList()));
+
+        Assert.Equal(TyrantErrorCode.ModInvalid, ex.Code);
+        Assert.Contains("reload", ex.Message);
+        Assert.Equal(["blue", "green"], ModProject.Open(ws, "red-spot").Manifest.Skins.Select(s => s.Id));
+        Assert.All(ModProject.Open(ws, "red-spot").Manifest.Skins, s => Assert.Null(s.Group));
+    }
 }
