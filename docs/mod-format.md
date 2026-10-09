@@ -217,6 +217,12 @@ scale = scale × scale.
 - **Bones the game moves itself:** `tyrant species rig-info <species>` (Species tab → **IK and rig…**) lists the bones
   the animations move (an edit changes that motion) and the bones growth positions or scales (Check says whether edits
   on those work yet).
+- **Neck and head (head look):** the game aims an animal's head from a "boom" measured per species on its original
+  skeleton (from the base of the neck to the head). For a species entry's rig edit, Tyrant measures how the edit moves
+  the neck and head and stores it as `"headRig": { "lengthScale": 1.2, "boomTurn": [x, y, z, w], "headTurn": [x, y, z, w] }`
+  (written for you when the rig edit is saved, and refreshed by Check and Install); the framework re-aims the species'
+  boom with it, keeping the game's tuning. The boom is per species, so a skin's neck or head edit cannot re-aim it:
+  Check warns, and the fix is to put the edit on the species or make a custom species for it.
 
 ## Sounds (replacing game sounds)
 
