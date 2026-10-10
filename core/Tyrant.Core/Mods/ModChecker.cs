@@ -44,6 +44,7 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
         {
             if (entry.Icon != null) Image(mod, $"Species {entry.Id} icon", entry.Icon, errors);
             if (entry.Swatch != null) Image(mod, $"Species {entry.Id} swatch", entry.Swatch, errors);
+            foreach (var (slot, file) in entry.Portraits) Portrait(mod, $"Species {entry.Id} portrait {slot}", file, errors, warnings);
             if (entry.Prefab != null)
             {
                 var path = Path.GetFullPath(Path.Combine(mod.Dir, entry.Prefab.Bundle));
@@ -131,6 +132,8 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
                 }
             }
             if (skin.Thumbnail is not null) Image(mod, $"{key} thumbnail", skin.Thumbnail, errors);
+            foreach (var (slot, file) in skin.Portraits ?? new Dictionary<string, string>())
+                Portrait(mod, $"{key} portrait {slot}", file, errors, warnings);
             foreach (var (sex, files, baseTextures) in new[] { ("male", skin.Male, based?.Male), ("female", skin.Female, based?.Female) })
             {
                 if (files is null) continue;
@@ -343,6 +346,12 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
                          "in game those parts would show as solid shapes. Keep the alpha channel when saving, or use Restore cutouts.");
         }
         return missing;
+    }
+
+    private static void Portrait(ModProject mod, string label, string file, List<string> errors, List<string> warnings)
+    {
+        if (Image(mod, label, file, errors) is { } image && !PortraitSlots.IsTwoToOne(image.Width, image.Height))
+            warnings.Add($"{label}: {file} is {image.Width}x{image.Height}; the game shows portraits at 2:1 (128x64), so it will look stretched.");
     }
 
     /// <summary>Checks one PNG of the mod; returns the decoded image, or null after adding an error.</summary>

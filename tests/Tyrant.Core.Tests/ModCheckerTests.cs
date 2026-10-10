@@ -186,6 +186,64 @@ public class ModCheckerTests
         Assert.Empty(result.Warnings);
     }
 
+    private static void PortraitPng(ModProject mod, string relative, int width, int height)
+    {
+        var path = Path.Combine(mod.Dir, relative);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        using var stream = File.Create(path);
+        new StbImageWriteSharp.ImageWriter().WritePng(new byte[width * height * 4], width, height, StbImageWriteSharp.ColorComponents.RedGreenBlueAlpha, stream);
+    }
+
+    [Fact]
+    public void Portraits_are_checked_like_other_images_and_warned_when_not_two_to_one()
+    {
+        var (game, _, mod) = Setup();
+        using var _ = game;
+        SkinPng(mod, "skins/red-spot/m.png");
+        Skin(mod, "Carcharodontosaurus", "Alt 1", "skins/red-spot/m.png");
+        PortraitPng(mod, "skins/red-spot/portraits/adultMale.png", 128, 64);
+        PortraitPng(mod, "skins/red-spot/portraits/adultFemale.png", 64, 64);
+        mod.Manifest.Skins[0].Portraits = new Dictionary<string, string>
+        {
+            ["adultMale"] = "skins/red-spot/portraits/adultMale.png",
+            ["adultFemale"] = "skins/red-spot/portraits/adultFemale.png",
+            ["infant"] = "skins/red-spot/portraits/infant.png",
+        };
+        mod.Save();
+
+        var result = Checker.Check(mod, SkinDumps.Index(), Species());
+
+        Assert.Contains(result.Errors, e => e.Contains("portrait infant") && e.Contains("missing"));
+        Assert.Contains(result.Warnings, w => w.Contains("portrait adultFemale") && w.Contains("2:1"));
+        Assert.DoesNotContain(result.Warnings, w => w.Contains("portrait adultMale"));
+    }
+
+    [Fact]
+    public void Species_starting_skin_portraits_are_checked_too()
+    {
+        var (game, _, mod) = Setup();
+        using var _ = game;
+        PortraitPng(mod, "portraits/rex/adultMale.png", 128, 64);
+        PortraitPng(mod, "portraits/rex/adultFemale.png", 64, 64);
+        mod.Manifest.Species.Add(new SpeciesEntry
+        {
+            Id = "rex", Base = "Allosaurus Anax", Name = "Rex", Genus = "R", Epithet = "rex",
+            Portraits = new Dictionary<string, string>
+            {
+                ["adultMale"] = "portraits/rex/adultMale.png",
+                ["adultFemale"] = "portraits/rex/adultFemale.png",
+                ["infant"] = "portraits/rex/infant.png",
+            },
+        });
+        mod.Save();
+
+        var result = Checker.Check(mod, SkinDumps.Index(), Species());
+
+        Assert.Contains(result.Errors, e => e.Contains("Species rex portrait infant") && e.Contains("missing"));
+        Assert.Contains(result.Warnings, w => w.Contains("Species rex portrait adultFemale") && w.Contains("2:1"));
+        Assert.DoesNotContain(result.Warnings, w => w.Contains("portrait adultMale"));
+    }
+
     [Fact]
     public void Skin_files_missing_or_unknown_species_are_errors()
     {
