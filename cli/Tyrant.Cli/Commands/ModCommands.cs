@@ -235,7 +235,7 @@ public sealed class ModInstallCommand : Command<ModInstallCommand.Settings>
             return ExitCodes.Error;
         }
         var launcher = CliServices.Launcher;
-        var componentDir = Path.Combine(AppContext.BaseDirectory, "dumper");
+        var componentDir = CliServices.GameModsDir;
         if (ModLoaderInstaller.FrameworkStatus(install, componentDir) != FrameworkState.Current)
         {
             var zip = settings.LoaderZip;

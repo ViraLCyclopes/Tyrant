@@ -116,4 +116,51 @@ public class ModSharingCliTests
             CliServices.GameModsDir = shipped;
         }
     }
+
+    [Fact]
+    public void Mod_install_cooks_the_textures_into_the_games_mod_folder()
+    {
+        using var game = new FakeGame();
+        var ws = Workspace(game);
+        Run("mod", "new", "red-spot", "--name", "Red spot", "-w", ws);
+        var dir = Path.Combine(ws, "mods", "red-spot");
+        Directory.CreateDirectory(Path.Combine(dir, "skins", "blue"));
+        using (var stream = File.Create(Path.Combine(dir, "skins", "blue", "male_D.png")))
+            new StbImageWriteSharp.ImageWriter().WritePng(new byte[4 * 4 * 4], 4, 4, StbImageWriteSharp.ColorComponents.RedGreenBlueAlpha, stream);
+        File.WriteAllText(Path.Combine(dir, "mod.json"),
+            "{\"format\":1,\"id\":\"red-spot\",\"name\":\"Red spot\",\"version\":\"1.0.0\",\"replace\":[],\"skins\":[{\"id\":\"blue\",\"species\":\"Carcharodontosaurus\",\"name\":\"Blue\",\"base\":\"0\",\"male\":{\"diffuse\":\"skins/blue/male_D.png\"}}]}");
+
+        // The framework is installed up front (with a fake loader archive and its hash), so 'mod install' needs no download.
+        var componentDir = Path.Combine(Path.GetTempPath(), "tyrant-tests", Guid.NewGuid().ToString("N"), "dumper");
+        Directory.CreateDirectory(componentDir);
+        foreach (var name in new[] { "Tyrant.Dumper.dll", "Tyrant.Dumper.Serialization.dll", "Tyrant.Framework.dll", "Tyrant.Framework.Core.dll" })
+            File.WriteAllText(Path.Combine(componentDir, name), "fake " + name);
+        var loader = Path.Combine(Path.GetDirectoryName(componentDir)!, "MelonLoader.x64.zip");
+        using (var zip = System.IO.Compression.ZipFile.Open(loader, System.IO.Compression.ZipArchiveMode.Create))
+            foreach (var entry in new[] { "version.dll", "MelonLoader/net35/MelonLoader.dll", "MelonLoader/net472/MelonLoader.dll" })
+            {
+                using var w = new StreamWriter(zip.CreateEntry(entry).Open());
+                w.Write("fake " + entry);
+            }
+        string sha;
+        using (var stream = File.OpenRead(loader)) sha = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(stream)).ToLowerInvariant();
+        new Tyrant.Core.Dumping.ModLoaderInstaller(sha, _ => false).Install(new Tyrant.Core.Install.GameInstall(game.Root, null), loader, componentDir);
+
+        var shipped = CliServices.GameModsDir;
+        CliServices.GameModsDir = componentDir;
+        try
+        {
+            var installed = Run("mod", "install", "red-spot", "-w", ws);
+
+            Assert.True(installed.Code == ExitCodes.Ok, installed.Err + installed.Out);
+            Assert.Contains("Cooking textures 1/1", installed.Out);
+            var pack = Path.Combine(game.Root, "UserData", "Tyrant", "Mods", "red-spot", "textures.tpack");
+            using var file = File.OpenRead(pack);
+            Assert.Equal("skins/blue/male_D.png", Assert.Single(Tyrant.Framework.Core.TexturePack.Read(file).Entries).Source);
+        }
+        finally
+        {
+            CliServices.GameModsDir = shipped;
+        }
+    }
 }

@@ -47,7 +47,9 @@ public sealed class JobManager(Action<string, object> notify, Action<string>? lo
     private Task _lastJob = Task.CompletedTask; // completes only after the job's final notification is sent
 
     /// <summary>Minimum time between two progress notifications; the final 100 % report is always sent.</summary>
-    public TimeSpan ProgressInterval { get; init; } = TimeSpan.FromMilliseconds(100);
+    public static readonly TimeSpan DefaultProgressInterval = TimeSpan.FromMilliseconds(100);
+
+    public TimeSpan ProgressInterval { get; init; } = DefaultProgressInterval;
 
     public string? RunningJobId
     {

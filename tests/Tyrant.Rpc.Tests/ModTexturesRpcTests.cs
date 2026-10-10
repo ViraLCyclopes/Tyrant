@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Tyrant.Core.Tests;
 
 namespace Tyrant.Rpc.Tests;
@@ -54,9 +55,9 @@ public class ModTexturesRpcTests
         Assert.Equal("MOD_INVALID", neither.DataCode);
     }
 
-    private static async Task<(RpcHarness H, string Ws)> OpenedWithLoader(FakeGame game)
+    private static async Task<(RpcHarness H, string Ws)> OpenedWithLoader(FakeGame game, TimeSpan? progressInterval = null)
     {
-        var h = new RpcHarness(TestStudio.Options(loaderZip: TestStudio.FakeMelonLoaderZip(), dumperDir: TestStudio.FakeGameModsDir()));
+        var h = new RpcHarness(TestStudio.Options(loaderZip: TestStudio.FakeMelonLoaderZip(), dumperDir: TestStudio.FakeGameModsDir()), progressInterval);
         var ws = TestStudio.TempDir();
         await h.Call("workspace.create", new { dir = ws, gamePath = game.Root });
         await h.Call("mods.create", new { id = "red-spot", name = "Red spot" });
@@ -100,5 +101,44 @@ public class ModTexturesRpcTests
         entry.CopyTo(copy);
         copy.Position = 0;
         AssertPack(copy);
+    }
+
+    private static IEnumerable<JsonElement> Cooking(RpcHarness h) =>
+        h.Notifications.Where(n => n.GetProperty("method").GetString() == "job.progress").Select(n => n.GetProperty("params"))
+            .Where(p => p.GetProperty("message").GetString()!.StartsWith("Cooking textures"));
+
+    [Fact]
+    public async Task Installing_reports_cooking_progress_between_the_install_and_the_end()
+    {
+        using var game = new FakeGame();
+        var (h, ws) = await OpenedWithLoader(game, TimeSpan.Zero);
+        await ModEditorMethodsTests.WithSkin(h, ws);
+
+        await h.RunJob("mods.install", new { id = "red-spot" });
+
+        var cooking = Cooking(h).ToList();
+        Assert.Contains(cooking, p => p.GetProperty("message").GetString() == "Cooking textures 1/2...");
+        Assert.Contains(cooking, p => p.GetProperty("message").GetString() == "Cooking textures 2/2...");
+        Assert.All(cooking, p => Assert.InRange(p.GetProperty("fraction").GetDouble(), 0.8, 0.98));
+    }
+
+    [Fact]
+    public async Task Cancelling_the_job_while_cooking_stops_it_and_installs_nothing()
+    {
+        using var game = new FakeGame();
+        var (h, ws) = await OpenedWithLoader(game, TimeSpan.Zero);
+        await ModEditorMethodsTests.WithSkin(h, ws);
+        h.OnNotification = n =>
+        {
+            if (n.GetProperty("method").GetString() != "job.progress") return;
+            var p = n.GetProperty("params");
+            if (p.GetProperty("message").GetString() == "Cooking textures 1/2...") h.Jobs.Cancel(p.GetProperty("jobId").GetString()!);
+        };
+
+        var ex = await Assert.ThrowsAsync<RpcCallException>(() => h.RunJob("mods.install", new { id = "red-spot" }));
+
+        Assert.Equal(Tyrant.Rpc.Protocol.RpcErrorCodes.Cancelled, ex.Code);
+        Assert.False(File.Exists(Path.Combine(game.Root, "UserData", "Tyrant", "Mods", "red-spot", "textures.tpack")));
+        Assert.False(File.Exists(Path.Combine(game.Root, "UserData", "Tyrant", "Mods", "red-spot", "mod.json")));
     }
 }

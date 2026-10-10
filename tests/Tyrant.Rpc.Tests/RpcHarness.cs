@@ -21,12 +21,15 @@ public sealed class RpcHarness
     private readonly List<JsonElement> _notifications = [];
     private int _nextId;
 
-    public RpcHarness(StudioOptions options)
+    public RpcHarness(StudioOptions options, TimeSpan? progressInterval = null)
     {
-        (Server, Jobs) = RpcHost.Build(options, Receive, Log);
+        (Server, Jobs) = RpcHost.Build(options, Receive, Log, progressInterval);
     }
 
     public StringWriter Log { get; } = new();
+
+    /// <summary>Called on the sending thread for every notification, after it is recorded.</summary>
+    public Action<JsonElement>? OnNotification { get; set; }
     public RpcServer Server { get; }
     public JobManager Jobs { get; }
 
@@ -73,6 +76,7 @@ public sealed class RpcHarness
             return;
         }
         lock (_notifications) _notifications.Add(message);
+        OnNotification?.Invoke(message);
         var method = message.GetProperty("method").GetString();
         if (method is JobManager.DoneMethod or JobManager.FailedMethod)
             JobEnd(message.GetProperty("params").GetProperty("jobId").GetString()!).TrySetResult(message);

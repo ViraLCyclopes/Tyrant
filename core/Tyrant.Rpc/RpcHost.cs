@@ -13,12 +13,12 @@ public static class RpcHost
     private static readonly TimeSpan JobStopTimeout = TimeSpan.FromSeconds(30);
 
     /// <summary>Wires the server, the job manager and every Studio method group.</summary>
-    public static (RpcServer Server, JobManager Jobs) Build(StudioOptions options, Action<string> send, TextWriter log)
+    public static (RpcServer Server, JobManager Jobs) Build(StudioOptions options, Action<string> send, TextWriter log, TimeSpan? progressInterval = null)
     {
         var server = new RpcServer(send, log);
         var session = new StudioSession(options);
         session.Logged += (level, message) => server.Notify(StudioSession.LogMethod, new LogNotification(level, message));
-        var jobs = new JobManager(server.Notify, message => session.Log(message));
+        var jobs = new JobManager(server.Notify, message => session.Log(message)) { ProgressInterval = progressInterval ?? JobManager.DefaultProgressInterval };
         server.Register(new JobMethods(jobs));
         server.Register(new StudioMethods(session, jobs));
         server.Register(new DataMethods(session));
