@@ -59,7 +59,7 @@ Export and installation use SQLite snapshots, including committed edits in a WAL
 The running game uses the installed copy; install the mod again and restart the
 game to apply workspace edits.
 
-The database has seven tables:
+The database has eight tables:
 
 | Table | Columns | Purpose |
 |---|---|---|
