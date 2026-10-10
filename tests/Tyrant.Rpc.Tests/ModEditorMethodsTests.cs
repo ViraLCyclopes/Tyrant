@@ -37,7 +37,7 @@ public class ModEditorMethodsTests
     internal static string Rev(JsonElement detail) => detail.GetProperty("revision").GetString()!;
 
     /// <summary>A mod with one skin on Carcharodontosaurus' "Alt 1" (male: diffuse, normal, pattern), with the data dump and an index holding the species prefab.</summary>
-    private static async Task<(RpcHarness H, string Ws, FakeAssetReader Reader)> WithSkinAndPrefab(FakeGame game)
+    internal static async Task<(RpcHarness H, string Ws, FakeAssetReader Reader)> WithSkinAndPrefab(FakeGame game)
     {
         var reader = new FakeAssetReader();
         var h = new RpcHarness(TestStudio.Options(dumperDir: TestStudio.FakeGameModsDir(), reader: reader));
@@ -116,7 +116,7 @@ public class ModEditorMethodsTests
     /// <see cref="WithSkinAndPrefab"/> plus a custom species "tyrant.{speciesMod}.anax" (template Carcharodontosaurus, starting skin
     /// "Alt 1") made in <paramref name="speciesMod"/>, and red-spot's skin "blue" on it, based on its one skin ("0").
     /// </summary>
-    private static async Task<(RpcHarness H, string Ws)> WithCustomSpeciesSkin(FakeGame game, string speciesMod)
+    internal static async Task<(RpcHarness H, string Ws)> WithCustomSpeciesSkin(FakeGame game, string speciesMod)
     {
         var (h, ws, _) = await WithSkinAndPrefab(game);
         if (speciesMod != "red-spot") await h.Call("mods.create", new { id = speciesMod, name = "Mod A" });

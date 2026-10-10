@@ -272,19 +272,29 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
         var (ws, install) = session.Current();
         var mod = ModProject.Open(ws, p.Id);
         var skin = mod.Skin(p.Skin);
+        return ShownModel(ws, install, mod, skin.Species, skin.Species, () => OwnModelOf(mod, skin.Species, skin.Model is not null ? skin.Id : null),
+            (species, index, slot) => MapFile(ws, install, index, mod, skin, BaseSkin(species, skin), p.Sex, slot));
+    }
+
+    /// <summary>
+    /// The 3D view's model: the species prefab and one map per slot from <paramref name="mapOf"/> (species, index, slot).
+    /// Shared by skins and custom species; needs the data dump and the asset index.
+    /// </summary>
+    private ModSkinModel ShownModel(Workspace ws, GameInstall install, ModProject mod, string speciesKey, string modelName, Func<ModSkinOwnModel?> own,
+        Func<IReadOnlyList<SpeciesSkins>, AssetIndex, string, string?> mapOf)
+    {
         var species = TrySpeciesFor(ws, install, mod) ?? throw new TyrantException(TyrantErrorCode.DataMissing,
             "The 3D view needs the game's data: on the Workspace tab click Run data dump (or run 'tyrant dump run').", FixAction.RefreshWorkspace);
         var index = TryIndex(ws) ?? throw new TyrantException(TyrantErrorCode.AssetIndexMissing,
             "The 3D view needs the asset index: on the Workspace tab click Index assets (or run 'tyrant assets index').", FixAction.ReindexAssets);
-        var guid = species.FirstOrDefault(s => s.SpeciesId == skin.Species)?.PrefabGuid;
+        var guid = species.FirstOrDefault(s => s.SpeciesId == speciesKey)?.PrefabGuid;
         var prefab = (guid is null ? null : index.Assets.FirstOrDefault(a => a.Type == "GameObject" && string.Equals(a.Guid, guid, StringComparison.OrdinalIgnoreCase)))
             ?? throw new TyrantException(TyrantErrorCode.TargetNotFound,
-                $"'{skin.Species}' has no model in the asset index: on the Workspace tab click Index assets (or run 'tyrant assets index') and try again.", FixAction.ReindexAssets);
-        var based = BaseSkin(species, skin);
+                $"'{modelName}' has no model in the asset index: on the Workspace tab click Index assets (or run 'tyrant assets index') and try again.", FixAction.ReindexAssets);
         var maps = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var slot in new[] { "diffuse", "normal", "extra", "pattern" })
-            if (MapFile(ws, install, index, mod, skin, based, p.Sex, slot) is { } file) maps[slot] = file;
-        return new ModSkinModel(prefab.Ref, maps, OwnModelOf(mod, skin.Species, skin.Model is not null ? skin.Id : null));
+            if (mapOf(species, index, slot) is { } file) maps[slot] = file;
+        return new ModSkinModel(prefab.Ref, maps, own());
     }
 
     /// <summary>The model the skin wears in this mod (its own, else the mod's species replacement); null when it is the game's or not built.</summary>
@@ -308,10 +318,13 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
     {
         // One sex only, as in the game (infants wear the male skin's infant slots).
         var source = SkinMaps.Source(skin, mod.Dir, based, slot, sex == "male" ? "male-only" : sex);
-        if (source is null) return null;
-        if (source.StartsWith("file:", StringComparison.Ordinal)) return OwnMapCopy(ws, mod, Path.GetRelativePath(mod.Dir, source[5..]));
-        return SkinMaps.Write(source, install, index, Options.AssetReader, Path.Combine(PreviewsDir(ws, "skin-model"), $"{source[5..]}.png"));
+        if (source is not null && source.StartsWith("file:", StringComparison.Ordinal)) return OwnMapCopy(ws, mod, Path.GetRelativePath(mod.Dir, source[5..]));
+        return MapFromSource(ws, install, index, source);
     }
+
+    /// <summary>A game texture source ("guid:...") as a PNG in the preview cache; null when there is none.</summary>
+    private string? MapFromSource(Workspace ws, GameInstall install, AssetIndex index, string? source) =>
+        source is null ? null : SkinMaps.Write(source, install, index, Options.AssetReader, Path.Combine(PreviewsDir(ws, "skin-model"), $"{source[5..]}.png"));
 
     /// <summary>
     /// A copy of the skin's own PNG in the preview cache: the app may only load files there (the asset protocol's scope).

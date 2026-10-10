@@ -29,6 +29,8 @@ public sealed partial class ModsMethods
         }
         else
         {
+            if (p.SpeciesId is null) throw new TyrantException(TyrantErrorCode.ModInvalid, "Give a skin or a species.");
+            if (p.SpeciesId is null) throw new TyrantException(TyrantErrorCode.ModInvalid, "Give a skin or a species.");
             var entry = mod.Manifest.Species.FirstOrDefault(s => s.Id == p.SpeciesId)
                 ?? throw new TyrantException(TyrantErrorCode.TargetNotFound, "Species not found: " + p.SpeciesId);
             var start = species?.FirstOrDefault(s => s.SpeciesId == entry.Key(mod.Id))?.Skins.FirstOrDefault();
@@ -69,6 +71,6 @@ public sealed partial class ModsMethods
             if (stream.Read(header, 0, 24) != 24) return (0, 0);
             return (System.Buffers.Binary.BinaryPrimitives.ReadInt32BigEndian(header.AsSpan(16)), System.Buffers.Binary.BinaryPrimitives.ReadInt32BigEndian(header.AsSpan(20)));
         }
-        catch (IOException) { return (0, 0); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return (0, 0); }
     }
 }

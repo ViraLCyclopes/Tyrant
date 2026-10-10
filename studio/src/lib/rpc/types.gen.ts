@@ -882,7 +882,7 @@ export interface ModSetPortraitsParams {
   id: string;
   revision: string;
   skin: string;
-  set: Record<string, ModPortraitSourceDto>;
+  set: Record<string, ModPortraitSourceDto | null>;
 }
 
 export interface ModSetPrefabFieldParams {
@@ -943,7 +943,7 @@ export interface ModSetSpeciesPortraitsParams {
   id: string;
   revision: string;
   speciesId: string;
-  set: Record<string, ModPortraitSourceDto>;
+  set: Record<string, ModPortraitSourceDto | null>;
 }
 
 export interface ModSetSpeciesPrefabParams {

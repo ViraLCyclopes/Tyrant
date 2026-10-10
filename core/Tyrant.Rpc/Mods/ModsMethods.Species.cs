@@ -62,25 +62,9 @@ public sealed partial class ModsMethods
         var entry = mod.Manifest.Species.FirstOrDefault(s => s.Id == p.SpeciesId)
             ?? throw new TyrantException(TyrantErrorCode.TargetNotFound, "Species not found: " + p.SpeciesId);
         var key = entry.Key(mod.Id);
-        var species = TrySpeciesFor(ws, install, mod) ?? throw new TyrantException(TyrantErrorCode.DataMissing,
-            "The 3D view needs the game's data: on the Workspace tab click Run data dump (or run 'tyrant dump run').", FixAction.RefreshWorkspace);
-        var index = TryIndex(ws) ?? throw new TyrantException(TyrantErrorCode.AssetIndexMissing,
-            "The 3D view needs the asset index: on the Workspace tab click Index assets (or run 'tyrant assets index').", FixAction.ReindexAssets);
-        var row = species.FirstOrDefault(s => s.SpeciesId == key);
-        var prefab = (row?.PrefabGuid is { } guid ? index.Assets.FirstOrDefault(a => a.Type == "GameObject" && string.Equals(a.Guid, guid, StringComparison.OrdinalIgnoreCase)) : null)
-            ?? throw new TyrantException(TyrantErrorCode.TargetNotFound, $"'{entry.Base}' has no model in the asset index: on the Workspace tab click Index assets and try again.", FixAction.ReindexAssets);
-        var start = row!.Skins.FirstOrDefault();
-        var maps = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var slot in new[] { "diffuse", "normal", "extra", "pattern" })
-        {
-            var textures = p.Sex == "female" ? start?.Female : start?.Male;
-            var wanted = p.Sex == "infant" ? "infant" + char.ToUpperInvariant(slot[0]) + slot[1..] : slot;
-            var guidOf = textures is not null && textures.TryGetValue(wanted, out var g) ? g
-                : textures is not null && textures.TryGetValue(slot, out var adult) ? adult : null;
-            if (SkinMaps.Write(guidOf is null ? null : "guid:" + guidOf, install, index, Options.AssetReader,
-                    Path.Combine(PreviewsDir(ws, "skin-model"), $"{guidOf}.png")) is { } file) maps[slot] = file;
-        }
-        return new ModSkinModel(prefab.Ref, maps, OwnModelOf(mod, key, null));
+        var sex = p.Sex == "male" ? "male-only" : p.Sex; // one sex only, as in the game
+        return ShownModel(ws, install, mod, key, entry.Base, () => OwnModelOf(mod, key, null), (species, index, slot) =>
+            MapFromSource(ws, install, index, SkinMaps.Source(null, null, species.FirstOrDefault(s => s.SpeciesId == key)?.Skins.FirstOrDefault(), slot, sex)));
     }
 
     [RpcMethod("mods.animalDatabase")]

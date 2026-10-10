@@ -93,12 +93,12 @@ public static class TsEmitter
                 var name = JsonNamingPolicy.CamelCase.ConvertName(property.Name);
                 var mark = optional.Contains(property.Name) ? "?" : "";
                 var nullable = IsNullable(property) ? " | null" : "";
-                ts.Append($"  {name}{mark}: {TypeName(property.PropertyType)}{nullable};\n");
+                ts.Append($"  {name}{mark}: {TypeName(property.PropertyType, property.PropertyType.IsValueType ? null : _nullability.Create(property))}{nullable};\n");
             }
             return ts.Append("}\n").ToString();
         }
 
-        public string TypeName(Type type)
+        public string TypeName(Type type, NullabilityInfo? info = null)
         {
             if (Nullable.GetUnderlyingType(type) is { } inner) return TypeName(inner); // "| null" is added by the caller
             if (type == typeof(string) || type == typeof(DateTimeOffset) || type == typeof(DateTime) || type == typeof(Guid)) return "string";
@@ -107,7 +107,11 @@ public static class TsEmitter
             if (type == typeof(void) || type == typeof(Task)) return "null";
             if (IsNumber(type)) return "number";
             if (ElementType(type) is { } element) return TypeName(element) + "[]";
-            if (DictionaryValueType(type) is { } value) return $"Record<string, {TypeName(value)}>";
+            if (DictionaryValueType(type) is { } value)
+            {
+                var nullableValue = info is { GenericTypeArguments.Length: 2 } && !value.IsValueType && info.GenericTypeArguments[1].ReadState == NullabilityState.Nullable;
+                return $"Record<string, {TypeName(value)}{(nullableValue ? " | null" : "")}>";
+            }
             return type.Name;
         }
 
