@@ -11,7 +11,7 @@ namespace Tyrant.Framework.Core
     public static class AnimalDatabaseFile
     {
         public const string FileName = "animals.db";
-        public const int SchemaVersion = 4;
+        public const int SchemaVersion = 5;
 
         public static List<SpeciesEntry> Read(string path)
         {
@@ -75,11 +75,12 @@ namespace Tyrant.Framework.Core
                     if (expectedSnapshot != null && Snapshot(current) != expectedSnapshot)
                         throw new ManifestException("animals.db changed outside Tyrant; reload the species database before saving.");
                     db.Execute("CREATE TABLE IF NOT EXISTS animal_fields (species_id TEXT NOT NULL REFERENCES animal_species(id) ON DELETE CASCADE, path TEXT NOT NULL, kind TEXT NOT NULL, value TEXT NOT NULL, template_value TEXT NOT NULL, editable INTEGER NOT NULL CHECK(editable IN (0,1)), PRIMARY KEY(species_id,path))");
-                    db.Execute("PRAGMA user_version = 4");
+                    db.Execute("PRAGMA user_version = " + SchemaVersion);
                     db.Execute("CREATE TABLE IF NOT EXISTS animal_localization (species_id TEXT NOT NULL REFERENCES animal_species(id) ON DELETE CASCADE, slot TEXT NOT NULL, term TEXT NOT NULL, PRIMARY KEY(species_id,slot))");
                     db.Execute("CREATE TABLE IF NOT EXISTS animal_assets (species_id TEXT NOT NULL REFERENCES animal_species(id) ON DELETE CASCADE, slot TEXT NOT NULL CHECK(slot='icon'), file TEXT NOT NULL, PRIMARY KEY(species_id,slot))");
                     db.Execute("CREATE TABLE IF NOT EXISTS animal_prefabs (species_id TEXT PRIMARY KEY NOT NULL REFERENCES animal_species(id) ON DELETE CASCADE, bundle TEXT NOT NULL, asset TEXT NOT NULL)");
                     db.Execute("CREATE TABLE IF NOT EXISTS animal_starting_skin (species_id TEXT PRIMARY KEY NOT NULL REFERENCES animal_species(id) ON DELETE CASCADE, skin INTEGER NOT NULL CHECK(skin >= 0), name TEXT, swatch TEXT)");
+                    db.Execute("CREATE TABLE IF NOT EXISTS animal_portraits (species_id TEXT NOT NULL REFERENCES animal_species(id) ON DELETE CASCADE, slot TEXT NOT NULL, file TEXT NOT NULL, PRIMARY KEY(species_id,slot))");
                     foreach (var old in current.Where(s => !entries.Any(e => e.Id == s.Id)))
                     {
                         db.Execute("DELETE FROM animal_fields WHERE species_id = ?", old.Id);
@@ -87,6 +88,7 @@ namespace Tyrant.Framework.Core
                         db.Execute("DELETE FROM animal_assets WHERE species_id = ?", old.Id);
                         db.Execute("DELETE FROM animal_prefabs WHERE species_id = ?", old.Id);
                         db.Execute("DELETE FROM animal_starting_skin WHERE species_id = ?", old.Id);
+                        db.Execute("DELETE FROM animal_portraits WHERE species_id = ?", old.Id);
                         db.Execute("DELETE FROM animal_stats WHERE species_id = ?", old.Id);
                         db.Execute("DELETE FROM animal_species WHERE id = ?", old.Id);
                     }
@@ -114,6 +116,9 @@ namespace Tyrant.Framework.Core
                         db.Execute("DELETE FROM animal_starting_skin WHERE species_id = ?", entry.Id);
                         if (entry.StartingSkin != 0 || entry.StartingSkinName != null || entry.Swatch != null)
                             db.Execute("INSERT INTO animal_starting_skin(species_id,skin,name,swatch) VALUES(?,?,?,?)", entry.Id, entry.StartingSkin, entry.StartingSkinName, entry.Swatch);
+                        db.Execute("DELETE FROM animal_portraits WHERE species_id = ?", entry.Id);
+                        foreach (var portrait in entry.Portraits)
+                            db.Execute("INSERT INTO animal_portraits(species_id,slot,file) VALUES(?,?,?)", entry.Id, portrait.Key, portrait.Value);
                     }
                     db.Execute("COMMIT");
                 }
@@ -124,8 +129,8 @@ namespace Tyrant.Framework.Core
         private static void CheckVersion(Database db)
         {
             using (var query = db.Query("PRAGMA user_version"))
-                if (!query.Next() || (query.Integer(0) != 1 && query.Integer(0) != 2 && query.Integer(0) != 3 && query.Integer(0) != SchemaVersion))
-                    throw new ManifestException("animals.db has an unsupported schema version (expected 1 to 4).");
+                if (!query.Next() || query.Integer(0) < 1 || query.Integer(0) > SchemaVersion)
+                    throw new ManifestException("animals.db has an unsupported schema version (expected 1 to 5).");
         }
 
         private static List<SpeciesEntry> ReadRows(Database db)
@@ -206,6 +211,17 @@ namespace Tyrant.Framework.Core
                         entry.StartingSkinName = query.IsNull(2) ? null : query.Text(2);
                         entry.Swatch = query.IsNull(3) ? null : query.Text(3);
                     }
+            bool hasPortraits;
+            using (var query = db.Query("SELECT 1 FROM sqlite_master WHERE type='table' AND name='animal_portraits'")) hasPortraits = query.Next();
+            if (hasPortraits)
+                using (var query = db.Query("SELECT species_id,slot,file FROM animal_portraits ORDER BY species_id,slot"))
+                    while (query.Next())
+                    {
+                        var entry = entries.FirstOrDefault(s => s.Id == query.Text(0)) ?? throw new ManifestException("animal_portraits references a missing species.");
+                        if (!PortraitSlots.IsSlot(query.Text(1)))
+                            throw new ManifestException($"animal_portraits: unknown portrait slot '{query.Text(1)}' (use {string.Join(", ", PortraitSlots.All)}).");
+                        entry.Portraits[query.Text(1)] = query.Text(2);
+                    }
             Validate(entries);
             return entries;
         }
@@ -237,6 +253,11 @@ namespace Tyrant.Framework.Core
                 if (entry.StartingSkin < 0) throw new ManifestException("animals.db: species '" + entry.Id + "' starting skin must be 0 or more.");
                 if (entry.StartingSkinName != null && string.IsNullOrWhiteSpace(entry.StartingSkinName))
                     throw new ManifestException("animals.db: species '" + entry.Id + "' starting skin name is empty (use NULL for the template's name).");
+                foreach (var portrait in entry.Portraits)
+                {
+                    if (!PortraitSlots.IsSlot(portrait.Key)) throw new ManifestException($"animals.db: species '{entry.Id}' has unknown portrait slot '{portrait.Key}'.");
+                    if (!IsModPng(portrait.Value)) throw new ManifestException("Species portraits must be relative PNG paths inside the mod.");
+                }
             }
         }
 

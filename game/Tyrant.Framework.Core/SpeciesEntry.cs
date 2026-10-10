@@ -25,6 +25,8 @@ namespace Tyrant.Framework.Core
         public string? StartingSkinName { get; set; }
         /// <summary>The starting skin's swatch (skin picker thumbnail), a PNG path inside the mod; null keeps the template's.</summary>
         public string? Swatch { get; set; }
+        /// <summary>The starting skin's portraits: slot (PortraitSlots.All) → PNG in the mod; a slot left out keeps the template's.</summary>
+        public Dictionary<string, string> Portraits { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
 
         /// <summary>Stable save identity, independent of display names and mod load order.</summary>
         public string Key(string modId) => "tyrant." + modId + "." + Id;
@@ -44,6 +46,7 @@ namespace Tyrant.Framework.Core
             if (StartingSkin != 0) map["startingSkin"] = StartingSkin;
             if (StartingSkinName != null) map["startingSkinName"] = StartingSkinName;
             if (Swatch != null) map["swatch"] = Swatch;
+            if (Portraits.Count > 0) map["portraits"] = PortraitSlots.All.Where(Portraits.ContainsKey).ToDictionary(k => k, k => (object?)Portraits[k]);
             return map;
         }
     }

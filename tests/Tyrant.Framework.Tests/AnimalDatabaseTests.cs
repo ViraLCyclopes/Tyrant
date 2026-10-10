@@ -79,7 +79,69 @@ public class AnimalDatabaseTests
     }
 
     [Fact]
-    public void A_version_3_file_without_the_starting_skin_table_reads_as_skin_0_and_saves_as_version_4()
+    public void Starting_skin_portraits_roundtrip_and_change_the_revision()
+    {
+        var path = PathToDatabase();
+        var source = Animal();
+        AnimalDatabaseFile.Save(path, [source]);
+        var before = AnimalDatabaseFile.Snapshot([source]);
+        source.Portraits["adultMale"] = "portraits/new-animal/adultMale.png";
+        source.Portraits["infant"] = "portraits/new-animal/infant.render.png";
+        AnimalDatabaseFile.Save(path, [source], before);
+
+        var saved = Assert.Single(AnimalDatabaseFile.Read(path));
+        Assert.Equal(source.Portraits, saved.Portraits);
+        Assert.NotEqual(before, AnimalDatabaseFile.Snapshot([saved]));
+        Assert.Equal("5", Sqlite(path, "PRAGMA user_version;"));
+
+        saved.Portraits.Clear();
+        AnimalDatabaseFile.Save(path, [saved]);
+        Assert.Empty(Assert.Single(AnimalDatabaseFile.Read(path)).Portraits);
+    }
+
+    [Theory]
+    [InlineData("adult", "portraits/a.png")]
+    [InlineData("adultMale", "../a.png")]
+    [InlineData("adultMale", "portraits/a.jpg")]
+    public void Invalid_portraits_are_rejected(string slot, string file)
+    {
+        var animal = Animal();
+        animal.Portraits[slot] = file;
+        Assert.Throws<ManifestException>(() => AnimalDatabaseFile.Save(PathToDatabase(), [animal]));
+    }
+
+    [Fact]
+    public void A_version_4_file_reads_without_portraits_and_saves_as_version_5()
+    {
+        var path = PathToDatabase();
+        var animal = Animal();
+        animal.StartingSkin = 1;
+        AnimalDatabaseFile.Save(path, [animal]);
+        Sqlite(path, "DROP TABLE animal_portraits; PRAGMA user_version = 4;");
+
+        var old = Assert.Single(AnimalDatabaseFile.Read(path));
+        Assert.Empty(old.Portraits);
+        old.Portraits["adultFemale"] = "portraits/new-animal/adultFemale.png";
+        AnimalDatabaseFile.Save(path, [old]);
+
+        var upgraded = Assert.Single(AnimalDatabaseFile.Read(path));
+        Assert.Equal((1, "portraits/new-animal/adultFemale.png"), (upgraded.StartingSkin, upgraded.Portraits["adultFemale"]));
+        Assert.Equal("5", Sqlite(path, "PRAGMA user_version;"));
+    }
+
+    [Fact]
+    public void An_unknown_slot_written_by_hand_is_an_error_naming_the_table()
+    {
+        var path = PathToDatabase();
+        AnimalDatabaseFile.Save(path, [Animal()]);
+        Sqlite(path, "INSERT INTO animal_portraits(species_id,slot,file) VALUES('new-animal','adult','portraits/a.png');");
+
+        var ex = Assert.Throws<ManifestException>(() => AnimalDatabaseFile.Read(path));
+        Assert.Contains("animal_portraits", ex.Message);
+    }
+
+    [Fact]
+    public void A_version_3_file_without_the_starting_skin_table_reads_as_skin_0_and_saves_as_version_5()
     {
         var path = PathToDatabase();
         AnimalDatabaseFile.Save(path, [Animal()]);
@@ -91,7 +153,7 @@ public class AnimalDatabaseTests
         AnimalDatabaseFile.Save(path, [old]);
 
         Assert.Equal(1, Assert.Single(AnimalDatabaseFile.Read(path)).StartingSkin);
-        Assert.Equal("4", Sqlite(path, "PRAGMA user_version;").Trim());
+        Assert.Equal("5", Sqlite(path, "PRAGMA user_version;").Trim());
     }
 
     private static string PathToDatabase() => Path.Combine(Path.GetTempPath(), "tyrant-tests", Guid.NewGuid().ToString("N"), AnimalDatabaseFile.FileName);
