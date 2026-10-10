@@ -257,4 +257,11 @@ describe('ModsView', () => {
     await fireEvent.click(await screen.findByRole('button', { name: 'Delete Red spot' }));
     expect(screen.queryByRole('checkbox', { name: 'Also remove it from the game' })).toBeNull();
   });
+
+  it('marks an installed mod whose textures are not cooked', async () => {
+    const { session } = setup([row({ state: 'installed', enabled: true, cooked: 'stale' }), row({ id: 'other', name: 'Other', state: 'installed', enabled: true, cooked: 'current' })], true);
+    renderWith(ModsView, session);
+
+    expect(await screen.findAllByText(/Reinstall to cook textures/)).toHaveLength(1);
+  });
 });

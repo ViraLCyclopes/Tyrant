@@ -5,11 +5,16 @@
   import { restoreCutouts } from '../modActions';
   import type { ModDoc } from './modDoc.svelte';
   import { isColourSlot, SLOT_LABELS, slotsFor } from './slots';
+  import TextureCompression from './TextureCompression.svelte';
+  import { textureFacts } from './textureFacts.svelte';
   import Thumb from './Thumb.svelte';
 
   let { doc, skin, sex }: { doc: ModDoc; skin: ModSkinDto; sex: 'male' | 'female' } = $props();
   const session = getSession();
   const tab = getTab();
+  // The doc is fixed for this page's lifetime (the editor remounts per mod).
+  // svelte-ignore state_referenced_locally
+  const facts = textureFacts(session, doc);
   const own = $derived(sex === 'male' ? skin.male : skin.female);
   const base = $derived(sex === 'male' ? skin.baseMaleSlots : skin.baseFemaleSlots);
   const slots = $derived(slotsFor(own ?? null, base ?? null));
@@ -43,6 +48,7 @@
         <li data-slot={slot}>
           <Thumb modId={doc.id} {file} label={name} version="{doc.detail?.revision}|{doc.detail?.filesStamp}" />
           <span class="slot">{SLOT_LABELS[slot]}</span>
+          {#if file}<TextureCompression {doc} {file} facts={facts.current} />{/if}
           <div class="buttons">
             <button aria-label="Replace {name}…" title="Copies your PNG into the skin's folder; this cannot be undone" onclick={() => replace(slot)}>Replace…</button>
             <button aria-label="Use base for {name}" disabled={!file} onclick={() => doc.edit('mods.setSkinFile', { skin: skin.id, sex, slot, png: null })}>Use base</button>

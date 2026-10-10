@@ -19,6 +19,7 @@ export type EditMethod =
   | 'mods.setSkinFile'
   | 'mods.copyBaseFile'
   | 'mods.setThumbnail'
+  | 'mods.setCompression'
   | 'mods.removeReplacement'
   | 'mods.replaceModel'
   | 'mods.removeModel'

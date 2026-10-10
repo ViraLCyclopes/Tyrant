@@ -1,7 +1,13 @@
 <script lang="ts">
+  import { getSession } from '$lib/stores/session.svelte';
   import type { ModDoc } from './modDoc.svelte';
+  import { textureFacts } from './textureFacts.svelte';
+  import { formatBytes } from './textures';
 
   let { doc }: { doc: ModDoc } = $props();
+  // The doc is fixed for this page's lifetime (the editor remounts per mod).
+  // svelte-ignore state_referenced_locally
+  const facts = textureFacts(getSession(), doc);
   let name = $state('');
   let version = $state('');
   let author = $state('');
@@ -31,6 +37,15 @@
   <label>Version <input bind:value={version} onchange={save} /></label>
   <label>Author <input bind:value={author} placeholder="optional" onchange={save} /></label>
   <label>Description <textarea rows="3" bind:value={description} placeholder="One or two sentences about the mod (optional)" onchange={save}></textarea></label>
+  {#if facts.current && facts.current.textures.length > 0}
+    <label>Texture compression
+      <select value={facts.current.compression} onchange={(e) => doc.edit('mods.setCompression', { file: null, mode: e.currentTarget.value })}>
+        <option value="auto">Match the game (DXT1/DXT5)</option>
+        <option value="bc7">BC7 — best quality, twice DXT1's memory</option>
+      </select>
+    </label>
+    <p class="hint">Textures in game: about {formatBytes(facts.current.totalBytes)}. Tyrant compresses them when it installs or exports the mod (BC7 takes about 20 s per 4K texture; unchanged textures are reused).</p>
+  {/if}
   <p class="hint">Id: <code>{doc.id}</code> — the mod's folder name and its key in the game, so it cannot change.</p>
   {#each doc.detail?.usesSpeciesFrom ?? [] as use (use.modId)}
     <p class="hint">Uses species from: {use.modName ?? use.modId}{#if !use.installed || !use.enabled} <span class="warn">({use.installed ? 'off' : 'not installed'} — {use.skins} {use.skins === 1 ? 'skin' : 'skins'} skipped)</span>{/if}</p>

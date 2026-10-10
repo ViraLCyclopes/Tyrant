@@ -3,11 +3,16 @@
   import { getTab } from '$lib/shell/tab.svelte';
   import { getSession } from '$lib/stores/session.svelte';
   import type { ModDoc } from './modDoc.svelte';
+  import TextureCompression from './TextureCompression.svelte';
+  import { textureFacts } from './textureFacts.svelte';
   import Thumb from './Thumb.svelte';
 
   let { doc, replacement, onRemoved }: { doc: ModDoc; replacement: ModReplacementDto; onRemoved: () => void } = $props();
   const session = getSession();
   const tab = getTab();
+  // The doc is fixed for this page's lifetime (the editor remounts per mod).
+  // svelte-ignore state_referenced_locally
+  const facts = textureFacts(session, doc);
 
   async function replaceFile() {
     const png = await session.platform.openFile(`Choose the new PNG for ${replacement.texture}`, ['png']);
@@ -37,6 +42,7 @@
     <Thumb modId={doc.id} file={replacement.file} size={160} label={replacement.texture} version="{doc.detail?.revision}|{doc.detail?.filesStamp}" />
     <div class="buttons">
       <p class="path">{replacement.file}</p>
+      <TextureCompression {doc} file={replacement.file} facts={facts.current} />
       <button onclick={replaceFile} title="Overwrites the PNG in the mod; this cannot be undone">Replace file…</button>
       <button class="ghost" onclick={() => session.platform.reveal(folder())}>Open folder</button>
       <button onclick={remove}>Remove</button>
