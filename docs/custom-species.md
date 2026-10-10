@@ -70,8 +70,9 @@ The database has seven tables:
 | `animal_assets` | `species_id`, `slot`, `file` | Custom icon PNG paths |
 | `animal_prefabs` | `species_id`, `bundle`, `asset` | Optional Unity AssetBundle and lowercase prefab asset path |
 | `animal_starting_skin` | `species_id`, `skin`, `name`, `swatch` | Starting skin: the template skin number, optional name and swatch PNG (see [Skins](#skins)) |
+| `animal_portraits` | `species_id`, `slot`, `file` | Starting skin portraits: slot (`adultMale` … `infantLeucistic`) to PNG path (see [Skins](#skins)) |
 
-`PRAGMA user_version` is `4`. Existing v1–v3 databases upgrade on their next save. Species ids are unique; a stat references its species
+`PRAGMA user_version` is `5`. Existing v1–v4 databases upgrade on their next save. Species ids are unique; a stat references its species
 id. Enable foreign keys when editing. If you create the database manually, use the
 schema in [animal-database-schema.sql](animal-database-schema.sql).
 
@@ -181,8 +182,7 @@ but new species write one plain text file per field.
 Choose **Choose icon PNG…** in the species editor. Tyrant copies the PNG to
 `icons/<species-id>.png` and records its path in `animal_assets` with `slot = 'icon'`.
 It replaces that species' `heroRender`, used by the Nursery species button and info
-preview. Transparent PNGs are supported. Skin swatches (a species' starting skin swatch is set under [Skins](#skins)), animal-info-sign backgrounds,
-and sex/growth portrait assets remain separate template assets. **Use template icon**
+preview. Transparent PNGs are supported. Skin swatches (a species' starting skin swatch is set under [Skins](#skins)), and animal-info-sign backgrounds remain separate template assets. **Use template icon**
 removes the override. SQL users may supply another relative PNG path inside the mod.
 Language files and icon PNGs are included in mod exports and installs.
 
@@ -196,6 +196,13 @@ A new species starts with one skin, copied from the template skin chosen as **St
 new-species form (default: the template's first). Change it, rename it, or give it its own swatch PNG
 (the round picture in the skin picker) in the species page's **Skins** section. These live in
 `animals.db`'s `animal_starting_skin` table (`skin` = the template skin's number, `name`, `swatch`).
+
+The starting skin can also have its own in-game portraits (the pictures the game shows for the animal by sex, growth stage
+and colour variant; the 12 slots are `adultMale`, `adultMaleAlbino`, `adultMaleMelanistic`, `adultMaleLeucistic`, the same for
+`adultFemale`, and `infant`, `infantAlbino`, `infantMelanistic`, `infantLeucistic`). Set them in the app under the species page
+> **Skins** > **Portraits**, or with `tyrant mod set-species-portrait <MOD> <SPECIES-ID> --slot <SLOT> (--png <FILE> | --clear)`.
+They are stored in the `animal_portraits` table (`species_id`, `slot`, `file`). Portraits are 2:1 (the game's are 128x64); a slot
+left out shows the template skin's portrait.
 
 Add more skins with **Add skin** on that section, or from the mod's side list: they are ordinary
 `skins[]` entries whose `species` is the species' id (`tyrant.<mod-id>.<species-id>`) and whose `base` is

@@ -68,6 +68,7 @@ A mod can add new skins next to the vanilla ones; nothing vanilla changes. Make 
     "name": "Red spot",
     "base": "Alt 1",
     "thumbnail": "skins/red-spot/thumbnail.png",
+    "portraits": { "adultMale": "skins/red-spot/portraits/adultMale.png" },
     "male":   { "diffuse": "skins/red-spot/male_D.png", "normal": "skins/red-spot/male_N.png" },
     "female": { "diffuse": "skins/red-spot/female_D.png" }
   }
@@ -82,6 +83,7 @@ A mod can add new skins next to the vanilla ones; nothing vanilla changes. Make 
 | `base` | The vanilla skin to start from (name or number). Everything the skin doesn't provide comes from it. For a custom species, `0` (its starting skin). |
 | `group` | Optional. Groups the skin in Tyrant's mod editor (e.g. `"Jurassic Park"`); the game ignores it, and the order of `skins` too. |
 | `thumbnail` | Optional swatch; otherwise cut from the diffuse. |
+| `portraits` | Optional in-game portraits: slot (`adultMale`, `adultMaleAlbino`, … `infantLeucistic`, the 12 the game has) → PNG, 2:1 (the game's are 128×64). A slot left out shows the base skin's. |
 | `male` / `female` | Slots to PNGs: `diffuse`, `normal`, `extra`, `pattern`, `fur`, `infantDiffuse`, `infantNormal`, `infantExtra`, `infantPattern`, `infantFur`. Leave a sex out for a single-sex skin (that sex looks like the base). |
 
 **Numbers and removal:**

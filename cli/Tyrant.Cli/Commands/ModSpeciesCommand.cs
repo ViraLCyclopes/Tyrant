@@ -95,3 +95,38 @@ public sealed class ModSetSpeciesSkinCommand : Command<ModSetSpeciesSkinCommand.
         return ExitCodes.Ok;
     }
 }
+
+public sealed class ModSpeciesPortraitCommand : Command<ModSpeciesPortraitCommand.Settings>
+{
+    public sealed class Settings : ModSettings
+    {
+        [CommandArgument(1, "<SPECIES-ID>")]
+        public string SpeciesId { get; set; } = "";
+
+        [CommandOption("--slot <SLOT>")]
+        [Description("adultMale, adultMaleAlbino, adultMaleMelanistic, adultMaleLeucistic, the same for adultFemale, infant, infantAlbino, infantMelanistic, infantLeucistic.")]
+        public string Slot { get; set; } = "";
+
+        [CommandOption("--png <FILE>")]
+        [Description("The portrait PNG (the game's are 128x64).")]
+        public string? Png { get; set; }
+
+        [CommandOption("--clear")]
+        [Description("Show the base skin's portrait again.")]
+        public bool Clear { get; set; }
+    }
+
+    public override int Execute(CommandContext context, Settings settings)
+    {
+        if (settings.Clear == (settings.Png is not null))
+        {
+            Console.Error.WriteLine("Give --png or --clear (not both).");
+            return ExitCodes.Error;
+        }
+        var (ws, _) = CliServices.OpenWorkspace(settings);
+        var portraits = ModProject.Open(ws, settings.Id).SetSpeciesPortraits(settings.SpeciesId,
+            new Dictionary<string, PortraitSource?> { [settings.Slot] = settings.Clear ? null : new PortraitSource(Png: settings.Png) });
+        Console.WriteLine(portraits.TryGetValue(settings.Slot, out var file) ? $"  {settings.Slot} <- {file}" : $"'{settings.SpeciesId}' {settings.Slot} uses the game's portrait.");
+        return ExitCodes.Ok;
+    }
+}

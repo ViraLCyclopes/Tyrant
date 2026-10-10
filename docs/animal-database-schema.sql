@@ -47,5 +47,11 @@ CREATE TABLE animal_starting_skin (
     name TEXT,
     swatch TEXT
 );
-PRAGMA user_version = 4;
+CREATE TABLE animal_portraits (
+    species_id TEXT NOT NULL REFERENCES animal_species(id) ON DELETE CASCADE,
+    slot TEXT NOT NULL,
+    file TEXT NOT NULL,
+    PRIMARY KEY(species_id,slot)
+);
+PRAGMA user_version = 5;
 COMMIT;

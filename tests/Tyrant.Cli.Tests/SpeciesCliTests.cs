@@ -212,6 +212,24 @@ public class SpeciesCliTests
     }
 
     [Fact]
+    public void Species_portraits_are_set_and_cleared_from_the_command_line()
+    {
+        using var game = new FakeGame();
+        var ws = SeedAllosaurus(game);
+        var art = Path.Combine(ws, "portrait.png");
+        File.WriteAllBytes(art, [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 0]);
+
+        var set = Run("mod", "set-species-portrait", "mod-a", "mirabilis", "--slot", "adultMale", "--png", art, "-w", ws);
+        Assert.Contains("portraits/mirabilis/adultMale.png", set.Out);
+        var bad = Run("mod", "set-species-portrait", "mod-a", "mirabilis", "--slot", "adult", "--png", art, "-w", ws);
+        Assert.Contains("adultMale", bad.Err);
+        var neither = Run("mod", "set-species-portrait", "mod-a", "mirabilis", "--slot", "infant", "-w", ws);
+        Assert.Contains("--png or --clear", neither.Err);
+        Assert.Contains("uses the game's", Run("mod", "set-species-portrait", "mod-a", "mirabilis", "--slot", "adultMale", "--clear", "-w", ws).Out);
+        Assert.NotEqual(ExitCodes.Ok, Run("mod", "set-species-portrait", "mod-a", "nope", "--slot", "adultMale", "--clear", "-w", ws).Code);
+    }
+
+    [Fact]
     public void Set_species_skin_with_an_empty_name_goes_back_to_the_template_skin_name()
     {
         using var game = new FakeGame();

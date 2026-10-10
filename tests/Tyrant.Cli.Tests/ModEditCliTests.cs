@@ -127,4 +127,20 @@ public class ModEditCliTests
         Assert.Equal(ExitCodes.Ok, Run("mod", "unreplace", "red-spot", "T_A_D", "-w", ws).Code);
         Assert.DoesNotContain("T_A_D", ModJson(ws));
     }
+
+    [Fact]
+    public void Skin_portraits_are_set_and_cleared_from_the_command_line()
+    {
+        using var game = new FakeGame();
+        var ws = WorkspaceWithSkin(game);
+        var art = Png(Path.Combine(ws, "art", "portrait.png"));
+
+        var set = Run("mod", "set-skin-portrait", "red-spot", "blue", "--slot", "adultMale", "--png", art, "-w", ws);
+        Assert.Contains("skins/blue/portraits/adultMale.png", set.Out);
+        var bad = Run("mod", "set-skin-portrait", "red-spot", "blue", "--slot", "adult", "--png", art, "-w", ws);
+        Assert.Contains("adultMale", bad.Err);
+        var neither = Run("mod", "set-skin-portrait", "red-spot", "blue", "--slot", "infant", "-w", ws);
+        Assert.Contains("--png or --clear", neither.Err);
+        Assert.Contains("uses the game's", Run("mod", "set-skin-portrait", "red-spot", "blue", "--slot", "adultMale", "--clear", "-w", ws).Out);
+    }
 }
