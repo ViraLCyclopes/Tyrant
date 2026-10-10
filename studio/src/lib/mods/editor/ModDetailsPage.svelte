@@ -5,9 +5,8 @@
   import { formatBytes } from './textures';
 
   let { doc }: { doc: ModDoc } = $props();
-  // The doc is fixed for this page's lifetime (the editor remounts per mod).
-  // svelte-ignore state_referenced_locally
-  const facts = textureFacts(getSession(), doc);
+  const facts = $derived(textureFacts(getSession(), doc));
+  $effect(() => facts.load());
   let name = $state('');
   let version = $state('');
   let author = $state('');

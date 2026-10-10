@@ -35,7 +35,7 @@ internal static class MipChain
         return levels;
     }
 
-    /// <summary>The next level: each pixel averages a 2×2 block (an odd last row or column is used once more).</summary>
+    /// <summary>The next level: each pixel averages a 2×2 block (for an odd size the last row or column is left out, except at size 1, which repeats).</summary>
     public static MipLevel Half(MipLevel level, MipFilter filter)
     {
         int w = level.Width, h = level.Height, w2 = Math.Max(1, w / 2), h2 = Math.Max(1, h / 2);

@@ -20,8 +20,18 @@ public sealed partial class ModProject
         else
         {
             var normal = file.Replace('\\', '/');
-            var known = ModTextureCooker.TextureFiles(Manifest).FirstOrDefault(f => string.Equals(f, normal, StringComparison.OrdinalIgnoreCase))
-                ?? throw new TyrantException(TyrantErrorCode.TargetNotFound, $"'{file}' is not one of '{Id}''s textures (a skin slot or a texture replacement); thumbnails and portraits are not compressed.");
+            var notTexture = $"'{file}' is not one of the textures of '{Id}' (a skin slot or a texture replacement); thumbnails and portraits are not compressed.";
+            var known = ModTextureCooker.TextureFiles(Manifest).FirstOrDefault(f => string.Equals(f, normal, StringComparison.OrdinalIgnoreCase));
+            if (known is null && mode is null)
+            {
+                // Clearing: drop any override for this file, even one left for a file that is no longer a texture (Check reports those).
+                var stale = settings.Overrides.Keys.Where(k => string.Equals(k.Replace('\\', '/'), normal, StringComparison.OrdinalIgnoreCase)).ToList();
+                if (stale.Count == 0) throw new TyrantException(TyrantErrorCode.TargetNotFound, notTexture);
+                foreach (var key in stale) settings.Overrides.Remove(key);
+                Save();
+                return;
+            }
+            if (known is null) throw new TyrantException(TyrantErrorCode.TargetNotFound, notTexture);
             settings.Overrides.Remove(known);
             if (mode is { } m) settings.Overrides[known] = m;
         }

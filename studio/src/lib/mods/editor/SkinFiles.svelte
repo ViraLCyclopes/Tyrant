@@ -12,9 +12,8 @@
   let { doc, skin, sex }: { doc: ModDoc; skin: ModSkinDto; sex: 'male' | 'female' } = $props();
   const session = getSession();
   const tab = getTab();
-  // The doc is fixed for this page's lifetime (the editor remounts per mod).
-  // svelte-ignore state_referenced_locally
-  const facts = textureFacts(session, doc);
+  const facts = $derived(textureFacts(session, doc));
+  $effect(() => facts.load());
   const own = $derived(sex === 'male' ? skin.male : skin.female);
   const base = $derived(sex === 'male' ? skin.baseMaleSlots : skin.baseFemaleSlots);
   const slots = $derived(slotsFor(own ?? null, base ?? null));

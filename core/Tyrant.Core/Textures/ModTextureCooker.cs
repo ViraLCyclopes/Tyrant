@@ -36,6 +36,17 @@ public sealed class ModTextureCooker(string cacheDir, Func<string, SlotKind?>? r
         return name => kinds.TryGetValue(name, out var kind) ? kind : null;
     }
 
+    /// <summary>The file's full path when it lies inside the mod folder; null otherwise (a stranger's mod.json may name any path, and nothing outside the mod is opened).</summary>
+    internal static string? InsidePath(string modDir, string file)
+    {
+        try
+        {
+            var path = Path.GetFullPath(Path.Combine(modDir, file));
+            return ModPaths.IsInside(path, modDir) ? path : null;
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException) { return null; }
+    }
+
     private static string Normal(string file) => file.Replace('\\', '/');
 
     /// <summary>Every texture the framework builds for the mod: skin slots, then replacements; each file once.</summary>
@@ -71,7 +82,7 @@ public sealed class ModTextureCooker(string cacheDir, Func<string, SlotKind?>? r
         var result = new List<TextureEstimate>();
         foreach (var t in Targets(manifest))
         {
-            if (PngFacts.Read(Path.Combine(modDir, t.File)) is not { } fact) continue;
+            if (InsidePath(modDir, t.File) is not { } path || PngFacts.Read(path) is not { } fact) continue;
             var format = TextureCooker.FormatFor(t.Kind, t.Mode, fact.Opaque);
             var (w, h) = TextureCooker.CookedSize(fact.Width, fact.Height);
             result.Add(new TextureEstimate(t.File, t.Kind, t.Mode, manifest.Textures.Overrides.ContainsKey(t.File), format, w, h,
@@ -94,10 +105,12 @@ public sealed class ModTextureCooker(string cacheDir, Func<string, SlotKind?>? r
         {
             ct.ThrowIfCancellationRequested();
             var t = targets[i];
-            var png = Path.GetFullPath(Path.Combine(sourceDir, t.File));
-            if (!ModPaths.IsInside(png, sourceDir) || !File.Exists(png))
+            var png = InsidePath(sourceDir, t.File);
+            if (png is null || !File.Exists(png))
                 throw new TyrantException(TyrantErrorCode.ModInvalid, $"{t.File} is missing, so the mod's textures could not be cooked.");
             var (path, entry) = Cache(png, t);
+            if (entry.Width > TexturePack.MaxSide || entry.Height > TexturePack.MaxSide)
+                throw new TyrantException(TyrantErrorCode.ModInvalid, $"{t.File} is {entry.Width}x{entry.Height}; textures can be at most {TexturePack.MaxSide} pixels on a side.");
             entry.Source = t.File;
             entry.Fingerprint = TextureFingerprint.Of(png);
             cached.Add((path, entry));

@@ -264,4 +264,12 @@ describe('ModsView', () => {
 
     expect(await screen.findAllByText(/Reinstall to cook textures/)).toHaveLength(1);
   });
+
+  it('does not tell a game-only mod to reinstall (it has no Install button)', async () => {
+    const { session } = setup([row({ id: 'other', name: 'Other', state: 'gameOnly', enabled: true, cooked: 'stale' })], true);
+    renderWith(ModsView, session);
+
+    expect(await screen.findByText(/textures not cooked/)).toBeInTheDocument();
+    expect(screen.queryByText(/Reinstall to cook textures/)).toBeNull();
+  });
 });

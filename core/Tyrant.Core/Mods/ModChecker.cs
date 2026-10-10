@@ -87,6 +87,7 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
         {
             var image = Image(mod, entry.Texture, entry.File, errors);
             if (image is null) continue;
+            if (TooLarge(image)) { errors.Add(TooLargeText(entry.Texture, entry.File, image)); continue; }
             if (image.Width % 4 != 0 || image.Height % 4 != 0)
             {
                 var (w4, h4) = TextureCooker.CookedSize(image.Width, image.Height);
@@ -147,6 +148,7 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
                 {
                     var image = Image(mod, $"{key} {sex} {slot}", file, errors);
                     if (image is null) continue;
+                    if (TooLarge(image)) { errors.Add(TooLargeText($"{key} {sex} {slot}", file, image)); continue; }
                     if (image.Width % 4 != 0 || image.Height % 4 != 0)
                     {
                         var (w4, h4) = TextureCooker.CookedSize(image.Width, image.Height);
@@ -367,6 +369,11 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
         if (Image(mod, label, file, errors) is { } image && !PortraitSlots.IsTwoToOne(image.Width, image.Height))
             warnings.Add($"{label}: {file} is {image.Width}x{image.Height}; the game shows portraits at 2:1 (128x64), so it will look stretched.");
     }
+
+    private static bool TooLarge(ImageResult image) => image.Width > TexturePack.MaxSide || image.Height > TexturePack.MaxSide;
+
+    private static string TooLargeText(string label, string file, ImageResult image) =>
+        $"{label}: {file} is {image.Width}x{image.Height}; textures can be at most {TexturePack.MaxSide} pixels on a side (the game could not load a bigger cooked texture).";
 
     /// <summary>Checks one PNG of the mod; returns the decoded image, or null after adding an error.</summary>
     private static ImageResult? Image(ModProject mod, string label, string file, List<string> errors)

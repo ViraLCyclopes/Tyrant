@@ -60,7 +60,8 @@ public sealed partial class ModsMethods
     private static string KindName(SlotKind kind) => kind == SlotKind.Normal ? "normal" : kind == SlotKind.Data ? "mask" : "colour";
 
     private static ModTextureCooker Cooker(Workspace ws, GameInstall install, ModProject mod) =>
-        ModTextureCooker.For(ws, TryIndex(ws)?.Assets, TrySpeciesFor(ws, install, mod));
+        // The index and dump are only needed to tell what a replacement fills; skin slots carry their kind (and parsing them is slow).
+        mod.Manifest.Replace.Count > 0 ? ModTextureCooker.For(ws, TryIndex(ws)?.Assets, TrySpeciesFor(ws, install, mod)) : ModTextureCooker.For(ws, null, null);
 
     /// <summary>Cooking progress as job progress between two fractions: "Cooking textures 3/20...". Synchronous, so reports stay in order and end with the job.</summary>
     private static IProgress<(int Done, int Total)> Cooking(IProgress<JobProgress> progress, double from, double to) =>

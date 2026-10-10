@@ -26,8 +26,8 @@ public static class CookedPacks
         }
         foreach (var file in files)
         {
-            var png = Path.Combine(modDir, file);
-            if (!File.Exists(png)) continue; // a missing file is Check's problem, not cooking's
+            var png = ModTextureCooker.InsidePath(modDir, file);
+            if (png is null || !File.Exists(png)) continue; // missing or outside the mod folder: Check's problem, not cooking's
             var print = Print(png);
             if (!pack.Entries.Any(e => string.Equals(e.Source, file, StringComparison.OrdinalIgnoreCase) && e.Fingerprint.Equals(print))) return "stale";
         }

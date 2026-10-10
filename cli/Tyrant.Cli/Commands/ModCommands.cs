@@ -53,6 +53,10 @@ internal static class ModCli
         }
     }
 
+    /// <summary>The texture cooker; the index and dump (slow to load) are only read when the mod has texture replacements.</summary>
+    public static ModTextureCooker Cooker(Workspace ws, GameInstall install, ModProject mod) =>
+        mod.Manifest.Replace.Count > 0 ? ModTextureCooker.For(ws, TryIndex(ws)?.Assets, TrySpeciesFor(ws, install, mod)) : ModTextureCooker.For(ws, null, null);
+
     public static IReadOnlyList<SpeciesSkins> RequireSpecies(Workspace ws) => TrySpecies(ws) ?? throw new TyrantException(TyrantErrorCode.DataMissing,
         "Model replacements need the game's data: on the Workspace tab click Run data dump, or run 'tyrant dump run'.", FixAction.RefreshWorkspace);
 
@@ -248,7 +252,7 @@ public sealed class ModInstallCommand : Command<ModInstallCommand.Settings>
             new ModLoaderInstaller(isGameRunning: launcher.IsRunning).Install(install, zip, componentDir);
             Console.WriteLine("Installed or updated Tyrant's framework in the game.");
         }
-        var cooker = ModTextureCooker.For(ws, ModCli.TryIndex(ws)?.Assets, ModCli.TrySpeciesFor(ws, install, mod));
+        var cooker = ModCli.Cooker(ws, install, mod);
         new GameMods(launcher.IsRunning).Install(install, mod, staging => cooker.WritePack(mod.Manifest, staging, staging,
             new SyncProgress(p => Console.WriteLine($"Cooking textures {p.Done}/{p.Total}..."))));
         Console.WriteLine($"Installed '{mod.Id}' into {Path.Combine(ModLoaderInstaller.ModsDir(install), mod.Id)}. Start the game to see it; undo with 'tyrant mod remove {mod.Id}'.");

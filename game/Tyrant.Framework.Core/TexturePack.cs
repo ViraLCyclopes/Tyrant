@@ -160,7 +160,7 @@ namespace Tyrant.Framework.Core
         public const string FileName = "textures.tpack";
         public const int Version = 1;
         private const int MaxEntries = 65536;
-        private const int MaxSide = 16384;
+        public const int MaxSide = 16384;
         private static readonly byte[] Magic = { (byte)'T', (byte)'P', (byte)'A', (byte)'K' };
 
         private readonly Dictionary<string, TexturePackEntry> _byKey;

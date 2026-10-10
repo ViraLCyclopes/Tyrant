@@ -72,7 +72,7 @@ public static class ModSharing
         }
         finally
         {
-            try { if (Directory.Exists(packDir)) Directory.Delete(packDir, recursive: true); } catch (IOException) { }
+            try { if (Directory.Exists(packDir)) Directory.Delete(packDir, recursive: true); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
         }
     }
 

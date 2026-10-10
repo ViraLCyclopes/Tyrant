@@ -10,9 +10,8 @@
   let { doc, replacement, onRemoved }: { doc: ModDoc; replacement: ModReplacementDto; onRemoved: () => void } = $props();
   const session = getSession();
   const tab = getTab();
-  // The doc is fixed for this page's lifetime (the editor remounts per mod).
-  // svelte-ignore state_referenced_locally
-  const facts = textureFacts(session, doc);
+  const facts = $derived(textureFacts(session, doc));
+  $effect(() => facts.load());
 
   async function replaceFile() {
     const png = await session.platform.openFile(`Choose the new PNG for ${replacement.texture}`, ['png']);
