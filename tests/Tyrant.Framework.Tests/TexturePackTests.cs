@@ -114,4 +114,19 @@ public class TexturePackTests
         Assert.Null(TextureCompressions.Parse("BC7")); // exact, as written in mod.json
         Assert.Null(TextureCompressions.Parse(null));
     }
+
+    [Fact]
+    public void An_entry_whose_offset_overflows_is_refused()
+    {
+        var good = Written(Entry("a.png", SlotKind.Color, UnityTextureFormats.Dxt1, 8, 8));
+        var offsetField = (int)TexturePack.Read(new MemoryStream(good)).Entries[0].Offset - 16; // Offset, then Length, end the table row
+        using var patched = new MemoryStream();
+        using (var w = new BinaryWriter(patched, System.Text.Encoding.UTF8, leaveOpen: true))
+        {
+            w.Write(good, 0, offsetField);
+            w.Write(long.MaxValue - 10);
+            w.Write(good, offsetField + 8, good.Length - offsetField - 8);
+        }
+        Assert.Throws<TexturePackException>(() => TexturePack.Read(new MemoryStream(patched.ToArray())));
+    }
 }

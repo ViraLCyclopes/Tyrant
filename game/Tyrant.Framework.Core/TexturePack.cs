@@ -287,7 +287,7 @@ namespace Tyrant.Framework.Core
             if (e.Width < 1 || e.Height < 1 || e.Width > MaxSide || e.Height > MaxSide) throw new TexturePackException($"{where}: size {e.Width}x{e.Height} is not valid");
             if (e.MipCount < 1 || e.MipCount > UnityTextureFormats.FullMipCount(e.Width, e.Height)) throw new TexturePackException($"{where}: {e.MipCount} mips is not valid");
             if (e.Length != UnityTextureFormats.DataLength(e.Format, e.Width, e.Height, e.MipCount)) throw new TexturePackException($"{where}: data length does not match its size");
-            if (e.Offset < tableEnd || e.Offset + e.Length > fileLength) throw new TexturePackException($"{where}: data lies outside the file (cut short?)");
+            if (e.Offset < tableEnd || e.Offset > fileLength || e.Length > fileLength - e.Offset) throw new TexturePackException($"{where}: data lies outside the file (cut short?)");
         }
     }
 }
