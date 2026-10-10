@@ -37,7 +37,7 @@ async function setup(detail = modDetail(), species = false, portraits: () => unk
 describe('PortraitsCard', () => {
   it('shows own, game and missing portraits, warns on a non 2:1 picture, and sets and clears slots', async () => {
     const { rpc, platform } = await setup();
-    platform.files.push('D:\art\male.png');
+    platform.files.push('D:\\art\\male.png');
     rpc.on('mods.setPortraits', () => modDetail({ revision: 'r2' }));
 
     expect(await screen.findByRole('img', { name: 'Adult male, Normal (this mod)' })).toBeInTheDocument();
@@ -46,7 +46,7 @@ describe('PortraitsCard', () => {
     expect(screen.getByText(/shows portraits at 2:1/)).toBeInTheDocument();
 
     await fireEvent.click(screen.getByRole('button', { name: 'Choose PNG for Adult male, Albino' }));
-    await waitFor(() => expect(rpc.callsTo('mods.setPortraits')[0]?.params).toMatchObject({ skin: 'blue', set: { adultMaleAlbino: { png: 'D:\art\male.png' } } }));
+    await waitFor(() => expect(rpc.callsTo('mods.setPortraits')[0]?.params).toMatchObject({ skin: 'blue', set: { adultMaleAlbino: { png: 'D:\\art\\male.png' } } }));
 
     await fireEvent.click(screen.getByRole('button', { name: 'Clear Adult male, Normal' }));
     await waitFor(() => expect(rpc.callsTo('mods.setPortraits')[1]?.params).toMatchObject({ set: { adultMale: null } }));
@@ -62,11 +62,11 @@ describe('PortraitsCard', () => {
 
   it('on the species page writes through mods.setSpeciesPortraits without undo', async () => {
     const { rpc, platform, doc } = await setup(modDetail(), true);
-    platform.files.push('D:\art\male.png');
+    platform.files.push('D:\\art\\male.png');
     rpc.on('mods.setSpeciesPortraits', () => modDetail({ revision: 'r2' }));
 
     await fireEvent.click(await screen.findByRole('button', { name: 'Choose PNG for Adult male, Normal' }));
-    await waitFor(() => expect(rpc.callsTo('mods.setSpeciesPortraits')[0]?.params).toMatchObject({ speciesId: 'example-animal', set: { adultMale: { png: 'D:\art\male.png' } } }));
+    await waitFor(() => expect(rpc.callsTo('mods.setSpeciesPortraits')[0]?.params).toMatchObject({ speciesId: 'example-animal', set: { adultMale: { png: 'D:\\art\\male.png' } } }));
     expect(doc.canUndo).toBe(false);
   });
 
