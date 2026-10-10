@@ -130,6 +130,23 @@ public class ModPortraitsRpcTests
     }
 
     [Fact]
+    public async Task A_game_portrait_that_cannot_be_decoded_shows_nothing_but_does_not_fail_the_call()
+    {
+        using var game = new FakeGame();
+        var (h, ws, reader) = await ModEditorMethodsTests.WithSkinAndPrefab(game);
+        var portrait = new Tyrant.Core.Assets.AssetRecord("carch.bundle", 20, "Texture2D", "P_adultMale", "Assets/P_adultMale.png", "abc", null);
+        AssetFixtures.WriteIndex(ws, [.. SkinDumps.Textures, SkinDumps.Prefab, portrait],
+            Tyrant.Core.Install.GameFingerprint.Compute(new Tyrant.Core.Install.GameInstall(game.Root, null)));
+        reader.FailFor.Add(portrait.Ref);
+
+        var shown = (await h.Call("mods.portraits", new { id = "red-spot", skin = "blue" })).GetProperty("portraits");
+
+        var row = Assert.Single(shown.EnumerateArray(), r => r.GetProperty("slot").GetString() == "adultMale");
+        Assert.Equal(JsonValueKind.Null, row.GetProperty("file").ValueKind);
+        Assert.Equal(12, shown.GetArrayLength());
+    }
+
+    [Fact]
     public async Task Species_model_gives_the_starting_skins_maps_per_sex()
     {
         using var game = new FakeGame();

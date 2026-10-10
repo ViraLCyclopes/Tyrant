@@ -40,6 +40,15 @@ public class PortraitSlotsTests
         Assert.Equal(expected, PortraitSlots.IsTwoToOne(w, h));
     }
 
+    [Theory]
+    [InlineData(128, 16f)]
+    [InlineData(256, 32f)]
+    [InlineData(64, 8f)]
+    public void Pixels_per_unit_keep_the_games_world_size(int width, float ppu)
+    {
+        Assert.Equal(ppu, PortraitSlots.PixelsPerUnit(width));
+    }
+
     [Fact]
     public void A_skins_portraits_round_trip_in_slot_order()
     {

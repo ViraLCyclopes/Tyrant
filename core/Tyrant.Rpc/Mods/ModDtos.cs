@@ -68,7 +68,7 @@ public sealed record ModSetPortraitsParams(string Id, string Revision, string Sk
 public sealed record ModSetSpeciesPortraitsParams(string Id, string Revision, string SpeciesId, IReadOnlyDictionary<string, ModPortraitSourceDto?> Set);
 public sealed record ModPortraitsParams(string Id, string? Skin = null, string? SpeciesId = null);
 /// <summary>What a portrait slot shows: File is a path in the preview cache the app may load (null when nothing); Width/Height 0 when unknown.</summary>
-public sealed record ModPortraitDto(string Slot, string? File, bool Own, bool Rendered, int Width, int Height);
+public sealed record ModPortraitDto(string Slot, string? File, bool Own, bool Rendered, int Width, int Height, bool Inherited = false);
 public sealed record ModPortraitsResult(IReadOnlyList<ModPortraitDto> Portraits);
 public sealed record ModSpeciesModelParams(string Id, string SpeciesId, string Sex = "male");
 

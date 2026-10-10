@@ -200,7 +200,7 @@ new-species form (default: the template's first). Change it, rename it, or give 
 The starting skin can also have its own in-game portraits (the pictures the game shows for the animal by sex, growth stage
 and colour variant; the 12 slots are `adultMale`, `adultMaleAlbino`, `adultMaleMelanistic`, `adultMaleLeucistic`, the same for
 `adultFemale`, and `infant`, `infantAlbino`, `infantMelanistic`, `infantLeucistic`). Set them in the app under the species page
-> **Skins** > **Portraits**, or with `tyrant mod set-species-portrait <MOD> <SPECIES-ID> --slot <SLOT> (--png <FILE> | --clear)`.
+(Skins → Portraits), or with `tyrant mod set-species-portrait <MOD> <SPECIES-ID> --slot <SLOT> (--png <FILE> | --clear)`.
 They are stored in the `animal_portraits` table (`species_id`, `slot`, `file`). Portraits are 2:1 (the game's are 128x64); a slot
 left out shows the template skin's portrait.
 

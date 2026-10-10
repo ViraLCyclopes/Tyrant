@@ -53,6 +53,9 @@ namespace Tyrant.Framework
                 }
                 harmony.Patch(method, prefix: new HarmonyMethod(typeof(PortraitModule), nameof(BeforeGetPortrait)));
                 _on = true;
+                var fields = AccessTools.TypeByName("PrehistoricKingdom.AnimalPortraits");
+                if (fields == null || PortraitSlots.All.Any(name => fields.GetField(name, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance) == null))
+                    FrameworkMod.Log.Warning("The game's portrait fields changed (game updated?): Tyrant's app may not show the game's own portraits; skins' portraits still work.");
             }
             catch (Exception ex)
             {
@@ -101,7 +104,10 @@ namespace Tyrant.Framework
                 {
                     texture = new Texture2D(2, 2, TextureFormat.RGBA32, false) { name = Path.GetFileName(path) };
                     if (texture.LoadImage(File.ReadAllBytes(path), true))
-                        sprite = Sprite.Create(texture, new Rect(0, 0, texture.width, texture.height), Vector2.zero, 16f, 0, SpriteMeshType.FullRect);
+                    {
+                        texture.wrapMode = TextureWrapMode.Clamp; // bilinear filtering must not bleed the opposite edge
+                        sprite = Sprite.Create(texture, new Rect(0, 0, texture.width, texture.height), Vector2.zero, PortraitSlots.PixelsPerUnit(texture.width), 0, SpriteMeshType.FullRect);
+                    }
                 }
             }
             catch (Exception)

@@ -67,11 +67,11 @@
         {@const label = `${row}, ${column}`}
         <div class="slot" class:game={!p?.own}>
           {#if p?.file}
-            <img src={session.platform.fileUrl(p.file)} alt="{label} ({p.own ? 'this mod' : 'game'})" />
+            <img src={session.platform.fileUrl(p.file)} alt="{label} ({p.own ? 'this mod' : p.inherited ? 'species' : 'game'})" />
           {:else}
             <span class="empty">Game portrait</span>
           {/if}
-          {#if p?.file && !p.own}<span class="tag">game</span>{/if}
+          {#if p?.file && !p.own}<span class="tag">{p.inherited ? 'species' : 'game'}</span>{/if}
           {#if p?.own && p.width > 0 && !isTwoToOne(p.width, p.height)}
             <span class="warn">The game shows portraits at 2:1 (128×64); this one will be stretched.</span>
           {/if}

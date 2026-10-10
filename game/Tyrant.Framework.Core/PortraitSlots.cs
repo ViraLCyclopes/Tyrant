@@ -36,6 +36,9 @@ namespace Tyrant.Framework.Core
 
         public static bool IsRendered(string file) => file.EndsWith(".render.png", StringComparison.OrdinalIgnoreCase);
 
+        /// <summary>Pixels per unit that keep a portrait the game's world size: 16 at the game's 128 wide, scaled with the width.</summary>
+        public static float PixelsPerUnit(int width) => 16f * width / 128f;
+
         /// <summary>The game shows portraits at 2:1 (128×64); within 2% is fine.</summary>
         public static bool IsTwoToOne(int width, int height) => height > 0 && Math.Abs(width / (double)height - 2.0) <= 0.04;
     }

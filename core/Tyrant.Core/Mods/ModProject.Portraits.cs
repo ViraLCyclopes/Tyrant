@@ -43,6 +43,11 @@ public sealed partial class ModProject
             if (source is null) continue;
             if (source.Data is null == source.Png is null)
                 throw new TyrantException(TyrantErrorCode.ModInvalid, $"Portrait '{slot}': give a PNG file or PNG data.");
+            if (source.Png is not null)
+            {
+                if (!File.Exists(source.Png)) throw new TyrantException(TyrantErrorCode.ModInvalid, $"'{source.Png}' does not exist.");
+                if (!IsPng(source.Png)) throw new TyrantException(TyrantErrorCode.ModInvalid, $"'{source.Png}' is not a PNG image (the game reads PNG only).");
+            }
             if (source.Data is not null && !source.Data.AsSpan().StartsWith(PngSignature))
                 throw new TyrantException(TyrantErrorCode.ModInvalid, $"Portrait '{slot}' is not a PNG image.");
         }

@@ -1,3 +1,5 @@
+using Tyrant.Core.Assets;
+using Tyrant.Core.Install;
 using Tyrant.Core.Errors;
 using Tyrant.Core.Mods;
 using Tyrant.Rpc.Protocol;
@@ -30,7 +32,6 @@ public sealed partial class ModsMethods
         else
         {
             if (p.SpeciesId is null) throw new TyrantException(TyrantErrorCode.ModInvalid, "Give a skin or a species.");
-            if (p.SpeciesId is null) throw new TyrantException(TyrantErrorCode.ModInvalid, "Give a skin or a species.");
             var entry = mod.Manifest.Species.FirstOrDefault(s => s.Id == p.SpeciesId)
                 ?? throw new TyrantException(TyrantErrorCode.TargetNotFound, "Species not found: " + p.SpeciesId);
             var start = species?.FirstOrDefault(s => s.SpeciesId == entry.Key(mod.Id))?.Skins.FirstOrDefault();
@@ -43,12 +44,19 @@ public sealed partial class ModsMethods
             {
                 null => null,
                 var s when s.StartsWith("file:", StringComparison.Ordinal) => OwnMapCopy(ws, mod, Path.GetRelativePath(mod.Dir, s[5..])),
-                var s when index is not null => SkinMaps.Write(s, install, index, Options.AssetReader, Path.Combine(PreviewsDir(ws, "portraits"), $"{s[5..]}.png")),
+                var s when index is not null => TryGamePortrait(s, install, index, Path.Combine(PreviewsDir(ws, "portraits"), $"{s[5..]}.png")),
                 _ => null,
             };
             var (width, height) = file is null ? (0, 0) : PngSize(file);
-            return new ModPortraitDto(r.Slot, file, r.Own, r.Rendered, width, height);
+            return new ModPortraitDto(r.Slot, file, r.Own, r.Rendered, width, height, r.Inherited);
         }).ToList());
+    }
+
+    /// <summary>A game texture as a file; one the reader cannot decode shows nothing instead of failing the whole call.</summary>
+    private string? TryGamePortrait(string source, GameInstall install, AssetIndex index, string png)
+    {
+        try { return SkinMaps.Write(source, install, index, Options.AssetReader, png); }
+        catch (Exception ex) when (ex is TyrantException { Code: TyrantErrorCode.AssetUnreadable } or IOException or InvalidDataException) { return null; }
     }
 
     private static Dictionary<string, PortraitSource?> Sources(IReadOnlyDictionary<string, ModPortraitSourceDto?> set) =>

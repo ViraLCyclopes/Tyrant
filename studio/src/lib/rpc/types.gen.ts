@@ -647,6 +647,7 @@ export interface ModPortraitDto {
   rendered: boolean;
   width: number;
   height: number;
+  inherited?: boolean;
 }
 
 export interface ModPortraitSourceDto {

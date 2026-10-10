@@ -113,5 +113,27 @@ public class ModPortraitsTests
         var shown = ShownPortraits.ForSkin(mod, skin, based: null);
 
         Assert.Equal((false, true), (shown[8].Own, shown[8].Source!.EndsWith("infant.png")));
+        Assert.True(shown[8].Inherited);
+        Assert.False(shown[0].Inherited);
+    }
+
+    [Fact]
+    public void A_missing_png_in_a_later_slot_writes_nothing_and_leaves_mod_json_unchanged()
+    {
+        var (game, ws, mod) = ModEditTests.Setup();
+        using var _ = game;
+        mod = ModEditTests.WithSkins(ws, mod);
+        var art = ModEditTests.Png(Path.Combine(ws.Dir, "art"), "male.png");
+        var before = File.ReadAllText(Path.Combine(mod.Dir, "mod.json"));
+
+        var ex = Assert.Throws<TyrantException>(() => mod.SetPortraits("blue", new Dictionary<string, PortraitSource?>
+        {
+            ["adultMale"] = new(Png: art),
+            ["infant"] = new(Png: Path.Combine(ws.Dir, "art", "missing.png")),
+        }));
+
+        Assert.Contains("does not exist", ex.Message);
+        Assert.False(Directory.Exists(Path.Combine(mod.Dir, "skins", "blue", "portraits")));
+        Assert.Equal(before, File.ReadAllText(Path.Combine(mod.Dir, "mod.json")));
     }
 }

@@ -3,7 +3,7 @@ using Tyrant.Framework.Core;
 namespace Tyrant.Core.Mods;
 
 /// <summary>One portrait as the game will show it: the mod's own file, else the base skin's game texture; null when neither exists.</summary>
-public sealed record ShownPortrait(string Slot, string? Source, bool Own, bool Rendered);
+public sealed record ShownPortrait(string Slot, string? Source, bool Own, bool Rendered, bool Inherited = false);
 
 /// <summary>What each of a skin's 12 portraits will show in game ("file:&lt;path&gt;", "guid:&lt;texture guid&gt;", or null).</summary>
 public static class ShownPortraits
@@ -22,7 +22,7 @@ public static class ShownPortraits
         PortraitSlots.All.Select(slot =>
         {
             if (own is not null && own.TryGetValue(slot, out var file)) return new ShownPortrait(slot, "file:" + Path.Combine(mod.Dir, file), true, PortraitSlots.IsRendered(file));
-            if (inherited is not null && inherited.TryGetValue(slot, out var parent)) return new ShownPortrait(slot, "file:" + Path.Combine(mod.Dir, parent), false, false);
+            if (inherited is not null && inherited.TryGetValue(slot, out var parent)) return new ShownPortrait(slot, "file:" + Path.Combine(mod.Dir, parent), false, false, Inherited: true);
             return new ShownPortrait(slot, based is not null && based.Portraits.TryGetValue(slot, out var guid) ? "guid:" + guid : null, false, false);
         }).ToList();
 }

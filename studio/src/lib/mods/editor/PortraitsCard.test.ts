@@ -56,6 +56,15 @@ describe('PortraitsCard', () => {
     expect(screen.getByRole('button', { name: 'Clear Infant, Normal' })).toBeDisabled(); // the game's: nothing to clear
   });
 
+  it('tags a picture inherited from the species as species, not game, and keeps Clear disabled', async () => {
+    await setup(modDetail(), false, () => ({ portraits: [{ slot: 'infant', file: 'species/infant.png', own: false, rendered: false, width: 128, height: 64, inherited: true }] }));
+
+    expect(await screen.findByRole('img', { name: 'Infant, Normal (species)' })).toBeInTheDocument();
+    expect(screen.getByText('species')).toBeInTheDocument();
+    expect(screen.queryByText('game')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Clear Infant, Normal' })).toBeDisabled();
+  });
+
   it('notes the row the game never shows on a male-only skin', async () => {
     const detail = modDetail();
     detail.skins[0] = { ...detail.skins[0], female: null };
