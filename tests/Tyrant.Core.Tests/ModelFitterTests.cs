@@ -75,6 +75,49 @@ public class ModelFitterTests
     }
 
     [Fact]
+    public void A_mesh_written_in_another_frame_is_put_back_in_the_games()
+    {
+        // Blender, given a prefab whose bind poses are scaled (Panthera atrox), writes the mesh upright and rescaled, with
+        // bind matrices to match: every bone agrees on the same turn and scale against the game's.
+        var frame = Matrix4x4.CreateRotationX(MathF.PI / 2) * Matrix4x4.CreateScale(1.049f);
+        Matrix4x4.Invert(frame, out var unframe);
+        var game = ModelFixture.Triangle(name: "Carch_LOD00");
+        var file = Imported(binds: [.. game.BindPoses.Select(b => frame * b)],
+            shapes: [new BlendShape("Infant", [1], [Vector3.TransformNormal(new Vector3(0, 0.5f, 0), unframe)], [Vector3.Zero])]);
+        for (var v = 0; v < 3; v++)
+        {
+            file.Mesh.Positions[v] = Vector3.Transform(game.Positions[v], unframe);
+            file.Mesh.Normals[v] = Vector3.Normalize(Vector3.TransformNormal(game.Normals[v], unframe));
+        }
+
+        var fit = ModelFitter.Fit(file, Game, ["Carch"]);
+
+        Assert.Empty(fit.Errors);
+        Assert.Empty(fit.Warnings); // the bones agree with the game's once the frame is undone
+        for (var v = 0; v < 3; v++)
+        {
+            Assert.True(Vector3.Distance(game.Positions[v], fit.Mesh!.Positions[v]) < 1e-5f, $"vertex {v}: {fit.Mesh.Positions[v]}");
+            Assert.True(Vector3.Distance(game.Normals[v], fit.Mesh.Normals[v]) < 1e-5f, $"normal {v}: {fit.Mesh.Normals[v]}");
+        }
+        Assert.True(Vector3.Distance(new Vector3(0, 0.5f, 0), fit.Mesh!.BlendShapes[0].PositionDeltas[0]) < 1e-5f);
+        Assert.Equal(game.Indices, fit.Mesh.Indices);
+    }
+
+    [Fact]
+    public void A_mirrored_frame_keeps_the_faces_outward()
+    {
+        var frame = Matrix4x4.CreateScale(-1, 1, 1);
+        var game = ModelFixture.Triangle(name: "Carch_LOD00");
+        var file = Imported(binds: [.. game.BindPoses.Select(b => frame * b)]);
+        for (var v = 0; v < 3; v++) file.Mesh.Positions[v] = Vector3.Transform(game.Positions[v], frame);
+
+        var fit = ModelFitter.Fit(file, Game, ["Carch"]);
+
+        Assert.Equal(game.Positions, fit.Mesh!.Positions);
+        Assert.Equal([0u, 2u, 1u], fit.Mesh.Indices); // mirrored back, so each triangle's winding turns too
+    }
+
+    [Fact]
     public void A_moved_rest_pose_is_a_warning()
     {
         var moved = Imported(binds: [Matrix4x4.CreateTranslation(0.3f, 0, 0), ModelFixture.Triangle().BindPoses[1]]);

@@ -37,17 +37,20 @@ public static class ModelFitter
             .Where(p => p.Item2 > 0).Select(p => p.Item1).ToHashSet();
         var map = new int[imported.JointNames.Length];
         for (var j = 0; j < map.Length; j++) map[j] = gameBones.TryGetValue(imported.JointNames[j], out var index) ? index : -1;
+        var frame = FileFrame(imported, map, binds);
+        Matrix4x4.Invert(frame, out var unframe);
         var skin = KeepGameBones(imported, mesh, map, used, errors, warnings);
         for (var j = 0; j < map.Length; j++)
         {
             if (map[j] < 0 || !used.Contains(j) || map[j] >= binds.Length) continue;
-            if (bindPoses is null && !Near(imported.InverseBinds[j], binds[map[j]]))
+            var inverseBind = unframe * imported.InverseBinds[j]; // as the bone sees the mesh once it is in the game's frame
+            if (bindPoses is null && !Near(inverseBind, binds[map[j]]))
             {
                 warnings.Add($"The rest pose of bone '{imported.JointNames[j]}' differs from the game's; the game's animations may bend this mesh oddly (keep the armature as exported).");
                 break;
             }
             // Blender's rest pose cannot hold a bone's scale, so against a rig edit only places and directions are compared.
-            if (bindPoses is not null && !NearIgnoringScale(imported.InverseBinds[j], binds[map[j]]))
+            if (bindPoses is not null && !NearIgnoringScale(inverseBind, binds[map[j]]))
             {
                 warnings.Add($"The rest pose of bone '{imported.JointNames[j]}' differs from the edited skeleton (rig edit); the game's animations may bend this mesh oddly.");
                 break;
@@ -60,8 +63,9 @@ public static class ModelFitter
         for (var s = 0; s < game.Mesh.BlendShapes.Length; s++)
         {
             var name = game.Mesh.BlendShapes[s].Name;
-            if (byName.TryGetValue(name, out var shape))
+            if (byName.TryGetValue(name, out var found))
             {
+                var shape = ToGameFrame(found, frame);
                 shapes.Add(shape);
                 if (s < GrowthKeys && MeanDelta(shape) > MeanDelta(game.Mesh.BlendShapes[s]) * GrowthDeltaFactor + 1e-4f)
                     warnings.Add($"Shape key '{name}' moves the mesh much more than the game's, so the young animal will look misshapen. Sculpt or edit (Sculpt Mode or Edit Mode) with the Basis selected in Shape Keys and the growth keys follow it; if you also made the change with a growth key selected, it was applied twice.");
@@ -88,6 +92,7 @@ public static class ModelFitter
 
         if (errors.Count > 0) return new FitResult(null, errors, warnings);
 
+        var mirrored = frame.GetDeterminant() < 0;
         var indices = new List<uint>();
         var ordered = new List<SubMesh>();
         for (var g = 0; g < gameMaterialNames.Count; g++)
@@ -97,19 +102,69 @@ public static class ModelFitter
             {
                 if (order[m] != g) continue;
                 var sub = mesh.SubMeshes[m];
-                for (var k = 0; k < sub.IndexCount; k++) indices.Add((uint)(mesh.Indices[sub.FirstIndex + k] + sub.BaseVertex));
+                for (var k = 0; k < sub.IndexCount; k++)
+                {
+                    // a mirroring frame turns every face inside out unless each triangle's winding turns with it
+                    var corner = mirrored && k % 3 != 0 ? k + (k % 3 == 1 ? 1 : -1) : k;
+                    indices.Add((uint)(mesh.Indices[sub.FirstIndex + corner] + sub.BaseVertex));
+                }
             }
             ordered.Add(new SubMesh(first, indices.Count - first, 0));
         }
 
         var fitted = new MeshData
         {
-            Name = mesh.Name, Positions = mesh.Positions, Normals = mesh.Normals, Uv0 = mesh.Uv0, Colors = mesh.Colors,
+            Name = mesh.Name, Positions = Points(mesh.Positions, frame), Normals = Directions(mesh.Normals, frame, normalize: true),
+            Uv0 = mesh.Uv0, Colors = mesh.Colors,
             Skin = skin, Indices = [.. indices], SubMeshes = [.. ordered],
             BindPoses = binds, BlendShapes = [.. shapes],
         };
         return new FitResult(fitted, errors, warnings);
     }
+
+    /// <summary>
+    /// The frame the file's vertices are in, against the game's mesh, as most of its bones agree on (each bone's bind matrix in
+    /// the file against the game's). Blender writes some prefabs' meshes (scaled bind poses: Panthera atrox) upright and
+    /// rescaled in its own frame, with bind matrices to match; Maya or a ported mesh can do the same. Identity when as many
+    /// bones agree with the game's frame as with any other, so a moved bone or a rig edit never turns the whole mesh.
+    /// </summary>
+    internal static Matrix4x4 FileFrame(ImportedMesh imported, int[] map, Matrix4x4[] binds)
+    {
+        var frames = new List<Matrix4x4>();
+        for (var j = 0; j < map.Length && j < imported.InverseBinds.Length; j++)
+            if (map[j] >= 0 && map[j] < binds.Length && Matrix4x4.Invert(binds[map[j]], out var unbind))
+                frames.Add(imported.InverseBinds[j] * unbind);
+        var best = Matrix4x4.Identity;
+        var most = frames.Count(f => Near(f, Matrix4x4.Identity));
+        foreach (var f in frames)
+        {
+            var count = frames.Count(o => Near(o, f));
+            if (count > most) (best, most) = (f, count);
+        }
+        return best;
+    }
+
+    private static Vector3[] Points(Vector3[] points, Matrix4x4 frame) =>
+        frame.IsIdentity ? points : [.. points.Select(p => Vector3.Transform(p, frame))];
+
+    /// <summary>Normals (and their shape key deltas) turn with the frame; its scale is left out (uniform: only the turn).</summary>
+    private static Vector3[] Directions(Vector3[] directions, Matrix4x4 frame, bool normalize)
+    {
+        if (frame.IsIdentity) return directions;
+        Matrix4x4.Invert(frame, out var inverse);
+        var turn = Matrix4x4.Transpose(inverse);
+        var scale = MathF.Cbrt(MathF.Abs(turn.GetDeterminant()));
+        if (scale > 0) turn = Matrix4x4.Multiply(turn, 1f / scale);
+        return [.. directions.Select(d =>
+        {
+            var t = Vector3.TransformNormal(d, turn);
+            return normalize && t.LengthSquared() > 0 ? Vector3.Normalize(t) : t;
+        })];
+    }
+
+    private static BlendShape ToGameFrame(BlendShape shape, Matrix4x4 frame) => frame.IsIdentity ? shape
+        : new BlendShape(shape.Name, shape.VertexIndices, [.. shape.PositionDeltas.Select(d => Vector3.TransformNormal(d, frame))],
+            Directions(shape.NormalDeltas, frame, normalize: false));
 
     private static bool NearIgnoringScale(Matrix4x4 a, Matrix4x4 b)
     {
