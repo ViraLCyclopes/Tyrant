@@ -477,6 +477,7 @@ export interface ModAnimalDto {
   startingSkin?: number;
   startingSkinName?: string | null;
   swatch?: string | null;
+  portraits?: Record<string, string> | null;
 }
 
 export interface ModAnimalFieldDto {
@@ -637,6 +638,31 @@ export interface ModModelPreviewParams {
   id: string;
   target: string;
   skin?: string | null;
+}
+
+export interface ModPortraitDto {
+  slot: string;
+  file: string | null;
+  own: boolean;
+  rendered: boolean;
+  width: number;
+  height: number;
+}
+
+export interface ModPortraitSourceDto {
+  png?: string | null;
+  data?: string | null;
+  rendered?: boolean;
+}
+
+export interface ModPortraitsParams {
+  id: string;
+  skin?: string | null;
+  speciesId?: string | null;
+}
+
+export interface ModPortraitsResult {
+  portraits: ModPortraitDto[];
 }
 
 export interface ModPrefabFieldDto {
@@ -852,6 +878,13 @@ export interface ModSetDetailsParams {
   description?: string | null;
 }
 
+export interface ModSetPortraitsParams {
+  id: string;
+  revision: string;
+  skin: string;
+  set: Record<string, ModPortraitSourceDto>;
+}
+
 export interface ModSetPrefabFieldParams {
   id: string;
   revision: string;
@@ -906,6 +939,13 @@ export interface ModSetSpeciesParams {
   localization?: Record<string, string> | null;
 }
 
+export interface ModSetSpeciesPortraitsParams {
+  id: string;
+  revision: string;
+  speciesId: string;
+  set: Record<string, ModPortraitSourceDto>;
+}
+
 export interface ModSetSpeciesPrefabParams {
   id: string;
   revision: string;
@@ -951,6 +991,7 @@ export interface ModSkinDto {
   model?: string | null;
   rig?: ModRigBone[] | null;
   group?: string | null;
+  portraits?: Record<string, string> | null;
 }
 
 export interface ModSkinModel {
@@ -990,6 +1031,12 @@ export interface ModSoundDto {
 export interface ModSoundFilesDto {
   event: string;
   files: string[];
+}
+
+export interface ModSpeciesModelParams {
+  id: string;
+  speciesId: string;
+  sex?: string;
 }
 
 export interface ModSpeciesResult {
@@ -1340,6 +1387,7 @@ export interface RpcMethods {
   "mods.install": { params: ModIdParams; result: JobStarted };
   "mods.list": { params: void; result: ModsListResult };
   "mods.modelPreview": { params: ModModelPreviewParams; result: ModModelPreview };
+  "mods.portraits": { params: ModPortraitsParams; result: ModPortraitsResult };
   "mods.prefabFields": { params: ModPrefabFieldsParams; result: ModPrefabFields };
   "mods.rebuildModels": { params: ModRebuildModelsParams; result: ModDetail };
   "mods.remove": { params: ModIdParams; result: ModsListResult };
@@ -1360,11 +1408,13 @@ export interface RpcMethods {
   "mods.sampleColors": { params: ModSampleColorsParams; result: ModSampledColors };
   "mods.setColors": { params: ModSetColorsParams; result: ModDetail };
   "mods.setDetails": { params: ModSetDetailsParams; result: ModDetail };
+  "mods.setPortraits": { params: ModSetPortraitsParams; result: ModDetail };
   "mods.setPrefabField": { params: ModSetPrefabFieldParams; result: ModDetail };
   "mods.setSkinFile": { params: ModSetSkinFileParams; result: ModDetail };
   "mods.setSound": { params: ModSetSoundParams; result: ModDetail };
   "mods.setSpecies": { params: ModSetSpeciesParams; result: ModDetail };
   "mods.setSpeciesIcon": { params: ModSetSpeciesIconParams; result: ModDetail };
+  "mods.setSpeciesPortraits": { params: ModSetSpeciesPortraitsParams; result: ModDetail };
   "mods.setSpeciesPrefab": { params: ModSetSpeciesPrefabParams; result: ModDetail };
   "mods.setSpeciesStartingSkin": { params: ModSetSpeciesStartingSkinParams; result: ModDetail };
   "mods.setSpeciesSwatch": { params: ModSetSpeciesSwatchParams; result: ModDetail };
@@ -1372,6 +1422,7 @@ export interface RpcMethods {
   "mods.skinModel": { params: ModSkinModelParams; result: ModSkinModel };
   "mods.skinSlots": { params: void; result: SkinSlotsResult };
   "mods.species": { params: void; result: ModSpeciesResult };
+  "mods.speciesModel": { params: ModSpeciesModelParams; result: ModSkinModel };
   "mods.speciesTemplate": { params: ModSpeciesTemplateParams; result: ModSpeciesTemplateDto };
   "mods.speciesTextures": { params: ModSpeciesTexturesParams; result: ModSpeciesTexturesResult };
   "mods.thumbnail": { params: ModThumbnailParams; result: ModThumbnailResult };

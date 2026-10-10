@@ -284,17 +284,16 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
         var maps = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var slot in new[] { "diffuse", "normal", "extra", "pattern" })
             if (MapFile(ws, install, index, mod, skin, based, p.Sex, slot) is { } file) maps[slot] = file;
-        return new ModSkinModel(prefab.Ref, maps, OwnModelOf(mod, skin));
+        return new ModSkinModel(prefab.Ref, maps, OwnModelOf(mod, skin.Species, skin.Model is not null ? skin.Id : null));
     }
 
     /// <summary>The model the skin wears in this mod (its own, else the mod's species replacement); null when it is the game's or not built.</summary>
-    private ModSkinOwnModel? OwnModelOf(ModProject mod, Tyrant.Framework.Core.SkinEntry skin)
+    private ModSkinOwnModel? OwnModelOf(ModProject mod, string species, string? skinId)
     {
-        var skinId = skin.Model is not null ? skin.Id : null;
-        if (skinId is null && !mod.Manifest.Models.Any(m => m.Target == skin.Species)) return null;
+        if (skinId is null && !mod.Manifest.Models.Any(m => m.Target == species)) return null;
         try
         {
-            var preview = ModelPreview(new ModModelPreviewParams(mod.Id, skin.Species, skinId));
+            var preview = ModelPreview(new ModModelPreviewParams(mod.Id, species, skinId));
             // The game's animal-shader materials wear the skin's maps (the model page shows the game's own textures instead).
             return preview.Lods.Count == 0 ? null : new ModSkinOwnModel(preview.Lods[0].File, preview.Materials.Select(m => m with { Skinnable = m.Animal }).ToList());
         }
@@ -368,7 +367,7 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
                 return new ModSkinDto(s.Id, s.Key(m.Id), s.Species, s.Name, s.Base, s.Thumbnail, s.Male, s.Female,
                     s.Colors is null ? null : Tyrant.Framework.Core.Json.Write(s.Colors.ToJson()),
                     based is null ? null : ShaderSlots.Shown(based.Male.Keys.ToList(), shader),
-                    based is null ? null : ShaderSlots.Shown(based.Female.Keys.ToList(), shader), s.Model, ModRigBone.Of(s.Rig), s.Group);
+                    based is null ? null : ShaderSlots.Shown(based.Female.Keys.ToList(), shader), s.Model, ModRigBone.Of(s.Rig), s.Group, s.Portraits);
             }).ToList(),
             m.Models.Select(x => x.File.Length == 0
                     ? new ModModelDto(x.Target, null, "", [], [], [], false, null, false, ModRigBone.Of(x.Rig))

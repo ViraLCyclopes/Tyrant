@@ -5,7 +5,7 @@ namespace Tyrant.Rpc.Tests;
 
 public class ModEditorMethodsTests
 {
-    private static async Task<(RpcHarness H, string Ws)> Opened(FakeGame game)
+    internal static async Task<(RpcHarness H, string Ws)> Opened(FakeGame game)
     {
         var h = new RpcHarness(TestStudio.Options(dumperDir: TestStudio.FakeGameModsDir()));
         var ws = TestStudio.TempDir();
@@ -14,7 +14,7 @@ public class ModEditorMethodsTests
         return (h, ws);
     }
 
-    private static string Png(string dir, string name)
+    internal static string Png(string dir, string name)
     {
         Directory.CreateDirectory(dir);
         var path = Path.Combine(dir, name);
@@ -24,7 +24,7 @@ public class ModEditorMethodsTests
     }
 
     /// <summary>A mod with one skin whose male diffuse and pattern are the mod's own files.</summary>
-    private static async Task<JsonElement> WithSkin(RpcHarness h, string ws)
+    internal static async Task<JsonElement> WithSkin(RpcHarness h, string ws)
     {
         var dir = Path.Combine(ws, "mods", "red-spot");
         Png(Path.Combine(dir, "skins", "blue"), "male_D.png");
@@ -34,7 +34,7 @@ public class ModEditorMethodsTests
         return await h.Call("mods.get", new { id = "red-spot" });
     }
 
-    private static string Rev(JsonElement detail) => detail.GetProperty("revision").GetString()!;
+    internal static string Rev(JsonElement detail) => detail.GetProperty("revision").GetString()!;
 
     /// <summary>A mod with one skin on Carcharodontosaurus' "Alt 1" (male: diffuse, normal, pattern), with the data dump and an index holding the species prefab.</summary>
     private static async Task<(RpcHarness H, string Ws, FakeAssetReader Reader)> WithSkinAndPrefab(FakeGame game)

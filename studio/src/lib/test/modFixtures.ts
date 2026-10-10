@@ -16,10 +16,12 @@ export function modDetail(over: Partial<ModDetail> = {}): ModDetail {
       {
         id: 'blue', key: 'red-spot/blue', species: 'Carcharodontosaurus', name: 'Blue-green stripes', base: 'Alt 1', thumbnail: null,
         male: { diffuse: 'skins/blue/male_D.png' }, female: null, colorsJson: null, baseMaleSlots: ['diffuse', 'normal', 'pattern'], baseFemaleSlots: ['diffuse'],
+        portraits: null,
       },
       {
         id: 'red', key: 'red-spot/red', species: 'Carcharodontosaurus', name: 'Red spot', base: 'Base', thumbnail: null,
         male: { diffuse: 'skins/red/male_D.png' }, female: null, colorsJson: null, baseMaleSlots: null, baseFemaleSlots: null,
+        portraits: null,
       },
     ],
     models: [],

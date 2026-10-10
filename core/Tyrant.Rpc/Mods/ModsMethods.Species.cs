@@ -9,7 +9,8 @@ namespace Tyrant.Rpc.Mods;
 public sealed record ModAnimalDto(string Id, string Key, string Base, string Name, string Genus, string Epithet,
     int? Cost, IReadOnlyDictionary<string, double> Stats, int? InheritedCost, IReadOnlyDictionary<string, double> InheritedStats,
     IReadOnlyList<ModAnimalFieldDto> DataFields, IReadOnlyDictionary<string, string> Localization, string? Icon, SpeciesPrefab? Prefab,
-    int StartingSkin = 0, string? StartingSkinName = null, string? Swatch = null);
+    int StartingSkin = 0, string? StartingSkinName = null, string? Swatch = null,
+    IReadOnlyDictionary<string, string>? Portraits = null);
 public sealed record ModAnimalFieldDto(string Path, string Kind, string Value, string TemplateValue, bool Editable);
 public sealed record ModSetSpeciesIconParams(string Id, string Revision, string SpeciesId, string? Png = null);
 public sealed record ModSetSpeciesPrefabParams(string Id, string Revision, string SpeciesId, string? Bundle = null, string? Asset = null);
@@ -53,6 +54,35 @@ public sealed partial class ModsMethods
         return new ModUnityProjectDto(directory, Path.Combine(directory, "README.md"));
     }
 
+    [RpcMethod("mods.speciesModel")]
+    public ModSkinModel SpeciesModel(ModSpeciesModelParams p)
+    {
+        var (ws, install) = session.Current();
+        var mod = ModProject.Open(ws, p.Id);
+        var entry = mod.Manifest.Species.FirstOrDefault(s => s.Id == p.SpeciesId)
+            ?? throw new TyrantException(TyrantErrorCode.TargetNotFound, "Species not found: " + p.SpeciesId);
+        var key = entry.Key(mod.Id);
+        var species = TrySpeciesFor(ws, install, mod) ?? throw new TyrantException(TyrantErrorCode.DataMissing,
+            "The 3D view needs the game's data: on the Workspace tab click Run data dump (or run 'tyrant dump run').", FixAction.RefreshWorkspace);
+        var index = TryIndex(ws) ?? throw new TyrantException(TyrantErrorCode.AssetIndexMissing,
+            "The 3D view needs the asset index: on the Workspace tab click Index assets (or run 'tyrant assets index').", FixAction.ReindexAssets);
+        var row = species.FirstOrDefault(s => s.SpeciesId == key);
+        var prefab = (row?.PrefabGuid is { } guid ? index.Assets.FirstOrDefault(a => a.Type == "GameObject" && string.Equals(a.Guid, guid, StringComparison.OrdinalIgnoreCase)) : null)
+            ?? throw new TyrantException(TyrantErrorCode.TargetNotFound, $"'{entry.Base}' has no model in the asset index: on the Workspace tab click Index assets and try again.", FixAction.ReindexAssets);
+        var start = row!.Skins.FirstOrDefault();
+        var maps = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var slot in new[] { "diffuse", "normal", "extra", "pattern" })
+        {
+            var textures = p.Sex == "female" ? start?.Female : start?.Male;
+            var wanted = p.Sex == "infant" ? "infant" + char.ToUpperInvariant(slot[0]) + slot[1..] : slot;
+            var guidOf = textures is not null && textures.TryGetValue(wanted, out var g) ? g
+                : textures is not null && textures.TryGetValue(slot, out var adult) ? adult : null;
+            if (SkinMaps.Write(guidOf is null ? null : "guid:" + guidOf, install, index, Options.AssetReader,
+                    Path.Combine(PreviewsDir(ws, "skin-model"), $"{guidOf}.png")) is { } file) maps[slot] = file;
+        }
+        return new ModSkinModel(prefab.Ref, maps, OwnModelOf(mod, key, null));
+    }
+
     [RpcMethod("mods.animalDatabase")]
     public ModAnimalDatabase AnimalDatabase(ModIdParams p)
     {
@@ -64,7 +94,7 @@ public sealed partial class ModsMethods
             return new ModAnimalDto(s.Id, s.Key(mod.Id), s.Base, s.Name, s.Genus, s.Epithet, s.Cost, s.Stats,
                 inherited?.Cost, inherited?.Stats ?? new Dictionary<string, double>(),
                 (s.Fields.Count > 0 ? s.Fields : inherited?.Fields ?? []).Select(f => new ModAnimalFieldDto(f.Path, f.Kind, f.Value, f.TemplateValue, f.Editable)).ToList(),
-                s.Localization, s.Icon, s.Prefab, s.StartingSkin, s.StartingSkinName, s.Swatch);
+                s.Localization, s.Icon, s.Prefab, s.StartingSkin, s.StartingSkinName, s.Swatch, s.Portraits.Count == 0 ? null : s.Portraits);
         }).ToList(), SpeciesStats.Fields.Select(f => new ModStatDto(f.Id, f.Label, f.Unit, f.Min, f.Max)).ToList());
     }
 

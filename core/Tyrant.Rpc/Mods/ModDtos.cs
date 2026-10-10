@@ -60,7 +60,17 @@ public sealed record ModForgetSkinsParams(IReadOnlyList<string> Keys);
 public sealed record ModSkinDto(string Id, string Key, string Species, string Name, string Base, string? Thumbnail,
     IReadOnlyDictionary<string, string>? Male, IReadOnlyDictionary<string, string>? Female, string? ColorsJson,
     IReadOnlyList<string>? BaseMaleSlots, IReadOnlyList<string>? BaseFemaleSlots, string? Model = null, IReadOnlyList<ModRigBone>? Rig = null,
-    string? Group = null);
+    string? Group = null, IReadOnlyDictionary<string, string>? Portraits = null);
+
+/// <summary>One portrait to set: a PNG file path, or base64 PNG data (Rendered: made by the app from the 3D view). Null resets the slot.</summary>
+public sealed record ModPortraitSourceDto(string? Png = null, string? Data = null, bool Rendered = false);
+public sealed record ModSetPortraitsParams(string Id, string Revision, string Skin, IReadOnlyDictionary<string, ModPortraitSourceDto?> Set);
+public sealed record ModSetSpeciesPortraitsParams(string Id, string Revision, string SpeciesId, IReadOnlyDictionary<string, ModPortraitSourceDto?> Set);
+public sealed record ModPortraitsParams(string Id, string? Skin = null, string? SpeciesId = null);
+/// <summary>What a portrait slot shows: File is a path in the preview cache the app may load (null when nothing); Width/Height 0 when unknown.</summary>
+public sealed record ModPortraitDto(string Slot, string? File, bool Own, bool Rendered, int Width, int Height);
+public sealed record ModPortraitsResult(IReadOnlyList<ModPortraitDto> Portraits);
+public sealed record ModSpeciesModelParams(string Id, string SpeciesId, string Sex = "male");
 
 /// <summary>One bone of a rig edit (Unity space, parent-relative): move x,y,z; rotate x,y,z,w; scale x,y,z.</summary>
 public sealed record ModRigBone(string Bone, float[] Move, float[] Rotate, float[] Scale)
