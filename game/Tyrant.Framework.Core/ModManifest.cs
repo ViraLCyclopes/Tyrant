@@ -163,6 +163,19 @@ namespace Tyrant.Framework.Core
         public string Key(string modId) => modId + "/" + Id;
     }
 
+    /// <summary>mod.json "textures": how Tyrant compresses the mod's textures when it cooks them (install, export).</summary>
+    public sealed class TextureSettings
+    {
+        public TextureCompression Compression { get; set; } = TextureCompression.Auto;
+
+        /// <summary>File (relative to the mod, as mod.json names it) → its own compression.</summary>
+        public Dictionary<string, TextureCompression> Overrides { get; } = new Dictionary<string, TextureCompression>(StringComparer.OrdinalIgnoreCase);
+
+        public TextureCompression For(string file) => Overrides.TryGetValue(file.Replace('\\', '/'), out var mode) ? mode : Compression;
+
+        internal bool IsDefault => Compression == TextureCompression.Auto && Overrides.Count == 0;
+    }
+
     /// <summary>A mod's mod.json: who it is, what it needs, and what each content module should do.</summary>
     public sealed class ModManifest
     {
@@ -194,6 +207,9 @@ namespace Tyrant.Framework.Core
         public List<ModelReplacement> Models { get; } = new List<ModelReplacement>();
 
         public List<SoundReplacement> Sounds { get; } = new List<SoundReplacement>();
+
+        /// <summary>mod.json "textures"; never null (absent = auto everywhere).</summary>
+        public TextureSettings Textures { get; } = new TextureSettings();
 
         public static ModManifest Parse(string json) => Parse(json, null);
 
@@ -289,6 +305,17 @@ namespace Tyrant.Framework.Core
                     skippedSkins.Add($"\"skins\" entry {n} was skipped: {ex.Message}");
                 }
             }
+            try
+            {
+                ParseTextures(map, manifest.Textures);
+            }
+            catch (ManifestException ex) when (skippedSkins != null)
+            {
+                // The game ignores it: compression only matters to Tyrant when it cooks.
+                manifest.Textures.Compression = TextureCompression.Auto;
+                manifest.Textures.Overrides.Clear();
+                skippedSkins.Add("\"textures\" was ignored: " + ex.Message);
+            }
             if (map.ContainsKey("species")) throw new ManifestException("Species definitions belong in animals.db, not mod.json.");
             return manifest;
         }
@@ -376,7 +403,29 @@ namespace Tyrant.Framework.Core
                     if (s.Colors != null) entry["colors"] = s.Colors.ToJson();
                     return (object?)entry;
                 }).ToList();
+            if (!Textures.IsDefault)
+            {
+                var block = new Dictionary<string, object?> { ["compression"] = TextureCompressions.Name(Textures.Compression) };
+                if (Textures.Overrides.Count > 0)
+                    block["overrides"] = Textures.Overrides.OrderBy(o => o.Key, StringComparer.Ordinal)
+                        .ToDictionary(o => o.Key, o => (object?)TextureCompressions.Name(o.Value));
+                map["textures"] = block;
+            }
             return Json.Write(map) + "\n";
+        }
+
+        private static void ParseTextures(Dictionary<string, object?> map, TextureSettings settings)
+        {
+            if (!map.TryGetValue("textures", out var value) || value == null) return;
+            if (!(value is Dictionary<string, object?> block)) throw new ManifestException("\"textures\" must be an object with \"compression\" and \"overrides\".");
+            if (block.TryGetValue("compression", out var compression) && compression != null)
+                settings.Compression = TextureCompressions.Parse(compression as string)
+                    ?? throw new ManifestException($"\"textures.compression\" must be \"auto\" or \"bc7\" (got {Json.Write(compression)}).");
+            if (!block.TryGetValue("overrides", out var overrides) || overrides == null) return;
+            if (!(overrides is Dictionary<string, object?> files)) throw new ManifestException("\"textures.overrides\" must map texture files to \"auto\" or \"bc7\".");
+            foreach (var pair in files)
+                settings.Overrides[pair.Key.Replace('\\', '/')] = TextureCompressions.Parse(pair.Value as string)
+                    ?? throw new ManifestException($"\"textures.overrides\" for \"{pair.Key}\" must be \"auto\" or \"bc7\".");
         }
 
         private static SoundReplacement ParseSound(object? item, int n)

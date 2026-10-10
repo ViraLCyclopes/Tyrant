@@ -123,6 +123,25 @@ A skin can set its own colours in a `colors` section. Every part is optional; an
 - **Blue and alpha** of both maps are unused.
 - **Diffuse alpha:** below 50% is cut away (feathers and hair).
 
+## Texture compression (`textures`)
+
+Tyrant compresses ("cooks") every skin texture and texture replacement when it installs or exports the mod, into one
+file, `textures.tpack`, next to mod.json. The game then loads each texture ready-made instead of decoding the PNG. The
+PNGs stay the mod's source; never edit `textures.tpack` by hand (Tyrant rewrites it, and the game ignores an entry whose
+PNG changed and uses the PNG instead).
+
+```json
+"textures": {
+  "compression": "auto",
+  "overrides": { "skins/red-spot/male_D.png": "bc7" }
+}
+```
+
+- `compression`: `auto` (default) matches the game — DXT1 for opaque colour and masks, DXT5 for textures with
+  transparency and for normal maps. `bc7` is best quality at the size of DXT5 (twice DXT1).
+- `overrides`: one texture's own setting (file as written in `replace` or a skin slot).
+- Thumbnails, portraits and species icons are not cooked.
+
 ## Models (replacing an animal's mesh)
 
 ```json

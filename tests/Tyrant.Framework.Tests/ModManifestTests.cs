@@ -87,4 +87,42 @@ public class ModManifestTests
     {
         Assert.Equal(valid, ModId.IsValid(id));
     }
+
+    [Fact]
+    public void Texture_compression_round_trips_and_is_left_out_when_default()
+    {
+        var plain = ModManifest.Parse("""{"format":1,"id":"red-spot"}""");
+        Assert.Equal(TextureCompression.Auto, plain.Textures.Compression);
+        Assert.Empty(plain.Textures.Overrides);
+        Assert.DoesNotContain("\"textures\"", plain.ToJson());
+
+        var json = """{"format":1,"id":"red-spot","textures":{"compression":"bc7","overrides":{"skins/blue/male_N.png":"auto","skins/blue/male_D.png":"bc7"}}}""";
+        var parsed = ModManifest.Parse(json);
+        Assert.Equal(TextureCompression.Bc7, parsed.Textures.Compression);
+        Assert.Equal(TextureCompression.Auto, parsed.Textures.For("SKINS/blue/male_N.png")); // paths match in any case
+        Assert.Equal(TextureCompression.Bc7, parsed.Textures.For("textures/other.png")); // the default
+
+        var again = ModManifest.Parse(parsed.ToJson());
+        Assert.Equal(TextureCompression.Bc7, again.Textures.Compression);
+        Assert.Equal(2, again.Textures.Overrides.Count);
+        Assert.True(parsed.ToJson().IndexOf("male_D", StringComparison.Ordinal) < parsed.ToJson().IndexOf("male_N", StringComparison.Ordinal)); // sorted, stable diffs
+    }
+
+    [Theory]
+    [InlineData("""{"compression":"BC7"}""", "textures.compression")]
+    [InlineData("""{"compression":"dxt1"}""", "textures.compression")]
+    [InlineData("""{"overrides":{"a.png":"fast"}}""", "a.png")]
+    [InlineData("""{"overrides":["a.png"]}""", "overrides")]
+    [InlineData("\"bc7\"", "textures")]
+    public void A_bad_textures_block_is_an_error_for_tyrant_and_ignored_in_game(string block, string named)
+    {
+        var json = $$"""{"format":1,"id":"red-spot","textures":{{block}}}""";
+        Assert.Contains(named, Assert.Throws<ManifestException>(() => ModManifest.Parse(json)).Message);
+
+        var messages = new List<string>();
+        var inGame = ModManifest.Parse(json, messages);
+        Assert.Equal(TextureCompression.Auto, inGame.Textures.Compression);
+        Assert.Empty(inGame.Textures.Overrides);
+        Assert.Contains(messages, m => m.Contains("\"textures\" was ignored"));
+    }
 }
