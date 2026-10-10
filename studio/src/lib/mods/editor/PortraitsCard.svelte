@@ -9,19 +9,26 @@
   let { doc, target }: { doc: ModDoc; target: Target } = $props();
   const session = getSession();
   const tab = getTab();
-  let shown = $state<ModPortraitDto[]>([]);
 
   /** Row index the game never shows: female on a male-only skin, male on a female-only one. */
   const unusedRow = $derived('skin' in target ? (!target.skin.female ? 1 : !target.skin.male ? 0 : -1) : -1);
 
-  // Follows saves, undo and replaced files.
+  const targetKey = $derived('skin' in target ? `skin:${target.skin.id}` : `species:${target.speciesId}`);
+  let loaded = $state<{ key: string; rows: ModPortraitDto[] } | null>(null);
+  const shown = $derived(loaded?.key === targetKey ? loaded.rows : []);
+  const loading = $derived(loaded?.key !== targetKey);
+
+  // Follows saves, undo and replaced files; only the latest request may set the rows.
   $effect(() => {
     void doc.detail?.revision;
     void doc.detail?.filesStamp;
+    const key = targetKey;
     const params = 'skin' in target ? { id: doc.id, skin: target.skin.id } : { id: doc.id, speciesId: target.speciesId };
+    let stale = false;
     void tab.quietly(() => session.rpc.call('mods.portraits', params)).then((r) => {
-      if (r) shown = r.portraits;
+      if (r && !stale) loaded = { key, rows: r.portraits };
     });
+    return () => { stale = true; };
   });
 
   function set(slot: string, value: { png: string } | null) {
@@ -40,7 +47,8 @@
 <section class="card">
   <h2>Portraits</h2>
   <p class="hint">The pictures in the animal's info panel, the Nursery and the nest. Empty slots show the game's.</p>
-  <div class="grid" role="table" aria-label="Portraits">
+  {#if loading}<p class="hint">Loading…</p>{/if}
+  <div class="grid" role="group" aria-label="Portraits">
     <span></span>
     {#each PORTRAIT_COLUMNS as column (column)}<span class="head">{column}</span>{/each}
     {#each PORTRAIT_ROWS as row, r (row)}
@@ -55,13 +63,13 @@
           {:else}
             <span class="empty">Game portrait</span>
           {/if}
-          {#if !p?.own}<span class="tag">game</span>{/if}
+          {#if p?.file && !p.own}<span class="tag">game</span>{/if}
           {#if p?.own && p.width > 0 && !isTwoToOne(p.width, p.height)}
             <span class="warn">The game shows portraits at 2:1 (128×64); this one will be stretched.</span>
           {/if}
           <div class="buttons">
-            <button aria-label="Choose PNG for {label}" onclick={() => choose(slot, label)}>Choose PNG…</button>
-            <button aria-label="Clear {label}" disabled={!p?.own} onclick={() => set(slot, null)}>Clear</button>
+            <button aria-label="Choose PNG for {label}" disabled={loading} onclick={() => choose(slot, label)}>Choose PNG…</button>
+            <button aria-label="Clear {label}" disabled={loading || !p?.own} onclick={() => set(slot, null)}>Clear</button>
           </div>
         </div>
       {/each}

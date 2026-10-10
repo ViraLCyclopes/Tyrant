@@ -18,11 +18,11 @@ const rows = PORTRAIT_SLOTS.map((slot) => {
   return { slot, file: null, own: false, rendered: false, width: 0, height: 0 };
 });
 
-async function setup(detail = modDetail(), species = false) {
+async function setup(detail = modDetail(), species = false, portraits: () => unknown = () => ({ portraits: rows })) {
   const rpc = new FakeRpc()
     .on('mods.get', () => detail)
     .on('mods.check', () => ({ errors: [], warnings: [], missingCutouts: [] }))
-    .on('mods.portraits', () => ({ portraits: rows }));
+    .on('mods.portraits', portraits as never);
   const platform = new FakePlatform();
   const session = new Session(rpc, platform, memoryStore());
   const tab = new Tab('tab-mod', session.log, { retitle: () => {}, openTool: () => null });
@@ -68,5 +68,30 @@ describe('PortraitsCard', () => {
     await fireEvent.click(await screen.findByRole('button', { name: 'Choose PNG for Adult male, Normal' }));
     await waitFor(() => expect(rpc.callsTo('mods.setSpeciesPortraits')[0]?.params).toMatchObject({ speciesId: 'example-animal', set: { adultMale: { png: 'D:\art\male.png' } } }));
     expect(doc.canUndo).toBe(false);
+  });
+
+  it('notes the male row on a female-only skin', async () => {
+    const detail = modDetail();
+    detail.skins[0] = { ...detail.skins[0], male: null, female: { diffuse: 'skins/blue/female_D.png' } } as never;
+    await setup(detail);
+    const note = await screen.findByText('The game never shows this row for this skin.');
+    expect(note.closest('span')?.textContent).toMatch(/^Adult male/);
+  });
+
+  it('shows a loading state with disabled buttons and no game tags until the rows arrive, and keeps the newest answer', async () => {
+    const pending: ((v: unknown) => void)[] = [];
+    const { doc } = await setup(modDetail(), false, () => new Promise((res) => pending.push(res)));
+    expect(screen.getByText('Loading…')).toBeInTheDocument();
+    expect(screen.queryByText('game')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Choose PNG for Adult male, Normal' })).toBeDisabled();
+
+    doc.detail = { ...doc.detail!, revision: 'r2' }; // a second request starts while the first is slow
+    await waitFor(() => expect(pending.length).toBe(2));
+    pending[1]({ portraits: rows });
+    expect(await screen.findByRole('img', { name: 'Adult male, Normal (this mod)' })).toBeInTheDocument();
+    pending[0]({ portraits: rows.map((r) => ({ ...r, file: null, own: false })) }); // the late, older answer
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.getByRole('img', { name: 'Adult male, Normal (this mod)' })).toBeInTheDocument();
+    expect(screen.queryByText('Loading…')).toBeNull();
   });
 });
