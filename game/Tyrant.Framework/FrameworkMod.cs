@@ -81,6 +81,7 @@ namespace Tyrant.Framework
             PrefabModule.Start(plan.Mods);
             SpawnHook.Start(HarmonyInstance);
             SkinsModule.Prepare(plan.Mods);
+            PortraitModule.Start(plan.Mods, HarmonyInstance);
             ModelModule.Start(plan.Mods);
             if (ModelModule.HasModels) RigModule.Start(HarmonyInstance);
             HeadRigModule.Start(plan.Mods, HarmonyInstance);

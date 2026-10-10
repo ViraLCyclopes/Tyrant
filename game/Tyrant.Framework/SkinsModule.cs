@@ -12,15 +12,6 @@ using UnityEngine;
 
 namespace Tyrant.Framework
 {
-    internal sealed class ReferenceComparer : IEqualityComparer<object>
-    {
-        public static readonly ReferenceComparer Instance = new ReferenceComparer();
-
-        public new bool Equals(object x, object y) => ReferenceEquals(x, y);
-
-        public int GetHashCode(object obj) => RuntimeHelpers.GetHashCode(obj);
-    }
-
     /// <summary>
     /// Adds the mods' skins to their species once the game's animal database exists: each is a copy of its base skin appended
     /// at its permanent number (skin-slots.json); numbers whose mod is gone get a hidden stand-in (a copy of skin 0).
@@ -281,6 +272,7 @@ namespace Tyrant.Framework
             SkinColorsModule.Apply(skin, entry, entry.Key(mod.Manifest.Id)); // its own variation assets when it has "colors"
             var thumbnail = Thumbnail(mod, entry);
             if (thumbnail != null) Traverse.Create(skin).Field("skinThumbnail").SetValue(thumbnail);
+            PortraitModule.Register(skin, mod.Directory, entry.Portraits, inheritFrom: baseSkin);
             return skin;
         }
 

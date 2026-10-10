@@ -163,6 +163,7 @@ namespace Tyrant.Framework
                     if (entry.StartingSkinName != null) Set(skin, "skinName", entry.StartingSkinName);
                     if (entry.Swatch != null) Set(skin, "skinThumbnail", LoadSprite(mod.Directory, entry.Swatch, id + ".swatch"));
                     skins.Add(skin);
+                    PortraitModule.Register(skin, mod.Directory, entry.Portraits);
                     Set(data, "skinsData", skins);
                     var nativeId = AccessTools.Field(data.GetType(), "NativeSpeciesID") ?? throw new MissingFieldException("NativeSpeciesID");
                     nativeId.SetValue(data, Activator.CreateInstance(nativeId.FieldType, new object[] { (ushort)list.Count }));
