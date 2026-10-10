@@ -3,6 +3,7 @@ import {
   Camera,
   Color3,
   Color4,
+  CreateScreenshotUsingRenderTargetAsync,
   CubeTexture,
   DirectionalLight,
   Engine,
@@ -67,6 +68,12 @@ export interface ModelViewer {
   setSky(faces: string[] | null): void;
   /** Centres the model in the view, keeping the angle (Home / numpad .). */
   frame(): void;
+  /** Facing left, three-quarter front, slightly above (the game's portraits), filling a 2:1 frame. */
+  portraitView(): void;
+  /** Shows the baby shape: the first morph target of each mesh at weight 1 (the game's growth key), or 0. */
+  setInfant(on: boolean): void;
+  /** Renders the current view to a transparent PNG (ground and sky hidden); base64 without the data: prefix. */
+  renderPortrait(width: number, height: number): Promise<string>;
   /** Stops drawing (the tab is hidden); resume starts again. */
   pause(): void;
   resume(): void;
@@ -262,6 +269,36 @@ async function build(canvas: HTMLCanvasElement, models: ModelFile[], options: Vi
     fitOrtho();
   };
 
+  // Starting guesses: still to be checked against port_AlloA_adult_m_skin0.png (head direction, elevation).
+  const PORTRAIT_ALPHA = (3 * Math.PI) / 4;
+  const PORTRAIT_BETA = Math.PI / 2.6;
+  const portraitView = () => {
+    camera.alpha = PORTRAIT_ALPHA;
+    camera.beta = PORTRAIT_BETA;
+    camera.setTarget(center.clone(), false, false, true);
+    camera.radius = orthoRadius = span * 0.75; // a 2:1 frame is wide: the animal fills it closer than frame()'s 1.2
+    fitOrtho();
+  };
+  const setInfant = (on: boolean) => {
+    for (const mesh of scene.meshes) {
+      const manager = mesh.morphTargetManager;
+      if (manager && manager.numTargets > 0) manager.getTarget(0).influence = on ? 1 : 0; // shape key 0: the game's baby key
+    }
+  };
+  const renderPortrait = async (width: number, height: number) => {
+    const clear = scene.clearColor;
+    const shown = [ground, sky].filter((m): m is Mesh => !!m && m.isEnabled());
+    scene.clearColor = new Color4(0, 0, 0, 0);
+    for (const m of shown) m.setEnabled(false);
+    try {
+      const url = await CreateScreenshotUsingRenderTargetAsync(engine, camera, { width, height }, 'image/png', 4, true);
+      return url.slice(url.indexOf(',') + 1);
+    } finally {
+      scene.clearColor = clear;
+      for (const m of shown) m.setEnabled(true);
+    }
+  };
+
   // Blender-style input instead of Babylon's default camera controls (no attachControl).
   canvas.tabIndex = 0; // numpad views need keyboard focus
   let drag: { mode: DragMode; x: number; y: number } | null = null;
@@ -356,6 +393,9 @@ async function build(canvas: HTMLCanvasElement, models: ModelFile[], options: Vi
     setGround,
     setSky,
     frame,
+    portraitView,
+    setInfant,
+    renderPortrait,
     pause: () => engine.stopRenderLoop(),
     resume: () => {
       engine.stopRenderLoop(); // never two loops
