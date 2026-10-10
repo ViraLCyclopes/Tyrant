@@ -269,7 +269,7 @@ async function build(canvas: HTMLCanvasElement, models: ModelFile[], options: Vi
     fitOrtho();
   };
 
-  // Starting guesses: still to be checked against port_AlloA_adult_m_skin0.png (head direction, elevation).
+  // Starting guesses: checking head direction and elevation against port_AlloA_adult_m_skin0.png is deferred to a manual check with the user.
   const PORTRAIT_ALPHA = (3 * Math.PI) / 4;
   const PORTRAIT_BETA = Math.PI / 2.6;
   const portraitView = () => {
@@ -290,12 +290,20 @@ async function build(canvas: HTMLCanvasElement, models: ModelFile[], options: Vi
     const shown = [ground, sky].filter((m): m is Mesh => !!m && m.isEnabled());
     scene.clearColor = new Color4(0, 0, 0, 0);
     for (const m of shown) m.setEnabled(false);
+    if (ortho) {
+      const e = orthoExtents(orthoRadius, camera.fov, width / height); // the canvas aspect would mis-frame the 2:1 shot
+      camera.orthoTop = e.top;
+      camera.orthoBottom = e.bottom;
+      camera.orthoLeft = e.left;
+      camera.orthoRight = e.right;
+    }
     try {
       const url = await CreateScreenshotUsingRenderTargetAsync(engine, camera, { width, height }, 'image/png', 4, true);
       return url.slice(url.indexOf(',') + 1);
     } finally {
       scene.clearColor = clear;
       for (const m of shown) m.setEnabled(true);
+      fitOrtho(); // back to the canvas aspect (no-op in perspective)
     }
   };
 
