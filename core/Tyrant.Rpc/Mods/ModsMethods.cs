@@ -89,7 +89,8 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
                 Options.Installer().Install(install, zip, Options.DumperDir);
             }
             progress.Report(new JobProgress(0.8, $"Installing {p.Id}"));
-            Game.Install(install, mod);
+            var cooker = Cooker(ws, install, mod);
+            Game.Install(install, mod, staging => cooker.WritePack(mod.Manifest, staging, staging, Cooking(progress, 0.8, 0.98), ct));
             session.Log($"Installed '{p.Id}' into the game.");
             return new ModInstallResult($"Installed '{p.Id}' into the game. Start the game to see it.", check.Warnings);
         });
@@ -128,7 +129,7 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
                 var uses = SpeciesUse.Of(mod.Manifest);
                 if (uses.Count > 0) everyone ??= OtherModSpecies.Load(ws, snapshot, null);
                 rows.Add(new ModRow(id, mod.Manifest.Name, mod.Manifest.Version, mod.Manifest.Author, mod.Manifest.Replace.Count, mod.Manifest.Skins.Count,
-                    Wire(game.StateOf(install, mod)), inGame?.Enabled, mod.Dir, null, inGame?.Clashes, UsesOf(uses, everyone)));
+                    Wire(game.StateOf(install, mod)), inGame?.Enabled, mod.Dir, null, inGame?.Clashes, UsesOf(uses, everyone), inGame?.Cooked));
             }
             catch (TyrantException ex)
             {
@@ -136,7 +137,7 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
             }
             installed.Remove(id);
         }
-        rows.AddRange(installed.Values.Select(m => new ModRow(m.Id, m.Name, m.Version, null, m.Replacements, m.Skins, "gameOnly", m.Enabled, m.Dir, m.Error, m.Clashes)));
+        rows.AddRange(installed.Values.Select(m => new ModRow(m.Id, m.Name, m.Version, null, m.Replacements, m.Skins, "gameOnly", m.Enabled, m.Dir, m.Error, m.Clashes, Cooked: m.Cooked)));
         return new ModsListResult(rows, ModLoaderInstaller.HasFramework(install),
             ModLoaderInstaller.FrameworkStatus(install, Options.DumperDir) == FrameworkState.Outdated);
     }

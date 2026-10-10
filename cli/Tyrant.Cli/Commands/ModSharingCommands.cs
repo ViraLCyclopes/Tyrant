@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using Spectre.Console.Cli;
 using Tyrant.Core.Mods;
+using Tyrant.Core.Textures;
 using Tyrant.Framework.Core;
 
 namespace Tyrant.Cli.Commands;
@@ -28,7 +29,9 @@ public sealed class ModExportCommand : Command<ModExportCommand.Settings>
             Console.Error.WriteLine($"'{settings.Id}' has problems, so it was not exported.");
             return ExitCodes.Error;
         }
-        var path = ModSharing.Export(mod, Path.GetFullPath(settings.Out ?? Path.Combine(ws.Dir, "exports", $"{mod.Id}-{mod.Manifest.Version}.zip")), FrameworkInfo.Version);
+        var cooker = ModTextureCooker.For(ws, ModCli.TryIndex(ws)?.Assets, ModCli.TrySpeciesFor(ws, install, mod));
+        var path = ModSharing.Export(mod, Path.GetFullPath(settings.Out ?? Path.Combine(ws.Dir, "exports", $"{mod.Id}-{mod.Manifest.Version}.zip")), FrameworkInfo.Version,
+            dir => cooker.WritePack(mod.Manifest, mod.Dir, dir, new SyncProgress(p => Console.WriteLine($"Cooking textures {p.Done}/{p.Total}..."))));
         foreach (var warning in check.Warnings) Console.WriteLine($"  WARN   {warning}");
         Console.WriteLine($"Exported '{mod.Id}' to {path}. Players unzip it into the game folder.");
         return ExitCodes.Ok;

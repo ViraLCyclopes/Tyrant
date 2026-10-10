@@ -150,6 +150,7 @@ public static class CliApp
                 mod.AddCommand<ModSkinFileCommand>("skin-file").WithDescription("Use your PNG for one slot of a skin, or the base skin's texture.");
                 mod.AddCommand<ModThumbnailCommand>("thumbnail").WithDescription("Set a skin's swatch PNG, or let the game make one.");
                 mod.AddCommand<ModUnreplaceCommand>("unreplace").WithDescription("Stop replacing a game texture.");
+                mod.AddCommand<ModSetCompressionCommand>("set-compression").WithDescription("Choose how Tyrant compresses the mod's textures (auto or bc7), or one texture's.");
             });
             config.AddBranch("data", data =>
             {

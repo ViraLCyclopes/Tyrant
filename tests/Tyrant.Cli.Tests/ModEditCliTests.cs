@@ -143,4 +143,24 @@ public class ModEditCliTests
         Assert.Contains("--png or --clear", neither.Err);
         Assert.Contains("uses the game's", Run("mod", "set-skin-portrait", "red-spot", "blue", "--slot", "adultMale", "--clear", "-w", ws).Out);
     }
+
+    [Fact]
+    public void Set_compression_for_the_mod_and_one_texture()
+    {
+        using var game = new FakeGame();
+        var ws = WorkspaceWithSkin(game);
+        Tyrant.Framework.Core.ModManifest Manifest() => Tyrant.Framework.Core.ModManifest.Parse(File.ReadAllText(Path.Combine(ws, "mods", "red-spot", "mod.json")));
+
+        Assert.Equal(ExitCodes.Ok, Run("mod", "set-compression", "red-spot", "bc7", "-w", ws).Code);
+        Assert.Equal(Tyrant.Framework.Core.TextureCompression.Bc7, Manifest().Textures.Compression);
+        Assert.Equal(ExitCodes.Ok, Run("mod", "set-compression", "red-spot", "auto", "--texture", "skins/blue/male_D.png", "-w", ws).Code);
+        Assert.Equal(Tyrant.Framework.Core.TextureCompression.Auto, Manifest().Textures.For("skins/blue/male_D.png"));
+        Assert.Equal(ExitCodes.Ok, Run("mod", "set-compression", "red-spot", "default", "--texture", "skins/blue/male_D.png", "-w", ws).Code);
+        Assert.Empty(Manifest().Textures.Overrides);
+
+        Assert.Contains("--texture", Run("mod", "set-compression", "red-spot", "default", "-w", ws).Err);
+        var bad = Run("mod", "set-compression", "red-spot", "fast", "-w", ws);
+        Assert.NotEqual(ExitCodes.Ok, bad.Code);
+        Assert.Contains("auto, bc7 or default", bad.Err);
+    }
 }

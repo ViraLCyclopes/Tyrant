@@ -278,3 +278,36 @@ public sealed class ModSkinPortraitCommand : Command<ModSkinPortraitCommand.Sett
         return ExitCodes.Ok;
     }
 }
+
+public sealed class ModSetCompressionCommand : Command<ModSetCompressionCommand.Settings>
+{
+    public sealed class Settings : ModSettings
+    {
+        [CommandArgument(1, "<MODE>")]
+        [Description("auto (match the game: DXT1/DXT5), bc7 (best quality, twice DXT1's memory), or default (with --texture: use the mod's).")]
+        public string Mode { get; set; } = "";
+
+        [CommandOption("--texture <FILE>")]
+        [Description("One texture of the mod (as in mod.json, e.g. skins/blue/male_D.png); without it the mod's own setting changes.")]
+        public string? Texture { get; set; }
+    }
+
+    public override int Execute(CommandContext context, Settings settings)
+    {
+        TextureCompression? mode = settings.Mode == "default" ? null : TextureCompressions.Parse(settings.Mode);
+        if (settings.Mode != "default" && mode is null)
+        {
+            Console.Error.WriteLine($"'{settings.Mode}' is not a compression: use auto, bc7 or default.");
+            return ExitCodes.Error;
+        }
+        if (mode is null && settings.Texture is null)
+        {
+            Console.Error.WriteLine("'default' needs --texture: the mod itself is auto or bc7.");
+            return ExitCodes.Error;
+        }
+        var (ws, _) = CliServices.OpenWorkspace(settings);
+        ModProject.Open(ws, settings.Id).SetCompression(settings.Texture, mode);
+        Console.WriteLine(settings.Texture is null ? $"'{settings.Id}' textures: {settings.Mode}." : $"{settings.Texture}: {settings.Mode}.");
+        return ExitCodes.Ok;
+    }
+}

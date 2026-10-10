@@ -9,7 +9,7 @@ namespace Tyrant.Rpc.Mods;
 /// UsesSpeciesFrom: the other mods whose custom species its skins are for (as <see cref="ModDetail.UsesSpeciesFrom"/>); null for none.
 /// </summary>
 public sealed record ModRow(string Id, string Name, string Version, string? Author, int Replacements, int Skins, string State, bool? Enabled, string? Dir, string? Error,
-    IReadOnlyList<string>? Clashes = null, IReadOnlyList<ModSpeciesUseDto>? UsesSpeciesFrom = null);
+    IReadOnlyList<string>? Clashes = null, IReadOnlyList<ModSpeciesUseDto>? UsesSpeciesFrom = null, string? Cooked = null);
 
 public sealed record ModsListResult(IReadOnlyList<ModRow> Mods, bool FrameworkInstalled, bool FrameworkOutdated = false);
 
@@ -197,3 +197,11 @@ public sealed record ModSkinOwnModel(string File, IReadOnlyList<Tyrant.Rpc.Asset
 public sealed record ModThumbnailParams(string Id, string File, int Size = 96);
 
 public sealed record ModThumbnailResult(string? File);
+
+/// <summary>File null sets the mod's own compression; Mode null (with a File) clears that texture's override. Mode: "auto" | "bc7".</summary>
+public sealed record ModSetCompressionParams(string Id, string Revision, string? File, string? Mode);
+
+/// <summary>Kind: "colour" | "normal" | "mask"; Mode: "auto" | "bc7"; Format: "DXT1" | "DXT5" | "BC7"; Override: this texture's mode is its own.</summary>
+public sealed record ModTextureDto(string File, string Kind, string Mode, bool Override, string Format, int Width, int Height, long Bytes);
+
+public sealed record ModTexturesResult(string Compression, IReadOnlyList<ModTextureDto> Textures, long TotalBytes);

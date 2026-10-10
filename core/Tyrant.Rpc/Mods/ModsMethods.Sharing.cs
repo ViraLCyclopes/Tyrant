@@ -23,7 +23,9 @@ public sealed partial class ModsMethods
             if (!check.Ok)
                 throw new TyrantException(TyrantErrorCode.ModInvalid, $"'{p.Id}' has problems, so it was not exported: {string.Join(" ", check.Errors)}");
             progress.Report(new JobProgress(0.6, $"Writing {p.Id}'s zip"));
-            var path = ModSharing.Export(mod, p.Out ?? Path.Combine(ws.Dir, "exports", $"{mod.Id}-{mod.Manifest.Version}.zip"), FrameworkInfo.Version);
+            var cooker = Cooker(ws, install, mod);
+            var path = ModSharing.Export(mod, p.Out ?? Path.Combine(ws.Dir, "exports", $"{mod.Id}-{mod.Manifest.Version}.zip"), FrameworkInfo.Version,
+                dir => cooker.WritePack(mod.Manifest, mod.Dir, dir, Cooking(progress, 0.6, 0.95), ct));
             session.Log($"Exported '{p.Id}' to {path}.");
             return new ModExportResult(path, check.Warnings);
         });

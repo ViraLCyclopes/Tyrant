@@ -5,6 +5,7 @@ using Tyrant.Core.Dumping;
 using Tyrant.Core.Errors;
 using Tyrant.Core.Install;
 using Tyrant.Core.Mods;
+using Tyrant.Core.Textures;
 using Tyrant.Core.Workspaces;
 
 namespace Tyrant.Cli.Commands;
@@ -14,6 +15,12 @@ public class ModSettings : WorkspaceSettings
     [CommandArgument(0, "<ID>")]
     [Description("The mod id (its folder name), e.g. red-spot-carcharo.")]
     public string Id { get; set; } = "";
+}
+
+/// <summary>Reports on the calling thread, in order (System.Progress posts to the thread pool without a synchronization context).</summary>
+internal sealed class SyncProgress(Action<(int Done, int Total)> report) : IProgress<(int Done, int Total)>
+{
+    public void Report((int Done, int Total) value) => report(value);
 }
 
 internal static class ModCli
@@ -241,7 +248,9 @@ public sealed class ModInstallCommand : Command<ModInstallCommand.Settings>
             new ModLoaderInstaller(isGameRunning: launcher.IsRunning).Install(install, zip, componentDir);
             Console.WriteLine("Installed or updated Tyrant's framework in the game.");
         }
-        new GameMods(launcher.IsRunning).Install(install, mod);
+        var cooker = ModTextureCooker.For(ws, ModCli.TryIndex(ws)?.Assets, ModCli.TrySpeciesFor(ws, install, mod));
+        new GameMods(launcher.IsRunning).Install(install, mod, staging => cooker.WritePack(mod.Manifest, staging, staging,
+            new SyncProgress(p => Console.WriteLine($"Cooking textures {p.Done}/{p.Total}..."))));
         Console.WriteLine($"Installed '{mod.Id}' into {Path.Combine(ModLoaderInstaller.ModsDir(install), mod.Id)}. Start the game to see it; undo with 'tyrant mod remove {mod.Id}'.");
         return ExitCodes.Ok;
     }

@@ -841,6 +841,7 @@ export interface ModRow {
   error: string | null;
   clashes?: string[] | null;
   usesSpeciesFrom?: ModSpeciesUseDto[] | null;
+  cooked?: string | null;
 }
 
 export interface ModSampleColorsParams {
@@ -868,6 +869,13 @@ export interface ModSetColorsParams {
   revision: string;
   skin: string;
   colors?: string | null;
+}
+
+export interface ModSetCompressionParams {
+  id: string;
+  revision: string;
+  file: string | null;
+  mode: string | null;
 }
 
 export interface ModSetDetailsParams {
@@ -1080,6 +1088,23 @@ export interface ModStatDto {
   unit: string;
   min: number;
   max: number;
+}
+
+export interface ModTextureDto {
+  file: string;
+  kind: string;
+  mode: string;
+  override: boolean;
+  format: string;
+  width: number;
+  height: number;
+  bytes: number;
+}
+
+export interface ModTexturesResult {
+  compression: string;
+  textures: ModTextureDto[];
+  totalBytes: number;
 }
 
 export interface ModThumbnailParams {
@@ -1408,6 +1433,7 @@ export interface RpcMethods {
   "mods.rig": { params: ModRigParams; result: ModRigView };
   "mods.sampleColors": { params: ModSampleColorsParams; result: ModSampledColors };
   "mods.setColors": { params: ModSetColorsParams; result: ModDetail };
+  "mods.setCompression": { params: ModSetCompressionParams; result: ModDetail };
   "mods.setDetails": { params: ModSetDetailsParams; result: ModDetail };
   "mods.setPortraits": { params: ModSetPortraitsParams; result: ModDetail };
   "mods.setPrefabField": { params: ModSetPrefabFieldParams; result: ModDetail };
@@ -1426,6 +1452,7 @@ export interface RpcMethods {
   "mods.speciesModel": { params: ModSpeciesModelParams; result: ModSkinModel };
   "mods.speciesTemplate": { params: ModSpeciesTemplateParams; result: ModSpeciesTemplateDto };
   "mods.speciesTextures": { params: ModSpeciesTexturesParams; result: ModSpeciesTexturesResult };
+  "mods.textures": { params: ModIdParams; result: ModTexturesResult };
   "mods.thumbnail": { params: ModThumbnailParams; result: ModThumbnailResult };
   "sounds.forSpecies": { params: SoundsForSpeciesParams; result: SoundsForSpeciesResult };
   "sounds.matchFolder": { params: SoundsMatchFolderParams; result: SoundsMatchFolderResult };
