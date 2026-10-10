@@ -129,6 +129,9 @@ namespace Tyrant.Framework.Core
 
         public string? Thumbnail { get; set; }
 
+        /// <summary>Portrait slot (PortraitSlots.All) → PNG in the mod; a slot left out shows the base skin's portrait.</summary>
+        public Dictionary<string, string>? Portraits { get; set; }
+
         /// <summary>Slot → PNG (relative to the mod folder); null when the skin has no male textures.</summary>
         public Dictionary<string, string>? Male { get; set; }
 
@@ -307,6 +310,7 @@ namespace Tyrant.Framework.Core
                     Name = Text(entry, "name") is { Length: > 0 } skinName ? skinName : skinId,
                     Base = Text(entry, "base") is { Length: > 0 } baseSkin ? baseSkin : "0",
                     Thumbnail = Text(entry, "thumbnail"),
+                    Portraits = PortraitMap(entry, skinId),
                     Male = Slots(entry, "male", skinId),
                     Female = Slots(entry, "female", skinId),
                     Colors = entry.TryGetValue("colors", out var colors) && colors != null ? SkinColors.Parse(colors, skinId) : null,
@@ -364,6 +368,7 @@ namespace Tyrant.Framework.Core
                     var entry = new Dictionary<string, object?> { ["id"] = s.Id, ["species"] = s.Species, ["name"] = s.Name, ["base"] = s.Base };
                     if (s.Group != null) entry["group"] = s.Group;
                     if (s.Thumbnail != null) entry["thumbnail"] = s.Thumbnail;
+                    if (s.Portraits is { Count: > 0 }) entry["portraits"] = PortraitSlots.All.Where(s.Portraits.ContainsKey).ToDictionary(k => k, k => (object?)s.Portraits[k]);
                     if (s.Male != null) entry["male"] = Ordered(s.Male);
                     if (s.Female != null) entry["female"] = Ordered(s.Female);
                     if (s.Model != null) entry["model"] = s.Model;
@@ -401,6 +406,20 @@ namespace Tyrant.Framework.Core
         {
             if (!map.TryGetValue(key, out var value) || value == null) return System.Array.Empty<object?>();
             return value as List<object?> ?? throw new ManifestException($"\"{key}\" must be a list.");
+        }
+
+        private static Dictionary<string, string>? PortraitMap(Dictionary<string, object?> entry, string skinId)
+        {
+            if (!entry.TryGetValue("portraits", out var value) || value == null) return null;
+            if (!(value is Dictionary<string, object?> map)) throw new ManifestException($"Skin \"{skinId}\": \"portraits\" must map portrait slots to files.");
+            var portraits = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var pair in map)
+            {
+                if (!PortraitSlots.IsSlot(pair.Key))
+                    throw new ManifestException($"Skin \"{skinId}\" uses unknown portrait \"{pair.Key}\" (use {string.Join(", ", PortraitSlots.All)}).");
+                portraits[pair.Key] = pair.Value as string ?? throw new ManifestException($"Skin \"{skinId}\": \"portraits.{pair.Key}\" must be a file path.");
+            }
+            return portraits.Count == 0 ? null : portraits;
         }
 
         private static Dictionary<string, string>? Slots(Dictionary<string, object?> entry, string sex, string skinId)
