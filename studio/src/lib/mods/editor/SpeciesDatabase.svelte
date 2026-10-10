@@ -1,4 +1,5 @@
 <script lang="ts">
+  import PortraitsCard from './PortraitsCard.svelte';
   import { onMount } from 'svelte';
   import { getSession } from '$lib/stores/session.svelte';
   import { getTab } from '$lib/shell/tab.svelte';
@@ -224,6 +225,7 @@
           <button type="button" onclick={pickSwatch}>Choose swatch PNG…</button>
           <button type="button" disabled={!animal.swatch} onclick={() => doc.edit('mods.setSpeciesSwatch', { speciesId: selected, png: null }, { undoable: false })}>Use template swatch</button>
         </div>
+        <PortraitsCard {doc} target={{ speciesId: selected, speciesKey: animal.key }} />
         <ul class="skin-list">
           {#each (doc.detail?.skins ?? []).filter((s) => s.species === animal.key) as s (s.id)}
             <li><button type="button" onclick={() => onOpenSkin(s.id)}>{s.name}</button>{#if s.group}<span class="hint"> · {s.group}</span>{/if}</li>

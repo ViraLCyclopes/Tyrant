@@ -3,6 +3,7 @@
   import type { ModSkinDto } from '$lib/rpc/types.gen';
   import { getSession } from '$lib/stores/session.svelte';
   import NameDialog from './NameDialog.svelte';
+  import PortraitsCard from './PortraitsCard.svelte';
   import { groupNames, setGroup } from './skinGroups';
   import ColourEditor from './ColourEditor.svelte';
   import RigEdit from './RigEdit.svelte';
@@ -86,6 +87,8 @@
     {#if !skin.thumbnail}<span class="hint">The game cuts a swatch from the diffuse.</span>{/if}
   </div>
 </section>
+
+<PortraitsCard {doc} target={{ skin }} />
 
 <section class="card">
   <h2>Model</h2>

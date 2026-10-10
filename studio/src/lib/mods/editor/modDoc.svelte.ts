@@ -10,6 +10,8 @@ export type EditMethod =
   | 'mods.setSpeciesStartingSkin'
   | 'mods.setSpeciesSwatch'
   | 'mods.setSpeciesPrefab'
+  | 'mods.setPortraits'
+  | 'mods.setSpeciesPortraits'
   | 'mods.renameSkin'
   | 'mods.removeSkin'
   | 'mods.arrangeSkins'
