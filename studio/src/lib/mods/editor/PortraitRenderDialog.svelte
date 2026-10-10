@@ -31,7 +31,13 @@
   let canvas = $state<HTMLCanvasElement>();
   let dialog = $state<HTMLElement>();
   let viewer = $state.raw<ModelViewer | null>(null);
+  /** The viewer is framed and dressed: Use this view may render. */
+  let ready = $state(false);
+  /** The first row's maps, put back after a render so the preview shows what it showed before. */
+  let firstMaps: Record<string, string> | null = null;
   let disposed = false;
+  /** A click closes the dialog only when it also started on the scrim (an orbit drag released outside the dialog must not). */
+  let downOnScrim = false;
 
   function model(sex: RenderSex): Promise<ModSkinModel> {
     return 'skin' in target
@@ -59,18 +65,20 @@
         next.dispose();
         return;
       }
-      next.setAnimalMaps(mapUrls(first.maps));
+      viewer = next; // from here the unmount cleanup (or the catch below) disposes it
+      firstMaps = mapUrls(first.maps);
+      next.setAnimalMaps(firstMaps);
       if ('skin' in target) await colour(next, target.skin);
-      if (disposed) {
-        next.dispose();
-        return;
-      }
+      if (disposed) return;
       next.portraitView();
-      viewer = next;
       if (!tab.active) next.pause();
+      ready = true;
       status = null;
     } catch (e) {
-      if (!disposed) status = asRpcError(e).message;
+      if (disposed) return;
+      status = asRpcError(e).message;
+      viewer?.dispose();
+      viewer = null;
     }
   }
 
@@ -87,13 +95,17 @@
     return session.log.records.findLast((r) => r.seq > seq && r.tab === tab.id)?.message ?? null;
   }
 
+  const allOwn = $derived(
+    `${sexes.length === 3 ? 'All three are your own pictures' : sexes.length === 2 ? 'Both are your own pictures' : 'It is your own picture'}; ` +
+      `tick Replace my pictures to render over ${sexes.length === 1 ? 'it' : 'them'}.`,
+  );
+
   async function useView() {
     const v = viewer;
-    if (!v || busy) return;
+    if (!v || !ready || busy) return;
     const wanted = renderTargets(shown, sexes, replace);
     if (!wanted.length) {
-      const which = sexes.length === 3 ? 'All three are your own pictures' : sexes.length === 2 ? 'Both are your own pictures' : 'It is your own picture';
-      status = `${which}; tick Replace my pictures to render over ${sexes.length === 1 ? 'it' : 'them'}.`;
+      status = allOwn;
       return;
     }
     busy = true;
@@ -110,7 +122,10 @@
           set[RENDER_SLOT[sex]] = { data: await v.renderPortrait(256, 128), rendered: true }; // the camera stays: one view for all
         }
       } finally {
-        if (!disposed) v.setInfant(false);
+        if (!disposed) {
+          v.setInfant(false);
+          if (firstMaps) v.setAnimalMaps(firstMaps); // not the infant's (or the last row's) textures on the shown animal
+        }
       }
       if (disposed) return;
       const since = session.log.lastSeq();
@@ -154,16 +169,25 @@
 
 <svelte:window onkeydown={onKey} />
 
-<div class="scrim" role="presentation" onclick={onclose}>
+<div
+  class="scrim"
+  role="presentation"
+  onpointerdown={(e) => (downOnScrim = e.target === e.currentTarget)}
+  onclick={(e) => {
+    const close = downOnScrim && e.target === e.currentTarget;
+    downOnScrim = false;
+    if (close) onclose();
+  }}
+>
   <div class="dialog" role="dialog" aria-modal="true" aria-label="Render portraits from 3D" tabindex="-1" bind:this={dialog} onclick={(e) => e.stopPropagation()} onkeydown={() => {}}>
     <h2>Render portraits from 3D</h2>
     <p class="hint">Turn and zoom the animal until it looks like the game's portraits, then use this view for the Normal column.</p>
     <canvas bind:this={canvas} class="viewport" aria-label="Portrait framing"></canvas>
-    <label class="row"><input type="checkbox" bind:checked={replace} /> Replace my pictures</label>
+    <label class="row"><input type="checkbox" bind:checked={replace} onchange={() => { if (status === allOwn) status = null; }} /> Replace my pictures</label>
     <p class="status" role="status">{status ?? ''}</p>
     <div class="actions">
       <button onclick={onclose}>Cancel</button>
-      <button class="primary" disabled={!viewer || busy} onclick={useView}>Use this view</button>
+      <button class="primary" disabled={!ready || busy} onclick={useView}>Use this view</button>
     </div>
   </div>
 </div>

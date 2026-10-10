@@ -174,5 +174,51 @@ describe('PortraitRenderDialog', () => {
     view.unmount();
     expect(fakeViewer.dispose).toHaveBeenCalled();
   });
-});
 
+  it('closes on a click on the scrim only when the press also started there (not at the end of an orbit drag)', async () => {
+    const { onclose } = await setup([]);
+    await waitFor(() => expect(fakeViewer.portraitView).toHaveBeenCalled());
+    const scrim = screen.getByRole('dialog').parentElement!;
+
+    await fireEvent.pointerDown(screen.getByLabelText('Portrait framing'));
+    await fireEvent.click(scrim); // the drag was released over the scrim
+    expect(onclose).not.toHaveBeenCalled();
+
+    await fireEvent.pointerDown(scrim);
+    await fireEvent.click(scrim);
+    expect(onclose).toHaveBeenCalledTimes(1);
+  });
+
+  it('disposes the viewer when dressing or framing it fails, and keeps Use this view disabled', async () => {
+    fakeViewer.portraitView.mockImplementationOnce(() => { throw new Error('No meshes to frame'); });
+    await setup([]);
+    expect(await screen.findByText('No meshes to frame')).toBeInTheDocument();
+    expect(fakeViewer.dispose).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: 'Use this view' })).toBeDisabled();
+  });
+
+  it('puts the first row’s maps back after a render, whether it worked or not', async () => {
+    fakeViewer.renderPortrait.mockImplementation(async () => { throw new Error('WebGL lost'); });
+    await setup([]);
+    await useView();
+    await screen.findByText('WebGL lost');
+    const first = fakeViewer.setAnimalMaps.mock.calls[0][0];
+    expect(fakeViewer.setAnimalMaps).toHaveBeenLastCalledWith(first);
+    expect(fakeViewer.setInfant).toHaveBeenLastCalledWith(false);
+
+    fakeViewer.renderPortrait.mockImplementation(async () => 'iVBORw0KGgo=');
+    await fireEvent.click(screen.getByRole('button', { name: 'Use this view' }));
+    await waitFor(() => expect(fakeViewer.renderPortrait).toHaveBeenCalledTimes(4));
+    await waitFor(() => expect(fakeViewer.setAnimalMaps).toHaveBeenLastCalledWith(first));
+    expect(fakeViewer.setAnimalMaps.mock.calls.at(-2)![0]).not.toEqual(first); // the infant's maps were shown for its render
+  });
+
+  it('ticking Replace my pictures clears the all-own note', async () => {
+    await setup([own('adultMale', false), own('adultFemale', false), own('infant', false)]);
+    await useView();
+    const note = 'All three are your own pictures; tick Replace my pictures to render over them.';
+    expect(await screen.findByText(note)).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Replace my pictures' }));
+    expect(screen.queryByText(note)).toBeNull();
+  });
+});
