@@ -71,6 +71,7 @@ namespace Tyrant.Framework
             foreach (var skipped in plan.Skipped) Log.Warning($"{skipped.Id}: skipped — {skipped.Reason}");
             Replacements = ReplacementTable.Build(plan.Mods, out var messages);
             foreach (var message in messages) Log.Warning(message);
+            TexturePacks.Start(plan.Mods);
             MaterialTextureModule.Start(); // replacements on objects other than animals
             foreach (var mod in plan.Mods)
             {

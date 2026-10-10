@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace Tyrant.Framework
 {
-    /// <summary>Builds each replacement texture once per file and slot kind, with mipmaps and compression like the game's own.</summary>
+    /// <summary>Builds each mod texture once per file and slot kind: from the mod's cooked pack when it can, else from the PNG.</summary>
     internal static class TextureCache
     {
         private static readonly Dictionary<string, Texture2D?> Cache = new Dictionary<string, Texture2D?>(StringComparer.OrdinalIgnoreCase);
@@ -37,70 +37,69 @@ namespace Tyrant.Framework
                 return null;
             }
 
-            var decoded = new Texture2D(2, 2, TextureFormat.RGBA32, false);
-            Color32[] pixels;
-            int width, height;
+            var cooked = TexturePacks.Load(replacement, kind);
+            if (cooked != null) return cooked;
+
+            // Not cooked: decode the PNG straight into a texture and work on Unity's own buffer (no managed pixel copies).
+            var texture = new Texture2D(2, 2, TextureFormat.RGBA32, true, kind != SlotKind.Color) { name = replacement.Texture };
             try
             {
-                if (!decoded.LoadImage(File.ReadAllBytes(replacement.FilePath), false))
+                if (!texture.LoadImage(File.ReadAllBytes(replacement.FilePath), false))
                 {
+                    UnityEngine.Object.Destroy(texture);
                     FrameworkMod.Log.Error($"{replacement.ModId}: {file} is not a readable PNG; {replacement.Texture} stays vanilla.");
                     return null;
                 }
-                pixels = decoded.GetPixels32();
-                width = decoded.width;
-                height = decoded.height;
+                if (kind == SlotKind.Normal) PackNormals(texture, replacement, file);
+                if (texture.width % 4 == 0 && texture.height % 4 == 0) texture.Compress(true); // DXT5 (RGBA source)
+                else FrameworkMod.Log.Warning($"{replacement.ModId}: {file} is {texture.width}x{texture.height}; sizes divisible by 4 use less memory.");
+                texture.Apply(false, true); // no longer readable: frees the CPU copy
+                return texture;
             }
-            finally
+            catch
             {
-                UnityEngine.Object.Destroy(decoded);
+                UnityEngine.Object.Destroy(texture);
+                throw;
             }
-
-            if (kind == SlotKind.Normal)
-            {
-                var rgba = ToBytes(pixels);
-                var shape = NormalMaps.Classify(rgba);
-                if (shape == NormalMapKind.Standard)
-                {
-                    NormalMaps.PackForUnity(rgba);
-                    pixels = ToColors(rgba);
-                }
-                else if (shape == NormalMapKind.Unknown)
-                {
-                    FrameworkMod.Log.Warning($"{replacement.ModId}: {file} does not look like a normal map; it is used as-is.");
-                }
-            }
-
-            // Colour is sRGB; normal maps and masks are data (linear), as the game's own textures are.
-            // Colour and masks without transparency compress to DXT1 like vanilla (half the memory of DXT5).
-            var format = kind != SlotKind.Normal && Pixels.IsOpaque(ToBytes(pixels)) ? TextureFormat.RGB24 : TextureFormat.RGBA32;
-            var texture = new Texture2D(width, height, format, true, kind != SlotKind.Color) { name = replacement.Texture };
-            texture.SetPixels32(pixels);
-            texture.Apply(true, false);
-            if (width % 4 == 0 && height % 4 == 0) texture.Compress(true); // DXT, like vanilla; needs sizes divisible by 4
-            else FrameworkMod.Log.Warning($"{replacement.ModId}: {file} is {width}x{height}; sizes divisible by 4 use less memory.");
-            texture.Apply(false, true); // no longer readable: frees the CPU copy
-            return texture;
         }
 
-        private static byte[] ToBytes(Color32[] pixels)
+        /// <summary>A standard normal map -> Unity's packed form, in the texture's own buffer (level 0), then mips rebuilt.</summary>
+        private static void PackNormals(Texture2D texture, Replacement replacement, string file)
         {
-            var bytes = new byte[pixels.Length * 4];
-            for (var k = 0; k < pixels.Length; k++)
+            int r, g, b, a;
+            if (texture.format == TextureFormat.RGBA32) (r, g, b, a) = (0, 1, 2, 3);
+            else if (texture.format == TextureFormat.ARGB32) (a, r, g, b) = (0, 1, 2, 3);
+            else
             {
-                bytes[k * 4] = pixels[k].r;
-                bytes[k * 4 + 1] = pixels[k].g;
-                bytes[k * 4 + 2] = pixels[k].b;
-                bytes[k * 4 + 3] = pixels[k].a;
+                FrameworkMod.Log.Warning($"{replacement.ModId}: {file} loaded as {texture.format}; it is used as-is.");
+                return;
             }
-            return bytes;
-        }
-
-        private static Color32[] ToColors(byte[] bytes)
-        {
-            var pixels = new Color32[bytes.Length / 4];
-            for (var k = 0; k < pixels.Length; k++) pixels[k] = new Color32(bytes[k * 4], bytes[k * 4 + 1], bytes[k * 4 + 2], bytes[k * 4 + 3]);
-            return pixels;
+            var data = texture.GetRawTextureData<byte>();
+            var pixels = texture.width * texture.height;
+            var step = Math.Max(1, pixels / 4096);
+            var sample = new byte[(pixels + step - 1) / step * 4];
+            for (int p = 0, s = 0; p < pixels && s < sample.Length; p += step, s += 4)
+            {
+                var i = p * 4;
+                (sample[s], sample[s + 1], sample[s + 2], sample[s + 3]) = (data[i + r], data[i + g], data[i + b], data[i + a]);
+            }
+            var shape = NormalMaps.Classify(sample);
+            if (shape == NormalMapKind.Unknown)
+            {
+                FrameworkMod.Log.Warning($"{replacement.ModId}: {file} does not look like a normal map; it is used as-is.");
+                return;
+            }
+            if (shape != NormalMapKind.Standard) return;
+            for (var p = 0; p < pixels; p++)
+            {
+                var i = p * 4;
+                var x = data[i + r];
+                var y = data[i + g];
+                data[i + r] = 255;
+                data[i + b] = y;
+                data[i + a] = x;
+            }
+            texture.Apply(true, false); // rebuild the mips from the packed level 0
         }
     }
 }
