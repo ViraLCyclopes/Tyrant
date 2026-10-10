@@ -14,7 +14,7 @@
   const unusedRow = $derived('skin' in target ? (!target.skin.female ? 1 : !target.skin.male ? 0 : -1) : -1);
 
   const targetKey = $derived('skin' in target ? `skin:${target.skin.id}` : `species:${target.speciesId}`);
-  let loaded = $state<{ key: string; rows: ModPortraitDto[] } | null>(null);
+  let loaded = $state<{ key: string; rows: ModPortraitDto[]; failed: boolean } | null>(null);
   const shown = $derived(loaded?.key === targetKey ? loaded.rows : []);
   const loading = $derived(loaded?.key !== targetKey);
 
@@ -26,7 +26,7 @@
     const params = 'skin' in target ? { id: doc.id, skin: target.skin.id } : { id: doc.id, speciesId: target.speciesId };
     let stale = false;
     void tab.quietly(() => session.rpc.call('mods.portraits', params)).then((r) => {
-      if (r && !stale) loaded = { key, rows: r.portraits };
+      if (!stale) loaded = { key, rows: r?.portraits ?? [], failed: !r };
     });
     return () => { stale = true; };
   });
@@ -47,7 +47,7 @@
 <section class="card">
   <h2>Portraits</h2>
   <p class="hint">The pictures in the animal's info panel, the Nursery and the nest. Empty slots show the game's.</p>
-  {#if loading}<p class="hint">Loading…</p>{/if}
+  {#if loading}<p class="hint">Loading…</p>{:else if loaded?.failed}<p class="hint">The current pictures could not be read; you can still choose PNGs.</p>{/if}
   <div class="grid" role="group" aria-label="Portraits">
     <span></span>
     {#each PORTRAIT_COLUMNS as column (column)}<span class="head">{column}</span>{/each}

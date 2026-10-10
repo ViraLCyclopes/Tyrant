@@ -94,4 +94,18 @@ describe('PortraitsCard', () => {
     expect(screen.getByRole('img', { name: 'Adult male, Normal (this mod)' })).toBeInTheDocument();
     expect(screen.queryByText('Loading…')).toBeNull();
   });
+
+  it('when mods.portraits fails, says so and still lets the user choose PNGs', async () => {
+    const { rpc, platform } = await setup(modDetail(), false, () => { throw new Error('no asset index'); });
+    platform.files.push('D:\\art\\male.png');
+    rpc.on('mods.setPortraits', () => modDetail({ revision: 'r2' }));
+
+    expect(await screen.findByText(/could not be read; you can still choose PNGs/)).toBeInTheDocument();
+    expect(screen.queryByText('Loading…')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Clear Adult male, Normal' })).toBeDisabled();
+    const choose = screen.getByRole('button', { name: 'Choose PNG for Adult male, Normal' });
+    expect(choose).toBeEnabled();
+    await fireEvent.click(choose);
+    await waitFor(() => expect(rpc.callsTo('mods.setPortraits')[0]?.params).toMatchObject({ set: { adultMale: { png: 'D:\\art\\male.png' } } }));
+  });
 });
