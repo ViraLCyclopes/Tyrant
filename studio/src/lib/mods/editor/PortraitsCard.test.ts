@@ -1,5 +1,5 @@
 import { fireEvent, screen, waitFor } from '@testing-library/svelte';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { Tab } from '$lib/shell/tab.svelte';
 import { memoryStore } from '$lib/storage';
 import { Session } from '$lib/stores/session.svelte';
@@ -10,6 +10,9 @@ import { modDetail } from '$lib/test/modFixtures';
 import { ModDoc } from './modDoc.svelte';
 import PortraitsCard from './PortraitsCard.svelte';
 import { PORTRAIT_SLOTS } from './portraits';
+
+// The Render from 3D dialog loads the viewer; the dialog's own tests cover rendering.
+vi.mock('$lib/assets/viewer', () => ({ showModels: vi.fn(() => new Promise(() => {})) }));
 
 const rows = PORTRAIT_SLOTS.map((slot) => {
   if (slot === 'adultMale') return { slot, file: 'portraits/adultMale.png', own: true, rendered: false, width: 128, height: 64 };
@@ -107,5 +110,26 @@ describe('PortraitsCard', () => {
     expect(choose).toBeEnabled();
     await fireEvent.click(choose);
     await waitFor(() => expect(rpc.callsTo('mods.setPortraits')[0]?.params).toMatchObject({ set: { adultMale: { png: 'D:\\art\\male.png' } } }));
+  });
+
+  it('Render from 3D opens the dialog once the rows are in, and notes which column it fills', async () => {
+    const pending: ((v: unknown) => void)[] = [];
+    await setup(modDetail(), false, () => new Promise((res) => pending.push(res)));
+    const button = screen.getByRole('button', { name: 'Render from 3D…' });
+    expect(button).toBeDisabled();
+    expect(screen.getByText(/Renders the Normal column \(adult male, adult female, infant\)\. Albino, melanistic and leucistic need your own PNGs\./)).toBeInTheDocument();
+
+    pending[0]({ portraits: rows });
+    await waitFor(() => expect(button).toBeEnabled());
+    await fireEvent.click(button);
+    expect(screen.getByRole('dialog', { name: 'Render portraits from 3D' })).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('keeps Render from 3D disabled when the current pictures could not be read', async () => {
+    await setup(modDetail(), false, () => { throw new Error('no asset index'); });
+    expect(await screen.findByText(/could not be read; you can still choose PNGs/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Render from 3D…' })).toBeDisabled();
   });
 });

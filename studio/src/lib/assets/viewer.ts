@@ -74,6 +74,8 @@ export interface ModelViewer {
   setInfant(on: boolean): void;
   /** Renders the current view to a transparent PNG (ground and sky hidden); base64 without the data: prefix. */
   renderPortrait(width: number, height: number): Promise<string>;
+  /** Resolves once the scene is ready to draw (textures and shaders loaded), e.g. after setAnimalMaps. */
+  whenReady(): Promise<void>;
   /** Stops drawing (the tab is hidden); resume starts again. */
   pause(): void;
   resume(): void;
@@ -404,6 +406,7 @@ async function build(canvas: HTMLCanvasElement, models: ModelFile[], options: Vi
     portraitView,
     setInfant,
     renderPortrait,
+    whenReady: () => scene.whenReadyAsync(),
     pause: () => engine.stopRenderLoop(),
     resume: () => {
       engine.stopRenderLoop(); // never two loops

@@ -3,6 +3,7 @@
   import { getTab } from '$lib/shell/tab.svelte';
   import { getSession } from '$lib/stores/session.svelte';
   import type { ModDoc } from './modDoc.svelte';
+  import PortraitRenderDialog from './PortraitRenderDialog.svelte';
   import { PORTRAIT_COLUMNS, PORTRAIT_ROWS, isTwoToOne, slotOf } from './portraits';
 
   type Target = { skin: ModSkinDto } | { speciesId: string; speciesKey: string };
@@ -17,6 +18,7 @@
   let loaded = $state<{ key: string; rows: ModPortraitDto[]; failed: boolean } | null>(null);
   const shown = $derived(loaded?.key === targetKey ? loaded.rows : []);
   const loading = $derived(loaded?.key !== targetKey);
+  let rendering = $state(false);
 
   // Follows saves, undo and replaced files; only the latest request may set the rows.
   $effect(() => {
@@ -46,7 +48,13 @@
 
 <section class="card">
   <h2>Portraits</h2>
-  <p class="hint">The pictures in the animal's info panel, the Nursery and the nest. Empty slots show the game's.</p>
+  <div class="render">
+    <p class="hint">The pictures in the animal's info panel, the Nursery and the nest. Empty slots show the game's.</p>
+    <!-- Without the rows (loading, or they could not be read) a render could not tell hand-picked pictures from the rest. -->
+    <button disabled={loading || loaded?.failed} onclick={() => (rendering = true)}>Render from 3D…</button>
+  </div>
+  <p class="hint note">Renders the Normal column (adult male, adult female, infant). Albino, melanistic and leucistic need your own PNGs.</p>
+  {#if rendering}<PortraitRenderDialog {doc} {target} {shown} onclose={() => (rendering = false)} />{/if}
   {#if loading}<p class="hint">Loading…</p>{:else if loaded?.failed}<p class="hint">The current pictures could not be read; you can still choose PNGs.</p>{/if}
   <div class="grid" role="group" aria-label="Portraits">
     <span></span>
@@ -78,6 +86,9 @@
 </section>
 
 <style>
+  .render { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+  .render p { margin: 0; }
+  .note { font-size: 12px; margin: 4px 0 8px; }
   .grid { display: grid; grid-template-columns: auto repeat(4, minmax(136px, 1fr)); gap: 8px; align-items: start; }
   .head { font-size: 12px; color: var(--muted); }
   .slot { display: grid; gap: 4px; position: relative; }
