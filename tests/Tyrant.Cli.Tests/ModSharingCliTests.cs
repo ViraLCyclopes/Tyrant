@@ -46,6 +46,32 @@ public class ModSharingCliTests
     }
 
     [Fact]
+    public void Mod_export_cooks_the_textures_into_the_zip()
+    {
+        using var game = new FakeGame();
+        var ws = Workspace(game);
+        Run("mod", "new", "red-spot", "--name", "Red spot", "-w", ws);
+        var dir = Path.Combine(ws, "mods", "red-spot");
+        Directory.CreateDirectory(Path.Combine(dir, "skins", "blue"));
+        using (var stream = File.Create(Path.Combine(dir, "skins", "blue", "male_D.png")))
+            new StbImageWriteSharp.ImageWriter().WritePng(new byte[4 * 4 * 4], 4, 4, StbImageWriteSharp.ColorComponents.RedGreenBlueAlpha, stream);
+        File.WriteAllText(Path.Combine(dir, "mod.json"),
+            "{\"format\":1,\"id\":\"red-spot\",\"name\":\"Red spot\",\"version\":\"1.0.0\",\"replace\":[],\"skins\":[{\"id\":\"blue\",\"species\":\"Carcharodontosaurus\",\"name\":\"Blue\",\"base\":\"0\",\"male\":{\"diffuse\":\"skins/blue/male_D.png\"}}]}");
+        var zip = Path.Combine(Path.GetTempPath(), "tyrant-tests", Guid.NewGuid().ToString("N"), "red-spot.zip");
+
+        var exported = Run("mod", "export", "red-spot", "--out", zip, "-w", ws);
+
+        Assert.Equal(ExitCodes.Ok, exported.Code);
+        using var archive = System.IO.Compression.ZipFile.OpenRead(zip);
+        using var entry = archive.GetEntry("UserData/Tyrant/Mods/red-spot/textures.tpack")!.Open();
+        using var copy = new MemoryStream();
+        entry.CopyTo(copy);
+        copy.Position = 0;
+        Assert.Equal("skins/blue/male_D.png", Assert.Single(Tyrant.Framework.Core.TexturePack.Read(copy).Entries).Source);
+        Assert.Contains("Cooking textures", exported.Out);
+    }
+
+    [Fact]
     public void Game_package_framework_writes_the_zip()
     {
         using var game = new FakeGame();

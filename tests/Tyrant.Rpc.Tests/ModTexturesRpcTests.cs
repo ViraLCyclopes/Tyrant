@@ -48,7 +48,57 @@ public class ModTexturesRpcTests
 
         var file = await Assert.ThrowsAsync<RpcCallException>(() => h.Call("mods.setCompression", new { id = "red-spot", revision = Rev(detail), file = "skins/blue/thumbnail.png", mode = "bc7" }));
         Assert.Contains("skins/blue/thumbnail.png", file.Message);
+        Assert.Equal("TARGET_NOT_FOUND", file.DataCode);
 
-        await Assert.ThrowsAsync<RpcCallException>(() => h.Call("mods.setCompression", new { id = "red-spot", revision = Rev(detail), file = (string?)null, mode = (string?)null }));
+        var neither = await Assert.ThrowsAsync<RpcCallException>(() => h.Call("mods.setCompression", new { id = "red-spot", revision = Rev(detail), file = (string?)null, mode = (string?)null }));
+        Assert.Equal("MOD_INVALID", neither.DataCode);
+    }
+
+    private static async Task<(RpcHarness H, string Ws)> OpenedWithLoader(FakeGame game)
+    {
+        var h = new RpcHarness(TestStudio.Options(loaderZip: TestStudio.FakeMelonLoaderZip(), dumperDir: TestStudio.FakeGameModsDir()));
+        var ws = TestStudio.TempDir();
+        await h.Call("workspace.create", new { dir = ws, gamePath = game.Root });
+        await h.Call("mods.create", new { id = "red-spot", name = "Red spot" });
+        return (h, ws);
+    }
+
+    private static void AssertPack(Stream stream)
+    {
+        var pack = Tyrant.Framework.Core.TexturePack.Read(stream);
+        Assert.Equal(["skins/blue/male_D.png", "skins/blue/male_pattern.png"], pack.Entries.Select(e => e.Source).Order().ToArray());
+    }
+
+    [Fact]
+    public async Task Installing_cooks_the_textures_into_the_game_and_the_list_says_so()
+    {
+        using var game = new FakeGame();
+        var (h, ws) = await OpenedWithLoader(game);
+        await ModEditorMethodsTests.WithSkin(h, ws);
+
+        await h.RunJob("mods.install", new { id = "red-spot" });
+        var list = await h.Call("mods.list");
+
+        var path = Path.Combine(game.Root, "UserData", "Tyrant", "Mods", "red-spot", "textures.tpack");
+        Assert.True(File.Exists(path));
+        using (var stream = File.OpenRead(path)) AssertPack(stream);
+        Assert.Equal("current", list.GetProperty("mods").EnumerateArray().Single(m => m.GetProperty("id").GetString() == "red-spot").GetProperty("cooked").GetString());
+    }
+
+    [Fact]
+    public async Task Exporting_puts_the_cooked_pack_in_the_zip()
+    {
+        using var game = new FakeGame();
+        var (h, ws) = await ModEditorMethodsTests.Opened(game);
+        await ModEditorMethodsTests.WithSkin(h, ws);
+
+        var zip = (await h.RunJob("mods.export", new { id = "red-spot" })).GetProperty("path").GetString()!;
+
+        using var archive = System.IO.Compression.ZipFile.OpenRead(zip);
+        using var entry = archive.GetEntry("UserData/Tyrant/Mods/red-spot/textures.tpack")!.Open();
+        using var copy = new MemoryStream();
+        entry.CopyTo(copy);
+        copy.Position = 0;
+        AssertPack(copy);
     }
 }
