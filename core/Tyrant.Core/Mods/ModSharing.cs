@@ -62,7 +62,21 @@ public static class ModSharing
         for (var lod = 0; File.Exists(Path.Combine(mod.Dir, ModelFiles.Lod(glb, lod))); lod++) yield return ModelFiles.Lod(glb, lod);
     }
 
-    public static string Export(ModProject mod, string zipPath, string frameworkVersion)
+    /// <param name="cook">Writes the mod's textures.tpack into the given temp folder and returns its path (or null when there is nothing to cook).</param>
+    public static string Export(ModProject mod, string zipPath, string frameworkVersion, Func<string, string?>? cook = null)
+    {
+        var packDir = Path.Combine(Path.GetTempPath(), "tyrant-pack-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            return WriteZip(mod, zipPath, frameworkVersion, cook?.Invoke(packDir));
+        }
+        finally
+        {
+            try { if (Directory.Exists(packDir)) Directory.Delete(packDir, recursive: true); } catch (IOException) { }
+        }
+    }
+
+    private static string WriteZip(ModProject mod, string zipPath, string frameworkVersion, string? pack)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(zipPath))!);
         var temp = zipPath + ".writing";
@@ -87,6 +101,7 @@ public static class ModSharing
                 }
                 else archive.CreateEntryFromFile(source, name, CompressionLevel.Optimal);
             }
+            if (pack is not null) archive.CreateEntryFromFile(pack, ZipRoot + mod.Id + "/" + TexturePack.FileName, CompressionLevel.Fastest);
             using var readme = new StreamWriter(archive.CreateEntry("README.txt").Open(), new UTF8Encoding(false));
             readme.Write(Readme(mod, frameworkVersion));
         }
@@ -149,6 +164,7 @@ public static class ModSharing
         {
             foreach (var (entry, name) in files.Where(f => f.Name.StartsWith(prefix, StringComparison.Ordinal)))
             {
+                if (string.Equals(name[prefix.Length..], TexturePack.FileName, StringComparison.OrdinalIgnoreCase)) continue; // a workspace mod keeps only its PNGs
                 var destination = Path.GetFullPath(Path.Combine(staging, name[prefix.Length..]));
                 if (!ModPaths.IsInside(destination, staging))
                     throw new TyrantException(TyrantErrorCode.ModInvalid, $"'{zipName}' contains an unsafe path; nothing was imported.");

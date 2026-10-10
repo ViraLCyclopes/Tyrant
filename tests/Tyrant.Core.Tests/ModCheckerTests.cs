@@ -368,4 +368,22 @@ public class ModCheckerTests
         Assert.Contains(result.Errors, e => e.Contains("c.json") && e.Contains("b.json"));
         Assert.Contains(result.Warnings, w => w.Contains("inputParams.gone"));
     }
+
+    [Fact]
+    public void An_override_for_a_file_that_is_not_a_texture_is_an_error_and_odd_sizes_warn_with_the_cooked_size()
+    {
+        var (game, _, mod) = ModEditTests.Setup();
+        using var _ = game;
+        var dir = Path.Combine(mod.Dir, "textures");
+        Directory.CreateDirectory(dir);
+        using (var stream = File.Create(Path.Combine(dir, "Fern.png")))
+            new StbImageWriteSharp.ImageWriter().WritePng(Enumerable.Repeat((byte)255, 6 * 6 * 4).ToArray(), 6, 6, StbImageWriteSharp.ColorComponents.RedGreenBlueAlpha, stream);
+        mod.Manifest.Replace.Add(new TextureReplacement { Texture = "Fern", File = "textures/Fern.png" });
+        mod.Manifest.Textures.Overrides["textures/nothing.png"] = TextureCompression.Bc7; // as an outside edit of mod.json would (Save would prune it)
+
+        var result = new ModChecker(_ => null).Check(mod, index: null);
+
+        Assert.Contains(result.Errors, e => e.Contains("textures/nothing.png") && e.Contains("not one of the mod's textures"));
+        Assert.Contains(result.Warnings, w => w.Contains("6x6") && w.Contains("8x8 when cooked"));
+    }
 }

@@ -98,7 +98,11 @@ public sealed partial class ModProject
         return entry;
     }
 
-    public void Save() => WriteSafely(Path.Combine(Dir, ModManifest.FileName), Manifest.ToJson());
+    public void Save()
+    {
+        PruneTextureOverrides(Manifest);
+        WriteSafely(Path.Combine(Dir, ModManifest.FileName), Manifest.ToJson());
+    }
 
     /// <summary>Writes a temp file in the same folder, then moves it over the old one: a failure never leaves half a mod.json.</summary>
     internal static void WriteSafely(string path, string text)

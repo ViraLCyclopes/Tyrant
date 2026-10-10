@@ -2,6 +2,7 @@ using StbImageSharp;
 using Tyrant.Core.Assets;
 using Tyrant.Core.Install;
 using Tyrant.Core.Sounds;
+using Tyrant.Core.Textures;
 using Tyrant.Framework.Core;
 
 namespace Tyrant.Core.Mods;
@@ -86,6 +87,11 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
         {
             var image = Image(mod, entry.Texture, entry.File, errors);
             if (image is null) continue;
+            if (image.Width % 4 != 0 || image.Height % 4 != 0)
+            {
+                var (w4, h4) = TextureCooker.CookedSize(image.Width, image.Height);
+                warnings.Add($"{entry.Texture}: {entry.File} is {image.Width}x{image.Height}; it will be scaled up to {w4}x{h4} when cooked (compressed textures need sides that are multiples of 4).");
+            }
 
             if (index is not null)
             {
@@ -141,6 +147,11 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
                 {
                     var image = Image(mod, $"{key} {sex} {slot}", file, errors);
                     if (image is null) continue;
+                    if (image.Width % 4 != 0 || image.Height % 4 != 0)
+                    {
+                        var (w4, h4) = TextureCooker.CookedSize(image.Width, image.Height);
+                        warnings.Add($"{key} {sex} {slot}: {file} is {image.Width}x{image.Height}; it will be scaled up to {w4}x{h4} when cooked (compressed textures need sides that are multiples of 4).");
+                    }
                     if (index is not null && baseTextures is not null && baseTextures.TryGetValue(slot, out var guid)
                         && index.Assets.FirstOrDefault(a => string.Equals(a.Guid, guid, StringComparison.OrdinalIgnoreCase)) is { } original
                         && sizeOf(original) is { } size && (size.Width, size.Height) != (image.Width, image.Height))
@@ -150,6 +161,9 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
                 }
             }
         }
+        var textureFiles = new HashSet<string>(ModTextureCooker.TextureFiles(mod.Manifest), StringComparer.OrdinalIgnoreCase);
+        foreach (var file in mod.Manifest.Textures.Overrides.Keys.Where(f => !textureFiles.Contains(f)))
+            errors.Add($"Texture compression for \"{file}\": not one of the mod's textures (a skin slot or a texture replacement).");
         ColourWarnings(mod, index, species, warnings);
         ModelProblems(mod, species, errors, warnings);
         RigProblems(mod, rigInfo, errors, warnings);

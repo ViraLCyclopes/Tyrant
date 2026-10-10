@@ -3,6 +3,7 @@ using System.Text;
 using Tyrant.Core.Dumping;
 using Tyrant.Core.Errors;
 using Tyrant.Core.Install;
+using Tyrant.Core.Textures;
 using Tyrant.Framework.Core;
 
 namespace Tyrant.Core.Mods;
@@ -21,6 +22,9 @@ public sealed record InstalledMod(string Id, string Name, string Version, int Re
 {
     /// <summary>Species whose model or rig edit a later enabled mod in the load order overrides (the framework uses the later one).</summary>
     public IReadOnlyList<string> Clashes { get; init; } = [];
+
+    /// <summary>"current", "stale" or "none" (see CookedPacks); null when the mod could not be read.</summary>
+    public string? Cooked { get; init; }
 }
 
 /// <summary>
@@ -34,7 +38,8 @@ public sealed class GameMods(Func<GameInstall, bool>? isGameRunning = null)
 
     public static string ListPath(GameInstall install) => Path.Combine(ModLoaderInstaller.RecordDir(install), ModList.FileName);
 
-    public void Install(GameInstall install, ModProject mod)
+    /// <param name="prepare">Runs on the staging copy before it replaces the installed one (Tyrant cooks the textures there); if it throws, nothing is installed.</param>
+    public void Install(GameInstall install, ModProject mod, Action<string>? prepare = null)
     {
         RefuseWhileRunning(install, "installing a mod");
         if (!ModLoaderInstaller.HasFramework(install))
@@ -51,6 +56,15 @@ public sealed class GameMods(Func<GameInstall, bool>? isGameRunning = null)
             TryDeleteDirectory(previous); // left by an earlier install that could not clean up
             if (Directory.Exists(staging)) Directory.Delete(staging, recursive: true);
             CopyDirectory(mod.Dir, staging);
+            if (prepare is not null)
+            {
+                try { prepare(staging); }
+                catch (Exception ex) when (ex is not (IOException or UnauthorizedAccessException))
+                {
+                    TryDeleteDirectory(staging);
+                    throw;
+                }
+            }
             // Swap whole folders: a move either happens completely or not at all, so a failure never leaves a half-deleted copy.
             if (Directory.Exists(target))
             {
@@ -117,7 +131,7 @@ public sealed class GameMods(Func<GameInstall, bool>? isGameRunning = null)
                 var manifest = ModManifest.Parse(File.ReadAllText(path));
                 manifest.Species.AddRange(AnimalDatabaseFile.Read(Path.Combine(dir, AnimalDatabaseFile.FileName)));
                 if (enabled) manifests[folder] = manifest;
-                result.Add(new InstalledMod(folder, manifest.Name, manifest.Version, manifest.Replace.Count, manifest.Skins.Count, enabled, dir, null));
+                result.Add(new InstalledMod(folder, manifest.Name, manifest.Version, manifest.Replace.Count, manifest.Skins.Count, enabled, dir, null) { Cooked = CookedPacks.StateOf(dir, manifest) });
             }
             catch (Exception ex) when (ex is ManifestException or IOException or UnauthorizedAccessException)
             {
@@ -171,6 +185,7 @@ public sealed class GameMods(Func<GameInstall, bool>? isGameRunning = null)
         foreach (var file in Directory.GetFiles(dir, "*", SearchOption.AllDirectories)
                      .Where(f => !AnimalDatabaseFile.IsAuxiliary(f))
                      .Select(f => (Path: f, Relative: Path.GetRelativePath(dir, f).Replace('\\', '/').ToLowerInvariant()))
+                     .Where(f => !string.Equals(f.Relative, TexturePack.FileName, StringComparison.OrdinalIgnoreCase))
                      .OrderBy(f => f.Relative, StringComparer.Ordinal))
         {
             var name = Encoding.UTF8.GetBytes(file.Relative + "\n");
@@ -211,6 +226,7 @@ public sealed class GameMods(Func<GameInstall, bool>? isGameRunning = null)
         foreach (var file in Directory.GetFiles(from, "*", SearchOption.AllDirectories))
         {
             if (AnimalDatabaseFile.IsAuxiliary(file)) continue;
+            if (string.Equals(Path.GetRelativePath(from, file), TexturePack.FileName, StringComparison.OrdinalIgnoreCase)) continue; // only prepare writes the pack
             var destination = Path.Combine(to, Path.GetRelativePath(from, file));
             Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
             if (Path.GetRelativePath(from, file) == AnimalDatabaseFile.FileName) AnimalDatabaseFile.CopySnapshot(file, destination);

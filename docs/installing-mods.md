@@ -124,3 +124,9 @@ New skins show up in the **Nursery** next to the game's own. For species with ma
 
 Only download Tyrant and the framework from the [official releases page](https://github.com/ViraLCyclopes/Tyrant/releases).
 See the [terms of use](../TERMS.md) for the rules on game content and sharing.
+
+### Cooked textures
+
+When Tyrant installs or exports a mod it compresses the mod's textures into `textures.tpack` next to `mod.json`, so the
+game loads them ready-made (less memory, no stutter). A mod installed by an older Tyrant has no such file: it still
+works, but the Mods tab marks it **Reinstall to cook textures** -- install it again to cook it.
