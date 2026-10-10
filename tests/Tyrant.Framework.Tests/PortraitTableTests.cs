@@ -29,4 +29,44 @@ public class PortraitTableTests
         Assert.Null(table.PathFor(skin, "adultMale"));
         Assert.False(table.Any);
     }
+
+    [Fact]
+    public void An_unusable_path_skips_only_its_slot_and_is_reported()
+    {
+        var table = new PortraitTable();
+        var dir = Path.Combine(Path.GetTempPath(), "mod-a");
+        object skin = new();
+        var skipped = table.Register(skin, dir, new Dictionary<string, string> { ["adultMale"] = "a\0b.png", ["infant"] = "i.png", ["adultFemale"] = "../x.png" });
+
+        Assert.Equal(new[] { "adultFemale", "adultMale" }, skipped.OrderBy(x => x).ToArray());
+        Assert.Null(table.PathFor(skin, "adultMale"));
+        Assert.Equal(Path.GetFullPath(Path.Combine(dir, "i.png")), table.PathFor(skin, "infant"));
+    }
+
+    [Fact]
+    public void An_unregistered_base_skin_gives_nothing_to_inherit()
+    {
+        var table = new PortraitTable();
+        var dir = Path.Combine(Path.GetTempPath(), "mod-a");
+        object skin = new(), unknown = new();
+        var skipped = table.Register(skin, dir, new Dictionary<string, string> { ["infant"] = "i.png" }, inheritFrom: unknown);
+
+        Assert.Empty(skipped);
+        Assert.NotNull(table.PathFor(skin, "infant"));
+        Assert.Null(table.PathFor(skin, "adultMale"));
+    }
+
+    [Fact]
+    public void Registering_again_with_nothing_removes_the_skin()
+    {
+        var table = new PortraitTable();
+        var dir = Path.Combine(Path.GetTempPath(), "mod-a");
+        object skin = new();
+        table.Register(skin, dir, new Dictionary<string, string> { ["infant"] = "i.png" });
+        Assert.True(table.Any);
+        table.Register(skin, dir, null);
+
+        Assert.False(table.Any);
+        Assert.Null(table.PathFor(skin, "infant"));
+    }
 }
