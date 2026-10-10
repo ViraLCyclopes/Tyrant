@@ -31,12 +31,14 @@ public static class ModSharing
                 foreach (var code in AnimalLocalization.Codes) named.Add($"localization/{code}/{term.Replace('\\', '/')}.txt");
         named.AddRange(m.Species.Select(s => s.Icon));
         named.AddRange(m.Species.Select(s => s.Swatch));
+        named.AddRange(m.Species.SelectMany(s => s.Portraits.Values));
         named.AddRange(m.Species.Select(s => s.Prefab?.Bundle));
         named.AddRange(mod.PrefabFiles().Keys.Select(f => PrefabOverrides.Folder + "/" + f));
         named.AddRange(m.Replace.Select(r => r.File));
         foreach (var skin in m.Skins)
         {
             named.Add(skin.Thumbnail);
+            named.AddRange(skin.Portraits?.Values ?? Enumerable.Empty<string>());
             named.AddRange(skin.Male?.Values ?? Enumerable.Empty<string>());
             named.AddRange(skin.Female?.Values ?? Enumerable.Empty<string>());
             named.AddRange(ModelFilesOf(mod, skin.Model));

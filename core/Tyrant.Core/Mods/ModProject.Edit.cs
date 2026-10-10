@@ -142,6 +142,8 @@ public sealed partial class ModProject
             if (why is null) removed.Add(Normal(file));
             else kept.Add($"{Normal(file)}: {why}");
         }
+        var portraitsFolder = Path.Combine(Dir, "skins", skinId, "portraits");
+        try { if (Directory.Exists(portraitsFolder) && !Directory.EnumerateFileSystemEntries(portraitsFolder).Any()) Directory.Delete(portraitsFolder); } catch (IOException) { }
         var folder = Path.Combine(Dir, "skins", skinId);
         try { if (Directory.Exists(folder) && !Directory.EnumerateFileSystemEntries(folder).Any()) Directory.Delete(folder); } catch (IOException) { }
         var blender = BlenderProjectWriter.FolderOf(WorkspaceDir, Id, skin.Species, skin.Id);
@@ -282,7 +284,7 @@ public sealed partial class ModProject
     public string FilesStamp()
     {
         var files = Manifest.Replace.Select(r => r.File).Concat(Manifest.Skins.SelectMany(FilesOf)).Concat(Manifest.Skins.Select(s => s.Model))
-            .Concat(Manifest.Models.Select(m => m.File)).Concat(Manifest.Sounds.SelectMany(s => s.Files)).Concat(Manifest.Species.SelectMany(s => new[] { s.Icon, s.Swatch })).OfType<string>()
+            .Concat(Manifest.Models.Select(m => m.File)).Concat(Manifest.Sounds.SelectMany(s => s.Files)).Concat(Manifest.Species.SelectMany(s => new[] { s.Icon, s.Swatch }.Concat(s.Portraits.Values))).OfType<string>()
             .Select(Normal).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(f => f, StringComparer.Ordinal);
         var text = new System.Text.StringBuilder();
         foreach (var file in files)
@@ -295,7 +297,7 @@ public sealed partial class ModProject
 
     private static IEnumerable<string> FilesOf(SkinEntry skin) =>
         (skin.Male?.Values ?? Enumerable.Empty<string>()).Concat(skin.Female?.Values ?? Enumerable.Empty<string>())
-        .Concat(skin.Thumbnail is null ? [] : [skin.Thumbnail]);
+        .Concat(skin.Thumbnail is null ? [] : [skin.Thumbnail]).Concat(skin.Portraits?.Values ?? Enumerable.Empty<string>());
 
     private static string Normal(string file) => file.Replace('\\', '/');
 }

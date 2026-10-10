@@ -83,7 +83,7 @@ public class ModSpeciesTests
         Assert.Equal(45, custom.Stats["maxAgeYears"]);
     }
 
-    private static SpeciesSkins Template(bool vivarium = false) => new("Allosaurus Anax", vivarium,
+    internal static SpeciesSkins Template(bool vivarium = false) => new("Allosaurus Anax", vivarium,
         [new VanillaSkin(0, "Default", new Dictionary<string, string>(), new Dictionary<string, string>()),
          new VanillaSkin(1, "Albino", new Dictionary<string, string>(), new Dictionary<string, string>())]) { PrefabGuid = "template-prefab" };
 

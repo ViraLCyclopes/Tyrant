@@ -24,6 +24,14 @@ public class SkinMapsTests
     }
 
     [Fact]
+    public void Portrait_guids_are_read_from_the_dump_and_empty_ones_are_skipped()
+    {
+        var alt1 = SkinMaps.Vanilla(Species(), "Carcharodontosaurus", "Alt 1")!;
+        Assert.Equal(new Dictionary<string, string> { ["adultMale"] = "abc" }, alt1.Portraits);
+        Assert.Empty(SkinMaps.Vanilla(Species(), "Carcharodontosaurus", "Base")!.Portraits);
+    }
+
+    [Fact]
     public void Own_files_win_then_male_vanilla_then_female_vanilla()
     {
         var alt1 = SkinMaps.Vanilla(Species(), "Carcharodontosaurus", "Alt 1");

@@ -8,7 +8,7 @@ namespace Tyrant.Core.Tests;
 
 public class ModEditTests
 {
-    private static (FakeGame Game, Workspace Ws, ModProject Mod) Setup()
+    internal static (FakeGame Game, Workspace Ws, ModProject Mod) Setup()
     {
         var game = new FakeGame();
         var ws = Workspace.Create(Path.Combine(Path.GetTempPath(), "tyrant-tests", Guid.NewGuid().ToString("N"), "ws"), new GameInstall(game.Root, null));
@@ -111,7 +111,7 @@ public class ModEditTests
         Assert.Equal(TyrantErrorCode.TargetNotFound, Assert.Throws<TyrantException>(() => mod.RemoveReplacement("T_A_D")).Code);
     }
 
-    private static string Png(string dir, string name = "in.png")
+    internal static string Png(string dir, string name = "in.png")
     {
         Directory.CreateDirectory(dir);
         var path = Path.Combine(dir, name);
@@ -120,7 +120,7 @@ public class ModEditTests
         return path;
     }
 
-    private static ModProject WithSkins(Workspace ws, ModProject mod)
+    internal static ModProject WithSkins(Workspace ws, ModProject mod)
     {
         var skins = Path.Combine(mod.Dir, "skins", "blue");
         Png(skins, "male_D.png");

@@ -2,11 +2,16 @@ using System.Text.Json;
 using Tyrant.Core.Data;
 using Tyrant.Core.Errors;
 using Tyrant.Core.Workspaces;
+using Tyrant.Framework.Core;
 
 namespace Tyrant.Core.Mods;
 
 /// <summary>A vanilla skin of a species: its index and name, and per sex the Addressables GUID of each texture slot it uses.</summary>
-public sealed record VanillaSkin(int Index, string Name, IReadOnlyDictionary<string, string> Male, IReadOnlyDictionary<string, string> Female);
+public sealed record VanillaSkin(int Index, string Name, IReadOnlyDictionary<string, string> Male, IReadOnlyDictionary<string, string> Female)
+{
+    /// <summary>Portrait slot to the Addressables GUID of its texture; empty when the dump has none.</summary>
+    public IReadOnlyDictionary<string, string> Portraits { get; init; } = new Dictionary<string, string>();
+}
 
 public sealed record SpeciesSkins(string SpeciesId, bool Vivarium, IReadOnlyList<VanillaSkin> Skins)
 {
@@ -66,7 +71,7 @@ public static class SpeciesSkinsReader
                     foreach (var skin in list.EnumerateArray())
                     {
                         var name = skin.TryGetProperty("skinName", out var n) && n.ValueKind == JsonValueKind.String ? n.GetString()! : $"Skin {index}";
-                        skins.Add(new VanillaSkin(index, name, Textures(skin, "maleVariationData", variations), Textures(skin, "femaleVariationData", variations)));
+                        skins.Add(new VanillaSkin(index, name, Textures(skin, "maleVariationData", variations), Textures(skin, "femaleVariationData", variations)) { Portraits = PortraitGuids(skin) });
                         index++;
                     }
                 }
@@ -81,6 +86,17 @@ public static class SpeciesSkinsReader
         && reference.TryGetProperty("m_AssetGUID", out var guid) && guid.ValueKind == JsonValueKind.String && guid.GetString() is { Length: > 0 } value
             ? value
             : null;
+
+    private static IReadOnlyDictionary<string, string> PortraitGuids(JsonElement skin)
+    {
+        var portraits = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (!skin.TryGetProperty("portraits", out var block) || block.ValueKind != JsonValueKind.Object) return portraits;
+        foreach (var slot in PortraitSlots.All)
+            if (block.TryGetProperty(slot, out var reference) && reference.ValueKind == JsonValueKind.Object
+                && reference.TryGetProperty("m_AssetGUID", out var guid) && guid.GetString() is { Length: > 0 } text)
+                portraits[slot] = text;
+        return portraits;
+    }
 
     private static IReadOnlyDictionary<string, string> Textures(JsonElement skin, string field, Dictionary<long, JsonElement> variations)
     {
