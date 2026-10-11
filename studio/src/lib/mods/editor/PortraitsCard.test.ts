@@ -56,6 +56,11 @@ describe('PortraitsCard', () => {
     expect(screen.getByRole('button', { name: 'Clear Infant, Normal' })).toBeDisabled(); // the game's: nothing to clear
   });
 
+  it('on a species notes that Render from 3D fills only the Normal column', async () => {
+    await setup(modDetail(), true);
+    expect(screen.getByText(/Renders the Normal column \(adult male, adult female, infant\)\. Albino, melanistic and leucistic need your own PNGs\./)).toBeInTheDocument();
+  });
+
   it('tags a picture inherited from the species as species, not game, and keeps Clear disabled', async () => {
     await setup(modDetail(), false, () => ({ portraits: [{ slot: 'infant', file: 'species/infant.png', own: false, rendered: false, width: 128, height: 64, inherited: true }] }));
 
@@ -126,7 +131,7 @@ describe('PortraitsCard', () => {
     await setup(modDetail(), false, () => new Promise((res) => pending.push(res)));
     const button = screen.getByRole('button', { name: 'Render from 3D…' });
     expect(button).toBeDisabled();
-    expect(screen.getByText(/Renders the Normal column \(adult male, adult female, infant\)\. Albino, melanistic and leucistic need your own PNGs\./)).toBeInTheDocument();
+    expect(screen.getByText(/Renders every picture from one view, each kind of animal with its colours \(the base skin's where this skin sets none\)\./)).toBeInTheDocument();
 
     pending[0]({ portraits: rows });
     await waitFor(() => expect(button).toBeEnabled());

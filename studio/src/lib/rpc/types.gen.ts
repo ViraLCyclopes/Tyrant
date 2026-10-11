@@ -850,6 +850,7 @@ export interface ModSampleColorsParams {
   colors?: string | null;
   variant?: string;
   seed?: number;
+  sex?: string;
 }
 
 export interface ModSampledColors {

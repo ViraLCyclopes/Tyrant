@@ -75,6 +75,7 @@ describe('SkinModel3D', () => {
 
     await fireEvent.click(screen.getByRole('radio', { name: 'Infant' }));
     await waitFor(() => expect(viewer.setAnimalMaps).toHaveBeenLastCalledWith({ diffuse: 'asset://D:\\m\\infant_D.png' }));
+    await waitFor(() => expect(rpc.callsTo('mods.sampleColors').at(-1)?.params).toMatchObject({ sex: 'infant' })); // a mutation's colours depend on the sex
     await fireEvent.click(screen.getByRole('button', { name: 'Show another animal' }));
     await waitFor(() => expect(rpc.callsTo('mods.sampleColors').at(-1)?.params).toMatchObject({ seed: 2 }));
     expect(viewer.showModels).toHaveBeenCalledTimes(1); // the same model, re-dressed

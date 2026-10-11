@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ModPortraitDto } from '$lib/rpc/types.gen';
-import { PORTRAIT_SLOTS, isTwoToOne, renderTargets, slotOf } from './portraits';
+import { PORTRAIT_SLOTS, isTwoToOne, renderShots, slotOf } from './portraits';
 
 const row = (slot: string, own: boolean, rendered: boolean): ModPortraitDto => ({ slot, file: own ? `C:/p/${slot}.png` : null, own, rendered, width: 128, height: 64 });
 
@@ -14,9 +14,17 @@ describe('portraits', () => {
 
   it('renders over empty and rendered slots but keeps hand-picked ones unless asked', () => {
     const shown = [row('adultMale', true, false), row('adultFemale', true, true), row('infant', false, false)];
-    expect(renderTargets(shown, ['male', 'female', 'infant'], false)).toEqual(['female', 'infant']);
-    expect(renderTargets(shown, ['male', 'female', 'infant'], true)).toEqual(['male', 'female', 'infant']);
-    expect(renderTargets(shown, ['male', 'infant'], false)).toEqual(['infant']); // a male-only skin has no female to render
+    const slots = (sexes: ('male' | 'female' | 'infant')[], replace: boolean) => renderShots(shown, sexes, ['normal'], replace).map((s) => s.slot);
+    expect(slots(['male', 'female', 'infant'], false)).toEqual(['adultFemale', 'infant']);
+    expect(slots(['male', 'female', 'infant'], true)).toEqual(['adultMale', 'adultFemale', 'infant']);
+    expect(slots(['male', 'infant'], false)).toEqual(['infant']); // a male-only skin has no female to render
+  });
+
+  it('renders every column a row has, row by row, each with its kind of animal', () => {
+    const shown = [row('adultMaleAlbino', true, false)];
+    const shots = renderShots(shown, ['male', 'infant'], ['normal', 'albino', 'melanistic', 'leucistic'], false);
+    expect(shots.map((s) => s.slot)).toEqual(['adultMale', 'adultMaleMelanistic', 'adultMaleLeucistic', 'infant', 'infantAlbino', 'infantMelanistic', 'infantLeucistic']);
+    expect(shots[1]).toEqual({ sex: 'male', variant: 'melanistic', slot: 'adultMaleMelanistic' });
   });
 
   it('allows 2% off 2:1', () => {

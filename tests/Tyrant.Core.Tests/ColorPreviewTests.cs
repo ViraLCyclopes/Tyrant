@@ -156,6 +156,27 @@ public class ColorPreviewTests
     }
 
     [Fact]
+    public void A_mutation_preview_uses_the_base_skins_mutation_colours()
+    {
+        var (game, ws, mod) = ModWithSkin(withDiffuse: true);
+        using var _ = game;
+        mod.Manifest.Skins[0].Base = "Alt 1"; // its male asset's albino B is green
+        mod.Save();
+        var dataDir = Path.Combine(ws.Dir, "data");
+        SkinDumps.Write(dataDir);
+        var species = SpeciesSkinsReader.Read(Tyrant.Core.Data.DataStore.OpenDirectory(dataDir));
+        var outDir = Path.Combine(ws.Dir, "out");
+
+        var albino = new ModImages(_ => null).ColorPreview(mod, "blue", null, "albino", "male", 1, 1, 8, outDir, null, species);
+        var normal = new ModImages(_ => null).ColorPreview(mod, "blue", null, "normal", "male", 1, 1, 8, outDir, null, species);
+
+        var a = ImageResult.FromMemory(File.ReadAllBytes(albino[0]), ColorComponents.RedGreenBlueAlpha).Data;
+        var n = ImageResult.FromMemory(File.ReadAllBytes(normal[0]), ColorComponents.RedGreenBlueAlpha).Data;
+        Assert.Equal(((byte)200, (byte)200, (byte)200), (n[0], n[1], n[2])); // normal animals keep the texture
+        Assert.True(a[1] > a[0] && a[1] > a[2], $"albino pixel {a[0]},{a[1]},{a[2]} should lean green");
+    }
+
+    [Fact]
     public void A_preview_without_any_diffuse_says_why()
     {
         var (game, ws, mod) = ModWithSkin(withDiffuse: false);

@@ -11,6 +11,12 @@ public sealed record VanillaSkin(int Index, string Name, IReadOnlyDictionary<str
 {
     /// <summary>Portrait slot to the Addressables GUID of its texture; empty when the dump has none.</summary>
     public IReadOnlyDictionary<string, string> Portraits { get; init; } = new Dictionary<string, string>();
+
+    /// <summary>Mutation (albino, melanistic, leucistic) to the male variation asset's colours for it; empty when the dump has none.</summary>
+    public IReadOnlyDictionary<string, SkinColorSet> MaleMorphs { get; init; } = new Dictionary<string, SkinColorSet>();
+
+    /// <summary>The same from the female variation asset.</summary>
+    public IReadOnlyDictionary<string, SkinColorSet> FemaleMorphs { get; init; } = new Dictionary<string, SkinColorSet>();
 }
 
 public sealed record SpeciesSkins(string SpeciesId, bool Vivarium, IReadOnlyList<VanillaSkin> Skins)
@@ -71,7 +77,12 @@ public static class SpeciesSkinsReader
                     foreach (var skin in list.EnumerateArray())
                     {
                         var name = skin.TryGetProperty("skinName", out var n) && n.ValueKind == JsonValueKind.String ? n.GetString()! : $"Skin {index}";
-                        skins.Add(new VanillaSkin(index, name, Textures(skin, "maleVariationData", variations), Textures(skin, "femaleVariationData", variations)) { Portraits = PortraitGuids(skin) });
+                        skins.Add(new VanillaSkin(index, name, Textures(skin, "maleVariationData", variations), Textures(skin, "femaleVariationData", variations))
+                        {
+                            Portraits = PortraitGuids(skin),
+                            MaleMorphs = Morphs(skin, "maleVariationData", variations),
+                            FemaleMorphs = Morphs(skin, "femaleVariationData", variations),
+                        });
                         index++;
                     }
                 }
@@ -98,13 +109,20 @@ public static class SpeciesSkinsReader
         return portraits;
     }
 
+    private static JsonElement? Variation(JsonElement skin, string field, Dictionary<long, JsonElement> variations) =>
+        skin.TryGetProperty(field, out var reference) && reference.ValueKind == JsonValueKind.Object
+        && reference.TryGetProperty("$ref", out var target) && target.TryGetProperty("id", out var id) && id.TryGetInt64(out var key)
+        && variations.TryGetValue(key, out var variation)
+            ? variation
+            : null;
+
+    private static IReadOnlyDictionary<string, SkinColorSet> Morphs(JsonElement skin, string field, Dictionary<long, JsonElement> variations) =>
+        Variation(skin, field, variations) is { } variation ? MorphColors.Read(variation) : new Dictionary<string, SkinColorSet>();
+
     private static IReadOnlyDictionary<string, string> Textures(JsonElement skin, string field, Dictionary<long, JsonElement> variations)
     {
         var textures = new Dictionary<string, string>(StringComparer.Ordinal);
-        if (!skin.TryGetProperty(field, out var reference) || reference.ValueKind != JsonValueKind.Object
-            || !reference.TryGetProperty("$ref", out var target) || !target.TryGetProperty("id", out var id) || !id.TryGetInt64(out var key)
-            || !variations.TryGetValue(key, out var variation))
-            return textures;
+        if (Variation(skin, field, variations) is not { } variation) return textures;
         foreach (var (slot, name) in Fields)
             if (variation.TryGetProperty(name, out var assetReference) && assetReference.ValueKind == JsonValueKind.Object
                 && assetReference.TryGetProperty("m_AssetGUID", out var guid) && guid.GetString() is { Length: > 0 } text)

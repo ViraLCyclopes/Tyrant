@@ -92,7 +92,7 @@
 
   async function colour(mine = generation) {
     try {
-      const colors = await session.rpc.call('mods.sampleColors', { id: doc.id, skin: skin.id, colors: colorsJson, variant, seed });
+      const colors = await session.rpc.call('mods.sampleColors', { id: doc.id, skin: skin.id, colors: colorsJson, variant, seed, sex });
       if (mine === generation) viewer?.setColors(colors);
     } catch {
       // the colours could not be read (the editor shows why); the model keeps its textures

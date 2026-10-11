@@ -72,6 +72,24 @@ public class ModEditorMethodsTests
     }
 
     [Fact]
+    public async Task Sample_colors_of_a_mutation_take_the_base_skins_colours_the_skin_leaves_unset()
+    {
+        using var game = new FakeGame();
+        var (h, _, _) = await WithSkinAndPrefab(game); // based on "Alt 1", whose male asset has albino colours
+
+        var vanilla = await h.Call("mods.sampleColors", new { id = "red-spot", skin = "blue", variant = "albino", sex = "male", seed = 0 });
+        var own = await h.Call("mods.sampleColors", new { id = "red-spot", skin = "blue", colors = "{\"albino\":{\"eye\":\"#00ff00\"}}", variant = "albino", sex = "male", seed = 0 });
+        var female = await h.Call("mods.sampleColors", new { id = "red-spot", skin = "blue", variant = "albino", sex = "female", seed = 0 });
+
+        Assert.Equal("#ff0000", vanilla.GetProperty("eye").GetString());
+        Assert.Equal("#00ff00", vanilla.GetProperty("b").GetString());
+        Assert.InRange(vanilla.GetProperty("strength").GetDouble(), 0.3, 0.4);
+        Assert.Equal("#00ff00", own.GetProperty("eye").GetString()); // the skin's own field wins...
+        Assert.InRange(own.GetProperty("strength").GetDouble(), 0.3, 0.4); // ...and the rest stay the base skin's
+        Assert.Equal(JsonValueKind.Null, female.GetProperty("eye").ValueKind); // the female asset has no albino colours
+    }
+
+    [Fact]
     public async Task Skin_model_names_the_species_prefab_and_the_skins_maps()
     {
         using var game = new FakeGame();

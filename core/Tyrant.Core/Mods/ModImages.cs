@@ -37,7 +37,7 @@ public sealed class ModImages(Func<AssetRecord, ImageResult?> gamePixels)
         var pattern = Load(mod, own, based, "pattern", size, index, fit);
         var extra = Load(mod, own, based, "extra", size, index, fit);
         var maps = new PreviewMaps(diffuse.Width, diffuse.Height, diffuse.Data, pattern?.Data, extra?.Data);
-        var (set, tint) = Mods.ColorPreview.For(colors, variant);
+        var (set, tint) = Mods.ColorPreview.For(colors, variant, MorphColors.Of(SkinMaps.BaseOf(species, skin), sex, variant));
 
         Directory.CreateDirectory(outDir);
         var stamp = Hash($"{mod.Id}|{skinId}|{colorsJson}|{variant}|{sex}|{seed}|{size}|{DateTime.UtcNow.Ticks}");

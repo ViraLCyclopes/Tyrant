@@ -2,15 +2,17 @@
   import { onMount } from 'svelte';
   import type { ModelViewer } from '$lib/assets/viewer';
   import { asRpcError } from '$lib/rpc/client';
-  import type { ModPortraitDto, ModSkinDto, ModSkinModel } from '$lib/rpc/types.gen';
+  import type { ModPortraitDto, ModSampledColors, ModSkinDto, ModSkinModel } from '$lib/rpc/types.gen';
   import { getTab } from '$lib/shell/tab.svelte';
   import { getSession } from '$lib/stores/session.svelte';
   import type { ModDoc } from './modDoc.svelte';
-  import { RENDER_SLOT, renderTargets, type RenderSex } from './portraits';
+  import type { Variant } from './colors';
+  import { renderShots, type RenderSex } from './portraits';
 
   /**
    * Render from 3D: the skin's (or species') model framed like the game's portraits; the user may orbit and zoom, then
-   * Use this view renders the Normal column (adult male, adult female, infant) from that one view and saves it in one edit.
+   * Use this view renders the portraits from that one view and saves them in one edit: for a skin every column (normal,
+   * albino, melanistic, leucistic, each with its colours), for a species the Normal column (it has no colours to show).
    * Hand-picked pictures are kept unless Replace my pictures is ticked.
    */
   type Target = { skin: ModSkinDto } | { speciesId: string; speciesKey: string };
@@ -24,6 +26,9 @@
       ? (['male', 'female', 'infant'] as RenderSex[]).filter((s) => s === 'infant' || (s === 'male' ? !!target.skin.male : !!target.skin.female))
       : ['male', 'female', 'infant'],
   );
+  const variants = $derived<Variant[]>('skin' in target ? ['normal', 'albino', 'melanistic', 'leucistic'] : ['normal']);
+  /** How many pictures a render can write. */
+  const slotCount = $derived(sexes.length * variants.length);
 
   let replace = $state(false);
   let status = $state<string | null>('Loading the model…');
@@ -33,8 +38,9 @@
   let viewer = $state.raw<ModelViewer | null>(null);
   /** The viewer is framed and dressed: Use this view may render. */
   let ready = $state(false);
-  /** The first row's maps, put back after a render so the preview shows what it showed before. */
+  /** The first row's maps and the normal colours, put back after a render so the preview shows what it showed before. */
   let firstMaps: Record<string, string> | null = null;
+  let firstColors: ModSampledColors | null = null;
   let disposed = false;
   /** A click closes the dialog only when it also started on the scrim (an orbit drag released outside the dialog must not). */
   let downOnScrim = false;
@@ -68,7 +74,10 @@
       viewer = next; // from here the unmount cleanup (or the catch below) disposes it
       firstMaps = mapUrls(first.maps);
       next.setAnimalMaps(firstMaps);
-      if ('skin' in target) await colour(next, target.skin);
+      if ('skin' in target) {
+        firstColors = await colours(target.skin, sexes[0]);
+        if (firstColors) next.setColors(firstColors);
+      }
       if (disposed) return;
       next.portraitView();
       if (!tab.active) next.pause();
@@ -82,11 +91,12 @@
     }
   }
 
-  async function colour(next: ModelViewer, skin: ModSkinDto) {
+  /** The shown animal's (normal) colours; null when they cannot be read. */
+  async function colours(skin: ModSkinDto, sex: RenderSex): Promise<ModSampledColors | null> {
     try {
-      next.setColors(await session.rpc.call('mods.sampleColors', { id: doc.id, skin: skin.id, colors: skin.colorsJson, variant: 'normal', seed: 0 }));
+      return await session.rpc.call('mods.sampleColors', { id: doc.id, skin: skin.id, colors: skin.colorsJson, variant: 'normal', sex, seed: 0 });
     } catch {
-      // the colours could not be read (the colour editor shows why); the model keeps its textures
+      return null; // the colours could not be read (the colour editor shows why); the model keeps its textures
     }
   }
 
@@ -96,35 +106,47 @@
   }
 
   const allOwn = $derived(
-    `${sexes.length === 3 ? 'All three are your own pictures' : sexes.length === 2 ? 'Both are your own pictures' : 'It is your own picture'}; ` +
-      `tick Replace my pictures to render over ${sexes.length === 1 ? 'it' : 'them'}.`,
+    `${slotCount === 3 ? 'All three are your own pictures' : slotCount === 2 ? 'Both are your own pictures' : slotCount === 1 ? 'It is your own picture' : `All ${slotCount} are your own pictures`}; ` +
+      `tick Replace my pictures to render over ${slotCount === 1 ? 'it' : 'them'}.`,
   );
 
   async function useView() {
     const v = viewer;
     if (!v || !ready || busy) return;
-    const wanted = renderTargets(shown, sexes, replace);
-    if (!wanted.length) {
+    const shots = renderShots(shown, sexes, variants, replace);
+    if (!shots.length) {
       status = allOwn;
       return;
     }
     busy = true;
-    status = 'Rendering…';
     try {
       const set: Record<string, { data: string; rendered: true }> = {};
       try {
-        for (const sex of wanted) {
-          const m = await model(sex);
-          if (disposed) return;
-          v.setAnimalMaps(mapUrls(m.maps));
-          v.setInfant(sex === 'infant');
+        let dressed: RenderSex | null = null;
+        for (const [i, shot] of shots.entries()) {
+          status = `Rendering ${i + 1}/${shots.length}…`;
+          if (shot.sex !== dressed) {
+            const m = await model(shot.sex); // the shots come row by row: one set of maps per row
+            if (disposed) return;
+            v.setAnimalMaps(mapUrls(m.maps));
+            v.setInfant(shot.sex === 'infant');
+            dressed = shot.sex;
+          }
+          if ('skin' in target) {
+            // Unlike the preview, a picture without its colours would be wrong: an error stops the render.
+            const { skin } = target;
+            const c = await session.rpc.call('mods.sampleColors', { id: doc.id, skin: skin.id, colors: skin.colorsJson, variant: shot.variant, sex: shot.sex, seed: 0 });
+            if (disposed) return;
+            v.setColors(c);
+          }
           await v.whenReady(); // the new maps must be loaded before the shot
-          set[RENDER_SLOT[sex]] = { data: await v.renderPortrait(256, 128), rendered: true }; // the camera stays: one view for all
+          set[shot.slot] = { data: await v.renderPortrait(256, 128), rendered: true }; // the camera stays: one view for all
         }
       } finally {
         if (!disposed) {
           v.setInfant(false);
           if (firstMaps) v.setAnimalMaps(firstMaps); // not the infant's (or the last row's) textures on the shown animal
+          if ('skin' in target) v.setColors(firstColors); // and a normal animal again
         }
       }
       if (disposed) return;
@@ -181,7 +203,9 @@
 >
   <div class="dialog" role="dialog" aria-modal="true" aria-label="Render portraits from 3D" tabindex="-1" bind:this={dialog} onclick={(e) => e.stopPropagation()} onkeydown={() => {}}>
     <h2>Render portraits from 3D</h2>
-    <p class="hint">Turn and zoom the animal until it looks like the game's portraits, then use this view for the Normal column.</p>
+    <p class="hint">
+      Turn and zoom the animal until it looks like the game's portraits, then use this view for {'skin' in target ? 'every portrait: normal, albino, melanistic and leucistic' : 'the Normal column'}.
+    </p>
     <canvas bind:this={canvas} class="viewport" aria-label="Portrait framing"></canvas>
     <label class="row"><input type="checkbox" bind:checked={replace} onchange={() => { if (status === allOwn) status = null; }} /> Replace my pictures</label>
     <p class="status" role="status">{status ?? ''}</p>

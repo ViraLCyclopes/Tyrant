@@ -27,6 +27,16 @@ public static class SkinDumps
 
     public static AssetIndex Index() => new() { Assets = [.. Textures] };
 
+    /// <summary>Carch_Alt1_M's albino block, shaped like the game's (a gradient key per colour, ranges as x/y).</summary>
+    private const string Albino = """
+        "albinoVariationData":{"minMaxHue":{"x":-0.1,"y":0.1},"minMaxVal":{"x":-0.2,"y":0.2},"minMaxSat":{"x":-0.3,"y":0},"iridescenceStrength":0,
+         "minMaxOverrideBase":{"x":0.3,"y":0.4},"minMaxPatternFeather":{"x":0,"y":0.4},
+         "patternAGradient":{"mode":"Blend","colorKeys":[{"time":0,"r":1,"g":0,"b":0,"a":1},{"time":1,"r":0,"g":0,"b":1,"a":1}],"alphaKeys":[]},
+         "patternBGradient":{"mode":"Blend","colorKeys":[{"time":0,"r":0,"g":1,"b":0,"a":1},{"time":1,"r":0,"g":1,"b":0,"a":1}],"alphaKeys":[]},
+         "eyeGradient":{"mode":"Blend","colorKeys":[{"time":0,"r":1,"g":0,"b":0,"a":1}],"alphaKeys":[]},
+         "secondaryGradient":{"mode":"Blend","colorKeys":[{"time":0,"r":0.5,"g":0.5,"b":0.5,"a":1},{"time":1,"r":0.5,"g":0.5,"b":0.5,"a":1}],"alphaKeys":[]}}
+        """;
+
     public static void Write(string dataDir)
     {
         var result = new DumpResult();
@@ -53,8 +63,8 @@ public static class SkinDumps
             """);
         Add(Var, "Carch_Base_M", 10, """{"$type":"x","$name":"Carch_Base_M","$id":10,"adultDiffuseMap":{"m_AssetGUID":"aaaa"}}""");
         Add(Var, "Carch_Base_F", 11, """{"$type":"x","$name":"Carch_Base_F","$id":11,"adultDiffuseMap":{"m_AssetGUID":"bbbb"}}""");
-        Add(Var, "Carch_Alt1_M", 12, $$$"""{"$type":"x","$name":"Carch_Alt1_M","$id":12,"adultDiffuseMap":{"m_AssetGUID":"{{{MaleDiffuse}}}"},"adultNormalMap":{"m_AssetGUID":"{{{MaleNormal}}}"},"adultPatternMap":{"m_AssetGUID":"{{{MalePattern}}}"},"adultExtraMap":{"m_AssetGUID":""}}""");
-        Add(Var, "Carch_Alt1_F", 13, $$$"""{"$type":"x","$name":"Carch_Alt1_F","$id":13,"adultDiffuseMap":{"m_AssetGUID":"{{{FemaleDiffuse}}}"},"adultExtraMap":{"m_AssetGUID":"{{{FemaleExtra}}}"}}""");
+        Add(Var, "Carch_Alt1_M", 12, $$$"""{"$type":"x","$name":"Carch_Alt1_M","$id":12,"adultDiffuseMap":{"m_AssetGUID":"{{{MaleDiffuse}}}"},"adultNormalMap":{"m_AssetGUID":"{{{MaleNormal}}}"},"adultPatternMap":{"m_AssetGUID":"{{{MalePattern}}}"},"adultExtraMap":{"m_AssetGUID":""},{{{Albino}}}}""");
+        Add(Var, "Carch_Alt1_F", 13, $$$$"""{"$type":"x","$name":"Carch_Alt1_F","$id":13,"adultDiffuseMap":{"m_AssetGUID":"{{{{FemaleDiffuse}}}}"},"adultExtraMap":{"m_AssetGUID":"{{{{FemaleExtra}}}}"},"leucisticVariationData":{"patternAGradient":{"mode":"Blend","colorKeys":[{"time":0,"r":1,"g":1,"b":1,"a":1}]}}}""");
         Add("PrehistoricKingdom.VivariumAnimalData", "Frog", 2, """{"$type":"PrehistoricKingdom.VivariumAnimalData","$name":"Frog","$id":2,"speciesID":"Frog","skinsData":[{"skinName":"Green"}]}""");
         DumpWriter.Write(dataDir, result, [], new DumpManifest { RequestId = "r" });
     }

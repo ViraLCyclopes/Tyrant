@@ -25,6 +25,9 @@ vi.mock('$lib/assets/viewer', () => ({ showModels }));
 
 const COLORS = { a: '#ff0000', b: null, secondary: null, eye: null, strength: 1, softness: 0.25, hue: 0, saturation: 0, value: 0 };
 
+/** Colour A per kind of animal, so a render can tell which colours it was taken with. */
+const VARIANT_A: Record<string, string> = { albino: '#ffffff', melanistic: '#000000', leucistic: '#eeeeee' };
+
 const own = (slot: string, rendered: boolean): ModPortraitDto => ({ slot, file: `portraits/${slot}.png`, own: true, rendered, width: 256, height: 128 });
 const game = (slot: string): ModPortraitDto => ({ slot, file: `game/${slot}.png`, own: false, rendered: false, width: 128, height: 64 });
 
@@ -47,7 +50,7 @@ async function setup(shown: ModPortraitDto[], options: { species?: boolean; fema
     })
     .on('mods.speciesModel', (p) => ({ prefabRef: 'p', maps: { diffuse: `D:\\s\\${p.sex}_D.png` }, ownModel: null }))
     .on('assets.preview', () => ({ files: ['C:/x.glb'], materials: [] }))
-    .on('mods.sampleColors', () => COLORS)
+    .on('mods.sampleColors', (p) => (p.variant === 'normal' ? COLORS : { ...COLORS, a: VARIANT_A[p.variant as string] }))
     .on('mods.setPortraits', () => modDetail({ revision: 'r2' }))
     .on('mods.setSpeciesPortraits', () => modDetail({ revision: 'r2' }));
   const session = new Session(rpc, new FakePlatform(), memoryStore());
@@ -74,7 +77,7 @@ describe('PortraitRenderDialog', () => {
     showModels.mockImplementation(async () => fakeViewer);
   });
 
-  it('renders the normal column from one view, skipping hand-picked slots unless Replace is ticked, in one edit', async () => {
+  it('renders every column from one view, skipping hand-picked slots unless Replace is ticked, in one edit', async () => {
     const shown = [own('adultMale', false), own('adultFemale', true), game('infant')];
     const { rpc, onclose } = await setup(shown);
 
@@ -82,7 +85,7 @@ describe('PortraitRenderDialog', () => {
 
     await waitFor(() => expect(rpc.callsTo('mods.setPortraits')).toHaveLength(1));
     const set = setOf(rpc, 'mods.setPortraits');
-    expect(Object.keys(set).sort()).toEqual(['adultFemale', 'infant']);
+    expect(Object.keys(set).sort()).toEqual(PORTRAIT_SLOTS.filter((s) => s !== 'adultMale').sort());
     expect(set.infant).toEqual({ data: 'iVBORw0KGgo=', rendered: true });
     expect(fakeViewer.setInfant).toHaveBeenCalledWith(true);
     expect(fakeViewer.renderPortrait).toHaveBeenCalledWith(256, 128);
@@ -93,7 +96,27 @@ describe('PortraitRenderDialog', () => {
     const { rpc } = await setup([own('adultMale', false), own('adultFemale', false), own('infant', false)]);
     await fireEvent.click(await screen.findByRole('checkbox', { name: 'Replace my pictures' }));
     await useView();
-    await waitFor(() => expect(Object.keys(setOf(rpc, 'mods.setPortraits')).sort()).toEqual(['adultFemale', 'adultMale', 'infant']));
+    await waitFor(() => expect(Object.keys(setOf(rpc, 'mods.setPortraits')).sort()).toEqual([...PORTRAIT_SLOTS].sort()));
+  });
+
+  it('takes each picture with its kind of animal’s colours for that row, then puts the normal colours back', async () => {
+    const taken: Record<string, string> = {};
+    let shot = 0;
+    const order = ['adultMale', 'adultMaleAlbino', 'adultMaleMelanistic', 'adultMaleLeucistic'];
+    fakeViewer.renderPortrait.mockImplementation(async () => {
+      taken[order[shot++] ?? `later${shot}`] = fakeViewer.setColors.mock.calls.at(-1)![0].a;
+      return 'iVBORw0KGgo=';
+    });
+    const { rpc } = await setup([]);
+
+    await useView();
+
+    await waitFor(() => expect(rpc.callsTo('mods.setPortraits')).toHaveLength(1));
+    expect(taken).toMatchObject({ adultMale: '#ff0000', adultMaleAlbino: '#ffffff', adultMaleMelanistic: '#000000', adultMaleLeucistic: '#eeeeee' });
+    const asked = rpc.callsTo('mods.sampleColors').map((c) => c.params as { variant: string; sex: string; seed: number });
+    expect(asked).toContainEqual(expect.objectContaining({ variant: 'albino', sex: 'female', seed: 0 }));
+    expect(asked).toContainEqual(expect.objectContaining({ variant: 'leucistic', sex: 'infant', seed: 0 }));
+    expect(fakeViewer.setColors).toHaveBeenLastCalledWith(COLORS); // the shown animal is a normal one again
   });
 
   it('opens on the portrait view with the skin\'s colours, and waits for the textures before each render', async () => {
@@ -104,8 +127,8 @@ describe('PortraitRenderDialog', () => {
     expect(screen.getByLabelText('Portrait framing').tagName).toBe('CANVAS');
 
     await useView();
-    await waitFor(() => expect(fakeViewer.renderPortrait).toHaveBeenCalledTimes(3));
-    expect(fakeViewer.whenReady).toHaveBeenCalledTimes(3);
+    await waitFor(() => expect(fakeViewer.renderPortrait).toHaveBeenCalledTimes(12));
+    expect(fakeViewer.whenReady).toHaveBeenCalledTimes(12);
     expect(fakeViewer.whenReady.mock.invocationCallOrder[0]).toBeLessThan(fakeViewer.renderPortrait.mock.invocationCallOrder[0]);
     expect(fakeViewer.setInfant).toHaveBeenLastCalledWith(false);
     expect(fakeViewer.portraitView).toHaveBeenCalledTimes(1); // the camera stays where the user put it
@@ -114,11 +137,11 @@ describe('PortraitRenderDialog', () => {
   it('renders only the rows the game shows on a male-only skin', async () => {
     const { rpc } = await setup([], { female: false });
     await useView();
-    await waitFor(() => expect(Object.keys(setOf(rpc, 'mods.setPortraits')).sort()).toEqual(['adultMale', 'infant']));
+    await waitFor(() => expect(Object.keys(setOf(rpc, 'mods.setPortraits')).sort()).toEqual(PORTRAIT_SLOTS.filter((s) => !s.startsWith('adultFemale')).sort()));
     expect(rpc.callsTo('mods.skinModel').map((c) => (c.params as { sex: string }).sex)).not.toContain('female');
   });
 
-  it('on the species page uses the species model and saves without undo, with no colour sampling', async () => {
+  it('on the species page renders the Normal column with the species model and saves without undo, with no colour sampling', async () => {
     const { rpc, doc } = await setup([], { species: true });
     await useView();
     await waitFor(() => expect(rpc.callsTo('mods.setSpeciesPortraits')).toHaveLength(1));
@@ -131,9 +154,9 @@ describe('PortraitRenderDialog', () => {
   });
 
   it('says so when every slot is hand-picked and Replace is unticked, and stays open', async () => {
-    const { rpc, onclose } = await setup([own('adultMale', false), own('adultFemale', false), own('infant', false)]);
+    const { rpc, onclose } = await setup(PORTRAIT_SLOTS.map((slot) => own(slot, false)));
     await useView();
-    expect(await screen.findByText('All three are your own pictures; tick Replace my pictures to render over them.')).toBeInTheDocument();
+    expect(await screen.findByText('All 12 are your own pictures; tick Replace my pictures to render over them.')).toBeInTheDocument();
     expect(rpc.callsTo('mods.setPortraits')).toHaveLength(0);
     expect(fakeViewer.renderPortrait).not.toHaveBeenCalled();
     expect(onclose).not.toHaveBeenCalled();
@@ -155,6 +178,18 @@ describe('PortraitRenderDialog', () => {
     expect(rpc.callsTo('mods.setPortraits')).toHaveLength(0);
     expect(onclose).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'Use this view' })).toBeEnabled();
+  });
+
+  it('when a kind of animal’s colours cannot be read, says why and saves nothing rather than a plain picture', async () => {
+    const { rpc, onclose } = await setup([]);
+    rpc.on('mods.sampleColors', (p) => {
+      if (p.variant === 'melanistic') throw new Error('These colours cannot be previewed: bad');
+      return COLORS;
+    });
+    await useView();
+    expect(await screen.findByText('These colours cannot be previewed: bad')).toBeInTheDocument();
+    expect(rpc.callsTo('mods.setPortraits')).toHaveLength(0);
+    expect(onclose).not.toHaveBeenCalled();
   });
 
   it('when the save fails, shows the error and stays open', async () => {
@@ -208,15 +243,15 @@ describe('PortraitRenderDialog', () => {
 
     fakeViewer.renderPortrait.mockImplementation(async () => 'iVBORw0KGgo=');
     await fireEvent.click(screen.getByRole('button', { name: 'Use this view' }));
-    await waitFor(() => expect(fakeViewer.renderPortrait).toHaveBeenCalledTimes(4));
+    await waitFor(() => expect(fakeViewer.renderPortrait).toHaveBeenCalledTimes(13));
     await waitFor(() => expect(fakeViewer.setAnimalMaps).toHaveBeenLastCalledWith(first));
     expect(fakeViewer.setAnimalMaps.mock.calls.at(-2)![0]).not.toEqual(first); // the infant's maps were shown for its render
   });
 
   it('ticking Replace my pictures clears the all-own note', async () => {
-    await setup([own('adultMale', false), own('adultFemale', false), own('infant', false)]);
+    await setup(PORTRAIT_SLOTS.map((slot) => own(slot, false)));
     await useView();
-    const note = 'All three are your own pictures; tick Replace my pictures to render over them.';
+    const note = 'All 12 are your own pictures; tick Replace my pictures to render over them.';
     expect(await screen.findByText(note)).toBeInTheDocument();
     await fireEvent.click(screen.getByRole('checkbox', { name: 'Replace my pictures' }));
     expect(screen.queryByText(note)).toBeNull();

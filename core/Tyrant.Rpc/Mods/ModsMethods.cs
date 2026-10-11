@@ -250,8 +250,9 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
     [RpcMethod("mods.sampleColors")]
     public ModSampledColors SampleColors(ModSampleColorsParams p)
     {
-        var (ws, _) = session.Current();
-        var skin = ModProject.Open(ws, p.Id).Skin(p.Skin);
+        var (ws, install) = session.Current();
+        var mod = ModProject.Open(ws, p.Id);
+        var skin = mod.Skin(p.Skin);
         Tyrant.Framework.Core.SkinColors? colors;
         try
         {
@@ -261,7 +262,8 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
         {
             throw new TyrantException(TyrantErrorCode.ModInvalid, $"These colours cannot be previewed: {ex.Message}");
         }
-        var (set, tint) = Tyrant.Core.Mods.ColorPreview.For(colors, p.Variant);
+        var based = MorphColors.Variants.Contains(p.Variant) ? MorphColors.Of(BaseSkin(TrySpeciesFor(ws, install, mod), skin), p.Sex, p.Variant) : null;
+        var (set, tint) = Tyrant.Core.Mods.ColorPreview.For(colors, p.Variant, based);
         var s = Tyrant.Core.Mods.ColorPreview.Sample(set, tint, new Random(p.Seed * 7919)); // the strip's first animal (ModImages)
         return new ModSampledColors(s.A?.ToString(), s.B?.ToString(), s.Secondary?.ToString(), s.Eye?.ToString(),
             s.Strength, s.Softness, s.Hue, s.Saturation, s.Value);

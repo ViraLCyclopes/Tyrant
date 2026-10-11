@@ -177,7 +177,8 @@ public sealed record ModColorPreviewParams(string Id, string Skin, string? Color
 
 public sealed record ModPreviewFiles(IReadOnlyList<string> Files);
 
-public sealed record ModSampleColorsParams(string Id, string Skin, string? Colors = null, string Variant = "normal", int Seed = 1);
+/// <summary>Sex: male, female or infant (a mutation's colours the skin leaves unset come from that sex's base asset; infants use the male one).</summary>
+public sealed record ModSampleColorsParams(string Id, string Skin, string? Colors = null, string Variant = "normal", int Seed = 1, string Sex = "male");
 
 /// <summary>One animal's colours (#rrggbb, null = keep the texture), the same as the 2D strip's first animal with that seed.</summary>
 public sealed record ModSampledColors(string? A, string? B, string? Secondary, string? Eye, float Strength, float Softness, float Hue, float Saturation, float Value);

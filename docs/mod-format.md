@@ -110,7 +110,7 @@ A skin can set its own colours in a `colors` section. Every part is optional; an
 |---|---|
 | `tint` | The random hue, saturation and value shift (each -1 to 1) of normal animals. `0` means exact colours. It only shows where the pattern map's red is above 0. |
 | `pattern` | Pattern colours for **normal** animals (vanilla only colours mutations). `a`, `b`: colours where the pattern map's red is low or high. `secondary`: where its green is set. `eye`: the eyes. `strength` (0–1): how much the colour replaces the texture. `softness` (> 0): how soft the edge between `a` and `b` is. |
-| `albino`, `melanistic`, `leucistic` | The same keys, used for that mutation, plus its own `tint`. |
+| `albino`, `melanistic`, `leucistic` | The same keys, used for that mutation, plus its own `tint`. Each key left out keeps the base skin's value, so a mutation you do not touch looks as it does on the base skin. |
 
 - **Colours:** `#rrggbb`, or a list of up to 8 for a gradient; each animal gets a random point on it.
 - **Ranges:** `[min, max]`, or one number for a fixed value.

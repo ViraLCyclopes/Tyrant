@@ -53,7 +53,13 @@
     <!-- Without the rows (loading, or they could not be read) a render could not tell hand-picked pictures from the rest. -->
     <button disabled={loading || loaded?.failed} onclick={() => (rendering = true)}>Render from 3D…</button>
   </div>
-  <p class="hint note">Renders the Normal column (adult male, adult female, infant). Albino, melanistic and leucistic need your own PNGs.</p>
+  <p class="hint note">
+    {#if 'skin' in target}
+      Renders every picture from one view, each kind of animal with its colours (the base skin's where this skin sets none).
+    {:else}
+      Renders the Normal column (adult male, adult female, infant). Albino, melanistic and leucistic need your own PNGs.
+    {/if}
+  </p>
   {#if rendering}<PortraitRenderDialog {doc} {target} {shown} onclose={() => (rendering = false)} />{/if}
   {#if loading}<p class="hint">Loading…</p>{:else if loaded?.failed}<p class="hint">The current pictures could not be read; you can still choose PNGs.</p>{/if}
   <div class="grid" role="group" aria-label="Portraits">

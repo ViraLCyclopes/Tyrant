@@ -19,13 +19,23 @@ public static class ColorPreview
 {
     private const float EyeThreshold = 0.9f;
 
-    public static (SkinColorSet? Set, SkinTint? Tint) For(SkinColors? colors, string variant) => variant switch
+    /// <summary>
+    /// The colours one kind of animal of a skin is drawn with. A mutation's fields the skin leaves unset are the base skin's
+    /// (<paramref name="based"/>, from <see cref="MorphColors.Of"/>), as in the game.
+    /// </summary>
+    public static (SkinColorSet? Set, SkinTint? Tint) For(SkinColors? colors, string variant, SkinColorSet? based = null)
     {
-        "albino" => (colors?.Albino, colors?.Albino?.Tint),
-        "melanistic" => (colors?.Melanistic, colors?.Melanistic?.Tint),
-        "leucistic" => (colors?.Leucistic, colors?.Leucistic?.Tint),
-        _ => (colors?.Pattern, colors?.Tint),
-    };
+        var own = variant switch
+        {
+            "albino" => colors?.Albino,
+            "melanistic" => colors?.Melanistic,
+            "leucistic" => colors?.Leucistic,
+            _ => colors?.Pattern,
+        };
+        if (!MorphColors.Variants.Contains(variant)) return (own, colors?.Tint);
+        var set = MorphColors.Fill(own, based);
+        return (set, set?.Tint);
+    }
 
     /// <summary>One animal's colours, drawn in the order the picture always used (so a seed keeps giving the same animal).</summary>
     public static SampledColors Sample(SkinColorSet? set, SkinTint? tint, Random random)
