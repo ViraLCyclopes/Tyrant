@@ -12,7 +12,7 @@ public sealed record CookedTexture(int Format, bool Linear, int Width, int Heigh
 public static class TextureCooker
 {
     /// <summary>Raise when the output for the same PNG changes, so cached textures are cooked again.</summary>
-    public const int Version = 1;
+    public const int Version = 2;
 
     public static int FormatFor(SlotKind kind, TextureCompression mode, bool opaque) =>
         mode == TextureCompression.Bc7 ? UnityTextureFormats.Bc7
@@ -30,8 +30,12 @@ public static class TextureCooker
     }
 
     /// <param name="rgba">Top row first, 4 bytes per pixel; not changed.</param>
-    public static CookedTexture Cook(byte[] rgba, int width, int height, SlotKind kind, TextureCompression mode)
+    /// <param name="texconv">Runs BC7 on the graphics card; null for the copy shipped with Tyrant.</param>
+    /// <param name="slower">Called when BC7 cannot use texconv and falls back to BCnEncoder (much slower).</param>
+    public static CookedTexture Cook(byte[] rgba, int width, int height, SlotKind kind, TextureCompression mode,
+        Texconv? texconv = null, Action? slower = null, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         var pixels = (byte[])rgba.Clone();
         var filter = kind == SlotKind.Color ? MipFilter.Srgb : MipFilter.Plain;
         if (kind == SlotKind.Normal)
@@ -44,22 +48,45 @@ public static class TextureCooker
         (pixels, width, height) = MipChain.ScaleToMultipleOf4(pixels, width, height);
         MipChain.FlipRows(pixels, width, height);
         var levels = MipChain.Build(pixels, width, height, filter);
+        var data = format == UnityTextureFormats.Bc7
+            ? Bc7(levels, texconv ?? Texconv.Default, slower, ct)
+            : Encode(levels, format, CompressionQuality.Balanced, ct);
+        return new CookedTexture(format, kind != SlotKind.Color, width, height, levels.Count, data);
+    }
 
+    /// <summary>BC7 through texconv; without it, BCnEncoder's fast BC7 (its balanced one takes minutes per 4K texture).</summary>
+    private static byte[] Bc7(List<MipLevel> levels, Texconv texconv, Action? slower, CancellationToken ct)
+    {
+        try
+        {
+            return texconv.CompressBc7(levels, ct);
+        }
+        catch (TexconvException)
+        {
+            slower?.Invoke();
+            return Encode(levels, UnityTextureFormats.Bc7, CompressionQuality.Fast, ct);
+        }
+    }
+
+    private static byte[] Encode(List<MipLevel> levels, int format, CompressionQuality quality, CancellationToken ct)
+    {
         var encoder = new BcEncoder();
         encoder.OutputOptions.GenerateMipMaps = false;
-        encoder.OutputOptions.Quality = CompressionQuality.Balanced;
+        encoder.OutputOptions.Quality = quality;
         encoder.OutputOptions.Format = format == UnityTextureFormats.Dxt1 ? CompressionFormat.Bc1
             : format == UnityTextureFormats.Dxt5 ? CompressionFormat.Bc3 : CompressionFormat.Bc7;
         encoder.Options.IsParallel = true;
-        var data = new byte[UnityTextureFormats.DataLength(format, width, height, levels.Count)];
+        var data = new byte[UnityTextureFormats.DataLength(format, levels[0].Width, levels[0].Height, levels.Count)];
         var at = 0;
         foreach (var level in levels)
         {
-            var block = encoder.EncodeToRawBytes(level.Rgba.AsSpan(), level.Width, level.Height, PixelFormat.Rgba32)[0];
+            ct.ThrowIfCancellationRequested();
+            // The async form is the one that takes a cancellation token; it is waited on here (cooking runs in a job or the CLI).
+            var block = encoder.EncodeToRawBytesAsync(level.Rgba.AsMemory(), level.Width, level.Height, PixelFormat.Rgba32, ct).GetAwaiter().GetResult()[0];
             block.CopyTo(data, at);
             at += block.Length;
         }
         if (at != data.Length) throw new InvalidOperationException($"Cooked {at} bytes, expected {data.Length}.");
-        return new CookedTexture(format, kind != SlotKind.Color, width, height, levels.Count, data);
+        return data;
     }
 }

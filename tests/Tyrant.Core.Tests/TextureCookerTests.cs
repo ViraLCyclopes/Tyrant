@@ -108,4 +108,55 @@ public class TextureCookerTests
 
         Assert.ThrowsAny<Exception>(() => TextureCooker.CookPng(path, SlotKind.Color, TextureCompression.Auto));
     }
+
+    private static Texconv Missing() =>
+        new(Path.Combine(Path.GetTempPath(), "tyrant-tests", Guid.NewGuid().ToString("N"), Texconv.FileName));
+
+    [Theory]
+    [InlineData(64, 64)]
+    [InlineData(8, 4)]
+    [InlineData(4, 4)]
+    public void Bc7_goes_through_texconv_at_any_size_with_every_mip(int w, int h)
+    {
+        var slower = 0;
+        var cooked = TextureCooker.Cook(Image(w, h, (x, y) => ((byte)(x * 255 / w), (byte)(y * 255 / h), 90, 255)), w, h,
+            SlotKind.Color, TextureCompression.Bc7, Texconv.Default, () => slower++);
+
+        Assert.Equal(0, slower);
+        Assert.Equal((UnityTextureFormats.Bc7, UnityTextureFormats.FullMipCount(w, h)), (cooked.Format, cooked.MipCount));
+        Assert.Equal(UnityTextureFormats.DataLength(UnityTextureFormats.Bc7, w, h, cooked.MipCount), cooked.Data.Length);
+        var corner = Level0(cooked)[(h - 1) * w + (w - 1)]; // rows are stored bottom first: the last row is the image's top
+        Assert.InRange(Math.Abs(corner.r - 255 * (w - 1) / w), 0, 12);
+        Assert.InRange(corner.g, 0, 12);
+    }
+
+    [Fact]
+    public void Without_texconv_bc7_still_cooks_and_says_it_is_slower()
+    {
+        var slower = 0;
+        var cooked = TextureCooker.Cook(Image(16, 16, (_, _) => (40, 160, 220, 255)), 16, 16, SlotKind.Color, TextureCompression.Bc7, Missing(), () => slower++);
+
+        Assert.Equal(1, slower);
+        Assert.Equal(UnityTextureFormats.Bc7, cooked.Format);
+        var pixel = Level0(cooked)[0];
+        Assert.InRange(Math.Abs(pixel.r - 40) + Math.Abs(pixel.g - 160) + Math.Abs(pixel.b - 220), 0, 12);
+    }
+
+    [Fact]
+    public void Cancelling_stops_a_texture_being_encoded()
+    {
+        var size = 1024;
+        var random = new Random(1);
+        var noise = new byte[size * size * 4];
+        random.NextBytes(noise);
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
+
+        Assert.ThrowsAny<OperationCanceledException>(() =>
+            TextureCooker.Cook(noise, size, size, SlotKind.Color, TextureCompression.Bc7, Missing(), null, cts.Token)); // BCnEncoder's BC7 takes seconds here
+        Assert.ThrowsAny<OperationCanceledException>(() =>
+            TextureCooker.Cook(noise, size, size, SlotKind.Color, TextureCompression.Auto, null, null, new CancellationToken(canceled: true)));
+    }
+
+    [Fact]
+    public void The_cooker_version_is_raised_for_the_new_bc7_encoder() => Assert.Equal(2, TextureCooker.Version);
 }
