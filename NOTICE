@@ -14,4 +14,8 @@ core/Tyrant.Core/Resources/classdata.tpk is Unity's class type database from Ass
 built-in asset files, which carry no type information of their own.
 
 BCnEncoder.Net (https://github.com/Nominom/BCnEncoder.NET, MIT OR Unlicense, Copyright (c) 2020 Nominom) compresses mod textures
-to the DXT and BC7 formats when Tyrant installs a mod.
+to the DXT formats when Tyrant installs a mod, and to BC7 when texconv cannot run.
+
+texconv.exe is Microsoft's DirectXTex texture converter (https://github.com/microsoft/DirectXTex, release may2026, MIT License,
+Copyright (c) Microsoft Corporation; licence text in texconv.LICENSE.txt next to it). Tyrant ships it unchanged and runs it to
+compress mod textures to BC7 on the graphics card.

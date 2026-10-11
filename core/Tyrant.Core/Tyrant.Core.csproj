@@ -21,4 +21,9 @@
   <ItemGroup>
     <EmbeddedResource Include="Resources\classdata.tpk" LogicalName="Tyrant.Core.Resources.classdata.tpk" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Microsoft's texconv (DirectXTex, MIT): BC7 on the graphics card. Sits next to tyrant.exe in builds, tests and the app's sidecar. -->
+    <None Include="Tools\texconv.exe" Link="texconv.exe" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="Tools\texconv.LICENSE.txt" Link="texconv.LICENSE.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>
