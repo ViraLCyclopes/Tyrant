@@ -18,9 +18,9 @@ public class ModSettings : WorkspaceSettings
 }
 
 /// <summary>Reports on the calling thread, in order (System.Progress posts to the thread pool without a synchronization context).</summary>
-internal sealed class SyncProgress(Action<(int Done, int Total)> report) : IProgress<(int Done, int Total)>
+internal sealed class SyncProgress(Action<CookProgress> report) : IProgress<CookProgress>
 {
-    public void Report((int Done, int Total) value) => report(value);
+    public void Report(CookProgress value) => report(value);
 }
 
 internal static class ModCli
@@ -254,7 +254,7 @@ public sealed class ModInstallCommand : Command<ModInstallCommand.Settings>
         }
         var cooker = ModCli.Cooker(ws, install, mod);
         new GameMods(launcher.IsRunning).Install(install, mod, staging => cooker.WritePack(mod.Manifest, staging, staging,
-            new SyncProgress(p => Console.WriteLine($"Cooking textures {p.Done}/{p.Total}..."))));
+            new SyncProgress(p => Console.WriteLine(p.Message))));
         Console.WriteLine($"Installed '{mod.Id}' into {Path.Combine(ModLoaderInstaller.ModsDir(install), mod.Id)}. Start the game to see it; undo with 'tyrant mod remove {mod.Id}'.");
         return ExitCodes.Ok;
     }

@@ -31,7 +31,7 @@ public sealed class ModExportCommand : Command<ModExportCommand.Settings>
         }
         var cooker = ModCli.Cooker(ws, install, mod);
         var path = ModSharing.Export(mod, Path.GetFullPath(settings.Out ?? Path.Combine(ws.Dir, "exports", $"{mod.Id}-{mod.Manifest.Version}.zip")), FrameworkInfo.Version,
-            dir => cooker.WritePack(mod.Manifest, mod.Dir, dir, new SyncProgress(p => Console.WriteLine($"Cooking textures {p.Done}/{p.Total}..."))));
+            dir => cooker.WritePack(mod.Manifest, mod.Dir, dir, new SyncProgress(p => Console.WriteLine(p.Message))));
         foreach (var warning in check.Warnings) Console.WriteLine($"  WARN   {warning}");
         Console.WriteLine($"Exported '{mod.Id}' to {path}. Players unzip it into the game folder.");
         return ExitCodes.Ok;

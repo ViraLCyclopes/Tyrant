@@ -43,7 +43,7 @@
         <option value="bc7">BC7 — best quality, twice DXT1's memory</option>
       </select>
     </label>
-    <p class="hint">Textures in game: about {formatBytes(facts.current.totalBytes)}. Tyrant compresses them when it installs or exports the mod (BC7 takes about 20 s per 4K texture; unchanged textures are reused).</p>
+    <p class="hint">Textures in game: about {formatBytes(facts.current.totalBytes)}. Tyrant compresses them when it installs or exports the mod (BC7 is compressed on the graphics card, a few seconds per texture, and takes longer without one; unchanged textures are reused).</p>
   {/if}
   <p class="hint">Id: <code>{doc.id}</code> — the mod's folder name and its key in the game, so it cannot change.</p>
   {#each doc.detail?.usesSpeciesFrom ?? [] as use (use.modId)}

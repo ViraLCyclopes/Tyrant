@@ -63,12 +63,12 @@ public sealed partial class ModsMethods
         // The index and dump are only needed to tell what a replacement fills; skin slots carry their kind (and parsing them is slow).
         mod.Manifest.Replace.Count > 0 ? ModTextureCooker.For(ws, TryIndex(ws)?.Assets, TrySpeciesFor(ws, install, mod)) : ModTextureCooker.For(ws, null, null);
 
-    /// <summary>Cooking progress as job progress between two fractions: "Cooking textures 3/20...". Synchronous, so reports stay in order and end with the job.</summary>
-    private static IProgress<(int Done, int Total)> Cooking(IProgress<JobProgress> progress, double from, double to) =>
-        new CookingProgress(p => progress.Report(new JobProgress(from + (to - from) * p.Done / Math.Max(1, p.Total), $"Cooking textures {p.Done}/{p.Total}...")));
+    /// <summary>Cooking progress as job progress between two fractions: "Cooking textures 3/20 (file)...". Synchronous, so reports stay in order and end with the job.</summary>
+    private static IProgress<CookProgress> Cooking(IProgress<JobProgress> progress, double from, double to) =>
+        new CookingProgress(p => progress.Report(new JobProgress(from + (to - from) * p.Fraction, p.Message)));
 
-    private sealed class CookingProgress(Action<(int Done, int Total)> report) : IProgress<(int Done, int Total)>
+    private sealed class CookingProgress(Action<CookProgress> report) : IProgress<CookProgress>
     {
-        public void Report((int Done, int Total) value) => report(value);
+        public void Report(CookProgress value) => report(value);
     }
 }

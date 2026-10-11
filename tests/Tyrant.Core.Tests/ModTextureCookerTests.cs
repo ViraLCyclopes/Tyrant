@@ -84,7 +84,7 @@ public class ModTextureCookerTests
         for (var i = 0; i < files.Count; i++) Png(mod, files[i], red: (byte)(20 + i * 30)); // distinct: the cache shares identical PNGs
         var cache = Dir();
         var cooker = new ModTextureCooker(cache);
-        var progress = new List<(int, int)>();
+        var progress = new List<CookProgress>();
 
         var path = cooker.WritePack(Manifest(), mod, mod, new SyncProgress(progress))!;
 
@@ -97,12 +97,16 @@ public class ModTextureCookerTests
             Assert.Equal(TextureFingerprint.Of(Path.Combine(mod, "skins", "blue", "male_D.png")), diffuse.Fingerprint);
             Assert.Equal(UnityTextureFormats.Dxt1, diffuse.Format);
         }
-        Assert.Equal((6, 6), progress[^1]);
+        Assert.Equal(cooker.Targets(Manifest()).Select((t, i) => (i + 1, 6, t.File)), progress.Select(p => (p.Number, p.Total, p.File)));
+        Assert.Equal("Cooking textures 1/6 (skins/blue/male_D.png)...", progress[0].Message);
+        Assert.Equal((0.0, 5 / 6.0), (progress[0].Fraction, progress[^1].Fraction));
         Assert.Equal(6, cooker.Cooked);
 
         Png(mod, "textures/Fern.png", red: 10); // one edit
         var again = new ModTextureCooker(cache);
-        again.WritePack(Manifest(), mod, mod);
+        var cached = new List<CookProgress>();
+        again.WritePack(Manifest(), mod, mod, new SyncProgress(cached));
+        Assert.Equal(6, cached.Count); // textures from the cache report too
         Assert.Equal(1, again.Cooked);
     }
 
@@ -165,8 +169,27 @@ public class ModTextureCookerTests
         Assert.Equal((UnityTextureFormats.Bc7, true), (rock.Format, rock.Override));
     }
 
-    private sealed class SyncProgress(List<(int, int)> seen) : IProgress<(int Done, int Total)>
+    [Fact]
+    public void A_bc7_texture_without_texconv_still_cooks_and_progress_says_it_is_slower()
     {
-        public void Report((int Done, int Total) value) => seen.Add(value);
+        var mod = Dir();
+        var m = Manifest();
+        foreach (var file in ModTextureCooker.TextureFiles(m)) Png(mod, file);
+        m.Textures.Overrides["textures/Fern.png"] = TextureCompression.Bc7;
+        var progress = new List<CookProgress>();
+        var cooker = new ModTextureCooker(Dir(), null, new Texconv(Path.Combine(Dir(), Texconv.FileName)));
+
+        cooker.WritePack(m, mod, mod, new SyncProgress(progress));
+
+        var slower = Assert.Single(progress, p => p.Slower);
+        Assert.Equal("textures/Fern.png", slower.File);
+        Assert.Equal($"Cooking textures {slower.Number}/6 (textures/Fern.png, without the graphics card: slower)...", slower.Message);
+        using var stream = File.OpenRead(Path.Combine(mod, TexturePack.FileName));
+        Assert.Equal(UnityTextureFormats.Bc7, TexturePack.Read(stream).Find("textures/Fern.png", SlotKind.Color)!.Format);
+    }
+
+    private sealed class SyncProgress(List<CookProgress> seen) : IProgress<CookProgress>
+    {
+        public void Report(CookProgress value) => seen.Add(value);
     }
 }

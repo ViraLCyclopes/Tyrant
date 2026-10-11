@@ -117,8 +117,8 @@ public class ModTexturesRpcTests
         await h.RunJob("mods.install", new { id = "red-spot" });
 
         var cooking = Cooking(h).ToList();
-        Assert.Contains(cooking, p => p.GetProperty("message").GetString() == "Cooking textures 1/2...");
-        Assert.Contains(cooking, p => p.GetProperty("message").GetString() == "Cooking textures 2/2...");
+        Assert.Contains(cooking, p => p.GetProperty("message").GetString()!.StartsWith("Cooking textures 1/2 (skins/blue/male_"));
+        Assert.Contains(cooking, p => p.GetProperty("message").GetString()!.StartsWith("Cooking textures 2/2 (skins/blue/male_"));
         Assert.All(cooking, p => Assert.InRange(p.GetProperty("fraction").GetDouble(), 0.8, 0.98));
     }
 
@@ -132,7 +132,7 @@ public class ModTexturesRpcTests
         {
             if (n.GetProperty("method").GetString() != "job.progress") return;
             var p = n.GetProperty("params");
-            if (p.GetProperty("message").GetString() == "Cooking textures 1/2...") h.Jobs.Cancel(p.GetProperty("jobId").GetString()!);
+            if (p.GetProperty("message").GetString()!.StartsWith("Cooking textures 1/2 (")) h.Jobs.Cancel(p.GetProperty("jobId").GetString()!);
         };
 
         var ex = await Assert.ThrowsAsync<RpcCallException>(() => h.RunJob("mods.install", new { id = "red-spot" }));

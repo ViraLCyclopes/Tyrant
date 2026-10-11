@@ -11,11 +11,20 @@ public sealed record CookTarget(string File, SlotKind Kind, TextureCompression M
 
 public sealed record TextureEstimate(string File, SlotKind Kind, TextureCompression Mode, bool Override, int Format, int Width, int Height, long Bytes);
 
+/// <summary>A texture starting to cook (cached ones too): "Cooking textures 2/12 (skins/blue/male_N.png)...".</summary>
+public sealed record CookProgress(int Number, int Total, string File, bool Slower = false)
+{
+    /// <summary>Textures done so far, as a fraction of all.</summary>
+    public double Fraction => (double)(Number - 1) / Total;
+
+    public string Message => $"Cooking textures {Number}/{Total} ({File}{(Slower ? ", without the graphics card: slower" : "")})...";
+}
+
 /// <summary>
 /// Cooks a mod's skin-slot and replacement textures into textures.tpack (install and export). Each cooked texture is kept
 /// in the workspace cache by its PNG's contents, kind, mode and cooker version, so a reinstall cooks only what changed.
 /// </summary>
-public sealed class ModTextureCooker(string cacheDir, Func<string, SlotKind?>? replacementKind = null)
+public sealed class ModTextureCooker(string cacheDir, Func<string, SlotKind?>? replacementKind = null, Texconv? texconv = null)
 {
     internal int Cooked { get; private set; }
 
@@ -91,7 +100,7 @@ public sealed class ModTextureCooker(string cacheDir, Func<string, SlotKind?>? r
         return result;
     }
 
-    public string? WritePack(ModManifest manifest, string sourceDir, string outDir, IProgress<(int Done, int Total)>? progress = null, CancellationToken ct = default)
+    public string? WritePack(ModManifest manifest, string sourceDir, string outDir, IProgress<CookProgress>? progress = null, CancellationToken ct = default)
     {
         var output = Path.Combine(outDir, TexturePack.FileName);
         var targets = Targets(manifest);
@@ -105,16 +114,17 @@ public sealed class ModTextureCooker(string cacheDir, Func<string, SlotKind?>? r
         {
             ct.ThrowIfCancellationRequested();
             var t = targets[i];
+            var number = i + 1;
+            progress?.Report(new CookProgress(number, targets.Count, t.File));
             var png = InsidePath(sourceDir, t.File);
             if (png is null || !File.Exists(png))
                 throw new TyrantException(TyrantErrorCode.ModInvalid, $"{t.File} is missing, so the mod's textures could not be cooked.");
-            var (path, entry) = Cache(png, t);
+            var (path, entry) = Cache(png, t, () => progress?.Report(new CookProgress(number, targets.Count, t.File, Slower: true)), ct);
             if (entry.Width > TexturePack.MaxSide || entry.Height > TexturePack.MaxSide)
                 throw new TyrantException(TyrantErrorCode.ModInvalid, $"{t.File} is {entry.Width}x{entry.Height}; textures can be at most {TexturePack.MaxSide} pixels on a side.");
             entry.Source = t.File;
             entry.Fingerprint = TextureFingerprint.Of(png);
             cached.Add((path, entry));
-            progress?.Report((i + 1, targets.Count));
         }
         Directory.CreateDirectory(outDir);
         var temp = output + ".writing";
@@ -137,7 +147,7 @@ public sealed class ModTextureCooker(string cacheDir, Func<string, SlotKind?>? r
     }
 
     /// <summary>The cooked texture as a one-entry pack in the cache (cooked now when missing or unreadable).</summary>
-    private (string Path, TexturePackEntry Entry) Cache(string png, CookTarget t)
+    private (string Path, TexturePackEntry Entry) Cache(string png, CookTarget t, Action slower, CancellationToken ct)
     {
         byte[] bytes;
         try { bytes = File.ReadAllBytes(png); }
@@ -161,7 +171,7 @@ public sealed class ModTextureCooker(string cacheDir, Func<string, SlotKind?>? r
         {
             using var input = new MemoryStream(bytes);
             var image = StbImageSharp.ImageResult.FromStream(input, StbImageSharp.ColorComponents.RedGreenBlueAlpha);
-            cooked = TextureCooker.Cook(image.Data, image.Width, image.Height, t.Kind, t.Mode);
+            cooked = TextureCooker.Cook(image.Data, image.Width, image.Height, t.Kind, t.Mode, texconv, slower, ct);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

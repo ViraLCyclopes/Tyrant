@@ -138,7 +138,7 @@ PNG changed and uses the PNG instead).
 ```
 
 - `compression`: `auto` (default) matches the game — DXT1 for opaque colour and masks, DXT5 for textures with
-  transparency and for normal maps. `bc7` is best quality at the size of DXT5 (twice DXT1).
+  transparency and for normal maps. `bc7` is best quality at the size of DXT5 (twice DXT1). Tyrant compresses BC7 on the graphics card (a few seconds per texture; longer without one).
 - `overrides`: one texture's own setting (file as written in `replace` or a skin slot).
 - Thumbnails, portraits and species icons are not cooked.
 
