@@ -188,6 +188,24 @@ public class ModTextureCookerTests
         Assert.Equal(UnityTextureFormats.Bc7, TexturePack.Read(stream).Find("textures/Fern.png", SlotKind.Color)!.Format);
     }
 
+    [Fact]
+    public void A_bc7_texture_that_fell_back_is_cooked_again_next_time_rather_than_reused()
+    {
+        var mod = Dir();
+        var m = Manifest();
+        foreach (var file in ModTextureCooker.TextureFiles(m)) Png(mod, file);
+        m.Textures.Overrides["textures/Fern.png"] = TextureCompression.Bc7;
+        var cache = Dir();
+        new ModTextureCooker(cache, null, new Texconv(Path.Combine(Dir(), Texconv.FileName))).WritePack(m, mod, mod);
+
+        var progress = new List<CookProgress>();
+        var again = new ModTextureCooker(cache, null, Texconv.Default);
+        again.WritePack(m, mod, mod, new SyncProgress(progress));
+
+        Assert.Equal(1, again.Cooked); // only the fallback BC7 texture, now through texconv
+        Assert.DoesNotContain(progress, p => p.Slower);
+    }
+
     private sealed class SyncProgress(List<CookProgress> seen) : IProgress<CookProgress>
     {
         public void Report(CookProgress value) => seen.Add(value);

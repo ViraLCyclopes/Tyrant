@@ -126,6 +126,20 @@ public class TexconvTests
     }
 
     [Fact]
+    public void A_texconv_that_hangs_is_stopped_after_its_time_limit_and_reported()
+    {
+        var temp = Dir();
+        var texconv = new Texconv(Fake("ping -n 60 127.0.0.1 >nul"), temp, TimeSpan.FromSeconds(1));
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+
+        var ex = Assert.Throws<TexconvException>(() => texconv.CompressBc7(Chain(8, 8), CancellationToken.None));
+
+        Assert.Contains("did not finish", ex.Message);
+        Assert.InRange(clock.Elapsed.TotalSeconds, 0, 20);
+        Assert.Empty(Directory.EnumerateFileSystemEntries(temp));
+    }
+
+    [Fact]
     public void Cancelling_stops_texconv_at_once_and_leaves_no_temp_folder()
     {
         var temp = Dir();

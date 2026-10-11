@@ -9,9 +9,12 @@ public sealed class TexconvException(string message) : Exception(message);
 /// Microsoft's texconv (DirectXTex, MIT; shipped next to tyrant.exe): compresses BC7 on the graphics card, or with its quick
 /// CPU encoder when there is none. Tyrant's own mips are handed over and kept as they are.
 /// </summary>
-public sealed class Texconv(string exePath, string? tempRoot = null)
+public sealed class Texconv(string exePath, string? tempRoot = null, TimeSpan? timeLimit = null)
 {
     public const string FileName = "texconv.exe";
+
+    /// <summary>Far more than an 8K texture takes even on texconv's CPU path; past it texconv is stuck (a hung graphics driver) and BC7 falls back.</summary>
+    public static readonly TimeSpan DefaultTimeLimit = TimeSpan.FromMinutes(10);
 
     /// <summary>The copy shipped with Tyrant.</summary>
     public static Texconv Default { get; } = new(Path.Combine(AppContext.BaseDirectory, FileName));
@@ -42,7 +45,18 @@ public sealed class Texconv(string exePath, string? tempRoot = null)
             process.ErrorDataReceived += (_, e) => { if (!string.IsNullOrWhiteSpace(e.Data)) last = e.Data.Trim(); };
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();
-            using (ct.Register(() => Stop(process))) process.WaitForExit();
+            using (ct.Register(() => Stop(process)))
+            {
+                var limit = timeLimit ?? DefaultTimeLimit;
+                if (!process.WaitForExit(limit))
+                {
+                    Stop(process);
+                    process.WaitForExit();
+                    ct.ThrowIfCancellationRequested();
+                    throw new TexconvException($"texconv did not finish within {limit.TotalSeconds:0} seconds (is the graphics driver stuck?)");
+                }
+                process.WaitForExit(); // lets the output handlers finish
+            }
             ct.ThrowIfCancellationRequested();
             if (process.ExitCode != 0) throw new TexconvException($"texconv exited with {process.ExitCode}: {last}");
             var output = Path.Combine(outDir, "in.dds");

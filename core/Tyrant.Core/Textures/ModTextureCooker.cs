@@ -167,17 +167,20 @@ public sealed class ModTextureCooker(string cacheDir, Func<string, SlotKind?>? r
             catch (Exception ex) when (ex is TexturePackException or IOException or InvalidOperationException) { } // cook again
         }
         CookedTexture cooked;
+        var fellBack = false;
         try
         {
             using var input = new MemoryStream(bytes);
             var image = StbImageSharp.ImageResult.FromStream(input, StbImageSharp.ColorComponents.RedGreenBlueAlpha);
-            cooked = TextureCooker.Cook(image.Data, image.Width, image.Height, t.Kind, t.Mode, texconv, slower, ct);
+            cooked = TextureCooker.Cook(image.Data, image.Width, image.Height, t.Kind, t.Mode, texconv, () => { fellBack = true; slower(); }, ct);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             throw new TyrantException(TyrantErrorCode.ModInvalid, $"{t.File} could not be cooked: it is not a readable PNG ({ex.Message}).");
         }
         Cooked++;
+        // BC7 cooked without texconv is kept under another name, so the next install tries texconv again instead of reusing it.
+        if (fellBack) path = Path.Combine(cacheDir, key[..2], key + ".fallback.tpack");
         var entry = new TexturePackEntry
         {
             Source = t.File, Kind = t.Kind, Mode = t.Mode, Format = cooked.Format, Linear = cooked.Linear,
