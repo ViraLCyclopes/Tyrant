@@ -81,9 +81,9 @@ public class SkinsManifestTests
     }
 
     [Fact]
-    public void The_framework_version_is_0_1_0()
+    public void The_framework_version_is_0_2_0()
     {
-        Assert.Equal("0.1.0", FrameworkInfo.Version); // unreleased: stays 0.1.0 (rig edits included) until the first release
+        Assert.Equal("0.2.0", FrameworkInfo.Version); // 0.2.0: reads textures from the pack when a slim install left the PNG out
     }
 
     private const string OneBadSkin = """

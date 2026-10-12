@@ -33,7 +33,10 @@ namespace Tyrant.Framework
             var file = Path.GetFileName(replacement.FilePath);
             if (!File.Exists(replacement.FilePath))
             {
-                FrameworkMod.Log.Error($"{replacement.ModId}: file {file} is missing — reinstall the mod from Tyrant; {replacement.Texture} stays vanilla.");
+                // A slim install: Tyrant left the PNG out because the pack holds it.
+                var packed = TexturePacks.LoadWithoutSource(replacement, kind, out var reason);
+                if (packed != null) return packed;
+                FrameworkMod.Log.Error($"{replacement.ModId}: file {file} is missing{reason} — reinstall the mod from Tyrant; {replacement.Texture} stays vanilla.");
                 return null;
             }
 

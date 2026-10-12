@@ -84,6 +84,15 @@ public class TexturePackTests
     }
 
     [Fact]
+    public void Without_its_png_an_entry_is_usable_when_present_and_the_gpu_takes_its_format()
+    {
+        var entry = Entry("a.png", SlotKind.Color, UnityTextureFormats.Bc7, 8, 8);
+        Assert.True(TexturePack.UsableWithoutSource(entry, _ => true));
+        Assert.False(TexturePack.UsableWithoutSource(null, _ => true));
+        Assert.False(TexturePack.UsableWithoutSource(entry, f => f != UnityTextureFormats.Bc7));
+    }
+
+    [Fact]
     public void A_fingerprint_reads_only_the_head_and_tail_and_changes_with_either()
     {
         var data = new byte[300_000];

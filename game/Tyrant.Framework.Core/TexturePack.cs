@@ -184,6 +184,10 @@ namespace Tyrant.Framework.Core
         public static bool Usable(TexturePackEntry? entry, TextureFingerprint source, Func<int, bool> supportsFormat) =>
             entry != null && entry.Fingerprint.Equals(source) && supportsFormat(entry.Format);
 
+        /// <summary>A slim install has no PNG to check against: the entry is used when present and this GPU takes the format.</summary>
+        public static bool UsableWithoutSource(TexturePackEntry? entry, Func<int, bool> supportsFormat) =>
+            entry != null && supportsFormat(entry.Format);
+
         /// <summary>Writes the table (offsets filled in from each entry's Length), then asks writeData for entry i's bytes in order.</summary>
         public static void Write(Stream output, IReadOnlyList<TexturePackEntry> entries, Action<int, Stream> writeData)
         {

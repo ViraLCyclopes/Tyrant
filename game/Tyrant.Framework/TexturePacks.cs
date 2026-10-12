@@ -81,7 +81,28 @@ namespace Tyrant.Framework
                 NoteUncooked(pack);
                 return null;
             }
+            return Upload(pack, entry, replacement, "its PNG is used");
+        }
 
+        /// <summary>
+        /// A slim install (Tyrant left the PNG out): the cooked texture without a fingerprint check; null, with the reason
+        /// for the log when there is one, when the pack has no usable entry.
+        /// </summary>
+        public static Texture2D? LoadWithoutSource(Replacement replacement, SlotKind kind, out string? reason)
+        {
+            reason = null;
+            if (!ByMod.TryGetValue(replacement.ModId, out var pack) || pack.ByKey == null || !pack.ByKey.TryGetValue(Key(replacement.FilePath, kind), out var entry))
+                return null;
+            if (!TexturePack.UsableWithoutSource(entry, format => SystemInfo.SupportsTextureFormat((TextureFormat)format)))
+            {
+                reason = $"; its cooked copy is {UnityTextureFormats.Name(entry.Format)}, which this graphics card cannot show (set it to DXT in Tyrant and reinstall)";
+                return null;
+            }
+            return Upload(pack, entry, replacement, "it stays vanilla");
+        }
+
+        private static Texture2D? Upload(Pack pack, TexturePackEntry entry, Replacement replacement, string otherwise)
+        {
             var texture = new Texture2D(entry.Width, entry.Height, (TextureFormat)entry.Format, entry.MipCount, entry.Linear) { name = replacement.Texture };
             try
             {
@@ -106,7 +127,7 @@ namespace Tyrant.Framework
             catch (Exception ex)
             {
                 UnityEngine.Object.Destroy(texture);
-                FrameworkMod.Log.Warning($"{replacement.ModId}: cooked {entry.Source} could not be loaded ({ex.Message}); its PNG is used.");
+                FrameworkMod.Log.Warning($"{replacement.ModId}: cooked {entry.Source} could not be loaded ({ex.Message}); {otherwise}.");
                 return null;
             }
         }
