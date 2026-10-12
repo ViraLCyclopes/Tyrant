@@ -131,5 +131,6 @@ When Tyrant installs or exports a mod it compresses the mod's textures into `tex
 game loads them ready-made (less memory, no stutter). A mod installed by an older Tyrant has no such file: it still
 works, but the Mods tab marks it **Reinstall to cook textures** — install it again to cook it.
 
-An exported zip carries `textures.tpack` next to the PNGs, so it is bigger than before, and players get the cooked
-textures without needing Tyrant.
+An exported zip carries `textures.tpack`, and usually not the texture PNGs it holds (the author can choose to include
+them), so a mod with big textures takes their space only once. Such a mod needs Tyrant Framework 0.2.0 or newer; an
+older framework skips it and says why. Tyrant's own installs leave those PNGs out of the game folder too.

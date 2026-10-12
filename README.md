@@ -186,8 +186,10 @@ dotnet run --project cli/Tyrant.Cli -- mod restore-cutouts red-spot-carcharo -w 
 dotnet run --project cli/Tyrant.Cli -- mod cook red-spot-carcharo -w D:\tyrant-workspace      # textures.tpack into the mod folder, without installing
 dotnet run --project cli/Tyrant.Cli -- mod install red-spot-carcharo -w D:\tyrant-workspace   # adds MelonLoader + Tyrant's framework if needed
 dotnet run --project cli/Tyrant.Cli -- mod disable red-spot-carcharo -w D:\tyrant-workspace   # also: enable, remove
-dotnet run --project cli/Tyrant.Cli -- mod export red-spot-carcharo -w D:\tyrant-workspace   # a zip players unzip into the game folder
+dotnet run --project cli/Tyrant.Cli -- mod export red-spot-carcharo -w D:\tyrant-workspace   # a zip players unzip into the game folder (--with-pngs keeps the PNGs)
 dotnet run --project cli/Tyrant.Cli -- mod import red-spot-carcharo-1.0.0.zip -w D:\tyrant-workspace   # add a shared mod (--replace to overwrite)
+dotnet run --project cli/Tyrant.Cli -- mod copy-from-game red-spot-carcharo -w D:\tyrant-workspace   # a mod only in the game folder, into the workspace
+dotnet run --project cli/Tyrant.Cli -- tpack extract textures.tpack --out D:\extracted   # a cooked pack back to PNGs (no workspace needed)
 dotnet run --project cli/Tyrant.Cli -- game status -w D:\tyrant-workspace   # framework version in the game and in this Tyrant
 dotnet run --project cli/Tyrant.Cli -- game package-framework -w D:\tyrant-workspace   # the framework as a zip for players without Tyrant
 dotnet run --project cli/Tyrant.Cli -- update check   # this version and the latest on GitHub
