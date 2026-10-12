@@ -531,6 +531,11 @@ export interface ModCopyBaseFileParams {
   slot: string;
 }
 
+export interface ModCopyFromGameParams {
+  id: string;
+  replace?: boolean;
+}
+
 export interface ModCreateParams {
   id: string;
   name?: string | null;
@@ -577,6 +582,7 @@ export interface ModEnableParams {
 export interface ModExportParams {
   id: string;
   out?: string | null;
+  includePngs?: boolean;
 }
 
 export interface ModExportResult {
@@ -601,6 +607,7 @@ export interface ModImportResult {
   id: string;
   problems: string[];
   mods: ModsListResult;
+  extracted?: number;
 }
 
 export interface ModInstallResult {
@@ -1339,6 +1346,17 @@ export interface SpeciesTextureDto {
   sharedWith: string[];
 }
 
+export interface TexturesExtractParams {
+  pack: string;
+  out: string;
+}
+
+export interface TexturesExtractResult {
+  written: number;
+  skipped: string[];
+  out: string;
+}
+
 export interface VanillaSkinRow {
   index: number;
   name: string;
@@ -1410,6 +1428,7 @@ export interface RpcMethods {
   "mods.colorPreview": { params: ModColorPreviewParams; result: ModPreviewFiles };
   "mods.cookTextures": { params: ModIdParams; result: JobStarted };
   "mods.copyBaseFile": { params: ModCopyBaseFileParams; result: ModDetail };
+  "mods.copyFromGame": { params: ModCopyFromGameParams; result: ModImportResult };
   "mods.create": { params: ModCreateParams; result: ModsListResult };
   "mods.createUnityProject": { params: ModIdParams; result: ModUnityProjectDto };
   "mods.customSpecies": { params: ModCustomSpeciesParams; result: ModCustomSpeciesResult };
@@ -1472,6 +1491,7 @@ export interface RpcMethods {
   "species.list": { params: void; result: SpeciesListResult };
   "species.pack": { params: SpeciesPackParams; result: JobStarted };
   "species.rigInfo": { params: SpeciesRigInfoParams; result: SpeciesRigInfoResult };
+  "textures.extract": { params: TexturesExtractParams; result: JobStarted };
   "workspace.create": { params: WorkspaceOpenParams; result: WorkspaceStatus };
   "workspace.open": { params: WorkspaceOpenParams; result: WorkspaceStatus };
   "workspace.refreshAll": { params: void; result: JobStarted };
@@ -1490,6 +1510,7 @@ export interface RpcJobs {
   "mods.install": ModInstallResult;
   "species.exportAnimations": SpeciesExportAnimationsResult;
   "species.pack": SpeciesPackRunResult;
+  "textures.extract": TexturesExtractResult;
   "workspace.refreshAll": RefreshAllResult;
 }
 

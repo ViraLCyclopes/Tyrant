@@ -96,6 +96,11 @@ public static class CliApp
                 game.AddCommand<GamePackageFrameworkCommand>("package-framework").WithDescription("Save Tyrant's framework as a zip for players without Tyrant.");
             });
 
+            config.AddBranch("tpack", tpack =>
+            {
+                tpack.SetDescription("Cooked texture packs (textures.tpack).");
+                tpack.AddCommand<TpackExtractCommand>("extract").WithDescription("Write a texture pack's textures as PNGs into a folder.");
+            });
             config.AddBranch("blender", blender =>
             {
                 blender.SetDescription("Open models in Blender with Tyrant's add-on and send them back (the Workspace tab's Blender card, Open in Blender).");
@@ -129,6 +134,7 @@ public static class CliApp
                 mod.AddCommand<ModExportCommand>("export").WithDescription("Export a mod as a zip players unzip into the game folder.");
                 mod.AddCommand<ModImportCommand>("import").WithDescription("Add a mod from a zip to the workspace.");
                 mod.AddCommand<ModInstallCommand>("install").WithDescription("Install a mod into the game (and Tyrant's framework, if needed).");
+                mod.AddCommand<ModCopyFromGameCommand>("copy-from-game").WithDescription("Copy a mod that is only in the game folder into the workspace (its PNGs extracted from its pack).");
                 mod.AddCommand<ModCookCommand>("cook").WithDescription("Cook a mod's textures into textures.tpack in its workspace folder, without installing.");
                 mod.AddCommand<ModRemoveCommand>("remove").WithDescription("Remove a mod from the game.");
                 mod.AddCommand<ModDeleteCommand>("delete").WithDescription("Delete a mod from the workspace (to the Recycle Bin), and from the game unless --keep-in-game.");

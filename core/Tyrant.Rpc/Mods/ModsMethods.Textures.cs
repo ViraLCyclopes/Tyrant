@@ -76,6 +76,17 @@ public sealed partial class ModsMethods
         });
     }
 
+    /// <summary>Extract textures (Mods tab): any textures.tpack to PNGs in a folder; no workspace needed.</summary>
+    [RpcMethod("textures.extract", JobResult = typeof(TexturesExtractResult))]
+    public JobStarted ExtractTextures(TexturesExtractParams p) =>
+        jobs.Start("Extract textures", (progress, ct) =>
+        {
+            progress.Report(new JobProgress(0.05, $"Extracting {Path.GetFileName(p.Pack)}"));
+            var result = TexturePackExtractor.ExtractTo(p.Pack, p.Out);
+            session.Log($"Extracted {result.Written.Count} textures from {p.Pack} into {p.Out}.");
+            return new TexturesExtractResult(result.Written.Count, result.Skipped, Path.GetFullPath(p.Out));
+        });
+
     private static string KindName(SlotKind kind) => kind == SlotKind.Normal ? "normal" : kind == SlotKind.Data ? "mask" : "colour";
 
     private static ModTextureCooker Cooker(Workspace ws, GameInstall install, ModProject mod) =>

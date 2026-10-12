@@ -162,4 +162,55 @@ public class ModTexturesRpcTests
         Assert.False(File.Exists(Path.Combine(game.Root, "UserData", "Tyrant", "Mods", "red-spot", "textures.tpack")));
         Assert.False(File.Exists(Path.Combine(game.Root, "UserData", "Tyrant", "Mods", "red-spot", "mod.json")));
     }
+
+    [Fact]
+    public async Task Export_leaves_out_the_pngs_unless_asked_and_import_extracts_them()
+    {
+        using var game = new FakeGame();
+        var (h, ws) = await ModEditorMethodsTests.Opened(game);
+        await ModEditorMethodsTests.WithSkin(h, ws);
+
+        var slim = (await h.RunJob("mods.export", new { id = "red-spot", @out = Path.Combine(ws, "slim.zip") })).GetProperty("path").GetString()!;
+        var full = (await h.RunJob("mods.export", new { id = "red-spot", @out = Path.Combine(ws, "full.zip"), includePngs = true })).GetProperty("path").GetString()!;
+
+        using (var archive = System.IO.Compression.ZipFile.OpenRead(slim))
+            Assert.Null(archive.GetEntry("UserData/Tyrant/Mods/red-spot/skins/blue/male_D.png"));
+        using (var archive = System.IO.Compression.ZipFile.OpenRead(full))
+            Assert.NotNull(archive.GetEntry("UserData/Tyrant/Mods/red-spot/skins/blue/male_D.png"));
+
+        await h.Call("mods.delete", new { id = "red-spot", removeFromGame = false });
+        var imported = await h.Call("mods.import", new { file = slim });
+        Assert.Equal(2, imported.GetProperty("extracted").GetInt32());
+        Assert.True(File.Exists(Path.Combine(ws, "mods", "red-spot", "skins", "blue", "male_D.png")));
+    }
+
+    [Fact]
+    public async Task Copy_from_game_brings_an_installed_mod_into_the_workspace()
+    {
+        using var game = new FakeGame();
+        var (h, ws) = await OpenedWithLoader(game);
+        await ModEditorMethodsTests.WithSkin(h, ws);
+        await h.RunJob("mods.install", new { id = "red-spot" });
+        await h.Call("mods.delete", new { id = "red-spot", removeFromGame = false });
+
+        var copied = await h.Call("mods.copyFromGame", new { id = "red-spot" });
+
+        Assert.Equal(("red-spot", 2), (copied.GetProperty("id").GetString(), copied.GetProperty("extracted").GetInt32()));
+        Assert.True(File.Exists(Path.Combine(ws, "mods", "red-spot", "skins", "blue", "male_pattern.png")));
+    }
+
+    [Fact]
+    public async Task Textures_extract_writes_a_packs_pngs_into_a_folder()
+    {
+        using var game = new FakeGame();
+        var (h, ws) = await ModEditorMethodsTests.Opened(game);
+        await ModEditorMethodsTests.WithSkin(h, ws);
+        var pack = (await h.RunJob("mods.cookTextures", new { id = "red-spot" })).GetProperty("path").GetString()!;
+        var outDir = Path.Combine(ws, "extracted");
+
+        var result = await h.RunJob("textures.extract", new { pack, @out = outDir });
+
+        Assert.Equal(2, result.GetProperty("written").GetInt32());
+        Assert.True(File.Exists(Path.Combine(outDir, "skins", "blue", "male_D.png")));
+    }
 }

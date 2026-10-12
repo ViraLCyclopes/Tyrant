@@ -188,4 +188,71 @@ public class ModSharingCliTests
             CliServices.GameModsDir = shipped;
         }
     }
+
+    private static string ModWithOneTexture(string ws)
+    {
+        Run("mod", "new", "red-spot", "--name", "Red spot", "-w", ws);
+        var dir = Path.Combine(ws, "mods", "red-spot");
+        Directory.CreateDirectory(Path.Combine(dir, "skins", "blue"));
+        using (var stream = File.Create(Path.Combine(dir, "skins", "blue", "male_D.png")))
+            new StbImageWriteSharp.ImageWriter().WritePng(new byte[4 * 4 * 4], 4, 4, StbImageWriteSharp.ColorComponents.RedGreenBlueAlpha, stream);
+        File.WriteAllText(Path.Combine(dir, "mod.json"),
+            "{\"format\":1,\"id\":\"red-spot\",\"name\":\"Red spot\",\"version\":\"1.0.0\",\"replace\":[],\"skins\":[{\"id\":\"blue\",\"species\":\"Carcharodontosaurus\",\"name\":\"Blue\",\"base\":\"0\",\"male\":{\"diffuse\":\"skins/blue/male_D.png\"}}]}");
+        return dir;
+    }
+
+    [Fact]
+    public void Mod_export_leaves_out_the_pngs_unless_with_pngs_and_import_extracts_them()
+    {
+        using var game = new FakeGame();
+        var ws = Workspace(game);
+        ModWithOneTexture(ws);
+        var temp = Path.Combine(Path.GetTempPath(), "tyrant-tests", Guid.NewGuid().ToString("N"));
+        var (slim, full) = (Path.Combine(temp, "slim.zip"), Path.Combine(temp, "full.zip"));
+
+        Assert.Equal(ExitCodes.Ok, Run("mod", "export", "red-spot", "--out", slim, "-w", ws).Code);
+        Assert.Equal(ExitCodes.Ok, Run("mod", "export", "red-spot", "--out", full, "--with-pngs", "-w", ws).Code);
+        var imported = Run("mod", "import", slim, "-w", Workspace(game));
+
+        using (var archive = System.IO.Compression.ZipFile.OpenRead(slim))
+            Assert.Null(archive.GetEntry("UserData/Tyrant/Mods/red-spot/skins/blue/male_D.png"));
+        using (var archive = System.IO.Compression.ZipFile.OpenRead(full))
+            Assert.NotNull(archive.GetEntry("UserData/Tyrant/Mods/red-spot/skins/blue/male_D.png"));
+        Assert.Equal(ExitCodes.Ok, imported.Code);
+        Assert.Contains("1 textures were extracted from its cooked pack; they are slightly lower quality than the author's originals.", imported.Out);
+    }
+
+    [Fact]
+    public void Tpack_extract_writes_a_packs_pngs_without_a_workspace()
+    {
+        using var game = new FakeGame();
+        var ws = Workspace(game);
+        var dir = ModWithOneTexture(ws);
+        Run("mod", "cook", "red-spot", "-w", ws);
+        var outDir = Path.Combine(Path.GetTempPath(), "tyrant-tests", Guid.NewGuid().ToString("N"), "out");
+
+        var (code, output, err) = Run("tpack", "extract", Path.Combine(dir, "textures.tpack"), "--out", outDir);
+
+        Assert.True(code == ExitCodes.Ok, err + output);
+        Assert.Contains($"Extracted 1 textures into {outDir}.", output);
+        Assert.True(File.Exists(Path.Combine(outDir, "skins", "blue", "male_D.png")));
+    }
+
+    [Fact]
+    public void Mod_copy_from_game_brings_an_installed_mod_into_the_workspace()
+    {
+        using var game = new FakeGame();
+        var ws = Workspace(game);
+        ModWithOneTexture(ws);
+        var installed = Path.Combine(game.Root, "UserData", "Tyrant", "Mods", "red-spot");
+        Directory.CreateDirectory(Path.Combine(installed, "skins", "blue"));
+        foreach (var file in new[] { "mod.json", "skins/blue/male_D.png" })
+            File.Copy(Path.Combine(ws, "mods", "red-spot", file), Path.Combine(installed, file));
+        var other = Workspace(game);
+
+        var (code, output, err) = Run("mod", "copy-from-game", "red-spot", "-w", other);
+
+        Assert.True(code == ExitCodes.Ok, err + output);
+        Assert.True(File.Exists(Path.Combine(other, "mods", "red-spot", "skins", "blue", "male_D.png")));
+    }
 }

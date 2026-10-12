@@ -14,14 +14,25 @@ public sealed record ModRow(string Id, string Name, string Version, string? Auth
 public sealed record ModsListResult(IReadOnlyList<ModRow> Mods, bool FrameworkInstalled, bool FrameworkOutdated = false);
 
 /// <summary>Out: where to write the zip; null writes &lt;workspace&gt;/exports/&lt;id&gt;-&lt;version&gt;.zip.</summary>
-public sealed record ModExportParams(string Id, string? Out = null);
+/// <summary>IncludePngs: also put the PNGs textures.tpack holds in the zip (bigger; others can edit them without quality loss).</summary>
+public sealed record ModExportParams(string Id, string? Out = null, bool IncludePngs = false);
 
 public sealed record ModExportResult(string Path, IReadOnlyList<string> Warnings);
 
 public sealed record ModImportParams(string File, bool Replace = false);
 
 /// <summary>The imported mod's id, its Check errors and warnings, and the refreshed list.</summary>
-public sealed record ModImportResult(string Id, IReadOnlyList<string> Problems, ModsListResult Mods);
+/// <summary>Extracted: how many PNGs came from the mod's cooked pack (a zip or game copy without its PNGs).</summary>
+public sealed record ModImportResult(string Id, IReadOnlyList<string> Problems, ModsListResult Mods, int Extracted = 0);
+
+/// <summary>A mod only in the game folder (UserData/Tyrant/Mods/&lt;id&gt;), copied into the workspace.</summary>
+public sealed record ModCopyFromGameParams(string Id, bool Replace = false);
+
+/// <summary>Pack: a textures.tpack; Out: the folder its PNGs go to (at their paths in the mod).</summary>
+public sealed record TexturesExtractParams(string Pack, string Out);
+
+/// <summary>Skipped: entries whose path points outside the folder, or that could not be decoded.</summary>
+public sealed record TexturesExtractResult(int Written, IReadOnlyList<string> Skipped, string Out);
 
 public sealed record ModCreateParams(string Id, string? Name = null, string? Author = null);
 
