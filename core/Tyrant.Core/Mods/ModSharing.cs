@@ -4,15 +4,22 @@ using System.Text.Json.Nodes;
 using Tyrant.Core.ModelReplacements;
 using Tyrant.Core.Dumping;
 using Tyrant.Core.Errors;
+using Tyrant.Core.Install;
 using Tyrant.Core.Textures;
 using Tyrant.Core.Workspaces;
 using Tyrant.Framework.Core;
 
 namespace Tyrant.Core.Mods;
 
+/// <summary>An imported mod, how many of its PNGs were extracted from its cooked pack, and the PNGs still missing.</summary>
+public sealed record ImportedMod(ModProject Mod, int Extracted, IReadOnlyList<string> Warnings);
+
 /// <summary>Mods as zips to share: Export writes one laid out for the game folder; Import brings one into the workspace.</summary>
 public static class ModSharing
 {
+    /// <summary>A file of a mod being brought in: its '/' path in the zip or folder, and how to read it.</summary>
+    private sealed record SourceFile(string Name, Func<Stream> Open);
+
     /// <summary>Where a mod sits inside an exported zip (and in the game folder).</summary>
     public const string ZipRoot = "UserData/Tyrant/Mods/";
 
@@ -123,12 +130,18 @@ public static class ModSharing
     /// mod folder, or mod.json at the zip's root. Unsafe paths, no mod or several refuse the whole zip; an existing mod is
     /// replaced only with <paramref name="replace"/>, and only once the new one has unpacked.
     /// </summary>
-    public static ModProject Import(Workspace ws, string zipPath, bool replace)
+    public static ModProject Import(Workspace ws, string zipPath, bool replace) => ImportReported(ws, zipPath, replace).Mod;
+
+    /// <summary><see cref="Import"/>, also saying how many PNGs came from the cooked pack and which are still missing.</summary>
+    public static ImportedMod ImportReported(Workspace ws, string zipPath, bool replace)
     {
         var zipName = Path.GetFileName(zipPath);
         try
         {
-            return Unpack(ws, zipPath, zipName, replace);
+            using var archive = ZipFile.OpenRead(zipPath);
+            var files = archive.Entries.Where(e => !string.IsNullOrEmpty(e.Name))
+                .Select(e => new SourceFile(e.FullName.Replace('\\', '/').TrimStart('/'), e.Open)).ToList();
+            return Unpack(ws, files, zipName, replace);
         }
         catch (InvalidDataException ex)
         {
@@ -136,11 +149,24 @@ public static class ModSharing
         }
     }
 
-    private static ModProject Unpack(Workspace ws, string zipPath, string zipName, bool replace)
+    /// <summary>
+    /// A mod only in the game folder (UserData/Tyrant/Mods/&lt;id&gt;) brought into the workspace like an import: a slim
+    /// install's PNGs are extracted from its pack.
+    /// </summary>
+    public static ImportedMod CopyFromGame(Workspace ws, GameInstall install, string id, bool replace)
     {
-        using var archive = ZipFile.OpenRead(zipPath);
-        var files = archive.Entries.Where(e => !string.IsNullOrEmpty(e.Name))
-            .Select(e => (Entry: e, Name: e.FullName.Replace('\\', '/').TrimStart('/'))).ToList();
+        var root = Path.GetFullPath(ModLoaderInstaller.ModsDir(install));
+        var plain = !string.IsNullOrWhiteSpace(id) && id is not ("." or "..") && Path.GetFileName(id) == id && id.IndexOfAny(Path.GetInvalidFileNameChars()) < 0;
+        var dir = plain ? Path.Combine(root, id) : null;
+        if (dir is null || !Directory.Exists(dir))
+            throw new TyrantException(TyrantErrorCode.TargetNotFound, $"'{id}' is not in the game's mods folder.");
+        var files = Directory.GetFiles(dir, "*", SearchOption.AllDirectories)
+            .Select(f => new SourceFile(Path.GetRelativePath(dir, f).Replace('\\', '/'), () => File.OpenRead(f))).ToList();
+        return Unpack(ws, files, id, replace);
+    }
+
+    private static ImportedMod Unpack(Workspace ws, List<SourceFile> files, string zipName, bool replace)
+    {
         if (files.Any(f => f.Name.Split('/').Any(part => part == "..") || Path.IsPathRooted(f.Name) || f.Name.Contains(':')))
             throw new TyrantException(TyrantErrorCode.ModInvalid, $"'{zipName}' contains an unsafe path; nothing was imported.");
 
@@ -152,7 +178,7 @@ public static class ModSharing
         var prefix = manifests[0].Name[..^ModManifest.FileName.Length];
 
         ModManifest manifest;
-        using (var reader = new StreamReader(manifests[0].Entry.Open()))
+        using (var reader = new StreamReader(manifests[0].Open()))
         {
             try { manifest = ModManifest.Parse(reader.ReadToEnd()); }
             catch (ManifestException ex) { throw new TyrantException(TyrantErrorCode.ModInvalid, $"The mod in '{zipName}' cannot be read: {ex.Message}"); }
@@ -168,18 +194,22 @@ public static class ModSharing
 
         var staging = target + ".importing";
         var previous = target + ".previous";
+        var extracted = 0;
+        var warnings = new List<string>();
         if (Directory.Exists(staging)) Directory.Delete(staging, recursive: true);
         try
         {
-            foreach (var (entry, name) in files.Where(f => f.Name.StartsWith(prefix, StringComparison.Ordinal)))
+            foreach (var file in files.Where(f => f.Name.StartsWith(prefix, StringComparison.Ordinal)))
             {
-                if (string.Equals(name[prefix.Length..], TexturePack.FileName, StringComparison.OrdinalIgnoreCase)) continue; // a workspace mod keeps only its PNGs
-                var destination = Path.GetFullPath(Path.Combine(staging, name[prefix.Length..]));
+                var destination = Path.GetFullPath(Path.Combine(staging, file.Name[prefix.Length..]));
                 if (!ModPaths.IsInside(destination, staging))
                     throw new TyrantException(TyrantErrorCode.ModInvalid, $"'{zipName}' contains an unsafe path; nothing was imported.");
                 Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-                entry.ExtractToFile(destination);
+                using var input = file.Open();
+                using var output = File.Create(destination);
+                input.CopyTo(output);
             }
+            (extracted, warnings) = Restore(staging, manifest);
             // Validate the database before replacing an existing workspace mod.
             try { AnimalDatabaseFile.Read(Path.Combine(staging, AnimalDatabaseFile.FileName)); }
             catch (ManifestException ex) { throw new TyrantException(TyrantErrorCode.ModInvalid, "The imported animal database is invalid: " + ex.Message); }
@@ -202,7 +232,34 @@ public static class ModSharing
         }
         var imported = ModProject.Open(ws, manifest.Id);
         Restamp(imported);
-        return imported;
+        return new ImportedMod(imported, extracted, warnings);
+    }
+
+    /// <summary>
+    /// A slim mod made editable: every PNG mod.json's cooked slots name that is missing is extracted from textures.tpack;
+    /// auto thumbnails go; the pack goes (Cook textures and install rebuild it). Returns the count and one warning per PNG
+    /// still missing.
+    /// </summary>
+    private static (int Extracted, List<string> Warnings) Restore(string staging, ModManifest manifest)
+    {
+        var missing = ModTextureCooker.TextureFiles(manifest)
+            .Where(f => ModTextureCooker.InsidePath(staging, f) is { } p && !File.Exists(p)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var packPath = Path.Combine(staging, TexturePack.FileName);
+        var extracted = 0;
+        if (missing.Count > 0 && File.Exists(packPath))
+        {
+            try { extracted = TexturePackExtractor.ExtractTo(packPath, staging, missing.Contains).Written.Count; }
+            catch (TyrantException) { } // a damaged pack: every PNG stays missing and is reported below
+        }
+        if (File.Exists(packPath)) File.Delete(packPath);
+        var warnings = missing.Where(f => !File.Exists(Path.Combine(staging, f))).Select(f => $"{f} is not in the zip or its cooked pack").ToList();
+        if (SlimCopy.WithoutAutoThumbnails(manifest))
+        {
+            foreach (var file in Directory.GetFiles(staging, "*.png", SearchOption.AllDirectories).Where(f => SlimCopy.IsAutoThumbnail(f)))
+                File.Delete(file);
+            File.WriteAllText(Path.Combine(staging, ModManifest.FileName), manifest.ToJson());
+        }
+        return (extracted, warnings);
     }
 
     /// <summary>Where players get Tyrant and its framework zip.</summary>

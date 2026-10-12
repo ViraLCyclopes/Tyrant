@@ -151,4 +151,57 @@ public class TextureInstallTests
         Assert.Contains("UserData/Tyrant/Mods/red-spot/textures.tpack", names);
         Assert.DoesNotContain(names, n => n.Contains("thumbnail.auto"));
     }
+
+    [Fact]
+    public void Importing_a_slim_zip_extracts_its_pngs_and_drops_the_auto_thumbnails()
+    {
+        var (game, install, ws, mod) = Setup();
+        using var _ = game;
+        var cooker = ModTextureCooker.For(ws, null, null);
+        var zip = Path.Combine(ws.Dir, "exports", "slim.zip");
+        ModSharing.Export(mod, zip, "0.2.0", dir => cooker.WritePack(mod.Manifest, mod.Dir, dir), includePngs: false);
+        var other = Workspace.Create(Path.Combine(Path.GetTempPath(), "tyrant-tests", Guid.NewGuid().ToString("N"), "ws"), install);
+
+        var imported = ModSharing.ImportReported(other, zip, replace: false);
+
+        Assert.Equal(3, imported.Extracted);
+        Assert.Empty(imported.Warnings);
+        Assert.True(File.Exists(Path.Combine(imported.Mod.Dir, "skins", "blue", "male_D.png")));
+        Assert.False(File.Exists(Path.Combine(imported.Mod.Dir, TexturePack.FileName)));
+        Assert.False(File.Exists(Path.Combine(imported.Mod.Dir, "skins", "blue", "thumbnail.auto.png")));
+        Assert.Null(imported.Mod.Manifest.Skins[0].Thumbnail);
+    }
+
+    [Fact]
+    public void A_png_missing_from_zip_and_pack_is_a_warning_not_a_failure()
+    {
+        var (game, install, ws, _) = Setup();
+        using var _g = game;
+        var zip = Path.Combine(ws.Dir, "broken.zip");
+        using (var archive = ZipFile.Open(zip, ZipArchiveMode.Create))
+        using (var writer = new StreamWriter(archive.CreateEntry("UserData/Tyrant/Mods/lost/mod.json").Open()))
+            writer.Write("""{"format":1,"id":"lost","name":"Lost","version":"1.0.0","replace":[],"skins":[{"id":"aaa","species":"S","name":"A","male":{"diffuse":"skins/aaa/male_D.png"}}]}""");
+
+        var imported = ModSharing.ImportReported(ws, zip, replace: false);
+
+        Assert.Equal(0, imported.Extracted);
+        Assert.Equal(["skins/aaa/male_D.png is not in the zip or its cooked pack"], imported.Warnings);
+    }
+
+    [Fact]
+    public void A_mod_only_in_the_game_can_be_copied_into_the_workspace_with_its_pngs()
+    {
+        var (game, install, ws, mod) = Setup();
+        using var _ = game;
+        new GameMods().Install(install, mod, staging => ModTextureCooker.For(ws, null, null).CookForInstall(mod, staging));
+        var other = Workspace.Create(Path.Combine(Path.GetTempPath(), "tyrant-tests", Guid.NewGuid().ToString("N"), "ws"), install);
+
+        var copied = ModSharing.CopyFromGame(other, install, "red-spot", replace: false);
+
+        Assert.Equal(3, copied.Extracted);
+        Assert.True(File.Exists(Path.Combine(copied.Mod.Dir, "skins", "blue", "female_D.png")));
+        Assert.Null(copied.Mod.Manifest.Skins[0].Thumbnail);
+        var missing = Assert.Throws<TyrantException>(() => ModSharing.CopyFromGame(other, install, "nope", false));
+        Assert.Equal(TyrantErrorCode.TargetNotFound, missing.Code);
+    }
 }
