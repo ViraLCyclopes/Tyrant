@@ -4,6 +4,7 @@ using System.Text.Json.Nodes;
 using Tyrant.Core.ModelReplacements;
 using Tyrant.Core.Dumping;
 using Tyrant.Core.Errors;
+using Tyrant.Core.Textures;
 using Tyrant.Core.Workspaces;
 using Tyrant.Framework.Core;
 
@@ -63,12 +64,17 @@ public static class ModSharing
     }
 
     /// <param name="cook">Writes the mod's textures.tpack into the given temp folder and returns its path (or null when there is nothing to cook).</param>
-    public static string Export(ModProject mod, string zipPath, string frameworkVersion, Func<string, string?>? cook = null)
+    /// <param name="includePngs">False: the zip leaves out the PNGs the pack holds, like an install (<see cref="SlimCopy"/>).</param>
+    public static string Export(ModProject mod, string zipPath, string frameworkVersion, Func<string, string?>? cook = null, bool includePngs = true)
     {
         var packDir = Path.Combine(Path.GetTempPath(), "tyrant-pack-" + Guid.NewGuid().ToString("N"));
         try
         {
-            return WriteZip(mod, zipPath, frameworkVersion, cook?.Invoke(packDir));
+            var pack = cook?.Invoke(packDir);
+            SlimPlan? slim = null;
+            if (pack is not null && !includePngs)
+                using (var stream = File.OpenRead(pack)) slim = SlimCopy.Plan(mod.Manifest, mod.Dir, TexturePack.Read(stream));
+            return WriteZip(mod, zipPath, frameworkVersion, pack, slim);
         }
         finally
         {
@@ -76,18 +82,18 @@ public static class ModSharing
         }
     }
 
-    private static string WriteZip(ModProject mod, string zipPath, string frameworkVersion, string? pack)
+    private static string WriteZip(ModProject mod, string zipPath, string frameworkVersion, string? pack, SlimPlan? slim)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(zipPath))!);
         var temp = zipPath + ".writing";
         if (File.Exists(temp)) File.Delete(temp);
         using (var archive = ZipFile.Open(temp, ZipArchiveMode.Create))
         {
-            foreach (var file in SharedFiles(mod))
+            foreach (var file in SharedFiles(mod).Where(f => slim is null || !slim.Dropped.Contains(f)))
             {
                 var name = ZipRoot + mod.Id + "/" + file;
                 var source = Path.Combine(mod.Dir, file);
-                if (file == ModManifest.FileName) WriteText(archive, name, SharedManifest(mod, frameworkVersion));
+                if (file == ModManifest.FileName) WriteText(archive, name, SharedManifest(slim?.Manifest ?? mod.Manifest, frameworkVersion));
                 else if (file.EndsWith(".model.json", StringComparison.OrdinalIgnoreCase)) WriteText(archive, name, WithoutLocalPaths(File.ReadAllText(source)));
                 else if (file == AnimalDatabaseFile.FileName)
                 {
@@ -101,6 +107,9 @@ public static class ModSharing
                 }
                 else archive.CreateEntryFromFile(source, name, CompressionLevel.Optimal);
             }
+            foreach (var (thumbnail, png) in slim?.Thumbnails ?? new Dictionary<string, byte[]>())
+                using (var entry = archive.CreateEntry(ZipRoot + mod.Id + "/" + thumbnail, CompressionLevel.Optimal).Open())
+                    entry.Write(png);
             if (pack is not null) archive.CreateEntryFromFile(pack, ZipRoot + mod.Id + "/" + TexturePack.FileName, CompressionLevel.Fastest);
             using var readme = new StreamWriter(archive.CreateEntry("README.txt").Open(), new UTF8Encoding(false));
             readme.Write(Readme(mod, frameworkVersion));
@@ -209,9 +218,9 @@ public static class ModSharing
     }
 
     /// <summary>mod.json as shared: it names the framework it needs, so an older framework skips it with a message.</summary>
-    private static string SharedManifest(ModProject mod, string frameworkVersion)
+    private static string SharedManifest(ModManifest manifest, string frameworkVersion)
     {
-        var copy = ModManifest.Parse(mod.Manifest.ToJson());
+        var copy = ModManifest.Parse(manifest.ToJson());
         // At least the exporting framework: an older stamp (a mod imported from an older zip) may predate fields the mod now uses.
         if (copy.RequiresTyrant is null || Tyrant.Core.Updates.SemVer.Compare(copy.RequiresTyrant, frameworkVersion) < 0)
             copy.RequiresTyrant = frameworkVersion;

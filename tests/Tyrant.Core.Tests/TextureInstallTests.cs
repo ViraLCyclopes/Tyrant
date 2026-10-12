@@ -113,4 +113,42 @@ public class TextureInstallTests
         mod.SetSkinFile("blue", "male", "pattern", null); // the file is no longer a texture
         Assert.Empty(ModProject.Open(ws, mod.Id).Manifest.Textures.Overrides);
     }
+
+    [Fact]
+    public void Export_without_pngs_leaves_out_the_cooked_pngs_and_needs_framework_0_2_0()
+    {
+        var (game, install, ws, mod) = Setup();
+        using var _ = game;
+        var cooker = ModTextureCooker.For(ws, null, null);
+        var zip = Path.Combine(ws.Dir, "exports", "slim.zip");
+
+        ModSharing.Export(mod, zip, "0.2.0", dir => cooker.WritePack(mod.Manifest, mod.Dir, dir), includePngs: false);
+
+        using var archive = ZipFile.OpenRead(zip);
+        var names = archive.Entries.Select(e => e.FullName).ToList();
+        Assert.DoesNotContain("UserData/Tyrant/Mods/red-spot/skins/blue/male_D.png", names);
+        Assert.Contains("UserData/Tyrant/Mods/red-spot/textures.tpack", names);
+        Assert.Contains("UserData/Tyrant/Mods/red-spot/skins/blue/thumbnail.auto.png", names);
+        using var reader = new StreamReader(archive.GetEntry("UserData/Tyrant/Mods/red-spot/mod.json")!.Open());
+        var shared = ModManifest.Parse(reader.ReadToEnd());
+        Assert.Equal("skins/blue/thumbnail.auto.png", shared.Skins[0].Thumbnail);
+        Assert.Equal("0.2.0", shared.RequiresTyrant);
+    }
+
+    [Fact]
+    public void Export_with_pngs_is_the_whole_mod_and_its_pack()
+    {
+        var (game, install, ws, mod) = Setup();
+        using var _ = game;
+        var cooker = ModTextureCooker.For(ws, null, null);
+        var zip = Path.Combine(ws.Dir, "exports", "full.zip");
+
+        ModSharing.Export(mod, zip, "0.2.0", dir => cooker.WritePack(mod.Manifest, mod.Dir, dir), includePngs: true);
+
+        using var archive = ZipFile.OpenRead(zip);
+        var names = archive.Entries.Select(e => e.FullName).ToList();
+        Assert.Contains("UserData/Tyrant/Mods/red-spot/skins/blue/male_D.png", names);
+        Assert.Contains("UserData/Tyrant/Mods/red-spot/textures.tpack", names);
+        Assert.DoesNotContain(names, n => n.Contains("thumbnail.auto"));
+    }
 }
