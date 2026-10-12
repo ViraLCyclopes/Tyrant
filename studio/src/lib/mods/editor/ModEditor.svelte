@@ -4,6 +4,7 @@
   import { getSession } from '$lib/stores/session.svelte';
   import AddSkin from '../AddSkin.svelte';
   import DeleteModDialog from '../DeleteModDialog.svelte';
+  import ExportDialog from './ExportDialog.svelte';
   import type { AddedSound } from '$lib/sounds/audio';
   import AddModel from './AddModel.svelte';
   import AddPrefabTarget from './AddPrefabTarget.svelte';
@@ -73,7 +74,7 @@
         { label: 'Check', run: () => void doc.runCheck(), enabled: () => !!doc.detail },
         {
           label: 'Export for sharing…',
-          run: () => void (doc.detail && exportMod(session, tab, doc.id, doc.detail.name, doc.detail.version)),
+          run: () => void (exporting = true),
           enabled: () => !!doc.detail && !session.busy,
         },
         { label: 'Restore cutouts', run: () => void restore(), enabled: () => !!doc.check?.missingCutouts?.length },
@@ -85,6 +86,13 @@
   ];
 
   let deleting = $state<{ installed: boolean } | null>(null);
+  /** Export for sharing… asks first whether to include the PNGs. */
+  let exporting = $state(false);
+
+  function exportChosen(includePngs: boolean) {
+    exporting = false;
+    if (doc.detail) void exportMod(session, tab, doc.id, doc.detail.name, doc.detail.version, includePngs);
+  }
   let deleteError = $state<string | null>(null);
   let deletingBusy = $state(false);
 
@@ -239,6 +247,9 @@
   <p class="hint">Loading the mod…</p>
 {/if}
 
+{#if exporting && doc.detail}
+  <ExportDialog name={doc.detail.name} onexport={exportChosen} oncancel={() => (exporting = false)} />
+{/if}
 {#if deleting && doc.detail}
   <DeleteModDialog name={doc.detail.name} installed={deleting.installed} error={deleteError} busy={deletingBusy} onCancel={() => (deleting = null)} onConfirm={confirmDelete} />
 {/if}

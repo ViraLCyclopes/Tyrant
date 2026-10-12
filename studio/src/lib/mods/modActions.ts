@@ -52,10 +52,10 @@ export async function restoreCutouts(session: Session, tab: Tab, id: string): Pr
 }
 
 /** Export for sharing: a zip players unzip into the game folder (mod editor's Mod menu). */
-export async function exportMod(session: Session, tab: Tab, id: string, name: string, version: string): Promise<boolean> {
+export async function exportMod(session: Session, tab: Tab, id: string, name: string, version: string, includePngs = false): Promise<boolean> {
   const out = await session.platform.saveFile(`Export '${name}' for sharing`, `${id}-${version}.zip`, 'zip');
   if (!out) return false;
-  const r = await session.runJob('mods.export', { id, out }, `Export ${id}`, tab);
+  const r = await session.runJob('mods.export', { id, out, includePngs }, `Export ${id}`, tab);
   if (!r) return false;
   tab.info(`Exported '${name}' to ${r.path}. Players unzip it into the game folder (it needs MelonLoader and Tyrant's framework; the zip's README says how).`);
   for (const warning of r.warnings) tab.warn(warning);
@@ -80,9 +80,50 @@ export async function importModZip(session: Session, tab: Tab): Promise<ModsList
     result = await tab.safely(() => session.rpc.call('mods.import', { file, replace: true }));
   }
   if (!result) return null;
-  tab.info(`Added '${result.id}' to the workspace. Open it to check it, then Install to game.`);
+  tab.info(`Added '${result.id}' to the workspace.${extractedNote(result)} Open it to check it, then Install to game.`);
   for (const problem of result.problems) tab.warn(problem);
   return result.mods;
+}
+
+/** " 3 textures were extracted from its cooked pack; …" for a mod brought in without its PNGs; empty otherwise. */
+function extractedNote(result: ModImportResult): string {
+  return result.extracted
+    ? ` ${result.extracted} textures were extracted from its cooked pack; they are slightly lower quality than the author's originals.`
+    : '';
+}
+
+/** Copy to workspace (Mods tab, a mod only in the game): asks before replacing a workspace mod with the same id; returns the refreshed list. */
+export async function copyFromGame(session: Session, tab: Tab, id: string): Promise<ModsListResult | null> {
+  let result: ModImportResult | null;
+  try {
+    result = await session.rpc.call('mods.copyFromGame', { id, replace: false });
+  } catch (e) {
+    const error = asRpcError(e);
+    if (error.code !== 'MOD_EXISTS') {
+      tab.fail(error);
+      return null;
+    }
+    const question = `${error.message.split('. ')[0]}. Replace it with the one in the game?`;
+    if (!(await session.platform.confirm(question, 'Copy to workspace'))) return null;
+    result = await tab.safely(() => session.rpc.call('mods.copyFromGame', { id, replace: true }));
+  }
+  if (!result) return null;
+  tab.info(`Copied '${result.id}' into the workspace.${extractedNote(result)} Open it to edit it.`);
+  for (const problem of result.problems) tab.warn(problem);
+  return result.mods;
+}
+
+/** Extract textures… (Mods tab): any textures.tpack to PNGs in a folder the user picks. */
+export async function extractTextures(session: Session, tab: Tab): Promise<boolean> {
+  const pack = await session.platform.openFile('Choose a texture pack to extract', ['tpack']);
+  if (!pack) return false;
+  const out = await session.platform.pickFolder('Choose a folder for the extracted PNGs');
+  if (!out) return false;
+  const r = await session.runJob('textures.extract', { pack, out }, 'Extract textures', tab);
+  if (!r) return false;
+  tab.info(`Extracted ${r.written} textures into ${r.out}.`);
+  if (r.skipped.length) tab.warn(`${r.skipped.length} could not be extracted: ${r.skipped.join(', ')}`);
+  return true;
 }
 
 /** Delete mod (Mods list, and the mod's Mod menu): to the Recycle Bin, closing its editor tab. A failure is for the dialog to show. */

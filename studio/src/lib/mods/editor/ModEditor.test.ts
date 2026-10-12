@@ -196,6 +196,22 @@ describe('ModEditor', () => {
     expect((typeof items === 'function' ? items() : items).map((i) => ('label' in i ? i.label : ''))).toContain('Export for sharing…');
   });
 
+  it('Export for sharing asks whether to include the PNGs, then exports', async () => {
+    const { tab, rpc, platform } = setup();
+    rpc.on('mods.export', () => ({ path: 'D:\\out\\red-spot.zip', warnings: [] }));
+    platform.saves.push('D:\\out\\red-spot.zip');
+    await screen.findByRole('button', { name: 'Blue-green stripes' });
+    const items = tab.menus[0]!.items;
+    const item = (typeof items === 'function' ? items() : items).find((i) => 'label' in i && i.label === 'Export for sharing…');
+
+    (item as { run: () => void }).run();
+    await fireEvent.click(await screen.findByRole('checkbox', { name: /Include the original PNGs/ }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Export…' }));
+
+    await waitFor(() => expect(rpc.callsTo('mods.export')[0]?.params).toMatchObject({ id: 'red-spot', includePngs: true }));
+    expect(screen.queryByRole('dialog', { name: /Export/ })).toBeNull();
+  });
+
   it('adds a Mod menu and an undo target to its tab', async () => {
     const { tab } = setup();
     await screen.findByRole('button', { name: 'Blue-green stripes' });

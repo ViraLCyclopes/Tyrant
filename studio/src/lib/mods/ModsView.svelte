@@ -5,7 +5,7 @@
   import { getSession } from '$lib/stores/session.svelte';
   import CleanSkins from './CleanSkins.svelte';
   import DeleteModDialog from './DeleteModDialog.svelte';
-  import { deleteMod, importModZip, installAria, installLabel, installMod, removeFromGame, restoreCutouts as restoreModCutouts } from './modActions';
+  import { copyFromGame, deleteMod, extractTextures, importModZip, installAria, installLabel, installMod, removeFromGame, restoreCutouts as restoreModCutouts } from './modActions';
 
   const session = getSession();
   const tab = getTab();
@@ -81,6 +81,11 @@
     if (mods) list = mods;
   }
 
+  async function copy(row: ModRow) {
+    const mods = await copyFromGame(session, tab, row.id);
+    if (mods) list = mods;
+  }
+
   async function updateFramework() {
     if (await session.runJob('dump.install', undefined, 'Update Tyrant in game', tab)) await refresh();
   }
@@ -120,6 +125,7 @@
   <button class="primary" onclick={updateFramework} disabled={session.busy}>Update Tyrant in game</button>
 {/if}
 <button class="ghost" onclick={addFromZip} disabled={session.busy}>Add mod from zip…</button>
+<button class="ghost" onclick={() => extractTextures(session, tab)} disabled={session.busy}>Extract textures…</button>
 <button class="ghost" onclick={() => (cleaning = !cleaning)}>Clean up skin numbers…</button>
 {#if cleaning}<CleanSkins />{/if}
 
@@ -147,6 +153,9 @@
               <button class="primary" aria-label="Open {row.name}" onclick={() => open(row.id, row.name)}>Open</button>
               <button aria-label="Check {row.name}" onclick={() => check(row)}>Check</button>
               <button aria-label={installAria(row.state, row.name)} onclick={() => install(row)} disabled={session.busy}>{installLabel(row.state)}</button>
+            {/if}
+            {#if row.state === 'gameOnly'}
+              <button aria-label="Copy {row.name} to workspace" onclick={() => copy(row)} disabled={session.busy}>Copy to workspace</button>
             {/if}
             {#if row.state !== 'notInstalled'}
               <button aria-label="Remove {row.name} from the game" onclick={() => remove(row)} disabled={session.busy}>Remove from game</button>

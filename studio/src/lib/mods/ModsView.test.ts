@@ -272,4 +272,27 @@ describe('ModsView', () => {
     expect(await screen.findByText(/textures not cooked/)).toBeInTheDocument();
     expect(screen.queryByText(/Reinstall to cook textures/)).toBeNull();
   });
+
+  it('copies a mod that is only in the game into the workspace', async () => {
+    const { rpc, session } = setup([row({ id: 'other', name: 'Other', state: 'gameOnly', enabled: true })], true);
+    rpc.on('mods.copyFromGame', () => ({ id: 'other', problems: [], mods: { mods: [row({ id: 'other', name: 'Other', state: 'installed', enabled: true })], frameworkInstalled: true, frameworkOutdated: false }, extracted: 0 }));
+    renderWith(ModsView, session);
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Copy Other to workspace' }));
+
+    await waitFor(() => expect(rpc.callsTo('mods.copyFromGame')[0]?.params).toEqual({ id: 'other', replace: false }));
+    expect(screen.queryByRole('button', { name: 'Copy Red spot to workspace' })).toBeNull();
+  });
+
+  it('extracts the textures of any pack', async () => {
+    const { rpc, platform, session } = setup([]);
+    rpc.on('textures.extract', (p) => ({ written: 1, skipped: [], out: p.out }));
+    platform.files.push('C:\\m\\textures.tpack');
+    platform.folders.push('C:\\out');
+    renderWith(ModsView, session);
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Extract textures…' }));
+
+    await waitFor(() => expect(rpc.callsTo('textures.extract')[0]?.params).toEqual({ pack: 'C:\\m\\textures.tpack', out: 'C:\\out' }));
+  });
 });
