@@ -135,8 +135,8 @@ page (`tyrant mod cook <id>`) writes it there without installing. The page says 
 takes it from the folder: it cooks a fresh one into the zip. If the mod folder is in git, add `textures.tpack` to
 `.gitignore`.
 
-Install leaves the PNGs that are in `textures.tpack` out of the game folder (a texture also used as a thumbnail,
-portrait or icon stays), and gives a skin without a thumbnail a `thumbnail.auto.png` cut from its diffuse. Export does
+Install leaves the skin PNGs that are in `textures.tpack` out of the game folder (texture replacements keep theirs,
+and so does a texture also used as a thumbnail, portrait or icon), and gives a skin without a thumbnail a `thumbnail.auto.png` cut from its diffuse. Export does
 the same unless you tick **Include the original PNGs** (`tyrant mod export <id> --with-pngs`). Import, **Copy to
 workspace** on the Mods tab (`tyrant mod copy-from-game <id>`) and **Extract textures…** (`tyrant tpack extract <file>
 --out <folder>`) turn a pack back into PNGs; those are the cooked textures, slightly lower quality than the originals.

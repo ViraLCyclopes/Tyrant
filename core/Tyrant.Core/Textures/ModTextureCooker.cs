@@ -29,7 +29,40 @@ public sealed class ModTextureCooker(string cacheDir, Func<string, SlotKind?>? r
     internal int Cooked { get; private set; }
 
     public static ModTextureCooker For(Workspace ws, IReadOnlyList<AssetRecord>? assets, IReadOnlyList<SpeciesSkins>? species) =>
-        new(Path.Combine(ws.CacheDir, "cooked-textures"), ReplacementKinds(assets, species));
+        new(CacheDirOf(ws), ReplacementKinds(assets, species));
+
+    /// <summary>Where a workspace keeps its cooked textures.</summary>
+    public static string CacheDirOf(Workspace ws) => Path.Combine(ws.CacheDir, "cooked-textures");
+
+    /// <summary>The cache file a PNG with these bytes cooks to as this kind and mode.</summary>
+    private static string CachePath(string cacheDir, byte[] png, SlotKind kind, TextureCompression mode)
+    {
+        var key = $"{Convert.ToHexString(SHA256.HashData(png)).ToLowerInvariant()}-{(int)kind}-{TextureCompressions.Name(mode)}-v{TextureCooker.Version}";
+        return Path.Combine(cacheDir, key[..2], key + ".tpack");
+    }
+
+    /// <summary>
+    /// Puts a pack entry in the cache as the cooked form of <paramref name="png"/> (a PNG extracted from that pack), so
+    /// cooking it again reuses the original instead of compressing an already compressed texture a second time.
+    /// </summary>
+    public static void Seed(string cacheDir, string png, Stream pack, TexturePackEntry entry)
+    {
+        var path = CachePath(cacheDir, File.ReadAllBytes(png), entry.Kind, entry.Mode);
+        var copy = new TexturePackEntry
+        {
+            Source = entry.Source, Kind = entry.Kind, Mode = entry.Mode, Format = entry.Format, Linear = entry.Linear,
+            Width = entry.Width, Height = entry.Height, MipCount = entry.MipCount, Length = entry.Length,
+        };
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        var temp = path + "." + Guid.NewGuid().ToString("N") + ".writing";
+        using (var stream = File.Create(temp))
+            TexturePack.Write(stream, [copy], (_, s) =>
+            {
+                pack.Position = entry.Offset;
+                CopyExactly(pack, s, entry.Length);
+            });
+        File.Move(temp, path, overwrite: true);
+    }
 
     /// <summary>Texture name → the kind of the vanilla skin slot it fills (the property the framework sets it on); null without the index or dump.</summary>
     public static Func<string, SlotKind?>? ReplacementKinds(IReadOnlyList<AssetRecord>? assets, IReadOnlyList<SpeciesSkins>? species)
@@ -206,8 +239,7 @@ public sealed class ModTextureCooker(string cacheDir, Func<string, SlotKind?>? r
         {
             throw new TyrantException(TyrantErrorCode.ModInvalid, $"{t.File} could not be read ({ex.Message}); is it open in another program?");
         }
-        var key = $"{Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant()}-{(int)t.Kind}-{TextureCompressions.Name(t.Mode)}-v{TextureCooker.Version}";
-        var path = Path.Combine(cacheDir, key[..2], key + ".tpack");
+        var path = CachePath(cacheDir, bytes, t.Kind, t.Mode);
         if (File.Exists(path))
         {
             try
@@ -231,7 +263,7 @@ public sealed class ModTextureCooker(string cacheDir, Func<string, SlotKind?>? r
         }
         Cooked++;
         // BC7 cooked without texconv is kept under another name, so the next install tries texconv again instead of reusing it.
-        if (fellBack) path = Path.Combine(cacheDir, key[..2], key + ".fallback.tpack");
+        if (fellBack) path = path[..^".tpack".Length] + ".fallback.tpack";
         var entry = new TexturePackEntry
         {
             Source = t.File, Kind = t.Kind, Mode = t.Mode, Format = cooked.Format, Linear = cooked.Linear,

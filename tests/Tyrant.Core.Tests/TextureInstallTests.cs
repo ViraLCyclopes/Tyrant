@@ -204,4 +204,36 @@ public class TextureInstallTests
         var missing = Assert.Throws<TyrantException>(() => ModSharing.CopyFromGame(other, install, "nope", false));
         Assert.Equal(TyrantErrorCode.TargetNotFound, missing.Code);
     }
+
+    [Fact]
+    public void A_mod_copied_from_the_game_keeps_its_cooked_textures_so_installing_it_again_cooks_nothing()
+    {
+        // The extracted PNGs are the cooked textures decoded: cooking them again would compress them a second time.
+        var (game, install, ws, mod) = Setup();
+        using var _ = game;
+        new GameMods().Install(install, mod, staging => ModTextureCooker.For(ws, null, null).CookForInstall(mod, staging));
+        var other = Workspace.Create(Path.Combine(Path.GetTempPath(), "tyrant-tests", Guid.NewGuid().ToString("N"), "ws"), install);
+        var copied = ModSharing.CopyFromGame(other, install, "red-spot", replace: false);
+
+        var cooker = ModTextureCooker.For(other, null, null);
+        cooker.CookInPlace(copied.Mod);
+
+        Assert.Equal(0, cooker.Cooked);
+    }
+
+    [Fact]
+    public void A_slim_zip_imported_keeps_its_cooked_textures_too()
+    {
+        var (game, install, ws, mod) = Setup();
+        using var _ = game;
+        var zip = Path.Combine(ws.Dir, "exports", "slim.zip");
+        ModSharing.Export(mod, zip, "0.2.0", dir => ModTextureCooker.For(ws, null, null).WritePack(mod.Manifest, mod.Dir, dir), includePngs: false);
+        var other = Workspace.Create(Path.Combine(Path.GetTempPath(), "tyrant-tests", Guid.NewGuid().ToString("N"), "ws"), install);
+        var imported = ModSharing.ImportReported(other, zip, replace: false);
+
+        var cooker = ModTextureCooker.For(other, null, null);
+        cooker.CookInPlace(imported.Mod);
+
+        Assert.Equal(0, cooker.Cooked);
+    }
 }

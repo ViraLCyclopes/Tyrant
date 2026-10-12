@@ -77,6 +77,8 @@ public class ModSharingTests
         Assert.Contains("UserData\\Tyrant\\Mods\\red-spot", readme);
         Assert.Contains("https://github.com/ViraLCyclopes/Tyrant/releases", readme);
         Assert.Contains("https://github.com/ViraLCyclopes/Tyrant/blob/main/docs/installing-mods.md", readme); // the step-by-step guide
+        // Unzipping over an older copy would leave its PNGs, which win over the new cooked pack.
+        Assert.Contains("Updating: delete the folder UserData\\Tyrant\\Mods\\red-spot first", readme);
     }
 
     [Fact]

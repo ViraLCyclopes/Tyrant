@@ -66,7 +66,8 @@ The two do not work together.
 
 ### 3. Install a mod
 
-1. Unzip the mod's zip into the game folder. The mod lands in `UserData\Tyrant\Mods\<mod id>\`.
+1. Unzip the mod's zip into the game folder. The mod lands in `UserData\Tyrant\Mods\<mod id>\`. To update a mod,
+   delete that folder first: texture files left from the old version would be shown instead of the new ones.
 2. Start the game.
 
 Each mod's zip has a `README.txt` that names the framework version it needs. If a mod needs a newer framework than

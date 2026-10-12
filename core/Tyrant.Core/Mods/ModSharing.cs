@@ -209,7 +209,7 @@ public static class ModSharing
                 using var output = File.Create(destination);
                 input.CopyTo(output);
             }
-            (extracted, warnings) = Restore(staging, manifest);
+            (extracted, warnings) = Restore(staging, manifest, ModTextureCooker.CacheDirOf(ws));
             // Validate the database before replacing an existing workspace mod.
             try { AnimalDatabaseFile.Read(Path.Combine(staging, AnimalDatabaseFile.FileName)); }
             catch (ManifestException ex) { throw new TyrantException(TyrantErrorCode.ModInvalid, "The imported animal database is invalid: " + ex.Message); }
@@ -238,9 +238,10 @@ public static class ModSharing
     /// <summary>
     /// A slim mod made editable: every PNG mod.json's cooked slots name that is missing is extracted from textures.tpack;
     /// auto thumbnails go; the pack goes (Cook textures and install rebuild it). Returns the count and one warning per PNG
-    /// still missing.
+    /// still missing. Each extracted texture's cooked data goes into the cook cache (<paramref name="cacheDir"/>), so
+    /// installing the mod again reuses it rather than compressing it twice.
     /// </summary>
-    private static (int Extracted, List<string> Warnings) Restore(string staging, ModManifest manifest)
+    private static (int Extracted, List<string> Warnings) Restore(string staging, ModManifest manifest, string cacheDir)
     {
         var missing = ModTextureCooker.TextureFiles(manifest)
             .Where(f => ModTextureCooker.InsidePath(staging, f) is { } p && !File.Exists(p)).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -248,7 +249,14 @@ public static class ModSharing
         var extracted = 0;
         if (missing.Count > 0 && File.Exists(packPath))
         {
-            try { extracted = TexturePackExtractor.ExtractTo(packPath, staging, missing.Contains).Written.Count; }
+            try
+            {
+                var written = TexturePackExtractor.ExtractTo(packPath, staging, missing.Contains).Written;
+                extracted = written.Count;
+                using var stream = File.OpenRead(packPath);
+                foreach (var entry in TexturePack.Read(stream).Entries.Where(e => written.Contains(TexturePack.NormalSource(e.Source), StringComparer.OrdinalIgnoreCase)))
+                    ModTextureCooker.Seed(cacheDir, Path.Combine(staging, TexturePack.NormalSource(entry.Source)), stream, entry);
+            }
             catch (TyrantException) { } // a damaged pack: every PNG stays missing and is reported below
         }
         if (File.Exists(packPath)) File.Delete(packPath);
@@ -337,6 +345,9 @@ public static class ModSharing
             2. Install Tyrant Framework: unzip Tyrant-Framework-{frameworkVersion}.zip (from {ReleasesUrl})
                into the game folder, or use Tyrant (Workspace tab -> Install Tyrant in game).
             3. Unzip this file into the game folder. The mod lands in UserData\Tyrant\Mods\{m.Id}.
+
+            Updating: delete the folder UserData\Tyrant\Mods\{m.Id} first, then unzip the new version
+            (texture files left from the old one would be shown instead of the new ones).
 
             Remove: delete the folder UserData\Tyrant\Mods\{m.Id}.
 

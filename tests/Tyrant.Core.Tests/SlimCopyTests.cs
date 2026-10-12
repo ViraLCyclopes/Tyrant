@@ -45,6 +45,23 @@ public class SlimCopyTests
     }
 
     [Fact]
+    public void A_replacement_texture_is_never_dropped()
+    {
+        // The game asks for a replacement by the kind of the material property it fills, which the cooker may only guess
+        // (a world normal map named rock_01_nm): without its PNG the texture would stay vanilla.
+        var (game, mod) = Setup();
+        using var _ = game;
+        mod.Manifest.Replace.Add(new TextureReplacement { Texture = "rock_01_nm", File = "replace/rock.png" });
+        mod.Manifest.Replace.Add(new TextureReplacement { Texture = "T_carch_D", File = "skins/blue/male_D.png" }); // also a skin slot
+
+        var droppable = SlimCopy.Droppable(mod.Manifest);
+
+        Assert.DoesNotContain("replace/rock.png", droppable);
+        Assert.DoesNotContain("skins/blue/male_D.png", droppable);
+        Assert.Contains("skins/blue/female_D.png", droppable);
+    }
+
+    [Fact]
     public void Only_files_the_pack_holds_are_dropped_and_skins_without_a_thumbnail_get_one()
     {
         var (game, mod) = Setup();

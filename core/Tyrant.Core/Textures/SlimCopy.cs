@@ -10,7 +10,8 @@ public sealed record SlimPlan(IReadOnlySet<string> Dropped, IReadOnlyDictionary<
 
 /// <summary>
 /// Install and PNG-less exports leave out the PNGs textures.tpack holds (spec: 2026-10-11-tyrant-slim-installs-design.md).
-/// A file is left out only when nothing uncooked names it and the pack has it; a skin whose thumbnail the game would cut
+/// A skin slot's file is left out only when nothing else names it (replacements keep theirs) and the pack has it; a skin
+/// whose thumbnail the game would cut
 /// from such a PNG gets that 128 px picture as thumbnail.auto.png instead.
 /// </summary>
 public static partial class SlimCopy
@@ -30,6 +31,9 @@ public static partial class SlimCopy
             if (!string.IsNullOrWhiteSpace(file)) uncooked.Add(TexturePack.NormalSource(file));
         }
         Add(m.Assembly);
+        // The game asks for a replacement by the kind of the material property it fills, which the cooker may only guess
+        // from the texture's name: its PNG stays, so the game can fall back to it.
+        foreach (var replacement in m.Replace) Add(replacement.File);
         foreach (var skin in m.Skins)
         {
             Add(skin.Thumbnail);
