@@ -34,7 +34,8 @@ public static class CookedPacks
         return "current";
     }
 
-    private static TextureFingerprint Print(string path)
+    /// <summary>A PNG's fingerprint, read again only when its size or write time changed.</summary>
+    internal static TextureFingerprint Print(string path)
     {
         var info = new FileInfo(path);
         if (Prints.TryGetValue(info.FullName, out var cached) && cached.Length == info.Length && cached.Written == info.LastWriteTimeUtc) return cached.Print;

@@ -183,6 +183,7 @@ dotnet run --project cli/Tyrant.Cli -- mod replace-sound red-spot-carcharo "even
 dotnet run --project cli/Tyrant.Cli -- mod replace-sounds anax-voice "D:\packs\Ultimasaurus" --species "Allosaurus Anax" --dry-run -w D:\tyrant-workspace   # a whole folder, matched by name
 dotnet run --project cli/Tyrant.Cli -- mod check red-spot-carcharo -w D:\tyrant-workspace
 dotnet run --project cli/Tyrant.Cli -- mod restore-cutouts red-spot-carcharo -w D:\tyrant-workspace   # put back see-through feathers/hair an editor flattened
+dotnet run --project cli/Tyrant.Cli -- mod cook red-spot-carcharo -w D:\tyrant-workspace      # textures.tpack into the mod folder, without installing
 dotnet run --project cli/Tyrant.Cli -- mod install red-spot-carcharo -w D:\tyrant-workspace   # adds MelonLoader + Tyrant's framework if needed
 dotnet run --project cli/Tyrant.Cli -- mod disable red-spot-carcharo -w D:\tyrant-workspace   # also: enable, remove
 dotnet run --project cli/Tyrant.Cli -- mod export red-spot-carcharo -w D:\tyrant-workspace   # a zip players unzip into the game folder

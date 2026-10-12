@@ -5,6 +5,7 @@ using Tyrant.Core.Mods;
 using Tyrant.Core.Textures;
 using Tyrant.Core.Workspaces;
 using Tyrant.Framework.Core;
+using Tyrant.Rpc.Jobs;
 using Tyrant.Rpc.Protocol;
 
 namespace Tyrant.Rpc.Mods;
@@ -51,10 +52,28 @@ public sealed partial class ModsMethods
     {
         var (ws, install) = session.Current();
         var mod = ModProject.Open(ws, p.Id);
-        var estimates = Cooker(ws, install, mod).Estimate(mod.Manifest, mod.Dir);
+        var cooker = Cooker(ws, install, mod);
+        var estimates = cooker.Estimate(mod.Manifest, mod.Dir);
         var rows = estimates.Select(e => new ModTextureDto(e.File, KindName(e.Kind), TextureCompressions.Name(e.Mode), e.Override,
             UnityTextureFormats.Name(e.Format), e.Width, e.Height, e.Bytes)).ToList();
-        return new ModTexturesResult(TextureCompressions.Name(mod.Manifest.Textures.Compression), rows, rows.Sum(r => r.Bytes));
+        var pack = new FileInfo(Path.Combine(mod.Dir, TexturePack.FileName));
+        return new ModTexturesResult(TextureCompressions.Name(mod.Manifest.Textures.Compression), rows, rows.Sum(r => r.Bytes),
+            cooker.PackState(mod.Manifest, mod.Dir), pack.Exists ? pack.Length : 0);
+    }
+
+    /// <summary>Cook textures: the mod's textures.tpack in its workspace folder, without installing (install writes it too).</summary>
+    [RpcMethod("mods.cookTextures", JobResult = typeof(ModCookResult))]
+    public JobStarted CookTextures(ModIdParams p)
+    {
+        var (ws, install) = session.Current();
+        var mod = ModProject.Open(ws, p.Id); // an unknown id fails before the job starts
+        return jobs.Start($"Cook {p.Id}'s textures", (progress, ct) =>
+        {
+            var path = Cooker(ws, install, mod).CookInPlace(mod, Cooking(progress, 0.02, 0.98), ct);
+            var message = path is null ? $"'{p.Id}' has no textures to cook." : $"Cooked '{p.Id}'s textures into {path}.";
+            session.Log(message);
+            return new ModCookResult(message, path);
+        });
     }
 
     private static string KindName(SlotKind kind) => kind == SlotKind.Normal ? "normal" : kind == SlotKind.Data ? "mask" : "colour";

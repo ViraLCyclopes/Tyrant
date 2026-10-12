@@ -253,9 +253,22 @@ public sealed class ModInstallCommand : Command<ModInstallCommand.Settings>
             Console.WriteLine("Installed or updated Tyrant's framework in the game.");
         }
         var cooker = ModCli.Cooker(ws, install, mod);
-        new GameMods(launcher.IsRunning).Install(install, mod, staging => cooker.WritePack(mod.Manifest, staging, staging,
+        new GameMods(launcher.IsRunning).Install(install, mod, staging => cooker.CookForInstall(mod, staging,
             new SyncProgress(p => Console.WriteLine(p.Message))));
         Console.WriteLine($"Installed '{mod.Id}' into {Path.Combine(ModLoaderInstaller.ModsDir(install), mod.Id)}. Start the game to see it; undo with 'tyrant mod remove {mod.Id}'.");
+        return ExitCodes.Ok;
+    }
+}
+
+/// <summary>tyrant mod cook: the mod's textures.tpack in its workspace folder, without installing (install writes it too).</summary>
+public sealed class ModCookCommand : Command<ModSettings>
+{
+    public override int Execute(CommandContext context, ModSettings settings)
+    {
+        var (ws, install) = CliServices.OpenWorkspace(settings);
+        var mod = ModProject.Open(ws, settings.Id);
+        var path = ModCli.Cooker(ws, install, mod).CookInPlace(mod, new SyncProgress(p => Console.WriteLine(p.Message)));
+        Console.WriteLine(path is null ? $"'{mod.Id}' has no textures to cook." : $"Cooked '{mod.Id}'s textures into {path}.");
         return ExitCodes.Ok;
     }
 }

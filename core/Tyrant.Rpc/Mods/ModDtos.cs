@@ -205,4 +205,8 @@ public sealed record ModSetCompressionParams(string Id, string Revision, string?
 /// <summary>Kind: "colour" | "normal" | "mask"; Mode: "auto" | "bc7"; Format: "DXT1" | "DXT5" | "BC7"; Override: this texture's mode is its own.</summary>
 public sealed record ModTextureDto(string File, string Kind, string Mode, bool Override, string Format, int Width, int Height, long Bytes);
 
-public sealed record ModTexturesResult(string Compression, IReadOnlyList<ModTextureDto> Textures, long TotalBytes);
+/// <summary>Pack: the workspace folder's textures.tpack against the PNGs, "none" (nothing to cook), "missing", "stale" or "current"; PackBytes: its size (0 without one).</summary>
+public sealed record ModTexturesResult(string Compression, IReadOnlyList<ModTextureDto> Textures, long TotalBytes, string Pack = "none", long PackBytes = 0);
+
+/// <summary>Path: the workspace's textures.tpack; null when the mod has nothing to cook.</summary>
+public sealed record ModCookResult(string Message, string? Path);

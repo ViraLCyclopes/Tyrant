@@ -146,6 +146,47 @@ public sealed class ModTextureCooker(string cacheDir, Func<string, SlotKind?>? r
         return output;
     }
 
+    /// <summary>Cooks the mod's textures.tpack into its workspace folder (an old one is removed when nothing is cooked); null when there is nothing to cook.</summary>
+    public string? CookInPlace(ModProject mod, IProgress<CookProgress>? progress = null, CancellationToken ct = default) =>
+        WritePack(mod.Manifest, mod.Dir, mod.Dir, progress, ct);
+
+    /// <summary>Install's last step before the copy goes into the game: the workspace pack, cooked now, and the same file in the staged copy.</summary>
+    public void CookForInstall(ModProject mod, string staging, IProgress<CookProgress>? progress = null, CancellationToken ct = default)
+    {
+        var staged = Path.Combine(staging, TexturePack.FileName);
+        if (CookInPlace(mod, progress, ct) is { } pack) File.Copy(pack, staged, overwrite: true);
+        else if (File.Exists(staged)) File.Delete(staged);
+    }
+
+    /// <summary>
+    /// The pack in a mod folder against its PNGs: "none" (nothing to cook), "missing", "stale" (unreadable, or a texture
+    /// missing, edited since, or due another format) or "current".
+    /// </summary>
+    public string PackState(ModManifest manifest, string modDir)
+    {
+        if (Targets(manifest).Count == 0) return "none";
+        var path = Path.Combine(modDir, TexturePack.FileName);
+        if (!File.Exists(path)) return "missing";
+        TexturePack pack;
+        try
+        {
+            using var stream = File.OpenRead(path);
+            pack = TexturePack.Read(stream);
+        }
+        catch (Exception ex) when (ex is TexturePackException or IOException or UnauthorizedAccessException)
+        {
+            return "stale";
+        }
+        foreach (var e in Estimate(manifest, modDir))
+        {
+            var print = CookedPacks.Print(InsidePath(modDir, e.File)!);
+            if (!pack.Entries.Any(p => string.Equals(p.Source, e.File, StringComparison.OrdinalIgnoreCase) && p.Kind == e.Kind && p.Format == e.Format
+                                       && p.Fingerprint.Equals(print)))
+                return "stale";
+        }
+        return "current";
+    }
+
     /// <summary>The cooked texture as a one-entry pack in the cache (cooked now when missing or unreadable).</summary>
     private (string Path, TexturePackEntry Entry) Cache(string png, CookTarget t, Action slower, CancellationToken ct)
     {

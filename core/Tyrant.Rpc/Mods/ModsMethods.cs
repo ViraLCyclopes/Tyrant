@@ -90,7 +90,7 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
             }
             progress.Report(new JobProgress(0.8, $"Installing {p.Id}"));
             var cooker = Cooker(ws, install, mod);
-            Game.Install(install, mod, staging => cooker.WritePack(mod.Manifest, staging, staging, Cooking(progress, 0.8, 0.98), ct));
+            Game.Install(install, mod, staging => cooker.CookForInstall(mod, staging, Cooking(progress, 0.8, 0.98), ct));
             session.Log($"Installed '{p.Id}' into the game.");
             return new ModInstallResult($"Installed '{p.Id}' into the game. Start the game to see it.", check.Warnings);
         });

@@ -518,6 +518,11 @@ export interface ModColorPreviewParams {
   size?: number;
 }
 
+export interface ModCookResult {
+  message: string;
+  path: string | null;
+}
+
 export interface ModCopyBaseFileParams {
   id: string;
   revision: string;
@@ -1106,6 +1111,8 @@ export interface ModTexturesResult {
   compression: string;
   textures: ModTextureDto[];
   totalBytes: number;
+  pack?: string;
+  packBytes?: number;
 }
 
 export interface ModThumbnailParams {
@@ -1401,6 +1408,7 @@ export interface RpcMethods {
   "mods.check": { params: ModIdParams; result: ModCheckReport };
   "mods.clearRig": { params: ModClearRigParams; result: ModDetail };
   "mods.colorPreview": { params: ModColorPreviewParams; result: ModPreviewFiles };
+  "mods.cookTextures": { params: ModIdParams; result: JobStarted };
   "mods.copyBaseFile": { params: ModCopyBaseFileParams; result: ModDetail };
   "mods.create": { params: ModCreateParams; result: ModsListResult };
   "mods.createUnityProject": { params: ModIdParams; result: ModUnityProjectDto };
@@ -1477,6 +1485,7 @@ export interface RpcJobs {
   "decompile.run": DecompileRunResult;
   "dump.install": DumperInstallResult;
   "dump.run": DumpRunResult;
+  "mods.cookTextures": ModCookResult;
   "mods.export": ModExportResult;
   "mods.install": ModInstallResult;
   "species.exportAnimations": SpeciesExportAnimationsResult;

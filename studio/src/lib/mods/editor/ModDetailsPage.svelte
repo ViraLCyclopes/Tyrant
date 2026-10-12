@@ -1,11 +1,14 @@
 <script lang="ts">
+  import { getTab } from '$lib/shell/tab.svelte';
   import { getSession } from '$lib/stores/session.svelte';
   import type { ModDoc } from './modDoc.svelte';
   import { textureFacts } from './textureFacts.svelte';
   import { formatBytes } from './textures';
 
   let { doc }: { doc: ModDoc } = $props();
-  const facts = $derived(textureFacts(getSession(), doc));
+  const session = getSession();
+  const tab = getTab();
+  const facts = $derived(textureFacts(session, doc));
   $effect(() => facts.load());
   let name = $state('');
   let version = $state('');
@@ -21,6 +24,21 @@
     author = d.author ?? '';
     description = d.description ?? '';
   });
+
+  /** The cooked pack in the workspace's mod folder (install writes it too). */
+  const packLine = $derived.by(() => {
+    const f = facts.current;
+    if (!f) return '';
+    if (f.pack === 'current') return `textures.tpack in the mod's folder is up to date (${formatBytes(f.packBytes ?? 0)}).`;
+    if (f.pack === 'stale') return `textures.tpack in the mod's folder is out of date (${formatBytes(f.packBytes ?? 0)}): cook or install again.`;
+    return "Not cooked yet: cooking or installing writes textures.tpack into the mod's folder.";
+  });
+
+  async function cook() {
+    const r = await session.runJob('mods.cookTextures', { id: doc.id }, `Cook ${doc.id}'s textures`, tab);
+    if (r) tab.info(r.message);
+    facts.reload();
+  }
 
   async function save() {
     const d = doc.detail;
@@ -44,6 +62,10 @@
       </select>
     </label>
     <p class="hint">Textures in game: about {formatBytes(facts.current.totalBytes)}. Tyrant compresses them when it installs or exports the mod (BC7 is compressed on the graphics card, a few seconds per texture, and takes longer without one; unchanged textures are reused).</p>
+    <div class="cook">
+      <p class="hint">{packLine}</p>
+      <button onclick={cook} disabled={session.busy}>Cook textures</button>
+    </div>
   {/if}
   <p class="hint">Id: <code>{doc.id}</code> — the mod's folder name and its key in the game, so it cannot change.</p>
   {#each doc.detail?.usesSpeciesFrom ?? [] as use (use.modId)}
@@ -54,5 +76,7 @@
 <style>
   .details { display: grid; gap: 10px; max-width: 560px; }
   label { display: grid; gap: 4px; color: var(--muted); }
+  .cook { display: flex; gap: 12px; align-items: center; justify-content: space-between; }
+  .cook p { margin: 0; }
   input, textarea { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; }
 </style>

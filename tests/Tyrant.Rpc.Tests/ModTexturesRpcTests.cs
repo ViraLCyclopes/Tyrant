@@ -84,6 +84,27 @@ public class ModTexturesRpcTests
         Assert.True(File.Exists(path));
         using (var stream = File.OpenRead(path)) AssertPack(stream);
         Assert.Equal("current", list.GetProperty("mods").EnumerateArray().Single(m => m.GetProperty("id").GetString() == "red-spot").GetProperty("cooked").GetString());
+        Assert.Equal(File.ReadAllBytes(path), File.ReadAllBytes(Path.Combine(ws, "mods", "red-spot", "textures.tpack"))); // the workspace gets the same pack
+    }
+
+    [Fact]
+    public async Task Cook_textures_writes_the_pack_into_the_workspace_folder_and_the_facts_follow_it()
+    {
+        using var game = new FakeGame();
+        var (h, ws) = await OpenedWithLoader(game, TimeSpan.Zero); // every progress message, unthrottled
+        await ModEditorMethodsTests.WithSkin(h, ws);
+        var before = await h.Call("mods.textures", new { id = "red-spot" });
+
+        var result = await h.RunJob("mods.cookTextures", new { id = "red-spot" });
+        var after = await h.Call("mods.textures", new { id = "red-spot" });
+
+        var path = Path.Combine(ws, "mods", "red-spot", "textures.tpack");
+        Assert.Equal(path, result.GetProperty("path").GetString());
+        Assert.Contains("textures.tpack", result.GetProperty("message").GetString());
+        using (var stream = File.OpenRead(path)) AssertPack(stream);
+        Assert.Equal(("missing", 0L), (before.GetProperty("pack").GetString(), before.GetProperty("packBytes").GetInt64()));
+        Assert.Equal(("current", new FileInfo(path).Length), (after.GetProperty("pack").GetString(), after.GetProperty("packBytes").GetInt64()));
+        Assert.Contains(Cooking(h), p => p.GetProperty("message").GetString()!.StartsWith("Cooking textures 2/2 ("));
     }
 
     [Fact]

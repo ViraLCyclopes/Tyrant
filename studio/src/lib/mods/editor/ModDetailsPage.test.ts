@@ -1,4 +1,5 @@
-import { screen } from '@testing-library/svelte';
+import { fireEvent, screen, waitFor } from '@testing-library/svelte';
+import type { ModTexturesResult } from '$lib/rpc/types.gen';
 import { describe, expect, it } from 'vitest';
 import { Tab } from '$lib/shell/tab.svelte';
 import { memoryStore } from '$lib/storage';
@@ -23,5 +24,46 @@ describe('Mod details page', () => {
     renderWith(ModDetailsPage, session, { doc }, tab);
     expect(await screen.findByText(/Uses species from: Mod A/)).toBeInTheDocument();
     expect(screen.getByText(/not installed — 3 skins skipped/)).toBeInTheDocument();
+  });
+
+  it('says whether the mod folder’s cooked pack is up to date, and Cook textures writes it there', async () => {
+    let pack = 'missing';
+    const facts = (): ModTexturesResult => ({
+      compression: 'auto',
+      textures: [{ file: 'skins/blue/male_D.png', kind: 'colour', mode: 'auto', override: false, format: 'DXT1', width: 4, height: 4, bytes: 16 }],
+      totalBytes: 16, pack, packBytes: pack === 'missing' ? 0 : 5 * 1024 * 1024,
+    });
+    const rpc = new FakeRpc()
+      .on('mods.get', () => modDetail())
+      .on('mods.check', () => ({ errors: [], warnings: [], missingCutouts: [] }))
+      .on('mods.textures', facts)
+      .on('mods.cookTextures', () => {
+        pack = 'current';
+        return { message: "Cooked 'red-spot's textures into C:\ws\mods\red-spot\textures.tpack.", path: 'C:\ws\mods\red-spot\textures.tpack' };
+      });
+    const session = new Session(rpc, new FakePlatform(), memoryStore());
+    const tab = new Tab('tab-mod', session.log, { retitle: () => {}, openTool: () => null });
+    const doc = new ModDoc('red-spot', rpc, tab, () => {});
+    await doc.load();
+    renderWith(ModDetailsPage, session, { doc }, tab);
+
+    expect(await screen.findByText(/Not cooked yet/)).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Cook textures' }));
+
+    await waitFor(() => expect(rpc.callsTo('mods.cookTextures')[0]?.params).toEqual({ id: 'red-spot' }));
+    expect(await screen.findByText(/textures\.tpack in the mod's folder is up to date \(5 MB\)/)).toBeInTheDocument();
+  });
+
+  it('says when the pack is out of date', async () => {
+    const rpc = new FakeRpc()
+      .on('mods.get', () => modDetail())
+      .on('mods.check', () => ({ errors: [], warnings: [], missingCutouts: [] }))
+      .on('mods.textures', () => ({ compression: 'auto', textures: [{ file: 'a.png', kind: 'colour', mode: 'auto', override: false, format: 'DXT1', width: 4, height: 4, bytes: 16 }], totalBytes: 16, pack: 'stale', packBytes: 2048 }));
+    const session = new Session(rpc, new FakePlatform(), memoryStore());
+    const tab = new Tab('tab-mod', session.log, { retitle: () => {}, openTool: () => null });
+    const doc = new ModDoc('red-spot', rpc, tab, () => {});
+    await doc.load();
+    renderWith(ModDetailsPage, session, { doc }, tab);
+    expect(await screen.findByText(/out of date/)).toBeInTheDocument();
   });
 });

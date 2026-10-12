@@ -130,6 +130,11 @@ file, `textures.tpack`, next to mod.json. The game then loads each texture ready
 PNGs stay the mod's source; never edit `textures.tpack` by hand (Tyrant rewrites it, and the game ignores an entry whose
 PNG changed and uses the PNG instead).
 
+Install also leaves the same `textures.tpack` in the workspace's mod folder, and **Cook textures** on the mod's details
+page (`tyrant mod cook <id>`) writes it there without installing. The page says whether it is up to date. Export never
+takes it from the folder: it cooks a fresh one into the zip. If the mod folder is in git, add `textures.tpack` to
+`.gitignore`.
+
 ```json
 "textures": {
   "compression": "auto",

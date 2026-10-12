@@ -118,6 +118,30 @@ public class ModSharingCliTests
     }
 
     [Fact]
+    public void Mod_cook_writes_the_pack_into_the_workspace_folder_without_installing()
+    {
+        using var game = new FakeGame();
+        var ws = Workspace(game);
+        Run("mod", "new", "red-spot", "--name", "Red spot", "-w", ws);
+        var dir = Path.Combine(ws, "mods", "red-spot");
+        Directory.CreateDirectory(Path.Combine(dir, "skins", "blue"));
+        using (var stream = File.Create(Path.Combine(dir, "skins", "blue", "male_D.png")))
+            new StbImageWriteSharp.ImageWriter().WritePng(new byte[4 * 4 * 4], 4, 4, StbImageWriteSharp.ColorComponents.RedGreenBlueAlpha, stream);
+        File.WriteAllText(Path.Combine(dir, "mod.json"),
+            "{\"format\":1,\"id\":\"red-spot\",\"name\":\"Red spot\",\"version\":\"1.0.0\",\"replace\":[],\"skins\":[{\"id\":\"blue\",\"species\":\"Carcharodontosaurus\",\"name\":\"Blue\",\"base\":\"0\",\"male\":{\"diffuse\":\"skins/blue/male_D.png\"}}]}");
+
+        var (code, output, err) = Run("mod", "cook", "red-spot", "-w", ws);
+
+        Assert.True(code == ExitCodes.Ok, err + output);
+        Assert.Contains("Cooking textures 1/1", output);
+        var pack = Path.Combine(dir, "textures.tpack");
+        Assert.Contains(pack, output);
+        using (var file = File.OpenRead(pack))
+            Assert.Equal("skins/blue/male_D.png", Assert.Single(Tyrant.Framework.Core.TexturePack.Read(file).Entries).Source);
+        Assert.False(Directory.Exists(Path.Combine(game.Root, "UserData", "Tyrant", "Mods", "red-spot")));
+    }
+
+    [Fact]
     public void Mod_install_cooks_the_textures_into_the_games_mod_folder()
     {
         using var game = new FakeGame();
@@ -157,6 +181,7 @@ public class ModSharingCliTests
             var pack = Path.Combine(game.Root, "UserData", "Tyrant", "Mods", "red-spot", "textures.tpack");
             using var file = File.OpenRead(pack);
             Assert.Equal("skins/blue/male_D.png", Assert.Single(Tyrant.Framework.Core.TexturePack.Read(file).Entries).Source);
+            Assert.True(File.Exists(Path.Combine(dir, "textures.tpack"))); // the workspace gets the same pack
         }
         finally
         {

@@ -16,6 +16,12 @@ export class TextureFacts {
     private readonly doc: ModDoc,
   ) {}
 
+  /** Fetches again although the doc did not change (the pack in the mod folder is not part of its state). */
+  reload(): void {
+    this.#key = null;
+    this.load();
+  }
+
   /** Reads the doc's state, so call it inside an $effect; fetches only when that state is new. */
   load(): void {
     const detail = this.doc.detail;

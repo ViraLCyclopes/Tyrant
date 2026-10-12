@@ -129,6 +129,7 @@ public static class CliApp
                 mod.AddCommand<ModExportCommand>("export").WithDescription("Export a mod as a zip players unzip into the game folder.");
                 mod.AddCommand<ModImportCommand>("import").WithDescription("Add a mod from a zip to the workspace.");
                 mod.AddCommand<ModInstallCommand>("install").WithDescription("Install a mod into the game (and Tyrant's framework, if needed).");
+                mod.AddCommand<ModCookCommand>("cook").WithDescription("Cook a mod's textures into textures.tpack in its workspace folder, without installing.");
                 mod.AddCommand<ModRemoveCommand>("remove").WithDescription("Remove a mod from the game.");
                 mod.AddCommand<ModDeleteCommand>("delete").WithDescription("Delete a mod from the workspace (to the Recycle Bin), and from the game unless --keep-in-game.");
                 mod.AddCommand<ModEnableCommand>("enable").WithDescription("Turn an installed mod on.");
