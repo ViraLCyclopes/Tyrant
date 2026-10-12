@@ -34,6 +34,25 @@ public static class CookedPacks
         return "current";
     }
 
+    /// <summary>
+    /// Every one of <paramref name="files"/> that exists under <paramref name="pngDir"/> has an entry in the pack with its
+    /// fingerprint and the compression the manifest asks for (a slim install's PNGs are compared through its pack).
+    /// </summary>
+    public static bool Matches(TexturePack pack, ModManifest manifest, string pngDir, IEnumerable<string> files)
+    {
+        foreach (var file in files)
+        {
+            var png = ModTextureCooker.InsidePath(pngDir, file);
+            if (png is null || !File.Exists(png)) continue;
+            var print = Print(png);
+            var mode = manifest.Textures.For(file);
+            if (!pack.Entries.Any(e => string.Equals(TexturePack.NormalSource(e.Source), file, StringComparison.OrdinalIgnoreCase)
+                                       && e.Fingerprint.Equals(print) && e.Mode == mode))
+                return false;
+        }
+        return true;
+    }
+
     /// <summary>A PNG's fingerprint, read again only when its size or write time changed.</summary>
     internal static TextureFingerprint Print(string path)
     {

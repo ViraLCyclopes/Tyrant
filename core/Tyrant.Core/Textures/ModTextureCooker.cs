@@ -150,12 +150,22 @@ public sealed class ModTextureCooker(string cacheDir, Func<string, SlotKind?>? r
     public string? CookInPlace(ModProject mod, IProgress<CookProgress>? progress = null, CancellationToken ct = default) =>
         WritePack(mod.Manifest, mod.Dir, mod.Dir, progress, ct);
 
-    /// <summary>Install's last step before the copy goes into the game: the workspace pack, cooked now, and the same file in the staged copy.</summary>
+    /// <summary>
+    /// Install's last step before the copy goes into the game: the workspace pack, cooked now, the same file in the staged
+    /// copy, and the staged copy made slim (the PNGs the pack holds left out; auto thumbnails; its mod.json).
+    /// </summary>
     public void CookForInstall(ModProject mod, string staging, IProgress<CookProgress>? progress = null, CancellationToken ct = default)
     {
         var staged = Path.Combine(staging, TexturePack.FileName);
-        if (CookInPlace(mod, progress, ct) is { } pack) File.Copy(pack, staged, overwrite: true);
-        else if (File.Exists(staged)) File.Delete(staged);
+        if (CookInPlace(mod, progress, ct) is not { } pack)
+        {
+            if (File.Exists(staged)) File.Delete(staged);
+            return;
+        }
+        File.Copy(pack, staged, overwrite: true);
+        TexturePack read;
+        using (var stream = File.OpenRead(staged)) read = TexturePack.Read(stream);
+        SlimCopy.Apply(SlimCopy.Plan(mod.Manifest, staging, read), staging);
     }
 
     /// <summary>

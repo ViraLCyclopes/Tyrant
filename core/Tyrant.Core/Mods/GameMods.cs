@@ -153,7 +153,24 @@ public sealed class GameMods(Func<GameInstall, bool>? isGameRunning = null)
     {
         var target = Path.Combine(ModLoaderInstaller.ModsDir(install), mod.Id);
         if (!Directory.Exists(target)) return ModInstallState.NotInstalled;
-        return ContentHash(target) == ContentHash(mod.Dir) ? ModInstallState.Installed : ModInstallState.Changed;
+        var pack = TryReadPack(Path.Combine(target, TexturePack.FileName));
+        // The PNGs a slim install left out: compared through the installed pack, not file by file.
+        var inPack = pack?.Entries.Select(e => TexturePack.NormalSource(e.Source)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var covered = inPack is null ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            : SlimCopy.Droppable(mod.Manifest).Where(inPack.Contains).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (ContentHash(target, skip: null) != ContentHash(mod.Dir, skip: covered)) return ModInstallState.Changed;
+        return pack is null || CookedPacks.Matches(pack, mod.Manifest, mod.Dir, covered) ? ModInstallState.Installed : ModInstallState.Changed;
+    }
+
+    private static TexturePack? TryReadPack(string path)
+    {
+        if (!File.Exists(path)) return null;
+        try
+        {
+            using var stream = File.OpenRead(path);
+            return TexturePack.Read(stream);
+        }
+        catch (Exception ex) when (ex is TexturePackException or IOException or UnauthorizedAccessException) { return null; }
     }
 
     /// <summary>
@@ -179,24 +196,42 @@ public sealed class GameMods(Func<GameInstall, bool>? isGameRunning = null)
     /// <summary>How many times a file was actually read for hashing (tests check the cache).</summary>
     internal static int TimesHashed(string path) => HashReads.TryGetValue(Path.GetFullPath(path), out var n) ? n : 0;
 
-    private static string ContentHash(string dir)
+    /// <summary>
+    /// One hash of a mod folder's files (not textures.tpack, auto thumbnails or <paramref name="skip"/>, which a slim install
+    /// compares through its pack); mod.json is hashed as compared (<see cref="ManifestHash"/>).
+    /// </summary>
+    private static string ContentHash(string dir, IReadOnlySet<string>? skip)
     {
         using var sha = SHA256.Create();
         foreach (var file in Directory.GetFiles(dir, "*", SearchOption.AllDirectories)
                      .Where(f => !AnimalDatabaseFile.IsAuxiliary(f))
                      .Select(f => (Path: f, Relative: Path.GetRelativePath(dir, f).Replace('\\', '/').ToLowerInvariant()))
                      .Where(f => !string.Equals(f.Relative, TexturePack.FileName, StringComparison.OrdinalIgnoreCase))
+                     .Where(f => (skip is null || !skip.Contains(f.Relative)) && !SlimCopy.IsAutoThumbnail(f.Relative))
                      .OrderBy(f => f.Relative, StringComparer.Ordinal))
         {
             var name = Encoding.UTF8.GetBytes(file.Relative + "\n");
             sha.TransformBlock(name, 0, name.Length, null, 0);
             var content = file.Relative == AnimalDatabaseFile.FileName
                 ? SHA256.HashData(Encoding.UTF8.GetBytes(AnimalDatabaseFile.Snapshot(AnimalDatabaseFile.Read(file.Path))))
+                : file.Relative == ModManifest.FileName ? ManifestHash(file.Path)
                 : FileHash(file.Path);
             sha.TransformBlock(content, 0, content.Length, null, 0);
         }
         sha.TransformFinalBlock([], 0, 0);
         return Convert.ToHexString(sha.Hash!);
+    }
+
+    /// <summary>mod.json as compared: parsed, auto thumbnails taken off, written again (install's rewrite is not a change).</summary>
+    private static byte[] ManifestHash(string path)
+    {
+        try
+        {
+            var manifest = ModManifest.Parse(File.ReadAllText(path));
+            SlimCopy.WithoutAutoThumbnails(manifest);
+            return SHA256.HashData(Encoding.UTF8.GetBytes(manifest.ToJson()));
+        }
+        catch (ManifestException) { return FileHash(path); }
     }
 
     private static byte[] FileHash(string path)

@@ -33,7 +33,7 @@ public class TextureInstallTests
         using var _ = game;
         var cooker = ModTextureCooker.For(ws, null, null);
 
-        new GameMods().Install(install, mod, staging => cooker.WritePack(mod.Manifest, staging, staging));
+        new GameMods().Install(install, mod, staging => cooker.CookForInstall(mod, staging));
 
         Assert.True(File.Exists(Path.Combine(Installed(install, mod.Id), TexturePack.FileName)));
         Assert.Equal(ModInstallState.Installed, new GameMods().StateOf(install, mod));
