@@ -41,6 +41,22 @@ public sealed partial class ModProject
         return entry;
     }
 
+    /// <summary>Undoes a species just added: its animals.db row and the language files made for it.</summary>
+    internal void RemoveSpeciesForRollback(SpeciesEntry entry)
+    {
+        Manifest.Species.Remove(entry);
+        SaveSpecies();
+        foreach (var code in AnimalLocalization.Codes)
+            foreach (var term in entry.Localization.Values)
+            {
+                var path = AnimalLocalization.FileFor(Dir, code, term);
+                if (File.Exists(path)) File.Delete(path);
+                for (var dir = Path.GetDirectoryName(path); dir != null && dir.Length > Path.Combine(Dir, "localization", code).Length
+                    && Directory.Exists(dir) && !Directory.EnumerateFileSystemEntries(dir).Any(); dir = Path.GetDirectoryName(dir))
+                    Directory.Delete(dir);
+            }
+    }
+
     public void SetSpecies(string id, string name, string genus, string epithet, int? cost, IReadOnlyDictionary<string, double> stats,
         IReadOnlyDictionary<string, string>? fields = null, SpeciesTemplateStats? template = null, IReadOnlyDictionary<string, string>? localization = null)
     {

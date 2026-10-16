@@ -204,9 +204,9 @@ public sealed partial class ModProject
     }
 
     private Dictionary<string, string> Template(GameInstall install, AssetIndex index, IAssetReader reader, string skinId, string sex,
-        IReadOnlyDictionary<string, string> textures, string[] slots, string[] infantSlots)
+        IReadOnlyDictionary<string, string> textures, string[] slots, string[] infantSlots, bool needsDiffuse = true)
     {
-        if (!textures.ContainsKey("diffuse"))
+        if (needsDiffuse && !textures.ContainsKey("diffuse"))
             throw new TyrantException(TyrantErrorCode.TargetNotFound, $"The base skin has no {sex} diffuse texture in the game data; pick another base or leave {sex} out.");
         var files = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var slot in slots.Concat(infantSlots))
