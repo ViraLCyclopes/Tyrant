@@ -149,6 +149,15 @@ namespace Tyrant.Framework.Core
         /// <summary>Tyrant's own grouping of a mod's skins in the mod editor ("Jurassic Park"); the game ignores it.</summary>
         public string? Group { get; set; }
 
+        /// <summary>
+        /// mod.json "starting": this skin is its custom species' starting skin (the species' skin 0, no number of its own). Only
+        /// on this mod's own species, one per species, with base "0" (the plain template clone); see <see cref="StartingSkins"/>.
+        /// </summary>
+        public bool Starting { get; set; }
+
+        /// <summary>mod.json "copiedFrom": the game skin of another species its PNGs were copied from (Edit a copy reads it).</summary>
+        public SkinSource? CopiedFrom { get; set; }
+
         public const int MaxGroupLength = 64;
 
         /// <summary>A group name as saved: trimmed and at most 64 characters; empty is no group.</summary>
@@ -161,6 +170,13 @@ namespace Tyrant.Framework.Core
 
         /// <summary>The skin's permanent key in skin-slots.json.</summary>
         public string Key(string modId) => modId + "/" + Id;
+    }
+
+    /// <summary>A game skin of a species, by its 0-based number.</summary>
+    public sealed class SkinSource
+    {
+        public string Species { get; set; } = "";
+        public int Skin { get; set; }
     }
 
     /// <summary>mod.json "textures": how Tyrant compresses the mod's textures when it cooks them (install, export).</summary>
@@ -344,11 +360,24 @@ namespace Tyrant.Framework.Core
                     Model = Text(entry, "model"),
                     Rig = entry.TryGetValue("rig", out var rig) && rig != null && RigEdit.Parse(rig, $"Skin \"{skinId}\"") is { Count: > 0 } parsed ? parsed : null,
                     Group = SkinEntry.GroupName(Text(entry, "group")),
+                    Starting = entry.TryGetValue("starting", out var starting) && starting != null
+                        && (starting as bool? ?? throw new ManifestException($"Skin \"{skinId}\": \"starting\" must be true or false.")),
+                    CopiedFrom = entry.TryGetValue("copiedFrom", out var copied) && copied != null ? Source(copied, skinId) : null,
                 };
                 if ((skin.Male?.Count ?? 0) == 0 && (skin.Female?.Count ?? 0) == 0)
                     throw new ManifestException($"Skin \"{skinId}\" needs \"male\" or \"female\" textures.");
                 manifest.Skins.Add(skin);
             }
+        }
+
+        private static SkinSource Source(object value, string skinId)
+        {
+            var map = value as Dictionary<string, object?>;
+            var species = map == null ? null : Text(map, "species");
+            var skin = map == null ? null : Integer(map, "skin");
+            if (string.IsNullOrWhiteSpace(species) || !(skin >= 0))
+                throw new ManifestException($"Skin \"{skinId}\": \"copiedFrom\" needs a \"species\" and a \"skin\" number (0 or more).");
+            return new SkinSource { Species = species!, Skin = skin!.Value };
         }
 
         public string ToJson()
@@ -393,6 +422,8 @@ namespace Tyrant.Framework.Core
                 map["skins"] = Skins.Select(s =>
                 {
                     var entry = new Dictionary<string, object?> { ["id"] = s.Id, ["species"] = s.Species, ["name"] = s.Name, ["base"] = s.Base };
+                    if (s.Starting) entry["starting"] = true;
+                    if (s.CopiedFrom != null) entry["copiedFrom"] = new Dictionary<string, object?> { ["species"] = s.CopiedFrom.Species, ["skin"] = s.CopiedFrom.Skin };
                     if (s.Group != null) entry["group"] = s.Group;
                     if (s.Thumbnail != null) entry["thumbnail"] = s.Thumbnail;
                     if (s.Portraits is { Count: > 0 }) entry["portraits"] = PortraitSlots.All.Where(s.Portraits.ContainsKey).ToDictionary(k => k, k => (object?)s.Portraits[k]);

@@ -117,6 +117,11 @@ namespace Tyrant.Framework.Core
                     manifest.Species.AddRange(AnimalDatabaseFile.Read(Path.Combine(source.Directory, AnimalDatabaseFile.FileName)));
                     AnimalLocalization.Load(source.Directory, manifest.Species);
                     foreach (var skipped in skippedSkins) plan.Warnings.Add($"{source.Folder}: {skipped}");
+                    foreach (var (skin, problem) in StartingSkins.Problems(manifest))
+                    {
+                        skin.Starting = false; // still loads, as an added skin
+                        plan.Warnings.Add($"{source.Folder}: skin \"{skin.Id}\" is not used as a starting skin: {problem}");
+                    }
                     if (manifest.Id != source.Folder)
                         plan.Skipped.Add(new SkippedMod(source.Folder, $"its id \"{manifest.Id}\" does not match its folder \"{source.Folder}\"."));
                     else
