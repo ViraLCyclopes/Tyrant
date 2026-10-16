@@ -267,3 +267,5 @@ Release build: `npm run build:app`, install `studio/src-tauri/target/release/bun
      **Delete species** the species and its skins leave the side list, and its files are in the Recycle Bin.
 121. With a second workspace mod that has a skin for that species, the dialog names that mod; after deleting, Check
      on the second mod reports its skin's species is missing, and in game only that skin is skipped.
+122. On a custom species page, **Paleopedia photo → Choose photo PNG…** with a 512×256 PNG: in game the
+     species' Paleopedia page and the Nursery species panel show it; **Use template photo** brings the template's back.

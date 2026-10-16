@@ -140,6 +140,27 @@ public class SpeciesCliTests : IDisposable
         Assert.Equal(ExitCodes.Error, code);
         Assert.Contains("mirabilis has its own starting skin 'mirabilis-start': rename it with 'mod rename-skin' and set its swatch with 'mod thumbnail'.", err);
     }
+
+    [Fact]
+    public void Set_species_photo_sets_and_clears_the_paleopedia_photo()
+    {
+        using var game = new FakeGame();
+        var ws = TexturedAllosaurus(game);
+        Assert.Equal(ExitCodes.Ok, AddMirabilis(ws).Code);
+        var png = Path.Combine(ws, "photo.png");
+        File.WriteAllBytes(png, Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jWWQAAAAASUVORK5CYII="));
+
+        var (code, output, err) = Run("mod", "set-species-photo", "mod-a", "mirabilis", "--png", png, "-w", ws);
+
+        Assert.True(code == ExitCodes.Ok, err);
+        Assert.Contains("mirabilis: Paleopedia photo <- icons/mirabilis.png", output);
+        Assert.True(File.Exists(Path.Combine(ws, "mods", "mod-a", "icons", "mirabilis.png")));
+
+        var cleared = Run("mod", "set-species-photo", "mod-a", "mirabilis", "--clear", "-w", ws);
+        Assert.Contains("mirabilis uses its template's Paleopedia photo.", cleared.Out);
+        Assert.Equal(ExitCodes.Error, Run("mod", "set-species-photo", "mod-a", "mirabilis", "-w", ws).Code);
+    }
+
     private static (int Code, string Out, string Err) Run(params string[] args)
     {
         var (oldOut, oldErr) = (Console.Out, Console.Error);

@@ -149,3 +149,36 @@ public sealed class ModSpeciesPortraitCommand : Command<ModSpeciesPortraitComman
         return ExitCodes.Ok;
     }
 }
+
+public sealed class ModSpeciesPhotoCommand : Command<ModSpeciesPhotoCommand.Settings>
+{
+    public sealed class Settings : ModSettings
+    {
+        [CommandArgument(1, "<SPECIES-ID>")]
+        [Description("The species' id in the mod (see 'tyrant mod show').")]
+        public string SpeciesId { get; set; } = "";
+
+        [CommandOption("--png <FILE>")]
+        [Description("The photo PNG (the game's are 512x256), shown in the Paleopedia and the Nursery's species panel.")]
+        public string? Png { get; set; }
+
+        [CommandOption("--clear")]
+        [Description("Show the template's photo again.")]
+        public bool Clear { get; set; }
+    }
+
+    public override int Execute(CommandContext context, Settings settings)
+    {
+        if (settings.Clear == (settings.Png is not null))
+        {
+            Console.Error.WriteLine("Give --png or --clear (not both).");
+            return ExitCodes.Error;
+        }
+        var (ws, _) = CliServices.OpenWorkspace(settings);
+        var mod = ModProject.Open(ws, settings.Id);
+        mod.SetSpeciesIcon(settings.SpeciesId, settings.Png);
+        var photo = mod.Manifest.Species.First(s => s.Id == settings.SpeciesId).Icon;
+        Console.WriteLine(photo is null ? $"{settings.SpeciesId} uses its template's Paleopedia photo." : $"{settings.SpeciesId}: Paleopedia photo <- {photo}");
+        return ExitCodes.Ok;
+    }
+}

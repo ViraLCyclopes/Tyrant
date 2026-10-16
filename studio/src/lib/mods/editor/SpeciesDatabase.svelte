@@ -141,7 +141,7 @@
     }
   }
   async function pickIcon() {
-    const png = await session.platform.openFile('Choose a species portrait PNG', ['png']);
+    const png = await session.platform.openFile('Choose a Paleopedia photo PNG (512×256)', ['png']);
     if (png) await doc.edit('mods.setSpeciesIcon', { speciesId: selected, png }, { undoable: false });
   }
 </script>
@@ -199,12 +199,6 @@
           {/each}
         </div>
         {#if !creating}
-          <h3>Species icon</h3>
-          <p class="hint">{animal?.icon ?? 'Using the template portrait'}. A PNG replaces this species' Nursery portrait.</p>
-          <div class="toolbar">
-            <button type="button" onclick={pickIcon}>Choose icon PNG…</button>
-            <button type="button" disabled={!animal?.icon} onclick={() => doc.edit('mods.setSpeciesIcon', { speciesId: selected, png: null }, { undoable: false })}>Use template icon</button>
-          </div>
           <h3>Localization keys</h3>
           <p class="hint">Each key points to its own plain text file. For example, mirabilis/description reads localization/en-US/mirabilis/description.txt. Name, description, character notes and social info are separate files. Missing translations fall back to English.</p>
           <label>Text language <select bind:value={textLanguage}>{#each ['en-US', 'fr', 'es', 'pt', 'de', 'ru', 'zh-CN'] as code}<option value={code}>{code}</option>{/each}</select></label>
@@ -233,6 +227,12 @@
           <button type="button" onclick={() => doc.edit('mods.setSpeciesPrefab', { speciesId: selected, bundle: null, asset: null }, { undoable: false })}>Use template prefab</button>
           <span class="hint">This species loads a Unity bundle ({animal.prefab.bundle}); the Unity path is parked.</span>
         {/if}
+      </div>
+      <h3>Paleopedia photo</h3>
+      <p class="hint">The picture in the Paleopedia and the Nursery's species panel. {animal.icon ? `Using ${animal.icon}.` : "Using the template's photo."} The game's are 512×256 PNGs.</p>
+      <div class="toolbar">
+        <button type="button" onclick={pickIcon}>Choose photo PNG…</button>
+        <button type="button" disabled={!animal.icon} onclick={() => doc.edit('mods.setSpeciesIcon', { speciesId: selected, png: null }, { undoable: false })}>Use template photo</button>
       </div>
     {/if}
     {#if animal && !creating}

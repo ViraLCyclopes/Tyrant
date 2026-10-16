@@ -178,14 +178,17 @@ The editor provides key inputs, a language selector, and separate buttons to rev
 each text file. Legacy combined language files remain readable for compatibility,
 but new species write one plain text file per field.
 
-## Custom icons
+## Paleopedia photo
 
-Choose **Choose icon PNG…** in the species editor. Tyrant copies the PNG to
-`icons/<species-id>.png` and records its path in `animal_assets` with `slot = 'icon'`.
-It replaces that species' `heroRender`, used by the Nursery species button and info
-preview. Transparent PNGs are supported. Skin swatches (a species' starting skin swatch is set under [Skins](#skins)), and animal-info-sign backgrounds remain separate template assets. **Use template icon**
-removes the override. SQL users may supply another relative PNG path inside the mod.
-Language files and icon PNGs are included in mod exports and installs.
+The picture at the top of a species' Paleopedia page, also shown in the Nursery's species panel, is its
+photo (the game's `heroRender`; the game's photos are 512×256 PNGs). On the species page choose
+**Paleopedia photo → Choose photo PNG…**, or run
+`tyrant mod set-species-photo <MOD> <SPECIES-ID> (--png <FILE> | --clear)`. Tyrant copies the PNG to
+`icons/<species-id>.png` and records its path in `animal_assets` with `slot = 'icon'`. Transparent PNGs are
+supported. Skin swatches (a species' starting skin swatch is set under [Skins](#skins)) and animal-info-sign
+backgrounds remain separate template assets. **Use template photo** (or `--clear`) removes the override.
+SQL users may supply another relative PNG path inside the mod.
+Language files and photo PNGs are included in mod exports and installs.
 
 At runtime Tyrant reads `animals.db`, clones the template's animal data, applies
 the overrides and registers the result in PK's in-memory animal database before

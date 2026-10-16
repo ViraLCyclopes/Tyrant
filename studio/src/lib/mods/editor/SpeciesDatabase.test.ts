@@ -76,7 +76,9 @@ describe('Species database', () => {
     await waitFor(() => expect(rpc.callsTo('mods.setSpecies')[0]?.params).toMatchObject({ dataFields: { '/brain/needs/adult/native/hitPoints': '800' }, localization: { description: 'pack.mirabilis.description' } }));
     rpc.on('mods.setSpeciesIcon', () => modDetail({ revision: 'r3' }));
     platform.files.push('C:/icons/mirabilis.png');
-    await fireEvent.click(screen.getByRole('button', { name: 'Choose icon PNG…' }));
+    expect(screen.getByRole('heading', { name: 'Paleopedia photo' })).toBeInTheDocument();
+    expect(screen.getByText(/the Paleopedia and the Nursery's species panel/)).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Choose photo PNG…' }));
     await waitFor(() => expect(rpc.callsTo('mods.setSpeciesIcon')[0]?.params).toMatchObject({ speciesId: 'new-animal', png: 'C:/icons/mirabilis.png' }));
   });
   it('saves overrides and can reset them to inherited values', async () => {
