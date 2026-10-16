@@ -5,6 +5,7 @@ import type { Tab } from '$lib/shell/tab.svelte';
 export type EditMethod =
   | 'mods.setDetails'
   | 'mods.addSpecies'
+  | 'mods.addStartingSkin'
   | 'mods.setSpecies'
   | 'mods.setSpeciesIcon'
   | 'mods.setSpeciesStartingSkin'
