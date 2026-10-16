@@ -196,3 +196,7 @@ species' textures need that species' model) or **My own PNGs** (male diffuse, op
 is listed in the side list with a *Starting skin* tag and opens a normal skin page (PNGs, colours, model, sounds,
 portraits with **Render from 3D…**). The species page's Skins section then shows **Starting skin: <name>** with
 **Open**. Species without one show the older controls and **Make an editable starting skin**.
+
+**Delete species…** at the bottom of the species page removes the species with its skins, models, sounds and
+prefab settings, after a dialog that lists them and any other workspace mods that use the species. Its files go to
+the Recycle Bin unless you untick that. Saved parks with the species can no longer load its animals.

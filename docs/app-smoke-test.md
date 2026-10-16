@@ -263,3 +263,7 @@ Release build: `npm run build:app`, install `studio/src-tauri/target/release/bun
      load the save: the animal looks like the starting skin (its textures, model and colours), not the template.
 119. On an older species with species portraits, **Make an editable starting skin** and give it one portrait: in game
      the other species portraits still show; a second skin based on 0 shows the starting skin's portrait in the app and game.
+120. On a species with two skins and a sound, **Delete species…**: the dialog lists the skins and the sound; after
+     **Delete species** the species and its skins leave the side list, and its files are in the Recycle Bin.
+121. With a second workspace mod that has a skin for that species, the dialog names that mod; after deleting, Check
+     on the second mod reports its skin's species is missing, and in game only that skin is skipped.

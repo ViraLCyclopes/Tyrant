@@ -28,6 +28,10 @@ public sealed record ModSetSpeciesParams(string Id, string Revision, string Spec
     int? Cost, IReadOnlyDictionary<string, double> Stats, IReadOnlyDictionary<string, string>? DataFields = null,
     IReadOnlyDictionary<string, string>? Localization = null);
 
+public sealed record ModSpeciesParams(string Id, string SpeciesId);
+/// <summary>DeleteFiles: its files, language files, icon and Blender projects go to the Recycle Bin too.</summary>
+public sealed record ModRemoveSpeciesParams(string Id, string Revision, string SpeciesId, bool DeleteFiles = true);
+
 public sealed record ModSetSpeciesStartingSkinParams(string Id, string Revision, string SpeciesId, int StartingSkin, string? Name = null);
 public sealed record ModSetSpeciesSwatchParams(string Id, string Revision, string SpeciesId, string? Png = null);
 public sealed record ModCustomSpeciesParams(string? Id = null);
@@ -121,6 +125,21 @@ public sealed partial class ModsMethods
             throw new TyrantException(TyrantErrorCode.ModInvalid, "A female PNG needs the male one too.");
         return png is not null ? new OwnPngs(png, pngFemale) : new CopySkin(from ?? template, skin ?? (from is null ? templateSkin : 0));
     }
+
+    /// <summary>What mods.removeSpecies would take with it, and which other workspace mods use the species.</summary>
+    [RpcMethod("mods.speciesRemoval")]
+    public SpeciesRemoval SpeciesRemoval(ModSpeciesParams p)
+    {
+        var (ws, _) = session.Current();
+        return ModProject.Open(ws, p.Id).SpeciesRemovalOf(ws, p.SpeciesId);
+    }
+
+    [RpcMethod("mods.removeSpecies")]
+    public ModDetail RemoveSpecies(ModRemoveSpeciesParams p) =>
+        Edit(p.Id, p.Revision, mod =>
+        {
+            foreach (var line in mod.RemoveSpecies(p.SpeciesId, p.DeleteFiles).Kept) session.Log($"'{p.Id}': {line}");
+        }, $"removed species '{p.SpeciesId}'{(p.DeleteFiles ? " and its files" : "")}");
 
     [RpcMethod("mods.setSpecies")]
     public ModDetail SetSpecies(ModSetSpeciesParams p) => Edit(p.Id, p.Revision, mod =>

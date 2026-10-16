@@ -237,6 +237,16 @@ Another mod can add skins to your species the same way: its Add skin lists "Othe
 the workspace and mods installed in the game). In game, if your mod is missing or off, only those skins are
 skipped; the rest of the other mod still loads. Tyrant's mod details and Mods list say so.
 
+## Deleting a species
+
+**Delete species…** at the bottom of the species page (or `tyrant mod remove-species <MOD> <SPECIES-ID>`) removes
+the species from `animals.db` together with this mod's skins for it (its starting skin too), its models and rig
+edits, the sounds for it or its skins, and its prefab settings. The dialog lists what goes and which other mods in
+the workspace still have skins, models or sounds for it (the game skips those). Its files go to the Recycle Bin
+too: PNGs, models, sounds, language files, icon, swatch, portraits, prefab bundle and Blender projects, except
+files something else in the mod still uses. Untick that (or pass `--keep-files`) to leave them. It cannot be undone
+with Ctrl+Z, and saved parks with the species can no longer load its animals, as when its mod is removed.
+
 ## CLI
 
 ```powershell
@@ -252,6 +262,7 @@ tyrant mod add-starting-skin my-animal-pack older-animal --start-from "Allosauru
 tyrant mod add-species my-animal-pack example-animal "Allosaurus Anax" --name "Example animal" --genus Example --epithet animal --starting-skin 1 -w <workspace>
 tyrant mod set-species-skin my-animal-pack example-animal --starting-skin 0 --name "Mirabilis" --swatch swatch.png -w <workspace>
 tyrant mod add-skin other-pack tyrant.my-animal-pack.example-animal --name "Blue" -w <workspace>
+tyrant mod remove-species my-animal-pack example-animal -w <workspace>
 ```
 
 Use the app or SQL for other stats. The CLI's `mod add-skin` and `mod replace-model`

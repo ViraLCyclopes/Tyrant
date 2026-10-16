@@ -127,37 +127,12 @@ public sealed partial class ModProject
         Manifest.Skins.Remove(skin);
         Save();
         if (!deleteFiles) return new RemovedFiles([], []);
-        var stillUsed = new HashSet<string>(Manifest.Skins.SelectMany(FilesOf)
-            .Concat(Manifest.Replace.Select(r => r.File))
-            .Concat(Manifest.Skins.SelectMany(s => ModSharing.ModelFilesOf(this, s.Model)))
-            .Concat(Manifest.Models.SelectMany(m => ModSharing.ModelFilesOf(this, m.File)))
-            .Select(Normal), StringComparer.OrdinalIgnoreCase);
         var removed = new List<string>();
         var kept = new List<string>();
-        foreach (var file in FilesOf(skin).Concat(ModSharing.ModelFilesOf(this, skin.Model)).Distinct(StringComparer.OrdinalIgnoreCase))
-        {
-            var path = Path.GetFullPath(Path.Combine(Dir, file));
-            if (stillUsed.Contains(Normal(file)) || !ModPaths.IsInside(path, Dir) || !File.Exists(path)) continue;
-            var why = TryRecycle(path);
-            if (why is null) removed.Add(Normal(file));
-            else kept.Add($"{Normal(file)}: {why}");
-        }
-        var portraitsFolder = Path.Combine(Dir, "skins", skinId, "portraits");
-        try { if (Directory.Exists(portraitsFolder) && !Directory.EnumerateFileSystemEntries(portraitsFolder).Any()) Directory.Delete(portraitsFolder); } catch (IOException) { }
-        var folder = Path.Combine(Dir, "skins", skinId);
-        try { if (Directory.Exists(folder) && !Directory.EnumerateFileSystemEntries(folder).Any()) Directory.Delete(folder); } catch (IOException) { }
-        var blender = BlenderProjectWriter.FolderOf(WorkspaceDir, Id, skin.Species, skin.Id);
-        if (Directory.Exists(blender))
-        {
-            if (!BlenderProjectFile.Belongs(blender, Id, skin.Id, skin.Species))
-                kept.Add($"{blender}: it is not this skin's Blender project, so it was left alone.");
-            else
-            {
-                var why = TryRecycle(blender);
-                if (why is null) removed.Add(blender);
-                else kept.Add($"{blender}: {why}");
-            }
-        }
+        RecycleUnused(FilesOf(skin).Concat(ModSharing.ModelFilesOf(this, skin.Model)), removed, kept);
+        DeleteIfEmpty(Path.Combine(Dir, "skins", skinId, "portraits"));
+        DeleteIfEmpty(Path.Combine(Dir, "skins", skinId));
+        RecycleBlender(BlenderProjectWriter.FolderOf(WorkspaceDir, Id, skin.Species, skin.Id), skin.Id, skin.Species, removed, kept);
         return new RemovedFiles(removed, kept);
     }
 

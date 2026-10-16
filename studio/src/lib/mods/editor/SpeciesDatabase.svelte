@@ -1,10 +1,11 @@
 <script lang="ts">
   import PortraitsCard from './PortraitsCard.svelte';
+  import RemoveSpeciesDialog from './RemoveSpeciesDialog.svelte';
   import StartingSkinChoice, { freshChoice, startParams, startingSkinOf, type StartingChoice } from './StartingSkinChoice.svelte';
   import { onMount } from 'svelte';
   import { getSession } from '$lib/stores/session.svelte';
   import { getTab } from '$lib/shell/tab.svelte';
-  import type { ModAnimalDatabase, ModSpeciesTemplateDto, SpeciesSkinsRow } from '$lib/rpc/types.gen';
+  import type { ModAnimalDatabase, ModSpeciesTemplateDto, SpeciesRemoval, SpeciesSkinsRow } from '$lib/rpc/types.gen';
   import OpenInBlender from '$lib/blender/OpenInBlender.svelte';
   import RecordTree from './RecordTree.svelte';
   import type { ModDoc } from './modDoc.svelte';
@@ -125,6 +126,19 @@
   async function pickSwatch() {
     const png = await session.platform.openFile('Choose a swatch PNG for the starting skin', ['png']);
     if (png) await doc.edit('mods.setSpeciesSwatch', { speciesId: selected, png }, { undoable: false });
+  }
+  /** What deleting the shown species takes with it (mods.speciesRemoval), while its dialog is open. */
+  let removal = $state<SpeciesRemoval | null>(null);
+  async function askDelete() {
+    removal = await tab.safely(() => session.rpc.call('mods.speciesRemoval', { id: doc.id, speciesId: selected })) ?? null;
+  }
+  async function deleteSpecies(deleteFiles: boolean) {
+    const gone = selected;
+    removal = null;
+    if (await doc.edit('mods.removeSpecies', { speciesId: gone, deleteFiles }, { undoable: false })) {
+      selected = database?.animals.find((a) => a.id !== gone)?.id ?? '';
+      tab.info(`Deleted species '${gone}'.`);
+    }
   }
   async function pickIcon() {
     const png = await session.platform.openFile('Choose a species portrait PNG', ['png']);
@@ -265,6 +279,14 @@
         </ul>
         <div><button type="button" onclick={() => onAddSkin(animal.key)}>Add skin</button></div>
       </section>
+      <section class="danger" aria-label="Delete species">
+        <h3>Delete species</h3>
+        <p class="hint">Removes {animal.name} from this mod with its skins, models, sounds and prefab settings.</p>
+        <div><button type="button" disabled={busy} onclick={askDelete}>Delete species…</button></div>
+      </section>
+    {/if}
+    {#if removal}
+      <RemoveSpeciesDialog plan={removal} onConfirm={deleteSpecies} onCancel={() => (removal = null)} />
     {/if}
     {#if creating && !templates.length}<p class="hint">Run the game's data dump on the Workspace tab to choose a template.</p>{/if}
   {:else}<p class="hint">Loading species…</p>{/if}
@@ -283,4 +305,5 @@
   .actions { margin-top: 18px; }
   .skins { display: grid; gap: 12px; }
   .skin-list { margin: 0; padding-left: 18px; }
+  .danger { display: grid; gap: 8px; border-top: 1px solid var(--border); padding-top: 12px; }
 </style>

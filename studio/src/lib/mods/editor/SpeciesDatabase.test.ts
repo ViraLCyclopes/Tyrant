@@ -183,6 +183,18 @@ describe('Species database', () => {
     expect(onOpenSkin).toHaveBeenCalledWith('new-animal-start');
   });
 
+  it('Delete species shows what goes, then removes it with its files', async () => {
+    const { rpc } = await setup();
+    rpc.on('mods.speciesRemoval', () => ({ key: animal.key, name: 'New animal', skins: ['Default'], models: 0, sounds: 0, prefabSettings: false, usedBy: [] }));
+    rpc.on('mods.removeSpecies', () => modDetail({ revision: 'r2' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Delete species…' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Delete New animal' });
+    expect(rpc.callsTo('mods.speciesRemoval')[0]?.params).toEqual({ id: 'red-spot', speciesId: 'new-animal' });
+    await fireEvent.click(within(dialog).getByRole('button', { name: 'Delete species' }));
+    await waitFor(() => expect(rpc.callsTo('mods.removeSpecies')[0]?.params).toMatchObject({ speciesId: 'new-animal', deleteFiles: true }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+
   it('a species without one can be given an editable starting skin', async () => {
     const { rpc } = await setup([{ ...animal, startingSkin: 0, startingSkinName: null, swatch: null } as typeof animal]);
     rpc.on('mods.addStartingSkin', () => modDetail({ revision: 'r2' }));

@@ -766,6 +766,13 @@ export interface ModRemoveSoundParams {
   skin?: string | null;
 }
 
+export interface ModRemoveSpeciesParams {
+  id: string;
+  revision: string;
+  speciesId: string;
+  deleteFiles?: boolean;
+}
+
 export interface ModRenameSkinParams {
   id: string;
   revision: string;
@@ -1081,6 +1088,11 @@ export interface ModSpeciesModelParams {
   sex?: string;
 }
 
+export interface ModSpeciesParams {
+  id: string;
+  speciesId: string;
+}
+
 export interface ModSpeciesResult {
   hasDump: boolean;
   species: SpeciesSkinsRow[];
@@ -1329,6 +1341,16 @@ export interface SpeciesPrefab {
   asset: string;
 }
 
+export interface SpeciesRemoval {
+  key: string;
+  name: string;
+  skins: string[];
+  models: number;
+  sounds: number;
+  prefabSettings: boolean;
+  usedBy: SpeciesUser[];
+}
+
 export interface SpeciesRigInfoParams {
   species: string;
 }
@@ -1364,6 +1386,14 @@ export interface SpeciesTextureDto {
   slot: string;
   skins: string[];
   sharedWith: string[];
+}
+
+export interface SpeciesUser {
+  modId: string;
+  name: string;
+  skins: number;
+  models: number;
+  sounds: number;
 }
 
 export interface TexturesExtractParams {
@@ -1471,6 +1501,7 @@ export interface RpcMethods {
   "mods.removeReplacement": { params: ModRemoveReplacementParams; result: ModDetail };
   "mods.removeSkin": { params: ModRemoveSkinParams; result: ModDetail };
   "mods.removeSound": { params: ModRemoveSoundParams; result: ModDetail };
+  "mods.removeSpecies": { params: ModRemoveSpeciesParams; result: ModDetail };
   "mods.renameSkin": { params: ModRenameSkinParams; result: ModDetail };
   "mods.replace": { params: ModReplaceParams; result: ModsListResult };
   "mods.replaceModel": { params: ModReplaceModelParams; result: ModDetail };
@@ -1499,6 +1530,7 @@ export interface RpcMethods {
   "mods.skinSlots": { params: void; result: SkinSlotsResult };
   "mods.species": { params: void; result: ModSpeciesResult };
   "mods.speciesModel": { params: ModSpeciesModelParams; result: ModSkinModel };
+  "mods.speciesRemoval": { params: ModSpeciesParams; result: SpeciesRemoval };
   "mods.speciesTemplate": { params: ModSpeciesTemplateParams; result: ModSpeciesTemplateDto };
   "mods.speciesTextures": { params: ModSpeciesTexturesParams; result: ModSpeciesTexturesResult };
   "mods.textures": { params: ModIdParams; result: ModTexturesResult };

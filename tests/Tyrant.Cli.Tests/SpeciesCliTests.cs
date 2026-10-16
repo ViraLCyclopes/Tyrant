@@ -97,6 +97,38 @@ public class SpeciesCliTests : IDisposable
     }
 
     [Fact]
+    public void Remove_species_takes_its_skins_and_files_and_warns_about_mods_that_use_it()
+    {
+        using var game = new FakeGame();
+        var ws = TexturedAllosaurus(game);
+        Assert.Equal(ExitCodes.Ok, AddMirabilis(ws).Code);
+        var fans = Tyrant.Core.Mods.ModProject.Create(Tyrant.Core.Workspaces.Workspace.Open(ws), "fans", null, null);
+        fans.Manifest.Skins.Add(new Tyrant.Framework.Core.SkinEntry { Id = "fan", Species = "tyrant.mod-a.mirabilis", Name = "Fan", Male = new() { ["diffuse"] = "skins/fan/male_D.png" } });
+        fans.Save();
+
+        var (code, output, err) = Run("mod", "remove-species", "mod-a", "mirabilis", "-w", ws);
+
+        Assert.True(code == ExitCodes.Ok, err);
+        Assert.Contains("Removed species tyrant.mod-a.mirabilis (Mirabilis) and 1 skin(s).", output);
+        Assert.Contains("fans still has 1 skin(s), 0 model(s), 0 sound(s) for it; the game skips them.", output);
+        Assert.Contains("Species (0):", Run("mod", "show", "mod-a", "-w", ws).Out);
+        Assert.False(Directory.Exists(Path.Combine(ws, "mods", "mod-a", "skins", "mirabilis-start")));
+    }
+
+    [Fact]
+    public void Remove_species_with_keep_files_leaves_its_files()
+    {
+        using var game = new FakeGame();
+        var ws = TexturedAllosaurus(game);
+        Assert.Equal(ExitCodes.Ok, AddMirabilis(ws).Code);
+
+        Assert.Equal(ExitCodes.Ok, Run("mod", "remove-species", "mod-a", "mirabilis", "--keep-files", "-w", ws).Code);
+
+        Assert.True(Directory.Exists(Path.Combine(ws, "mods", "mod-a", "skins", "mirabilis-start")));
+        Assert.Contains("Species (0):", Run("mod", "show", "mod-a", "-w", ws).Out);
+    }
+
+    [Fact]
     public void Set_species_skin_points_a_new_species_at_its_skin_commands()
     {
         using var game = new FakeGame();

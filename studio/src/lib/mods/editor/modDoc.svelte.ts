@@ -7,6 +7,7 @@ export type EditMethod =
   | 'mods.addSpecies'
   | 'mods.addStartingSkin'
   | 'mods.setSpecies'
+  | 'mods.removeSpecies'
   | 'mods.setSpeciesIcon'
   | 'mods.setSpeciesStartingSkin'
   | 'mods.setSpeciesSwatch'

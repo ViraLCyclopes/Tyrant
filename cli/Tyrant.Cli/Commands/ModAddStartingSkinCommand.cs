@@ -38,6 +38,7 @@ public sealed class ModAddStartingSkinCommand : Command<ModAddStartingSkinComman
     public sealed class Settings : ModSettings, IStartingSkinOptions
     {
         [CommandArgument(1, "<SPECIES-ID>")]
+        [Description("The species' id in the mod (see 'tyrant mod show').")]
         public string SpeciesId { get; set; } = "";
         [CommandOption("--start-from <SPECIES>")]
         [Description("Copy this base-game species' skin, as SPECIES or SPECIES/SKIN (number or name); default: the template's starting skin.")]
