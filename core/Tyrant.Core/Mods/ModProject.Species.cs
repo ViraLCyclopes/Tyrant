@@ -83,15 +83,17 @@ public sealed partial class ModProject
 
     public void EnsureLocalizationFiles(SpeciesEntry entry)
     {
+        // English gets starter text; other languages start empty, and empty text falls back to English in game.
+        foreach (var code in AnimalLocalization.Codes)
         foreach (var term in entry.Localization)
         {
-            var path = AnimalLocalization.FileFor(Dir, "en-US", term.Value);
+            var path = AnimalLocalization.FileFor(Dir, code, term.Value);
             if (File.Exists(path)) continue;
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            var text = term.Key switch
+            var text = (code, term.Key) switch
             {
-                "name" => entry.Name,
-                "description" => entry.Name + " is a custom species based on " + entry.Base + ".",
+                ("en-US", "name") => entry.Name,
+                ("en-US", "description") => entry.Name + " is a custom species based on " + entry.Base + ".",
                 _ => "",
             };
             var temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";

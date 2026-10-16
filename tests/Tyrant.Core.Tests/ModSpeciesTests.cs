@@ -144,6 +144,23 @@ public class ModSpeciesTests
     }
 
     [Fact]
+    public void New_species_get_a_text_file_per_language_and_other_languages_fall_back_to_english()
+    {
+        using var game = new FakeGame();
+        var ws = Workspace.Create(Path.Combine(game.LibraryRoot, "workspace"), new GameInstall(game.Root, null));
+        var mod = ModProject.Create(ws, "animal-pack", null, null);
+        var entry = mod.AddSpecies([Template()], "new-animal", "Allosaurus Anax", "Animal", "Example", "animal");
+        foreach (var code in AnimalLocalization.Codes)
+            foreach (var term in entry.Localization.Values)
+                Assert.True(File.Exists(AnimalLocalization.FileFor(mod.Dir, code, term)), code + "/" + term);
+        Assert.Equal("Animal", File.ReadAllText(AnimalLocalization.FileFor(mod.Dir, "en-US", entry.Localization["name"])));
+        Assert.Equal("", File.ReadAllText(AnimalLocalization.FileFor(mod.Dir, "fr", entry.Localization["name"])));
+        var loaded = AnimalDatabaseFile.Read(mod.DatabasePath);
+        AnimalLocalization.Load(mod.Dir, loaded);
+        Assert.Equal("Animal", AnimalText.Resolve(loaded[0].Texts, "name", "French"));
+    }
+
+    [Fact]
     public void Authoring_persists_canonical_template_and_keeps_source_available()
     {
         using var game = new FakeGame();

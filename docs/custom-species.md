@@ -170,7 +170,8 @@ the same relative paths under `fr`, `es`, `pt`, `de`, `ru`, and `zh-CN` folders.
 There are no JSON wrappers or key headers inside these files.
 
 The database's description row points to that key. Creation writes an English name
-and a placeholder description. Missing translations fall back to English. Empty or
+and a placeholder description, plus empty files for every other language, ready to
+translate. Empty or missing translations fall back to English. Empty or
 missing notes retain the template's notes. At runtime Tyrant creates separate PK
 localization assets and follows the current game language; original CSVs are unchanged.
 The editor provides key inputs, a language selector, and separate buttons to reveal
