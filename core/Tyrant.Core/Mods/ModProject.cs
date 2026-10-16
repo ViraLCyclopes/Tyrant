@@ -229,17 +229,31 @@ public sealed partial class ModProject
         if (sex is not ("male" or "female")) throw new TyrantException(TyrantErrorCode.ModInvalid, $"Sex must be male or female (got '{sex}').");
         var canonical = SkinSlotNames.Canonical(slot)
             ?? throw new TyrantException(TyrantErrorCode.ModInvalid, $"'{slot}' is not a skin slot (use {string.Join(", ", SkinSlotNames.All)}).");
-        var target = species.FirstOrDefault(s => string.Equals(s.SpeciesId, skin.Species, StringComparison.OrdinalIgnoreCase))
-            ?? throw new TyrantException(TyrantErrorCode.TargetNotFound, $"'{skin.Species}' is not in the game data.");
-        var based = int.TryParse(skin.Base, out var number) ? target.Skins.FirstOrDefault(s => s.Index == number)
-            : target.Skins.FirstOrDefault(s => string.Equals(s.Name, skin.Base, StringComparison.OrdinalIgnoreCase));
-        var textures = based is null ? null : sex == "male" ? based.Male : based.Female;
-        if (textures is null || !textures.TryGetValue(canonical, out var guid))
-            throw new TyrantException(TyrantErrorCode.TargetNotFound, $"The base skin {based?.Name ?? skin.Base} has no {sex} {SpeciesTextures.Label(canonical)} texture to copy.");
         var file = $"skins/{skinId}/{SkinFileName(sex, canonical)}";
         var path = Path.Combine(Dir, file.Replace('/', Path.DirectorySeparatorChar));
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        reader.WriteTexture(install, index.Resolve(guid, "Texture2D"), path);
+        // Based on the species' starting skin: its own PNG for the slot, as the game shows it.
+        var inheritedFile = StartingSkins.InheritsFrom(Manifest, skin, out var starting) && (sex == "male" ? starting.Male : starting.Female) is { } own
+            && own.TryGetValue(canonical, out var ownFile) && Path.GetFullPath(Path.Combine(Dir, ownFile)) is var ownPath
+            && ModPaths.IsInside(ownPath, Dir) && File.Exists(ownPath) ? ownPath : null;
+        if (inheritedFile is not null)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.Copy(inheritedFile, path, overwrite: true);
+        }
+        else
+        {
+            // A starting skin copied from another species takes that species' texture, not the template's.
+            var (speciesId, baseSkin) = skin.CopiedFrom is { } copied ? (copied.Species, copied.Skin.ToString(System.Globalization.CultureInfo.InvariantCulture)) : (skin.Species, skin.Base);
+            var target = species.FirstOrDefault(s => string.Equals(s.SpeciesId, speciesId, StringComparison.OrdinalIgnoreCase))
+                ?? throw new TyrantException(TyrantErrorCode.TargetNotFound, $"'{speciesId}' is not in the game data.");
+            var based = int.TryParse(baseSkin, out var number) ? target.Skins.FirstOrDefault(s => s.Index == number)
+                : target.Skins.FirstOrDefault(s => string.Equals(s.Name, baseSkin, StringComparison.OrdinalIgnoreCase));
+            var textures = based is null ? null : sex == "male" ? based.Male : based.Female;
+            if (textures is null || !textures.TryGetValue(canonical, out var guid))
+                throw new TyrantException(TyrantErrorCode.TargetNotFound, $"The base skin {based?.Name ?? baseSkin} has no {sex} {SpeciesTextures.Label(canonical)} texture to copy.");
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            reader.WriteTexture(install, index.Resolve(guid, "Texture2D"), path);
+        }
         File.SetLastWriteTimeUtc(path, DateTime.UtcNow);
         var files = sex == "male" ? skin.Male ??= new Dictionary<string, string>(StringComparer.Ordinal) : skin.Female ??= new Dictionary<string, string>(StringComparer.Ordinal);
         files[canonical] = file;

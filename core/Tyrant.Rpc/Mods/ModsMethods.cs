@@ -320,7 +320,8 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
     private string? MapFile(Workspace ws, GameInstall install, AssetIndex index, ModProject mod, Tyrant.Framework.Core.SkinEntry skin, VanillaSkin? based, string sex, string slot)
     {
         // One sex only, as in the game (infants wear the male skin's infant slots).
-        var source = SkinMaps.Source(skin, mod.Dir, based, slot, sex == "male" ? "male-only" : sex);
+        var inherited = Tyrant.Framework.Core.StartingSkins.InheritsFrom(mod.Manifest, skin, out var starting) ? starting : null;
+        var source = SkinMaps.Source(skin, mod.Dir, based, slot, sex == "male" ? "male-only" : sex, inherited);
         if (source is not null && source.StartsWith("file:", StringComparison.Ordinal)) return OwnMapCopy(ws, mod, Path.GetRelativePath(mod.Dir, source[5..]));
         return MapFromSource(ws, install, index, source);
     }

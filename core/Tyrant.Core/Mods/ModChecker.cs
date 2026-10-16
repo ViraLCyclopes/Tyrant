@@ -69,6 +69,10 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
             }
             catch (ManifestException ex) { errors.Add($"Species {entry.Id}: {ex.Message}"); }
         }
+        foreach (var (skin, problem) in StartingSkins.Problems(mod.Manifest)) errors.Add($"Skin {skin.Id}: {problem}");
+        foreach (var skin in mod.Manifest.Skins.Where(s => s.Starting && s.CopiedFrom is not null && s.Model is null
+            && !mod.Manifest.Models.Any(m => m.Target == s.Species)))
+            warnings.Add($"Skin {skin.Id}: These textures fit {skin.CopiedFrom!.Species}'s model; give this skin that model (Models on its page) or they will not line up.");
         if (mod.Manifest.Species.Count > 0)
         {
             warnings.Add("New species support is experimental; spawning and save/reload need an in-game test. Removing the species mod prevents its saved animals from loading.");

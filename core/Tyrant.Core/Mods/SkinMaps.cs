@@ -26,17 +26,19 @@ public static class SkinMaps
     /// <summary>
     /// "file:&lt;path&gt;" or "guid:&lt;texture guid&gt;" for the slot, or null. sex: "female"; "male-only" (the 3D view: one sex, as the
     /// game); "infant" (the male skin's infant slot, then the adult one, as the game); "male" also borrows the female skin's map
-    /// per slot (Blender projects: male-only and female-only skins still get every map).
+    /// per slot (Blender projects: male-only and female-only skins still get every map). inherited: the species' starting skin
+    /// a skin based on skin 0 wears under its own PNGs (same mod folder), as in game.
     /// </summary>
-    public static string? Source(SkinEntry? own, string? modDir, VanillaSkin? vanilla, string slot, string sex)
+    public static string? Source(SkinEntry? own, string? modDir, VanillaSkin? vanilla, string slot, string sex, SkinEntry? inherited = null)
     {
         var candidates = sex == "infant" ? new[] { "infant" + char.ToUpperInvariant(slot[0]) + slot[1..], slot } : [slot];
-        IReadOnlyDictionary<string, string>?[] owns = sex switch
+        IReadOnlyDictionary<string, string>?[] Of(SkinEntry? skin) => sex switch
         {
-            "female" => [own?.Female],
-            "male" => [own?.Male, own?.Female],
-            _ => [own?.Male],
+            "female" => [skin?.Female],
+            "male" => [skin?.Male, skin?.Female],
+            _ => [skin?.Male],
         };
+        var owns = Of(own).Concat(Of(inherited)).ToArray();
         IReadOnlyDictionary<string, string>?[] vanillas = sex switch
         {
             "female" => [vanilla?.Female],

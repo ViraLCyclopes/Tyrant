@@ -198,13 +198,14 @@ public static class BlenderProjectWriter
             var femaleMaps = new Dictionary<string, string>(StringComparer.Ordinal);
             if (resolved.Animal)
             {
+                var inherited = mod is not null && ownSkin is not null && StartingSkins.InheritsFrom(mod.Manifest, ownSkin, out var starting) ? starting : null;
                 foreach (var slot in SkinMaps.Slots)
                 {
-                    var source = SkinMaps.Source(ownSkin, mod?.Dir, vanilla, slot, "male");
+                    var source = SkinMaps.Source(ownSkin, mod?.Dir, vanilla, slot, "male", inherited);
                     if (source is not null && store.Put(slot + ".png", SourceKey(source), png => SkinMaps.Write(source, install, index, reader, png) is not null))
                         maps[slot] = $"textures/{slot}.png";
                     // The female's own map, else the male's (as the male borrows hers).
-                    var female = SkinMaps.Source(ownSkin, mod?.Dir, vanilla, slot, "female") ?? source;
+                    var female = SkinMaps.Source(ownSkin, mod?.Dir, vanilla, slot, "female", inherited) ?? source;
                     if (female is not null && store.Put($"female/{slot}.png", SourceKey(female), png => SkinMaps.Write(female, install, index, reader, png) is not null))
                         femaleMaps[slot] = $"textures/female/{slot}.png";
                 }
