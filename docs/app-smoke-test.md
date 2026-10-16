@@ -269,3 +269,6 @@ Release build: `npm run build:app`, install `studio/src-tauri/target/release/bun
      on the second mod reports its skin's species is missing, and in game only that skin is skipped.
 122. On a custom species page, **Paleopedia photo → Choose photo PNG…** with a 512×256 PNG: in game the
      species' Paleopedia page and the Nursery species panel show it; **Use template photo** brings the template's back.
+123. On a species with a starting skin and a second skin with only a diffuse PNG, **Make default** on the second skin:
+     after confirming it is tagged *starting skin* and listed first and looks the same; in game a new animal of the species
+     starts with it, and the old starting skin is still in the skin picker.

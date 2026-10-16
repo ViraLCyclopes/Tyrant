@@ -185,6 +185,25 @@ describe('Species database', () => {
     expect(onOpenSkin).toHaveBeenCalledWith('new-animal-start');
   });
 
+  it('Make default makes another skin the starting skin after confirming', async () => {
+    const base = modDetail();
+    const detail = modDetail({ skins: [
+      { ...base.skins[0], id: 'new-animal-start', name: 'Mine', species: 'tyrant.red-spot.new-animal', starting: true },
+      { ...base.skins[0], id: 'brown', name: 'Brown', species: 'tyrant.red-spot.new-animal', starting: false },
+    ] });
+    const { rpc, platform } = await setup([{ ...animal, startingSkinId: 'new-animal-start' } as typeof animal], {}, true, detail);
+    rpc.on('mods.makeStartingSkin', () => ({ ...detail, revision: 'r2' }));
+    const skins = screen.getByRole('region', { name: 'Skins' });
+    expect(within(skins).queryByRole('button', { name: 'Make Mine the default' })).toBeNull();
+    platform.confirmAnswer = false;
+    await fireEvent.click(within(skins).getByRole('button', { name: 'Make Brown the default' }));
+    expect(platform.confirms[0]).toContain('Mine stays as an ordinary skin');
+    expect(rpc.callsTo('mods.makeStartingSkin')).toHaveLength(0);
+    platform.confirmAnswer = true;
+    await fireEvent.click(within(skins).getByRole('button', { name: 'Make Brown the default' }));
+    await waitFor(() => expect(rpc.callsTo('mods.makeStartingSkin')[0]?.params).toMatchObject({ skin: 'brown', revision: 'r1' }));
+  });
+
   it('Delete species shows what goes, then removes it with its files', async () => {
     const { rpc } = await setup();
     rpc.on('mods.speciesRemoval', () => ({ key: animal.key, name: 'New animal', skins: ['Default'], models: 0, sounds: 0, prefabSettings: false, usedBy: [] }));

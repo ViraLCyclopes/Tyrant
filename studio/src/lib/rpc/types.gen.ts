@@ -632,6 +632,12 @@ export interface ModInstallResult {
   warnings: string[];
 }
 
+export interface ModMakeStartingSkinParams {
+  id: string;
+  revision: string;
+  skin: string;
+}
+
 export interface ModModelDto {
   target: string;
   skin: string | null;
@@ -1491,6 +1497,7 @@ export interface RpcMethods {
   "mods.import": { params: ModImportParams; result: ModImportResult };
   "mods.install": { params: ModIdParams; result: JobStarted };
   "mods.list": { params: void; result: ModsListResult };
+  "mods.makeStartingSkin": { params: ModMakeStartingSkinParams; result: ModDetail };
   "mods.modelPreview": { params: ModModelPreviewParams; result: ModModelPreview };
   "mods.portraits": { params: ModPortraitsParams; result: ModPortraitsResult };
   "mods.prefabFields": { params: ModPrefabFieldsParams; result: ModPrefabFields };

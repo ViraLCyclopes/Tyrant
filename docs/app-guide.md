@@ -196,6 +196,7 @@ species' textures need that species' model) or **My own PNGs** (male diffuse, op
 is listed in the side list with a *Starting skin* tag and opens a normal skin page (PNGs, colours, model, sounds,
 portraits with **Render from 3D…**). The species page's Skins section then shows **Starting skin: <name>** with
 **Open**. Species without one show the older controls and **Make an editable starting skin**.
+**Make default** beside another skin in that list makes it the starting skin; the old one stays as an ordinary skin.
 
 **Paleopedia photo**, under the species page's Prefab and look, sets the picture at the top of the species'
 Paleopedia page and in the Nursery's species panel (a PNG; the game's are 512×256). **Use template photo** goes back

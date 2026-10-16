@@ -182,3 +182,23 @@ public sealed class ModSpeciesPhotoCommand : Command<ModSpeciesPhotoCommand.Sett
         return ExitCodes.Ok;
     }
 }
+
+public sealed class ModSetStartingSkinCommand : Command<ModSetStartingSkinCommand.Settings>
+{
+    public sealed class Settings : ModSettings
+    {
+        [CommandArgument(1, "<SKIN>")]
+        [Description("The skin's id in the mod (see 'tyrant mod show').")]
+        public string Skin { get; set; } = "";
+    }
+
+    public override int Execute(CommandContext context, Settings settings)
+    {
+        var (ws, _) = CliServices.OpenWorkspace(settings);
+        var (made, previous) = ModProject.Open(ws, settings.Id).MakeStartingSkin(settings.Skin);
+        Console.WriteLine($"{made.Name} is now the starting skin of {made.Species}"
+            + (previous is null ? "." : $"; {previous.Name} ({previous.Id}) is an ordinary skin."));
+        Console.WriteLine("Skins based on 0 now take what they have no PNG for from it, and animals with skin 0 in saved parks wear it.");
+        return ExitCodes.Ok;
+    }
+}

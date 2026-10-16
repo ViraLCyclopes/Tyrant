@@ -142,6 +142,24 @@ public class SpeciesCliTests : IDisposable
     }
 
     [Fact]
+    public void Set_starting_skin_makes_another_skin_the_default()
+    {
+        using var game = new FakeGame();
+        var ws = TexturedAllosaurus(game);
+        Assert.Equal(ExitCodes.Ok, AddMirabilis(ws).Code);
+        var mod = Tyrant.Core.Mods.ModProject.Open(Tyrant.Core.Workspaces.Workspace.Open(ws), "mod-a"); // add-skin needs game textures the fake game lacks
+        var start = mod.Manifest.Skins.Single(s => s.Starting);
+        mod.Manifest.Skins.Add(new Tyrant.Framework.Core.SkinEntry { Id = "brown", Species = "tyrant.mod-a.mirabilis", Name = "Brown", Male = new() { ["diffuse"] = start.Male!["diffuse"] } });
+        mod.Save();
+
+        var (code, output, err) = Run("mod", "set-starting-skin", "mod-a", "brown", "-w", ws);
+
+        Assert.True(code == ExitCodes.Ok, err);
+        Assert.Contains("Brown is now the starting skin of tyrant.mod-a.mirabilis; Default (mirabilis-start) is an ordinary skin.", output);
+        Assert.Equal(ExitCodes.Error, Run("mod", "set-starting-skin", "mod-a", "brown", "-w", ws).Code);
+    }
+
+    [Fact]
     public void Set_species_photo_sets_and_clears_the_paleopedia_photo()
     {
         using var game = new FakeGame();

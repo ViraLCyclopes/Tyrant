@@ -218,6 +218,12 @@ Delete the starting skin and the species starts with its template's game skin ag
 starting skins existed keep the template's game skin until you click **Make an editable starting skin** on the
 species page.
 
+To make another of the species' skins in the same mod its starting skin, click **Make default** beside it in the
+species page's Skins list (or `tyrant mod set-starting-skin <MOD> <SKIN>`). If the species already has a starting
+skin, what the skin took from it (PNGs for maps it has none of, colours, portraits, swatch) is copied into the skin
+first, so it looks the same; the old starting skin stays as an ordinary skin based on `0`. From then on, skins based
+on `0` take what they lack from the new starting skin, and animals placed with skin 0 in saved parks wear it.
+
 ### Species without a starting skin
 
 Such a species starts with a copy of the template skin chosen as **Starting skin** (default: the template's
@@ -265,6 +271,8 @@ tyrant mod add-starting-skin my-animal-pack older-animal --start-from "Allosauru
 tyrant mod add-species my-animal-pack example-animal "Allosaurus Anax" --name "Example animal" --genus Example --epithet animal --starting-skin 1 -w <workspace>
 tyrant mod set-species-skin my-animal-pack example-animal --starting-skin 0 --name "Mirabilis" --swatch swatch.png -w <workspace>
 tyrant mod add-skin other-pack tyrant.my-animal-pack.example-animal --name "Blue" -w <workspace>
+tyrant mod set-starting-skin my-animal-pack blue -w <workspace>
+tyrant mod set-species-photo my-animal-pack example-animal --png photo.png -w <workspace>
 tyrant mod remove-species my-animal-pack example-animal -w <workspace>
 ```
 
