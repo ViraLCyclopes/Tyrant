@@ -49,8 +49,9 @@ public class ModPortraitsRpcTests
         using var game = new FakeGame();
         var (h, ws, _) = await AssetFixtures.Opened(game);
         var objects = new DumpResult();
-        objects.Objects.Add(new DumpObject(typeof(object), new EngineObjectInfo("PrehistoricKingdom.AnimalData", "Allosaurus", 1), """
-            {"speciesID":"Allosaurus Anax", "cost":20000, "massAverageAdult":4010, "matureMaxAge":{"x":15,"y":40}, "skinsData":[{"skinName":"Default"}]}
+        var skin = AssetFixtures.TexturedSkin(objects, "Default", 50);
+        objects.Objects.Add(new DumpObject(typeof(object), new EngineObjectInfo("PrehistoricKingdom.AnimalData", "Allosaurus", 1), $$"""
+            {"speciesID":"Allosaurus Anax", "cost":20000, "massAverageAdult":4010, "matureMaxAge":{"x":15,"y":40}, "skinsData":[{{skin}}]}
             """));
         DumpWriter.Write(Path.Combine(ws, "data"), objects, [], new DumpManifest { RequestId = "r1", BuildGuid = "b" });
         await h.Call("mods.create", new { id = "mod-a" });

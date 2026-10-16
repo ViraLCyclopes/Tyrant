@@ -1,3 +1,4 @@
+using Tyrant.Core.Assets;
 using Tyrant.Core.Errors;
 using Tyrant.Core.Mods;
 using Tyrant.Framework.Core;
@@ -10,7 +11,7 @@ public sealed record ModAnimalDto(string Id, string Key, string Base, string Nam
     int? Cost, IReadOnlyDictionary<string, double> Stats, int? InheritedCost, IReadOnlyDictionary<string, double> InheritedStats,
     IReadOnlyList<ModAnimalFieldDto> DataFields, IReadOnlyDictionary<string, string> Localization, string? Icon, SpeciesPrefab? Prefab,
     int StartingSkin = 0, string? StartingSkinName = null, string? Swatch = null,
-    IReadOnlyDictionary<string, string>? Portraits = null);
+    IReadOnlyDictionary<string, string>? Portraits = null, string? StartingSkinId = null);
 public sealed record ModAnimalFieldDto(string Path, string Kind, string Value, string TemplateValue, bool Editable);
 public sealed record ModSetSpeciesIconParams(string Id, string Revision, string SpeciesId, string? Png = null);
 public sealed record ModSetSpeciesPrefabParams(string Id, string Revision, string SpeciesId, string? Bundle = null, string? Asset = null);
@@ -18,7 +19,11 @@ public sealed record ModUnityProjectDto(string Directory, string Readme);
 public sealed record ModStatDto(string Id, string Label, string Unit, double Min, double Max);
 public sealed record ModAnimalDatabase(IReadOnlyList<ModAnimalDto> Animals, IReadOnlyList<ModStatDto> Fields);
 public sealed record ModAddSpeciesParams(string Id, string Revision, string SpeciesId, string Template, string Name,
-    string Genus, string Epithet, int? Cost = null, IReadOnlyDictionary<string, double>? Stats = null, int StartingSkin = 0);
+    string Genus, string Epithet, int? Cost = null, IReadOnlyDictionary<string, double>? Stats = null, int StartingSkin = 0,
+    string? StartFrom = null, int? StartSkin = null, string? StartPng = null, string? StartPngFemale = null, string? StartName = null);
+/// <summary>An editable starting skin for a species without one: a copy of a game skin (StartFrom/StartSkin, default the template's), or PNGs.</summary>
+public sealed record ModAddStartingSkinParams(string Id, string Revision, string SpeciesId, string? StartFrom = null, int? StartSkin = null,
+    string? StartPng = null, string? StartPngFemale = null, string? StartName = null);
 public sealed record ModSetSpeciesParams(string Id, string Revision, string SpeciesId, string Name, string Genus, string Epithet,
     int? Cost, IReadOnlyDictionary<string, double> Stats, IReadOnlyDictionary<string, string>? DataFields = null,
     IReadOnlyDictionary<string, string>? Localization = null);
@@ -78,21 +83,44 @@ public sealed partial class ModsMethods
             return new ModAnimalDto(s.Id, s.Key(mod.Id), s.Base, s.Name, s.Genus, s.Epithet, s.Cost, s.Stats,
                 inherited?.Cost, inherited?.Stats ?? new Dictionary<string, double>(),
                 (s.Fields.Count > 0 ? s.Fields : inherited?.Fields ?? []).Select(f => new ModAnimalFieldDto(f.Path, f.Kind, f.Value, f.TemplateValue, f.Editable)).ToList(),
-                s.Localization, s.Icon, s.Prefab, s.StartingSkin, s.StartingSkinName, s.Swatch, s.Portraits.Count == 0 ? null : s.Portraits);
+                s.Localization, s.Icon, s.Prefab, s.StartingSkin, s.StartingSkinName, s.Swatch, s.Portraits.Count == 0 ? null : s.Portraits,
+                mod.StartingSkinOf(s.Id)?.Id);
         }).ToList(), SpeciesStats.Fields.Select(f => new ModStatDto(f.Id, f.Label, f.Unit, f.Min, f.Max)).ToList());
     }
 
     [RpcMethod("mods.addSpecies")]
     public ModDetail AddSpecies(ModAddSpeciesParams p) => Edit(p.Id, p.Revision, mod =>
     {
-        var (ws, _) = session.Current();
+        var (ws, install) = session.Current();
         var stats = p.Stats ?? new Dictionary<string, double>();
         var vanilla = SpeciesSkinsReader.Load(ws);
         var template = vanilla.FirstOrDefault(s => string.Equals(s.SpeciesId, p.Template, StringComparison.OrdinalIgnoreCase));
         var inherited = SpeciesDatabase.Template(ws, template?.SpeciesId ?? p.Template);
         ValidateStats(stats, inherited);
-        mod.AddSpecies(vanilla, p.SpeciesId, p.Template, p.Name, p.Genus, p.Epithet, p.Cost, stats, inherited, startingSkin: p.StartingSkin);
+        var source = StartSource(p.StartFrom, p.StartSkin, p.StartPng, p.StartPngFemale, template?.SpeciesId ?? p.Template, p.StartingSkin);
+        mod.CreateSpecies(install, AssetIndex.Load(AssetIndex.PathIn(ws)), Options.AssetReader, vanilla, p.SpeciesId, p.Template, p.Name, p.Genus, p.Epithet,
+            p.Cost, stats, inherited, p.StartingSkin, source, p.StartName);
     }, "added species " + p.Name);
+
+    [RpcMethod("mods.addStartingSkin")]
+    public ModDetail AddStartingSkin(ModAddStartingSkinParams p) => Edit(p.Id, p.Revision, mod =>
+    {
+        var (ws, install) = session.Current();
+        var entry = mod.Manifest.Species.FirstOrDefault(s => s.Id == p.SpeciesId)
+            ?? throw new TyrantException(TyrantErrorCode.TargetNotFound, "Species not found: " + p.SpeciesId);
+        mod.AddStartingSkin(install, AssetIndex.Load(AssetIndex.PathIn(ws)), Options.AssetReader, SpeciesSkinsReader.Load(ws), p.SpeciesId,
+            StartSource(p.StartFrom, p.StartSkin, p.StartPng, p.StartPngFemale, entry.Base, entry.StartingSkin), p.StartName);
+    }, "added a starting skin to " + p.SpeciesId);
+
+    /// <summary>Own PNGs when given, else a copy of StartFrom's skin StartSkin (default: the template's starting skin).</summary>
+    private static StartingSkinSource StartSource(string? from, int? skin, string? png, string? pngFemale, string template, int templateSkin)
+    {
+        if (png is not null && (from is not null || skin is not null))
+            throw new TyrantException(TyrantErrorCode.ModInvalid, "Copy a skin or use your own PNGs, not both.");
+        if (png is null && pngFemale is not null)
+            throw new TyrantException(TyrantErrorCode.ModInvalid, "A female PNG needs the male one too.");
+        return png is not null ? new OwnPngs(png, pngFemale) : new CopySkin(from ?? template, skin ?? (from is null ? templateSkin : 0));
+    }
 
     [RpcMethod("mods.setSpecies")]
     public ModDetail SetSpecies(ModSetSpeciesParams p) => Edit(p.Id, p.Revision, mod =>

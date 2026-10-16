@@ -36,9 +36,10 @@ public class SpeciesDatabaseRpcTests
         using var game = new FakeGame();
         var (h, ws, _) = await AssetFixtures.Opened(game);
         var objects = new DumpResult();
-        objects.Objects.Add(new DumpObject(typeof(object), new EngineObjectInfo("PrehistoricKingdom.AnimalData", "Allosaurus", 1), """
+        var skin = AssetFixtures.TexturedSkin(objects, "Default", 50);
+        objects.Objects.Add(new DumpObject(typeof(object), new EngineObjectInfo("PrehistoricKingdom.AnimalData", "Allosaurus", 1), $$"""
             {"speciesID":"Allosaurus Anax", "cost":20000, "massAverageAdult":4010, "matureMaxAge":{"x":15,"y":40}, "diet":"Carnivore",
-              "skinsData":[{"skinName":"Default"}]}
+              "skinsData":[{{skin}}]}
             """));
         DumpWriter.Write(Path.Combine(ws, "data"), objects, [], new DumpManifest { RequestId = "r1", BuildGuid = "b" });
         await h.Call("mods.create", new { id = "animal-pack" });
@@ -50,7 +51,9 @@ public class SpeciesDatabaseRpcTests
         });
         var path = Path.Combine(ws, "mods", "animal-pack", AnimalDatabaseFile.FileName);
         Assert.True(File.Exists(path));
-        Assert.DoesNotContain("species", File.ReadAllText(Path.Combine(ws, "mods", "animal-pack", "mod.json")));
+        // Species live in animals.db; mod.json holds only the starting skin that points at it.
+        using (var json = System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(ws, "mods", "animal-pack", "mod.json"))))
+            Assert.False(json.RootElement.TryGetProperty("species", out _));
         var data = await h.Call("mods.animalDatabase", new { id = "animal-pack" });
         var animal = Assert.Single(data.GetProperty("animals").EnumerateArray());
         Assert.Equal(4500, animal.GetProperty("stats").GetProperty("adultMassKg").GetDouble());
@@ -84,8 +87,9 @@ public class SpeciesDatabaseRpcTests
         using var game = new FakeGame();
         var (h, ws, _) = await AssetFixtures.Opened(game);
         var objects = new DumpResult();
-        objects.Objects.Add(new DumpObject(typeof(object), new EngineObjectInfo("PrehistoricKingdom.AnimalData", "Allosaurus", 1), """
-            {"speciesID":"Allosaurus Anax", "cost":20000, "skinsData":[{"skinName":"Default"},{"skinName":"Albino"}]}
+        var skins = AssetFixtures.TexturedSkin(objects, "Default", 50) + "," + AssetFixtures.TexturedSkin(objects, "Albino", 51);
+        objects.Objects.Add(new DumpObject(typeof(object), new EngineObjectInfo("PrehistoricKingdom.AnimalData", "Allosaurus", 1), $$"""
+            {"speciesID":"Allosaurus Anax", "cost":20000, "skinsData":[{{skins}}]}
             """));
         DumpWriter.Write(Path.Combine(ws, "data"), objects, [], new DumpManifest { RequestId = "r1", BuildGuid = "b" });
         await h.Call("mods.create", new { id = "mod-a", name = "Mod A" });

@@ -71,7 +71,7 @@ public sealed record ModForgetSkinsParams(IReadOnlyList<string> Keys);
 public sealed record ModSkinDto(string Id, string Key, string Species, string Name, string Base, string? Thumbnail,
     IReadOnlyDictionary<string, string>? Male, IReadOnlyDictionary<string, string>? Female, string? ColorsJson,
     IReadOnlyList<string>? BaseMaleSlots, IReadOnlyList<string>? BaseFemaleSlots, string? Model = null, IReadOnlyList<ModRigBone>? Rig = null,
-    string? Group = null, IReadOnlyDictionary<string, string>? Portraits = null);
+    string? Group = null, IReadOnlyDictionary<string, string>? Portraits = null, bool Starting = false, string? CopiedFromSpecies = null, int? CopiedFromSkin = null);
 
 /// <summary>One portrait to set: a PNG file path, or base64 PNG data (Rendered: made by the app from the 3D view). Null resets the slot.</summary>
 public sealed record ModPortraitSourceDto(string? Png = null, string? Data = null, bool Rendered = false);

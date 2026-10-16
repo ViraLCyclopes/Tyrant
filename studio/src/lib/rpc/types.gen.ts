@@ -452,6 +452,22 @@ export interface ModAddSpeciesParams {
   cost?: number | null;
   stats?: Record<string, number> | null;
   startingSkin?: number;
+  startFrom?: string | null;
+  startSkin?: number | null;
+  startPng?: string | null;
+  startPngFemale?: string | null;
+  startName?: string | null;
+}
+
+export interface ModAddStartingSkinParams {
+  id: string;
+  revision: string;
+  speciesId: string;
+  startFrom?: string | null;
+  startSkin?: number | null;
+  startPng?: string | null;
+  startPngFemale?: string | null;
+  startName?: string | null;
 }
 
 export interface ModAnimalDatabase {
@@ -478,6 +494,7 @@ export interface ModAnimalDto {
   startingSkinName?: string | null;
   swatch?: string | null;
   portraits?: Record<string, string> | null;
+  startingSkinId?: string | null;
 }
 
 export interface ModAnimalFieldDto {
@@ -1014,6 +1031,9 @@ export interface ModSkinDto {
   rig?: ModRigBone[] | null;
   group?: string | null;
   portraits?: Record<string, string> | null;
+  starting?: boolean;
+  copiedFromSpecies?: string | null;
+  copiedFromSkin?: number | null;
 }
 
 export interface ModSkinModel {
@@ -1421,6 +1441,7 @@ export interface RpcMethods {
   "job.current": { params: void; result: JobCurrentResult };
   "mods.addSkin": { params: ModAddSkinParams; result: ModsListResult };
   "mods.addSpecies": { params: ModAddSpeciesParams; result: ModDetail };
+  "mods.addStartingSkin": { params: ModAddStartingSkinParams; result: ModDetail };
   "mods.animalDatabase": { params: ModIdParams; result: ModAnimalDatabase };
   "mods.arrangeSkins": { params: ModArrangeSkinsParams; result: ModDetail };
   "mods.check": { params: ModIdParams; result: ModCheckReport };

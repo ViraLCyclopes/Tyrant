@@ -384,7 +384,8 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
                 return new ModSkinDto(s.Id, s.Key(m.Id), s.Species, s.Name, s.Base, s.Thumbnail, s.Male, s.Female,
                     s.Colors is null ? null : Tyrant.Framework.Core.Json.Write(s.Colors.ToJson()),
                     based is null ? null : ShaderSlots.Shown(based.Male.Keys.ToList(), shader),
-                    based is null ? null : ShaderSlots.Shown(based.Female.Keys.ToList(), shader), s.Model, ModRigBone.Of(s.Rig), s.Group, s.Portraits);
+                    based is null ? null : ShaderSlots.Shown(based.Female.Keys.ToList(), shader), s.Model, ModRigBone.Of(s.Rig), s.Group, s.Portraits,
+                    ReferenceEquals(Tyrant.Framework.Core.StartingSkins.Of(m, s.Species), s), s.CopiedFrom?.Species, s.CopiedFrom?.Skin);
             }).ToList(),
             m.Models.Select(x => x.File.Length == 0
                     ? new ModModelDto(x.Target, null, "", [], [], [], false, null, false, ModRigBone.Of(x.Rig))
