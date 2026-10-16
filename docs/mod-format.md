@@ -81,6 +81,8 @@ A mod can add new skins next to the vanilla ones; nothing vanilla changes. Make 
 | `species` | The game's species id, or a custom species' `tyrant.<mod-id>.<species-id>` (from this mod or another). Tyrant fills it in. |
 | `name` | Shown in the Nursery. |
 | `base` | The vanilla skin to start from (name or number). Everything the skin doesn't provide comes from it. For a custom species, `0` (its starting skin). |
+| `starting` | Optional, `true` on a custom species' **starting skin**: the species' skin 0 itself (no number of its own). Only on this mod's own species, one per species, with `base` `"0"` (the template skin the species is copied from). Other skins on the species with base `0` wear its textures and colours under their own. The game ignores a flag that breaks these rules (the skin loads as an added skin) and Check reports it. |
+| `copiedFrom` | Optional, `{ "species": "Carcharodontosaurus", "skin": 1 }`: the game skin of another species a starting skin's PNGs were copied from. **Edit a copy** copies from it. |
 | `group` | Optional. Groups the skin in Tyrant's mod editor (e.g. `"Jurassic Park"`); the game ignores it, and the order of `skins` too. |
 | `thumbnail` | Optional swatch; otherwise cut from the diffuse. |
 | `portraits` | Optional in-game portraits: slot (`adultMale`, `adultMaleAlbino`, … `infantLeucistic`, the 12 the game has) → PNG, 2:1 (the game's are 128×64). A slot left out shows the base skin's. |

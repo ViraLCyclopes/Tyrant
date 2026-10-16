@@ -244,3 +244,18 @@ Release build: `npm run build:app`, install `studio/src-tauri/target/release/bun
 - **Colours** on Normal: untick *From base skin* on Colour A, pick a colour: the preview strip shows six animals in it; **↻** shows six others. Switch to **Albino** and set **Eyes**.
 - Edit the mod's `mod.json` in a text editor, switch to another tab and back: the editor reloads it and the log says so.
 - **Remove skin…** with *Also delete its files*: the skin and its PNGs go; `tyrant mod show <id>` lists what is left.
+
+## Editable starting skin
+
+110. New species from Allosaurus Anax with **Copy a skin** → Carcharodontosaurus / Alt 1: the side list shows its
+     skin with a *Starting skin* tag; its page says *Starting skin of … · copied from Carcharodontosaurus* and lists
+     every map; Check notes the Carch textures need the Carch model.
+111. Give that starting skin the Carch model, repaint its diffuse, install: in the Nursery the species' first skin
+     is yours, with its name and swatch.
+112. Save the park, reload: the animal keeps the starting skin.
+113. Add a second skin to the species (base 0) without a normal map: in game it wears the starting skin's normal.
+114. **Render from 3D…** on the starting skin's Portraits card: the portraits use its PNGs and model.
+115. Remove the starting skin: the dialog says the species will start with its template's game skin; in game it
+     does, and the saved park still loads.
+116. On that species, **Make an editable starting skin** with **My own PNGs**: the new skin gets a fresh id and works.
+117. CLI: `tyrant mod add-species … --start-from Carcharodontosaurus/1` prints *Starting skin: <id> (<name>).*

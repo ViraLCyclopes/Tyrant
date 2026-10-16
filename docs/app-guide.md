@@ -188,3 +188,11 @@ files that changed; again after a game update).
 - Logs: `<workspace>\logs\studio.log` (what Tyrant did in that workspace) and
   `%LOCALAPPDATA%\com.tyrant.toolkit\logs\core.log` (the core's own log). The dumper's log is
   `<game folder>\MelonLoader\Latest.log`.
+
+## Custom species: the starting skin
+
+A new species' form has a **Starting skin** section: **Copy a skin** (any base-game species and skin; another
+species' textures need that species' model) or **My own PNGs** (male diffuse, optional female). The skin it makes
+is listed in the side list with a *Starting skin* tag and opens a normal skin page (PNGs, colours, model, sounds,
+portraits with **Render from 3D…**). The species page's Skins section then shows **Starting skin: <name>** with
+**Open**. Species without one show the older controls and **Make an editable starting skin**.

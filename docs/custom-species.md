@@ -193,12 +193,36 @@ AI tables initialize. PK's game database files are not modified.
 
 ## Skins
 
-A new species starts with one skin, copied from the template skin chosen as **Starting skin** on the
-new-species form (default: the template's first). Change it, rename it, or give it its own swatch PNG
-(the round picture in the skin picker) in the species page's **Skins** section. These live in
-`animals.db`'s `animal_starting_skin` table (`skin` = the template skin's number, `name`, `swatch`).
+### The starting skin
 
-The starting skin can also have its own in-game portraits (the pictures the game shows for the animal by sex, growth stage
+Every new species starts with its own **starting skin**: an ordinary skin in your mod, editable like any
+other (its PNGs, colours, own model, sounds, rig edit, swatch and portraits on its skin page). The new-species
+form's **Starting skin** section picks where its PNGs come from:
+
+- **Copy a skin**: any base-game species' skin (default: the template and its first skin). Every map is copied
+  into the mod (diffuse, normal, extra, pattern, fur and the babies' maps, for each sex the skin has). A sex the
+  skin has no textures for wears the template's game skin. Copying from another species (say Carcharodontosaurus
+  PNGs on an Allosaurus-based species) only lines up on that species' model: give the skin (or the species) that
+  model; Check reminds you.
+- **My own PNGs**: a male diffuse PNG and optionally a female one (default: the male one). The other maps come
+  from the template skin so the skin is complete; replace them on the skin page.
+
+In mod.json it is a `skins[]` entry with `"starting": true` and `"base": "0"` (see the mod format). In game it is
+the species' skin 0, so saved animals keep it. Other skins on the species with base `0` wear its textures and
+colours under their own (not its model, rig or sounds: put a model meant for every skin on the species).
+
+Delete the starting skin and the species starts with its template's game skin again. Species made before
+starting skins existed keep the template's game skin until you click **Make an editable starting skin** on the
+species page.
+
+### Species without a starting skin
+
+Such a species starts with a copy of the template skin chosen as **Starting skin** (default: the template's
+first). Change it, rename it, or give it its own swatch PNG (the round picture in the skin picker) in the species
+page's **Skins** section. These live in `animals.db`'s `animal_starting_skin` table (`skin` = the template skin's
+number, `name`, `swatch`); a species with a starting skin keeps only `skin` there (the game object it is copied from).
+
+Such a starting skin can also have its own in-game portraits (the pictures the game shows for the animal by sex, growth stage
 and colour variant; the 12 slots are `adultMale`, `adultMaleAlbino`, `adultMaleMelanistic`, `adultMaleLeucistic`, the same for
 `adultFemale`, and `infant`, `infantAlbino`, `infantMelanistic`, `infantLeucistic`). Set them in the app under the species page
 (Skins → Portraits), or with `tyrant mod set-species-portrait <MOD> <SPECIES-ID> --slot <SLOT> (--png <FILE> | --clear)`.
@@ -222,6 +246,9 @@ tyrant mod check my-animal-pack -w <workspace>
 ```
 
 ```powershell
+tyrant mod add-species my-animal-pack example-animal "Allosaurus Anax" --name "Example animal" --genus Example --epithet animal --start-from "Carcharodontosaurus/Alt 1" --start-name "Carch look" -w <workspace>
+tyrant mod add-species my-animal-pack own-look "Allosaurus Anax" --name "Own look" --genus Example --epithet own --start-png male_D.png --start-png-female female_D.png -w <workspace>
+tyrant mod add-starting-skin my-animal-pack older-animal --start-from "Allosaurus Anax/1" -w <workspace>
 tyrant mod add-species my-animal-pack example-animal "Allosaurus Anax" --name "Example animal" --genus Example --epithet animal --starting-skin 1 -w <workspace>
 tyrant mod set-species-skin my-animal-pack example-animal --starting-skin 0 --name "Mirabilis" --swatch swatch.png -w <workspace>
 tyrant mod add-skin other-pack tyrant.my-animal-pack.example-animal --name "Blue" -w <workspace>
