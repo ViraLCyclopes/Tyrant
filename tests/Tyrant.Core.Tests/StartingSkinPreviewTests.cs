@@ -84,6 +84,50 @@ public class StartingSkinPreviewTests
     }
 
     [Fact]
+    public void Add_skin_on_a_species_with_a_starting_skin_starts_from_its_pngs()
+    {
+        using var s = new Setup();
+        var start = s.Start(new CopySkin("Carcharodontosaurus", 1));
+        File.WriteAllText(Path.Combine(s.Mod.Dir, start.Male!["diffuse"]), "painted");
+        File.WriteAllText(Path.Combine(s.Mod.Dir, start.Male["normal"]), "painted normal");
+
+        var other = s.Mod.AddSkin(s.Ws, s.Install, Index(), s.Reader, StartingSkinTests.Species(), "tyrant.pack.mira", "Second", "0", new SkinTemplateOptions(true, true, true));
+
+        Assert.Equal("painted", File.ReadAllText(Path.Combine(s.Mod.Dir, other.Male!["diffuse"])));
+        Assert.Equal("painted normal", File.ReadAllText(Path.Combine(s.Mod.Dir, other.Male["normal"])));
+        Assert.True(File.Exists(Path.Combine(s.Mod.Dir, other.Female!["diffuse"]))); // the male-only starting skin has none: the template's
+    }
+
+    [Fact]
+    public void A_skin_based_on_the_starting_skin_shows_its_portraits()
+    {
+        using var s = new Setup();
+        var start = s.Start(new CopySkin("Allosaurus Anax", 0));
+        var png = Path.Combine(s.Ws.Dir, "p.png");
+        File.WriteAllBytes(png, Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jWWQAAAAASUVORK5CYII="));
+        s.Mod.SetPortraits(start.Id, new Dictionary<string, PortraitSource?> { ["adultMale"] = new PortraitSource(png) });
+        var other = s.Mod.AddSkin(s.Ws, s.Install, Index(), s.Reader, StartingSkinTests.Species(), "tyrant.pack.mira", "Second", "0", new SkinTemplateOptions(true, false, false));
+
+        var shown = ShownPortraits.ForSkin(s.Mod, other, null).Single(p => p.Slot == "adultMale");
+
+        Assert.True(shown.Inherited);
+        Assert.Equal("file:" + Path.Combine(s.Mod.Dir, start.Portraits!["adultMale"]), shown.Source);
+    }
+
+    [Fact]
+    public void Edit_a_copy_of_a_sex_the_copied_skin_lacks_takes_the_template_texture()
+    {
+        using var s = new Setup();
+        var start = s.Start(new CopySkin("Carcharodontosaurus", 1)); // male only
+        var before = s.Reader.Textures;
+
+        var file = s.Mod.CopyBaseFile(s.Install, Index(), s.Reader, StartingSkinTests.Species(), start.Id, "female", "diffuse");
+
+        Assert.Equal(before + 1, s.Reader.Textures); // the template's female diffuse
+        Assert.Equal(file, start.Female!["diffuse"]);
+    }
+
+    [Fact]
     public void Check_reports_bad_starting_flags_and_notes_cross_species_textures_without_a_model()
     {
         using var s = new Setup();

@@ -255,7 +255,7 @@
             <button type="button" onclick={() => (making = null)}>Cancel</button>
           </div>
         {:else}
-          <div><button type="button" onclick={() => (making = freshChoice(animal.base))}>Make an editable starting skin</button></div>
+          <div><button type="button" onclick={() => (making = freshChoice(animal.base, animal.startingSkin ?? 0))}>Make an editable starting skin</button></div>
         {/if}
         {/if}
         <ul class="skin-list">

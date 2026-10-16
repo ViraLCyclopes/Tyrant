@@ -56,6 +56,7 @@ public sealed partial class ModProject
             ?? throw new TyrantException(TyrantErrorCode.ModInvalid, $"{template.SpeciesId} has no skins.");
 
         var id = StartingSkinId(speciesId);
+        int? newStart = null; // copying another template skin: the species' game object is copied from it too
         var entry = new SkinEntry { Id = id, Species = key, Base = "0", Starting = true };
         var folder = Path.Combine(Dir, "skins", id);
         try
@@ -75,6 +76,7 @@ public sealed partial class ModProject
                         throw new TyrantException(TyrantErrorCode.TargetNotFound, $"{from.SpeciesId}'s skin {skin.Name} has no textures in the game data to copy.");
                     if (!string.Equals(from.SpeciesId, species.Base, StringComparison.OrdinalIgnoreCase))
                         entry.CopiedFrom = new SkinSource { Species = from.SpeciesId, Skin = skin.Index };
+                    else if (skin.Index != species.StartingSkin) newStart = skin.Index;
                     entry.Name = string.IsNullOrWhiteSpace(name) ? skin.Name : name.Trim();
                     break;
                 case OwnPngs own:
@@ -96,6 +98,13 @@ public sealed partial class ModProject
             Manifest.Skins.Clear();
             Manifest.Skins.AddRange(arranged);
             Save();
+            if (newStart is int start)
+            {
+                var old = species.StartingSkin;
+                species.StartingSkin = start;
+                try { SaveSpecies(); }
+                catch { species.StartingSkin = old; throw; }
+            }
         }
         catch
         {

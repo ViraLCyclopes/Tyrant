@@ -133,6 +133,18 @@ public class StartingSkinTests
     }
 
     [Fact]
+    public void Copying_another_template_skin_makes_it_the_one_the_species_is_copied_from()
+    {
+        using var s = new Setup();
+        s.Create(new CopySkin(Template, 0));
+        s.Mod.RemoveSkin("mira-start", deleteFiles: true);
+
+        s.Mod.AddStartingSkin(s.Install, Index(), s.Reader, Species(), "mira", new CopySkin(Template, 1));
+
+        Assert.Equal(1, ModProject.Open(s.Ws, "pack").Manifest.Species.Single().StartingSkin);
+    }
+
+    [Fact]
     public void A_second_starting_skin_is_refused_and_after_removal_a_new_one_gets_a_fresh_id()
     {
         using var s = new Setup();

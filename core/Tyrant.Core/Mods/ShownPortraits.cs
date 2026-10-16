@@ -12,7 +12,15 @@ public static class ShownPortraits
     public static IReadOnlyList<ShownPortrait> ForSkin(ModProject mod, SkinEntry skin, VanillaSkin? based)
     {
         var species = mod.Manifest.Species.FirstOrDefault(s => s.Key(mod.Id) == skin.Species);
-        return Rows(mod, skin.Portraits, species?.Portraits, based);
+        IReadOnlyDictionary<string, string>? inherited = species?.Portraits;
+        // Based on the starting skin: its portraits, laid over the species' (as the game registers skin 0's).
+        if (StartingSkins.InheritsFrom(mod.Manifest, skin, out var starting) && starting.Portraits is { Count: > 0 } startPortraits)
+        {
+            var merged = new Dictionary<string, string>(inherited ?? new Dictionary<string, string>(), StringComparer.Ordinal);
+            foreach (var (slot, file) in startPortraits) merged[slot] = file;
+            inherited = merged;
+        }
+        return Rows(mod, skin.Portraits, inherited, based);
     }
 
     /// <summary>A custom species' starting skin: its own, then the template skin's.</summary>

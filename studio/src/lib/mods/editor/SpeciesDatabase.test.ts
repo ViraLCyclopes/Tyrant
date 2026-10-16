@@ -193,6 +193,15 @@ describe('Species database', () => {
     await waitFor(() => expect(rpc.callsTo('mods.addStartingSkin')[0]?.params).toMatchObject({ speciesId: 'new-animal', startFrom: 'Carcharodontosaurus', startSkin: 0 }));
   });
 
+  it("making a starting skin copies the template skin the species already starts with", async () => {
+    const { rpc } = await setup([{ ...animal, startingSkin: 1, startingSkinName: null, swatch: null } as typeof animal]);
+    rpc.on('mods.addStartingSkin', () => modDetail({ revision: 'r2' }));
+    const skins = screen.getByRole('region', { name: 'Skins' });
+    await fireEvent.click(within(skins).getByRole('button', { name: 'Make an editable starting skin' }));
+    await fireEvent.click(within(skins).getByRole('button', { name: 'Create starting skin' }));
+    await waitFor(() => expect(rpc.callsTo('mods.addStartingSkin')[0]?.params).toMatchObject({ startFrom: 'Allosaurus Anax', startSkin: 1 }));
+  });
+
   it("the Skins section sets the starting skin, its name and swatch, lists the species' skins and adds one", async () => {
     const onAddSkin = vi.fn();
     const onOpenSkin = vi.fn();

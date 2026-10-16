@@ -39,6 +39,8 @@ namespace Tyrant.Framework
         private static readonly MethodInfo CloneMethod = AccessTools.Method(typeof(object), "MemberwiseClone");
         private static readonly Dictionary<object, Added> AddedSkins = new Dictionary<object, Added>(ReferenceComparer.Instance);
         private static readonly HashSet<object> StandIns = new HashSet<object>(ReferenceComparer.Instance);
+        /// <summary>Stand-ins of a species whose skin 0 is a starting skin: they look like it (textures, model, sounds), not added.</summary>
+        private static readonly Dictionary<object, Added> StandInLooks = new Dictionary<object, Added>(ReferenceComparer.Instance);
         private static readonly Dictionary<object, HashSet<int>> StandInIndices = new Dictionary<object, HashSet<int>>(ReferenceComparer.Instance);
         private static List<LoadedMod> _mods = new List<LoadedMod>();
         private static SkinNumbers _numbers = new SkinNumbers();
@@ -120,7 +122,7 @@ namespace Tyrant.Framework
 
         public static bool TryGet(object? skinData, out string modId, out SkinEntry entry, out string directory)
         {
-            if (skinData != null && AddedSkins.TryGetValue(skinData, out var added))
+            if (skinData != null && (AddedSkins.TryGetValue(skinData, out var added) || StandInLooks.TryGetValue(skinData, out added)))
             {
                 (modId, entry, directory) = (added.ModId, added.Entry, added.Directory);
                 return true;
@@ -264,6 +266,7 @@ namespace Tyrant.Framework
                         removed++;
                     }
                     StandIns.Add(skin);
+                    if (AddedSkins.TryGetValue(list[0], out var startingLook)) StandInLooks[skin] = startingLook;
                     standIns.Add(slot.Number);
                 }
                 list.Add(skin); // its index is slot.Number: the layout is contiguous from the vanilla count
@@ -286,7 +289,7 @@ namespace Tyrant.Framework
                 SkinColorsModule.Apply(skin, entry, key); // first: the step most likely to fail, before anything else changed
                 var thumbnail = Thumbnail(mod, entry);
                 if (thumbnail != null) Traverse.Create(skin).Field("skinThumbnail").SetValue(thumbnail);
-                if (entry.Portraits is { Count: > 0 }) PortraitModule.Register(skin, mod.Directory, entry.Portraits);
+                if (entry.Portraits is { Count: > 0 }) PortraitModule.Register(skin, mod.Directory, entry.Portraits, inheritFrom: skin); // over the species'
                 Traverse.Create(skin).Field("skinName").SetValue(entry.Name);
                 AddedSkins[skin] = new Added(mod.Manifest.Id, entry, mod.Directory);
                 FrameworkMod.Log.Msg($"{species}: starting skin {key} applied.");

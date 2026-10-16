@@ -4,8 +4,8 @@
     | { kind: 'copy'; species: string; skin: number; name: string }
     | { kind: 'png'; male: string | null; female: string | null; name: string };
 
-  /** A copy of the template's first skin, unnamed. */
-  export const freshChoice = (template: string): StartingChoice => ({ kind: 'copy', species: template, skin: 0, name: '' });
+  /** A copy of the template's skin (default: its first), unnamed. */
+  export const freshChoice = (template: string, skin = 0): StartingChoice => ({ kind: 'copy', species: template, skin, name: '' });
 
   /** The starting-skin fields of mods.addSpecies / mods.addStartingSkin. */
   export function startParams(c: StartingChoice) {

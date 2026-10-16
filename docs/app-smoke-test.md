@@ -259,3 +259,7 @@ Release build: `npm run build:app`, install `studio/src-tauri/target/release/bun
      does, and the saved park still loads.
 116. On that species, **Make an editable starting skin** with **My own PNGs**: the new skin gets a fresh id and works.
 117. CLI: `tyrant mod add-species … --start-from Carcharodontosaurus/1` prints *Starting skin: <id> (<name>).*
+118. On a new species with a starting skin, add a second skin, give an animal that skin, save, then remove the skin and
+     load the save: the animal looks like the starting skin (its textures, model and colours), not the template.
+119. On an older species with species portraits, **Make an editable starting skin** and give it one portrait: in game
+     the other species portraits still show; a second skin based on 0 shows the starting skin's portrait in the app and game.
