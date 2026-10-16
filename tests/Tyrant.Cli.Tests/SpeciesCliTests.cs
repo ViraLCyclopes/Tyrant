@@ -1,10 +1,113 @@
 using Tyrant.Cli;
+using Tyrant.Core.Assets;
+using Tyrant.Core.Install;
 using Tyrant.Core.Tests;
 
 namespace Tyrant.Cli.Tests;
 
-public class SpeciesCliTests
+public class SpeciesCliTests : IDisposable
 {
+    public void Dispose() => CliServices.AssetReader = new BundleAssetReader();
+
+    /// <summary>
+    /// An indexed workspace whose dump has Allosaurus Anax (skins Default, Albino) and Carcharodontosaurus (Base, Alt 1), every
+    /// skin but Carch's Base wearing the SkinDumps textures, read by a fake asset reader; mod-a exists.
+    /// </summary>
+    private static string TexturedAllosaurus(FakeGame game)
+    {
+        var ws = IndexedWorkspace(game);
+        var objects = new Tyrant.Dumper.Serialization.DumpResult();
+        void Add(string type, string name, long id, string json) =>
+            objects.Objects.Add(new Tyrant.Dumper.Serialization.DumpObject(typeof(object), new Tyrant.Dumper.Serialization.EngineObjectInfo(type, name, id), json));
+        const string Var = "PrehistoricKingdom.AnimalSkinVariationAsset";
+        var textured = "\"maleVariationData\":{\"$ref\":{\"type\":\"" + Var + "\",\"name\":\"A_M\",\"id\":10}},"
+            + "\"femaleVariationData\":{\"$ref\":{\"type\":\"" + Var + "\",\"name\":\"A_F\",\"id\":11}}";
+        Add("PrehistoricKingdom.AnimalData", "Allosaurus", 1,
+            "{\"speciesID\":\"Allosaurus Anax\", \"skinsData\":[{\"skinName\":\"Default\"," + textured + "},{\"skinName\":\"Albino\"," + textured + "}]}");
+        Add("PrehistoricKingdom.AnimalData", "Carcharodontosaurus", 2,
+            "{\"speciesID\":\"Carcharodontosaurus\", \"skinsData\":[{\"skinName\":\"Base\"},{\"skinName\":\"Alt 1\"," + textured + "}]}");
+        Add(Var, "A_M", 10, "{\"$type\":\"x\",\"$name\":\"A_M\",\"$id\":10,\"adultDiffuseMap\":{\"m_AssetGUID\":\"" + SkinDumps.MaleDiffuse
+            + "\"},\"adultNormalMap\":{\"m_AssetGUID\":\"" + SkinDumps.MaleNormal + "\"}}");
+        Add(Var, "A_F", 11, "{\"$type\":\"x\",\"$name\":\"A_F\",\"$id\":11,\"adultDiffuseMap\":{\"m_AssetGUID\":\"" + SkinDumps.FemaleDiffuse + "\"}}");
+        Tyrant.Dumper.Serialization.DumpWriter.Write(Path.Combine(ws, "data"), objects, [], new Tyrant.Dumper.Serialization.DumpManifest { RequestId = "r1", BuildGuid = "b" });
+        new AssetIndex { Assets = [.. SkinDumps.Textures], Fingerprint = GameFingerprint.Compute(new GameInstall(game.Root, null)) }
+            .Save(Path.Combine(ws, "cache", AssetIndex.FileName));
+        CliServices.AssetReader = new FakeAssetReader();
+        Assert.Equal(ExitCodes.Ok, Run("mod", "new", "mod-a", "-w", ws).Code);
+        return ws;
+    }
+
+    private static string ModJson(string ws) => File.ReadAllText(Path.Combine(ws, "mods", "mod-a", "mod.json"));
+
+    private static (int Code, string Out, string Err) AddMirabilis(string ws, params string[] extra) =>
+        Run(["mod", "add-species", "mod-a", "mirabilis", "Allosaurus Anax", "--name", "Mirabilis", "--genus", "E", "--epithet", "m", .. extra, "-w", ws]);
+
+    [Fact]
+    public void Add_species_gives_the_species_its_starting_skin()
+    {
+        using var game = new FakeGame();
+        var ws = TexturedAllosaurus(game);
+
+        var (code, output, err) = AddMirabilis(ws);
+
+        Assert.True(code == ExitCodes.Ok, err);
+        Assert.Contains("Starting skin: mirabilis-start (Default).", output);
+        Assert.Contains("\"starting\": true", ModJson(ws));
+        Assert.DoesNotContain("copiedFrom", ModJson(ws));
+    }
+
+    [Fact]
+    public void Start_from_another_species_records_where_it_came_from()
+    {
+        using var game = new FakeGame();
+        var ws = TexturedAllosaurus(game);
+
+        var (code, output, err) = AddMirabilis(ws, "--start-from", "Carcharodontosaurus/Alt 1", "--start-name", "Carch look");
+
+        Assert.True(code == ExitCodes.Ok, err);
+        Assert.Contains("Starting skin: mirabilis-start (Carch look).", output);
+        Assert.Contains("copiedFrom", ModJson(ws));
+    }
+
+    [Fact]
+    public void Copying_and_own_pngs_together_are_refused()
+    {
+        using var game = new FakeGame();
+        var ws = TexturedAllosaurus(game);
+
+        var (code, _, err) = AddMirabilis(ws, "--start-from", "Carcharodontosaurus/1", "--start-png", Path.Combine(ws, "x.png"));
+
+        Assert.Equal(ExitCodes.Error, code);
+        Assert.Contains("Copy a skin or use your own PNGs, not both.", err);
+    }
+
+    [Fact]
+    public void A_species_without_a_starting_skin_gets_one_and_removing_it_says_what_happens()
+    {
+        using var game = new FakeGame();
+        var ws = TexturedAllosaurus(game);
+        Assert.Equal(ExitCodes.Ok, AddMirabilis(ws).Code);
+
+        var removed = Run("mod", "remove-skin", "mod-a", "mirabilis-start", "--delete-files", "-w", ws);
+        Assert.Contains("tyrant.mod-a.mirabilis will start with its template's game skin (Default) instead.", removed.Out);
+
+        var (code, output, err) = Run("mod", "add-starting-skin", "mod-a", "mirabilis", "--start-from", "Allosaurus Anax/1", "-w", ws);
+        Assert.True(code == ExitCodes.Ok, err);
+        Assert.Contains("Starting skin: mirabilis-start (Albino).", output);
+    }
+
+    [Fact]
+    public void Set_species_skin_points_a_new_species_at_its_skin_commands()
+    {
+        using var game = new FakeGame();
+        var ws = TexturedAllosaurus(game);
+        Assert.Equal(ExitCodes.Ok, AddMirabilis(ws).Code);
+
+        var (code, _, err) = Run("mod", "set-species-skin", "mod-a", "mirabilis", "--name", "Ghost", "-w", ws);
+
+        Assert.Equal(ExitCodes.Error, code);
+        Assert.Contains("mirabilis has its own starting skin 'mirabilis-start': rename it with 'mod rename-skin' and set its swatch with 'mod thumbnail'.", err);
+    }
     private static (int Code, string Out, string Err) Run(params string[] args)
     {
         var (oldOut, oldErr) = (Console.Out, Console.Error);
@@ -160,17 +263,11 @@ public class SpeciesCliTests
     public void Starting_skin_is_chosen_changed_and_shown()
     {
         using var game = new FakeGame();
-        var ws = IndexedWorkspace(game);
-        var objects = new Tyrant.Dumper.Serialization.DumpResult();
-        objects.Objects.Add(new Tyrant.Dumper.Serialization.DumpObject(typeof(object),
-            new Tyrant.Dumper.Serialization.EngineObjectInfo("PrehistoricKingdom.AnimalData", "Allosaurus", 1),
-            """{"speciesID":"Allosaurus Anax", "skinsData":[{"skinName":"Default"},{"skinName":"Albino"}]}"""));
-        Tyrant.Dumper.Serialization.DumpWriter.Write(Path.Combine(ws, "data"), objects, [], new Tyrant.Dumper.Serialization.DumpManifest { RequestId = "r1", BuildGuid = "b" });
-        Assert.Equal(ExitCodes.Ok, Run("mod", "new", "mod-a", "-w", ws).Code);
+        var ws = TexturedAllosaurus(game);
 
-        Assert.Equal(ExitCodes.Ok, Run("mod", "add-species", "mod-a", "mirabilis", "Allosaurus Anax", "--name", "Mirabilis", "--genus", "E", "--epithet", "m",
-            "--starting-skin", "Albino", "-w", ws).Code);
+        Assert.Equal(ExitCodes.Ok, AddMirabilis(ws, "--starting-skin", "Albino").Code);
         Assert.Contains("starting skin 1 Albino", Run("mod", "show", "mod-a", "-w", ws).Out);
+        Assert.Equal(ExitCodes.Ok, Run("mod", "remove-skin", "mod-a", "mirabilis-start", "--delete-files", "-w", ws).Code); // as an older species
 
         var (code, _, err) = Run("mod", "set-species-skin", "mod-a", "mirabilis", "--starting-skin", "9", "-w", ws);
         Assert.Equal(ExitCodes.Error, code);
@@ -181,14 +278,9 @@ public class SpeciesCliTests
 
     private static string SeedAllosaurus(FakeGame game)
     {
-        var ws = IndexedWorkspace(game);
-        var objects = new Tyrant.Dumper.Serialization.DumpResult();
-        objects.Objects.Add(new Tyrant.Dumper.Serialization.DumpObject(typeof(object),
-            new Tyrant.Dumper.Serialization.EngineObjectInfo("PrehistoricKingdom.AnimalData", "Allosaurus", 1),
-            """{"speciesID":"Allosaurus Anax", "skinsData":[{"skinName":"Default"},{"skinName":"Albino"}]}"""));
-        Tyrant.Dumper.Serialization.DumpWriter.Write(Path.Combine(ws, "data"), objects, [], new Tyrant.Dumper.Serialization.DumpManifest { RequestId = "r1", BuildGuid = "b" });
-        Assert.Equal(ExitCodes.Ok, Run("mod", "new", "mod-a", "-w", ws).Code);
-        Assert.Equal(ExitCodes.Ok, Run("mod", "add-species", "mod-a", "mirabilis", "Allosaurus Anax", "--name", "Mirabilis", "--genus", "E", "--epithet", "m", "-w", ws).Code);
+        var ws = TexturedAllosaurus(game);
+        Assert.Equal(ExitCodes.Ok, AddMirabilis(ws).Code);
+        Assert.Equal(ExitCodes.Ok, Run("mod", "remove-skin", "mod-a", "mirabilis-start", "--delete-files", "-w", ws).Code); // as an older species
         return ws;
     }
 

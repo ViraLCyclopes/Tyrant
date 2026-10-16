@@ -142,6 +142,7 @@ public static class CliApp
                 mod.AddCommand<ModDisableCommand>("disable").WithDescription("Turn an installed mod off.");
                 mod.AddCommand<ModAddSkinCommand>("add-skin").WithDescription("Add a new skin to a species, starting from a vanilla skin's textures.");
                 mod.AddCommand<ModAddSpeciesCommand>("add-species").WithDescription("Experimental: add a distinct species using a vanilla regular animal as its template.");
+                mod.AddCommand<ModAddStartingSkinCommand>("add-starting-skin").WithDescription("Give a custom species an editable starting skin (copied from a game skin, or your PNGs).");
                 mod.AddCommand<ModSetSpeciesSkinCommand>("set-species-skin").WithDescription("Set a custom species' starting skin, its name and its swatch PNG.");
                 mod.AddCommand<ModSkinPortraitCommand>("set-skin-portrait").WithDescription("Set or clear one of a skin's in-game portraits.");
                 mod.AddCommand<ModSpeciesPortraitCommand>("set-species-portrait").WithDescription("Set or clear one of a custom species' starting skin portraits.");

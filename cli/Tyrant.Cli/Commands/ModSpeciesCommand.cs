@@ -7,10 +7,22 @@ namespace Tyrant.Cli.Commands;
 
 public sealed class ModAddSpeciesCommand : Command<ModAddSpeciesCommand.Settings>
 {
-    public sealed class Settings : ModSettings
+    public sealed class Settings : ModSettings, IStartingSkinOptions
     {
         [CommandArgument(1, "<SPECIES-ID>")]
         public string SpeciesId { get; set; } = "";
+        [CommandOption("--start-from <SPECIES>")]
+        [Description("Its starting skin copies this base-game species' skin, as SPECIES or SPECIES/SKIN (number or name); default: the template's starting skin.")]
+        public string? StartFrom { get; set; }
+        [CommandOption("--start-png <PNG>")]
+        [Description("Your own diffuse PNG for the starting skin instead (the other maps come from the template skin).")]
+        public string? StartPng { get; set; }
+        [CommandOption("--start-png-female <PNG>")]
+        [Description("The female's own diffuse PNG (default: the --start-png one).")]
+        public string? StartPngFemale { get; set; }
+        [CommandOption("--start-name <NAME>")]
+        [Description("The starting skin's name in game (default: the copied skin's name, or the species name).")]
+        public string? StartName { get; set; }
         [CommandArgument(2, "<TEMPLATE>")]
         public string Template { get; set; } = "";
         [CommandOption("--name <NAME>")]
@@ -29,14 +41,18 @@ public sealed class ModAddSpeciesCommand : Command<ModAddSpeciesCommand.Settings
 
     public override int Execute(CommandContext context, Settings settings)
     {
-        var (ws, _) = CliServices.OpenWorkspace(settings);
+        var (ws, install) = CliServices.OpenWorkspace(settings);
         var mod = ModProject.Open(ws, settings.Id);
         var species = SpeciesSkinsReader.Load(ws);
         var template = species.FirstOrDefault(s => string.Equals(s.SpeciesId, settings.Template, StringComparison.OrdinalIgnoreCase));
-        var entry = mod.AddSpecies(species, settings.SpeciesId, settings.Template,
-            settings.Name, settings.Genus, settings.Epithet, settings.Cost, templateStats: SpeciesDatabase.Template(ws, template?.SpeciesId ?? settings.Template),
-            startingSkin: settings.StartingSkin is null ? 0 : StartingSkinOption.Resolve(species, settings.Template, settings.StartingSkin));
+        var startingSkin = settings.StartingSkin is null ? 0 : StartingSkinOption.Resolve(species, settings.Template, settings.StartingSkin);
+        var source = StartingSkinOptions.Source(species, settings, template?.SpeciesId ?? settings.Template, startingSkin);
+        var entry = mod.CreateSpecies(install, CliServices.LoadIndex(ws, install), CliServices.AssetReader, species, settings.SpeciesId, settings.Template,
+            settings.Name, settings.Genus, settings.Epithet, settings.Cost, null, SpeciesDatabase.Template(ws, template?.SpeciesId ?? settings.Template),
+            startingSkin, source, settings.StartName);
+        var skin = mod.StartingSkinOf(entry.Id)!;
         Console.WriteLine($"Added {entry.Name}: {entry.Key(mod.Id)} (template {entry.Base}).");
+        Console.WriteLine($"Starting skin: {skin.Id} ({skin.Name}).");
         Console.WriteLine("Experimental species support: test spawning and save/reload in a separate park before using it in your main park.");
         return ExitCodes.Ok;
     }
@@ -82,6 +98,9 @@ public sealed class ModSetSpeciesSkinCommand : Command<ModSetSpeciesSkinCommand.
         var entry = mod.Manifest.Species.FirstOrDefault(s => s.Id == settings.SpeciesId)
             ?? throw new TyrantException(TyrantErrorCode.TargetNotFound, $"No species '{settings.SpeciesId}' in mod '{mod.Id}'.");
         if (settings.Swatch is not null && settings.NoSwatch) throw new TyrantException(TyrantErrorCode.ModInvalid, "Use --swatch or --no-swatch, not both.");
+        if ((settings.Name is not null || settings.Swatch is not null || settings.NoSwatch) && mod.StartingSkinOf(entry.Id) is { } own)
+            throw new TyrantException(TyrantErrorCode.ModInvalid,
+                $"{entry.Id} has its own starting skin '{own.Id}': rename it with 'mod rename-skin' and set its swatch with 'mod thumbnail'.");
         if (settings.StartingSkin is not null || settings.Name is not null)
         {
             var vanilla = SpeciesSkinsReader.Load(ws);

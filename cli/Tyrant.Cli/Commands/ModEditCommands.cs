@@ -108,11 +108,24 @@ public sealed class ModRemoveSkinCommand : Command<ModRemoveSkinCommand.Settings
     public override int Execute(CommandContext context, Settings settings)
     {
         var (ws, _) = CliServices.OpenWorkspace(settings);
-        var deleted = ModProject.Open(ws, settings.Id).RemoveSkin(settings.Skin, settings.DeleteFiles);
-        Console.WriteLine($"Removed skin '{settings.Skin}'. Its number in the game stays reserved.");
+        var mod = ModProject.Open(ws, settings.Id);
+        var fallback = StartingFallback(ws, mod, mod.Skin(settings.Skin));
+        var deleted = mod.RemoveSkin(settings.Skin, settings.DeleteFiles);
+        Console.WriteLine(fallback is null ? $"Removed skin '{settings.Skin}'. Its number in the game stays reserved." : $"Removed skin '{settings.Skin}'. {fallback}");
         foreach (var file in deleted.Recycled) Console.WriteLine($"  to the Recycle Bin  {file}");
         foreach (var file in deleted.Kept) Console.WriteLine($"  stayed  {file}");
         return ExitCodes.Ok;
+    }
+
+    /// <summary>For a species' starting skin: what the species wears once it is gone; null for any other skin.</summary>
+    private static string? StartingFallback(Tyrant.Core.Workspaces.Workspace ws, ModProject mod, Tyrant.Framework.Core.SkinEntry skin)
+    {
+        if (!ReferenceEquals(Tyrant.Framework.Core.StartingSkins.Of(mod.Manifest, skin.Species), skin)) return null;
+        var species = mod.Manifest.Species.First(s => s.Key(mod.Id) == skin.Species);
+        string? name = null;
+        try { name = SkinMaps.Vanilla(SpeciesSkinsReader.Load(ws), species.Base, species.StartingSkin.ToString(System.Globalization.CultureInfo.InvariantCulture))?.Name; }
+        catch (Tyrant.Core.Errors.TyrantException) { } // no data dump: the template skin's name is unknown
+        return name is null ? $"{skin.Species} will start with its template's game skin instead." : $"{skin.Species} will start with its template's game skin ({name}) instead.";
     }
 }
 
