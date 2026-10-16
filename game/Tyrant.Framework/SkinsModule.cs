@@ -14,7 +14,8 @@ namespace Tyrant.Framework
 {
     /// <summary>
     /// Adds the mods' skins to their species once the game's animal database exists: each is a copy of its base skin appended
-    /// at its permanent number (skin-slots.json); numbers whose mod is gone get a hidden stand-in (a copy of skin 0).
+    /// at its permanent number (skin-slots.json); numbers whose mod is gone get a hidden stand-in (a copy of skin 0). A custom
+    /// species' "starting" skin takes no number: it is applied to the species' skin 0, and skins based on 0 wear its PNGs.
     /// </summary>
     internal static class SkinsModule
     {
@@ -30,6 +31,9 @@ namespace Tyrant.Framework
             public string ModId { get; }
             public SkinEntry Entry { get; }
             public string Directory { get; }
+
+            /// <summary>The species' starting skin this skin was copied from (its PNGs go under the skin's own); null for none.</summary>
+            public Added? Inherits { get; set; }
         }
 
         private static readonly MethodInfo CloneMethod = AccessTools.Method(typeof(object), "MemberwiseClone");
@@ -101,6 +105,18 @@ namespace Tyrant.Framework
 
         public static bool IsStandInIndex(object? speciesData, int index) =>
             speciesData != null && StandInIndices.TryGetValue(speciesData, out var indices) && indices.Contains(index);
+
+        /// <summary>The starting skin an added skin was copied from (skin 0 of a custom species with a starting skin).</summary>
+        public static bool TryGetInherited(object? skinData, out string modId, out SkinEntry entry, out string directory)
+        {
+            if (skinData != null && AddedSkins.TryGetValue(skinData, out var added) && added.Inherits is { } inherits)
+            {
+                (modId, entry, directory) = (inherits.ModId, inherits.Entry, inherits.Directory);
+                return true;
+            }
+            (modId, entry, directory) = ("", null!, "");
+            return false;
+        }
 
         public static bool TryGet(object? skinData, out string modId, out SkinEntry entry, out string directory)
         {
@@ -206,6 +222,9 @@ namespace Tyrant.Framework
             }
             if (!(Traverse.Create(data).Field("skinsData").GetValue() is IList list) || list.Count == 0) return false;
             var vanilla = list.Count;
+            // The starting skin (ModCatalog kept at most one, on its own mod's species) is skin 0 itself: no number.
+            foreach (var x in group.Where(x => x.Skin.Starting).Take(1)) ApplyStarting(species, list, x.Mod, x.Skin);
+            group = group.Where(x => !x.Skin.Starting).ToList();
             var changed = numbers.Assign(species, vanilla, group.Select(x => x.Skin.Key(x.Mod.Manifest.Id)), messages);
             var byKey = new Dictionary<string, (LoadedMod Mod, SkinEntry Skin)>(StringComparer.Ordinal);
             foreach (var x in group) byKey[x.Skin.Key(x.Mod.Manifest.Id)] = x;
@@ -214,11 +233,12 @@ namespace Tyrant.Framework
             foreach (var slot in SkinLayout.For(species, numbers.Of(species), vanilla))
             {
                 object? skin = null;
+                object? baseSkin = null;
                 if (slot.Key != null && byKey.TryGetValue(slot.Key, out var x))
                 {
                     try
                     {
-                        skin = MakeSkin(list, vanilla, x.Mod, x.Skin);
+                        skin = MakeSkin(list, vanilla, x.Mod, x.Skin, out baseSkin);
                     }
                     catch (Exception ex)
                     {
@@ -227,7 +247,10 @@ namespace Tyrant.Framework
                     }
                     if (skin != null)
                     {
-                        AddedSkins[skin] = new Added(x.Mod.Manifest.Id, x.Skin, x.Mod.Directory);
+                        AddedSkins[skin] = new Added(x.Mod.Manifest.Id, x.Skin, x.Mod.Directory)
+                        {
+                            Inherits = baseSkin != null && AddedSkins.TryGetValue(baseSkin, out var starting) ? starting : null,
+                        };
                         added++;
                     }
                 }
@@ -250,10 +273,34 @@ namespace Tyrant.Framework
             return changed;
         }
 
-        private static object? MakeSkin(IList list, int vanilla, LoadedMod mod, SkinEntry entry)
+        /// <summary>
+        /// Dresses the species' skin 0 (SpeciesModule's copy of the template skin) as the mod's starting skin: name, colours,
+        /// swatch and portraits here; textures, model, rig and sounds follow through AddedSkins.
+        /// </summary>
+        private static void ApplyStarting(string species, IList list, LoadedMod mod, SkinEntry entry)
+        {
+            var skin = list[0];
+            var key = entry.Key(mod.Manifest.Id);
+            try
+            {
+                SkinColorsModule.Apply(skin, entry, key); // first: the step most likely to fail, before anything else changed
+                var thumbnail = Thumbnail(mod, entry);
+                if (thumbnail != null) Traverse.Create(skin).Field("skinThumbnail").SetValue(thumbnail);
+                if (entry.Portraits is { Count: > 0 }) PortraitModule.Register(skin, mod.Directory, entry.Portraits);
+                Traverse.Create(skin).Field("skinName").SetValue(entry.Name);
+                AddedSkins[skin] = new Added(mod.Manifest.Id, entry, mod.Directory);
+                FrameworkMod.Log.Msg($"{species}: starting skin {key} applied.");
+            }
+            catch (Exception ex)
+            {
+                FrameworkMod.Log.Warning($"{key}: the starting skin could not be applied ({ex.GetBaseException().Message}); the species keeps its template skin.");
+            }
+        }
+
+        private static object? MakeSkin(IList list, int vanilla, LoadedMod mod, SkinEntry entry, out object? baseSkin)
         {
             var key = entry.Key(mod.Manifest.Id);
-            object? baseSkin = null;
+            baseSkin = null;
             if (int.TryParse(entry.Base, out var index)) baseSkin = index >= 0 && index < vanilla ? list[index] : null;
             else
                 for (var i = 0; i < vanilla; i++)

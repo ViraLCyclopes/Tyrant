@@ -90,22 +90,17 @@ namespace Tyrant.Framework
                 }
             }
 
-            // An added skin: its PNGs for the animal's sex; slots it does not provide keep the base skin's textures.
+            // An added skin: its PNGs for the animal's sex; slots it does not provide keep the base skin's textures (a skin based
+            // on a species' starting skin wears that skin's PNGs underneath its own).
             if (addedSkin)
             {
                 var male = string.Equals(Read(SexProperty, animal, "Sex")?.ToString(), "Male", StringComparison.Ordinal);
-                var files = male ? entry.Male : entry.Female;
-                if (files != null)
+                var skinData = Read(SkinDataProperty, animal, "SkinData");
+                if (SkinsModule.TryGetInherited(skinData, out var baseModId, out var baseEntry, out var baseDirectory))
+                    changed |= SetSkinTextures(baseModId, baseEntry, baseDirectory, male);
+                if (SetSkinTextures(modId, entry, directory, male))
                 {
-                    foreach (var pair in files)
-                    {
-                        var path = Path.Combine(directory, pair.Value);
-                        if (!ModPaths.IsInside(path, directory)) continue;
-                        var texture = TextureCache.Get(new Replacement(modId, $"{entry.Key(modId)}:{pair.Key}", Path.GetFullPath(path)), SkinSlotNames.KindOf(pair.Key));
-                        if (texture == null) continue;
-                        Block.SetTexture(SkinSlotNames.Property(pair.Key), texture);
-                        changed = true;
-                    }
+                    changed = true;
                     if (Announced.Add(entry.Key(modId) + (male ? "|male" : "|female")))
                         FrameworkMod.Log.Msg($"skin {entry.Key(modId)} ({(male ? "male" : "female")}) on {NameOf(animal)}");
                 }
@@ -113,6 +108,24 @@ namespace Tyrant.Framework
 
             if (changed)
                 foreach (var renderer in renderers) renderer.SetPropertyBlock(Block);
+        }
+
+        /// <summary>A skin's PNGs for one sex onto Block; true when it set any.</summary>
+        private static bool SetSkinTextures(string modId, SkinEntry entry, string directory, bool male)
+        {
+            var files = male ? entry.Male : entry.Female;
+            if (files == null) return false;
+            var any = false;
+            foreach (var pair in files)
+            {
+                var path = Path.Combine(directory, pair.Value);
+                if (!ModPaths.IsInside(path, directory)) continue;
+                var texture = TextureCache.Get(new Replacement(modId, $"{entry.Key(modId)}:{pair.Key}", Path.GetFullPath(path)), SkinSlotNames.KindOf(pair.Key));
+                if (texture == null) continue;
+                Block.SetTexture(SkinSlotNames.Property(pair.Key), texture);
+                any = true;
+            }
+            return any;
         }
 
         private static object? Read(Dictionary<Type, PropertyInfo?> cache, object target, string name)
