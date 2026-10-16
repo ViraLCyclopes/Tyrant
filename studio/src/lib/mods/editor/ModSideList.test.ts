@@ -23,6 +23,12 @@ function setup(detail: ModDetail = modDetail({ skins: [skin('a', 'Amber'), skin(
 const lastOrder = (props: { detail: ModDetail; onArrange: ReturnType<typeof vi.fn> }) => props.onArrange.mock.lastCall![0](props.detail.skins);
 
 describe('ModSideList skins', () => {
+  it("tags a species' starting skin", () => {
+    setup(modDetail({ skins: [{ ...skin('s', 'Mine'), starting: true }, skin('a', 'Amber')] }));
+    expect(screen.getByRole('button', { name: 'Mine' })).toHaveTextContent('Starting skin');
+    expect(screen.getByRole('button', { name: 'Amber' })).not.toHaveTextContent('Starting skin');
+  });
+
   it('shows ungrouped skins, then each group under its heading with its species', () => {
     setup();
     expect(screen.getByRole('button', { name: 'Amber' })).toHaveTextContent('Carcharodontosaurus');

@@ -75,7 +75,11 @@
       <option value={NEW_GROUP}>New group…</option>
     </select>
   </label>
-  <p class="hint">{skin.species} · based on {skin.base} · id <code>{skin.id}</code> (saved animals use it, so it never changes)</p>
+  {#if skin.starting}
+    <p class="hint">Starting skin of {skin.species}{skin.copiedFromSpecies ? ` · copied from ${skin.copiedFromSpecies}` : ''} · id <code>{skin.id}</code> (saved animals use it, so it never changes)</p>
+  {:else}
+    <p class="hint">{skin.species} · based on {skin.base} · id <code>{skin.id}</code> (saved animals use it, so it never changes)</p>
+  {/if}
 </header>
 
 <section class="card">
@@ -129,7 +133,7 @@
 <div class="row"><button onclick={() => (removing = true)}>Remove skin…</button></div>
 
 {#if removing}
-  <RemoveSkinDialog name={skin.name} onCancel={() => (removing = false)} onConfirm={remove} />
+  <RemoveSkinDialog name={skin.name} startingOf={skin.starting ? skin.species : null} onCancel={() => (removing = false)} onConfirm={remove} />
 {/if}
 
 {#if namingGroup}

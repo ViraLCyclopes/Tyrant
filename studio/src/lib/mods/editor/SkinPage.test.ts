@@ -28,6 +28,13 @@ async function setup(detail = modDetail()) {
 }
 
 describe('SkinPage', () => {
+  it("a starting skin's header says whose it is and where it was copied from", async () => {
+    const base = modDetail();
+    await setup(modDetail({ skins: [{ ...base.skins[0], species: 'tyrant.red-spot.anax', starting: true, copiedFromSpecies: 'Carcharodontosaurus', copiedFromSkin: 1 }] }));
+    expect(screen.getByText(/Starting skin of tyrant\.red-spot\.anax · copied from Carcharodontosaurus/)).toBeInTheDocument();
+    expect(screen.queryByText(/based on/)).toBeNull();
+  });
+
   it('a skin without a model of its own shows the species replacement and offers Replace…', async () => {
     const species = { target: 'Carcharodontosaurus', skin: null, file: 'models/carch-1a2b.glb', lods: [], errors: [], warnings: [], stale: false, origin: null, originChanged: false };
     const { rpc, platform } = await setup(modDetail({ models: [species] }));

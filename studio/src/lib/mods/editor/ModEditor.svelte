@@ -257,7 +257,7 @@
 {#if removingSkin && doc.detail}
   {@const skin = doc.detail.skins.find((k) => k.id === removingSkin)}
   {#if skin}
-    <RemoveSkinDialog name={skin.name} onCancel={() => (removingSkin = null)} onConfirm={(deleteFiles) => { const id = skin.id; removingSkin = null; void doc.removeSkin(id, deleteFiles); }} />
+    <RemoveSkinDialog name={skin.name} startingOf={skin.starting ? skin.species : null} onCancel={() => (removingSkin = null)} onConfirm={(deleteFiles) => { const id = skin.id; removingSkin = null; void doc.removeSkin(id, deleteFiles); }} />
   {/if}
 {/if}
 

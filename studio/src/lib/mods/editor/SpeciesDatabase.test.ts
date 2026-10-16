@@ -139,6 +139,60 @@ describe('Species database', () => {
     expect(within(starting()).getByRole('option', { name: 'Base' })).toHaveProperty('selected', true);
   });
 
+  async function fillNewSpecies() {
+    await fireEvent.input(screen.getByRole('textbox', { name: /Species id/ }), { target: { value: 'mirabilis' } });
+    await fireEvent.input(screen.getByRole('textbox', { name: /Display name/ }), { target: { value: 'Mirabilis' } });
+    await fireEvent.input(screen.getByRole('textbox', { name: /Genus/ }), { target: { value: 'Example' } });
+    await fireEvent.input(screen.getByRole('textbox', { name: /Species epithet/ }), { target: { value: 'mirabilis' } });
+  }
+
+  it("a new species' starting skin can copy another species' skin", async () => {
+    const { rpc } = await setup([]);
+    rpc.on('mods.addSpecies', () => modDetail({ revision: 'r2' }));
+    await waitFor(() => expect(within(screen.getByRole('combobox', { name: 'Copy from' })).getAllByRole('option')).toHaveLength(2));
+    await fireEvent.change(screen.getByRole('combobox', { name: 'Copy from' }), { target: { value: 'Carcharodontosaurus' } });
+    await fireEvent.change(screen.getByRole('combobox', { name: 'Starting skin' }), { target: { value: '2' } });
+    await fillNewSpecies();
+    await fireEvent.click(screen.getByRole('button', { name: 'Create species' }));
+    await waitFor(() => expect(rpc.callsTo('mods.addSpecies')[0]?.params).toMatchObject({
+      template: 'Allosaurus Anax', startingSkin: 0, startFrom: 'Carcharodontosaurus', startSkin: 2, startPng: null,
+    }));
+  });
+
+  it('own PNGs need the male diffuse before the species can be created', async () => {
+    const { platform } = await setup([]);
+    await fillNewSpecies();
+    await fireEvent.click(screen.getByRole('radio', { name: 'My own PNGs' }));
+    expect(screen.getByRole('button', { name: 'Create species' })).toBeDisabled();
+    platform.files.push('C:/art/male.png');
+    await fireEvent.click(screen.getByRole('button', { name: 'Choose male diffuse PNG…' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Create species' })).toBeEnabled());
+  });
+
+  it('a species with its own starting skin opens it instead of the template skin controls', async () => {
+    const onOpenSkin = vi.fn();
+    const base = modDetail();
+    const detail = modDetail({ skins: [{ ...base.skins[0], id: 'new-animal-start', name: 'Mine', species: 'tyrant.red-spot.new-animal', starting: true }] });
+    await setup([{ ...animal, startingSkinId: 'new-animal-start' } as typeof animal], { onOpenSkin }, true, detail);
+    const skins = screen.getByRole('region', { name: 'Skins' });
+    expect(within(skins).getByText('Starting skin: Mine')).toBeInTheDocument();
+    expect(within(skins).queryByRole('combobox', { name: 'Starting skin' })).toBeNull();
+    expect(within(skins).queryByRole('button', { name: 'Choose swatch PNG…' })).toBeNull();
+    expect(within(skins).queryByRole('button', { name: 'Render from 3D…' })).toBeNull();
+    await fireEvent.click(within(skins).getByRole('button', { name: 'Open starting skin' }));
+    expect(onOpenSkin).toHaveBeenCalledWith('new-animal-start');
+  });
+
+  it('a species without one can be given an editable starting skin', async () => {
+    const { rpc } = await setup([{ ...animal, startingSkin: 0, startingSkinName: null, swatch: null } as typeof animal]);
+    rpc.on('mods.addStartingSkin', () => modDetail({ revision: 'r2' }));
+    const skins = screen.getByRole('region', { name: 'Skins' });
+    await fireEvent.click(within(skins).getByRole('button', { name: 'Make an editable starting skin' }));
+    await fireEvent.change(within(skins).getByRole('combobox', { name: 'Copy from' }), { target: { value: 'Carcharodontosaurus' } });
+    await fireEvent.click(within(skins).getByRole('button', { name: 'Create starting skin' }));
+    await waitFor(() => expect(rpc.callsTo('mods.addStartingSkin')[0]?.params).toMatchObject({ speciesId: 'new-animal', startFrom: 'Carcharodontosaurus', startSkin: 0 }));
+  });
+
   it("the Skins section sets the starting skin, its name and swatch, lists the species' skins and adds one", async () => {
     const onAddSkin = vi.fn();
     const onOpenSkin = vi.fn();

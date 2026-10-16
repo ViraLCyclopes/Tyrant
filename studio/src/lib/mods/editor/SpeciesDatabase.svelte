@@ -1,5 +1,6 @@
 <script lang="ts">
   import PortraitsCard from './PortraitsCard.svelte';
+  import StartingSkinChoice, { freshChoice, startParams, startingSkinOf, type StartingChoice } from './StartingSkinChoice.svelte';
   import { onMount } from 'svelte';
   import { getSession } from '$lib/stores/session.svelte';
   import { getTab } from '$lib/shell/tab.svelte';
@@ -19,7 +20,9 @@
   let name = $state('');
   let genus = $state('');
   let epithet = $state('');
-  let startingSkin = $state(0);
+  /** The new species' starting skin (create form), and the one being made for a species without one (Skins section). */
+  let choice = $state<StartingChoice>(freshChoice(''));
+  let making = $state<StartingChoice | null>(null);
   let cost = $state<number | undefined>(undefined);
   let values = $state<Record<string, number | undefined>>({});
   let dataValues = $state<Record<string, string>>({});
@@ -68,10 +71,14 @@
     if (source) template = source.base;
   });
 
-  // A different template has different skins, so the starting skin goes back to the first.
+  // A different template has different skins, so the starting skin goes back to copying its first.
   $effect(() => {
-    void template;
-    startingSkin = 0;
+    choice = freshChoice(template);
+  });
+  // Another animal: no half-made starting skin carries over.
+  $effect(() => {
+    void selected;
+    making = null;
   });
 
   // A new species shows what it inherits from the chosen template, as an existing species does from its own.
@@ -90,7 +97,9 @@
   const inheritedStats = $derived<Record<string, number>>(creating ? (templateStats?.stats ?? {}) : (animal?.inheritedStats ?? {}));
 
   const validId = $derived(/^[a-z0-9](?:[a-z0-9-]{1,62})[a-z0-9]$/.test(speciesId));
-  const canSave = $derived(!!name.trim() && !!genus.trim() && !!epithet.trim() && (!creating || (validId && !!template)));
+  const canSave = $derived(!!name.trim() && !!genus.trim() && !!epithet.trim() && (!creating || (validId && !!template && !(choice.kind === 'png' && !choice.male))));
+  /** This mod's starting skin of the shown species, when it has one. */
+  const startingSkin = $derived(animal?.startingSkinId ? doc.detail?.skins.find((s) => s.id === animal.startingSkinId) : undefined);
 
   async function save() {
     busy = true;
@@ -98,12 +107,17 @@
       const stats = Object.fromEntries(Object.entries(values).filter((entry): entry is [string, number] => entry[1] !== undefined));
       const fields = { speciesId, name, genus, epithet, cost: cost ?? null, stats, dataFields: dataValues, localization };
       const added = creating;
-      if (await doc.edit(added ? 'mods.addSpecies' : 'mods.setSpecies', added ? { ...fields, template, startingSkin } : fields, { undoable: false })) {
+      const start = { startingSkin: startingSkinOf(choice, template), ...startParams(choice) };
+      if (await doc.edit(added ? 'mods.addSpecies' : 'mods.setSpecies', added ? { ...fields, template, ...start } : fields, { undoable: false })) {
         selected = speciesId;
         await reload();
         tab.info(added ? `Added species '${name}'.` : `Saved '${name}' and its stats.`);
       }
     } finally { busy = false; }
+  }
+  async function makeStartingSkin() {
+    if (!making || !animal) return;
+    if (await doc.edit('mods.addStartingSkin', { speciesId: selected, ...startParams(making) }, { undoable: false })) making = null;
   }
   function setStart(skin: number, skinName: string | null) {
     void doc.edit('mods.setSpeciesStartingSkin', { speciesId: selected, startingSkin: skin, name: skinName }, { undoable: false });
@@ -147,9 +161,6 @@
                 {#each templates as source}<option value={source.speciesId}>{source.speciesId}</option>{/each}
               </select>
             </label>
-            <label>Starting skin
-              <select bind:value={startingSkin}>{#each templateSkins as s (s.index)}<option value={s.index}>{s.name}</option>{/each}</select>
-            </label>
           {:else}<p class="hint">Template: {animal?.base}</p>{/if}
           <label>Display name <input bind:value={name} required /></label>
           <label>Genus <input bind:value={genus} required /></label>
@@ -159,6 +170,10 @@
             {#if inheritedCost != null}<span class="hint">Template: {inheritedCost}</span>{/if}
           </label>
         </div>
+        {#if creating && template}
+          <StartingSkinChoice {templates} {template} speciesName={name} value={choice} onChange={(c) => (choice = c)} />
+          <p class="hint">The starting skin becomes a skin in this mod: its PNGs, colours, model and portraits are yours to edit on its page.</p>
+        {/if}
         <h3>Animal stats</h3>
         <div class="grid">
           {#each database.fields as field (field.id)}
@@ -209,6 +224,13 @@
     {#if animal && !creating}
       <section class="skins" aria-label="Skins">
         <h3>Skins</h3>
+        {#if startingSkin}
+          <p class="hint">The species starts with its own skin; edit its PNGs, name, swatch and portraits on its page. Add more skins below; other mods can add skins to it too.</p>
+          <div class="toolbar">
+            <span>Starting skin: {startingSkin.name}</span>
+            <button type="button" aria-label="Open starting skin" onclick={() => onOpenSkin(startingSkin.id)}>Open</button>
+          </div>
+        {:else}
         <p class="hint">The species starts with one skin copied from {animal.base}. Add more skins below; other mods can add skins to it too.</p>
         <div class="grid">
           <label>Starting skin
@@ -226,9 +248,19 @@
           <button type="button" disabled={!animal.swatch} onclick={() => doc.edit('mods.setSpeciesSwatch', { speciesId: selected, png: null }, { undoable: false })}>Use template swatch</button>
         </div>
         <PortraitsCard {doc} target={{ speciesId: selected, speciesKey: animal.key }} />
+        {#if making}
+          <StartingSkinChoice {templates} template={animal.base} speciesName={animal.name} value={making} onChange={(c) => (making = c)} />
+          <div class="toolbar">
+            <button type="button" class="primary" disabled={making.kind === 'png' && !making.male} onclick={makeStartingSkin}>Create starting skin</button>
+            <button type="button" onclick={() => (making = null)}>Cancel</button>
+          </div>
+        {:else}
+          <div><button type="button" onclick={() => (making = freshChoice(animal.base))}>Make an editable starting skin</button></div>
+        {/if}
+        {/if}
         <ul class="skin-list">
           {#each (doc.detail?.skins ?? []).filter((s) => s.species === animal.key) as s (s.id)}
-            <li><button type="button" onclick={() => onOpenSkin(s.id)}>{s.name}</button>{#if s.group}<span class="hint"> · {s.group}</span>{/if}</li>
+            <li><button type="button" onclick={() => onOpenSkin(s.id)}>{s.name}</button>{#if s.starting}<span class="hint"> · starting skin</span>{/if}{#if s.group}<span class="hint"> · {s.group}</span>{/if}</li>
           {/each}
         </ul>
         <div><button type="button" onclick={() => onAddSkin(animal.key)}>Add skin</button></div>

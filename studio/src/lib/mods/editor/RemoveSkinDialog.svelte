@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
 
-  let { name, onConfirm, onCancel }: { name: string; onConfirm: (deleteFiles: boolean) => void; onCancel: () => void } = $props();
+  /** startingOf: the species when this is its starting skin (the species then goes back to its template's game skin). */
+  let { name, startingOf = null, onConfirm, onCancel }: { name: string; startingOf?: string | null; onConfirm: (deleteFiles: boolean) => void; onCancel: () => void } = $props();
   let deleteFiles = $state(false);
   let dialog = $state<HTMLElement>();
 
@@ -21,7 +22,11 @@
 <div class="scrim" role="presentation" onclick={onCancel}>
   <div class="dialog" role="dialog" aria-modal="true" aria-label="Remove {name}" tabindex="-1" bind:this={dialog} onclick={(e) => e.stopPropagation()} onkeydown={() => {}}>
     <h2>Remove '{name}'?</h2>
-    <p>Its number in the game stays reserved, so other skins keep theirs; saved animals with this skin fall back to its base skin.</p>
+    {#if startingOf}
+      <p>{startingOf} will start with its template's game skin instead.</p>
+    {:else}
+      <p>Its number in the game stays reserved, so other skins keep theirs; saved animals with this skin fall back to its base skin.</p>
+    {/if}
     <label class="row"><input type="checkbox" bind:checked={deleteFiles} /> Also delete its files, its model and its Blender project (never ones another skin, model or replacement uses)</label>
     {#if deleteFiles}<p class="warn">They go to the Recycle Bin. This cannot be undone with Ctrl+Z: the skin does not come back.</p>{/if}
     <div class="actions">

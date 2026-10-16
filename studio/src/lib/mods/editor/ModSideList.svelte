@@ -264,7 +264,7 @@
           data-drop-group={section.group ?? ''} data-drop-index={i} data-skin-id={skin.id}>
           <button class="item" class:on={isSkin(skin.id)} aria-label={skin.name} title="{skin.name} · {skin.species} (drag it, or Alt+↑/↓, to move it)"
             onpointerdown={(e) => startPress(e, skin)} onclick={() => select(skin)} onkeydown={(e) => onSkinKey(e, skin)}>
-            {skin.name} <span class="species">{skin.species}</span>
+            {skin.name} <span class="species">{skin.species}</span>{#if skin.starting}<span class="tag">Starting skin</span>{/if}
           </button>
           <ItemMenu label="Actions for {skin.name}" items={() => skinActions(skin)} />
         </div>
@@ -350,6 +350,7 @@
   .row.group .toggle { font-weight: 600; }
   .species { color: var(--muted); font-size: 11px; }
   .item.on .species { color: inherit; opacity: 0.8; }
+  .tag { margin-left: 6px; font-size: 10px; padding: 0 4px; border-radius: 3px; background: var(--panel-2); color: var(--muted); }
   .side.dragging { cursor: grabbing; user-select: none; }
   .row.placeholder { outline: 1px dashed var(--accent); outline-offset: -1px; }
   .row.placeholder > * { opacity: 0.35; }
