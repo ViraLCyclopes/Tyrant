@@ -114,6 +114,29 @@ public class RemoveSpeciesTests
     }
 
     [Fact]
+    public void Language_folders_left_empty_go_too()
+    {
+        using var s = new Setup();
+        var other = s.File("localization/de/other/name.txt");
+
+        s.Mod.RemoveSpecies("mira", deleteFiles: true);
+
+        Assert.True(File.Exists(s.Full(other)));
+        foreach (var code in AnimalLocalization.Codes.Where(c => c != "de"))
+            Assert.False(Directory.Exists(Path.Combine(s.Mod.Dir, "localization", code)), code);
+    }
+
+    [Fact]
+    public void The_localization_folder_goes_when_nothing_is_left_in_it()
+    {
+        using var s = new Setup();
+
+        s.Mod.RemoveSpecies("mira", deleteFiles: true);
+
+        Assert.False(Directory.Exists(Path.Combine(s.Mod.Dir, "localization")));
+    }
+
+    [Fact]
     public void Files_another_entry_still_uses_stay()
     {
         using var s = new Setup();

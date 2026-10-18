@@ -116,6 +116,78 @@ public sealed partial class ModProject
         return entry;
     }
 
+    /// <summary>
+    /// Makes another skin of one of this mod's species its starting skin (skin 0). What it took from the old starting skin
+    /// (maps it has no PNG for, colours, portraits, swatch) is copied into it first, so it looks as before; the old starting
+    /// skin stays as an ordinary skin based on 0. Returns the new and the old starting skin (null when there was none).
+    /// </summary>
+    public (SkinEntry Made, SkinEntry? Previous) MakeStartingSkin(string skinId)
+    {
+        var skin = Skin(skinId);
+        if (skin.Starting) throw new TyrantException(TyrantErrorCode.ModInvalid, $"'{skin.Name}' is already its species' starting skin.");
+        if (!Manifest.Species.Any(s => s.Key(Manifest.Id) == skin.Species))
+            throw new TyrantException(TyrantErrorCode.ModInvalid,
+                $"'{skin.Name}' is a skin of {skin.Species}: only a skin of one of this mod's own species can be its starting skin.");
+        var previous = StartingSkins.Of(Manifest, skin.Species);
+        var order = Manifest.Skins.ToList();
+        var (male, female, colors, portraits, thumbnail, baseSkin) =
+            (skin.Male, skin.Female, skin.Colors, skin.Portraits is null ? null : new Dictionary<string, string>(skin.Portraits), skin.Thumbnail, skin.Base);
+        var copied = new List<string>();
+        try
+        {
+            if (previous is not null && StartingSkins.InheritsFrom(Manifest, skin, out _))
+            {
+                skin.Male = TakeMaps(skin.Id, "male", previous.Male, skin.Male, copied);
+                skin.Female = TakeMaps(skin.Id, "female", previous.Female, skin.Female, copied);
+                if (skin.Colors is null && previous.Colors is not null) skin.Colors = SkinColors.Parse(Json.Parse(Json.Write(previous.Colors.ToJson())), skin.Id);
+                if (previous.Portraits is { Count: > 0 })
+                {
+                    skin.Portraits ??= [];
+                    foreach (var (slot, file) in previous.Portraits) skin.Portraits.TryAdd(slot, file);
+                }
+                skin.Thumbnail ??= previous.Thumbnail;
+            }
+            if (previous is not null) previous.Starting = false;
+            skin.Starting = true;
+            skin.Base = "0";
+            var arranged = Arranged([skin, .. Manifest.Skins.Where(s => s != skin)]);
+            Manifest.Skins.Clear();
+            Manifest.Skins.AddRange(arranged);
+            Save();
+        }
+        catch
+        {
+            (skin.Male, skin.Female, skin.Colors, skin.Portraits, skin.Thumbnail, skin.Base, skin.Starting) = (male, female, colors, portraits, thumbnail, baseSkin, false);
+            if (previous is not null) previous.Starting = true;
+            Manifest.Skins.Clear();
+            Manifest.Skins.AddRange(order);
+            foreach (var file in copied)
+                try { File.Delete(Path.Combine(Dir, file.Replace('/', Path.DirectorySeparatorChar))); }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+            throw;
+        }
+        return (Skin(skinId), previous is null ? null : Skin(previous.Id));
+    }
+
+    /// <summary>The skin's maps for one sex plus copies of the old starting skin's PNGs for the slots it has none for.</summary>
+    private Dictionary<string, string>? TakeMaps(string skinId, string sex, IReadOnlyDictionary<string, string>? from, Dictionary<string, string>? own, List<string> copied)
+    {
+        if (from is null) return own;
+        var maps = own is null ? new Dictionary<string, string>(StringComparer.Ordinal) : new Dictionary<string, string>(own, StringComparer.Ordinal);
+        foreach (var (slot, file) in from)
+        {
+            if (maps.ContainsKey(slot) || Path.GetFullPath(Path.Combine(Dir, file)) is not { } source || !ModPaths.IsInside(source, Dir) || !File.Exists(source)) continue;
+            var copy = $"skins/{skinId}/{SkinFileName(sex, slot)}";
+            var path = Path.Combine(Dir, copy.Replace('/', Path.DirectorySeparatorChar));
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.Copy(source, path, overwrite: true);
+            File.SetLastWriteTimeUtc(path, DateTime.UtcNow);
+            maps[slot] = copy;
+            copied.Add(copy);
+        }
+        return maps.Count == 0 ? own : maps;
+    }
+
     private Dictionary<string, string> OwnDiffuse(string skinId, string sex, string png, Dictionary<string, string> files)
     {
         var file = $"skins/{skinId}/{SkinFileName(sex, "diffuse")}";

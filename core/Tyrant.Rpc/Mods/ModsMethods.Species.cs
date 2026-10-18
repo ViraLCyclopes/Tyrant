@@ -31,6 +31,7 @@ public sealed record ModSetSpeciesParams(string Id, string Revision, string Spec
 public sealed record ModSpeciesParams(string Id, string SpeciesId);
 /// <summary>DeleteFiles: its files, language files, icon and Blender projects go to the Recycle Bin too.</summary>
 public sealed record ModRemoveSpeciesParams(string Id, string Revision, string SpeciesId, bool DeleteFiles = true);
+public sealed record ModMakeStartingSkinParams(string Id, string Revision, string Skin);
 
 public sealed record ModSetSpeciesStartingSkinParams(string Id, string Revision, string SpeciesId, int StartingSkin, string? Name = null);
 public sealed record ModSetSpeciesSwatchParams(string Id, string Revision, string SpeciesId, string? Png = null);
@@ -140,6 +141,10 @@ public sealed partial class ModsMethods
         {
             foreach (var line in mod.RemoveSpecies(p.SpeciesId, p.DeleteFiles).Kept) session.Log($"'{p.Id}': {line}");
         }, $"removed species '{p.SpeciesId}'{(p.DeleteFiles ? " and its files" : "")}");
+
+    [RpcMethod("mods.makeStartingSkin")]
+    public ModDetail MakeStartingSkin(ModMakeStartingSkinParams p) =>
+        Edit(p.Id, p.Revision, mod => mod.MakeStartingSkin(p.Skin), $"made skin '{p.Skin}' its species' starting skin");
 
     [RpcMethod("mods.setSpecies")]
     public ModDetail SetSpecies(ModSetSpeciesParams p) => Edit(p.Id, p.Revision, mod =>

@@ -140,8 +140,16 @@
       tab.info(`Deleted species '${gone}'.`);
     }
   }
+  async function makeDefault(skin: string, name: string) {
+    const current = startingSkin?.name;
+    const message = `Make ${name} the starting skin of ${animal?.name}? It becomes the look the species starts with (skin 0).`
+      + (current ? ` ${current} stays as an ordinary skin; what ${name} took from it (PNGs, colours, portraits, swatch) is copied into ${name} first.` : '')
+      + ` Skins based on 0 take what they have no PNG for from ${name}, and animals with skin 0 in saved parks will wear it.`;
+    if (!(await session.platform.confirm(message, 'Make default'))) return;
+    await doc.edit('mods.makeStartingSkin', { skin });
+  }
   async function pickIcon() {
-    const png = await session.platform.openFile('Choose a species portrait PNG', ['png']);
+    const png = await session.platform.openFile('Choose a Paleopedia photo PNG (512×256)', ['png']);
     if (png) await doc.edit('mods.setSpeciesIcon', { speciesId: selected, png }, { undoable: false });
   }
 </script>
@@ -199,12 +207,6 @@
           {/each}
         </div>
         {#if !creating}
-          <h3>Species icon</h3>
-          <p class="hint">{animal?.icon ?? 'Using the template portrait'}. A PNG replaces this species' Nursery portrait.</p>
-          <div class="toolbar">
-            <button type="button" onclick={pickIcon}>Choose icon PNG…</button>
-            <button type="button" disabled={!animal?.icon} onclick={() => doc.edit('mods.setSpeciesIcon', { speciesId: selected, png: null }, { undoable: false })}>Use template icon</button>
-          </div>
           <h3>Localization keys</h3>
           <p class="hint">Each key points to its own plain text file. For example, mirabilis/description reads localization/en-US/mirabilis/description.txt. Name, description, character notes and social info are separate files. Missing translations fall back to English.</p>
           <label>Text language <select bind:value={textLanguage}>{#each ['en-US', 'fr', 'es', 'pt', 'de', 'ru', 'zh-CN'] as code}<option value={code}>{code}</option>{/each}</select></label>
@@ -214,9 +216,11 @@
               <button type="button" disabled={!localization[slot]} onclick={() => doc.detail && session.platform.reveal(`${doc.detail.dir}/localization/${textLanguage}/${localization[slot].replaceAll('\\', '/')}.txt`)}>Show {slot} text file</button>
             {/each}
           </div>
-          <h3>Full animal record</h3>
-          <p class="hint">Stored in animal_fields. Edit numbers, booleans, enum names and text here or with SQL. Paths follow the game's fields; reference and structural rows describe inherited assets and arrays. Purchase cost is in animal_species; the basic stats above are in animal_stats.</p>
-          <RecordTree fields={animal?.dataFields ?? []} bind:values={dataValues} />
+          <details class="advanced">
+            <summary><h3>Full animal record</h3> <span class="hint">Advanced: every field the game stores for this animal. Most species never need it.</span></summary>
+            <p class="hint">Stored in animal_fields. Edit numbers, booleans, enum names and text here or with SQL. Paths follow the game's fields; reference and structural rows describe inherited assets and arrays. Purchase cost is in animal_species; the basic stats above are in animal_stats.</p>
+            <RecordTree fields={animal?.dataFields ?? []} bind:values={dataValues} />
+          </details>
         {/if}
         <div class="actions">
           <button type="submit" class="primary" disabled={!canSave}>{busy ? 'Saving…' : creating ? 'Create species' : 'Save species'}</button>
@@ -233,6 +237,12 @@
           <button type="button" onclick={() => doc.edit('mods.setSpeciesPrefab', { speciesId: selected, bundle: null, asset: null }, { undoable: false })}>Use template prefab</button>
           <span class="hint">This species loads a Unity bundle ({animal.prefab.bundle}); the Unity path is parked.</span>
         {/if}
+      </div>
+      <h3>Paleopedia photo</h3>
+      <p class="hint">The picture in the Paleopedia and the Nursery's species panel. {animal.icon ? `Using ${animal.icon}.` : "Using the template's photo."} The game's are 512×256 PNGs.</p>
+      <div class="toolbar">
+        <button type="button" onclick={pickIcon}>Choose photo PNG…</button>
+        <button type="button" disabled={!animal.icon} onclick={() => doc.edit('mods.setSpeciesIcon', { speciesId: selected, png: null }, { undoable: false })}>Use template photo</button>
       </div>
     {/if}
     {#if animal && !creating}
@@ -274,7 +284,8 @@
         {/if}
         <ul class="skin-list">
           {#each (doc.detail?.skins ?? []).filter((s) => s.species === animal.key) as s (s.id)}
-            <li><button type="button" onclick={() => onOpenSkin(s.id)}>{s.name}</button>{#if s.starting}<span class="hint"> · starting skin</span>{/if}{#if s.group}<span class="hint"> · {s.group}</span>{/if}</li>
+            <li><button type="button" onclick={() => onOpenSkin(s.id)}>{s.name}</button>{#if s.starting}<span class="hint"> · starting skin</span>{:else}
+              <button type="button" class="small" aria-label="Make {s.name} the default" title="Make it the species' starting (default) skin" onclick={() => makeDefault(s.id, s.name)}>Make default</button>{/if}{#if s.group}<span class="hint"> · {s.group}</span>{/if}</li>
           {/each}
         </ul>
         <div><button type="button" onclick={() => onAddSkin(animal.key)}>Add skin</button></div>
@@ -305,5 +316,10 @@
   .actions { margin-top: 18px; }
   .skins { display: grid; gap: 12px; }
   .skin-list { margin: 0; padding-left: 18px; }
+  .skin-list li { margin: 4px 0; }
+  .skin-list .small { margin-left: 8px; padding: 2px 8px; font-size: 0.85em; }
+  .advanced { margin-top: 12px; display: grid; gap: 8px; }
+  .advanced summary { cursor: pointer; }
+  .advanced summary h3 { display: inline; }
   .danger { display: grid; gap: 8px; border-top: 1px solid var(--border); padding-top: 12px; }
 </style>

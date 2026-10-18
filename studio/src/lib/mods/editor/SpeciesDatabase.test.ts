@@ -76,7 +76,9 @@ describe('Species database', () => {
     await waitFor(() => expect(rpc.callsTo('mods.setSpecies')[0]?.params).toMatchObject({ dataFields: { '/brain/needs/adult/native/hitPoints': '800' }, localization: { description: 'pack.mirabilis.description' } }));
     rpc.on('mods.setSpeciesIcon', () => modDetail({ revision: 'r3' }));
     platform.files.push('C:/icons/mirabilis.png');
-    await fireEvent.click(screen.getByRole('button', { name: 'Choose icon PNG…' }));
+    expect(screen.getByRole('heading', { name: 'Paleopedia photo' })).toBeInTheDocument();
+    expect(screen.getByText(/the Paleopedia and the Nursery's species panel/)).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Choose photo PNG…' }));
     await waitFor(() => expect(rpc.callsTo('mods.setSpeciesIcon')[0]?.params).toMatchObject({ speciesId: 'new-animal', png: 'C:/icons/mirabilis.png' }));
   });
   it('saves overrides and can reset them to inherited values', async () => {
@@ -181,6 +183,25 @@ describe('Species database', () => {
     expect(within(skins).queryByRole('button', { name: 'Render from 3D…' })).toBeNull();
     await fireEvent.click(within(skins).getByRole('button', { name: 'Open starting skin' }));
     expect(onOpenSkin).toHaveBeenCalledWith('new-animal-start');
+  });
+
+  it('Make default makes another skin the starting skin after confirming', async () => {
+    const base = modDetail();
+    const detail = modDetail({ skins: [
+      { ...base.skins[0], id: 'new-animal-start', name: 'Mine', species: 'tyrant.red-spot.new-animal', starting: true },
+      { ...base.skins[0], id: 'brown', name: 'Brown', species: 'tyrant.red-spot.new-animal', starting: false },
+    ] });
+    const { rpc, platform } = await setup([{ ...animal, startingSkinId: 'new-animal-start' } as typeof animal], {}, true, detail);
+    rpc.on('mods.makeStartingSkin', () => ({ ...detail, revision: 'r2' }));
+    const skins = screen.getByRole('region', { name: 'Skins' });
+    expect(within(skins).queryByRole('button', { name: 'Make Mine the default' })).toBeNull();
+    platform.confirmAnswer = false;
+    await fireEvent.click(within(skins).getByRole('button', { name: 'Make Brown the default' }));
+    expect(platform.confirms[0]).toContain('Mine stays as an ordinary skin');
+    expect(rpc.callsTo('mods.makeStartingSkin')).toHaveLength(0);
+    platform.confirmAnswer = true;
+    await fireEvent.click(within(skins).getByRole('button', { name: 'Make Brown the default' }));
+    await waitFor(() => expect(rpc.callsTo('mods.makeStartingSkin')[0]?.params).toMatchObject({ skin: 'brown', revision: 'r1' }));
   });
 
   it('Delete species shows what goes, then removes it with its files', async () => {

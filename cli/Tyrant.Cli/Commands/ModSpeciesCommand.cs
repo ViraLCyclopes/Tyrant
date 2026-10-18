@@ -149,3 +149,56 @@ public sealed class ModSpeciesPortraitCommand : Command<ModSpeciesPortraitComman
         return ExitCodes.Ok;
     }
 }
+
+public sealed class ModSpeciesPhotoCommand : Command<ModSpeciesPhotoCommand.Settings>
+{
+    public sealed class Settings : ModSettings
+    {
+        [CommandArgument(1, "<SPECIES-ID>")]
+        [Description("The species' id in the mod (see 'tyrant mod show').")]
+        public string SpeciesId { get; set; } = "";
+
+        [CommandOption("--png <FILE>")]
+        [Description("The photo PNG (the game's are 512x256), shown in the Paleopedia and the Nursery's species panel.")]
+        public string? Png { get; set; }
+
+        [CommandOption("--clear")]
+        [Description("Show the template's photo again.")]
+        public bool Clear { get; set; }
+    }
+
+    public override int Execute(CommandContext context, Settings settings)
+    {
+        if (settings.Clear == (settings.Png is not null))
+        {
+            Console.Error.WriteLine("Give --png or --clear (not both).");
+            return ExitCodes.Error;
+        }
+        var (ws, _) = CliServices.OpenWorkspace(settings);
+        var mod = ModProject.Open(ws, settings.Id);
+        mod.SetSpeciesIcon(settings.SpeciesId, settings.Png);
+        var photo = mod.Manifest.Species.First(s => s.Id == settings.SpeciesId).Icon;
+        Console.WriteLine(photo is null ? $"{settings.SpeciesId} uses its template's Paleopedia photo." : $"{settings.SpeciesId}: Paleopedia photo <- {photo}");
+        return ExitCodes.Ok;
+    }
+}
+
+public sealed class ModSetStartingSkinCommand : Command<ModSetStartingSkinCommand.Settings>
+{
+    public sealed class Settings : ModSettings
+    {
+        [CommandArgument(1, "<SKIN>")]
+        [Description("The skin's id in the mod (see 'tyrant mod show').")]
+        public string Skin { get; set; } = "";
+    }
+
+    public override int Execute(CommandContext context, Settings settings)
+    {
+        var (ws, _) = CliServices.OpenWorkspace(settings);
+        var (made, previous) = ModProject.Open(ws, settings.Id).MakeStartingSkin(settings.Skin);
+        Console.WriteLine($"{made.Name} is now the starting skin of {made.Species}"
+            + (previous is null ? "." : $"; {previous.Name} ({previous.Id}) is an ordinary skin."));
+        Console.WriteLine("Skins based on 0 now take what they have no PNG for from it, and animals with skin 0 in saved parks wear it.");
+        return ExitCodes.Ok;
+    }
+}

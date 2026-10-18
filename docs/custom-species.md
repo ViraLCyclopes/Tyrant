@@ -178,14 +178,17 @@ The editor provides key inputs, a language selector, and separate buttons to rev
 each text file. Legacy combined language files remain readable for compatibility,
 but new species write one plain text file per field.
 
-## Custom icons
+## Paleopedia photo
 
-Choose **Choose icon PNG…** in the species editor. Tyrant copies the PNG to
-`icons/<species-id>.png` and records its path in `animal_assets` with `slot = 'icon'`.
-It replaces that species' `heroRender`, used by the Nursery species button and info
-preview. Transparent PNGs are supported. Skin swatches (a species' starting skin swatch is set under [Skins](#skins)), and animal-info-sign backgrounds remain separate template assets. **Use template icon**
-removes the override. SQL users may supply another relative PNG path inside the mod.
-Language files and icon PNGs are included in mod exports and installs.
+The picture at the top of a species' Paleopedia page, also shown in the Nursery's species panel, is its
+photo (the game's `heroRender`; the game's photos are 512×256 PNGs). On the species page choose
+**Paleopedia photo → Choose photo PNG…**, or run
+`tyrant mod set-species-photo <MOD> <SPECIES-ID> (--png <FILE> | --clear)`. Tyrant copies the PNG to
+`icons/<species-id>.png` and records its path in `animal_assets` with `slot = 'icon'`. Transparent PNGs are
+supported. Skin swatches (a species' starting skin swatch is set under [Skins](#skins)) and animal-info-sign
+backgrounds remain separate template assets. **Use template photo** (or `--clear`) removes the override.
+SQL users may supply another relative PNG path inside the mod.
+Language files and photo PNGs are included in mod exports and installs.
 
 At runtime Tyrant reads `animals.db`, clones the template's animal data, applies
 the overrides and registers the result in PK's in-memory animal database before
@@ -214,6 +217,12 @@ colours under their own (not its model, rig or sounds: put a model meant for eve
 Delete the starting skin and the species starts with its template's game skin again. Species made before
 starting skins existed keep the template's game skin until you click **Make an editable starting skin** on the
 species page.
+
+To make another of the species' skins in the same mod its starting skin, click **Make default** beside it in the
+species page's Skins list (or `tyrant mod set-starting-skin <MOD> <SKIN>`). If the species already has a starting
+skin, what the skin took from it (PNGs for maps it has none of, colours, portraits, swatch) is copied into the skin
+first, so it looks the same; the old starting skin stays as an ordinary skin based on `0`. From then on, skins based
+on `0` take what they lack from the new starting skin, and animals placed with skin 0 in saved parks wear it.
 
 ### Species without a starting skin
 
@@ -262,6 +271,8 @@ tyrant mod add-starting-skin my-animal-pack older-animal --start-from "Allosauru
 tyrant mod add-species my-animal-pack example-animal "Allosaurus Anax" --name "Example animal" --genus Example --epithet animal --starting-skin 1 -w <workspace>
 tyrant mod set-species-skin my-animal-pack example-animal --starting-skin 0 --name "Mirabilis" --swatch swatch.png -w <workspace>
 tyrant mod add-skin other-pack tyrant.my-animal-pack.example-animal --name "Blue" -w <workspace>
+tyrant mod set-starting-skin my-animal-pack blue -w <workspace>
+tyrant mod set-species-photo my-animal-pack example-animal --png photo.png -w <workspace>
 tyrant mod remove-species my-animal-pack example-animal -w <workspace>
 ```
 

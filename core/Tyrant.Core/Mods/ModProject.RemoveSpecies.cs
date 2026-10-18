@@ -106,13 +106,12 @@ public sealed partial class ModProject
         RecycleBlender(BlenderProjectWriter.FolderOf(WorkspaceDir, Id, key, null), null, key, removed, kept);
         DeleteIfEmpty(Path.Combine(Dir, PrefabOverrides.Folder, entry.Id));
         RemoveEmptyPrefabFolder();
+        var localization = Path.Combine(Dir, "localization");
         foreach (var code in AnimalLocalization.Codes)
             foreach (var term in entry.Localization.Values)
-            {
-                var root = Path.Combine(Dir, "localization", code);
-                for (var dir = Path.GetDirectoryName(AnimalLocalization.FileFor(Dir, code, term)); dir != null && dir.Length > root.Length; dir = Path.GetDirectoryName(dir))
+                for (var dir = Path.GetDirectoryName(AnimalLocalization.FileFor(Dir, code, term)); dir != null && dir.Length > localization.Length; dir = Path.GetDirectoryName(dir))
                     if (!DeleteIfEmpty(dir)) break;
-            }
+        DeleteIfEmpty(localization);
         return new RemovedFiles(removed, kept);
     }
 
