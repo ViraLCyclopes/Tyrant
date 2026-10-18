@@ -216,9 +216,11 @@
               <button type="button" disabled={!localization[slot]} onclick={() => doc.detail && session.platform.reveal(`${doc.detail.dir}/localization/${textLanguage}/${localization[slot].replaceAll('\\', '/')}.txt`)}>Show {slot} text file</button>
             {/each}
           </div>
-          <h3>Full animal record</h3>
-          <p class="hint">Stored in animal_fields. Edit numbers, booleans, enum names and text here or with SQL. Paths follow the game's fields; reference and structural rows describe inherited assets and arrays. Purchase cost is in animal_species; the basic stats above are in animal_stats.</p>
-          <RecordTree fields={animal?.dataFields ?? []} bind:values={dataValues} />
+          <details class="advanced">
+            <summary><h3>Full animal record</h3> <span class="hint">Advanced: every field the game stores for this animal. Most species never need it.</span></summary>
+            <p class="hint">Stored in animal_fields. Edit numbers, booleans, enum names and text here or with SQL. Paths follow the game's fields; reference and structural rows describe inherited assets and arrays. Purchase cost is in animal_species; the basic stats above are in animal_stats.</p>
+            <RecordTree fields={animal?.dataFields ?? []} bind:values={dataValues} />
+          </details>
         {/if}
         <div class="actions">
           <button type="submit" class="primary" disabled={!canSave}>{busy ? 'Saving…' : creating ? 'Create species' : 'Save species'}</button>
@@ -316,5 +318,8 @@
   .skin-list { margin: 0; padding-left: 18px; }
   .skin-list li { margin: 4px 0; }
   .skin-list .small { margin-left: 8px; padding: 2px 8px; font-size: 0.85em; }
+  .advanced { margin-top: 12px; display: grid; gap: 8px; }
+  .advanced summary { cursor: pointer; }
+  .advanced summary h3 { display: inline; }
   .danger { display: grid; gap: 8px; border-top: 1px solid var(--border); padding-top: 12px; }
 </style>
