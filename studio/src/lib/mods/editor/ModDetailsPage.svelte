@@ -55,12 +55,13 @@
   <label>Author <input bind:value={author} placeholder="optional" onchange={save} /></label>
   <label>Description <textarea rows="3" bind:value={description} placeholder="One or two sentences about the mod (optional)" onchange={save}></textarea></label>
   {#if facts.current && facts.current.textures.length > 0}
-    <label>Texture compression
+    <label>Default texture compression
       <select value={facts.current.compression} onchange={(e) => doc.edit('mods.setCompression', { file: null, mode: e.currentTarget.value })}>
         <option value="auto">Match the game (DXT1/DXT5)</option>
         <option value="bc7">BC7 — best quality, twice DXT1's memory</option>
       </select>
     </label>
+    <p class="hint">Every texture uses this unless you pick its own: the box under each texture on its skin or replacement page.</p>
     <p class="hint">Textures in game: about {formatBytes(facts.current.totalBytes)}. Tyrant compresses them when it installs or exports the mod (BC7 is compressed on the graphics card, a few seconds per texture, and takes longer without one; unchanged textures are reused).</p>
     <div class="cook">
       <p class="hint">{packLine}</p>
