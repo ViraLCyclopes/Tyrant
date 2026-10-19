@@ -6,6 +6,7 @@
   import PortraitsCard from './PortraitsCard.svelte';
   import { groupNames, setGroup } from './skinGroups';
   import ColourEditor from './ColourEditor.svelte';
+  import MaterialEditor from './MaterialEditor.svelte';
   import RigEdit from './RigEdit.svelte';
   import type { ModDoc } from './modDoc.svelte';
   import RemoveSkinDialog from './RemoveSkinDialog.svelte';
@@ -120,6 +121,11 @@
 <section class="card">
   <h2>Colours</h2>
   <ColourEditor {doc} {skin} />
+</section>
+
+<section class="card">
+  <h2>Material</h2>
+  <MaterialEditor {doc} {skin} />
 </section>
 
 {#if lines.errors.length || lines.warnings.length}

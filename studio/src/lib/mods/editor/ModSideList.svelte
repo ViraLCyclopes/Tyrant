@@ -18,6 +18,7 @@
     onAddSound = () => {},
     onAddReplacement = () => {},
     onAddPrefab = () => {},
+    onAddMaterial = () => {},
   }: {
     detail: ModDetail;
     check: ModCheckReport | null;
@@ -31,6 +32,7 @@
     onAddSound?: () => void;
     onAddReplacement?: () => void;
     onAddPrefab?: () => void;
+    onAddMaterial?: () => void;
   } = $props();
 
   const problems = $derived((check?.errors.length ?? 0) + (check?.warnings.length ?? 0));
@@ -42,6 +44,12 @@
     ...(detail.prefabTargets ?? []).map((t) => t.target),
     ...(selection.kind === 'prefab' && !(detail.prefabTargets ?? []).some((t) => t.target === selection.target) ? [selection.target] : []),
   ]);
+  /** Species with material settings, and the selected one while it has none yet (as prefab settings do). */
+  const materialSpecies = $derived([
+    ...(detail.speciesMaterials ?? []).map((m) => m.species),
+    ...(selection.kind === 'material' && !(detail.speciesMaterials ?? []).some((m) => m.species.toLowerCase() === selection.species.toLowerCase()) ? [selection.species] : []),
+  ]);
+  const isMaterial = (species: string) => selection.kind === 'material' && selection.species.toLowerCase() === species.toLowerCase();
   const isSound = (s: ModSoundDto) =>
     selection.kind === 'sound' && selection.event === s.event && selection.species === s.species && selection.skin === s.skin;
   const whoHears = (s: ModSoundDto) => s.species ?? (s.skin ? `skin ${s.skin}` : 'everyone');
@@ -291,6 +299,16 @@
     <button class:on={isModel(model.target)} onclick={() => onSelect({ kind: 'model', target: model.target, skin: null })}>
       {model.target}{#if !model.file} <span class="hint">rig edit</span>{:else if model.rig} <span class="hint">+ rig edit</span>{/if}{#if model.errors.length || model.stale}<span class="count">⚠</span>{/if}
     </button>
+  {:else}
+    <p class="empty">None.</p>
+  {/each}
+
+  <div class="heading">
+    <span>Species materials ({detail.speciesMaterials?.length ?? 0})</span>
+    <button class="add" aria-label="Add species materials" onclick={onAddMaterial}>+ Add</button>
+  </div>
+  {#each materialSpecies as species (species)}
+    <button class:on={isMaterial(species)} onclick={() => onSelect({ kind: 'material', species })}>{species}</button>
   {:else}
     <p class="empty">None.</p>
   {/each}

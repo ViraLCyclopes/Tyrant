@@ -19,6 +19,8 @@ export type EditMethod =
   | 'mods.removeSkin'
   | 'mods.arrangeSkins'
   | 'mods.setColors'
+  | 'mods.setMaterials'
+  | 'mods.setMaterialFile'
   | 'mods.setSkinFile'
   | 'mods.copyBaseFile'
   | 'mods.setThumbnail'

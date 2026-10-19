@@ -201,3 +201,26 @@ describe('ModSideList prefab settings', () => {
     expect(screen.getByRole('button', { name: 'Allosaurus' })).toBeInTheDocument();
   });
 });
+
+describe('ModSideList species materials', () => {
+  it('lists species materials in their own section, not under Models; + Add asks for the form', async () => {
+    const onAddMaterial = vi.fn();
+    const session = new Session(new FakeRpc(), new FakePlatform(), memoryStore());
+    const onSelect = vi.fn();
+    const detail = modDetail({ models: [], speciesMaterials: [{ species: 'Titanoboa', materialsJson: '{"Titanoboa":{"settings":{"_Smoothness":0.5}}}' }] });
+    renderWith(ModSideList, session, { detail, check: null, selection: { kind: 'details' as const }, onSelect, onAddSkin: vi.fn(), onAddMaterial });
+    expect(screen.getByText('Models (0)')).toBeInTheDocument();
+    expect(screen.getByText('Species materials (1)')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Titanoboa' })).toHaveLength(1);
+    await fireEvent.click(screen.getByRole('button', { name: 'Titanoboa' }));
+    expect(onSelect).toHaveBeenCalledWith({ kind: 'material', species: 'Titanoboa' });
+    await fireEvent.click(screen.getByRole('button', { name: 'Add species materials' }));
+    expect(onAddMaterial).toHaveBeenCalled();
+  });
+
+  it('also lists the selected species while it has no materials yet', () => {
+    const session = new Session(new FakeRpc(), new FakePlatform(), memoryStore());
+    renderWith(ModSideList, session, { detail: modDetail(), check: null, selection: { kind: 'material' as const, species: 'Allosaurus' }, onSelect: vi.fn(), onAddSkin: vi.fn() });
+    expect(screen.getByRole('button', { name: 'Allosaurus' })).toHaveClass('on');
+  });
+});
