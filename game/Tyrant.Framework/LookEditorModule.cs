@@ -26,6 +26,7 @@ namespace Tyrant.Framework
         private static readonly List<ulong> Removed = new List<ulong>(); // OnAnimalRemoved, handled in Tick
         private static readonly List<string> Saved = new List<string>(); // OnSaveCompleted's paths, handled in Tick
         private static readonly List<string> SavesRemoved = new List<string>(); // OnSaveRemoved's paths, handled in Tick (menus too)
+        private static readonly List<(object Animal, int Tries)> PlacedNew = new List<(object, int)>(); // OnAnimalPlacedNew's animals, handled in Tick
         private static readonly HashSet<ulong> Gone = new HashSet<ulong>(); // removed since the park was loaded or saved: dropped on its save
         private static readonly HashSet<string> WriteWarned = new HashSet<string>(StringComparer.OrdinalIgnoreCase); // looks files a write failed for
         private static bool _loadedNews;
@@ -37,6 +38,15 @@ namespace Tyrant.Framework
 
         /// <summary>The park's per-animal looks, or null outside a park.</summary>
         public static AnimalLooks? Looks { get; private set; }
+
+        /// <summary>
+        /// Looks saved in the Nursery for the next animal created ("Next created"): in memory only, dropped with the park; the
+        /// animal placed to match takes its look into <see cref="Looks"/> (and this save's file).
+        /// </summary>
+        public static PendingLooks Pending { get; } = new PendingLooks();
+
+        /// <summary>How many frames a new animal is looked at again while its id or material cannot be read yet.</summary>
+        private const int PlacedTries = 120;
 
         /// <summary>True when the current save's looks file had problems: it is then never written over (the player can fix it).</summary>
         private static bool _looksUnreadable;
@@ -64,6 +74,7 @@ namespace Tyrant.Framework
                 Subscribe(AccessTools.TypeByName("PrehistoricKingdom.SaveLoadManager"), "OnSaveCompleted", nameof(OnSaveCompleted), null);
                 Subscribe(AccessTools.TypeByName("PrehistoricKingdom.SaveLoadManager"), "OnSaveRemoved", nameof(OnSaveRemoved), null);
                 Subscribe(AccessTools.TypeByName("PrehistoricKingdom.AnimalManager"), "OnAnimalRemoved", nameof(OnAnimalRemoved), null);
+                SubscribePlaced();
                 _started = true;
             }
             catch (Exception ex)
@@ -85,7 +96,11 @@ namespace Tyrant.Framework
                     LeavePark();
                     _gui = gui;
                     // GameCore clears its listeners after each invocation and on shutdown: listen again for every park.
-                    if (gui != null) Subscribe(Core, "OnLoadingProcessComplete", nameof(OnLoadingProcessComplete), null);
+                    if (gui != null)
+                    {
+                        Subscribe(Core, "OnLoadingProcessComplete", nameof(OnLoadingProcessComplete), null);
+                        SubscribePlaced(); // AnimalManager.StaticInit clears its events: listen again for every park
+                    }
                 }
                 if (gui == null)
                 {
@@ -95,6 +110,7 @@ namespace Tyrant.Framework
                 bool loaded;
                 List<ulong> removed;
                 List<string> saved;
+                List<(object Animal, int Tries)> placed;
                 lock (Gate)
                 {
                     loaded = _loadedNews;
@@ -103,11 +119,14 @@ namespace Tyrant.Framework
                     Removed.Clear();
                     saved = Saved.ToList();
                     Saved.Clear();
+                    placed = PlacedNew.ToList();
+                    PlacedNew.Clear();
                 }
                 // The game's event (once per park), or should it be missed the game saying it is fully loaded.
                 if (!_parkRead && (loaded || Property(Core, "IsFullyLoaded") is true)) ParkLoaded();
                 if (removed.Count > 0 && _parkRead) AnimalsRemoved(removed); // removals queued while loading belong to the old park
                 if (_parkRead) foreach (var path in saved) ParkSaved(path);
+                if (_parkRead) foreach (var (animal, tries) in placed) AnimalPlaced(animal, tries);
                 SavesDeleted(); // after the saves: a save converted to a new one copies its images before the old one goes
                 LookEditorWindow.Tick(gui, _parkRead);
             }
@@ -302,10 +321,65 @@ namespace Tyrant.Framework
             LookEditorWindow.AnimalsRemoved(ids);
         }
 
+        /// <summary>
+        /// A new animal was placed (created in the Nursery or bought into a vivarium): the look kept for its species, skin and
+        /// sex (<see cref="Pending"/>) becomes its own, in this save's looks file. An animal whose id or material cannot be read
+        /// yet is looked at again for a few frames.
+        /// </summary>
+        private static void AnimalPlaced(object animal, int tries)
+        {
+            if (Pending.IsEmpty || Looks == null || !IsAnimal(animal)) return;
+            var context = MaterialsModule.Describe(animal);
+            if (context == null || !(context.PersistentId is ulong id))
+            {
+                if (tries < PlacedTries) lock (Gate) PlacedNew.Add((animal, tries + 1));
+                return;
+            }
+            if (!LooksWritable)
+            {
+                if (Warned.Add("pending-unwritable"))
+                    FrameworkMod.Log.Warning($"The look saved for the next {context.Species} is kept: this save's looks file cannot be written (save the park, or fix the file).");
+                return;
+            }
+            if (!(Pending.Take(context.Species, context.SkinKey, context.Sex) is { } look)) return;
+            var before = Looks.Get(id);
+            var map = before != null ? new Dictionary<string, MaterialOverride>(before, StringComparer.Ordinal) : new Dictionary<string, MaterialOverride>(StringComparer.Ordinal);
+            foreach (var pair in look) map[pair.Key] = LookFiles.Relative(pair.Value, FrameworkMod.TyrantDirectory); // like the editor's own saves
+            Looks.Set(id, map);
+            bool written;
+            try
+            {
+                written = WriteLooks(); // also hands the store to the materials
+            }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is ManifestException)
+            {
+                FrameworkMod.Log.Warning($"The look saved for the next {context.Species} could not be written: {ex.Message}");
+                written = false;
+            }
+            if (!written)
+            {
+                Looks.Set(id, before);
+                MaterialsModule.SetAnimalLooks(Looks);
+                foreach (var pair in look) Pending.Set(context.Species, context.SkinKey, context.Sex, pair.Key, pair.Value); // kept for the next one
+                return;
+            }
+            MaterialsModule.Reapply(animal, keywords: true);
+            FrameworkMod.Log.Msg($"The look saved in the Nursery went to the new {context.Species} ({id}).");
+            LookEditorWindow.PendingTaken(context);
+        }
+
+        private static void SubscribePlaced()
+        {
+            var manager = AccessTools.TypeByName("PrehistoricKingdom.AnimalManager");
+            Subscribe(manager, "OnAnimalPlacedNew", nameof(OnAnimalPlacedNew), null);
+            Subscribe(manager, "OnVivariumAnimalPlacedNew", nameof(OnAnimalPlacedNew), null);
+        }
+
         private static void LeavePark()
         {
             if (_gui == null) return;
             LookEditorWindow.LeavePark();
+            Pending.Clear(); // never saved: a look for the next animal belongs to this park visit
             Looks = null;
             _looksUnreadable = false;
             _savePath = null;
@@ -315,6 +389,7 @@ namespace Tyrant.Framework
             {
                 Removed.Clear();
                 Saved.Clear();
+                PlacedNew.Clear();
                 _loadedNews = false;
             }
             MaterialsModule.SetAnimalLooks(null);
@@ -344,6 +419,13 @@ namespace Tyrant.Framework
             {
                 // a save whose path cannot be read keeps its looks file (harmless: nothing reads it again)
             }
+        }
+
+        // AnimalManager.OnAnimalPlacedNew (Animal) and OnVivariumAnimalPlacedNew (VivariumAnimal), from AnimalPlacementPipeline.
+        private static void OnAnimalPlacedNew(object animal)
+        {
+            if (animal == null || Pending.IsEmpty) return;
+            lock (Gate) PlacedNew.Add((animal, 0));
         }
 
         private static void OnAnimalRemoved(object animal)

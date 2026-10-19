@@ -50,6 +50,9 @@ namespace Tyrant.Framework
         // The editor's unsaved edits and the park's per-animal looks (their files resolved, per animal, while its look is the same object).
         private static readonly LiveLooks Live = new LiveLooks();
         private static readonly PreparedLooks Saved = new PreparedLooks(Prepared);
+        private static WeakReference? _previewAnimal; // SetPreviewLook's animal (a Nursery preview, gone when the Nursery is)
+        private static string? _previewMaterial;
+        private static MaterialOverride? _previewBlock;
 
         private static readonly MaterialPropertyBlock Block = new MaterialPropertyBlock();
         private static readonly List<Renderer> Renderers = new List<Renderer>();
@@ -117,6 +120,19 @@ namespace Tyrant.Framework
         public static void SetLive(LookScope scope, string key, string materialName, MaterialOverride? draft)
         {
             Live.Set(scope, key, materialName, draft == null || draft.IsEmpty ? null : Prepared(draft));
+            _sweepDue = true;
+        }
+
+        /// <summary>
+        /// The Nursery editor's Next created draft, on its preview animal (null clears): the preview has no persistent id, so
+        /// the draft is kept by the object, at the live animal layer. Only one at a time; file paths as for <see cref="SetLive"/>.
+        /// </summary>
+        public static void SetPreviewLook(object? animal, string? materialName, MaterialOverride? draft)
+        {
+            var clear = animal == null || materialName == null || draft == null || draft.IsEmpty;
+            _previewAnimal = clear ? null : new WeakReference(animal);
+            _previewMaterial = clear ? null : materialName;
+            _previewBlock = clear ? null : Prepared(draft!);
             _sweepDue = true;
         }
 
@@ -472,7 +488,8 @@ namespace Tyrant.Framework
                 var custom = CustomSpecies.TryGetValue(species, out var speciesMod) ? speciesMod : null;
                 var skinType = SkinTypeOf(members, animal);
                 return new AnimalContext(species, own ? (modId, entry.Id) : ((string, string)?)null, vanillaKey,
-                    Variants[skinType >= 0 && skinType < Variants.Length ? skinType : 0], IdOf(members, animal), material.name, source, custom);
+                    Variants[skinType >= 0 && skinType < Variants.Length ? skinType : 0], IdOf(members, animal), material.name, source, custom,
+                    members.Sex == null ? null : IsMale(members, animal) ? "male" : "female");
             }
             catch (Exception ex)
             {
@@ -787,7 +804,9 @@ namespace Tyrant.Framework
                 || (!string.IsNullOrEmpty(skinName) && _table.CoversVanillaSkinsOf(species)) || Live.CoversSpecies(species)
                 || (Live.HasSkins && Live.CoversSkin(own ? entry.Key(modId) : string.IsNullOrEmpty(skinName) || species == null ? null : species + "/" + skinName));
             var id = Live.HasAnimals || !Saved.IsEmpty ? IdOf(members, animal) : null;
-            if (!covered && !(id is ulong known && (Live.CoversAnimal(known) || Saved.Has(known)))) return null;
+            // The Nursery preview's Next created draft (it has no id of its own): by the object, while one is set.
+            var preview = _previewBlock != null && ReferenceEquals(_previewAnimal?.Target, animal);
+            if (!covered && !preview && !(id is ulong known && (Live.CoversAnimal(known) || Saved.Has(known)))) return null;
             var saved = id is ulong savedId ? Saved.Get(savedId) : null;
             if (!(members.BaseMaterial?.GetValue(animal, null) is Material material) || material == null) return null;
             var name = material.name;
@@ -801,7 +820,8 @@ namespace Tyrant.Framework
             ReportOtherNames(VanillaBlocks, resolved.VanillaKey, name);
             ReportOtherNames(SpeciesBlocks, species, name);
 
-            var liveAnimal = id is ulong animalId ? Live.Animal(animalId, name) : null;
+            var liveAnimal = preview && string.Equals(_previewMaterial, name, StringComparison.Ordinal) ? _previewBlock
+                : id is ulong animalId ? Live.Animal(animalId, name) : null;
             var savedAnimal = saved != null && saved.TryGetValue(name, out var look) ? look : null;
             var liveSkin = Live.Skin(resolved.SkinKey ?? resolved.VanillaKey, name);
             var tableSkin = resolved.SkinKey != null ? _table.Block(MaterialOwnerKind.Skin, resolved.SkinKey, name) : _table.Block(MaterialOwnerKind.VanillaSkin, resolved.VanillaKey, name);
@@ -1040,7 +1060,7 @@ namespace Tyrant.Framework
         /// <summary>Forgets the ramps and masks no table, live or saved block uses, and destroys the textures made for them.</summary>
         private static void Sweep()
         {
-            Pool.Retain(_table.Blocks.Concat(Live.Blocks).Concat(Saved.Blocks));
+            Pool.Retain(_table.Blocks.Concat(Live.Blocks).Concat(Saved.Blocks).Concat(_previewBlock == null ? Enumerable.Empty<MaterialOverride>() : new[] { _previewBlock }));
             Drop(Ramps, ramp => Pool.Contains(ramp));
             Drop(FileMasks, mask => Pool.Contains(mask));
             Drop(SlotMasks, key => Pool.Contains(key.Mask));

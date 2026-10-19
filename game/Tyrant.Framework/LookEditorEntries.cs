@@ -402,7 +402,7 @@ namespace Tyrant.Framework
             }
             var context = MaterialsModule.Describe(current);
             if (context == null) return;
-            if (EditorScopes.SameLook(context, _context))
+            if (EditorScopes.SameLook(context, _context, _scope)) // a Next created look is per sex
             {
                 if (_detached || !ReferenceEquals(current, _animal) || context.Variant != _context!.Variant) Repoint(current, context);
                 return;
@@ -412,7 +412,7 @@ namespace Tyrant.Framework
                 Select(current, keepMessage: _detached); // after a save made while it showed another look, "Saved to …" stays
                 return;
             }
-            if (_detached && EditorScopes.SameLook(context, _declined)) return; // the player kept editing
+            if (_detached && EditorScopes.SameLook(context, _declined, _scope)) return; // the player kept editing
             Confirm(FollowNow, () => Detach(current, context));
         }
 
@@ -450,7 +450,8 @@ namespace Tyrant.Framework
             ReadHeader();
             _matching = MaterialsModule.AnimalsMatching(_scope, current).ToList();
             _below = MaterialsModule.Below(current, _scope);
-            MaterialsModule.Reapply(current, keywords: true); // the draft's live edit on the new animal
+            if (NextCreated) PushLive(keywords: true); // the draft is kept by the preview object: it moves to the new one
+            else MaterialsModule.Reapply(current, keywords: true); // the draft's live edit on the new animal
             Rebuild();
         }
 
