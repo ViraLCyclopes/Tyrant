@@ -125,8 +125,9 @@ namespace Tyrant.Framework
         }
 
         /// <summary>Once a frame: finishes the loads that completed; returns the species that became ready (or failed) this frame.</summary>
-        public static List<string> Tick()
+        public static IReadOnlyList<string> Tick()
         {
+            if (Loading.Count == 0) return Array.Empty<string>(); // nothing allocated on the frames without a load
             var done = new List<string>();
             for (var i = Loading.Count - 1; i >= 0; i--)
             {
@@ -385,6 +386,10 @@ namespace Tyrant.Framework
         private static void Fail(Species s, string why)
         {
             s.Failed = true;
+            s.Preset = null;
+            foreach (var copy in new[] { s.Ramp, s.Mask })
+                if (copy != null) UnityEngine.Object.Destroy(copy); // a copy made before the failure is not used
+            s.Ramp = s.Mask = null;
             if (Warned.Add("failed|" + s.Id))
                 FrameworkMod.Log.Warning($"{s.Id}: its look could not be read ({why}); presets from it are off, and its ramp and mask references show the game's own.");
         }
