@@ -48,7 +48,8 @@ namespace Tyrant.Framework.Core
         public MaterialBlockOwner? OwnerOf(MaterialOwnerKind kind, string key, string materialName) =>
             _owners.TryGetValue(OwnerKey(kind, key, materialName), out var owner) ? owner : null;
 
-        private static string OwnerKey(MaterialOwnerKind kind, string key, string material) => (int)kind + "\n" + key + "\n" + material;
+        private static string OwnerKey(MaterialOwnerKind kind, string key, string material) =>
+            (int)kind + "\n" + (kind == MaterialOwnerKind.VanillaSkin ? key.ToUpperInvariant() : key) + "\n" + material; // vanilla keys match in any case, like _vanilla
 
         /// <summary>True when a mod sets materials for this species (any material); cheap, for animals no mod covers.</summary>
         public bool CoversSpecies(string? speciesId) => speciesId != null && _species.ContainsKey(speciesId);

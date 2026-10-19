@@ -136,7 +136,8 @@ public class MaterialTableTests
 
         var owner = table.OwnerOf(MaterialOwnerKind.Species, "Titanoboa", "Titanoboa")!;
         Assert.Equal(("mod-b", b.Directory), (owner.ModId, owner.ModDirectory));
-        Assert.Equal(("mod-c", c.Directory), (table.OwnerOf(MaterialOwnerKind.Skin, "mod-c/mine", "Titanoboa")!.ModId, table.OwnerOf(MaterialOwnerKind.Skin, "mod-c/mine", "Titanoboa")!.ModDirectory));
+        var skinOwner = table.OwnerOf(MaterialOwnerKind.Skin, "mod-c/mine", "Titanoboa")!;
+        Assert.Equal(("mod-c", c.Directory), (skinOwner.ModId, skinOwner.ModDirectory));
         Assert.Null(table.OwnerOf(MaterialOwnerKind.Species, "Titanoboa", "Eyes"));
         Assert.Null(table.OwnerOf(MaterialOwnerKind.VanillaSkin, "Titanoboa/Skin A", "Titanoboa"));
     }
@@ -153,6 +154,20 @@ public class MaterialTableTests
         Assert.Single(messages);
         var clash = Assert.Single(MaterialTable.Clashes([("mod-a", a.Manifest), ("mod-b", b.Manifest)]));
         Assert.Equal("Titanoboa/Skin A: its Titanoboa material settings are overridden by 'mod-b' (later in the load order).", clash.Message);
+    }
+
+    [Fact]
+    public void Vanilla_skin_keys_match_in_any_case_for_lookup_owner_and_clashes()
+    {
+        var a = Mod("mod-a", """{"format":1,"id":"mod-a"}""", VanillaFile("Titanoboa", "Skin A", """{"Titanoboa":{"settings":{"_Smoothness":0.1}}}"""));
+        var b = Mod("mod-b", """{"format":1,"id":"mod-b"}""", VanillaFile("Titanoboa", "skin a", """{"Titanoboa":{"settings":{"_Smoothness":0.9}}}"""));
+        var table = MaterialTable.Build([a, b], out var messages);
+
+        Assert.Equal(0.9f, table.For("Titanoboa", null, null, "Titanoboa/Skin A", "Titanoboa")!.Settings["_Smoothness"].Number);
+        Assert.Equal("mod-b", table.OwnerOf(MaterialOwnerKind.VanillaSkin, "Titanoboa/Skin A", "Titanoboa")!.ModId);
+        Assert.Equal("mod-b", table.OwnerOf(MaterialOwnerKind.VanillaSkin, "Titanoboa/skin a", "Titanoboa")!.ModId);
+        Assert.Single(messages);
+        Assert.Single(MaterialTable.Clashes([("mod-a", a.Manifest), ("mod-b", b.Manifest)]));
     }
 
     [Fact]
