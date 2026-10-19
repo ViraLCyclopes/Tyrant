@@ -39,6 +39,9 @@ public sealed record MaterialModel(string Name, IReadOnlyList<TextureSlot> Textu
     public long ShaderPathId { get; init; }
     public IReadOnlyList<string> Keywords { get; init; } = [];
     public IReadOnlyDictionary<string, float> Floats { get; init; } = new Dictionary<string, float>();
+
+    /// <summary>The material's colour properties (m_Colors), four floats (r, g, b, a) each.</summary>
+    public IReadOnlyDictionary<string, float[]> Colors { get; init; } = new Dictionary<string, float[]>();
 }
 
 /// <summary>One mesh renderer of a prefab; Bones is empty for static (MeshFilter) meshes.</summary>

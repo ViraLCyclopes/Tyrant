@@ -144,8 +144,10 @@ public sealed class GameMods(Func<GameInstall, bool>? isGameRunning = null)
             .Select(id => (id, manifests[id])).ToList();
         var clashes = ModelTable.Clashes(order);
         var prefabClashes = PrefabTable.Clashes(order.Select(o => (o.id, Path.Combine(root, o.id))).ToList());
+        var materialClashes = MaterialTable.Clashes(order);
         IEnumerable<string> ClashesOf(string id) =>
-            clashes.Where(c => c.Loser == id).Select(c => c.Message).Concat(prefabClashes.Where(c => c.Loser == id).Select(c => c.Message));
+            clashes.Where(c => c.Loser == id).Select(c => c.Message).Concat(prefabClashes.Where(c => c.Loser == id).Select(c => c.Message))
+                .Concat(materialClashes.Where(c => c.Loser == id).Select(c => c.Message));
         return result.Select(m => ClashesOf(m.Id).Any() ? m with { Clashes = ClashesOf(m.Id).ToList() } : m).ToList();
     }
 

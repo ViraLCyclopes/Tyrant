@@ -51,6 +51,18 @@ public class MaterialReaderTests
     }
 
     [Fact]
+    public void Reads_the_colour_properties()
+    {
+        var material = Obj("Base", Str("m_Name", "Acro"),
+            Obj("m_SavedProperties", Vector("m_Colors", Obj("data", Str("first", "_FresnelColor"),
+                Obj("second", F("r", 0.02f), F("g", 0.67f), F("b", 0.95f), F("a", 1))))));
+
+        var read = MaterialReader.Read(material, []);
+
+        Assert.Equal([0.02f, 0.67f, 0.95f, 1f], read.Colors["_FresnelColor"]);
+    }
+
+    [Fact]
     public void Older_materials_keep_their_keywords_in_one_string()
     {
         var material = Obj("Base", Str("m_Name", "Rock"), PPtr("m_Shader", 0, 5), Str("m_ShaderKeywords", "_ALPHATEST_ON _NORMALMAP"));

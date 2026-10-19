@@ -45,6 +45,25 @@ public class SlimCopyTests
     }
 
     [Fact]
+    public void A_ramp_png_stays_in_a_slim_install()
+    {
+        var (game, mod) = Setup();
+        using var _ = game;
+        mod.Manifest.Skins[0].Materials = new()
+        {
+            ["Carch"] = new MaterialOverride
+            {
+                Iridescence = new IridescenceSettings { Mask = new MaskSource { File = "materials/blue/mask.png" }, Ramp = new RampSource { File = "materials/blue/ramp.png" } },
+            },
+        };
+
+        var droppable = SlimCopy.Droppable(mod.Manifest);
+
+        Assert.Contains("materials/blue/mask.png", droppable);
+        Assert.DoesNotContain("materials/blue/ramp.png", droppable);
+    }
+
+    [Fact]
     public void A_replacement_texture_is_never_dropped()
     {
         // The game asks for a replacement by the kind of the material property it fills, which the cooker may only guess

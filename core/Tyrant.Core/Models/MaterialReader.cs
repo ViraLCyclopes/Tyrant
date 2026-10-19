@@ -28,6 +28,14 @@ public static class MaterialReader
         var floatArray = material["m_SavedProperties.m_Floats.Array"];
         if (!floatArray.IsDummy)
             foreach (var pair in floatArray.Children) floats[pair["first"].AsString] = pair["second"].AsFloat;
+        var colors = new Dictionary<string, float[]>(StringComparer.Ordinal);
+        var colorArray = material["m_SavedProperties.m_Colors.Array"];
+        if (!colorArray.IsDummy)
+            foreach (var pair in colorArray.Children)
+            {
+                var c = pair["second"];
+                colors[pair["first"].AsString] = [c["r"].AsFloat, c["g"].AsFloat, c["b"].AsFloat, c["a"].AsFloat];
+            }
         var name = material["m_Name"];
         return new MaterialModel(name.IsDummy ? "" : name.AsString, slots)
         {
@@ -35,6 +43,7 @@ public static class MaterialReader
             ShaderPathId = shaderFile >= 0 && shaderFile <= externals.Count ? shaderPath : 0,
             Keywords = Keywords(material),
             Floats = floats,
+            Colors = colors,
         };
     }
 

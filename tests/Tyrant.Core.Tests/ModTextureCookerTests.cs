@@ -56,6 +56,42 @@ public class ModTextureCookerTests
     }
 
     [Fact]
+    public void Material_masks_are_cooked_as_data_and_ramps_never()
+    {
+        var m = new ModManifest { Id = "red-spot" };
+        m.Skins.Add(new SkinEntry
+        {
+            Id = "blue", Species = "Carcharodontosaurus", Male = new() { ["diffuse"] = "skins/blue/male_D.png" },
+            Materials = new()
+            {
+                ["Carch"] = new MaterialOverride
+                {
+                    Iridescence = new IridescenceSettings
+                    {
+                        Mask = new MaskSource { File = "materials/blue/mask.png" },
+                        Ramp = new RampSource { File = "materials/blue/ramp.png" },
+                    },
+                },
+            },
+        });
+        m.Models.Add(new ModelReplacement
+        {
+            Target = "Carcharodontosaurus",
+            Materials = new() { ["Carch"] = new MaterialOverride { Iridescence = new IridescenceSettings { Mask = new MaskSource { File = "materials/species/mask.png" } } } },
+        });
+
+        var targets = new ModTextureCooker(Dir()).Targets(m);
+        var files = ModTextureCooker.TextureFiles(m);
+
+        Assert.Contains(new CookTarget("materials/blue/mask.png", SlotKind.Data, TextureCompression.Auto), targets);
+        Assert.Contains(new CookTarget("materials/species/mask.png", SlotKind.Data, TextureCompression.Auto), targets);
+        Assert.DoesNotContain(targets, t => t.File.Contains("ramp"));
+        Assert.Contains("materials/blue/mask.png", files);
+        Assert.Contains("materials/species/mask.png", files);
+        Assert.DoesNotContain(files, f => f.Contains("ramp"));
+    }
+
+    [Fact]
     public void Replacement_kinds_come_from_the_vanilla_skin_slot_the_texture_fills()
     {
         var assets = new[]

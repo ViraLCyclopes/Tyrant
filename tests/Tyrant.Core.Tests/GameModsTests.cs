@@ -281,4 +281,31 @@ public class GameModsTests
         Assert.Contains(list["aaa-long"].Clashes, c => c.Contains("Spinosaurus") && c.Contains("wins"));
         Assert.Empty(list["bbb-short"].Clashes);
     }
+
+    private static ModProject MaterialsMod(Workspace ws, string id)
+    {
+        var mod = Mod(ws, id, "T_A_D.png");
+        mod.Manifest.Models.Add(new ModelReplacement
+        {
+            Target = "Titanoboa",
+            Materials = new() { ["Titanoboa"] = new MaterialOverride { Iridescence = new IridescenceSettings { Scale = 1 } } },
+        });
+        mod.Save();
+        return mod;
+    }
+
+    [Fact]
+    public void Species_material_clashes_are_listed_for_the_losing_mod()
+    {
+        var (game, install, ws) = Setup();
+        using var _ = game;
+        new GameMods().Install(install, MaterialsMod(ws, "aaa-long"));
+        new GameMods().Install(install, MaterialsMod(ws, "bbb-short"));
+
+        var list = new GameMods().List(install).ToDictionary(m => m.Id);
+
+        var clash = new MaterialClash("Titanoboa", "Titanoboa", "aaa-long", "bbb-short");
+        Assert.Contains(clash.Message, list["aaa-long"].Clashes);
+        Assert.Empty(list["bbb-short"].Clashes);
+    }
 }
