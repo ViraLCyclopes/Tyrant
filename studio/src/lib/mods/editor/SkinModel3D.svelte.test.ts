@@ -13,7 +13,7 @@ import SkinModel3D from './SkinModel3D.svelte';
 
 const viewer = vi.hoisted(() => ({
   showModels: vi.fn(), setColors: vi.fn(), setAnimalMaps: vi.fn(), setSkeleton: vi.fn(), setTextures: vi.fn(), setSkin: vi.fn(),
-  setGround: vi.fn(), setSky: vi.fn(), frame: vi.fn(), dispose: vi.fn(), pause: vi.fn(), resume: vi.fn(),
+  setGround: vi.fn(), setSky: vi.fn(), frame: vi.fn(), dispose: vi.fn(), pause: vi.fn(), resume: vi.fn(), setIridescence: vi.fn(),
 }));
 vi.mock('$lib/assets/viewer', () => ({ showModels: viewer.showModels }));
 
@@ -32,7 +32,7 @@ describe('SkinModel3D (props that change)', () => {
     showModels.mockResolvedValue({ ...methods, failures: [] });
     const session = new Session(rpc, new FakePlatform(), memoryStore());
     const skin = { id: 'blue', male: { diffuse: 'skins/blue/male_D.png' } } as unknown as ModSkinDto;
-    const props = $state({ doc: { id: 'red-spot', detail: { revision: 'r1' } } as never, skin, colorsJson: null as string | null, variant: 'normal' as Variant });
+    const props = $state({ doc: { id: 'red-spot', detail: { revision: 'r1' } } as never, skin, colorsJson: null as string | null, variant: 'normal' as Variant, materialsJson: null as string | null });
     render(SkinModel3D, { props, context: new Map<symbol, unknown>([[SESSION_KEY, session], [TAB_KEY, testTab(session)]]) });
     await waitFor(() => expect(viewer.setAnimalMaps).toHaveBeenCalled());
 
@@ -42,5 +42,55 @@ describe('SkinModel3D (props that change)', () => {
     flushSync();
 
     expect((screen.getByRole('radio', { name: 'Infant' }) as HTMLInputElement).checked).toBe(true);
+  });
+
+  it('a material draft is previewed: its iridescence goes on the model with the ramp as a URL', async () => {
+    const preview = { on: true, strength: 0.25, scale: -0.25, power: -0.3, bias: 1.3, ramp: 'D:\\p\\ramp.png', mask: null, maskSt: [1, 1, 0, 0], smoothness: null };
+    const rpc = new FakeRpc()
+      .on('mods.skinModel', () => ({ prefabRef: 'acro#1', maps: { diffuse: 'D:\\m\\male_D.png' } }))
+      .on('mods.sampleColors', () => ({ a: null, b: null, secondary: null, eye: null, strength: 1, softness: 0.25, hue: 0, saturation: 0, value: 0 }))
+      .on('mods.materialPreview', () => preview)
+      .on('assets.preview', () => model);
+    viewer.setIridescence.mockReset();
+    const { showModels, ...methods } = viewer;
+    showModels.mockResolvedValue({ ...methods, failures: [] });
+    const session = new Session(rpc, new FakePlatform(), memoryStore());
+    const skin = { id: 'blue', male: { diffuse: 'skins/blue/male_D.png' } } as unknown as ModSkinDto;
+    const props = $state({ doc: { id: 'red-spot', detail: { revision: 'r1' } } as never, skin, colorsJson: null as string | null, variant: 'normal' as Variant, materialsJson: null as string | null });
+    render(SkinModel3D, { props, context: new Map<symbol, unknown>([[SESSION_KEY, session], [TAB_KEY, testTab(session)]]) });
+    // Dressed: the saved materials are previewed (no draft yet).
+    await waitFor(() => expect(viewer.setIridescence).toHaveBeenCalled());
+    expect(rpc.callsTo('mods.materialPreview')[0].params).toEqual({ id: 'red-spot', skin: 'blue', materials: null, sex: 'male' });
+
+    const draft = '{"Acro":{"iridescence":{"strength":0.25}}}';
+    props.materialsJson = draft;
+    flushSync();
+    await waitFor(() => expect(rpc.callsTo('mods.materialPreview').at(-1)!.params).toEqual({ id: 'red-spot', skin: 'blue', materials: draft, sex: 'male' }));
+    await waitFor(() => expect(viewer.setIridescence).toHaveBeenLastCalledWith(expect.objectContaining({ ramp: 'asset://D:\\p\\ramp.png', mask: null })));
+    expect(viewer.setIridescence.mock.lastCall![0].uniforms).toMatchObject({ on: true, strength: 0.25, shaping: [-0.25, -0.3, 1.3] });
+  });
+
+  it('an image re-imported under the same name (files stamp only) previews the material again', async () => {
+    const preview = { on: true, strength: 0.25, scale: -0.25, power: -0.3, bias: 1.3, ramp: 'D:\\p\\ramp.png', mask: null, maskSt: [1, 1, 0, 0], smoothness: null };
+    const rpc = new FakeRpc()
+      .on('mods.skinModel', () => ({ prefabRef: 'acro#1', maps: { diffuse: 'D:\\m\\male_D.png' } }))
+      .on('mods.sampleColors', () => ({ a: null, b: null, secondary: null, eye: null, strength: 1, softness: 0.25, hue: 0, saturation: 0, value: 0 }))
+      .on('mods.materialPreview', () => preview)
+      .on('assets.preview', () => model);
+    const { showModels, ...methods } = viewer;
+    showModels.mockResolvedValue({ ...methods, failures: [] });
+    const session = new Session(rpc, new FakePlatform(), memoryStore());
+    const skin = { id: 'blue', male: { diffuse: 'skins/blue/male_D.png' } } as unknown as ModSkinDto;
+    const props = $state({ doc: { id: 'red-spot', detail: { revision: 'r1', filesStamp: 'a' } } as { id: string; detail: { revision: string; filesStamp: string } },
+      skin, colorsJson: null as string | null, variant: 'normal' as Variant, materialsJson: null as string | null });
+    render(SkinModel3D, { props: props as never, context: new Map<symbol, unknown>([[SESSION_KEY, session], [TAB_KEY, testTab(session)]]) });
+    await waitFor(() => expect(rpc.callsTo('mods.materialPreview').length).toBeGreaterThan(0));
+    await new Promise((r) => setTimeout(r, 300)); // the draft effect's first preview settles
+    const before = rpc.callsTo('mods.materialPreview').length;
+
+    props.doc.detail.filesStamp = 'b'; // only the stamp: the PNG changed, mod.json did not
+    flushSync();
+
+    await waitFor(() => expect(rpc.callsTo('mods.materialPreview').length).toBeGreaterThan(before));
   });
 });

@@ -71,7 +71,8 @@ public sealed record ModForgetSkinsParams(IReadOnlyList<string> Keys);
 public sealed record ModSkinDto(string Id, string Key, string Species, string Name, string Base, string? Thumbnail,
     IReadOnlyDictionary<string, string>? Male, IReadOnlyDictionary<string, string>? Female, string? ColorsJson,
     IReadOnlyList<string>? BaseMaleSlots, IReadOnlyList<string>? BaseFemaleSlots, string? Model = null, IReadOnlyList<ModRigBone>? Rig = null,
-    string? Group = null, IReadOnlyDictionary<string, string>? Portraits = null, bool Starting = false, string? CopiedFromSpecies = null, int? CopiedFromSkin = null);
+    string? Group = null, IReadOnlyDictionary<string, string>? Portraits = null, bool Starting = false, string? CopiedFromSpecies = null, int? CopiedFromSkin = null,
+    string? MaterialsJson = null);
 
 /// <summary>One portrait to set: a PNG file path, or base64 PNG data (Rendered: made by the app from the 3D view). Null resets the slot.</summary>
 public sealed record ModPortraitSourceDto(string? Png = null, string? Data = null, bool Rendered = false);
@@ -131,7 +132,7 @@ public sealed record ModReplacementDto(string Texture, string? Key, string? Guid
 public sealed record ModDetail(string Id, string Name, string Version, string? Author, string? Description, string Dir, string Revision,
     string ManifestJson, IReadOnlyList<ModReplacementDto> Replace, IReadOnlyList<ModSkinDto> Skins, IReadOnlyList<ModModelDto> Models,
     IReadOnlyList<ModSoundDto> Sounds, string FilesStamp = "", IReadOnlyDictionary<string, string>? PrefabFiles = null,
-    IReadOnlyList<ModPrefabTargetDto>? PrefabTargets = null, IReadOnlyList<ModSpeciesUseDto>? UsesSpeciesFrom = null);
+    IReadOnlyList<ModPrefabTargetDto>? PrefabTargets = null, IReadOnlyList<ModSpeciesUseDto>? UsesSpeciesFrom = null, IReadOnlyList<ModSpeciesMaterialsDto>? SpeciesMaterials = null);
 
 public sealed record ModSpeciesUseDto(string ModId, string? ModName, int Skins, bool InWorkspace, bool Installed, bool Enabled);
 
@@ -221,3 +222,39 @@ public sealed record ModTexturesResult(string Compression, IReadOnlyList<ModText
 
 /// <summary>Path: the workspace's textures.tpack; null when the mod has nothing to cook.</summary>
 public sealed record ModCookResult(string Message, string? Path);
+
+/// <summary>Exactly one of Skin and Species; Materials is the "materials" JSON (null or {} removes it).</summary>
+public sealed record ModSetMaterialsParams(string Id, string Revision, string? Skin = null, string? Species = null, string? Materials = null);
+
+/// <summary>Part is "ramp" or "mask"; Png null removes the file from the material's settings.</summary>
+public sealed record ModSetMaterialFileParams(string Id, string Revision, string Material, string Part, string? Skin = null, string? Species = null, string? Png = null);
+
+public sealed record ModMaterialInfoParams(string Id, string? Skin = null, string? Species = null);
+
+/// <summary>Kind is number|color|vector; Inherited is the JSON text of the value below the edited layer; Source is game|species|starting skin|default.</summary>
+public sealed record ModMaterialProperty(string Key, string Group, string Label, string Kind, float Min, float Max, string? Inherited, string Source);
+
+/// <summary>
+/// GameIridescence: a skin's vanilla base skin's own iridescence strength in the game (0 when it has none; the stronger sex), the
+/// baseline below every mod layer; null for a species page or when the data dump cannot tell. GameHasRamp: the game material has
+/// its own ramp (and so its own shaping).
+/// </summary>
+public sealed record ModMaterialInfo(string Name, string Animal, IReadOnlyList<ModMaterialProperty> Properties, string? InheritedIridescenceJson,
+    float? GameIridescence, bool GameHasRamp, string? Problem);
+
+public sealed record ModMaterialPreviewParams(string Id, string? Skin = null, string? Species = null, string? Materials = null, string Sex = "male");
+
+/// <summary>
+/// Ramp and Mask are files in the preview cache the app may load (null: none). Smoothness multiplies the extra map's smoothness:
+/// the mod's _Smoothness over the game material's (the mod's value itself when the game has none, or 0); null when no draft or
+/// mod layer sets _Smoothness (the extra map's own is kept).
+/// </summary>
+public sealed record ModMaterialPreview(bool On, float Strength, float Scale, float Power, float Bias, string? Ramp, string? Mask,
+    IReadOnlyList<float> MaskSt, float? Smoothness);
+
+public sealed record ModThinFilmParams(double Thickness, double Index = 1.56, int Count = 32);
+
+public sealed record ModThinFilm(IReadOnlyList<string> Stops);
+
+/// <summary>A species' "materials" JSON (set in its models entry).</summary>
+public sealed record ModSpeciesMaterialsDto(string Species, string MaterialsJson);

@@ -7,4 +7,5 @@ export type Selection =
   | { kind: 'model'; target: string; skin: string | null }
   | { kind: 'sound'; event: string; species: string | null; skin: string | null }
   | { kind: 'prefab'; target: string }
+  | { kind: 'material'; species: string }
   | { kind: 'check' };

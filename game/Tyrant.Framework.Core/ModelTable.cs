@@ -99,7 +99,7 @@ namespace Tyrant.Framework.Core
             var owner = new Dictionary<string, string>(StringComparer.Ordinal);
             var clashes = new List<RigClash>();
             foreach (var (id, manifest) in enabledInLoadOrder)
-                foreach (var target in manifest.Models.Select(m => m.Target).Distinct(StringComparer.Ordinal))
+                foreach (var target in manifest.Models.Where(m => m.HasModelOrRig).Select(m => m.Target).Distinct(StringComparer.Ordinal))
                 {
                     if (owner.TryGetValue(target, out var earlier) && earlier != id) clashes.Add(new RigClash(target, earlier, id));
                     owner[target] = id;

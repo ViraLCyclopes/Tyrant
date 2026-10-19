@@ -18,7 +18,8 @@
   import type { ModDoc } from './modDoc.svelte';
   import RangeField from './RangeField.svelte';
 
-  let { doc, skin }: { doc: ModDoc; skin: ModSkinDto } = $props();
+  /** `materialsJson` is the Material card's draft for the 3D view (null: what is saved). */
+  let { doc, skin, materialsJson = null }: { doc: ModDoc; skin: ModSkinDto; materialsJson?: string | null } = $props();
   let variant = $state<Variant>('normal');
   const model = $derived(parseColors(skin.colorsJson));
   const meta = $derived(VARIANTS.find((v) => v.id === variant)!);
@@ -72,7 +73,7 @@
 </script>
 
 <div class="colours">
-  <SkinModel3D {doc} {skin} colorsJson={skin.colorsJson} {variant} />
+  <SkinModel3D {doc} {skin} colorsJson={skin.colorsJson} {variant} {materialsJson} />
   <ColourPreviewStrip {doc} {skin} colorsJson={skin.colorsJson} {variant} />
 
   <div class="variants" role="radiogroup" aria-label="Animal type">

@@ -90,6 +90,19 @@ public sealed partial class ModsMethods
         };
         return ModChecker.ForGame(install).Check(mod, index, checkSpecies,
             m.Sounds.Count > 0 ? TrySounds(ws) : null, rigInfo, id => SpeciesDatabase.Template(ws, id), prefabFields,
-            others);
+            others, AnimalMaterialOf(install));
     }
+
+    /// <summary>A prefab's animal material for Check; null when its bundle cannot be read (the name check is then skipped).</summary>
+    private Func<Tyrant.Core.Assets.AssetIndex, Tyrant.Core.Assets.AssetRecord, AnimalMaterial?> AnimalMaterialOf(Tyrant.Core.Install.GameInstall install) => (index, prefab) =>
+    {
+        try
+        {
+            return AnimalMaterial.Of(install, Options.AssetReader, index, prefab);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return null;
+        }
+    };
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { ModSampledColors, PreviewMaterial } from '$lib/rpc/types.gen';
-import { animalUniforms, planMaterial } from './viewerMaterials';
+import type { ModMaterialPreview, ModSampledColors, PreviewMaterial } from '$lib/rpc/types.gen';
+import { animalUniforms, iridescenceUniforms, planMaterial } from './viewerMaterials';
 
 const slot = (name: string, file: string | null = `D:\\p\\textures\\${name}.png`) => ({ name, texture: name, file });
 
@@ -52,5 +52,26 @@ describe('animalUniforms', () => {
     const u = animalUniforms({ a: null, b: '#0000ff', secondary: null, eye: null, strength: 1, softness: 0.25, hue: 0, saturation: 0, value: 0 });
     expect(u.colorA).toEqual([0, 0, 1]);
     expect(u.colorB).toEqual([0, 0, 1]);
+  });
+});
+
+describe('iridescenceUniforms', () => {
+  it('without a preview there is no iridescence', () => {
+    const u = iridescenceUniforms(null);
+    expect(u.on).toBe(false);
+    expect(u.strength).toBe(0);
+    expect(u.smoothness).toBeNull();
+  });
+
+  it('a preview gives its strength and its scale, power and bias as the shaping', () => {
+    const p: ModMaterialPreview = { on: true, strength: 0.25, scale: -0.25, power: -0.3, bias: 1.3, ramp: 'D:\\r.png', mask: null, maskSt: [1, 1, 0, 0], smoothness: 0.4 };
+    const u = iridescenceUniforms(p);
+    expect(u).toMatchObject({ on: true, strength: 0.25, shaping: [-0.25, -0.3, 1.3], smoothness: 0.4 });
+    expect(u.maskSt).toEqual([1, 1, 0, 0]);
+  });
+
+  it("the mask's tiling and offset are turned into the viewer's texture space (V points down)", () => {
+    const p: ModMaterialPreview = { on: true, strength: 1, scale: 1, power: 1, bias: 0, ramp: 'r', mask: 'm', maskSt: [2, 3, 0.25, 0.1], smoothness: null };
+    expect(iridescenceUniforms(p).maskSt).toEqual([2, 3, 0.25, 1 - 3 - 0.1]);
   });
 });

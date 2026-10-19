@@ -6,6 +6,7 @@
   import PortraitsCard from './PortraitsCard.svelte';
   import { groupNames, setGroup } from './skinGroups';
   import ColourEditor from './ColourEditor.svelte';
+  import MaterialEditor from './MaterialEditor.svelte';
   import RigEdit from './RigEdit.svelte';
   import type { ModDoc } from './modDoc.svelte';
   import RemoveSkinDialog from './RemoveSkinDialog.svelte';
@@ -22,6 +23,9 @@
   let namingGroup = $state(false);
   const lines = $derived(checkLinesFor(doc.check, skin.key));
   const speciesModel = $derived(doc.detail?.models.find((m) => m.skin === null && m.target === skin.species));
+  /** The Material card's draft, previewed in the Colours card's 3D view; null until it sends one (then what is saved shows). */
+  let materialDraft = $state<{ skin: string; json: string | null } | null>(null);
+  const draftJson = $derived(materialDraft?.skin === skin.id ? materialDraft.json : null);
 
   async function replaceModel() {
     const file = await session.platform.openFile(`Choose a model for ${skin.name} (.glb or .fbx)`, ['glb', 'fbx']);
@@ -119,7 +123,12 @@
 
 <section class="card">
   <h2>Colours</h2>
-  <ColourEditor {doc} {skin} />
+  <ColourEditor {doc} {skin} materialsJson={draftJson} />
+</section>
+
+<section class="card">
+  <h2>Material</h2>
+  <MaterialEditor {doc} {skin} onDraft={(json) => (materialDraft = { skin: skin.id, json })} />
 </section>
 
 {#if lines.errors.length || lines.warnings.length}

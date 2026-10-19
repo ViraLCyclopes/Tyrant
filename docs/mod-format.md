@@ -125,6 +125,95 @@ A skin can set its own colours in a `colors` section. Every part is optional; an
 - **Blue and alpha** of both maps are unused.
 - **Diffuse alpha:** below 50% is cut away (feathers and hair).
 
+## Skin materials
+
+A skin, or a whole species, can change how the animal's material looks: a rainbow sheen (**iridescence**, like a boa's
+scales) and some of the animal shader's settings. Nothing vanilla changes. In the app: open the mod, pick a skin,
+**Material**; for a whole species, **Species materials** in the side list. `tyrant mod materials` does the same from the
+command line (`--show`, `--set file.json`, `--clear`, `--ramp png`, `--mask png`).
+
+On a skin, `materials` sits beside `colors`. For a species it sits in its `models` entry (which may have no `file`):
+
+```json
+"skins": [
+  { "id": "rainbow", "species": "Titanoboa", "name": "Rainbow", "base": "0",
+    "materials": {
+      "Titanoboa": {
+        "iridescence": {
+          "strength": { "normal": 0.35, "albino": 0.2 },
+          "variation": 0.15,
+          "ramp": { "thinFilm": { "thickness": 420 } },
+          "mask": { "from": "extra", "channel": "g", "invert": false },
+          "scale": -0.25, "power": -0.3, "bias": 1.3
+        },
+        "settings": { "_Smoothness": 0.55, "_RimIntensity": 0.2, "_FresnelColor": "#40c0ff" }
+      }
+    } }
+],
+"models": [
+  { "target": "Titanoboa", "materials": { "Titanoboa": { "iridescence": { "strength": 0.4, "mask": "everywhere" } } } }
+]
+```
+
+The key under `materials` is the material's name. For now only the animal's own material works, and its name is the
+species' material name (for example `Titanoboa`); any other name is an error. Extra materials (eyes, props) come later.
+
+| Key | Meaning |
+|---|---|
+| `iridescence.strength` | A number 0–1 for every animal, or an object with `normal` (required) and optionally `albino`, `melanistic`, `leucistic`. A mutation left out uses `normal`. `0` turns iridescence off, also on skins that have it in vanilla. Leaving `iridescence` out keeps the game's settings: only some vanilla skins shimmer (Microraptor's, for example), as their own skin data says. |
+| `iridescence.variation` | 0–1. How much strength differs between animals, as a fraction of the strength (0.15: each lands within ±15 %). Default `0.15` when `strength` is set. Each animal's offset comes from its ID, so it is stable across save and load and nothing is saved. An animal without an ID (the Nursery hologram) uses the set strength. |
+| `iridescence.ramp` | The colours, along the viewing angle: a PNG in the mod (`"materials/skins/rainbow/iridescence-ramp.png"`), `{ "stops": ["#ff0000", …] }` (1 to 32 colours, evenly spaced) or `{ "thinFilm": { "thickness": 420, "index": 1.56 } }` (`thickness` 0–2000 nm, `index` 1–3, default 1.56). Left out: the game's ramp. |
+| `iridescence.mask` | Where it shows: `"everywhere"`, a PNG in the mod, or `{ "from": "extra", "channel": "g", "invert": false }` (`from` is `extra`, `pattern` or `fur`; `channel` is `r`, `g`, `b` or `a`). Left out: the game's mask. |
+| `iridescence.tiling`, `iridescence.offset` | `[x, y]`, beside `mask`: repeat and shift the mask. |
+| `iridescence.scale`, `power`, `bias` | −10 to 10. Shape the strength across the viewing angle (edge falloff, falloff curve, brightness offset). |
+| `settings` | Animal shader values, below. |
+
+**Masks and ramps:**
+- **`from` masks** work on skins only (a species has no map of its own), and only when the skin has that map in the mod:
+  its own, or its starting skin's. Otherwise Check reports an error (and in the game the whole body shimmers).
+- **Ramp PNGs** are never compressed, and slim installs keep them. **Mask PNGs** are cooked like other data maps.
+- Images imported in the app (**Import image**) or with `--ramp` / `--mask` are copied to
+  `materials/skins/<skin>/iridescence-ramp.png` and `iridescence-mask.png`, or `materials/species/<species>/…` for a species.
+- **Sharing** carries them: ramp PNGs always go in the zip; mask PNGs too, or inside `textures.tpack` when the export
+  leaves the PNGs out, and **Add mod from zip** brings them back. Removing a skin with its files sends its images to the
+  Recycle Bin.
+
+**Settings** (`settings`; numbers outside the range are errors, and a key not in this table is an error):
+
+| Key | Label in the app | Range |
+|---|---|---|
+| `_Smoothness` | Surface · Smoothness | 0–1 |
+| `_Specularity` | Surface · Specularity | 0–1 |
+| `_OcclusionStrength` | Surface · Ambient occlusion | 0–10 |
+| `_AdultNormalIntensity` | Surface · Adult normal strength | −10–10 |
+| `_InfantNormalIntensity` | Surface · Baby normal strength | −10–10 |
+| `_DetailScale` | Detail · Detail tiling | 2–4 numbers, each −100–100 |
+| `_MicroBumpStr` | Detail · Micro bump strength | 0–1 |
+| `_MicroBumpMaskedScale` | Detail · Micro bump (masked) scale | 0–1 |
+| `_RimIntensity` | Rim / fresnel · Rim light | 0–10 |
+| `_FresnelColor` | Rim / fresnel · Rim colour | a colour, `#rrggbb` |
+| `_FresnelPower` | Rim / fresnel · Rim falloff | 0–10 |
+| `_EyeEmission` | Eyes · Eye glow | 0–1 |
+| `_EyeSmoothness` | Eyes · Eye smoothness | 0–1 |
+| `_EyeSpecularity` | Eyes · Eye specularity | 0–1 |
+| `_Length` | Fur · Fur length | 0–4 |
+| `_FurWindStrength` | Fur · Fur wind strength | 0–10 |
+| `_FurWindSpeed` | Fur · Fur wind speed | 0–10 |
+| `_FurWindScale` | Fur · Fur wind scale | 0–10 |
+| `_Cutoff` | Cutout · Cutout threshold | 0–1 |
+
+**Which setting wins**, per field: the skin's, else its base (starting) skin's, else its species', else the game's. Between
+mods, the later mod in the load order wins a species' material block, and the Mods tab lists the clash (the framework logs it in the game too). Mod Check does not report it.
+
+**What it can and cannot do:**
+- The shimmer's hue follows the **viewing angle** only, not the light, and runs across the body's curve rather than
+  scale by scale. Real rainbow boas flash mostly in highlights; Tyrant approximates the look.
+- The app's 3D preview approximates the game too. A `_Smoothness` override is previewed as a multiplier on the extra map's
+  smoothness; check the real look in the game.
+- Nothing is written into parks or saves. Remove the mod and every animal is vanilla again.
+
+Materials need Tyrant Framework 0.2.0 or newer.
+
 ## Texture compression (`textures`)
 
 Tyrant compresses ("cooks") every skin texture and texture replacement when it installs or exports the mod, into one

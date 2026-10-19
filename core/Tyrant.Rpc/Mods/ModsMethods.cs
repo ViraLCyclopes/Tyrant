@@ -385,9 +385,10 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
                     s.Colors is null ? null : Tyrant.Framework.Core.Json.Write(s.Colors.ToJson()),
                     based is null ? null : ShaderSlots.Shown(based.Male.Keys.ToList(), shader),
                     based is null ? null : ShaderSlots.Shown(based.Female.Keys.ToList(), shader), s.Model, ModRigBone.Of(s.Rig), s.Group, s.Portraits,
-                    ReferenceEquals(Tyrant.Framework.Core.StartingSkins.Of(m, s.Species), s), s.CopiedFrom?.Species, s.CopiedFrom?.Skin);
+                    ReferenceEquals(Tyrant.Framework.Core.StartingSkins.Of(m, s.Species), s), s.CopiedFrom?.Species, s.CopiedFrom?.Skin,
+                    s.Materials is null ? null : Tyrant.Framework.Core.Json.Write(Tyrant.Framework.Core.MaterialOverrides.ToJson(s.Materials)));
             }).ToList(),
-            m.Models.Select(x => x.File.Length == 0
+            m.Models.Where(x => x.HasModelOrRig).Select(x => x.File.Length == 0
                     ? new ModModelDto(x.Target, null, "", [], [], [], false, null, false, ModRigBone.Of(x.Rig))
                     : ModelDto(mod, x.Target, null, x.File))
                 .Concat(m.Skins.Where(s => s.Model is not null).Select(s => ModelDto(mod, s.Species, s.Id, s.Model!)))
@@ -395,7 +396,8 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
             m.Sounds.Select(SoundDto).ToList(), mod.FilesStamp(),
             PrefabFiles: mod.PrefabFiles(),
             PrefabTargets: mod.PrefabTargets().Select(t => new ModPrefabTargetDto(t.Overrides.Target, t.File, t.Overrides.Fields.Count)).ToList(),
-            UsesSpeciesFrom: UsesOf(uses, others));
+            UsesSpeciesFrom: UsesOf(uses, others),
+            SpeciesMaterials: SpeciesMaterialsOf(m));
     }
 
     /// <summary>The other mods whose species the skins use, with whether each is here, installed and on; null for none.</summary>

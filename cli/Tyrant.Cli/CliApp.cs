@@ -158,6 +158,7 @@ public static class CliApp
                 mod.AddCommand<ModGroupCommand>("group").WithDescription("Put skins in a group in the mod editor (Tyrant only), or take them out.");
                 mod.AddCommand<ModMoveSkinCommand>("move-skin").WithDescription("Move a skin up, down or to a place within its group.");
                 mod.AddCommand<ModColorsCommand>("colors").WithDescription("Show, set (from a JSON file) or clear a skin's colours.");
+                mod.AddCommand<ModMaterialsCommand>("materials").WithDescription("Show, set (from a JSON file), clear or import images for a skin's or species' material settings.");
                 mod.AddCommand<ModSkinFileCommand>("skin-file").WithDescription("Use your PNG for one slot of a skin, or the base skin's texture.");
                 mod.AddCommand<ModThumbnailCommand>("thumbnail").WithDescription("Set a skin's swatch PNG, or let the game make one.");
                 mod.AddCommand<ModUnreplaceCommand>("unreplace").WithDescription("Stop replacing a game texture.");

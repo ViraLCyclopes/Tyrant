@@ -17,6 +17,23 @@ public sealed record VanillaSkin(int Index, string Name, IReadOnlyDictionary<str
 
     /// <summary>The same from the female variation asset.</summary>
     public IReadOnlyDictionary<string, SkinColorSet> FemaleMorphs { get; init; } = new Dictionary<string, SkinColorSet>();
+
+    /// <summary>
+    /// The male variation asset's own iridescence strength (defaultVariationData: its strength when "iridescence" is on, else 0):
+    /// what a normal animal of the skin shimmers with in the game. Null when the dump does not say.
+    /// </summary>
+    public float? MaleIridescence { get; init; }
+
+    /// <summary>The same from the female variation asset.</summary>
+    public float? FemaleIridescence { get; init; }
+
+    /// <summary>The skin's own iridescence for a sex (infants wear the male asset); null sex: the stronger of the two known.</summary>
+    public float? Iridescence(string? sex) => sex switch
+    {
+        "female" => FemaleIridescence,
+        "male" or "infant" => MaleIridescence,
+        _ => MaleIridescence is null ? FemaleIridescence : FemaleIridescence is null ? MaleIridescence : Math.Max(MaleIridescence.Value, FemaleIridescence.Value),
+    };
 }
 
 public sealed record SpeciesSkins(string SpeciesId, bool Vivarium, IReadOnlyList<VanillaSkin> Skins)
@@ -82,6 +99,8 @@ public static class SpeciesSkinsReader
                             Portraits = PortraitGuids(skin),
                             MaleMorphs = Morphs(skin, "maleVariationData", variations),
                             FemaleMorphs = Morphs(skin, "femaleVariationData", variations),
+                            MaleIridescence = IridescenceOf(Variation(skin, "maleVariationData", variations)),
+                            FemaleIridescence = IridescenceOf(Variation(skin, "femaleVariationData", variations)),
                         });
                         index++;
                     }
@@ -115,6 +134,17 @@ public static class SpeciesSkinsReader
         && variations.TryGetValue(key, out var variation)
             ? variation
             : null;
+
+    /// <summary>A variation asset's defaultVariationData: its strength when "iridescence" is on, 0 when off, null when the dump lacks it.</summary>
+    private static float? IridescenceOf(JsonElement? variation)
+    {
+        if (variation is not { } v || !v.TryGetProperty("defaultVariationData", out var data) || data.ValueKind != JsonValueKind.Object
+            || !data.TryGetProperty("iridescence", out var on) || on.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) return null;
+        if (on.ValueKind == JsonValueKind.False) return 0f;
+        return data.TryGetProperty("iridescenceStrength", out var strength) && strength.ValueKind == JsonValueKind.Number && strength.TryGetSingle(out var value)
+            ? Math.Clamp(value, 0f, 1f)
+            : null;
+    }
 
     private static IReadOnlyDictionary<string, SkinColorSet> Morphs(JsonElement skin, string field, Dictionary<long, JsonElement> variations) =>
         Variation(skin, field, variations) is { } variation ? MorphColors.Read(variation) : new Dictionary<string, SkinColorSet>();

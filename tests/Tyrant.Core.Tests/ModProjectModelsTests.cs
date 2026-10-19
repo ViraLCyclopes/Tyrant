@@ -143,6 +143,38 @@ public class ModProjectModelsTests
     }
 
     [Fact]
+    public void Replacing_a_model_keeps_the_materials_of_the_species()
+    {
+        var (game, ws, install, mod, reader, glb) = Setup();
+        using var _ = game;
+        mod.SetSpeciesMaterials(Index(), SpeciesSkinsReader.Load(ws), "carcharodontosaurus", """{"Carch":{"iridescence":{"strength":0.5}}}""");
+
+        mod.ReplaceModel(install, Index(), SpeciesSkinsReader.Load(ws), reader, glb, "Carcharodontosaurus", null, null);
+        mod.ReplaceModel(install, Index(), SpeciesSkinsReader.Load(ws), reader, glb, "Carcharodontosaurus", null, null);
+
+        var entry = Assert.Single(mod.Manifest.Models);
+        Assert.NotEqual("", entry.File);
+        Assert.Equal(0.5f, entry.Materials!["Carch"].Iridescence!.Strength!.Normal);
+    }
+
+    [Fact]
+    public void Removing_a_model_keeps_the_materials_of_its_entry()
+    {
+        var (game, ws, install, mod, reader, glb) = Setup();
+        using var _ = game;
+        mod.ReplaceModel(install, Index(), SpeciesSkinsReader.Load(ws), reader, glb, "Carcharodontosaurus", null, null);
+        mod.Manifest.Models[0].Materials = MaterialOverrides.Parse(Json.Parse("""{"Carch":{"iridescence":{"strength":0.5}}}"""), "x", false);
+
+        mod.RemoveModel("Carcharodontosaurus", null);
+
+        var entry = Assert.Single(mod.Manifest.Models);
+        Assert.Equal("", entry.File);
+        Assert.NotNull(entry.Materials);
+        mod.SetRig(install, Index(), SpeciesSkinsReader.Load(ws), reader, "Carcharodontosaurus", null, null);
+        Assert.Single(mod.Manifest.Models);
+    }
+
+    [Fact]
     public void Check_reports_a_missing_model_file()
     {
         var (game, ws, install, mod, reader, glb) = Setup();

@@ -5,8 +5,17 @@
   import { getSession } from '$lib/stores/session.svelte';
   import type { ModDoc } from './modDoc.svelte';
 
-  /** The mod editor's Prefab settings → + Add: pick the species (this mod's or the game's) whose prefab to adjust. */
-  let { doc, onDone }: { doc: Pick<ModDoc, 'id'>; onDone: (target: string | null) => void } = $props();
+  /**
+   * The mod editor's Prefab settings → + Add: pick the species (this mod's or the game's) whose prefab to adjust. Species
+   * materials → + Add uses it too, with its own words.
+   */
+  let {
+    doc,
+    onDone,
+    title = 'Add prefab settings',
+    what = 'Prefab settings',
+    opens = "the animal's prefab fields",
+  }: { doc: Pick<ModDoc, 'id'>; onDone: (target: string | null) => void; title?: string; what?: string; opens?: string } = $props();
 
   const session = getSession();
   const tab = getTab();
@@ -29,11 +38,11 @@
 </script>
 
 <section class="card">
-  <h2>Add prefab settings</h2>
+  <h2>{title}</h2>
   {#if !loaded}
     <p class="hint">Loading the species…</p>
   {:else if species && !species.hasDump && mine.length === 0}
-    <p class="hint">Prefab settings for game species need the game's data: on the Workspace tab click Run data dump, then try again.</p>
+    <p class="hint">{what} for game species need the game's data: on the Workspace tab click Run data dump, then try again.</p>
     <div class="row"><button onclick={() => onDone(null)}>Cancel</button></div>
   {:else}
     {#if species && !species.hasDump}
@@ -61,7 +70,7 @@
       <button onclick={() => onDone(null)}>Cancel</button>
       {#if !target}<span class="hint">There are no species to choose from.</span>{/if}
     </div>
-    <p class="hint">Opens the animal's prefab fields. Nothing is saved until you change one.</p>
+    <p class="hint">Opens {opens}. Nothing is saved until you change one.</p>
   {/if}
 </section>
 

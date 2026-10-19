@@ -40,6 +40,26 @@ describe('ModEditor', () => {
     expect(await screen.findByRole('heading', { name: /Prefab settings: Spinosaurus/ })).toBeInTheDocument();
   });
 
+  it('Species materials has + Add; the species it picks opens its Material card, and Remove clears it', async () => {
+    const { rpc } = setup(modDetail({ speciesMaterials: [{ species: 'Titanoboa', materialsJson: '{"Titanoboa":{"settings":{"_Smoothness":0.5}}}' }] }));
+    rpc.on('mods.species', () => ({ hasDump: true, species: [{ speciesId: 'Spinosaurus', vivarium: false, skins: [] }] }))
+      .on('mods.animalDatabase', () => ({ animals: [], fields: [] }))
+      .on('mods.materialInfo', (p) => ({ name: p.species!, animal: p.species!, properties: [], inheritedIridescenceJson: null, gameIridescence: null, gameHasRamp: false, problem: null }))
+      .on('mods.setMaterials', () => modDetail({ revision: 'r2' }));
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Add species materials' }));
+    await screen.findByRole('option', { name: 'Spinosaurus' });
+    await fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+    expect(await screen.findByRole('heading', { name: 'Species materials: Spinosaurus' })).toBeInTheDocument();
+    expect(await screen.findByText('Material: Spinosaurus')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Remove' })).toBeDisabled();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Titanoboa' }));
+    expect(await screen.findByRole('heading', { name: 'Species materials: Titanoboa' })).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+    await waitFor(() => expect(rpc.callsTo('mods.setMaterials')[0]?.params).toMatchObject({ species: 'Titanoboa', materials: null }));
+  });
+
   it('lists species models under Models and opens their page', async () => {
     setup(modDetail({ models: [{ target: 'Carcharodontosaurus', skin: null, file: 'models/carch-1a2b.glb', lods: [], errors: [], warnings: [], stale: false, origin: null, originChanged: false }] }));
 

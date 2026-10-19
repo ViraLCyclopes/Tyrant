@@ -1,4 +1,4 @@
-import type { ModSampledColors, PreviewMaterial } from '$lib/rpc/types.gen';
+import type { ModMaterialPreview, ModSampledColors, PreviewMaterial } from '$lib/rpc/types.gen';
 
 /** How the viewer dresses one material: animals get the PK animal plugin with their data maps; others keep their textures. */
 export interface MaterialPlan {
@@ -51,5 +51,30 @@ export function animalUniforms(colors: ModSampledColors | null): AnimalUniforms 
     eye: eye ?? BLACK,
     flags: [a ? 1 : 0, secondary ? 1 : 0, eye ? 1 : 0, colors ? colors.strength : 0],
     shape: [Math.max(0.01, colors?.softness ?? 0.25), colors?.hue ?? 0, colors?.saturation ?? 0, colors?.value ?? 0],
+  };
+}
+
+/** The PK animal plugin's iridescence inputs (the game's deferred add, see PkAnimalPlugin) and the smoothness override. */
+export interface IridescenceUniforms {
+  on: boolean;
+  strength: number;
+  /** scale, power, bias of the N·V falloff */
+  shaping: [number, number, number];
+  /** The mask's tiling (xy) and offset (zw) in the viewer's texture space, where V points down (the .glb's UVs are flipped). */
+  maskSt: [number, number, number, number];
+  /** Multiplies the extra map's smoothness (the mod's _Smoothness over the game's); null keeps the map's own. */
+  smoothness: number | null;
+}
+
+/** One material preview as shader inputs; null is no iridescence and no smoothness override. */
+export function iridescenceUniforms(p: ModMaterialPreview | null): IridescenceUniforms {
+  const [sx = 1, sy = 1, ox = 0, oy = 0] = p?.maskSt ?? [];
+  return {
+    on: !!p?.on,
+    strength: p?.strength ?? 0,
+    shaping: [p?.scale ?? 1, p?.power ?? 1, p?.bias ?? 0],
+    // Unity samples the mask at uv * tiling + offset with V up; here V = 1 - V(Unity), on both the UVs and the image.
+    maskSt: [sx, sy, ox, 1 - sy - oy],
+    smoothness: p?.smoothness ?? null,
   };
 }

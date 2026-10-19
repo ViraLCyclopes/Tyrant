@@ -63,8 +63,8 @@ public static class SkinDumps
             """);
         Add(Var, "Carch_Base_M", 10, """{"$type":"x","$name":"Carch_Base_M","$id":10,"adultDiffuseMap":{"m_AssetGUID":"aaaa"}}""");
         Add(Var, "Carch_Base_F", 11, """{"$type":"x","$name":"Carch_Base_F","$id":11,"adultDiffuseMap":{"m_AssetGUID":"bbbb"}}""");
-        Add(Var, "Carch_Alt1_M", 12, $$$"""{"$type":"x","$name":"Carch_Alt1_M","$id":12,"adultDiffuseMap":{"m_AssetGUID":"{{{MaleDiffuse}}}"},"adultNormalMap":{"m_AssetGUID":"{{{MaleNormal}}}"},"adultPatternMap":{"m_AssetGUID":"{{{MalePattern}}}"},"adultExtraMap":{"m_AssetGUID":""},{{{Albino}}}}""");
-        Add(Var, "Carch_Alt1_F", 13, $$$$"""{"$type":"x","$name":"Carch_Alt1_F","$id":13,"adultDiffuseMap":{"m_AssetGUID":"{{{{FemaleDiffuse}}}}"},"adultExtraMap":{"m_AssetGUID":"{{{{FemaleExtra}}}}"},"leucisticVariationData":{"patternAGradient":{"mode":"Blend","colorKeys":[{"time":0,"r":1,"g":1,"b":1,"a":1}]}}}""");
+        Add(Var, "Carch_Alt1_M", 12, $$$"""{"$type":"x","$name":"Carch_Alt1_M","$id":12,"adultDiffuseMap":{"m_AssetGUID":"{{{MaleDiffuse}}}"},"adultNormalMap":{"m_AssetGUID":"{{{MaleNormal}}}"},"adultPatternMap":{"m_AssetGUID":"{{{MalePattern}}}"},"adultExtraMap":{"m_AssetGUID":""},"defaultVariationData":{"iridescence":true,"iridescenceStrength":0.25},{{{Albino}}}}""");
+        Add(Var, "Carch_Alt1_F", 13, $$$$"""{"$type":"x","$name":"Carch_Alt1_F","$id":13,"adultDiffuseMap":{"m_AssetGUID":"{{{{FemaleDiffuse}}}}"},"adultExtraMap":{"m_AssetGUID":"{{{{FemaleExtra}}}}"},"defaultVariationData":{"iridescence":false,"iridescenceStrength":1},"leucisticVariationData":{"patternAGradient":{"mode":"Blend","colorKeys":[{"time":0,"r":1,"g":1,"b":1,"a":1}]}}}""");
         Add("PrehistoricKingdom.VivariumAnimalData", "Frog", 2, """{"$type":"PrehistoricKingdom.VivariumAnimalData","$name":"Frog","$id":2,"speciesID":"Frog","skinsData":[{"skinName":"Green"}]}""");
         DumpWriter.Write(dataDir, result, [], new DumpManifest { RequestId = "r" });
     }

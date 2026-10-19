@@ -8,6 +8,7 @@
   import type { AddedSound } from '$lib/sounds/audio';
   import AddModel from './AddModel.svelte';
   import AddPrefabTarget from './AddPrefabTarget.svelte';
+  import AddSpeciesMaterial from './AddSpeciesMaterial.svelte';
   import PrefabPage from './PrefabPage.svelte';
   import AddReplacement from './AddReplacement.svelte';
   import AddSound from './AddSound.svelte';
@@ -22,6 +23,7 @@
   import type { Selection } from './selection';
   import SkinPage from './SkinPage.svelte';
   import SoundPage from './SoundPage.svelte';
+  import SpeciesMaterialPage from './SpeciesMaterialPage.svelte';
   import SpeciesDatabase from './SpeciesDatabase.svelte';
 
   const session = getSession();
@@ -33,7 +35,7 @@
   let addingSpecies = $state<string | null>(null);
   let removingSkin = $state<string | null>(null);
   /** The form shown instead of a page: + Add on Skins, Models or Sounds. */
-  let adding = $state<'skin' | 'model' | 'sound' | 'texture' | 'prefab' | null>(null);
+  let adding = $state<'skin' | 'model' | 'sound' | 'texture' | 'prefab' | 'material' | null>(null);
 
   onMount(() => {
     void load();
@@ -202,7 +204,7 @@
     <ModSideList detail={doc.detail} check={doc.check} {selection} onSelect={(s) => { adding = null; selection = s; }}
       onAddSkin={(group) => { addingGroup = group; addingSpecies = null; adding = 'skin'; }}
       onArrange={(build) => doc.edit('mods.arrangeSkins', (d) => { const order = build(d.skins); return order ? { order } : null; })} onRemoveSkin={(id) => (removingSkin = id)} onAddModel={() => (adding = 'model')} onAddSound={() => (adding = 'sound')}
-      onAddReplacement={() => (adding = 'texture')} onAddPrefab={() => (adding = 'prefab')} />
+      onAddReplacement={() => (adding = 'texture')} onAddPrefab={() => (adding = 'prefab')} onAddMaterial={() => (adding = 'material')} />
     <section class="page">
       {#if adding === 'skin'}
         <AddSkin modId={doc.id} group={addingGroup} speciesId={addingSpecies ?? undefined} onDone={skinAdded} />
@@ -214,6 +216,8 @@
         <AddReplacement modId={doc.id} onDone={replacementAdded} />
       {:else if adding === 'prefab'}
         <AddPrefabTarget {doc} onDone={(t) => { adding = null; if (t) selection = { kind: 'prefab', target: t }; }} />
+      {:else if adding === 'material'}
+        <AddSpeciesMaterial {doc} onDone={(s) => { adding = null; if (s) selection = { kind: 'material', species: s }; }} />
       {:else if selection.kind === 'details'}
         <ModDetailsPage {doc} />
       {:else if selection.kind === 'speciesDatabase'}
@@ -234,6 +238,8 @@
         <ReplacementPage {doc} replacement={selectedReplacement} onRemoved={() => (selection = { kind: 'details' })} />
       {:else if selection.kind === 'prefab'}
         <PrefabPage {doc} target={selection.target} onRemoved={() => (selection = { kind: 'details' })} />
+      {:else if selection.kind === 'material'}
+        {#key selection.species}<SpeciesMaterialPage {doc} species={selection.species} onRemoved={() => (selection = { kind: 'details' })} />{/key}
       {:else if selection.kind === 'check'}
         <CheckPage {doc} />
       {/if}

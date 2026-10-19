@@ -2,6 +2,7 @@ import { ShaderStore } from '@babylonjs/core';
 import '@babylonjs/core/Shaders/pbr.fragment';
 import { describe, expect, it } from 'vitest';
 import { PkAnimalPlugin } from './pkAnimalPlugin';
+import { animalUniforms, iridescenceUniforms } from './viewerMaterials';
 
 // The GLSL cannot run here; these pin it against Babylon's real PBR fragment source, which is where a mistake would break
 // every animal preview in the app.
@@ -25,9 +26,64 @@ describe('PkAnimalPlugin', () => {
       if (glsl.includes('vMainUV1')) expect(glsl, point).toContain('defined(MAINUV1)');
   });
 
+  it('adds iridescence where the shader has both the normal and the view direction, outside any function', () => {
+    const glsl = Object.entries(code).filter(([, g]) => g.includes('pkRampSampler') && g.includes('normalW'));
+    expect(glsl.length).toBe(1);
+    const [point, term] = glsl[0];
+    expect(term).toContain('pow(1.0 - nv');
+    expect(term).toContain('#ifdef PK_IRID');
+    const at = source.indexOf(`#define ${point}`);
+    expect(at, point).toBeGreaterThan(source.indexOf('#include<pbrBlockNormalFinal>'));
+    expect(at, point).toBeGreaterThan(source.indexOf('vec3 surfaceAlbedo=albedoOpacityOut.surfaceAlbedo;'));
+    expect(source.indexOf('#include<pbrBlockNormalFinal>')).toBeGreaterThan(source.indexOf('void main'));
+  });
+
+  it("a material smoothness multiplies the extra map's, which it never flattens", () => {
+    const glsl = code.CUSTOM_FRAGMENT_UPDATE_METALLICROUGHNESS;
+    expect(glsl.indexOf('pkIrid2.y')).toBeGreaterThan(glsl.indexOf('pkExtraSampler'));
+    expect(glsl).toContain('1.0 - clamp(texture2D(pkExtraSampler, vMainUV1).r * pkIrid2.y, 0.0, 1.0)');
+    expect(glsl).toContain('1.0 - clamp(pkIrid2.y, 0.0, 1.0)'); // no extra map
+  });
+
+  it('without a material smoothness the extra map keeps its own (−1 is bound)', () => {
+    const bound: Record<string, number[]> = {};
+    const ubo = {
+      updateFloat3: (name: string, ...v: number[]) => (bound[name] = v),
+      updateFloat4: (name: string, ...v: number[]) => (bound[name] = v),
+      setTexture: () => {},
+    };
+    const plugin = { uniforms: animalUniforms(null), iridescence: iridescenceUniforms(null), extra: null, pattern: null, ramp: null, mask: null };
+    PkAnimalPlugin.prototype.bindForSubMesh.call(plugin as never, ubo as never);
+    expect(bound.pkIrid2[1]).toBe(-1);
+    const preview = { on: false, strength: 0, scale: 1, power: 1, bias: 0, ramp: null, mask: null, maskSt: [1, 1, 0, 0], smoothness: null };
+    PkAnimalPlugin.prototype.bindForSubMesh.call({ ...plugin, iridescence: iridescenceUniforms(preview) } as never, ubo as never);
+    expect(bound.pkIrid2[1]).toBe(-1);
+    PkAnimalPlugin.prototype.bindForSubMesh.call({ ...plugin, iridescence: iridescenceUniforms({ ...preview, smoothness: 0.4 }) } as never, ubo as never);
+    expect(bound.pkIrid2[1]).toBe(0.4);
+  });
+
+  it('a ramp turns iridescence on, with its ramp and mask samplers', () => {
+    const plugin = { ramp: {}, mask: null } as unknown as PkAnimalPlugin;
+    const defines: Record<string, boolean> = {};
+    PkAnimalPlugin.prototype.prepareDefines.call(plugin, defines as never);
+    expect(defines.PK_IRID).toBe(true);
+    expect(defines.PK_IRID_MASK).toBe(false);
+    PkAnimalPlugin.prototype.prepareDefines.call({ ramp: null, mask: null } as never, defines as never);
+    expect(defines.PK_IRID).toBe(false);
+    const samplers: string[] = [];
+    PkAnimalPlugin.prototype.getSamplers.call(plugin, samplers);
+    expect(samplers).toEqual(expect.arrayContaining(['pkRampSampler', 'pkMaskSampler']));
+    expect(Object.values(code).join('\n')).toContain('pkRampSampler');
+  });
+
+  it('declares the iridescence uniforms', () => {
+    const names = PkAnimalPlugin.prototype.getUniforms.call({}).ubo!.map((u) => u.name);
+    expect(names).toEqual(expect.arrayContaining(['pkIrid', 'pkIrid2', 'pkMaskSt']));
+  });
+
   it('a map that failed to load does not keep the animal from being drawn', () => {
     const failed = { isReady: () => false, isReadyOrNotBlocking: () => true };
-    const ready = PkAnimalPlugin.prototype.isReadyForSubMesh.call({ extra: failed, pattern: null } as never);
+    const ready = PkAnimalPlugin.prototype.isReadyForSubMesh.call({ extra: failed, pattern: null, ramp: failed, mask: null } as never);
     expect(ready).toBe(true);
   });
 });

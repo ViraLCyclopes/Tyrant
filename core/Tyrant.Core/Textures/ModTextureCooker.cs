@@ -95,10 +95,22 @@ public sealed class ModTextureCooker(string cacheDir, Func<string, SlotKind?>? r
     public static IReadOnlyList<string> TextureFiles(ModManifest manifest) =>
         manifest.Skins.SelectMany(s => (s.Male?.Values ?? Enumerable.Empty<string>()).Concat(s.Female?.Values ?? Enumerable.Empty<string>()))
             .Concat(manifest.Replace.Select(r => r.File))
+            .Concat(MaskFiles(manifest))
             .Where(f => !string.IsNullOrWhiteSpace(f))
             .Select(Normal)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
+
+    /// <summary>
+    /// The iridescence mask files of the skins' and species' material settings: data textures the framework loads from the pack.
+    /// Ramps are not here: the game samples them on the CPU and reads their PNGs directly.
+    /// </summary>
+    private static IEnumerable<string> MaskFiles(ModManifest manifest) =>
+        manifest.Skins.Select(s => s.Materials).Concat(manifest.Models.Select(m => m.Materials))
+            .Where(materials => materials is not null)
+            .SelectMany(materials => materials!.Values)
+            .Select(material => material.Iridescence?.Mask?.File)
+            .Where(file => !string.IsNullOrWhiteSpace(file))!;
 
     public IReadOnlyList<CookTarget> Targets(ModManifest manifest)
     {
@@ -116,6 +128,7 @@ public sealed class ModTextureCooker(string cacheDir, Func<string, SlotKind?>? r
                     Add(file, SkinSlotNames.KindOf(slot));
         foreach (var r in manifest.Replace)
             Add(r.File, replacementKind?.Invoke(r.Texture) ?? (NormalMap.IsCandidate(r.Texture) ? SlotKind.Normal : MaterialSwap.KindOf(r.Texture)));
+        foreach (var mask in MaskFiles(manifest)) Add(mask, SlotKind.Data);
         return targets;
     }
 

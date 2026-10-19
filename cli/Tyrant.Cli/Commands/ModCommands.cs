@@ -98,7 +98,18 @@ internal static class ModCli
         return ModChecker.ForGame(install).Check(mod, index, m.Species.Count > 0 || m.Skins.Count > 0 || m.Sounds.Count > 0 || hasPrefabs ? species : null,
             m.Sounds.Count > 0 ? TrySounds(ws) : null,
             RigInfoProvider(ws, install, species is null ? null : ModProject.WithSpecies(species, m, others?.Species)), // a skin's rig edit may be on a custom species
-            id => SpeciesDatabase.Template(ws, id), prefabFields, others: others);
+            id => SpeciesDatabase.Template(ws, id), prefabFields, others: others,
+            animalMaterialOf: (idx, prefab) =>
+            {
+                try
+                {
+                    return AnimalMaterial.Of(install, CliServices.AssetReader, idx, prefab);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    return null;
+                }
+            });
     }
 
     /// <summary>

@@ -91,6 +91,58 @@ public class ModSharingTests
         Assert.DoesNotContain(ModSharing.SharedFiles(mod), f => f.Contains("evil"));
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)] // slim: the mask is cooked, so it comes back from the pack; the ramp is never cooked
+    public void A_shared_mod_brings_its_iridescence_ramps_and_masks(bool withPngs)
+    {
+        var (game, ws, mod) = ModEditTests.Setup();
+        using var _ = game;
+        mod = ModEditTests.WithSkins(ws, mod);
+        var png = ModEditTests.Png(Path.Combine(ws.Dir, "src"));
+        var ramp = mod.SetMaterialFile("blue", null, "Carch", "ramp", png);
+        var mask = mod.SetMaterialFile("blue", null, "Carch", "mask", png);
+        const string speciesRamp = "materials/species/Carcharodontosaurus/iridescence-ramp.png";
+        ModEditTests.Png(Path.Combine(mod.Dir, "materials", "species", "Carcharodontosaurus"), "iridescence-ramp.png");
+        mod.Manifest.Models.Add(new ModelReplacement
+        {
+            Target = "Carcharodontosaurus", Key = "k", File = "",
+            Materials = new() { ["Carch"] = new MaterialOverride { Iridescence = new IridescenceSettings { Ramp = new RampSource { File = speciesRamp } } } },
+        });
+        mod.Save();
+        var zip = TempZip();
+
+        ModSharing.Export(mod, zip, "0.2.0", dir => Tyrant.Core.Textures.ModTextureCooker.For(ws, null, null).WritePack(mod.Manifest, mod.Dir, dir), includePngs: withPngs);
+
+        using (var archive = ZipFile.OpenRead(zip))
+        {
+            var names = archive.Entries.Select(e => e.FullName).ToList();
+            Assert.Contains("UserData/Tyrant/Mods/red-spot/" + ramp, names);
+            Assert.Contains("UserData/Tyrant/Mods/red-spot/" + speciesRamp, names);
+            Assert.Equal(withPngs, names.Contains("UserData/Tyrant/Mods/red-spot/" + mask)); // slim: in the pack instead
+        }
+        var imported = ModSharing.ImportReported(NewWorkspace(game), zip, replace: false);
+        Assert.Empty(imported.Warnings);
+        foreach (var file in new[] { ramp, mask, speciesRamp })
+            Assert.True(File.Exists(Path.Combine(imported.Mod.Dir, file)), file);
+    }
+
+    [Fact]
+    public void Material_images_are_shared_and_stamped_like_every_file_mod_json_names()
+    {
+        var (game, ws, mod) = ModEditTests.Setup();
+        using var _ = game;
+        mod = ModEditTests.WithSkins(ws, mod);
+        var png = ModEditTests.Png(Path.Combine(ws.Dir, "src"));
+        var ramp = mod.SetMaterialFile("blue", null, "Carch", "ramp", png);
+        var before = mod.FilesStamp();
+
+        File.SetLastWriteTimeUtc(Path.Combine(mod.Dir, ramp), DateTime.UtcNow.AddMinutes(5)); // re-imported under the same name
+
+        Assert.Contains(ramp, ModSharing.SharedFiles(mod));
+        Assert.NotEqual(before, mod.FilesStamp());
+    }
+
     private static string ZipWith(params (string Name, string Content)[] entries)
     {
         var path = TempZip();

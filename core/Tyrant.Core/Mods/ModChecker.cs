@@ -34,10 +34,12 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
         }
     }, Cutouts.GamePixels(install, new BundleAssetReader()), Cutouts.GamePixels(install, new BundleAssetReader(), onlyIfAlpha: false));
 
+    /// <param name="animalMaterialOf">A prefab's animal material (null without a reader); lets Check name-check material settings.</param>
     /// <param name="rigInfo">A species' rig info (its skeleton, bones its animations and growth move); null without the index or dump.</param>
     public ModCheckResult Check(ModProject mod, AssetIndex? index, IReadOnlyList<SpeciesSkins>? species = null, SoundCatalog? sounds = null,
         Func<string, Rigging.RigInfo?>? rigInfo = null, Func<string, SpeciesTemplateStats?>? templateStats = null,
-        Func<string, IReadOnlyList<PrefabFieldInfo>?>? prefabFields = null, OtherMods? others = null)
+        Func<string, IReadOnlyList<PrefabFieldInfo>?>? prefabFields = null, OtherMods? others = null,
+        Func<AssetIndex, AssetRecord, AnimalMaterial?>? animalMaterialOf = null)
     {
         var errors = new List<string>();
         var warnings = new List<string>();
@@ -71,7 +73,7 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
         }
         foreach (var (skin, problem) in StartingSkins.Problems(mod.Manifest)) errors.Add($"Skin {skin.Id}: {problem}");
         foreach (var skin in mod.Manifest.Skins.Where(s => s.Starting && s.CopiedFrom is not null && s.Model is null
-            && !mod.Manifest.Models.Any(m => m.Target == s.Species)))
+            && !mod.Manifest.Models.Any(m => m.Target == s.Species && m.HasModelOrRig)))
             warnings.Add($"Skin {skin.Id}: These textures fit {skin.CopiedFrom!.Species}'s model; give this skin that model (Models on its page) or they will not line up.");
         if (mod.Manifest.Species.Count > 0)
         {
@@ -171,6 +173,7 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
         foreach (var file in mod.Manifest.Textures.Overrides.Keys.Where(f => !textureFiles.Contains(f)))
             errors.Add($"Texture compression for \"{file}\": not one of the mod's textures (a skin slot or a texture replacement).");
         ColourWarnings(mod, index, species, warnings);
+        MaterialProblems(mod, index, species, animalMaterialOf, errors, warnings);
         ModelProblems(mod, species, errors, warnings);
         RigProblems(mod, rigInfo, errors, warnings);
         SoundProblems(mod, species, sounds, errors, warnings);
@@ -401,6 +404,53 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
             errors.Add($"{label}: {file} is not a readable PNG.");
             return null;
         }
+    }
+
+    private const int RampSamples = 32;
+
+    /// <summary>
+    /// Each skin's and species' material settings: ramp and mask files, a mask taken from a map the skin lacks, material names that are
+    /// not the animal's (only with the asset index and a way to read the prefab's materials), and iridescence turned off everywhere.
+    /// </summary>
+    private static void MaterialProblems(ModProject mod, AssetIndex? index, IReadOnlyList<SpeciesSkins>? species,
+        Func<AssetIndex, AssetRecord, AnimalMaterial?>? animalMaterialOf, List<string> errors, List<string> warnings)
+    {
+        var owners = mod.Manifest.Skins.Where(s => s.Materials is not null)
+            .Select(s => (Key: s.Key(mod.Id), s.Species, Skin: (SkinEntry?)s, Materials: s.Materials!))
+            .Concat(mod.Manifest.Models.Where(m => m.Materials is not null).Select(m => (Key: m.Target, Species: m.Target, Skin: (SkinEntry?)null, Materials: m.Materials!)));
+        var animals = new Dictionary<string, AnimalMaterial?>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (key, speciesId, skin, materials) in owners)
+        {
+            AnimalMaterial? animal = null;
+            if (index is not null && animalMaterialOf is not null && !animals.TryGetValue(speciesId, out animal))
+            {
+                var guid = species?.FirstOrDefault(s => string.Equals(s.SpeciesId, speciesId, StringComparison.OrdinalIgnoreCase))?.PrefabGuid;
+                var prefab = guid is null ? null : index.Assets.FirstOrDefault(a => a.Type == "GameObject" && string.Equals(a.Guid, guid, StringComparison.OrdinalIgnoreCase));
+                animals[speciesId] = animal = prefab is null ? null : animalMaterialOf(index, prefab);
+            }
+            foreach (var (name, material) in materials)
+            {
+                var isAnimals = animal is null || string.Equals(name, animal.Name, StringComparison.Ordinal);
+                if (!isAnimals) errors.Add($"{key}: {MaterialMessages.NotAnimalMaterial(name, animal!.Name)}");
+                if (material.Iridescence is not { } iridescence) continue;
+                if (iridescence.Ramp?.File is { } ramp && Image(mod, $"{key} iridescence ramp", ramp, errors) is { } rampImage && rampImage.Width < RampSamples)
+                    warnings.Add($"{key} iridescence ramp: {ramp} is {rampImage.Width} px wide; the game samples {RampSamples} or more.");
+                if (iridescence.Mask?.File is { } mask) Image(mod, $"{key} iridescence mask", mask, errors);
+                if (iridescence.Mask?.From is { } from && skin is not null && !HasSlotFile(mod, skin, from))
+                    errors.Add($"{key} iridescence mask: the skin has no {from} map in the mod; import one or use Edit a copy first.");
+                if (isAnimals && animal is not null && animal.Ramp is null && iridescence.Strength is { } strength
+                    && strength.Normal == 0 && (strength.Albino ?? 0) == 0 && (strength.Melanistic ?? 0) == 0 && (strength.Leucistic ?? 0) == 0)
+                    warnings.Add($"{key}: iridescence strength is 0 everywhere, so it is off.");
+            }
+        }
+    }
+
+    /// <summary>Whether the skin, or the starting skin it inherits from, has a PNG in the slot for either sex.</summary>
+    private static bool HasSlotFile(ModProject mod, SkinEntry skin, string slot)
+    {
+        var skins = new List<SkinEntry> { skin };
+        if (StartingSkins.InheritsFrom(mod.Manifest, skin, out var starting)) skins.Add(starting);
+        return skins.Any(s => new[] { s.Male, s.Female }.Any(files => files is not null && files.TryGetValue(slot, out var file) && !string.IsNullOrWhiteSpace(file)));
     }
 
     /// <summary>Pattern colours that could never show (no red in the pattern map); extra maps that the game would colour as eyes (red above 0.9).</summary>

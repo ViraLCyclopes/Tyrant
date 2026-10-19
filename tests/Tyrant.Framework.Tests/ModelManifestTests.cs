@@ -59,11 +59,11 @@ public class ModelManifestTests
     }
 
     [Fact]
-    public void A_species_entry_without_file_or_rig_is_refused_with_both_named()
+    public void A_species_entry_without_file_rig_or_materials_is_refused_with_all_named()
     {
         var ex = Assert.Throws<ManifestException>(() => ModManifest.Parse("""{"format":1,"id":"abc","models":[{"target":"Carcharodontosaurus","rig":{}}]}"""));
 
-        Assert.Contains("\"file\" or \"rig\"", ex.Message);
+        Assert.Contains("\"file\", \"rig\" or \"materials\"", ex.Message);
     }
 
     [Fact]
