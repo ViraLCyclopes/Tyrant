@@ -109,6 +109,25 @@ public class ModEditCliTests
     }
 
     [Fact]
+    public void Materials_show_set_clear_and_import()
+    {
+        using var game = new FakeGame();
+        var ws = WorkspaceWithSkin(game);
+        var file = Path.Combine(ws, "materials.json");
+        File.WriteAllText(file, "{\"Titanoboa\":{\"iridescence\":{\"strength\":0.3}}}");
+        var ramp = Png(Path.Combine(ws, "art", "ramp.png"));
+
+        Assert.Equal(ExitCodes.Ok, Run("mod", "materials", "red-spot", "blue", "--set", file, "-w", ws).Code);
+        Assert.Contains("\"strength\"", Run("mod", "materials", "red-spot", "blue", "--show", "-w", ws).Out);
+        Assert.Equal(ExitCodes.Ok, Run("mod", "materials", "red-spot", "blue", "--ramp", ramp, "--material", "Titanoboa", "-w", ws).Code);
+        Assert.Contains("materials/blue/iridescence-ramp.png", ModJson(ws));
+        Assert.Equal(ExitCodes.Ok, Run("mod", "materials", "red-spot", "blue", "--clear", "-w", ws).Code);
+        Assert.DoesNotContain("\"materials\"", ModJson(ws));
+        Assert.Equal(ExitCodes.Error, Run("mod", "materials", "red-spot", "blue", "-w", ws).Code); // no action
+        Assert.Equal(ExitCodes.Error, Run("mod", "materials", "red-spot", "blue", "--species", "Trex", "--show", "-w", ws).Code); // skin and species
+    }
+
+    [Fact]
     public void Skin_file_thumbnail_and_unreplace()
     {
         using var game = new FakeGame();

@@ -28,7 +28,7 @@ public sealed class ModShowCommand : Command<ModSettings>
         foreach (var s in m.Skins)
         {
             var files = (s.Male?.Count ?? 0) + (s.Female?.Count ?? 0);
-            Console.WriteLine($"  {s.Id}  \"{s.Name}\"  {s.Species}  base {s.Base}  {files} file(s)  colours: {(s.Colors is null ? "no" : "yes")}{(s.Model is null ? "" : $"  model: {s.Model}")}{(s.Group is null ? "" : $"  group: {s.Group}")}");
+            Console.WriteLine($"  {s.Id}  \"{s.Name}\"  {s.Species}  base {s.Base}  {files} file(s)  colours: {(s.Colors is null ? "no" : "yes")}  materials: {(s.Materials is null ? "no" : "yes")}{(s.Model is null ? "" : $"  model: {s.Model}")}{(s.Group is null ? "" : $"  group: {s.Group}")}");
         }
         foreach (var use in SpeciesUse.Of(m)) Console.WriteLine($"Uses species from: {use.ModId} ({use.Skins} skin(s))");
         Console.WriteLine($"Models ({m.Models.Count}):");
@@ -164,6 +164,112 @@ public sealed class ModColorsCommand : Command<ModColorsCommand.Settings>
         mod.SetColors(settings.Skin, settings.Clear ? null : File.ReadAllText(settings.Set!));
         Console.WriteLine(settings.Clear ? $"'{settings.Skin}' uses the base skin's colours." : $"Saved the colours of '{settings.Skin}'.");
         return ExitCodes.Ok;
+    }
+}
+
+public sealed class ModMaterialsCommand : Command<ModMaterialsCommand.Settings>
+{
+    public sealed class Settings : ModSettings
+    {
+        [CommandArgument(1, "[SKIN]")]
+        [Description("The skin's id (see 'tyrant mod show'); or use --species.")]
+        public string? Skin { get; set; }
+
+        [CommandOption("--species <ID>")]
+        [Description("Work on a species' material settings instead of a skin's.")]
+        public string? Species { get; set; }
+
+        [CommandOption("--show")]
+        [Description("Print the material settings as JSON.")]
+        public bool Show { get; set; }
+
+        [CommandOption("--set <FILE>")]
+        [Description("Set them from a JSON file (the \"materials\" section of mod.json).")]
+        public string? Set { get; set; }
+
+        [CommandOption("--clear")]
+        [Description("Remove them (the game's settings are used).")]
+        public bool Clear { get; set; }
+
+        [CommandOption("--ramp <PNG>")]
+        [Description("Use your PNG as the iridescence ramp of a material.")]
+        public string? Ramp { get; set; }
+
+        [CommandOption("--mask <PNG>")]
+        [Description("Use your PNG as the iridescence mask of a material.")]
+        public string? Mask { get; set; }
+
+        [CommandOption("--material <NAME>")]
+        [Description("The material for --ramp or --mask (default: the only one in the settings, else the animal's material).")]
+        public string? Material { get; set; }
+    }
+
+    public override int Execute(CommandContext context, Settings settings)
+    {
+        if ((settings.Skin is null) == (settings.Species is null))
+        {
+            Console.Error.WriteLine("Give a skin or --species (not both).");
+            return ExitCodes.Error;
+        }
+        if ((settings.Show ? 1 : 0) + (settings.Set is null ? 0 : 1) + (settings.Clear ? 1 : 0) + (settings.Ramp is null ? 0 : 1) + (settings.Mask is null ? 0 : 1) != 1)
+        {
+            Console.Error.WriteLine("Use exactly one of --show, --set <file.json>, --clear, --ramp <png> or --mask <png>.");
+            return ExitCodes.Error;
+        }
+        var (ws, install) = CliServices.OpenWorkspace(settings);
+        var mod = ModProject.Open(ws, settings.Id);
+        var who = settings.Skin ?? settings.Species!;
+        var blocks = settings.Skin is not null
+            ? mod.Skin(settings.Skin).Materials
+            : mod.Manifest.Models.FirstOrDefault(m => string.Equals(m.Target, settings.Species, StringComparison.OrdinalIgnoreCase))?.Materials;
+
+        if (settings.Show)
+        {
+            Console.WriteLine(blocks is null ? "No material settings of its own." : Json.Write(MaterialOverrides.ToJson(blocks)));
+            return ExitCodes.Ok;
+        }
+        if (settings.Set is not null || settings.Clear)
+        {
+            var json = settings.Clear ? null : File.ReadAllText(settings.Set!);
+            if (settings.Skin is not null) mod.SetSkinMaterials(settings.Skin, json);
+            else mod.SetSpeciesMaterials(CliServices.LoadIndex(ws, install), ModCli.RequireSpeciesFor(ws, install, mod), settings.Species!, json);
+            Console.WriteLine(settings.Clear ? $"'{who}' uses the game's material settings." : $"Saved the material settings of '{who}'.");
+            return ExitCodes.Ok;
+        }
+
+        var material = settings.Material;
+        if (material is null && blocks is { Count: 1 }) material = blocks.Keys.First();
+        if (material is null)
+        {
+            var index = ModCli.TryIndex(ws);
+            var dump = ModCli.TrySpecies(ws);
+            if (index is null || dump is null)
+            {
+                Console.Error.WriteLine("Name the material with --material (the animal's own cannot be found without the data dump and the asset index).");
+                return ExitCodes.Error;
+            }
+            var target = settings.Species ?? mod.Skin(settings.Skin!).Species;
+            var prefab = ModProject.ResolveModelTarget(index, mod.SpeciesFor(ws, install, dump), target, null).Prefab;
+            material = AnimalMaterial.Of(install, CliServices.AssetReader, index, prefab)?.Name;
+            if (material is null)
+            {
+                Console.Error.WriteLine("This animal has no animal-shader material; name one with --material.");
+                return ExitCodes.Error;
+            }
+        }
+        var part = settings.Ramp is not null ? "ramp" : "mask";
+        var speciesId = settings.Species;
+        if (speciesId is not null && index_Resolve(ws, install, mod, speciesId) is { } resolved) speciesId = resolved;
+        var file = mod.SetMaterialFile(settings.Skin, speciesId, material, part, settings.Ramp ?? settings.Mask);
+        Console.WriteLine($"Imported {file}.");
+        return ExitCodes.Ok;
+    }
+
+    /// <summary>The species' id as the mod stores it; null when the data is missing (the name is used as given).</summary>
+    private static string? index_Resolve(Tyrant.Core.Workspaces.Workspace ws, Tyrant.Core.Install.GameInstall install, ModProject mod, string species)
+    {
+        if (ModCli.TryIndex(ws) is not { } index || ModCli.TrySpecies(ws) is not { } dump) return null;
+        return ModProject.ResolveModelTarget(index, mod.SpeciesFor(ws, install, dump), species, null).Species;
     }
 }
 
