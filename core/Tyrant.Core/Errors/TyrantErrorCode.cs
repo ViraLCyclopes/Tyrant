@@ -34,6 +34,9 @@ public enum TyrantErrorCode
     BlenderMissing,
     BlenderFailed,
     DeleteFailed,
+
+    /// <summary>Install or remove would throw away looks the in-game editor saved into the installed copy.</summary>
+    GameLooksPending,
 }
 
 /// <summary>A suggested remedy the UI can render as a button.</summary>

@@ -7,9 +7,11 @@ namespace Tyrant.Rpc.Mods;
 /// <summary>
 /// Clashes: species whose model or rig edit a later enabled mod in the load order overrides (the game uses the later one).
 /// UsesSpeciesFrom: the other mods whose custom species its skins are for (as <see cref="ModDetail.UsesSpeciesFrom"/>); null for none.
+/// GameLooks: the in-game editor changed material folders of the installed copy that install or remove would throw away
+/// (mods.looksChanges lists them); for a mod only in the game, that it has material folders at all.
 /// </summary>
 public sealed record ModRow(string Id, string Name, string Version, string? Author, int Replacements, int Skins, string State, bool? Enabled, string? Dir, string? Error,
-    IReadOnlyList<string>? Clashes = null, IReadOnlyList<ModSpeciesUseDto>? UsesSpeciesFrom = null, string? Cooked = null);
+    IReadOnlyList<string>? Clashes = null, IReadOnlyList<ModSpeciesUseDto>? UsesSpeciesFrom = null, string? Cooked = null, bool GameLooks = false);
 
 public sealed record ModsListResult(IReadOnlyList<ModRow> Mods, bool FrameworkInstalled, bool FrameworkOutdated = false);
 
@@ -27,6 +29,17 @@ public sealed record ModImportResult(string Id, IReadOnlyList<string> Problems, 
 
 /// <summary>A mod only in the game folder (UserData/Tyrant/Mods/&lt;id&gt;), copied into the workspace.</summary>
 public sealed record ModCopyFromGameParams(string Id, bool Replace = false);
+
+/// <summary>
+/// A material folder (materials/&lt;skins, species or vanilla-skins&gt;/&lt;folder&gt;) not as installed: GameChanged when the
+/// in-game editor changed it in the installed copy, ProjectChanged when the workspace did (both: the user picks a side).
+/// </summary>
+public sealed record ModLooksChangeDto(string Folder, bool GameChanged, bool ProjectChanged);
+
+public sealed record ModLooksChanges(IReadOnlyList<ModLooksChangeDto> Changes);
+
+/// <summary>Folders: the material folders (as mods.looksChanges names them) whose game copy replaces the workspace's.</summary>
+public sealed record ModBringInLooksParams(string Id, IReadOnlyList<string> Folders);
 
 /// <summary>Pack: a textures.tpack; Out: the folder its PNGs go to (at their paths in the mod).</summary>
 public sealed record TexturesExtractParams(string Pack, string Out);

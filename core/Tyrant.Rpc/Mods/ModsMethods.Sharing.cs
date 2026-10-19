@@ -9,7 +9,7 @@ using Tyrant.Rpc.Protocol;
 
 namespace Tyrant.Rpc.Mods;
 
-/// <summary>mods.* for sharing: export a mod as a zip, import one.</summary>
+/// <summary>mods.* for sharing: export a mod as a zip, import one, and bring looks made in the game back into the workspace.</summary>
 public sealed partial class ModsMethods
 {
     [RpcMethod("mods.export", JobResult = typeof(ModExportResult))]
@@ -50,6 +50,26 @@ public sealed partial class ModsMethods
         var imported = ModSharing.CopyFromGame(ws, install, p.Id, p.Replace);
         session.Log($"Copied '{imported.Mod.Id}' from the game into the workspace.");
         return Imported(ws, install, imported);
+    }
+
+    /// <summary>The material folders the in-game editor or the workspace changed since install (the app asks before install, remove, delete and uninstall).</summary>
+    [RpcMethod("mods.looksChanges")]
+    public ModLooksChanges LooksChanges(ModIdParams p)
+    {
+        var (ws, install) = session.Current();
+        return new ModLooksChanges(GameLooks.Changes(install, ModProject.Open(ws, p.Id))
+            .Select(c => new ModLooksChangeDto(c.Folder, c.GameChanged, c.ProjectChanged)).ToList());
+    }
+
+    /// <summary>Replaces these material folders in the workspace with the game's copy (the rest of the mod stays as it is).</summary>
+    [RpcMethod("mods.bringInLooks")]
+    public ModDetail BringInLooks(ModBringInLooksParams p)
+    {
+        var (ws, install) = session.Current();
+        var mod = ModProject.Open(ws, p.Id);
+        var brought = GameLooks.BringIn(install, mod, p.Folders);
+        session.Log($"'{p.Id}': brought {brought} look folder(s) in from the game ({string.Join(", ", p.Folders)}).");
+        return DetailOf(ws, mod);
     }
 
     private ModImportResult Imported(Workspace ws, GameInstall install, ImportedMod imported)

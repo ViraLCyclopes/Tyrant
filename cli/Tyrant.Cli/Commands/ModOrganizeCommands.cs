@@ -30,6 +30,8 @@ public sealed class ModDeleteCommand : Command<ModDeleteCommand.Settings>
                 throw new TyrantException(TyrantErrorCode.ModNotFound, $"There is no mod '{settings.Id}' in this workspace ({ModProject.RootOf(ws)}).");
             Console.WriteLine($"This sends {Path.Combine(ModProject.RootOf(ws), settings.Id)} and its Blender projects to the Recycle Bin" +
                               (settings.KeepInGame ? "." : ", and removes it from the game if it is installed."));
+            if (!settings.KeepInGame && GameLooks.Changes(install, ModProject.Open(ws, settings.Id)).Where(c => c.GameChanged).ToList() is { Count: > 0 } pending)
+                Console.WriteLine($"Its copy in the game has looks made there ({GameLooks.Describe(pending)}); 'tyrant mod looks {settings.Id} --bring-in' first keeps them in the recycled folder.");
             Console.WriteLine($"Run 'tyrant mod delete {settings.Id} --yes{(settings.KeepInGame ? " --keep-in-game" : "")}' to do it.");
             return ExitCodes.Usage;
         }

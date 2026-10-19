@@ -190,6 +190,7 @@ dotnet run --project cli/Tyrant.Cli -- mod disable red-spot-carcharo -w D:\tyran
 dotnet run --project cli/Tyrant.Cli -- mod export red-spot-carcharo -w D:\tyrant-workspace   # a zip players unzip into the game folder (--with-pngs keeps the PNGs)
 dotnet run --project cli/Tyrant.Cli -- mod import red-spot-carcharo-1.0.0.zip -w D:\tyrant-workspace   # add a shared mod (--replace to overwrite)
 dotnet run --project cli/Tyrant.Cli -- mod copy-from-game red-spot-carcharo -w D:\tyrant-workspace   # a mod only in the game folder, into the workspace
+dotnet run --project cli/Tyrant.Cli -- mod looks red-spot-carcharo --bring-in -w D:\tyrant-workspace   # looks saved by the in-game editor, into the workspace (--folder <F> for some only)
 dotnet run --project cli/Tyrant.Cli -- tpack extract textures.tpack --out D:\extracted   # a cooked pack back to PNGs (no workspace needed)
 dotnet run --project cli/Tyrant.Cli -- game status -w D:\tyrant-workspace   # framework version in the game and in this Tyrant
 dotnet run --project cli/Tyrant.Cli -- game package-framework -w D:\tyrant-workspace   # the framework as a zip for players without Tyrant

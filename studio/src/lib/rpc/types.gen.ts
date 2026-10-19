@@ -511,6 +511,11 @@ export interface ModArrangeSkinsParams {
   order: ModSkinPlace[];
 }
 
+export interface ModBringInLooksParams {
+  id: string;
+  folders: string[];
+}
+
 export interface ModCheckReport {
   errors: string[];
   warnings: string[];
@@ -633,6 +638,16 @@ export interface ModImportResult {
 export interface ModInstallResult {
   message: string;
   warnings: string[];
+}
+
+export interface ModLooksChangeDto {
+  folder: string;
+  gameChanged: boolean;
+  projectChanged: boolean;
+}
+
+export interface ModLooksChanges {
+  changes: ModLooksChangeDto[];
 }
 
 export interface ModMakeStartingSkinParams {
@@ -938,6 +953,7 @@ export interface ModRow {
   clashes?: string[] | null;
   usesSpeciesFrom?: ModSpeciesUseDto[] | null;
   cooked?: string | null;
+  gameLooks?: boolean;
 }
 
 export interface ModSampleColorsParams {
@@ -1585,6 +1601,7 @@ export interface RpcMethods {
   "mods.addStartingSkin": { params: ModAddStartingSkinParams; result: ModDetail };
   "mods.animalDatabase": { params: ModIdParams; result: ModAnimalDatabase };
   "mods.arrangeSkins": { params: ModArrangeSkinsParams; result: ModDetail };
+  "mods.bringInLooks": { params: ModBringInLooksParams; result: ModDetail };
   "mods.check": { params: ModIdParams; result: ModCheckReport };
   "mods.clearRig": { params: ModClearRigParams; result: ModDetail };
   "mods.colorPreview": { params: ModColorPreviewParams; result: ModPreviewFiles };
@@ -1602,6 +1619,7 @@ export interface RpcMethods {
   "mods.import": { params: ModImportParams; result: ModImportResult };
   "mods.install": { params: ModIdParams; result: JobStarted };
   "mods.list": { params: void; result: ModsListResult };
+  "mods.looksChanges": { params: ModIdParams; result: ModLooksChanges };
   "mods.makeStartingSkin": { params: ModMakeStartingSkinParams; result: ModDetail };
   "mods.materialInfo": { params: ModMaterialInfoParams; result: ModMaterialInfo };
   "mods.materialPreview": { params: ModMaterialPreviewParams; result: ModMaterialPreview };

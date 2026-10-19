@@ -1,6 +1,10 @@
 using System.ComponentModel;
 using Spectre.Console.Cli;
+using Tyrant.Core.Dumping;
+using Tyrant.Core.Errors;
+using Tyrant.Core.Install;
 using Tyrant.Core.Mods;
+using Tyrant.Core.Workspaces;
 using Tyrant.Core.Textures;
 using Tyrant.Framework.Core;
 
@@ -92,5 +96,83 @@ public sealed class ModCopyFromGameCommand : Command<ModCopyFromGameCommand.Sett
         var imported = ModSharing.CopyFromGame(ws, install, settings.Id, settings.Replace);
         Console.WriteLine($"Copied '{imported.Mod.Id}' from the game into the workspace (mods\\{imported.Mod.Id}).");
         return ModImportCommand.Report(ws, install, imported);
+    }
+}
+
+/// <summary>tyrant mod looks: the material folders the in-game editor (or the workspace) changed since install, and bringing them in.</summary>
+public sealed class ModLooksCommand : Command<ModLooksCommand.Settings>
+{
+    public sealed class Settings : ModSettings
+    {
+        [CommandOption("--bring-in")]
+        [Description("Replace the workspace's material folders with the game's copy (every folder changed in the game, or the --folder ones).")]
+        public bool BringIn { get; set; }
+
+        [CommandOption("--folder <FOLDER>")]
+        [Description("A material folder to bring in, as listed (e.g. materials/species/Carcharodontosaurus); repeat for more.")]
+        public string[] Folders { get; set; } = [];
+
+        public override Spectre.Console.ValidationResult Validate() =>
+            Folders.Length > 0 && !BringIn ? Spectre.Console.ValidationResult.Error("--folder needs --bring-in.") : base.Validate();
+    }
+
+    public override int Execute(CommandContext context, Settings settings)
+    {
+        var (ws, install) = CliServices.OpenWorkspace(settings);
+        var mod = ModProject.Open(ws, settings.Id);
+        var changes = GameLooks.Changes(install, mod);
+        if (settings.BringIn)
+        {
+            var folders = settings.Folders.Length > 0 ? settings.Folders : changes.Where(c => c.GameChanged).Select(c => c.Folder).ToArray();
+            if (folders.Length == 0)
+            {
+                Console.WriteLine($"No looks in the game differ from '{mod.Id}' in the workspace; nothing to bring in.");
+                return ExitCodes.Ok;
+            }
+            var brought = GameLooks.BringIn(install, mod, folders);
+            foreach (var folder in folders) Console.WriteLine($"  brought in  {folder}");
+            Console.WriteLine($"Brought {brought} look folder(s) from the game into '{mod.Id}' (mods\\{mod.Id}).");
+            return ExitCodes.Ok;
+        }
+        if (changes.Count == 0)
+        {
+            Console.WriteLine($"The looks of '{mod.Id}' in the game are as installed.");
+            return ExitCodes.Ok;
+        }
+        var width = changes.Max(c => c.Folder.Length);
+        foreach (var change in changes)
+            Console.WriteLine($"  {change.Folder.PadRight(width)}  changed {(change.GameChanged && change.ProjectChanged ? "in the game and in the project" : change.GameChanged ? "in the game" : "in the project")}");
+        if (changes.Any(c => c.GameChanged))
+            Console.WriteLine($"Bring the game's into the workspace with 'tyrant mod looks {mod.Id} --bring-in' (add --folder <FOLDER> for some only); installing or removing the mod would throw them away.");
+        return ExitCodes.Ok;
+    }
+}
+
+/// <summary>Install and remove: refused while the installed copy has looks made in the game, unless they are brought in or let go.</summary>
+internal static class GameLooksCli
+{
+    public static void Settle(GameInstall install, ModProject mod, GameLooksSettings settings, string action)
+    {
+        var pending = GameLooks.Changes(install, mod).Where(c => c.GameChanged).ToList();
+        if (pending.Count == 0 || settings.DiscardGameLooks) return;
+        if (!settings.BringInLooks)
+            throw new TyrantException(TyrantErrorCode.GameLooksPending,
+                $"'{mod.Id}' in the game has looks made there ({GameLooks.Describe(pending)}) that {action} would throw away. " +
+                $"Add --bring-in-looks to bring them into the workspace first (or run 'tyrant mod looks {mod.Id} --bring-in'), or --discard-game-looks to let them go.");
+        GameLooks.BringIn(install, mod, pending.Select(c => c.Folder).ToList());
+        Console.WriteLine($"Brought the looks made in the game into the workspace: {GameLooks.Describe(pending)}.");
+    }
+
+    /// <summary>A mod only in the game (such as Vanilla Looks) with material folders, so looks made there: --bring-in-looks copies it into the workspace first.</summary>
+    public static void SettleGameOnly(Workspace ws, GameInstall install, GameLooksSettings settings)
+    {
+        var installed = Path.Combine(ModLoaderInstaller.ModsDir(install), settings.Id);
+        if (!ModId.IsValid(settings.Id) || !Directory.Exists(installed) || !GameLooks.HasMaterials(installed) || settings.DiscardGameLooks) return;
+        if (!settings.BringInLooks)
+            throw new TyrantException(TyrantErrorCode.GameLooksPending,
+                $"'{settings.Id}' is only in the game and holds looks made there; removing it would throw them away. " +
+                $"Add --bring-in-looks to copy it into the workspace first (as 'tyrant mod copy-from-game {settings.Id}'), or --discard-game-looks to let them go.");
+        ModSharing.CopyFromGame(ws, install, settings.Id, replace: false);
+        Console.WriteLine($"Copied '{settings.Id}' from the game into the workspace (mods\\{settings.Id}).");
     }
 }

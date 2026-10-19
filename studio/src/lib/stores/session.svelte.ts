@@ -1,6 +1,7 @@
 import { getContext, setContext } from 'svelte';
 import { RpcError, asRpcError, type JobMethod, type ParamsOf, type Rpc } from '$lib/rpc/client';
-import type { DumpRunResult, InstallInfo, RefreshAllResult, RpcJobs, WorkspaceStatus } from '$lib/rpc/types.gen';
+import type { DumpRunResult, InstallInfo, ModLooksChangeDto, ModRow, RefreshAllResult, RpcJobs, WorkspaceStatus } from '$lib/rpc/types.gen';
+import { keepGameLooks } from '$lib/mods/modActions';
 import type { Platform } from '$lib/platform';
 import type { KeyValueStore } from '$lib/storage';
 import { toLevel } from '$lib/shell/log';
@@ -15,6 +16,27 @@ const MAX_RECENT = 5;
 
 export const START_GAME_WARNING =
   'This starts Prehistoric Kingdom through Steam, reads its game data at the main menu and closes it again (about a minute). Continue?';
+
+/** One mod in the Bring in looks dialog: the folders the in-game editor changed, or (gameOnly) a mod only in the game with looks made there. */
+export interface LooksPromptMod {
+  id: string;
+  name: string;
+  changes: ModLooksChangeDto[];
+  gameOnly: boolean;
+}
+
+/** What to keep: per mod, the material folders whose game copy comes into the workspace; and the game-only mods to copy there. */
+export interface LooksAnswer {
+  bringIn: Record<string, string[]>;
+  copy: string[];
+}
+
+/** The Bring in looks dialog (shown by the shell) while an action waits for its answer; null answers Cancel. */
+export interface LooksPrompt {
+  action: string;
+  mods: LooksPromptMod[];
+  answer: (answer: LooksAnswer | null) => void;
+}
 
 export interface ActiveJob {
   id: string | null;
@@ -34,6 +56,8 @@ export class Session {
   job = $state<ActiveJob | null>(null);
   recent = $state<string[]>([]);
   ready = $state(false);
+  /** Looks made in the game that an install, remove, delete or uninstall would throw away, while the user picks what to keep. */
+  looksPrompt = $state.raw<LooksPrompt | null>(null);
   /** The workspace action that failed last, so an error's fix button repeats it on the right folder. */
   private lastFailed: { kind: 'open' | 'create'; dir: string } | null = null;
 
@@ -268,14 +292,31 @@ export class Session {
     return this.runJob('dump.run', { timeoutSeconds: 300 }, 'Data dump', tab);
   }
 
+  /** Shows the Bring in looks dialog; resolves with what to keep, or null when cancelled. */
+  askLooks(action: string, mods: LooksPromptMod[]): Promise<LooksAnswer | null> {
+    this.looksPrompt?.answer(null); // one at a time: an older question counts as cancelled
+    return new Promise((resolve) => {
+      const prompt: LooksPrompt = {
+        action,
+        mods,
+        answer: (answer) => {
+          if (this.looksPrompt === prompt) this.looksPrompt = null;
+          resolve(answer);
+        },
+      };
+      this.looksPrompt = prompt;
+    });
+  }
+
   /** Removes Tyrant from the game after asking: this also deletes every installed mod, some of which may exist nowhere else. */
   async uninstallDumper(tab?: Tab): Promise<void> {
-    let installed: { state: string }[] = [];
+    let installed: ModRow[] = [];
     try {
       installed = (await this.rpc.call('mods.list')).mods.filter((m) => m.state !== 'notInstalled');
     } catch {
       // no workspace mods to describe; the question below still covers what is removed
     }
+    if (tab && !(await keepGameLooks(this, tab, installed, 'Uninstalling Tyrant from the game'))) return;
     const gameOnly = installed.filter((m) => m.state === 'gameOnly').length;
     const message = [
       "Remove Tyrant from the game? This removes Tyrant's dumper and framework, and MelonLoader if Tyrant installed it and no other mods use it.",
@@ -283,6 +324,7 @@ export class Session {
         ? `It also removes ${installed.length} installed mod(s)${gameOnly ? `; ${gameOnly} of them ${gameOnly === 1 ? 'is' : 'are'} not in this workspace, so Tyrant cannot reinstall ${gameOnly === 1 ? 'it' : 'them'}` : ''}.`
         : '',
       'Mods in your workspace stay; you can install them again.',
+      "Your animals' looks saved in parks (UserData\\Tyrant\\Looks) stay too.",
     ].filter(Boolean).join(' ');
     if (!(await this.platform.confirm(message, 'Uninstall from game'))) return;
     const result = tab ? await tab.safely(() => this.rpc.call('dump.uninstall')) : await this.safely(() => this.rpc.call('dump.uninstall'));

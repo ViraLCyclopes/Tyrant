@@ -88,6 +88,7 @@ public sealed class GameMods(Func<GameInstall, bool>? isGameRunning = null)
         if (at >= 0) entries[at] = new ModListEntry(mod.Id, true);
         else entries.Add(new ModListEntry(mod.Id, true));
         WriteList(install, entries);
+        GameLooks.Stamp(install, mod.Id, target); // what went in, so looks the in-game editor saves later can be told apart
     }
 
     public void Remove(GameInstall install, string id)
@@ -100,6 +101,7 @@ public sealed class GameMods(Func<GameInstall, bool>? isGameRunning = null)
             throw new TyrantException(TyrantErrorCode.ModNotFound, $"'{id}' is not installed in the game.");
         if (Directory.Exists(target)) Directory.Delete(target, recursive: true);
         WriteList(install, entries);
+        GameLooks.Forget(install, id);
     }
 
     public void SetEnabled(GameInstall install, string id, bool enabled)
@@ -240,7 +242,7 @@ public sealed class GameMods(Func<GameInstall, bool>? isGameRunning = null)
         catch (ManifestException) { return FileHash(path); }
     }
 
-    private static byte[] FileHash(string path)
+    internal static byte[] FileHash(string path)
     {
         var info = new FileInfo(path);
         if (FileHashCache.TryGetValue(path, out var cached) && cached.Length == info.Length && cached.Written == info.LastWriteTimeUtc) return cached.Hash;

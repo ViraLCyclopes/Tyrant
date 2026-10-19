@@ -417,6 +417,51 @@ public class ModLoaderInstallerTests
         Assert.False(ModLoaderInstaller.HasFramework(install));
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)] // MelonLoader was there before: only Tyrant goes
+    public void Uninstall_keeps_the_looks_folder(bool installsLoader)
+    {
+        using var game = new FakeGame();
+        var (zip, sha) = FakeMelonLoaderZip();
+        var install = new GameInstall(game.Root, null);
+        if (!installsLoader) FakeExistingMelonLoader(game);
+        new ModLoaderInstaller(sha).Install(install, installsLoader ? zip : null, FakeGameModsDir());
+        var mod = Path.Combine(ModLoaderInstaller.ModsDir(install), "vanilla-looks");
+        Directory.CreateDirectory(mod);
+        File.WriteAllText(Path.Combine(mod, "mod.json"), "{}");
+        var looks = Path.Combine(ModLoaderInstaller.RecordDir(install), "Looks");
+        Directory.CreateDirectory(Path.Combine(looks, "My Park", "12"));
+        File.WriteAllText(Path.Combine(looks, "My Park.json"), "{}");
+        File.WriteAllText(Path.Combine(looks, "My Park", "12", "fur-mask.png"), "png");
+        File.WriteAllText(Path.Combine(ModLoaderInstaller.RecordDir(install), "install-stamps.json"), "{}");
+
+        var result = new ModLoaderInstaller(sha).Uninstall(install);
+
+        Assert.Equal(installsLoader, result.RemovedLoader);
+        Assert.True(File.Exists(Path.Combine(looks, "My Park.json")));
+        Assert.True(File.Exists(Path.Combine(looks, "My Park", "12", "fur-mask.png")));
+        Assert.Equal([looks], Directory.GetFileSystemEntries(ModLoaderInstaller.RecordDir(install)));
+        Assert.False(ModLoaderInstaller.HasFramework(install));
+        Assert.Equal(installsLoader ? InstallState.NotInstalled : InstallState.LoaderOnly, ModLoaderInstaller.GetState(install));
+        Assert.Contains("UserData\\Tyrant\\Looks", ModLoaderInstaller.UninstallSummary(result));
+    }
+
+    [Fact]
+    public void Uninstall_removes_an_empty_looks_folder()
+    {
+        using var game = new FakeGame();
+        var (zip, sha) = FakeMelonLoaderZip();
+        var install = new GameInstall(game.Root, null);
+        new ModLoaderInstaller(sha).Install(install, zip, FakeGameModsDir());
+        Directory.CreateDirectory(Path.Combine(ModLoaderInstaller.RecordDir(install), "Looks", ".pending"));
+
+        var result = new ModLoaderInstaller(sha).Uninstall(install);
+
+        Assert.False(Directory.Exists(Path.Combine(game.Root, "UserData")));
+        Assert.DoesNotContain("Looks", ModLoaderInstaller.UninstallSummary(result));
+    }
+
     [Fact]
     public void Framework_status_compares_the_shipped_and_installed_files()
     {

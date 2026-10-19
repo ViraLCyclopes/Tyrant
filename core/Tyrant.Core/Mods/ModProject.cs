@@ -77,6 +77,19 @@ public sealed partial class ModProject
         if (problems.Count > 0) throw new ManifestException(string.Join(" ", problems));
     }
 
+    /// <summary>Reads the material folders again after their files changed on disk (looks brought in from the game).</summary>
+    internal void ReloadMaterials()
+    {
+        try
+        {
+            LoadMaterials(Manifest, Dir);
+        }
+        catch (ManifestException ex)
+        {
+            throw new TyrantException(TyrantErrorCode.ModInvalid, $"Mod '{Id}' cannot be read: {ex.Message}");
+        }
+    }
+
     /// <summary>
     /// Adds (or updates) a replacement of one game texture, found by name, Addressables path, GUID or ref. The PNG is copied
     /// into textures/; without one, the texture's exported PNG (assets/textures/…) is used.

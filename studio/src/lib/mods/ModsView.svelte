@@ -5,7 +5,7 @@
   import { getSession } from '$lib/stores/session.svelte';
   import CleanSkins from './CleanSkins.svelte';
   import DeleteModDialog from './DeleteModDialog.svelte';
-  import { copyFromGame, deleteMod, extractTextures, importModZip, installAria, installLabel, installMod, removeFromGame, restoreCutouts as restoreModCutouts } from './modActions';
+  import { bringInLooks, copyFromGame, deleteMod, extractTextures, importModZip, installAria, installLabel, installMod, removeFromGame, restoreCutouts as restoreModCutouts } from './modActions';
 
   const session = getSession();
   const tab = getTab();
@@ -90,6 +90,10 @@
     if (await session.runJob('dump.install', undefined, 'Update Tyrant in game', tab)) await refresh();
   }
 
+  async function bringIn(row: ModRow) {
+    if (await bringInLooks(session, tab, row)) await refresh();
+  }
+
   async function remove(row: ModRow) {
     if (await removeFromGame(session, tab, row.id, row.name)) await refresh();
   }
@@ -142,7 +146,7 @@
           <td><strong>{row.name}</strong>{#if row.name !== row.id} <span class="hint">{row.id}</span>{/if}{#if row.error}<div class="warn">{row.error}</div>{/if}{#each row.clashes ?? [] as clash (clash)}<div class="hint">{clash}</div>{/each}{#each row.usesSpeciesFrom ?? [] as use (use.modId)}<div class="hint">Uses species from: {use.modName ?? use.modId}{#if !use.installed || !use.enabled} <span class="warn">({use.installed ? 'off' : 'not installed'} — {use.skins} {use.skins === 1 ? 'skin' : 'skins'} skipped)</span>{/if}</div>{/each}</td>
           <td>{row.version}</td>
           <td>{summary(row)}</td>
-          <td>{STATE_LABEL[row.state] ?? row.state}{#if row.cooked === 'stale'} <span class="hint">· {row.state === 'gameOnly' ? 'textures not cooked' : 'Reinstall to cook textures'}</span>{/if}</td>
+          <td>{STATE_LABEL[row.state] ?? row.state}{#if row.cooked === 'stale'} <span class="hint">· {row.state === 'gameOnly' ? 'textures not cooked' : 'Reinstall to cook textures'}</span>{/if}{#if row.gameLooks} <span class="hint">· {row.state === 'gameOnly' ? 'has looks made in the game' : 'looks changed in the game'}</span>{/if}</td>
           <td>
             {#if row.enabled !== null}
               <input type="checkbox" aria-label="{row.name} on" checked={row.enabled} onchange={(e) => setEnabled(row, e.currentTarget.checked, e.currentTarget)} />
@@ -153,6 +157,7 @@
               <button class="primary" aria-label="Open {row.name}" onclick={() => open(row.id, row.name)}>Open</button>
               <button aria-label="Check {row.name}" onclick={() => check(row)}>Check</button>
               <button aria-label={installAria(row.state, row.name)} onclick={() => install(row)} disabled={session.busy}>{installLabel(row.state)}</button>
+              {#if row.gameLooks}<button aria-label="Bring in looks made in the game into {row.name}" onclick={() => bringIn(row)} disabled={session.busy}>Bring in looks…</button>{/if}
             {/if}
             {#if row.state === 'gameOnly'}
               <button aria-label="Copy {row.name} to workspace" onclick={() => copy(row)} disabled={session.busy}>Copy to workspace</button>
