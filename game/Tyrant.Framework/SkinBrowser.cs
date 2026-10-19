@@ -7,6 +7,7 @@ using HarmonyLib;
 using Tyrant.Framework.Core;
 using UnityEngine;
 using UnityEngine.Events;
+using static Tyrant.Framework.GameUi;
 
 namespace Tyrant.Framework
 {
@@ -21,14 +22,6 @@ namespace Tyrant.Framework
         private const int RowLimit = 5;
         private const string ButtonName = "TyrantAllSkinsButton";
         private const string CloseButtonPath = "Menu/GalleryMenu/GalleryRect/SettingsHeader/AnimalFilterMenu/Header/CloseButton";
-        private static readonly Color Panel = new Color(0.259f, 0.286f, 0.310f, 0.98f);
-        private static readonly Color Green = new Color(0.345f, 0.678f, 0.184f, 1f);
-        private static readonly Type? Image = AccessTools.TypeByName("UnityEngine.UI.Image");
-        private static readonly Type? Button = AccessTools.TypeByName("UnityEngine.UI.Button");
-        private static readonly Type? ScrollRect = AccessTools.TypeByName("UnityEngine.UI.ScrollRect");
-        private static readonly Type? RectMask = AccessTools.TypeByName("UnityEngine.UI.RectMask2D");
-        private static readonly Type? Grid = AccessTools.TypeByName("UnityEngine.UI.GridLayoutGroup");
-        private static readonly Type? Fitter = AccessTools.TypeByName("UnityEngine.UI.ContentSizeFitter");
         private static readonly Type? ToggleUtil = AccessTools.TypeByName("PrehistoricKingdom.ToggleUtil") ?? AccessTools.TypeByName("ToggleUtil");
 
         private sealed class Cell
@@ -244,9 +237,9 @@ namespace Tyrant.Framework
             viewport.offsetMax = new Vector2(-12f, searchSource != null ? -97f : -47f);
             if (RectMask != null) viewport.gameObject.AddComponent(RectMask);
             _content = Child(viewport, "Content", new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f), Vector2.zero, Vector2.zero);
-            if (Grid != null)
+            if (GridGroup != null)
             {
-                var grid = Traverse.Create(_content.gameObject.AddComponent(Grid));
+                var grid = Traverse.Create(_content.gameObject.AddComponent(GridGroup));
                 grid.Property("cellSize").SetValue(new Vector2(84f, 112f));
                 grid.Property("spacing").SetValue(new Vector2(8f, 10f));
             }
@@ -402,101 +395,16 @@ namespace Tyrant.Framework
 
         // ---- helpers ----
 
-        /// <summary>Clones a game object inactive, without its localisation components (they would overwrite our texts).</summary>
-        private static GameObject CloneInactive(GameObject source, Transform parent)
-        {
-            var wasActive = source.activeSelf;
-            source.SetActive(false);
-            GameObject clone;
-            try
-            {
-                clone = UnityEngine.Object.Instantiate(source, parent, false);
-            }
-            finally
-            {
-                source.SetActive(wasActive);
-            }
-            foreach (var component in clone.GetComponentsInChildren<Component>(true).Where(c => c != null && c.GetType().Name == "PKLocalizationGUI").ToList())
-                UnityEngine.Object.DestroyImmediate(component);
-            return clone;
-        }
-
-        private static RectTransform Child(Transform parent, string name, Vector2 anchorMin, Vector2 anchorMax, Vector2 pivot, Vector2 position, Vector2 size)
-        {
-            var go = new GameObject(name, typeof(RectTransform)) { layer = parent.gameObject.layer };
-            var rect = (RectTransform)go.transform;
-            rect.SetParent(parent, false);
-            rect.anchorMin = anchorMin;
-            rect.anchorMax = anchorMax;
-            rect.pivot = pivot;
-            rect.anchoredPosition = position;
-            rect.sizeDelta = size;
-            return rect;
-        }
-
-        private static void OnClick(GameObject button, Action action)
-        {
-            var component = button.GetComponent(Button!);
-            var property = AccessTools.Property(Button!, "onClick");
-            if (component == null || property == null) return;
-            var clicked = (UnityEvent)Activator.CreateInstance(property.PropertyType); // drops the original's listeners
-            clicked.AddListener(() => action());
-            property.SetValue(component, clicked, null);
-            Traverse.Create(component).Property("interactable").SetValue(true);
-        }
-
-        /// <summary>Puts a sprite on a button's icon (its first child image).</summary>
-        private static void SetIcon(Transform button, Sprite sprite)
-        {
-            for (var i = 0; i < button.childCount; i++)
-                if (button.GetChild(i).GetComponent(Image!) is Component icon)
-                {
-                    Traverse.Create(icon).Property("sprite").SetValue(sprite);
-                    return;
-                }
-        }
-
-        private static Component? Text(Transform? transform) =>
-            transform == null ? null : transform.GetComponents<Component>().FirstOrDefault(c => c != null && c.GetType().FullName?.StartsWith("TMPro.") == true);
-
-        private static void SetText(Transform? transform, string text)
-        {
-            var component = Text(transform);
-            if (component != null) Traverse.Create(component).Property("text").SetValue(text);
-        }
-
-        private static void Center(Component? text)
-        {
-            if (text == null) return;
-            var fitter = Fitter == null ? null : text.GetComponent(Fitter);
-            if (fitter != null) UnityEngine.Object.DestroyImmediate(fitter);
-            var t = Traverse.Create(text);
-            var alignment = AccessTools.Property(text.GetType(), "alignment")?.PropertyType;
-            if (alignment != null) t.Property("alignment").SetValue(Enum.Parse(alignment, "Center"));
-            var overflow = AccessTools.Property(text.GetType(), "overflowMode")?.PropertyType;
-            if (overflow != null) t.Property("overflowMode").SetValue(Enum.Parse(overflow, "Ellipsis"));
-            t.Property("fontSize").SetValue(11f);
-        }
-
-        private static void SetColor(Component graphic, Color color) => Traverse.Create(graphic).Property("color").SetValue(color);
-
         /// <summary>A 3×3 grid of squares, drawn once.</summary>
         private static Sprite GridIcon()
         {
             if (_gridIcon != null) return _gridIcon;
-            const int size = 32, cell = 8, gap = 4;
-            var pixels = new Color32[size * size];
-            for (var y = 0; y < size; y++)
-            for (var x = 0; x < size; x++)
+            const int cell = 8, gap = 4;
+            _gridIcon = DrawIcon(32, (x, y) =>
             {
                 int cx = x - 2, cy = y - 2;
-                var inside = cx >= 0 && cy >= 0 && cx < 3 * cell + 2 * gap && cy < 3 * cell + 2 * gap && cx % (cell + gap) < cell && cy % (cell + gap) < cell;
-                pixels[y * size + x] = inside ? new Color32(255, 255, 255, 255) : new Color32(255, 255, 255, 0);
-            }
-            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false) { name = "Tyrant all skins icon", filterMode = FilterMode.Bilinear };
-            texture.SetPixels32(pixels);
-            texture.Apply(false, true);
-            _gridIcon = Sprite.Create(texture, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f));
+                return cx >= 0 && cy >= 0 && cx < 3 * cell + 2 * gap && cy < 3 * cell + 2 * gap && cx % (cell + gap) < cell && cy % (cell + gap) < cell;
+            }, "Tyrant all skins icon");
             return _gridIcon;
         }
     }
