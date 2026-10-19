@@ -140,6 +140,20 @@ public class ModEditCliTests
     }
 
     [Fact]
+    public void Materials_set_accepts_fur_grow()
+    {
+        using var game = new FakeGame();
+        var ws = WorkspaceWithSkin(game);
+        var file = Path.Combine(ws, "materials.json");
+        File.WriteAllText(file, "{\"Titanoboa\":{\"fur\":{\"grow\":true},\"settings\":{\"_Length\":0.5}}}");
+
+        Assert.Equal(ExitCodes.Ok, Run("mod", "materials", "red-spot", "blue", "--set", file, "-w", ws).Code);
+        Assert.Contains("\"grow\"", Run("mod", "materials", "red-spot", "blue", "--show", "-w", ws).Out);
+        File.WriteAllText(file, "{\"Titanoboa\":{\"fur\":{\"grow\":\"yes\"}}}");
+        Assert.Equal(ExitCodes.Error, Run("mod", "materials", "red-spot", "blue", "--set", file, "-w", ws).Code);
+    }
+
+    [Fact]
     public void Materials_of_a_species_without_the_game_data()
     {
         using var game = new FakeGame();

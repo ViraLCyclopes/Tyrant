@@ -38,6 +38,26 @@ public class ModMaterialsTests
     }
 
     [Fact]
+    public void Fur_grow_is_saved_and_survives_removing_the_fur_mask()
+    {
+        var (game, ws, mod) = ModEditTests.Setup();
+        using var _ = game;
+        mod = ModEditTests.WithSkins(ws, mod);
+        var png = ModEditTests.Png(Path.Combine(ws.Dir, "src"));
+
+        mod.SetSkinMaterials("blue", """{"Titanoboa":{"fur":{"grow":true}}}""");
+        Assert.True(ModProject.Open(ws, mod.Id).SkinMaterial("blue", "Titanoboa")!.Fur!.Grow);
+        Assert.Contains("\"grow\": true", File.ReadAllText(Path.Combine(mod.Dir, "materials", "skins", "blue", MaterialFolders.FileName)));
+
+        mod.SetMaterialFile("blue", null, "Titanoboa", "furMask", png);
+        mod.SetMaterialFile("blue", null, "Titanoboa", "furMask", null);
+        var fur = ModProject.Open(ws, mod.Id).SkinMaterial("blue", "Titanoboa")!.Fur!;
+        Assert.True(fur.Grow); // the block is not empty: grow stays
+        Assert.Null(fur.Mask);
+        Assert.Equal(TyrantErrorCode.ModInvalid, Assert.Throws<TyrantException>(() => mod.SetSkinMaterials("blue", """{"Titanoboa":{"fur":{"grow":1}}}""")).Code);
+    }
+
+    [Fact]
     public void Skin_materials_are_saved_to_their_folder_not_mod_json()
     {
         var (game, ws, mod) = ModEditTests.Setup();

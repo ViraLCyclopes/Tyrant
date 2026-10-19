@@ -19,6 +19,9 @@ namespace Tyrant.Framework.Core
         public const float DefaultThickness = 420;
         public const float StartScale = -0.25f, StartPower = -0.3f, StartBias = 1.3f;
 
+        /// <summary>The fur length Grow fur starts with on a skin whose fur has none (the shader's _Length runs 0 to 4).</summary>
+        public const float StartFurLength = 0.5f;
+
         public const float MaxThickness = 2000;
         public const float MinShaping = -10, MaxShaping = 10;
 
@@ -93,6 +96,30 @@ namespace Tyrant.Framework.Core
             for (var i = 0; i < count; i++) vector[i] = Clamp(i == component ? value : i < shown.Count ? shown[i] : 0, property.Min, property.Max);
             draft.SetSetting(key, MaterialValue.OfVector(vector));
         }
+
+        /// <summary>True when the animal grows Tyrant's fur at this scope: the draft's own choice, else a lower layer's.</summary>
+        /// <param name="below">What the layers under the draft's scope set (<see cref="MaterialTable.MergeBelow"/>), or null.</param>
+        public static bool GrowsFur(LookDraft draft, MaterialOverride? below) => (draft.Current.Fur?.Grow ?? below?.Fur?.Grow) == true;
+
+        /// <summary>
+        /// The editor's Grow fur on/off. On where nothing gives the fur any length (the draft, the layers below and the game all
+        /// 0 or unset) also sets <see cref="StartFurLength"/>, so the fur shows at once. Off writes false only over a lower layer
+        /// that grows fur; otherwise the key goes (false never takes away fur the game has).
+        /// </summary>
+        /// <param name="gameLength">The animal's own _Length (its property block, else its material).</param>
+        public static void SetFurGrow(LookDraft draft, MaterialOverride? below, float gameLength, bool on)
+        {
+            if (!on)
+            {
+                draft.SetFurGrow(below?.Fur?.Grow == true ? false : (bool?)null);
+                return;
+            }
+            draft.SetFurGrow(true);
+            if ((LengthOf(draft.Current) ?? LengthOf(below) ?? gameLength) <= 0) draft.SetSetting("_Length", MaterialValue.OfNumber(StartFurLength));
+        }
+
+        private static float? LengthOf(MaterialOverride? block) =>
+            block != null && block.Settings.TryGetValue("_Length", out var v) && v.Kind == MaterialValueKind.Number ? v.Number : (float?)null;
 
         internal static VariantNumbers? Copy(VariantNumbers? s) =>
             s == null ? null : new VariantNumbers { Normal = s.Normal, Albino = s.Albino, Melanistic = s.Melanistic, Leucistic = s.Leucistic };

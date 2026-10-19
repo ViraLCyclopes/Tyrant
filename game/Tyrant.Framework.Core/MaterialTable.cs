@@ -178,6 +178,7 @@ namespace Tyrant.Framework.Core
                     fur ??= new FurMasks();
                     fur.Mask ??= f.Mask;
                     fur.InfantMask ??= f.InfantMask;
+                    fur.Grow ??= f.Grow; // a higher false beats a lower true: that layer does not force fur
                 }
                 var i = layer.Iridescence;
                 if (i == null) continue;
@@ -285,7 +286,7 @@ namespace Tyrant.Framework.Core
             }
             if (source.Fur is FurMasks fur)
             {
-                var masks = new FurMasks { Mask = CopyMask(fur.Mask, resolve), InfantMask = CopyMask(fur.InfantMask, resolve) };
+                var masks = new FurMasks { Mask = CopyMask(fur.Mask, resolve), InfantMask = CopyMask(fur.InfantMask, resolve), Grow = fur.Grow };
                 if (!masks.IsEmpty) copy.Fur = masks;
             }
             return copy;

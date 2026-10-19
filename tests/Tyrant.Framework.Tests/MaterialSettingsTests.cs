@@ -68,6 +68,26 @@ public class MaterialSettingsTests
     }
 
     [Fact]
+    public void Fur_grow_reads_and_writes_back_on_its_own_or_beside_a_mask()
+    {
+        var grow = Titanoboa("""{ "Titanoboa": { "fur": { "grow": true } } }""").Fur!;
+        Assert.True(grow.Grow);
+        Assert.Null(grow.Mask);
+        Assert.False(grow.IsEmpty);
+
+        var off = Titanoboa("""{ "Titanoboa": { "fur": { "grow": false, "mask": "m.png" } } }""").Fur!;
+        Assert.False(off.Grow); // false is kept: it says "do not force fur" over a lower layer's true
+        Assert.Equal("m.png", off.Mask!.File);
+        Assert.Null(Titanoboa("""{ "Titanoboa": { "fur": { "mask": "m.png" } } }""").Fur!.Grow); // left out: the game decides
+
+        var json = Json.Write(MaterialOverrides.ToJson(new Dictionary<string, MaterialOverride> { ["Titanoboa"] = new() { Fur = new FurMasks { Grow = true } } }));
+        Assert.Contains("\"grow\":true", string.Concat(json.Where(c => !char.IsWhiteSpace(c))));
+        Assert.True(MaterialOverrides.Parse(Json.Parse(json), "Skin", false)!["Titanoboa"].Fur!.Grow);
+        Assert.DoesNotContain("grow", Json.Write(MaterialOverrides.ToJson(new Dictionary<string, MaterialOverride>
+            { ["Titanoboa"] = new() { Fur = new FurMasks { Mask = new MaskSource { File = "m.png" } } } })));
+    }
+
+    [Fact]
     public void A_single_strength_applies_to_every_variant()
     {
         var s = Titanoboa("""{ "Titanoboa": { "iridescence": { "strength": 0.3 } } }""").Iridescence!.Strength!;
@@ -103,6 +123,8 @@ public class MaterialSettingsTests
     [InlineData("""{ "Titanoboa": { "iridescence": { "ramp": { "thinFilm": { "thickness": -5 } } } } }""", "from 0 to 2000")]
     [InlineData("""{ "Titanoboa": { "iridescence": { "mask": { "from": "normal" } } } }""", "extra, pattern or fur")]
     [InlineData("""{ "Titanoboa": { "iridescence": { "mask": { "from": "extra", "channel": "x" } } } }""", "r, g, b or a")]
+    [InlineData("""{ "Titanoboa": { "fur": { "grow": "yes" } } }""", "\"materials.Titanoboa.fur.grow\" must be true or false")]
+    [InlineData("""{ "Titanoboa": { "fur": { "length": 1 } } }""", "use mask, infantMask, grow")]
     public void Material_problems_are_explained(string materials, string expected)
     {
         var (manifest, problems) = WithMaterials(materials);

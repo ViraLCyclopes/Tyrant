@@ -104,6 +104,14 @@ namespace Tyrant.Framework.Core
             if (fur.IsEmpty) Current.Fur = null;
         }
 
+        /// <summary>Whether Tyrant grows fur at this scope: true, false (do not force it over a lower layer), or null (left out).</summary>
+        public void SetFurGrow(bool? grow)
+        {
+            var fur = Current.Fur ??= new FurMasks();
+            fur.Grow = grow;
+            if (fur.IsEmpty) Current.Fur = null;
+        }
+
         /// <summary>Back to the last saved look.</summary>
         public void Reset() => Current = Parse(_saved);
 

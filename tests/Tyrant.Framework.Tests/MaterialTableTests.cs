@@ -186,6 +186,32 @@ public class MaterialTableTests
     }
 
     [Fact]
+    public void Fur_grow_merges_per_field_and_a_grow_only_block_covers_the_animal()
+    {
+        var a = Mod("mod-a", "{\"format\":1,\"id\":\"mod-a\",\"skins\":[" + Skin("bare") + "]}",
+            SpeciesFile("Titanoboa", """{"Titanoboa":{"fur":{"grow":true}}}"""),
+            SkinFile("bare", """{"Titanoboa":{"fur":{"grow":false}}}"""),
+            VanillaFile("Titanoboa", "Skin A", """{"Titanoboa":{"fur":{"mask":"top.png"}}}"""));
+        var table = MaterialTable.Build([a], out var messages);
+
+        Assert.Empty(messages);
+        Assert.True(table.CoversSpecies("Titanoboa")); // a block holding only grow is not empty
+        Assert.True(table.CoversSkin("mod-a", "bare"));
+        var species = table.For("Titanoboa", null, null, null, "Titanoboa")!.Fur!;
+        Assert.True(species.Grow);
+        var vanilla = table.For("Titanoboa", null, null, "Titanoboa/Skin A", "Titanoboa")!.Fur!;
+        Assert.True(vanilla.Grow); // from the species, beside the vanilla skin's own mask
+        Assert.Equal(Path.GetFullPath(Path.Combine(a.Directory, "top.png")), vanilla.Mask!.File);
+        Assert.False(table.For("Titanoboa", "mod-a/bare", null, null, "Titanoboa")!.Fur!.Grow); // the skin's false wins
+
+        var live = new MaterialOverride { Fur = new FurMasks { Grow = true } };
+        Assert.True(MaterialTable.MergeLayers(live, null, null, null, null, null, null)!.Fur!.Grow);
+        Assert.True(MaterialTable.MergeBelow(LookScope.Animal, null, null, live, null, null, null, null)!.Fur!.Grow);
+        Assert.True(MaterialTable.WithFullPaths(live, Path.GetTempPath()).Fur!.Grow);
+        Assert.False(MaterialTable.WithFullPaths(live, Path.GetTempPath()).IsEmpty);
+    }
+
+    [Fact]
     public void Merge_does_not_change_its_inputs_and_variation_defaults()
     {
         var top = new MaterialOverride { Iridescence = new IridescenceSettings { Scale = 1f } };

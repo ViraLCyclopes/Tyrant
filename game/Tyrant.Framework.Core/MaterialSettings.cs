@@ -171,13 +171,19 @@ namespace Tyrant.Framework.Core
             && Scale == null && Power == null && Bias == null;
     }
 
-    /// <summary>Fur masks a material takes from files (the fur slots of a skin, replaced for one material); only files, never "everywhere" or "from".</summary>
+    /// <summary>
+    /// A material's fur: masks taken from files (the fur slots of a skin, replaced for one material; only files, never
+    /// "everywhere" or "from"), and whether Tyrant grows fur on a skin the game gives none.
+    /// </summary>
     public sealed class FurMasks
     {
         public MaskSource? Mask { get; set; }
         public MaskSource? InfantMask { get; set; }
 
-        public bool IsEmpty => Mask == null && InfantMask == null;
+        /// <summary>True: Tyrant switches the game's fur on. False: Tyrant does not force it (fur the game has stays). Null: lower layers decide.</summary>
+        public bool? Grow { get; set; }
+
+        public bool IsEmpty => Mask == null && InfantMask == null && Grow == null;
     }
 
     /// <summary>One material's changes (materials.json "materials.&lt;name&gt;"): iridescence, shader settings and/or fur masks.</summary>
@@ -246,6 +252,7 @@ namespace Tyrant.Framework.Core
                     var fur = new Dictionary<string, object?>();
                     if (pair.Value.Fur.Mask?.File != null) fur["mask"] = pair.Value.Fur.Mask.File;
                     if (pair.Value.Fur.InfantMask?.File != null) fur["infantMask"] = pair.Value.Fur.InfantMask.File;
+                    if (pair.Value.Fur.Grow is bool grow) fur["grow"] = grow;
                     entry["fur"] = fur;
                 }
                 if (pair.Value.Settings.Count > 0)
@@ -281,12 +288,15 @@ namespace Tyrant.Framework.Core
         private static FurMasks ParseFur(object value, string owner, string path)
         {
             var map = Map(value, owner, path);
-            Known(map, owner, path, "mask", "infantMask");
+            Known(map, owner, path, "mask", "infantMask", "grow");
             MaskSource? File(string key) =>
                 !map.TryGetValue(key, out var v) || v == null ? null
                 : v is string file && file.Length > 0 && file != "everywhere" ? new MaskSource { File = file }
                 : throw new ManifestException($"{owner}: \"{path}.{key}\" must be an image file path.");
-            return new FurMasks { Mask = File("mask"), InfantMask = File("infantMask") };
+            bool? grow = null;
+            if (map.TryGetValue("grow", out var g) && g != null)
+                grow = g as bool? ?? throw new ManifestException($"{owner}: \"{path}.grow\" must be true or false.");
+            return new FurMasks { Mask = File("mask"), InfantMask = File("infantMask"), Grow = grow };
         }
 
         private static void ParseSettings(object value, string owner, string path, Dictionary<string, MaterialValue> into)

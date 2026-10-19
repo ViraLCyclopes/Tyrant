@@ -327,6 +327,57 @@ public class LookEditingTests
         AssertSaveable(draft, skinLevel: true);
     }
 
+    private static MaterialOverride Length(float length) => new() { Settings = { ["_Length"] = MaterialValue.OfNumber(length) } };
+
+    [Fact]
+    public void Growing_fur_where_nothing_gives_it_length_seeds_a_visible_length()
+    {
+        var bare = new LookDraft(LookScope.Species, null);
+        LookEditing.SetFurGrow(bare, null, gameLength: 0, on: true);
+        Assert.True(bare.Current.Fur!.Grow);
+        Assert.Equal(LookEditing.StartFurLength, bare.Current.Settings["_Length"].Number);
+        Assert.True(LookEditing.GrowsFur(bare, null));
+        AssertSaveable(bare, skinLevel: false);
+
+        var zeroBelow = new LookDraft(LookScope.Animal, null);
+        LookEditing.SetFurGrow(zeroBelow, Length(0), gameLength: 0, on: true);
+        Assert.Equal(LookEditing.StartFurLength, zeroBelow.Current.Settings["_Length"].Number);
+    }
+
+    [Fact]
+    public void Growing_fur_keeps_a_length_the_draft_a_layer_below_or_the_game_already_has()
+    {
+        var own = new LookDraft(LookScope.Skin, Length(1.5f));
+        LookEditing.SetFurGrow(own, null, gameLength: 0, on: true);
+        Assert.Equal(1.5f, own.Current.Settings["_Length"].Number);
+
+        var below = new LookDraft(LookScope.Animal, null);
+        LookEditing.SetFurGrow(below, Length(0.8f), gameLength: 0, on: true);
+        Assert.False(below.Current.Settings.ContainsKey("_Length"));
+
+        var game = new LookDraft(LookScope.Animal, null);
+        LookEditing.SetFurGrow(game, null, gameLength: 1.2f, on: true);
+        Assert.False(game.Current.Settings.ContainsKey("_Length"));
+    }
+
+    [Fact]
+    public void Turning_grow_off_writes_false_only_over_a_layer_that_grows()
+    {
+        var alone = new LookDraft(LookScope.Skin, null);
+        LookEditing.SetFurGrow(alone, null, gameLength: 1, on: true);
+        LookEditing.SetFurGrow(alone, null, gameLength: 1, on: false);
+        Assert.Null(alone.Current.Fur); // nothing below grows: the key goes
+        Assert.False(LookEditing.GrowsFur(alone, null));
+
+        var growing = new MaterialOverride { Fur = new FurMasks { Grow = true } };
+        var over = new LookDraft(LookScope.Animal, null);
+        Assert.True(LookEditing.GrowsFur(over, growing)); // shown on: a lower layer grows
+        LookEditing.SetFurGrow(over, growing, gameLength: 1, on: false);
+        Assert.False(over.Current.Fur!.Grow);
+        Assert.False(LookEditing.GrowsFur(over, growing));
+        AssertSaveable(over, skinLevel: true);
+    }
+
     [Fact]
     public void A_block_a_load_would_refuse_is_named_before_it_is_written()
     {
