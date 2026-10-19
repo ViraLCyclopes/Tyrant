@@ -227,6 +227,9 @@ namespace Tyrant.Framework.Core
                 }
             });
 
+        /// <summary>A deep copy with each file path passed through <paramref name="map"/> (null drops that ramp or mask). The input is not changed.</summary>
+        public static MaterialOverride WithPaths(MaterialOverride block, Func<string, string?> map) => CopyOne(block, map);
+
         /// <summary>The variation of the strength between animals: as set, else a little when a strength is set, else none.</summary>
         public static float EffectiveVariation(IridescenceSettings i) =>
             i.Variation ?? (i.Strength != null ? IridescenceSettings.DefaultVariation : 0);

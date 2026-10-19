@@ -48,6 +48,7 @@ namespace Tyrant.Framework
             SkinsModule.Tick(); // adds skins once the animal database exists, before a park loads
             MaterialTextureModule.Tick();
             SoundsModule.Tick();
+            LookEditorModule.Tick(); // the in-game look editor: its button, window and the park's per-animal looks
             MaterialsModule.Tick(); // frees the textures of edits that were replaced
         }
 
@@ -94,6 +95,7 @@ namespace Tyrant.Framework
             HeadRigModule.Start(plan.Mods, HarmonyInstance);
             MaterialsModule.Start(plan.Mods);
             MaterialsModule.Patch(HarmonyInstance); // always: the in-game editor works on animals no mod covers
+            LookEditorModule.Start();
             SoundsModule.Start(plan.Mods, HarmonyInstance);
             if (Replacements.Count > 0 || CodeMods.Count > 0 || SkinsModule.HasSkins || ModelModule.HasModels) AnimalTexturePatch.Apply(HarmonyInstance);
             if (SkinsModule.HasSkins) SkinPatches.Apply(HarmonyInstance);

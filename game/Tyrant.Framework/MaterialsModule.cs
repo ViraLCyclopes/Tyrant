@@ -340,6 +340,40 @@ namespace Tyrant.Framework
             return result;
         }
 
+        /// <summary>The mods' table (for <see cref="SaveTargets.For"/> and an owner's own block).</summary>
+        public static MaterialTable Table => _table;
+
+        /// <summary>True when the hooks are in: without them the editor would change nothing.</summary>
+        public static bool Active => _active;
+
+        /// <summary>Re-applies the loaded animals with these ids, e.g. once a park's per-animal looks are read after its animals were set up.</summary>
+        public static void ReapplyIds(IReadOnlyCollection<ulong> ids, bool keywords)
+        {
+            var wanted = new HashSet<ulong>(ids);
+            var animals = new List<object>();
+            ReadMaps(map =>
+            {
+                foreach (DictionaryEntry entry in map)
+                    if (entry.Value != null && FieldOf(entry.Key, "uniqueID")?.GetValue(entry.Key) is ulong id && wanted.Contains(id)) animals.Add(entry.Value);
+            });
+            foreach (var animal in animals) Reapply(animal, keywords); // after the read lock is released
+        }
+
+        /// <summary>What the animal wears now, every layer merged (the editor's live edits included); null when nothing changes it.</summary>
+        public static MaterialOverride? Effective(object animal)
+        {
+            if (animal == null) return null;
+            try
+            {
+                return Resolve(animal, MembersOf(animal.GetType()))?.Override;
+            }
+            catch (Exception ex)
+            {
+                Failed(ex);
+                return null;
+            }
+        }
+
         /// <summary>The animal's species, skin, variant, id, material and the skin's source; null when it has no species or material.</summary>
         public static AnimalContext? Describe(object animal)
         {
@@ -921,6 +955,31 @@ namespace Tyrant.Framework
         private static List<object> LoadedAnimals()
         {
             var animals = new List<object>();
+            ReadMaps(map =>
+            {
+                foreach (var value in map.Values)
+                    if (value != null) animals.Add(value);
+            });
+            return animals;
+        }
+
+        /// <summary>
+        /// The persistent ids of every animal in the park and the vivarium (an unrealised vivarium animal included); empty outside
+        /// a park, or when the maps cannot be read.
+        /// </summary>
+        public static List<ulong> LoadedIds()
+        {
+            var ids = new List<ulong>();
+            ReadMaps(map =>
+            {
+                foreach (var key in map.Keys)
+                    if (key != null && FieldOf(key, "uniqueID")?.GetValue(key) is ulong id) ids.Add(id);
+            });
+            return ids;
+        }
+
+        private static void ReadMaps(Action<IDictionary> read)
+        {
             try
             {
                 if (!_animalsRead)
@@ -932,21 +991,21 @@ namespace Tyrant.Framework
                     if (_gameType == null || _hasInstance == null || _animalManager == null)
                         FrameworkMod.Log.Warning("Game.AnimalManager was not found (game updated?); live edits of a whole skin or species show on the selected animal only.");
                 }
-                if (_hasInstance == null || _animalManager == null || !(_hasInstance.GetValue(null, null) is bool has) || !has) return animals;
+                if (_hasInstance == null || _animalManager == null || !(_hasInstance.GetValue(null, null) is bool has) || !has) return;
                 var manager = _animalManager.GetValue(null, null);
-                if (manager == null) return animals;
+                if (manager == null) return;
                 _animals ??= AccessTools.Property(manager.GetType(), "Animals");
                 var collection = _animals?.GetValue(manager, null);
-                if (collection == null) return animals;
+                if (collection == null) return;
                 _getReader ??= AccessTools.Method(collection.GetType(), "GetReader", Type.EmptyTypes);
                 var reader = _getReader?.Invoke(collection, null); // a boxed AnimalCollection.Reader, holding the read lock
-                if (reader == null) return animals;
+                if (reader == null) return;
                 try
                 {
                     _animalMap ??= AccessTools.Property(reader.GetType(), "PersistentIDToAnimalMap");
                     _vivariumMap ??= AccessTools.Property(reader.GetType(), "PersistentIDToVivariumAnimalMap");
-                    AddValues(_animalMap?.GetValue(reader, null), animals);
-                    AddValues(_vivariumMap?.GetValue(reader, null), animals);
+                    if (_animalMap?.GetValue(reader, null) is IDictionary animals) read(animals);
+                    if (_vivariumMap?.GetValue(reader, null) is IDictionary vivarium) read(vivarium);
                 }
                 finally
                 {
@@ -957,14 +1016,6 @@ namespace Tyrant.Framework
             {
                 Failed(ex);
             }
-            return animals;
-        }
-
-        private static void AddValues(object? map, List<object> into)
-        {
-            if (!(map is IDictionary dictionary)) return;
-            foreach (var value in dictionary.Values)
-                if (value != null) into.Add(value);
         }
 
         /// <summary>AnimalVisuals.AutoSetSharedMaterialVariant (private): AnimalMaterials.AddUpdateAnimal unless the animal blocks it.</summary>

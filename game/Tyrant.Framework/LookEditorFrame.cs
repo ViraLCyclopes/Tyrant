@@ -1,0 +1,395 @@
+using System;
+using System.Linq;
+using HarmonyLib;
+using MelonLoader;
+using Tyrant.Framework.Core;
+using UnityEngine;
+using static Tyrant.Framework.GameUi;
+
+namespace Tyrant.Framework
+{
+    /// <summary>
+    /// The look editor's frame: the top-bar button, the window (title to drag, corner to resize, minimise and X), its place
+    /// kept in MelonPreferences, the "Discard changes?" box, and the header and footer texts.
+    /// </summary>
+    internal static partial class LookEditorWindow
+    {
+        // ---- the top-bar button ----
+
+        private static void EnsureButton(object gui)
+        {
+            if (_button != null) return;
+            var board = Traverse.Create(gui).Field("mainBoardGUI").GetValue() as Component;
+            if (board == null || Button == null || Image == null) return;
+            var actions = Traverse.Create(board).Field("middleActions").GetValue() as GameObject;
+            if (actions != null && !actions.activeInHierarchy) return; // not shown yet: its buttons are looked for when it is
+            var source = actions == null ? null : actions.GetComponentsInChildren(Button, false).FirstOrDefault(c => c != null && c.gameObject != actions);
+            if (source != null)
+            {
+                var clone = CloneInactive(source.gameObject, source.transform.parent);
+                clone.name = ButtonName;
+                foreach (var extra in clone.GetComponentsInChildren<Component>(true).Where(c => c != null && IsForeign(c)).ToList())
+                    UnityEngine.Object.DestroyImmediate(extra); // the original's tooltip and hover actions
+                foreach (var text in clone.GetComponentsInChildren<Component>(true).Where(c => c != null && c.GetType().FullName?.StartsWith("TMPro.") == true))
+                    Traverse.Create(text).Property("text").SetValue("");
+                var hasIcon = Enumerable.Range(0, clone.transform.childCount).Any(i => clone.transform.GetChild(i).GetComponent(Image) != null);
+                if (hasIcon) SetIcon(clone.transform, Icon());
+                else if (clone.GetComponent(Image) is Component own) Traverse.Create(own).Property("sprite").SetValue(Icon());
+                clone.transform.SetAsLastSibling();
+                BesideSiblings((RectTransform)clone.transform);
+                OnClick(clone, Safe(Toggle));
+                clone.SetActive(true);
+                _button = clone;
+                return;
+            }
+            if (!_hierarchyLogged)
+            {
+                _hierarchyLogged = true;
+                FrameworkMod.Log.Warning("The top bar has no button to copy (game updated?); the Tyrant button sits at the top right. Top bar: "
+                    + (actions == null ? "(no middleActions)" : Hierarchy(actions.transform, 0)));
+            }
+            var canvas = Traverse.Create(gui).Field("MainBoardCanvas").GetValue() as Component;
+            if (canvas == null || !(Traverse.Create(board).Field("staffAmtTxt").GetValue() is Component font)) return;
+            var rect = Child(canvas.transform, ButtonName, Vector2.one, Vector2.one, Vector2.one, new Vector2(-12f, -12f), new Vector2(36f, 36f));
+            var (button, label) = FlatButton(rect, font, "", GameUi.Panel, Safe(Toggle));
+            UnityEngine.Object.Destroy(label.gameObject);
+            var icon = Child(button.transform, "Icon", Vector2.zero, Vector2.one, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(-8f, -8f));
+            var image = icon.gameObject.AddComponent(Image);
+            Traverse.Create(image).Property("sprite").SetValue(Icon());
+            Traverse.Create(image).Property("raycastTarget").SetValue(false);
+            _button = rect.gameObject;
+        }
+
+        /// <summary>Without a layout group the clone would cover its original: it goes right of the right-most sibling.</summary>
+        private static void BesideSiblings(RectTransform clone)
+        {
+            var parent = clone.parent;
+            if (parent == null || parent.GetComponents<Component>().Any(c => c != null && IsLayoutGroup(c.GetType()))) return;
+            var right = float.MinValue;
+            for (var i = 0; i < parent.childCount; i++)
+                if (parent.GetChild(i) is RectTransform sibling && sibling != clone && sibling.gameObject.activeSelf)
+                    right = Mathf.Max(right, sibling.anchoredPosition.x + sibling.rect.width * (1f - sibling.pivot.x));
+            if (right > float.MinValue) clone.anchoredPosition = new Vector2(right + 6f + clone.rect.width * clone.pivot.x, clone.anchoredPosition.y);
+        }
+
+        private static bool IsLayoutGroup(Type? type)
+        {
+            for (; type != null; type = type.BaseType)
+                if (type.FullName == "UnityEngine.UI.LayoutGroup") return true;
+            return false;
+        }
+
+        private static bool IsForeign(Component c)
+        {
+            var name = c.GetType().Name;
+            return name.Contains("Tooltip") || name == "EventTrigger" || name == "ToggleUtil";
+        }
+
+        private static string Hierarchy(Transform t, int depth)
+        {
+            var parts = t.GetComponents<Component>().Where(c => c != null && !(c is Transform)).Select(c => c.GetType().Name);
+            var line = $"{t.name} [{string.Join(", ", parts)}]";
+            if (depth >= 2 || t.childCount == 0) return line;
+            return line + " { " + string.Join("; ", Enumerable.Range(0, t.childCount).Select(i => Hierarchy(t.GetChild(i), depth + 1))) + " }";
+        }
+
+        /// <summary>A "T", drawn once.</summary>
+        private static Sprite Icon() =>
+            _icon != null ? _icon : _icon = DrawIcon(32, (x, y) => (y >= 23 && y <= 27 && x >= 5 && x <= 26) || (x >= 14 && x <= 17 && y >= 4 && y <= 27), "Tyrant looks icon");
+
+        // ---- the window frame ----
+
+        private static void Build(object gui)
+        {
+            var board = Traverse.Create(gui).Field("mainBoardGUI").GetValue() as Component;
+            _font = board == null ? null : Traverse.Create(board).Field("staffAmtTxt").GetValue() as Component;
+            if (_font == null || Image == null || Button == null)
+            {
+                FrameworkMod.Log.Warning("The game's top bar text was not found (game updated?); the look editor cannot open.");
+                return;
+            }
+            _inputTemplate = SearchFieldTemplate();
+
+            var canvasObject = new GameObject("TyrantLookEditorCanvas", typeof(RectTransform)) { layer = board!.gameObject.layer };
+            try
+            {
+                var canvas = canvasObject.AddComponent<Canvas>();
+                canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+                canvas.sortingOrder = 120; // over the game's panels
+                var boardCanvas = Traverse.Create(gui).Field("MainBoardCanvas").GetValue() as Canvas;
+                CopyScaler(boardCanvas != null ? boardCanvas.rootCanvas : null, canvasObject); // the game's UI scale
+                if (Raycaster != null) canvasObject.AddComponent(Raycaster);
+
+                var window = Child(canvasObject.transform, "TyrantLookEditor", new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f), Vector2.zero, new Vector2(360f, 600f));
+                SetColor(window.gameObject.AddComponent(Image), GameUi.Panel);
+                var strip = Child(window, "Strip", new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f), Vector2.zero, new Vector2(0f, 4f));
+                SetColor(strip.gameObject.AddComponent(Image), Green);
+
+                // Title: drag the window by it; minimise and close on the right.
+                var title = Child(window, "Title", new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -4f), new Vector2(0f, TitleHeight - 4f));
+                SetColor(title.gameObject.AddComponent(Image), new Color(0f, 0f, 0f, 0.15f));
+                var caption = Label(title, _font, "<b>Tyrant</b>  looks", 13f);
+                ((RectTransform)caption.transform).offsetMin = new Vector2(10f, 0f);
+                OnPointer(title.gameObject, "Drag", Safe<object>(data => Move(PointerDelta(data))));
+                OnPointer(title.gameObject, "EndDrag", Safe<object>(_ => SavePrefs()));
+                var minimise = FlatButton(title, _font, "-", Idle, Safe(Minimise));
+                Place((RectTransform)minimise.Button.transform, 1f, 1f, -50f, -28f, 2f, -2f);
+                var close = FlatButton(title, _font, "X", Idle, Safe(RequestClose));
+                Place((RectTransform)close.Button.transform, 1f, 1f, -26f, -4f, 2f, -2f);
+
+                var main = Child(window, "Main", Vector2.zero, Vector2.one, new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
+                main.offsetMax = new Vector2(0f, -TitleHeight);
+                _name = Label(TopRow(main, 4f, 20f), _font, "", 14f);
+                _info = Label(TopRow(main, 24f, 16f), _font, "", 11f);
+                Traverse.Create(_info).Property("color").SetValue(Faint);
+
+                var scopes = TopRow(main, 44f, 24f);
+                var names = new[] { (LookScope.Animal, "This animal"), (LookScope.Skin, "Whole skin"), (LookScope.Species, "Whole species") };
+                for (var i = 0; i < names.Length; i++)
+                {
+                    var scope = names[i].Item1;
+                    var button = FlatButton(scopes, _font, names[i].Item2, Idle, Safe(() => ChooseScope(scope)));
+                    Place((RectTransform)button.Button.transform, i / 3f, (i + 1) / 3f, i == 0 ? 0f : 2f, i == 2 ? 0f : -2f);
+                    ScopeButtons[scope] = button;
+                }
+                var tabs = TopRow(main, 74f, 24f);
+                _irisTab = FlatButton(tabs, _font, "Iridescence", Idle, Safe(() => ChooseTab(fur: false)));
+                Place((RectTransform)_irisTab.Button.transform, 0f, 0.5f, 0f, -2f);
+                _furTab = FlatButton(tabs, _font, "Fur", Idle, Safe(() => ChooseTab(fur: true)));
+                Place((RectTransform)_furTab.Button.transform, 0.5f, 1f, 2f, 0f);
+
+                var body = Child(main, "Body", Vector2.zero, Vector2.one, new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
+                body.offsetMin = new Vector2(0f, 84f);
+                body.offsetMax = new Vector2(0f, -104f);
+                _content = ScrollView(body, "Viewport");
+
+                _status = Label(BottomRow(main, 62f, 18f), _font, "", 10f);
+                Traverse.Create(_status).Property("color").SetValue(Faint);
+                var upper = BottomRow(main, 34f, 24f);
+                _export = FlatButton(upper, _font, "Export mask PNG", Idle, Safe(ExportMask));
+                Place((RectTransform)_export.Button.transform, 0f, 0.5f, 0f, -2f);
+                _reload = FlatButton(upper, _font, "Reload images", Idle, Safe(ReloadImages));
+                Place((RectTransform)_reload.Button.transform, 0.5f, 1f, 2f, 0f);
+                var lower = BottomRow(main, 6f, 24f);
+                _reset = FlatButton(lower, _font, "Reset", Idle, Safe(Reset));
+                Place((RectTransform)_reset.Button.transform, 0f, 0.5f, 0f, -2f);
+                _save = FlatButton(lower, _font, "Save", Green, Safe(Save));
+                Place((RectTransform)_save.Button.transform, 0.5f, 1f, 2f, 0f);
+
+                // Resize from the bottom-right corner.
+                var grip = Child(main, "Grip", new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(1f, 0f), Vector2.zero, new Vector2(14f, 14f));
+                SetColor(grip.gameObject.AddComponent(Image), new Color(1f, 1f, 1f, 0.25f));
+                OnPointer(grip.gameObject, "Drag", Safe<object>(data => Resize(PointerDelta(data))));
+                OnPointer(grip.gameObject, "EndDrag", Safe<object>(_ => SavePrefs()));
+
+                window.gameObject.SetActive(false);
+                _canvas = canvasObject;
+                _window = window.gameObject;
+                _main = main.gameObject;
+            }
+            catch
+            {
+                UnityEngine.Object.Destroy(canvasObject); // never leave a half-built window on screen
+                _content = null;
+                throw;
+            }
+        }
+
+        private static RectTransform TopRow(RectTransform parent, float top, float height)
+        {
+            var row = Child(parent, "Row", new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -top), new Vector2(0f, height));
+            row.offsetMin = new Vector2(10f, row.offsetMin.y);
+            row.offsetMax = new Vector2(-10f, row.offsetMax.y);
+            return row;
+        }
+
+        private static RectTransform BottomRow(RectTransform parent, float bottom, float height)
+        {
+            var row = Child(parent, "Row", Vector2.zero, new Vector2(1f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, bottom), new Vector2(0f, height));
+            row.offsetMin = new Vector2(10f, row.offsetMin.y);
+            row.offsetMax = new Vector2(-24f, row.offsetMax.y); // clear of the resize grip
+            return row;
+        }
+
+        /// <summary>Spans a rect from x0 to x1 of its row (fractions), with pixel insets, full height (optionally inset).</summary>
+        private static void Place(RectTransform rect, float x0, float x1, float left, float right, float bottom = 0f, float top = 0f)
+        {
+            rect.anchorMin = new Vector2(x0, 0f);
+            rect.anchorMax = new Vector2(x1, 1f);
+            rect.offsetMin = new Vector2(left, bottom);
+            rect.offsetMax = new Vector2(right, top);
+        }
+
+        private static void CopyScaler(Component? source, GameObject target)
+        {
+            if (Scaler == null) return;
+            var scaler = target.AddComponent(Scaler);
+            var from = source == null ? null : source.GetComponent(Scaler);
+            if (from == null) return;
+            foreach (var name in new[] { "uiScaleMode", "referenceResolution", "screenMatchMode", "matchWidthOrHeight", "scaleFactor", "referencePixelsPerUnit" })
+            {
+                var property = AccessTools.Property(Scaler, name);
+                if (property != null && property.CanWrite) property.SetValue(scaler, property.GetValue(from, null), null);
+            }
+        }
+
+        /// <summary>The Nursery's species search box, cloned for the typed-value boxes (null: they are built by reflection).</summary>
+        private static Component? SearchFieldTemplate()
+        {
+            var type = AccessTools.TypeByName("PrehistoricKingdom.NurseryMenuV2");
+            if (type == null) return null;
+            foreach (var found in Resources.FindObjectsOfTypeAll(type))
+                if (found is Component menu && menu != null && menu.gameObject.scene.IsValid()
+                    && Traverse.Create(menu).Field("gallerySearchInputField").GetValue() is Component field && field != null)
+                    return field;
+            return null;
+        }
+
+        private static float Scale => _canvas != null && _canvas.GetComponent<Canvas>() is Canvas canvas && canvas.scaleFactor > 0 ? canvas.scaleFactor : 1f;
+
+        private static Vector2 CanvasSize => _canvas == null ? new Vector2(1920f, 1080f) : ((RectTransform)_canvas.transform).rect.size;
+
+        private static void Move(Vector2 delta)
+        {
+            if (_x == null || _y == null) return;
+            _x.Value += delta.x / Scale;
+            _y.Value -= delta.y / Scale;
+            Place();
+        }
+
+        private static void Resize(Vector2 delta)
+        {
+            if (_w == null || _h == null) return;
+            _w.Value += delta.x / Scale;
+            _h.Value -= delta.y / Scale;
+            Place();
+        }
+
+        /// <summary>Puts the window where the preferences say, kept on screen and no smaller than its minimum.</summary>
+        private static void Place()
+        {
+            if (_window == null || _x == null || _y == null || _w == null || _h == null) return;
+            var screen = CanvasSize;
+            if (screen.x >= 320f && screen.y >= 240f) // a canvas made this frame has no size yet: placed on the next one
+            {
+                Keep(_w, Mathf.Clamp(_w.Value, MinWidth, Mathf.Max(MinWidth, screen.x)));
+                Keep(_h, Mathf.Clamp(_h.Value, MinHeight, Mathf.Max(MinHeight, screen.y)));
+                if (_x.Value < 0f) Keep(_x, screen.x - _w.Value - 16f); // first time: the top right, under the top bar
+                Keep(_x, Mathf.Clamp(_x.Value, 60f - _w.Value, Mathf.Max(0f, screen.x - 60f)));
+                Keep(_y, Mathf.Clamp(_y.Value, 0f, Mathf.Max(0f, screen.y - TitleHeight)));
+            }
+            var rect = (RectTransform)_window.transform;
+            rect.anchoredPosition = new Vector2(_x.Value, -_y.Value);
+            rect.sizeDelta = new Vector2(_w.Value, _minimised ? TitleHeight : _h.Value);
+        }
+
+        private static void Keep(MelonPreferences_Entry<float> entry, float value)
+        {
+            if (entry.Value != value) entry.Value = value;
+        }
+
+        private static void Minimise()
+        {
+            _minimised = !_minimised;
+            if (_main != null) _main.SetActive(!_minimised);
+            Place();
+        }
+
+        private static void SavePrefs()
+        {
+            try
+            {
+                _prefs?.SaveToFile(false);
+            }
+            catch (Exception ex)
+            {
+                FrameworkMod.Log.Warning("The look editor's place could not be saved: " + ex.GetBaseException().Message);
+            }
+        }
+
+        private static void ChooseTab(bool fur)
+        {
+            _onFurTab = fur;
+            Rebuild();
+        }
+
+        // ---- the "Discard changes?" box ----
+
+        private static void ShowModal(string question, string detail, Action discard)
+        {
+            if (_window == null || _font == null) return;
+            CloseModal();
+            var shade = Child(_window.transform, "Modal", Vector2.zero, Vector2.one, new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
+            SetColor(shade.gameObject.AddComponent(Image!), new Color(0f, 0f, 0f, 0.55f)); // catches every click under it
+            var box = Child(shade, "Box", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(260f, 112f));
+            SetColor(box.gameObject.AddComponent(Image!), GameUi.Panel);
+            var strip = Child(box, "Strip", new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f), Vector2.zero, new Vector2(0f, 4f));
+            SetColor(strip.gameObject.AddComponent(Image!), Green);
+            Label(TopRow(box, 12f, 22f), _font, "<b>" + question + "</b>", 14f, "Center");
+            var text = Label(TopRow(box, 36f, 30f), _font, detail, 11f, "Center");
+            Traverse.Create(text).Property("enableWordWrapping").SetValue(true);
+            var buttons = Child(box, "Buttons", Vector2.zero, new Vector2(1f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 10f), new Vector2(-20f, 26f));
+            var yes = FlatButton(buttons, _font, "Discard", new Color(0.62f, 0.22f, 0.2f, 1f), Safe(() =>
+            {
+                CloseModal();
+                discard();
+            }));
+            Place((RectTransform)yes.Button.transform, 0f, 0.5f, 0f, -3f);
+            var keep = FlatButton(buttons, _font, "Keep editing", Idle, Safe(CloseModal));
+            Place((RectTransform)keep.Button.transform, 0.5f, 1f, 3f, 0f);
+            _modal = shade.gameObject;
+        }
+
+        private static void CloseModal()
+        {
+            if (_modal != null) UnityEngine.Object.Destroy(_modal);
+            _modal = null;
+        }
+
+        // ---- the header and the footer ----
+
+        private static void Header()
+        {
+            if (_name == null || _info == null) return;
+            if (_animal == null || _context == null)
+            {
+                SetText(_name.transform, "No animal selected");
+                SetText(_info.transform, "Select an animal in the park to edit its fur and iridescence.");
+            }
+            else
+            {
+                var name = AccessTools.Property(_animal.GetType(), "Name")?.GetValue(_animal, null) as string;
+                var data = AccessTools.Property(_animal.GetType(), "BaseData")?.GetValue(_animal, null);
+                var species = data == null ? null : AccessTools.Property(data.GetType(), "DisplayName")?.GetValue(data, null) as string;
+                var skinData = AccessTools.Property(_animal.GetType(), "SkinData")?.GetValue(_animal, null);
+                var skin = skinData == null ? null : AccessTools.Field(skinData.GetType(), "skinName")?.GetValue(skinData) as string;
+                SetText(_name.transform, "<b>" + (string.IsNullOrEmpty(name) ? species ?? _context.Species : name) + "</b>");
+                var variant = _context.Variant == "normal" ? "" : " (" + _context.Variant + ")";
+                SetText(_info.transform, $"{species ?? _context.Species} · {skin ?? "?"}{variant} · {_context.Source}");
+            }
+            foreach (var pair in ScopeButtons)
+            {
+                var available = Available(pair.Key);
+                SetColor(pair.Value.Button.GetComponent(Image!), pair.Key == _scope && available ? Green : Idle);
+                SetInteractable(pair.Value.Button.GetComponent(Button!), available);
+                Traverse.Create(pair.Value.Label).Property("color").SetValue(available ? Color.white : Faint);
+            }
+            SetColor(_irisTab.Button.GetComponent(Image!), _onFurTab ? Idle : Green);
+            SetColor(_furTab.Button.GetComponent(Image!), _onFurTab ? Green : Idle);
+        }
+
+        private static void Footer()
+        {
+            if (_status == null) return;
+            var editing = _draft != null && _animal != null;
+            var dirty = _draft?.IsDirty == true;
+            SetText(_status.transform, _message.Length > 0 ? _message : editing ? "Saves to " + TargetName() + "." : "");
+            SetText(_save.Label.transform, dirty ? "Save *" : "Save");
+            SetInteractable(_save.Button.GetComponent(Button!), dirty && _target != null);
+            SetInteractable(_reset.Button.GetComponent(Button!), dirty);
+            SetInteractable(_export.Button.GetComponent(Button!), editing && _target != null);
+            SetInteractable(_reload.Button.GetComponent(Button!), true);
+            SetColor(_save.Button.GetComponent(Image!), dirty && _target != null ? Green : Idle);
+        }
+    }
+}
