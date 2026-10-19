@@ -21,6 +21,7 @@ namespace Tyrant.Framework
     /// first LOD renderer and written to every LOD like the game's own edit scope. On top of the mods' table lie the in-game
     /// editor's live edits and the park's per-animal looks (<see cref="MaterialTable.MergeLayers"/>). A key Tyrant wrote on a
     /// renderer and no longer sets (the Nursery preview reuses one animal for every skin, the vivarium reuses pooled animals) goes back to the base material's value, or to the game's for the keys the game writes per animal.
+    /// A ramp or mask taken from a species ({ "species": id }) is <see cref="SpeciesLooks"/>' copy, the game's own until it is made.
     /// </summary>
     internal static class MaterialsModule
     {
@@ -146,9 +147,20 @@ namespace Tyrant.Framework
             _sweepDue = true;
         }
 
-        /// <summary>Once a frame: destroys the textures of ramps and masks no block uses any more (after the edits re-applied).</summary>
+        /// <summary>
+        /// Once a frame: a species whose look finished loading (<see cref="SpeciesLooks"/>) is shown on every animal at once (its
+        /// references showed the game's own until now); then the textures of ramps and masks no block uses any more are destroyed.
+        /// </summary>
         public static void Tick()
         {
+            try
+            {
+                if (SpeciesLooks.Tick().Count > 0 && _active) ReapplyAll();
+            }
+            catch (Exception ex)
+            {
+                Failed(ex);
+            }
             if (!_sweepDue) return;
             _sweepDue = false;
             try
@@ -419,6 +431,13 @@ namespace Tyrant.Framework
             }
         }
 
+        /// <summary>Every loaded animal, and the Nursery preview showing a Next created draft, written again (no keyword change).</summary>
+        private static void ReapplyAll()
+        {
+            foreach (var animal in LoadedAnimals()) Reapply(animal, keywords: false);
+            if (_previewAnimal?.Target is object preview) Reapply(preview, keywords: false);
+        }
+
         /// <summary>The selected animal first, then every loaded animal (park and vivarium) the edit of this scope also reaches.</summary>
         public static IEnumerable<object> AnimalsMatching(LookScope scope, object selected)
         {
@@ -590,8 +609,9 @@ namespace Tyrant.Framework
 
             // Textures first (a failure is reported and leaves that one out); a mask from the game's map reads the block.
             var male = IsMale(members, animal);
-            // "game" (the material's own) writes nothing: a key Tyrant wrote before goes back to the material's value.
-            var ramp = i?.Ramp == null || i.Ramp.Game ? null : RampTexture(i.Ramp);
+            // "game" (the material's own) writes nothing: a key Tyrant wrote before goes back to the material's value. So does a
+            // species' ramp or mask until its copy is made (SpeciesLooks loads it; the animal is written again then) or when it fails.
+            var ramp = i?.Ramp == null || i.Ramp.Game ? null : i.Ramp.Species != null ? SpeciesLooks.Ramp(i.Ramp.Species) : RampTexture(i.Ramp);
             var mask = i?.Mask == null || i.Mask.Game ? null : MaskTexture(i.Mask, found, male, record);
             var adultFur = o.Fur?.Mask == null || o.Fur.Mask.Game ? null : FileMask(o.Fur.Mask); // "game": the game's own per-animal mask stays
             var infantFur = o.Fur?.InfantMask == null ? adultFur : o.Fur.InfantMask.Game ? null : FileMask(o.Fur.InfantMask); // one file covers both ages
@@ -926,6 +946,7 @@ namespace Tyrant.Framework
 
         private static Texture? MaskTexture(MaskSource mask, Resolved found, bool male, Written? record)
         {
+            if (mask.Species != null) return SpeciesLooks.Mask(mask.Species); // Tyrant's copy, null while it loads
             if (mask.Everywhere || mask.File != null) return FileMask(mask);
             if (mask.From == null) return null;
 
@@ -1053,24 +1074,32 @@ namespace Tyrant.Framework
         /// One channel of a (possibly compressed, unreadable) texture as a readable grey RGBA texture, through a linear render
         /// texture; the caller owns it (the editor's Export mask PNG encodes it).
         /// </summary>
-        public static Texture2D ReadGrey(Texture source, char channel, bool invert, bool mipmaps)
+        public static Texture2D ReadGrey(Texture source, char channel, bool invert, bool mipmaps) =>
+            ReadPixels(source, mipmaps, pixels => MaskChannel.Extract(pixels, channel, invert));
+
+        /// <summary>
+        /// A (possibly compressed, unreadable) texture as a readable RGBA texture, read back through a linear render texture into
+        /// a linear texture, so the shader samples the values it sampled from the source; <paramref name="change"/> may rework the
+        /// pixels first. The caller owns it.
+        /// </summary>
+        public static Texture2D ReadPixels(Texture source, bool mipmaps, Func<byte[], byte[]>? change = null)
         {
             int width = source.width, height = source.height;
             var target = RenderTexture.GetTemporary(width, height, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.Linear);
             var previous = RenderTexture.active;
-            var mask = new Texture2D(width, height, TextureFormat.RGBA32, mipmaps, true) { name = "Tyrant iridescence mask", hideFlags = HideFlags.DontUnloadUnusedAsset };
+            var copy = new Texture2D(width, height, TextureFormat.RGBA32, mipmaps, true) { name = "Tyrant iridescence mask", hideFlags = HideFlags.DontUnloadUnusedAsset };
             try
             {
                 Graphics.Blit(source, target);
                 RenderTexture.active = target;
-                mask.ReadPixels(new Rect(0, 0, width, height), 0, 0, false);
-                mask.SetPixelData(MaskChannel.Extract(mask.GetPixelData<byte>(0).ToArray(), channel, invert), 0);
-                mask.Apply(mipmaps, false);
-                return mask;
+                copy.ReadPixels(new Rect(0, 0, width, height), 0, 0, false);
+                if (change != null) copy.SetPixelData(change(copy.GetPixelData<byte>(0).ToArray()), 0);
+                copy.Apply(mipmaps, false);
+                return copy;
             }
             catch
             {
-                UnityEngine.Object.Destroy(mask);
+                UnityEngine.Object.Destroy(copy);
                 throw;
             }
             finally

@@ -13,7 +13,8 @@ namespace Tyrant.Framework
     /// <summary>
     /// The look editor's Iridescence and Fur tabs. Each control shows what this scope's draft sets, else what the layers under
     /// this scope set (<see cref="MaterialsModule.Below"/>, never a higher layer's), else the game's own; editing it sets it at
-    /// this scope. A choice redraws the tab; a slider or a typed value only re-applies.
+    /// this scope. A choice redraws the tab; a slider or a typed value only re-applies. Each tab starts with a Preset row: a
+    /// vanilla species to start the look from (<see cref="LookEditing.ApplyPreset(LookDraft, PresetKind, SpeciesPreset)"/>).
     /// </summary>
     internal static partial class LookEditorWindow
     {
@@ -46,6 +47,7 @@ namespace Tyrant.Framework
 
         private static void IridescenceRows()
         {
+            PresetRow(PresetKind.Iridescence);
             var draft = _draft!;
             var variant = _context!.Variant;
             var own = draft.Current.Iridescence;
@@ -91,6 +93,7 @@ namespace Tyrant.Framework
                     Changed(rebuild: true);
                 }),
                 Option("PNG", rampKind == RampKind.File, true, () => PickFirst(ramp?.File, file => draft.SetRamp(new RampSource { File = file }))),
+                Option("Species", rampKind == RampKind.Species, true, () => PickSpecies(ramp?.Species, species => draft.SetRamp(new RampSource { Species = species }))),
             };
             if (rampKind == RampKind.Stops) ramps.Insert(0, Option("Colours", true, false, () => { })); // stops come from the app
             Choices(null, ramps);
@@ -102,6 +105,9 @@ namespace Tyrant.Framework
             }
             else if (rampKind == RampKind.File)
                 Cycler("Ramp", Pngs(ramp!.File), ramp.File!, file => draft.SetRamp(new RampSource { File = file }));
+            else if (rampKind == RampKind.Species)
+                SpeciesStepper("Rainbow of", SpeciesLooks.List(PresetKind.Iridescence), ramp!.Species, none: false,
+                    species => draft.SetRamp(new RampSource { Species = species }), null);
 
             // Mask.
             var mask = own?.Mask ?? below?.Mask;
@@ -113,6 +119,7 @@ namespace Tyrant.Framework
                 MaskKind.Game => Option("Game's", maskKind == kind, true, () => SetMask(new MaskSource { Game = true })),
                 MaskKind.Channel => Option("Channel", maskKind == kind, true, () =>
                     SetMask(new MaskSource { From = mask?.From ?? LookEditing.Slots[0], Channel = mask?.From != null ? mask.Channel : 'r', Invert = mask?.From != null && mask.Invert })),
+                MaskKind.Species => Option("Species", maskKind == kind, true, () => PickSpecies(mask?.Species, species => draft.SetMask(new MaskSource { Species = species }))),
                 _ => Option("PNG", maskKind == kind, true, () => PickFirst(mask?.File, file => draft.SetMask(new MaskSource { File = file }))),
             }));
             if (maskKind == MaskKind.Channel && _scope != LookScope.Species) // a species file cannot hold a mask from a skin slot
@@ -126,6 +133,9 @@ namespace Tyrant.Framework
             }
             else if (maskKind == MaskKind.File)
                 Cycler("Mask", Pngs(mask!.File), mask.File!, file => draft.SetMask(new MaskSource { File = file }));
+            else if (maskKind == MaskKind.Species)
+                SpeciesStepper("Mask of", SpeciesLooks.List(PresetKind.Iridescence), mask!.Species, none: false,
+                    species => draft.SetMask(new MaskSource { Species = species }), null);
 
             // Shaping, folded away.
             Choices(null, new[] { Option(_shapingOpen ? "Shaping  -" : "Shaping  +", false, true, () =>
@@ -171,6 +181,109 @@ namespace Tyrant.Framework
             Changed(rebuild: true);
         }
 
+        /// <summary>A ramp or mask from a species: the one in use, else the iridescence preset picked, else the first that shimmers.</summary>
+        private static void PickSpecies(string? current, Action<string> use)
+        {
+            var offered = SpeciesLooks.List(PresetKind.Iridescence);
+            var species = current ?? (PresetPick.TryGetValue(PresetKind.Iridescence, out var picked) ? picked : null) ?? offered.FirstOrDefault().Id;
+            if (species == null)
+            {
+                _message = "No species shimmers in the game's animal data (it may not be read yet).";
+                Footer();
+                return;
+            }
+            use(species);
+            SpeciesLooks.Values(species); // its copy starts loading now; the animals show it once it is made
+            Changed(rebuild: true);
+        }
+
+        // ---- presets ----
+
+        /// <summary>
+        /// The Preset row: ‹ None · Microraptor · … › and Apply. Picking a species starts loading its look; Apply starts the draft
+        /// from it (the draft is then dirty like after any edit, and Reset still goes back to the saved look), at once or, while
+        /// the species' material still loads, as soon as it is ready.
+        /// </summary>
+        private static void PresetRow(PresetKind kind)
+        {
+            var offered = SpeciesLooks.List(kind);
+            var pick = PresetPick.TryGetValue(kind, out var p) && p != null && offered.Any(o => o.Id == p) ? p : null;
+            SpeciesStepper("Preset", offered, pick, none: true, species =>
+            {
+                PresetPick[kind] = species;
+                if (species != null) SpeciesLooks.Values(species); // loads in the background while the player decides
+                Rebuild();
+            }, ("Apply", pick != null && _draft != null, () => ApplyPreset(kind, pick!)));
+        }
+
+        private static void ApplyPreset(PresetKind kind, string species)
+        {
+            if (_draft == null) return;
+            if (SpeciesLooks.Unavailable(species))
+            {
+                _presetWaiting = null;
+                _message = SpeciesLooks.NameOf(species) + "'s look could not be read (see the MelonLoader log).";
+                Footer();
+                return;
+            }
+            if (!LookEditing.ApplyPreset(_draft, kind, SpeciesLooks.Source, species))
+            {
+                _presetWaiting = (kind, species); // SpeciesLoaded applies it once the material is read
+                _message = "Loading " + SpeciesLooks.NameOf(species) + "'s look…";
+                Footer();
+                return;
+            }
+            _presetWaiting = null;
+            Switch.Forget(); // the preset's values are the draft's own now: a later off/on or grow off starts from them
+            FurSwitch.Forget();
+            _message = "Started from " + SpeciesLooks.NameOf(species) + (kind == PresetKind.Fur ? "'s fur" : "'s iridescence") + "; edit anything, Reset goes back to the saved look.";
+            Changed(rebuild: true);
+        }
+
+        /// <summary>A species' look finished loading: a preset waiting for it is applied, and the draft shows its copies.</summary>
+        private static void SpeciesLoaded(string species)
+        {
+            if (!IsOpen || _draft == null) return;
+            if (_presetWaiting is { } waiting && waiting.Species == species)
+            {
+                ApplyPreset(waiting.Kind, species);
+                return;
+            }
+            PushLive(keywords: false); // the park's animals were written again; the Nursery's preview is not among them
+        }
+
+        /// <summary>
+        /// A label, ‹ name ›, and an optional button: steps through the species (and "None" first when <paramref name="none"/>);
+        /// <paramref name="pick"/> gets the id (null for None).
+        /// </summary>
+        private static void SpeciesStepper(string label, IReadOnlyList<(string Id, string Name)> items, string? current, bool none, Action<string?> pick,
+            (string Text, bool Enabled, Action Click)? button)
+        {
+            var row = Row();
+            Place((RectTransform)Label(row, _font!, label, 11f).transform, 0f, 0.3f, 0f, 0f);
+            var ids = (none ? new string?[] { null } : Array.Empty<string?>()).Concat(items.Select(i => (string?)i.Id)).ToList();
+            var index = ids.IndexOf(current);
+            void Step(int by)
+            {
+                if (ids.Count == 0) return;
+                pick(ids[((index < 0 ? 0 : index) + by + ids.Count) % ids.Count]);
+            }
+            var end = button == null ? 1f : 0.78f;
+            var back = FlatButton(row, _font!, "<", Idle, Safe(() => Step(-1)));
+            Place((RectTransform)back.Button.transform, 0.3f, 0.3f, 0f, 22f);
+            var shown = current == null ? (ids.Count == (none ? 1 : 0) ? "none in the game's data" : "None") : SpeciesLooks.NameOf(current);
+            Place((RectTransform)Label(row, _font!, shown, 11f, "Center").transform, 0.3f, end, 26f, -26f);
+            var next = FlatButton(row, _font!, ">", Idle, Safe(() => Step(1)));
+            Place((RectTransform)next.Button.transform, end, end, -22f, 0f);
+            if (button is { } b)
+            {
+                var (apply, text) = FlatButton(row, _font!, b.Text, b.Enabled ? Green : Idle, Safe(b.Click));
+                Place((RectTransform)apply.transform, 0.8f, 1f, 0f, 0f);
+                SetInteractable(apply.GetComponent(Button!), b.Enabled);
+                if (!b.Enabled) Traverse.Create(text).Property("color").SetValue(Faint);
+            }
+        }
+
         private static bool ShownOn()
         {
             var strength = _draft?.Current.Iridescence?.Strength ?? _below?.Iridescence?.Strength;
@@ -192,6 +305,7 @@ namespace Tyrant.Framework
 
         private static void FurRows()
         {
+            PresetRow(PresetKind.Fur);
             var draft = _draft!;
             // Grow fur: the game's fur on a skin it gives none (fur.grow), at any scope; on also gives a length when none shows.
             var growing = LookEditing.GrowsFur(draft, _below);

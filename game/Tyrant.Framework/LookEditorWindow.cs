@@ -56,6 +56,8 @@ namespace Tyrant.Framework
         private static List<object> _matching = new List<object>();
         private static readonly IridescenceSwitch Switch = new IridescenceSwitch();
         private static readonly FurGrowSwitch FurSwitch = new FurGrowSwitch(); // remembers the length Grow fur seeded, for Off
+        private static readonly Dictionary<PresetKind, string?> PresetPick = new Dictionary<PresetKind, string?>(); // the Preset row's species per tab
+        private static (PresetKind Kind, string Species)? _presetWaiting; // Apply pressed while that species' material still loads
 
         /// <summary>Exported masks waiting for Save, outside every mod (UserData/Tyrant/Looks/.pending).</summary>
         private static StagedFiles? _stagedFiles;
@@ -72,6 +74,7 @@ namespace Tyrant.Framework
             _w = _prefs.CreateEntry("EditorW", 360f);
             _h = _prefs.CreateEntry("EditorH", 600f);
             Staged.Clean(); // exports an earlier run left unsaved
+            SpeciesLooks.Loaded += species => Safe(() => SpeciesLoaded(species))();
         }
 
         /// <summary>Once a frame in a park: the Tyrant buttons, an animal that went away, the Nursery's preview animal.</summary>
@@ -279,6 +282,7 @@ namespace Tyrant.Framework
             _declined = null;
             _awaitPreview = false;
             _matching = new List<object>();
+            _presetWaiting = null;
             Switch.Forget();
             FurSwitch.Forget();
             Staged.Discard();
@@ -304,6 +308,7 @@ namespace Tyrant.Framework
         /// <summary>A draft of what is saved for the animal at the current scope, where it would save, and who it reaches.</summary>
         private static void NewDraft()
         {
+            _presetWaiting = null; // a preset waits for the draft it was asked for
             Switch.Forget();
             FurSwitch.Forget();
             Staged.Discard(); // an export belongs to the draft it was made for
@@ -556,6 +561,7 @@ namespace Tyrant.Framework
         private static void Reset()
         {
             if (_draft == null) return;
+            _presetWaiting = null;
             _draft.Reset();
             Switch.Forget();
             FurSwitch.Forget();
@@ -590,6 +596,14 @@ namespace Tyrant.Framework
             if (_detached || !Alive(_animal))
             {
                 _message = "The Nursery shows another look now: Save or Reset first, then export from the animal it shows.";
+                Footer();
+                return;
+            }
+            var shownMask = _draft.Current.Iridescence?.Mask ?? _below?.Iridescence?.Mask;
+            if (!_onFurTab && shownMask?.Species != null)
+            {
+                // The game's images never go into files: a species' mask stays a reference.
+                _message = SpeciesLooks.NameOf(shownMask.Species) + "'s mask stays a reference and is not exported; pick Channel or PNG to make one of your own.";
                 Footer();
                 return;
             }
