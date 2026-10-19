@@ -589,6 +589,7 @@ export interface ModDetail {
   prefabFiles?: Record<string, string> | null;
   prefabTargets?: ModPrefabTargetDto[] | null;
   usesSpeciesFrom?: ModSpeciesUseDto[] | null;
+  speciesMaterials?: ModSpeciesMaterialsDto[] | null;
 }
 
 export interface ModEnableParams {
@@ -636,6 +637,52 @@ export interface ModMakeStartingSkinParams {
   id: string;
   revision: string;
   skin: string;
+}
+
+export interface ModMaterialInfo {
+  name: string;
+  animal: string;
+  properties: ModMaterialProperty[];
+  inheritedIridescenceJson: string | null;
+  gameHasIridescence: boolean;
+  problem: string | null;
+}
+
+export interface ModMaterialInfoParams {
+  id: string;
+  skin?: string | null;
+  species?: string | null;
+}
+
+export interface ModMaterialPreview {
+  on: boolean;
+  strength: number;
+  scale: number;
+  power: number;
+  bias: number;
+  ramp: string | null;
+  mask: string | null;
+  maskSt: number[];
+  smoothness: number | null;
+}
+
+export interface ModMaterialPreviewParams {
+  id: string;
+  skin?: string | null;
+  species?: string | null;
+  materials?: string | null;
+  sex?: string;
+}
+
+export interface ModMaterialProperty {
+  key: string;
+  group: string;
+  label: string;
+  kind: string;
+  min: number;
+  max: number;
+  inherited: string | null;
+  source: string;
 }
 
 export interface ModModelDto {
@@ -930,6 +977,24 @@ export interface ModSetDetailsParams {
   description?: string | null;
 }
 
+export interface ModSetMaterialFileParams {
+  id: string;
+  revision: string;
+  material: string;
+  part: string;
+  skin?: string | null;
+  species?: string | null;
+  png?: string | null;
+}
+
+export interface ModSetMaterialsParams {
+  id: string;
+  revision: string;
+  skin?: string | null;
+  species?: string | null;
+  materials?: string | null;
+}
+
 export interface ModSetPortraitsParams {
   id: string;
   revision: string;
@@ -1047,6 +1112,7 @@ export interface ModSkinDto {
   starting?: boolean;
   copiedFromSpecies?: string | null;
   copiedFromSkin?: number | null;
+  materialsJson?: string | null;
 }
 
 export interface ModSkinModel {
@@ -1086,6 +1152,11 @@ export interface ModSoundDto {
 export interface ModSoundFilesDto {
   event: string;
   files: string[];
+}
+
+export interface ModSpeciesMaterialsDto {
+  species: string;
+  materialsJson: string;
 }
 
 export interface ModSpeciesModelParams {
@@ -1158,6 +1229,16 @@ export interface ModTexturesResult {
   totalBytes: number;
   pack?: string;
   packBytes?: number;
+}
+
+export interface ModThinFilm {
+  stops: string[];
+}
+
+export interface ModThinFilmParams {
+  thickness: number;
+  index?: number;
+  count?: number;
 }
 
 export interface ModThumbnailParams {
@@ -1498,6 +1579,8 @@ export interface RpcMethods {
   "mods.install": { params: ModIdParams; result: JobStarted };
   "mods.list": { params: void; result: ModsListResult };
   "mods.makeStartingSkin": { params: ModMakeStartingSkinParams; result: ModDetail };
+  "mods.materialInfo": { params: ModMaterialInfoParams; result: ModMaterialInfo };
+  "mods.materialPreview": { params: ModMaterialPreviewParams; result: ModMaterialPreview };
   "mods.modelPreview": { params: ModModelPreviewParams; result: ModModelPreview };
   "mods.portraits": { params: ModPortraitsParams; result: ModPortraitsResult };
   "mods.prefabFields": { params: ModPrefabFieldsParams; result: ModPrefabFields };
@@ -1522,6 +1605,8 @@ export interface RpcMethods {
   "mods.setColors": { params: ModSetColorsParams; result: ModDetail };
   "mods.setCompression": { params: ModSetCompressionParams; result: ModDetail };
   "mods.setDetails": { params: ModSetDetailsParams; result: ModDetail };
+  "mods.setMaterialFile": { params: ModSetMaterialFileParams; result: ModDetail };
+  "mods.setMaterials": { params: ModSetMaterialsParams; result: ModDetail };
   "mods.setPortraits": { params: ModSetPortraitsParams; result: ModDetail };
   "mods.setPrefabField": { params: ModSetPrefabFieldParams; result: ModDetail };
   "mods.setSkinFile": { params: ModSetSkinFileParams; result: ModDetail };
@@ -1541,6 +1626,7 @@ export interface RpcMethods {
   "mods.speciesTemplate": { params: ModSpeciesTemplateParams; result: ModSpeciesTemplateDto };
   "mods.speciesTextures": { params: ModSpeciesTexturesParams; result: ModSpeciesTexturesResult };
   "mods.textures": { params: ModIdParams; result: ModTexturesResult };
+  "mods.thinFilm": { params: ModThinFilmParams; result: ModThinFilm };
   "mods.thumbnail": { params: ModThumbnailParams; result: ModThumbnailResult };
   "sounds.forSpecies": { params: SoundsForSpeciesParams; result: SoundsForSpeciesResult };
   "sounds.matchFolder": { params: SoundsMatchFolderParams; result: SoundsMatchFolderResult };
