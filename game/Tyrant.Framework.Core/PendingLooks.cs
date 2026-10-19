@@ -52,7 +52,7 @@ namespace Tyrant.Framework.Core
             Find(species, skin, sex, exact: true) is Entry entry ? CopyAll(entry.Materials) : null;
 
         /// <summary>
-        /// The look for a new animal of this species, skin and sex, removed from the store: the one kept for its sex, else one of
+        /// The look for an incubation of this species, skin and sex, removed from the store: the one kept for its sex, else one of
         /// the same species and skin that does not depend on sex. Null when none matches.
         /// </summary>
         public Dictionary<string, MaterialOverride>? Take(string species, string? skin, string? sex)
@@ -62,6 +62,10 @@ namespace Tyrant.Framework.Core
             _entries.Remove(entry);
             return CopyAll(entry.Materials);
         }
+
+        /// <summary>True when <see cref="Take"/> would hand out a look for this species, skin and sex (nothing is taken).</summary>
+        public bool Has(string species, string? skin, string? sex) =>
+            Find(species, skin, sex, exact: true) != null || Find(species, skin, sex, exact: false) != null;
 
         /// <summary>Drops every look (the park was left: they are never saved).</summary>
         public void Clear() => _entries.Clear();

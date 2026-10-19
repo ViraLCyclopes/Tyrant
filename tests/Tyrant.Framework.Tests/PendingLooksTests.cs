@@ -54,6 +54,20 @@ public class PendingLooksTests
     }
 
     [Fact]
+    public void Has_tells_whether_take_would_match_without_taking()
+    {
+        var pending = new PendingLooks();
+        Assert.False(pending.Has("Allosaurus", "Allosaurus/Base", "male"));
+        pending.Set("Allosaurus", "Allosaurus/Base", "male", "Body", Strength(0.3f));
+        Assert.True(pending.Has("Allosaurus", "Allosaurus/Base", "male"));
+        Assert.True(pending.Has("Allosaurus", "Allosaurus/Base", "female")); // the sex-independent fallback, as Take
+        Assert.False(pending.Has("Ouranosaurus", "Allosaurus/Base", "male"));
+        Assert.Equal(1, pending.Count); // nothing taken
+        pending.Set("Allosaurus", "Allosaurus/Base", "male", "Body", FromMap());
+        Assert.False(pending.Has("Allosaurus", "Allosaurus/Base", "female"));
+    }
+
+    [Fact]
     public void A_look_with_a_mask_from_a_sexs_own_map_goes_to_that_sex_only()
     {
         var pending = new PendingLooks();

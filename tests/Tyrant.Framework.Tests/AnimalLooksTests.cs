@@ -35,33 +35,43 @@ public class AnimalLooksTests
         Assert.False(File.Exists(path + ".tmp"));
     }
 
+    private static IncubatingLook Bound(float strength, string species = "Allosaurus", string? skin = "Allosaurus/Base", string? sex = "male") =>
+        new(species, skin, sex, Look(strength));
+
     [Fact]
-    public void Looks_bound_to_incubating_animals_round_trip_beside_the_animals()
+    public void Looks_bound_to_incubating_animals_round_trip_with_the_animal_they_are_for()
     {
         var path = AnimalLooks.PathFor(TempDir(), "Park A")!;
         var looks = new AnimalLooks();
         looks.Set(1, Look(0.2f));
-        looks.SetIncubating(900, Look(0.7f));
+        looks.SetIncubating(900, Bound(0.7f));
+        looks.SetIncubating(901, Bound(0.3f, "Ouranosaurus", skin: null, sex: null));
         looks.Write(path);
-        Assert.Contains("\"incubating\"", File.ReadAllText(path));
+        var text = File.ReadAllText(path);
+        Assert.Contains("\"incubating\"", text);
+        Assert.Contains("\"species\"", text);
 
         var problems = new List<string>();
         var read = AnimalLooks.Read(path, problems);
         Assert.Empty(problems);
         Assert.Equal(1, read.Count); // the animals only
-        Assert.Equal(1, read.IncubatingCount);
-        Assert.Equal(0.7f, read.GetIncubating(900)!["Body"].Iridescence!.Strength!.Normal);
+        Assert.Equal(2, read.IncubatingCount);
+        var bound = read.GetIncubating(900)!;
+        Assert.Equal(("Allosaurus", "Allosaurus/Base", "male"), (bound.Species, bound.Skin, bound.Sex));
+        Assert.Equal(0.7f, bound.Materials["Body"].Iridescence!.Strength!.Normal);
+        Assert.Equal(("Ouranosaurus", (string?)null, (string?)null), (read.GetIncubating(901)!.Species, read.GetIncubating(901)!.Skin, read.GetIncubating(901)!.Sex));
         Assert.Null(read.Get(900)); // a virtual animal's id is not an animal's
-        Assert.Equal(new ulong[] { 900 }, read.IncubatingIds);
+        Assert.Equal(new ulong[] { 900, 901 }, read.IncubatingIds);
 
         read.SetIncubating(900, null);
+        read.SetIncubating(901, null);
         Assert.Equal(0, read.IncubatingCount);
         read.Write(path);
         Assert.DoesNotContain("incubating", File.ReadAllText(path)); // no empty section
     }
 
     [Fact]
-    public void A_file_without_the_incubating_section_reads_as_before_and_a_bad_one_is_a_problem()
+    public void A_file_without_the_incubating_section_reads_as_before_and_a_bad_binding_is_a_problem()
     {
         var dir = TempDir();
         var old = Path.Combine(dir, "old.json");
@@ -73,11 +83,30 @@ public class AnimalLooksTests
         Assert.Equal(0, read.IncubatingCount);
 
         var bad = Path.Combine(dir, "bad.json");
-        File.WriteAllText(bad, """{"format":1,"incubating":{"x":{},"7":{"Body":{"settings":{"_Smoothness":0.4}}}}}""");
+        File.WriteAllText(bad, """
+            {"format":1,"incubating":{
+              "x":{"species":"A","materials":{}},
+              "7":{"Body":{"settings":{"_Smoothness":0.4}}},
+              "8":{"species":"Allosaurus","skin":"Allosaurus/Base","sex":"female","materials":{"Body":{"settings":{"_Smoothness":0.4}}}}}}
+            """);
         read = AnimalLooks.Read(bad, problems);
-        Assert.Single(problems);
+        Assert.Equal(2, problems.Count);
         Assert.Contains("incubating animal \"x\" is not an id", problems[0]);
-        Assert.NotNull(read.GetIncubating(7));
+        Assert.Contains("needs \"species\"", problems[1]); // a binding that does not say which animal it is for is dropped
+        Assert.Null(read.GetIncubating(7));
+        Assert.Equal("female", read.GetIncubating(8)!.Sex);
+    }
+
+    [Fact]
+    public void A_binding_matches_only_the_animal_it_was_made_for()
+    {
+        var bound = Bound(0.5f);
+        Assert.True(bound.Matches("Allosaurus", "allosaurus/base", "male")); // skin keys in any case
+        Assert.False(bound.Matches("Ouranosaurus", "Allosaurus/Base", "male"));
+        Assert.False(bound.Matches("Allosaurus", "Allosaurus/Alt 1", "male"));
+        Assert.False(bound.Matches("Allosaurus", "Allosaurus/Base", "female"));
+        Assert.False(bound.Matches("Allosaurus", null, "male"));
+        Assert.True(Bound(0.5f, skin: null, sex: null).Matches("Allosaurus", null, null));
     }
 
     [Fact]
@@ -85,12 +114,14 @@ public class AnimalLooksTests
     {
         var dir = TempDir();
         var looks = new AnimalLooks();
-        looks.SetIncubating(5, Look(0.1f));
-        looks.SetIncubating(6, Look(0.2f));
+        looks.SetIncubating(5, Bound(0.1f));
+        looks.SetIncubating(6, Bound(0.2f));
         Assert.Equal(1, looks.PruneIncubating(new ulong[] { 6, 99 }));
         Assert.Null(looks.GetIncubating(5));
         Assert.NotNull(looks.GetIncubating(6));
+        Assert.Equal(1, looks.PruneIncubating(Array.Empty<ulong>())); // none left in the park (a save that never had them): all go
 
+        looks.SetIncubating(6, Bound(0.2f));
         looks.WriteFor(dir, "Park B");
         Assert.True(File.Exists(AnimalLooks.PathFor(dir, "Park B"))); // only a binding: still written
         looks.SetIncubating(6, null);
