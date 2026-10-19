@@ -308,3 +308,30 @@ Needs a data dump, an asset index and the game. Steps marked **(game)** start th
 139. On the **Material** card of a skin based on Microraptor's vanilla skin, **Iridescence** is ticked as the game's
      (strength *game's, 25 %*) and the 3D view shimmers with no mod strength; on a species page (**Species materials**) it is
      unticked and says *Game's (only some skins shimmer)*.
+
+## In-game live editor
+
+Needs the game and a Tyrant Framework installed from this build. Steps marked **(app)** are in the Tyrant app.
+
+140. **(game)** Open a park with Titanoboas. Click **Tyrant** in the top bar: a window opens. Drag it by its title, resize it from
+     the corner (it stops at 300 × 360), close and reopen the park: it is where you left it.
+141. **(game)** On one Titanoboa, **This animal**, tab **Iridescence**: move strength and thickness (type values too); only that
+     animal changes. Switch to **Whole skin**: every animal wearing the skin changes with it.
+142. **(game)** **Save** on **This animal**, save the park, reload it: the look is still there and
+     `UserData/Tyrant/Looks/<park>.json` has the animal's entry (the park save has nothing new). Sell the animal, save the park:
+     its entry is gone.
+143. **(game)** Save a vanilla skin of a species no mod touches: the `vanilla-looks` mod appears in `Mods` (**Vanilla Looks** in
+     the Mods tab) and loads last; its look shows on a second animal and after a restart.
+144. **(game)** Save into a mod skin made by someone else: the change lands in that mod's folder in the game, not the workspace.
+145. **(game)** **Export mask PNG**, edit the PNG in an image editor, press **Reload images**: the animals update. Without
+     **Save**, **Discard** deletes the staged file.
+146. **(game)** Change a value, then select another animal: it asks about the unsaved change (keep or discard). Same on closing the window.
+147. **(game)** The vivarium species check: a pooled vivarium animal with a vanilla skin looks vanilla (no sheen from another
+     animal's look), and an animal with a look keeps it after being moved.
+148. **(app)** After steps 143 or 144, **Install** the mod (or **Remove from game**): the **Bring in looks made in the game?** dialog lists the
+     changed folders. Bring one in: it appears in the workspace mod (**Vanilla skin materials** for a vanilla skin). When both
+     sides changed, **Game's** and **Project's** each win as chosen.
+149. **(app)** `vanilla-looks` is listed as a game-only mod with **Copy to workspace first**. CLI: `tyrant mod looks <mod>` lists
+     the folders; `tyrant mod install <mod>` stops with `GAME_LOOKS_PENDING` until `--bring-in-looks` or `--discard-game-looks`.
+150. **(app)** **Uninstall from game**: the dialog asks first; afterwards `UserData/Tyrant/Looks` is still there. **(game)** Remove Tyrant:
+     the park loads vanilla, with no error.
