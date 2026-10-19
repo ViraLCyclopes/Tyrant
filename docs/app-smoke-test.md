@@ -357,3 +357,10 @@ Needs the game and a Tyrant Framework installed from this build. Steps marked **
 150. **(app)** **Uninstall from game**: the dialog asks first and says the looks and masks are kept; afterwards `UserData/Tyrant/Looks`
      and `UserData/Tyrant/Masks` are still there. **(game)** Remove Tyrant:
      the park loads vanilla, with no error.
+151. **(game)** Grow fur: with the game's Fur graphics setting on (tessellation), open the Nursery on Ouranosaurus, click
+     **T**, choose **Whole species**, then **Fur** → **Grow fur** **On**: fur appears over the whole body at once, and
+     **Length** shows 0.5. Change **Length** and **Droop**: the fur follows. **Off**: the bare skin is back. **On** again,
+     **Save**, close the Nursery and place an Ouranosaurus: it has fur; the species' `materials.json` (in **Vanilla Looks**
+     when no mod set that species) has `"fur": { "grow": true }`. Turn the Fur graphics setting's
+     tessellation off: the fur goes, the status line in the editor says grown fur needs tessellated fur, and
+     `Latest.log` has one warning about it.
