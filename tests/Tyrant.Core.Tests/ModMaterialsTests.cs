@@ -406,6 +406,35 @@ public class ModMaterialsTests
     }
 
     [Fact]
+    public void A_species_ramp_or_mask_previews_that_species_material_s_own()
+    {
+        var (game, ws, mod) = ModEditTests.Setup();
+        using var _ = game;
+        mod = ModEditTests.WithSkins(ws, mod);
+        var outDir = Path.Combine(ws.Dir, "preview");
+        var ownRamp = ModEditTests.Png(Path.Combine(ws.Dir, "game"), "own-ramp.png");
+        var microRamp = ModEditTests.Png(Path.Combine(ws.Dir, "game"), "micro-ramp.png");
+        var microMask = ModEditTests.Png(Path.Combine(ws.Dir, "game"), "micro-mask.png");
+        var ownAsset = new AssetRecord("m.bundle", 7, "Texture2D", "Ramp", null, "feed", null);
+        var rampAsset = new AssetRecord("micro.bundle", 1, "Texture2D", "MicroRamp", null, "aaaa", null);
+        var maskAsset = new AssetRecord("micro.bundle", 2, "Texture2D", "MicroMask", null, "bbbb", null);
+        var gameMaterial = new AnimalMaterial("Carch", new Dictionary<string, float>(), new Dictionary<string, float[]>(), ownAsset, null);
+        var micro = new AnimalMaterial("Microraptor", new Dictionary<string, float>(), new Dictionary<string, float[]>(), rampAsset, maskAsset);
+        var draft = MaterialOverrides.Parse(Json.Parse("""{"Carch":{"iridescence":{"strength":0.4,"ramp":{"species":"Microraptor"},"mask":{"species":"Microraptor"}}}}"""), "x", true)!["Carch"];
+        string? Export(AssetRecord a) => a == rampAsset ? microRamp : a == maskAsset ? microMask : a == ownAsset ? ownRamp : null;
+
+        var result = MaterialPreview.Build(mod, "blue", null, "Carch", draft, "male", gameMaterial, outDir, Export,
+            speciesMaterial: id => id == "Microraptor" ? micro : null);
+
+        Assert.True(result.On);
+        Assert.Equal(microRamp, result.RampFile);
+        Assert.Equal(microMask, result.MaskFile);
+        var unknown = MaterialOverrides.Parse(Json.Parse("""{"Carch":{"iridescence":{"strength":0.4,"ramp":{"species":"Nope"}}}}"""), "x", true)!["Carch"];
+        var fallback = MaterialPreview.Build(mod, "blue", null, "Carch", unknown, "male", gameMaterial, outDir, Export, speciesMaterial: _ => null);
+        Assert.Equal(ownRamp, fallback.RampFile); // as in the game: a species that cannot be read leaves the material's own
+    }
+
+    [Fact]
     public void Preview_without_a_mod_strength_shows_the_vanilla_skins_own_iridescence()
     {
         var (game, ws, mod) = ModEditTests.Setup();

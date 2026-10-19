@@ -154,6 +154,50 @@ public class ModEditCliTests
     }
 
     [Fact]
+    public void Materials_preset_starts_a_material_from_a_species_over_its_own_settings()
+    {
+        using var game = new FakeGame();
+        var ws = WorkspaceWithSkin(game);
+        SkinDumps.Write(Path.Combine(ws, "data"));
+        new Tyrant.Core.Assets.AssetIndex { Assets = [.. SkinDumps.Textures, SkinDumps.Prefab], Fingerprint = Tyrant.Core.Install.GameFingerprint.Compute(new Tyrant.Core.Install.GameInstall(game.Root, null)) }
+            .Save(Path.Combine(ws, "cache", Tyrant.Core.Assets.AssetIndex.FileName));
+        var previous = CliServices.AssetReader;
+        CliServices.AssetReader = new FakeAssetReader
+        {
+            PrefabMaterials = [new Tyrant.Core.Models.MaterialModel("Carch_Mat", [new Tyrant.Core.Models.TextureSlot("_AdultDiffuse", null, 1), new Tyrant.Core.Models.TextureSlot("_IridescenceTexture", null, 2)])
+            {
+                Floats = new Dictionary<string, float> { ["_IridescenceScale"] = -0.25f },
+            }],
+        };
+        try
+        {
+            var file = Path.Combine(ws, "materials.json");
+            File.WriteAllText(file, "{\"Carch_Mat\":{\"settings\":{\"_Smoothness\":0.4}}}");
+            Assert.Equal(ExitCodes.Ok, Run("mod", "materials", "red-spot", "blue", "--set", file, "-w", ws).Code);
+
+            var preset = Run("mod", "materials", "red-spot", "blue", "--preset", "Carcharodontosaurus", "--kind", "iridescence", "-w", ws);
+
+            Assert.True(preset.Code == ExitCodes.Ok, preset.Err);
+            Assert.Contains("Carch_Mat of 'blue' starts from Carcharodontosaurus's iridescence", preset.Out);
+            var shown = Run("mod", "materials", "red-spot", "blue", "--show", "-w", ws).Out;
+            Assert.Contains("\"species\": \"Carcharodontosaurus\"", shown); // the ramp, by reference
+            Assert.Contains("\"_Smoothness\": 0.4", shown); // what the preset does not set stays
+            Assert.Contains("\"scale\": -0.25", shown);
+
+            var noFur = Run("mod", "materials", "red-spot", "blue", "--preset", "Carcharodontosaurus", "--kind", "fur", "-w", ws);
+            Assert.Equal(ExitCodes.Error, noFur.Code);
+            Assert.Contains("Carcharodontosaurus has no skin with fur", noFur.Err);
+            var noKind = Run("mod", "materials", "red-spot", "blue", "--preset", "Carcharodontosaurus", "-w", ws);
+            Assert.Equal(ExitCodes.Error, noKind.Code);
+            Assert.Contains("--kind iridescence or --kind fur", noKind.Err);
+        }
+        finally
+        {
+            CliServices.AssetReader = previous;
+        }
+    }
+
+    [Fact]
     public void Materials_of_a_species_without_the_game_data()
     {
         using var game = new FakeGame();

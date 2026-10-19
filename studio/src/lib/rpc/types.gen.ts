@@ -1196,6 +1196,28 @@ export interface ModSpeciesParams {
   speciesId: string;
 }
 
+export interface ModSpeciesPreset {
+  species: string;
+  name: string;
+  materialJson: string;
+}
+
+export interface ModSpeciesPresetDto {
+  species: string;
+  name: string;
+}
+
+export interface ModSpeciesPresetParams {
+  species: string;
+  kind: string;
+}
+
+export interface ModSpeciesPresets {
+  iridescence: ModSpeciesPresetDto[];
+  fur: ModSpeciesPresetDto[];
+  problem: string | null;
+}
+
 export interface ModSpeciesResult {
   hasDump: boolean;
   species: SpeciesSkinsRow[];
@@ -1665,6 +1687,8 @@ export interface RpcMethods {
   "mods.skinSlots": { params: void; result: SkinSlotsResult };
   "mods.species": { params: void; result: ModSpeciesResult };
   "mods.speciesModel": { params: ModSpeciesModelParams; result: ModSkinModel };
+  "mods.speciesPreset": { params: ModSpeciesPresetParams; result: ModSpeciesPreset };
+  "mods.speciesPresets": { params: void; result: ModSpeciesPresets };
   "mods.speciesRemoval": { params: ModSpeciesParams; result: SpeciesRemoval };
   "mods.speciesTemplate": { params: ModSpeciesTemplateParams; result: ModSpeciesTemplateDto };
   "mods.speciesTextures": { params: ModSpeciesTexturesParams; result: ModSpeciesTexturesResult };

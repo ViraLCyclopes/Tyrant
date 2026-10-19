@@ -109,7 +109,8 @@ public sealed partial class ModsMethods
             species is null ? null : VanillaIridescence(mod, species, p.Skin, p.VanillaSkin, p.Sex),
             p.VanillaSkin,
             slot => SkinMaps.Source(null, null, vanilla, slot, p.Sex) is { } source && index is not null
-                ? SkinMaps.Write(source, install, index, Options.AssetReader, Path.Combine(dir, source[5..] + ".png")) : null);
+                ? SkinMaps.Write(source, install, index, Options.AssetReader, Path.Combine(dir, source[5..] + ".png")) : null,
+            id => dump is null || index is null ? null : GameMaterial(install, dump, index, id)); // a ramp or mask taken from a species: the game's files
         return new ModMaterialPreview(result.On, result.Strength, result.Scale, result.Power, result.Bias, InCache(ws, mod, dir, result.RampFile),
             InCache(ws, mod, dir, result.MaskFile), result.MaskSt, result.Numbers.TryGetValue("_Smoothness", out var smoothness) ? smoothness : null);
     }
@@ -117,6 +118,30 @@ public sealed partial class ModsMethods
     [RpcMethod("mods.thinFilm")]
     public ModThinFilm ThinFilmStops(ModThinFilmParams p) =>
         new(ThinFilm.Ramp(p.Thickness, p.Index, Math.Clamp(p.Count, 1, IridescenceSettings.MaxRampStops)).Select(c => c.ToString()).ToList());
+
+    [RpcMethod("mods.speciesPresets")]
+    public ModSpeciesPresets SpeciesPresets()
+    {
+        var (ws, _) = session.Current();
+        if (TrySpecies(ws) is not { } dump) return new ModSpeciesPresets([], [], NeedsDump);
+        static List<ModSpeciesPresetDto> Of(IReadOnlyList<SpeciesSkins> dump, PresetKind kind) =>
+            GamePresets.List(dump, kind).Select(s => new ModSpeciesPresetDto(s.Id, s.Name)).ToList();
+        return new ModSpeciesPresets(Of(dump, PresetKind.Iridescence), Of(dump, PresetKind.Fur), null);
+    }
+
+    [RpcMethod("mods.speciesPreset")]
+    public ModSpeciesPreset SpeciesPresetOf(ModSpeciesPresetParams p)
+    {
+        var kind = GamePresets.KindOf(p.Kind)
+            ?? throw new TyrantException(TyrantErrorCode.ModInvalid, $"A preset is \"iridescence\" or \"fur\", not \"{p.Kind}\".");
+        var (ws, install) = session.Current();
+        var dump = TrySpecies(ws) ?? throw new TyrantException(TyrantErrorCode.DataMissing, NeedsDump, FixAction.RefreshWorkspace);
+        var index = TryIndex(ws) ?? throw new TyrantException(TyrantErrorCode.AssetIndexMissing, NeedsIndex, FixAction.ReindexAssets);
+        var species = dump.FirstOrDefault(s => string.Equals(s.SpeciesId, p.Species, StringComparison.Ordinal))
+            ?? throw new TyrantException(TyrantErrorCode.TargetNotFound, $"\"{p.Species}\" is not a species in the game data.");
+        var preset = GamePresets.Of(species, GameMaterial(install, dump, index, species.SpeciesId));
+        return new ModSpeciesPreset(species.SpeciesId, species.Name, GamePresets.FragmentJson(preset, kind));
+    }
 
     [RpcMethod("mods.vanillaSkins")]
     public ModVanillaSkinList VanillaSkinsOf(ModVanillaSkinsParams p)

@@ -54,10 +54,12 @@ public static class MaterialPreview
     /// used when no layer sets a strength; null when unknown (none). <paramref name="vanillaMap"/> gives the game's map in a slot,
     /// for this sex, as a PNG file (null: none), for masks taken from one: a vanilla skin's (<paramref name="vanillaSkin"/>) own, or a
     /// mod skin's base skin's for a slot the mod has no PNG for (the framework does the same in the game).
+    /// <paramref name="speciesMaterial"/> gives a vanilla species' animal material, for a ramp or mask taken from it
+    /// (<c>{ "species": id }</c>); one that cannot be read leaves the game material's own, as in the game.
     /// </summary>
     public static MaterialPreviewResult Build(ModProject mod, string? skinId, string? speciesId, string material, MaterialOverride? draft, string sex,
         AnimalMaterial? game, string outDir, Func<AssetRecord, string?> exportTexture, float? gameStrength = null,
-        string? vanillaSkin = null, Func<string, string?>? vanillaMap = null)
+        string? vanillaSkin = null, Func<string, string?>? vanillaMap = null, Func<string, AnimalMaterial?>? speciesMaterial = null)
     {
         var merged = MaterialTable.Merge(draft, Inherited(mod, skinId, speciesId, material, vanillaSkin).Below);
         var i = merged?.Iridescence;
@@ -70,14 +72,18 @@ public static class MaterialPreview
 
         string? rampFile = null, maskFile = null;
         // "game" is the game material's own ramp and mask, over any lower layer's.
-        if (i?.Ramp is { Game: false } ramp)
+        if (i?.Ramp is { Species: { } rampSpecies })
+            rampFile = (speciesMaterial?.Invoke(rampSpecies)?.Ramp ?? game?.Ramp) is { } taken ? exportTexture(taken) : null;
+        else if (i?.Ramp is { Game: false } ramp)
         {
             if (ramp.File is not null) rampFile = ModFile(mod, ramp.File);
             else if (IridescenceRamp.Stops(ramp) is { Count: > 0 } stops) rampFile = WritePng(outDir, IridescenceRamp.Pixels(stops), 32, 32);
         }
         else if (game?.Ramp is { } gameRamp) rampFile = exportTexture(gameRamp);
 
-        if (i?.Mask is { Game: false } mask)
+        if (i?.Mask is { Species: { } maskSpecies })
+            maskFile = (speciesMaterial?.Invoke(maskSpecies)?.Mask ?? game?.Mask) is { } taken ? exportTexture(taken) : null;
+        else if (i?.Mask is { Game: false } mask)
         {
             if (mask.File is not null) maskFile = ModFile(mod, mask.File);
             else if (mask.From is not null

@@ -40,7 +40,7 @@ public class SpeciesPresetsTests
         Assert.True(mammoth.Furry);
         Assert.False(mammoth.Shimmers);
         Assert.Null(mammoth.Strength);
-        Assert.Equal([0f, -30f, 8.11f], mammoth.Droop);
+        Assert.Equal([0f, -30f, 8.11f], mammoth.Droop!);
     }
 
     [Fact]

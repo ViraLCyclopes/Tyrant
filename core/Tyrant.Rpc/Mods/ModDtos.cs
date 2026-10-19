@@ -270,6 +270,21 @@ public sealed record ModMaterialPreview(bool On, float Strength, float Scale, fl
 
 public sealed record ModThinFilmParams(double Thickness, double Index = 1.56, int Count = 32);
 
+/// <summary>A vanilla species a Material card can start from: its game id and the name the game shows.</summary>
+public sealed record ModSpeciesPresetDto(string Species, string Name);
+
+/// <summary>The species whose skins shimmer (Iridescence) and those with fur (Fur), by name; Problem says why both are empty (no data dump).</summary>
+public sealed record ModSpeciesPresets(IReadOnlyList<ModSpeciesPresetDto> Iridescence, IReadOnlyList<ModSpeciesPresetDto> Fur, string? Problem);
+
+/// <summary>Kind: "iridescence" or "fur".</summary>
+public sealed record ModSpeciesPresetParams(string Species, string Kind);
+
+/// <summary>
+/// MaterialJson: one material's block as materials.json writes it, holding only what the preset sets (the species' ramp and mask
+/// by reference, its numbers); the app merges it into its draft.
+/// </summary>
+public sealed record ModSpeciesPreset(string Species, string Name, string MaterialJson);
+
 public sealed record ModThinFilm(IReadOnlyList<string> Stops);
 
 /// <summary>A species' "materials" JSON (set in its models entry).</summary>

@@ -212,8 +212,16 @@ public sealed class ModMaterialsCommand : Command<ModMaterialsCommand.Settings>
         public string? FurInfantMask { get; set; }
 
         [CommandOption("--material <NAME>")]
-        [Description("The material for the image options (default: the only one in the settings, else the animal's material).")]
+        [Description("The material for the image and preset options (default: the only one in the settings, else the animal's material).")]
         public string? Material { get; set; }
+
+        [CommandOption("--preset <SPECIES>")]
+        [Description("Start a material from a vanilla species' look (with --kind): its ramp and mask by reference, its numbers copied; the rest stays.")]
+        public string? Preset { get; set; }
+
+        [CommandOption("--kind <KIND>")]
+        [Description("What --preset takes: iridescence or fur.")]
+        public string? Kind { get; set; }
     }
 
     public override int Execute(CommandContext context, Settings settings)
@@ -229,9 +237,15 @@ public sealed class ModMaterialsCommand : Command<ModMaterialsCommand.Settings>
             return ExitCodes.Error;
         }
         string?[] images = [settings.Ramp, settings.Mask, settings.FurMask, settings.FurInfantMask];
-        if ((settings.Show ? 1 : 0) + (settings.Set is null ? 0 : 1) + (settings.Clear ? 1 : 0) + images.Count(i => i is not null) != 1)
+        if ((settings.Show ? 1 : 0) + (settings.Set is null ? 0 : 1) + (settings.Clear ? 1 : 0) + images.Count(i => i is not null) + (settings.Preset is null ? 0 : 1) != 1)
         {
-            Console.Error.WriteLine("Use exactly one of --show, --set <file.json>, --clear, --ramp <png>, --mask <png>, --fur-mask <png> or --fur-infant-mask <png>.");
+            Console.Error.WriteLine("Use exactly one of --show, --set <file.json>, --clear, --ramp <png>, --mask <png>, --fur-mask <png>, --fur-infant-mask <png> or --preset <species>.");
+            return ExitCodes.Error;
+        }
+        var kind = GamePresets.KindOf(settings.Kind);
+        if (settings.Preset is not null && kind is null)
+        {
+            Console.Error.WriteLine("Give --kind iridescence or --kind fur with --preset.");
             return ExitCodes.Error;
         }
         var (ws, install) = CliServices.OpenWorkspace(settings);
@@ -266,6 +280,11 @@ public sealed class ModMaterialsCommand : Command<ModMaterialsCommand.Settings>
             return ExitCodes.Ok;
         }
 
+        if (settings.Preset is not null && (index is null || dump is null || species is null))
+        {
+            Console.Error.WriteLine("Starting from a species needs the game's data: run 'tyrant dump run' and 'tyrant assets index' first.");
+            return ExitCodes.Error;
+        }
         if (speciesId is not null && settings.VanillaSkin is null && blocks is null && species is null)
         {
             Console.Error.WriteLine($"'{who}' has no material settings in this mod, and the game's data is missing to look the species up; set them first with --set.");
@@ -288,6 +307,7 @@ public sealed class ModMaterialsCommand : Command<ModMaterialsCommand.Settings>
                 return ExitCodes.Error;
             }
         }
+        if (settings.Preset is not null) return ApplyPreset(settings, mod, install, index!, dump!, species!, speciesId, blocks, material, kind!.Value, who);
         var owner = settings.Skin is not null ? new MaterialOwner(MaterialOwnerKind.Skin, settings.Skin, null, null)
             : settings.VanillaSkin is not null ? new MaterialOwner(MaterialOwnerKind.VanillaSkin, null, speciesId, settings.VanillaSkin)
             : new MaterialOwner(MaterialOwnerKind.Species, null, speciesId, null);
@@ -295,6 +315,41 @@ public sealed class ModMaterialsCommand : Command<ModMaterialsCommand.Settings>
             : settings.FurMask is not null ? ("furMask", settings.FurMask) : ("furInfantMask", settings.FurInfantMask);
         var file = mod.SetMaterialFile(owner, material, part, png);
         Console.WriteLine($"Imported {file}.");
+        return ExitCodes.Ok;
+    }
+
+    /// <summary>
+    /// --preset: the material starts from a vanilla species (LookEditing.ApplyPreset, as the in-game editor and the app's
+    /// "Start from a species…" do): what the preset sets replaces this level's, everything else stays. Saved like --set.
+    /// </summary>
+    private static int ApplyPreset(Settings settings, ModProject mod, Tyrant.Core.Install.GameInstall install, Tyrant.Core.Assets.AssetIndex index,
+        IReadOnlyList<SpeciesSkins> dump, IReadOnlyList<SpeciesSkins> species, string? speciesId, IReadOnlyDictionary<string, MaterialOverride>? blocks, string material,
+        PresetKind kind, string who)
+    {
+        var source = dump.FirstOrDefault(s => string.Equals(s.SpeciesId, settings.Preset, StringComparison.OrdinalIgnoreCase) && SpeciesUse.ModOf(s.SpeciesId) is null);
+        if (source is null)
+        {
+            Console.Error.WriteLine($"\"{settings.Preset}\" is not a species in the game data.");
+            return ExitCodes.Error;
+        }
+        var prefab = ModProject.ResolveModelTarget(index, dump, source.SpeciesId, null).Prefab;
+        var preset = GamePresets.Of(source, AnimalMaterial.Of(install, CliServices.AssetReader, index, prefab));
+        if (kind == PresetKind.Fur ? !preset.Furry : !preset.Shimmers)
+        {
+            var offered = GamePresets.List(dump, kind).Select(s => s.Id).ToList();
+            Console.Error.WriteLine($"{source.SpeciesId} has no skin {(kind == PresetKind.Fur ? "with fur" : "that shimmers")}; "
+                + (offered.Count == 0 ? "the game data has none." : "these do: " + string.Join(", ", offered) + "."));
+            return ExitCodes.Error;
+        }
+        var map = blocks is null ? new Dictionary<string, MaterialOverride>(StringComparer.Ordinal) : blocks.ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
+        var draft = new LookDraft(settings.Skin is null && settings.VanillaSkin is null ? LookScope.Species : LookScope.Skin, map.TryGetValue(material, out var own) ? own : null);
+        LookEditing.ApplyPreset(draft, kind, preset);
+        map[material] = draft.Current;
+        var json = Json.Write(MaterialOverrides.ToJson(map));
+        if (settings.Skin is not null) mod.SetSkinMaterials(settings.Skin, json);
+        else if (settings.VanillaSkin is not null) mod.SetVanillaSkinMaterials(speciesId!, settings.VanillaSkin, json);
+        else mod.SetSpeciesMaterials(index, species, speciesId!, json);
+        Console.WriteLine($"{material} of '{who}' starts from {source.SpeciesId}'s {(kind == PresetKind.Fur ? "fur" : "iridescence")}; edit it as you like.");
         return ExitCodes.Ok;
     }
 
