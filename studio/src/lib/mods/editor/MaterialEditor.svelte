@@ -3,7 +3,7 @@
   import type { ModDetail, ModMaterialInfo, ModMaterialProperty, ModSkinDto } from '$lib/rpc/types.gen';
   import { getSession } from '$lib/stores/session.svelte';
   import IridescencePanel from './IridescencePanel.svelte';
-  import { cloneMaterial, parseIridescenceJson, parseMaterial, replaceMaterial, START_FUR_LENGTH, toMaterialsJson, type MaterialModel } from './materials';
+  import { cloneMaterial, GAME, parseFurJson, parseIridescenceJson, parseMaterial, replaceMaterial, START_FUR_LENGTH, toMaterialsJson, type MaterialModel } from './materials';
   import type { ModDoc } from './modDoc.svelte';
 
   /**
@@ -126,23 +126,57 @@
     return doc.edit('mods.setMaterialFile', { ...target, material: name, part, png: null });
   }
 
+  /** The fur block under this level (masks, grow), from mods.materialInfo. */
+  const inheritedFur = $derived(parseFurJson(info?.inheritedFurJson));
+  /** Grown here, else by a level below. */
+  const growing = $derived((shown?.fur?.grow ?? inheritedFur?.grow) === true);
+  /** True while the fur length is the one ticking Grow fur set: unticking takes it back. */
+  let seededLength = false;
+
+  /** A fur block with one change, or none when nothing is left in it. */
+  function setFur(m: MaterialModel, change: (fur: NonNullable<MaterialModel['fur']>) => void) {
+    const fur = { ...(m.fur ?? {}) };
+    change(fur);
+    if (fur.mask || fur.infantMask || fur.grow !== undefined) m.fur = fur;
+    else delete m.fur;
+  }
+
   /**
    * Grow fur (fur.grow): on also sets a starting fur length when neither this level nor anything below gives the fur one, so it
-   * shows at once; off removes the key (the levels below decide again).
+   * shows at once. Off writes false over a level below that grows fur, else removes the key; it also takes back the starting
+   * length while it is still the one on set.
    */
   function setGrow(on: boolean) {
     const below = info?.properties.find((p) => p.key === '_Length');
     const inheritedLength = below ? inheritedOf(below) : null;
+    const own = shown?.settings._Length;
+    const length = typeof own === 'number' ? own : typeof inheritedLength === 'number' ? inheritedLength : 0;
+    const seed = on && length <= 0;
+    const unseed = !on && seededLength && own === START_FUR_LENGTH;
+    const overBelow = inheritedFur?.grow === true;
     void edit((m) => {
-      const fur = { ...(m.fur ?? {}) };
-      if (on) fur.grow = true;
-      else delete fur.grow;
-      if (fur.mask || fur.infantMask || fur.grow !== undefined) m.fur = fur;
-      else delete m.fur;
-      const own = m.settings._Length;
-      const length = typeof own === 'number' ? own : typeof inheritedLength === 'number' ? inheritedLength : 0;
-      if (on && length <= 0) m.settings._Length = START_FUR_LENGTH;
+      setFur(m, (fur) => {
+        if (on) fur.grow = true;
+        else if (overBelow) fur.grow = false;
+        else delete fur.grow;
+      });
+      if (seed) m.settings._Length = START_FUR_LENGTH;
+      if (unseed) delete m.settings._Length;
     }, true);
+    seededLength = seed;
+  }
+
+  /** The fur mask's Game's over a level below that sets one: "game" (leaving it out would show that one again). */
+  function gameFur(part: 'mask' | 'infantMask') {
+    void edit((m) => setFur(m, (fur) => (fur[part] = GAME)), true);
+  }
+
+  /** What a fur mask row shows: this level's file or the game's, else the one below, else the skin's own. */
+  function furShown(own: string | undefined, below: string | undefined): string {
+    if (own === GAME) return 'the game’s';
+    if (own) return own;
+    if (below === GAME) return 'the game’s (from below)';
+    return below ? `${below} (from below)` : "the skin's own";
   }
 
   function setComponent(p: ModMaterialProperty, n: number, text: string) {
@@ -169,9 +203,10 @@
         <legend>{group}</legend>
         {#if group === 'Fur'}
           <label class="grow">
-            <input type="checkbox" checked={shown.fur?.grow === true} onchange={(e) => setGrow(e.currentTarget.checked)} />
+            <input type="checkbox" checked={growing} onchange={(e) => setGrow(e.currentTarget.checked)} />
             Grow fur on skins without fur
           </label>
+          {#if shown.fur?.grow === undefined && inheritedFur?.grow === true}<p class="hint">Fur is grown by a level below; untick to turn it off here.</p>{/if}
           <p class="hint">Needs tessellated fur in the game's graphics settings. The preview here shows no fur; tune the look in game.</p>
         {/if}
         {#each rows as p (p.key)}
@@ -198,14 +233,21 @@
           </div>
         {/each}
         {#if group === 'Fur'}
-          {#each [{ part: 'furMask' as const, label: 'Fur mask', file: shown.fur?.mask }, { part: 'furInfantMask' as const, label: 'Baby fur mask', file: shown.fur?.infantMask }] as row (row.part)}
+          {#each [
+            { part: 'furMask' as const, key: 'mask' as const, label: 'Fur mask', file: shown.fur?.mask, below: inheritedFur?.mask },
+            { part: 'furInfantMask' as const, key: 'infantMask' as const, label: 'Baby fur mask', file: shown.fur?.infantMask, below: inheritedFur?.infantMask },
+          ] as row (row.part)}
             <div class="setting" role="group" aria-label={row.label}>
               <span class="label">{row.label}</span>
-              <span class="inherited">{row.file ?? "the skin's own"}</span>
+              <span class="inherited">{furShown(row.file, row.below)}</span>
               <span class="field">
                 <button aria-label="Import {row.label.toLowerCase()}" disabled={!canImportFile} onclick={() => void importFur(row.part)}>Import…</button>
+                {#if row.below && row.below !== GAME && row.file !== GAME}
+                  <button aria-label="Game's {row.label.toLowerCase()}" title="The game's own, over the one below" onclick={() => gameFur(row.key)}>Game's</button>
+                {/if}
               </span>
-              <button class="ghost x" aria-label="Remove {row.label.toLowerCase()}" title="Use the skin's own" disabled={!row.file} onclick={() => void removeFur(row.part)}>✕</button>
+              <button class="ghost x" aria-label="Remove {row.label.toLowerCase()}" title="Use the one below" disabled={!row.file}
+                onclick={() => (row.file === GAME ? void edit((m) => setFur(m, (fur) => delete fur[row.key]), true) : void removeFur(row.part))}>✕</button>
             </div>
           {/each}
         {/if}

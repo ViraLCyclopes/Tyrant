@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { emptyIridescence, parseIridescenceJson, parseMaterial, replaceMaterial, toMaterialsJson, type MaterialModel } from './materials';
+import { emptyIridescence, parseFurJson, parseIridescenceJson, parseMaterial, replaceMaterial, toMaterialsJson, type MaterialModel } from './materials';
 
 /** Parses one material block and writes it back. */
 const roundTrip = (block: unknown) => toMaterialsJson('Titanoboa', parseMaterial(JSON.stringify({ Titanoboa: block }), 'Titanoboa'));
@@ -27,8 +27,8 @@ describe('materials', () => {
     same({ iridescence: { ramp: 'materials/skins/blue/iridescence-ramp.png' } });
     same({ iridescence: { ramp: { stops: ['#3060ff', '#ff60c0'] } } });
     same({ iridescence: { ramp: { thinFilm: { thickness: 500, index: 1.4 } } } });
-    same({ iridescence: { strength: 0.3 } }); // no ramp: the game's
-    expect(parseMaterial('{"T":{"iridescence":{"strength":0.3}}}', 'T').iridescence?.ramp).toEqual({ kind: 'game' });
+    same({ iridescence: { strength: 0.3 } }); // no ramp: what lies below (else the game's)
+    expect(parseMaterial('{"T":{"iridescence":{"strength":0.3}}}', 'T').iridescence?.ramp).toEqual({ kind: 'inherit' });
     expect(parseMaterial('{"T":{"iridescence":{"ramp":{"thinFilm":{"thickness":420}}}}}', 'T').iridescence?.ramp).toEqual({ kind: 'thinFilm', thickness: 420, index: 1.56 });
   });
 
@@ -37,7 +37,15 @@ describe('materials', () => {
     same({ iridescence: { mask: 'materials/skins/blue/iridescence-mask.png' } });
     same({ iridescence: { mask: { from: 'pattern', channel: 'a', invert: true } } });
     expect(parseMaterial('{"T":{"iridescence":{"mask":{"from":"fur"}}}}', 'T').iridescence?.mask).toEqual({ kind: 'from', slot: 'fur', channel: 'r', invert: false });
-    expect(parseMaterial('{"T":{"iridescence":{"strength":1}}}', 'T').iridescence?.mask).toEqual({ kind: 'game' });
+    expect(parseMaterial('{"T":{"iridescence":{"strength":1}}}', 'T').iridescence?.mask).toEqual({ kind: 'inherit' });
+  });
+
+  it('round-trips the explicit "game" ramp, mask and fur masks', () => {
+    same({ iridescence: { ramp: 'game', mask: 'game' } });
+    same({ fur: { mask: 'game', infantMask: 'game' } });
+    expect(parseMaterial('{"T":{"iridescence":{"ramp":"game","mask":"game"}}}', 'T').iridescence).toMatchObject({ ramp: { kind: 'game' }, mask: { kind: 'game' } });
+    expect(parseFurJson('{"grow":true,"mask":"game"}')).toEqual({ grow: true, mask: 'game' });
+    expect(parseFurJson(null)).toBeNull();
   });
 
   it('round-trips fur grow on its own, as false, and beside a mask', () => {

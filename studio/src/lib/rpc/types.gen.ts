@@ -664,6 +664,7 @@ export interface ModMaterialInfo {
   gameIridescence: number | null;
   gameHasRamp: boolean;
   problem: string | null;
+  inheritedFurJson?: string | null;
 }
 
 export interface ModMaterialInfoParams {

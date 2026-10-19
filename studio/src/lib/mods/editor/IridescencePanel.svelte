@@ -13,6 +13,7 @@
     MAX_RAMP_STOPS,
     maxStrength,
     MUTATIONS,
+    picked,
     type IridescenceModel,
     type MaterialModel,
     type StrengthModel,
@@ -67,8 +68,9 @@
   /** What a strength edit starts from when no layer sets one: the game's own, else a visible default. */
   const startStrength = $derived(gameOn ? gameStrength! : DEFAULT_STRENGTH);
   const variation = $derived(model?.variation ?? inherited?.variation ?? DEFAULT_VARIATION);
-  const ramp = $derived(model && model.ramp.kind !== 'game' ? model.ramp : (inherited?.ramp ?? model?.ramp ?? { kind: 'game' as const }));
-  const mask = $derived(model && model.mask.kind !== 'game' ? model.mask : (inherited?.mask ?? model?.mask ?? { kind: 'game' as const }));
+  // This level's own choice ("game" included), else the one below; "inherit" and "game" both show as Game's.
+  const ramp = $derived(model && model.ramp.kind !== 'inherit' ? model.ramp : (inherited?.ramp ?? model?.ramp ?? { kind: 'inherit' as const }));
+  const mask = $derived(model && model.mask.kind !== 'inherit' ? model.mask : (inherited?.mask ?? model?.mask ?? { kind: 'inherit' as const }));
   const shaping = $derived({
     scale: model?.scale ?? inherited?.scale ?? null,
     power: model?.power ?? inherited?.power ?? null,
@@ -111,15 +113,17 @@
     if (png) await doc.edit('mods.setMaterialFile', { ...target, material, part, png });
   }
 
+  // Game's over a lower level's choice writes "game" (leaving it out would show that choice again); with none below it only
+  // clears this level's.
   function pickRamp(id: string) {
     if (id === 'file') void importPart('ramp');
-    else if (id === 'game') edit((i) => (i.ramp = { kind: 'game' }));
+    else if (id === 'game') edit((i) => (i.ramp = picked(inherited?.ramp) ? { kind: 'game' } : { kind: 'inherit' }));
     else if (ramp.kind !== 'stops' && ramp.kind !== 'thinFilm') edit((i) => (i.ramp = { kind: 'stops', stops: ['#3060ff', '#ff60c0'] }));
   }
 
   function pickMask(id: string) {
     if (id === 'file') void importPart('mask');
-    else if (id === 'game') edit((i) => (i.mask = { kind: 'game' }));
+    else if (id === 'game') edit((i) => (i.mask = picked(inherited?.mask) ? { kind: 'game' } : { kind: 'inherit' }));
     else if (id === 'everywhere') edit((i) => (i.mask = { kind: 'everywhere' }));
     else if (mask.kind !== 'from') edit((i) => (i.mask = { kind: 'from', slot: 'extra', channel: 'r', invert: false }));
   }
@@ -222,7 +226,7 @@
         { id: 'game', label: 'Game’s' },
         { id: 'file', label: 'Import image', disabled: !canImport },
         { id: 'gradient', label: 'Gradient' },
-      ], ramp.kind === 'stops' || ramp.kind === 'thinFilm' ? 'gradient' : ramp.kind, pickRamp)}
+      ], ramp.kind === 'stops' || ramp.kind === 'thinFilm' ? 'gradient' : ramp.kind === 'inherit' ? 'game' : ramp.kind, pickRamp)}
       <button onclick={() => setThickness(DEFAULT_THICKNESS, true)}>Real iridescence (thin film)</button>
       {#if ramp.kind === 'file'}<span class="hint">{ramp.file}</span>{/if}
     </div>
@@ -245,7 +249,7 @@
         { id: 'game', label: 'Game’s' },
         { id: 'file', label: 'Import image', disabled: !canImport },
         ...(skin ? [{ id: 'from', label: 'From a map channel' }] : []),
-      ], mask.kind, pickMask)}
+      ], mask.kind === 'inherit' ? 'game' : mask.kind, pickMask)}
       {#if mask.kind === 'file'}<span class="hint">{mask.file}</span>{/if}
     </div>
     {#if mask.kind === 'from'}

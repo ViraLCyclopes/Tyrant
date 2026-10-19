@@ -1,13 +1,23 @@
 /**
  * One material's block of a skin's or species' "materials" in mod.json (keyed by material name), as the Material card edits
- * it. Unset (null, or "game") values are left out of mod.json; keys the editor does not know are dropped when parsing.
+ * it. Unset (null, or "inherit") values are left out of mod.json; keys the editor does not know are dropped when parsing.
+ * "game" is the explicit `"game"` value: the game's own ramp or mask, over whatever a lower level sets.
  */
 export type MaskSlot = 'extra' | 'pattern' | 'fur';
 export type Channel = 'r' | 'g' | 'b' | 'a';
 
-export type RampModel = { kind: 'game' } | { kind: 'file'; file: string } | { kind: 'stops'; stops: string[] } | { kind: 'thinFilm'; thickness: number; index: number };
+/** The explicit "the game's own" value of a ramp, a mask or a fur mask. */
+export const GAME = 'game';
+
+export type RampModel =
+  | { kind: 'inherit' }
+  | { kind: 'game' }
+  | { kind: 'file'; file: string }
+  | { kind: 'stops'; stops: string[] }
+  | { kind: 'thinFilm'; thickness: number; index: number };
 
 export type MaskModel =
+  | { kind: 'inherit' }
   | { kind: 'game' }
   | { kind: 'everywhere' }
   | { kind: 'file'; file: string }
@@ -37,7 +47,7 @@ export interface MaterialModel {
   iridescence: IridescenceModel | null;
   settings: Record<string, number | string | number[]>;
   /**
-   * Fur masks taken from files (mod-relative paths): the adult one and the baby one. `grow` true turns the game's fur on for
+   * Fur masks taken from files (mod-relative paths, or `"game"`: the game's own): the adult one and the baby one. `grow` true turns the game's fur on for
    * skins without any; false says this level does not (over a lower one that does); left out, the levels below decide.
    */
   fur?: { mask?: string; infantMask?: string; grow?: boolean };
@@ -58,7 +68,7 @@ export const CHANNELS: Channel[] = ['r', 'g', 'b', 'a'];
 type Json = Record<string, unknown>;
 
 export function emptyIridescence(): IridescenceModel {
-  return { strength: null, variation: null, ramp: { kind: 'game' }, mask: { kind: 'game' }, scale: null, power: null, bias: null };
+  return { strength: null, variation: null, ramp: { kind: 'inherit' }, mask: { kind: 'inherit' }, scale: null, power: null, bias: null };
 }
 
 export function parseMaterial(json: string | null, name: string): MaterialModel {
@@ -72,6 +82,14 @@ export function parseMaterial(json: string | null, name: string): MaterialModel 
 export function parseIridescenceJson(json: string | null): IridescenceModel | null {
   return json ? readIridescence(JSON.parse(json)) : null;
 }
+
+/** A "fur" block on its own (mods.materialInfo's inherited one); null when there is none. */
+export function parseFurJson(json: string | null | undefined): MaterialModel['fur'] | null {
+  return json ? readFur(JSON.parse(json)) : null;
+}
+
+/** True for a ramp or mask a level actually picks (not left to the levels below, not the game's own). */
+export const picked = (part: RampModel | MaskModel | undefined): boolean => !!part && part.kind !== 'inherit' && part.kind !== 'game';
 
 /** `{ name: block }`, or null when the block is empty. */
 export function toMaterialsJson(name: string, model: MaterialModel): string | null {
@@ -136,19 +154,21 @@ function readStrength(value: unknown): StrengthModel | null {
 }
 
 function readRamp(value: unknown): RampModel {
+  if (value === GAME) return { kind: 'game' };
   if (typeof value === 'string' && value) return { kind: 'file', file: value };
   const r = asObject(value);
   if (Array.isArray(r?.stops) && r.stops.length && r.stops.every((c) => typeof c === 'string')) return { kind: 'stops', stops: (r.stops as string[]).map((c) => c.toLowerCase()) };
   const film = asObject(r?.thinFilm);
   if (film && num(film.thickness) !== null) return { kind: 'thinFilm', thickness: film.thickness as number, index: num(film.index) ?? DEFAULT_INDEX };
-  return { kind: 'game' };
+  return { kind: 'inherit' };
 }
 
 function readMask(value: unknown): MaskModel {
+  if (value === GAME) return { kind: 'game' };
   if (value === 'everywhere') return { kind: 'everywhere' };
   if (typeof value === 'string' && value) return { kind: 'file', file: value };
   const m = asObject(value);
-  if (!m || !MASK_SLOTS.includes(m.from as MaskSlot)) return { kind: 'game' };
+  if (!m || !MASK_SLOTS.includes(m.from as MaskSlot)) return { kind: 'inherit' };
   const channel = typeof m.channel === 'string' ? (m.channel.toLowerCase() as Channel) : 'r';
   return { kind: 'from', slot: m.from as MaskSlot, channel: CHANNELS.includes(channel) ? channel : 'r', invert: m.invert === true };
 }
@@ -207,6 +227,8 @@ function writeStrength(s: StrengthModel): number | Json {
 
 function writeRamp(r: RampModel): unknown {
   switch (r.kind) {
+    case 'game':
+      return GAME;
     case 'file':
       return r.file;
     case 'stops':
@@ -220,6 +242,8 @@ function writeRamp(r: RampModel): unknown {
 
 function writeMask(m: MaskModel): unknown {
   switch (m.kind) {
+    case 'game':
+      return GAME;
     case 'everywhere':
       return 'everywhere';
     case 'file':
