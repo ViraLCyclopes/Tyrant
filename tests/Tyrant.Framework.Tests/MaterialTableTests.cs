@@ -240,6 +240,24 @@ public class MaterialTableTests
     }
 
     [Fact]
+    public void The_layers_below_a_scope_leave_out_that_scope_and_everything_above_it()
+    {
+        // live animal > saved animal > live skin > table skin > base skin > live species > table species
+        var layers = Enumerable.Range(0, 7).Select(i => Smooth(i)).ToArray<MaterialOverride?>();
+        layers[6]!.Settings["_Length"] = MaterialValue.OfNumber(2);
+        MaterialOverride? Below(LookScope scope) =>
+            MaterialTable.MergeBelow(scope, layers[0], layers[1], layers[2], layers[3], layers[4], layers[5], layers[6]);
+
+        Assert.Equal(2f, Below(LookScope.Animal)!.Settings["_Smoothness"].Number); // from the live skin down
+        Assert.Equal(4f, Below(LookScope.Skin)!.Settings["_Smoothness"].Number); // from the base skin down
+        Assert.Null(Below(LookScope.Species)); // only the game lies below a species
+        Assert.Equal(2f, Below(LookScope.Skin)!.Settings["_Length"].Number);
+
+        layers[4] = layers[5] = layers[6] = null;
+        Assert.Null(Below(LookScope.Skin));
+    }
+
+    [Fact]
     public void Merging_no_layers_allocates_nothing()
     {
         MaterialTable.MergeLayers(null, null, null, null, null, null, null);

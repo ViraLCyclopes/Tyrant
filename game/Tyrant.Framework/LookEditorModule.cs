@@ -22,6 +22,7 @@ namespace Tyrant.Framework
 
         private static readonly object Gate = new object();
         private static readonly List<ulong> Removed = new List<ulong>(); // OnAnimalRemoved, handled in Tick
+        private static readonly HashSet<ulong> Gone = new HashSet<ulong>(); // removed since the park was loaded or saved: dropped on its save
         private static bool _loadedNews, _savedNews, _selectionNews;
         private static bool _disabled;
         private static bool _started; // Start ran (the framework loaded): until then Tick does nothing
@@ -39,6 +40,9 @@ namespace Tyrant.Framework
 
         public static bool Disabled => _disabled;
 
+        /// <summary>True when the park's looks file can be written (a park with a name, a file without problems).</summary>
+        public static bool LooksWritable => Looks != null && LooksPath != null && !_looksUnreadable;
+
         public static void Start()
         {
             if (!MaterialsModule.Active)
@@ -50,7 +54,7 @@ namespace Tyrant.Framework
             try
             {
                 LookEditorWindow.Start();
-                Subscribe(Game, "OnLoadingProcessComplete", nameof(OnLoadingProcessComplete), null);
+                Subscribe(Core, "OnLoadingProcessComplete", nameof(OnLoadingProcessComplete), null); // Game's event forwards to GameCore's
                 Subscribe(AccessTools.TypeByName("PrehistoricKingdom.SaveLoadManager"), "OnSaveCompleted", nameof(OnSaveCompleted), null);
                 Subscribe(AccessTools.TypeByName("PrehistoricKingdom.AnimalManager"), "OnAnimalRemoved", nameof(OnAnimalRemoved), null);
                 _started = true;
@@ -73,6 +77,8 @@ namespace Tyrant.Framework
                 {
                     LeavePark();
                     _gui = gui;
+                    // GameCore clears its listeners after each invocation and on shutdown: listen again for every park.
+                    if (gui != null) Subscribe(Core, "OnLoadingProcessComplete", nameof(OnLoadingProcessComplete), null);
                 }
                 if (gui == null) return;
                 ListenToSelection();
@@ -86,14 +92,9 @@ namespace Tyrant.Framework
                     removed = Removed.ToList();
                     Removed.Clear();
                 }
-                // The game's event (again: another park loaded under the same interface), or should it be missed the game saying
-                // it is fully loaded.
-                if (loaded || (!_parkRead && Property(Core, "IsFullyLoaded") is true))
-                {
-                    if (_parkRead) LookEditorWindow.LeavePark();
-                    ParkLoaded();
-                }
-                if (removed.Count > 0) AnimalsRemoved(removed);
+                // The game's event (once per park), or should it be missed the game saying it is fully loaded.
+                if (!_parkRead && (loaded || Property(Core, "IsFullyLoaded") is true)) ParkLoaded();
+                if (removed.Count > 0 && _parkRead) AnimalsRemoved(removed); // removals queued while loading belong to the old park
                 if (saved && _parkRead) ParkSaved();
                 LookEditorWindow.Tick(gui, _parkRead, selection);
             }
@@ -103,8 +104,10 @@ namespace Tyrant.Framework
             }
         }
 
+        private static readonly FieldInfo? ParkNameField = SimManager == null ? null : AccessTools.Field(SimManager, "parkName");
+
         /// <summary>The park's name (its looks file); null outside a park.</summary>
-        public static string? ParkName => SimManager == null ? null : AccessTools.Field(SimManager, "parkName")?.GetValue(null) as string;
+        public static string? ParkName => ParkNameField?.GetValue(null) as string;
 
         /// <summary>The park's looks file, or null when the park has no name.</summary>
         public static string? LooksPath => ParkName is string park ? AnimalLooks.PathFor(FrameworkMod.TyrantDirectory, park) : null;
@@ -113,14 +116,17 @@ namespace Tyrant.Framework
         public static object? SelectedAnimal()
         {
             var handler = Property(Game, "Selection");
-            var selected = handler == null ? null : AccessTools.Property(handler.GetType(), "SingleSelected")?.GetValue(handler, null);
+            var selected = handler == null ? null : Getter(handler.GetType(), "SingleSelected")?.GetValue(handler, null);
             return IsAnimal(selected) ? selected : null;
         }
 
         public static bool IsAnimal(object? value) =>
             value != null && AnimalType != null && AnimalType.IsInstanceOfType(value) && !(value is UnityEngine.Object unity && unity == null);
 
-        /// <summary>Writes the store after the editor saved one animal's look; false (and a log line) when it could not be.</summary>
+        /// <summary>
+        /// Writes the store after the editor saved one animal's look; false (and a log line) when it could not be. Looks of animals
+        /// removed since the park was loaded or saved are still in it: the park save on disk still has those animals.
+        /// </summary>
         public static bool WriteLooks()
         {
             var path = LooksPath;
@@ -158,12 +164,14 @@ namespace Tyrant.Framework
         private static void ParkLoaded()
         {
             _parkRead = true;
+            Gone.Clear();
+            lock (Gate) Removed.Clear(); // ids of the park that was left
             var path = LooksPath;
             var problems = new List<string>();
             Looks = path == null ? new AnimalLooks() : AnimalLooks.Read(path, problems);
             foreach (var problem in problems) FrameworkMod.Log.Warning(problem);
             _looksUnreadable = problems.Count > 0;
-            Prune(path);
+            Prune(path, write: true);
             MaterialsModule.SetAnimalLooks(Looks);
             if (Looks.Count > 0)
             {
@@ -173,36 +181,44 @@ namespace Tyrant.Framework
             LookEditorWindow.ParkLoaded();
         }
 
+        /// <summary>The park was saved: the looks of animals removed since, and of animals no longer in it, go (file included).</summary>
         private static void ParkSaved()
         {
             if (Looks == null) return;
-            if (Prune(LooksPath)) MaterialsModule.SetAnimalLooks(Looks);
-        }
-
-        /// <summary>Drops looks whose animal is gone and writes the file when any were; never on an empty or unreadable park.</summary>
-        private static bool Prune(string? path)
-        {
-            if (Looks == null || Looks.Count == 0) return false;
-            var alive = MaterialsModule.LoadedIds();
-            if (alive.Count == 0) return false; // no animals read (or none yet): nothing is dropped on a guess
-            var pruned = Looks.Prune(alive);
-            if (pruned == 0) return false;
-            FrameworkMod.Log.Msg($"{pruned} look(s) of animals no longer in the park were dropped.");
-            if (path != null && !_looksUnreadable) Looks.Write(path);
-            return true;
-        }
-
-        private static void AnimalsRemoved(List<ulong> ids)
-        {
-            if (Looks == null) return;
-            var changed = false;
-            foreach (var id in ids)
+            var dropped = 0;
+            foreach (var id in Gone)
                 if (Looks.Get(id) != null)
                 {
-                    Looks.Set(id, null); // in memory: the file follows on the next park save
-                    changed = true;
+                    Looks.Set(id, null);
+                    dropped++;
                 }
-            if (changed) MaterialsModule.SetAnimalLooks(Looks);
+            Gone.Clear();
+            if (dropped > 0) FrameworkMod.Log.Msg($"{dropped} look(s) of animals removed from the park were dropped.");
+            if (dropped + Prune(LooksPath, write: false) == 0) return;
+            if (LooksPath is string path && !_looksUnreadable) Looks.Write(path);
+            MaterialsModule.SetAnimalLooks(Looks);
+        }
+
+        /// <summary>Drops looks whose animal is not in the park (never on an empty read); returns how many. Writes when asked and any went.</summary>
+        private static int Prune(string? path, bool write)
+        {
+            if (Looks == null || Looks.Count == 0) return 0;
+            var alive = MaterialsModule.LoadedIds();
+            if (alive.Count == 0) return 0; // no animals read (or none yet): nothing is dropped on a guess
+            var pruned = Looks.Prune(alive);
+            if (pruned == 0) return 0;
+            FrameworkMod.Log.Msg($"{pruned} look(s) of animals no longer in the park were dropped.");
+            if (write && path != null && !_looksUnreadable) Looks.Write(path);
+            return pruned;
+        }
+
+        /// <summary>
+        /// Removed animals (sold or destroyed) keep their look in the store and its file until the park is saved: loading the
+        /// earlier save brings them back with their look. Their look is never drawn again, as they are gone.
+        /// </summary>
+        private static void AnimalsRemoved(List<ulong> ids)
+        {
+            foreach (var id in ids) Gone.Add(id);
             LookEditorWindow.AnimalsRemoved(ids);
         }
 
@@ -213,6 +229,12 @@ namespace Tyrant.Framework
             Looks = null;
             _looksUnreadable = false;
             _parkRead = false;
+            Gone.Clear();
+            lock (Gate)
+            {
+                Removed.Clear();
+                _loadedNews = _savedNews = false;
+            }
             _selection = null;
             _selectionHandler = null;
             MaterialsModule.SetAnimalLooks(null);
@@ -239,7 +261,7 @@ namespace Tyrant.Framework
             }
             catch (Exception)
             {
-                // an id that cannot be read keeps its look until the park is saved or loaded (then it is pruned)
+                // an id that cannot be read keeps its look until the park is saved or loaded with the animal gone (then it is pruned)
             }
         }
 
@@ -252,8 +274,8 @@ namespace Tyrant.Framework
         public static ulong? PersistentId(object animal)
         {
             var type = animal.GetType();
-            if (!(AccessTools.Property(type, "HasValidPersistentID")?.GetValue(animal, null) is true)) return null;
-            var id = AccessTools.Property(type, "PersistentID")?.GetValue(animal, null);
+            if (!(Getter(type, "HasValidPersistentID")?.GetValue(animal, null) is true)) return null;
+            var id = Getter(type, "PersistentID")?.GetValue(animal, null);
             return id != null && AccessTools.Field(id.GetType(), "uniqueID")?.GetValue(id) is ulong unique ? unique : (ulong?)null;
         }
 
@@ -281,7 +303,7 @@ namespace Tyrant.Framework
             var info = type?.GetEvent(eventName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
             if (info == null)
             {
-                FrameworkMod.Log.Warning($"{type?.Name ?? "?"}.{eventName} was not found (game updated?); the look editor works without it.");
+                if (Warned.Add(eventName)) FrameworkMod.Log.Warning($"{type?.Name ?? "?"}.{eventName} was not found (game updated?); the look editor works without it.");
                 return;
             }
             var method = AccessTools.Method(typeof(LookEditorModule), handler);
@@ -290,12 +312,22 @@ namespace Tyrant.Framework
             info.AddEventHandler(target, callback);
         }
 
+        private static readonly HashSet<string> Warned = new HashSet<string>(StringComparer.Ordinal);
+        private static readonly Dictionary<(Type, string), PropertyInfo?> Getters = new Dictionary<(Type, string), PropertyInfo?>();
+
+        /// <summary>A property looked up once per type (Tick reads some every frame).</summary>
+        private static PropertyInfo? Getter(Type type, string name)
+        {
+            if (!Getters.TryGetValue((type, name), out var property)) Getters[(type, name)] = property = AccessTools.Property(type, name);
+            return property;
+        }
+
         /// <summary>A static property of the game; null while it cannot be read (e.g. its instance is between parks).</summary>
         private static object? Property(Type? type, string name)
         {
             try
             {
-                return type == null ? null : AccessTools.Property(type, name)?.GetValue(null, null);
+                return type == null ? null : Getter(type, name)?.GetValue(null, null);
             }
             catch (TargetInvocationException)
             {

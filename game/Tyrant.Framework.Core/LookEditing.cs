@@ -115,7 +115,7 @@ namespace Tyrant.Framework.Core
             draft.SetIridescenceOn(false);
         }
 
-        /// <param name="effective">The animal's merged block now (the draft's layer included), or null.</param>
+        /// <param name="effective">What the layers under the draft's scope set (<see cref="MaterialTable.MergeBelow"/>), or null.</param>
         /// <param name="gameHasRamp">True when the animal's own material has an iridescence ramp.</param>
         public void On(LookDraft draft, MaterialOverride? effective, bool gameHasRamp)
         {
@@ -160,15 +160,20 @@ namespace Tyrant.Framework.Core
         /// <summary>
         /// A copy for a mod's materials.json: files are mod-relative, and a file outside the mod is copied into
         /// <paramref name="ownerFolder"/> (mod-relative, '/' separators) first: a mod only uses its own files. A file of the same
-        /// name and other content is kept, the copy gets "-2", "-3"; the same content already there is reused.
+        /// name and other content is kept, the copy gets "-2", "-3"; the same content already there is reused. A missing outside
+        /// file is dropped from the copy and added to <paramref name="missing"/>.
         /// </summary>
-        public static MaterialOverride Adopt(MaterialOverride block, string modDir, string ownerFolder)
+        public static MaterialOverride Adopt(MaterialOverride block, string modDir, string ownerFolder, ICollection<string>? missing = null)
         {
             var folder = Path.Combine(modDir, ownerFolder.Replace('/', Path.DirectorySeparatorChar));
             return MaterialTable.WithPaths(block, file =>
             {
                 if (ModPaths.IsInside(file, modDir)) return RelativePath(file, modDir);
-                if (!File.Exists(file)) return null; // a missing file outside the mod cannot be carried in
+                if (!File.Exists(file))
+                {
+                    missing?.Add(file); // a missing file outside the mod cannot be carried in
+                    return null;
+                }
                 Directory.CreateDirectory(folder);
                 var bytes = File.ReadAllBytes(file);
                 var name = Path.GetFileNameWithoutExtension(file);
@@ -197,10 +202,101 @@ namespace Tyrant.Framework.Core
             return files.OrderBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase).ThenBy(f => f, StringComparer.OrdinalIgnoreCase).ToList();
         }
 
+        internal static string Full(string path)
+        {
+            try
+            {
+                return Path.GetFullPath(path);
+            }
+            catch (Exception ex) when (ex is ArgumentException || ex is NotSupportedException || ex is PathTooLongException)
+            {
+                return path;
+            }
+        }
+
         private static string RelativePath(string file, string baseDir)
         {
             var root = Path.GetFullPath(baseDir).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
             return Path.GetFullPath(file).Substring(root.Length).Replace('\\', '/');
+        }
+    }
+
+    /// <summary>
+    /// Exported masks waiting for Save: each is written under a pending folder (outside every mod, so no picker lists it and no
+    /// share carries it) and the draft points there for the preview. Save moves the ones the saved block uses over their fixed
+    /// names (iridescence-mask.png, fur-mask.png); Discard and Reset delete them, so a saved look never changes without Save.
+    /// </summary>
+    public sealed class StagedFiles
+    {
+        private readonly Dictionary<string, string> _final = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase); // staged -> fixed name
+
+        public StagedFiles(string folder) => Folder = folder;
+
+        public string Folder { get; }
+
+        public bool IsEmpty => _final.Count == 0;
+
+        public bool IsStaged(string path) => _final.ContainsKey(LookFiles.Full(path));
+
+        /// <summary>A new pending path for a file that becomes <paramref name="finalPath"/> on commit; one staged earlier for it is deleted.</summary>
+        public string Stage(string finalPath)
+        {
+            var target = LookFiles.Full(finalPath);
+            foreach (var old in _final.Where(p => string.Equals(p.Value, target, StringComparison.OrdinalIgnoreCase)).Select(p => p.Key).ToList())
+            {
+                Delete(old);
+                _final.Remove(old);
+            }
+            Directory.CreateDirectory(Folder);
+            var path = LookFiles.Full(Path.Combine(Folder, Guid.NewGuid().ToString("N") + "-" + Path.GetFileName(finalPath)));
+            _final[path] = target;
+            return path;
+        }
+
+        /// <summary>A copy of the block naming the fixed files instead of the staged ones (nothing is moved). The input is not changed.</summary>
+        public MaterialOverride Final(MaterialOverride block) =>
+            MaterialTable.WithPaths(block, file => _final.TryGetValue(LookFiles.Full(file), out var target) ? target : file);
+
+        /// <summary>Moves each staged file the block uses over its fixed name (replacing it), then deletes the rest.</summary>
+        public void Commit(MaterialOverride block)
+        {
+            var used = new HashSet<string>(LookFiles.Files(block).Select(LookFiles.Full), StringComparer.OrdinalIgnoreCase);
+            foreach (var pair in _final.Where(p => used.Contains(p.Key) && File.Exists(p.Key)))
+            {
+                var directory = Path.GetDirectoryName(pair.Value);
+                if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
+                var temp = pair.Value + ".tmp";
+                File.Copy(pair.Key, temp, true);
+                if (File.Exists(pair.Value)) File.Replace(temp, pair.Value, null);
+                else File.Move(temp, pair.Value);
+            }
+            Discard();
+        }
+
+        /// <summary>Deletes every staged file.</summary>
+        public void Discard()
+        {
+            foreach (var path in _final.Keys) Delete(path);
+            _final.Clear();
+        }
+
+        /// <summary>Deletes what an earlier run left in the pending folder.</summary>
+        public void Clean()
+        {
+            if (!Directory.Exists(Folder)) return;
+            foreach (var file in Directory.GetFiles(Folder)) Delete(file);
+        }
+
+        private static void Delete(string path)
+        {
+            try
+            {
+                if (File.Exists(path)) File.Delete(path);
+            }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+            {
+                // left for Clean on the next start
+            }
         }
     }
 }

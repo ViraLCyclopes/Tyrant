@@ -18,7 +18,8 @@ namespace Tyrant.Framework
 
         private static void EnsureButton(object gui)
         {
-            if (_button != null) return;
+            if (_button != null || Time.unscaledTime < _nextButtonTry) return;
+            _nextButtonTry = Time.unscaledTime + 0.5f; // until the top bar shows, not every frame
             var board = Traverse.Create(gui).Field("mainBoardGUI").GetValue() as Component;
             if (board == null || Button == null || Image == null) return;
             var actions = Traverse.Create(board).Field("middleActions").GetValue() as GameObject;
@@ -274,7 +275,7 @@ namespace Tyrant.Framework
             {
                 Keep(_w, Mathf.Clamp(_w.Value, MinWidth, Mathf.Max(MinWidth, screen.x)));
                 Keep(_h, Mathf.Clamp(_h.Value, MinHeight, Mathf.Max(MinHeight, screen.y)));
-                if (_x.Value < 0f) Keep(_x, screen.x - _w.Value - 16f); // first time: the top right, under the top bar
+                if (_x.Value <= Unplaced / 2f) Keep(_x, screen.x - _w.Value - 16f); // first time: the top right, under the top bar
                 Keep(_x, Mathf.Clamp(_x.Value, 60f - _w.Value, Mathf.Max(0f, screen.x - 60f)));
                 Keep(_y, Mathf.Clamp(_y.Value, 0f, Mathf.Max(0f, screen.y - TitleHeight)));
             }

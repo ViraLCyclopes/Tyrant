@@ -19,6 +19,7 @@ namespace Tyrant.Framework
     internal static partial class LookEditorWindow
     {
         private const float MinWidth = 300f, MinHeight = 360f, TitleHeight = 28f;
+        private const float Unplaced = -1000000f; // EditorX before the window was first placed (far below any x a drag can reach)
         private const string ButtonName = "TyrantLooksButton";
         private static readonly Color Idle = new Color(0.18f, 0.20f, 0.22f, 1f);
         private static readonly Color Faint = new Color(1f, 1f, 1f, 0.5f);
@@ -38,6 +39,7 @@ namespace Tyrant.Framework
         private static Sprite? _icon;
         private static bool _minimised, _shapingOpen, _onFurTab, _openWhenReady, _hierarchyLogged;
         private static string _message = "";
+        private static float _nextButtonTry;
 
         // ---- what is being edited ----
         private static object? _animal;
@@ -45,21 +47,27 @@ namespace Tyrant.Framework
         private static LookScope _scope = LookScope.Animal;
         private static LookDraft? _draft;
         private static SaveTarget? _target;
-        private static MaterialOverride? _effective;
+        private static MaterialOverride? _below;
         private static bool? _lastOn;
         private static List<object> _matching = new List<object>();
         private static readonly IridescenceSwitch Switch = new IridescenceSwitch();
+
+        /// <summary>Exported masks waiting for Save, outside every mod (UserData/Tyrant/Looks/.pending).</summary>
+        private static StagedFiles? _stagedFiles;
+
+        private static StagedFiles Staged => _stagedFiles ??= new StagedFiles(Path.Combine(FrameworkMod.TyrantDirectory, "Looks", ".pending"));
 
         private static bool IsOpen => _window != null && _window.activeSelf;
 
         public static void Start()
         {
             _prefs = MelonPreferences.CreateCategory("Tyrant");
-            _x = _prefs.CreateEntry("EditorX", -1f);
+            _x = _prefs.CreateEntry("EditorX", Unplaced);
             _y = _prefs.CreateEntry("EditorY", 96f);
             _w = _prefs.CreateEntry("EditorW", 360f);
             _h = _prefs.CreateEntry("EditorH", 600f);
             _open = _prefs.CreateEntry("EditorOpen", false);
+            Staged.Clean(); // exports an earlier run left unsaved
         }
 
         /// <summary>Once a frame in a park: the top-bar button, an animal that went away, a new selection.</summary>
@@ -88,6 +96,7 @@ namespace Tyrant.Framework
             if (_canvas != null) UnityEngine.Object.Destroy(_canvas);
             if (_button != null) UnityEngine.Object.Destroy(_button);
             _canvas = _window = _main = _modal = _button = null;
+            _nextButtonTry = 0f;
             _content = null;
             _gui = _font = _inputTemplate = _name = _info = _status = null;
             ScopeButtons.Clear();
@@ -157,6 +166,7 @@ namespace Tyrant.Framework
             {
                 FrameworkMod.Log.Warning($"\"{MasksDirectory}\" could not be made: {ex.Message}");
             }
+            if (_animal is UnityEngine.Object unity && unity == null) AnimalGone(); // went while the window was closed
             if (LookEditorModule.SelectedAnimal() is object selected && !ReferenceEquals(selected, _animal)) Select(selected);
             else Rebuild();
         }
@@ -167,6 +177,7 @@ namespace Tyrant.Framework
         {
             ClearLive(reapply: true);
             _draft?.Reset();
+            Staged.Discard();
             if (_window != null) _window.SetActive(false);
             if (_open != null) _open.Value = false;
             SavePrefs();
@@ -185,6 +196,7 @@ namespace Tyrant.Framework
                 ClearLive(reapply: true);
                 _draft?.Reset();
                 Switch.Forget();
+                Staged.Discard();
                 then();
             });
         }
@@ -223,9 +235,10 @@ namespace Tyrant.Framework
             _context = null;
             _draft = null;
             _target = null;
-            _effective = null;
+            _below = null;
             _matching = new List<object>();
             Switch.Forget();
+            Staged.Discard();
         }
 
         private static bool Available(LookScope scope) => _context != null && scope switch
@@ -251,6 +264,7 @@ namespace Tyrant.Framework
         private static void NewDraft()
         {
             Switch.Forget();
+            Staged.Discard(); // an export belongs to the draft it was made for
             if (_animal == null || _context == null)
             {
                 _draft = null;
@@ -269,7 +283,7 @@ namespace Tyrant.Framework
                 _message = ex.Message;
             }
             _matching = MaterialsModule.AnimalsMatching(_scope, _animal).ToList(); // once per draft: a slider move only re-applies
-            _effective = MaterialsModule.Effective(_animal);
+            _below = MaterialsModule.Below(_animal, _scope); // never a higher layer: the draft's scope and above are left out
         }
 
         /// <summary>The block saved for this scope (files full): the animal's look, or the table's own entry of the skin or species.</summary>
@@ -315,7 +329,6 @@ namespace Tyrant.Framework
             if (_draft == null || _context == null || !(_context.KeyFor(_scope) is string key)) return;
             MaterialsModule.SetLive(_scope, key, _context.MaterialName, _draft.IsDirty ? _draft.Current : null); // a clean draft is the saved look
             foreach (var animal in _matching) MaterialsModule.Reapply(animal, keywords);
-            if (_animal != null) _effective = MaterialsModule.Effective(_animal);
         }
 
         /// <summary>Takes the draft's live layer away (the saved look shows again).</summary>
@@ -333,20 +346,27 @@ namespace Tyrant.Framework
         {
             if (_draft == null || _context == null || _target == null) return;
             var c = _context;
+            var current = Staged.Final(_draft.Current); // exports under their fixed names (iridescence-mask.png, fur-mask.png)
+            var missing = new List<string>();
+            var committed = false;
             string where;
             try
             {
                 if (_target.Kind == SaveTargetKind.AnimalLooks)
                 {
-                    if (!(c.PersistentId is ulong id) || LookEditorModule.Looks == null)
+                    if (!(c.PersistentId is ulong id) || LookEditorModule.Looks == null || !LookEditorModule.LooksWritable)
                     {
-                        _message = "This animal's look cannot be saved: the park has no name or the animal no id.";
+                        _message = LookEditorModule.Looks != null && c.PersistentId != null
+                            ? "Not saved: this park's looks file has problems (see the MelonLoader log)."
+                            : "This animal's look cannot be saved: the park has no name or the animal no id.";
                         Footer();
                         return;
                     }
+                    Staged.Commit(_draft.Current); // before the store is prepared again, so the new image is the one read
+                    committed = true;
                     var looks = LookEditorModule.Looks;
                     var map = looks.Get(id) is { } existing ? new Dictionary<string, MaterialOverride>(existing, StringComparer.Ordinal) : new Dictionary<string, MaterialOverride>(StringComparer.Ordinal);
-                    var block = LookFiles.Relative(_draft.Current, FrameworkMod.TyrantDirectory); // UserData/Tyrant-relative, like "Masks/x.png"
+                    var block = LookFiles.Relative(current, FrameworkMod.TyrantDirectory); // UserData/Tyrant-relative, like "Masks/x.png"
                     if (block.IsEmpty) map.Remove(c.MaterialName);
                     else map[c.MaterialName] = block;
                     var before = looks.Get(id);
@@ -374,7 +394,9 @@ namespace Tyrant.Framework
                 {
                     var owner = _target.Owner!;
                     var modDir = ModDirectory(create: true)!;
-                    var block = LookFiles.Adopt(_draft.Current, modDir, MaterialFolders.FolderOf(owner)); // the mod keeps its own copy of outside images
+                    Staged.Commit(_draft.Current); // before the reload, so the new image is the one read
+                    committed = true;
+                    var block = LookFiles.Adopt(current, modDir, MaterialFolders.FolderOf(owner), missing); // the mod keeps its own copy of outside images
                     MaterialFolders.SaveOwner(modDir, owner, new Dictionary<string, MaterialOverride>(StringComparer.Ordinal) { [c.MaterialName] = block });
                     where = TargetName();
                 }
@@ -382,6 +404,7 @@ namespace Tyrant.Framework
             catch (Exception ex) when (ex is ManifestException || ex is IOException || ex is UnauthorizedAccessException)
             {
                 FrameworkMod.Log.Warning($"The look could not be saved: {ex.Message}");
+                if (committed) PointAtFinal(current); // the exports are at their fixed names now
                 _message = "Not saved: " + ex.Message;
                 Footer();
                 return;
@@ -391,9 +414,18 @@ namespace Tyrant.Framework
             if (_animal != null) MaterialsModule.Reapply(_animal, keywords: true); // the Nursery preview is not in the park's lists
             _draft.MarkSaved();
             NewDraft(); // from what was saved (images a mod adopted have their new place)
-            _message = "Saved to " + where + ".";
+            _message = "Saved to " + where + "." + (missing.Count == 0 ? "" : " Left out (missing): " + string.Join(", ", missing.Select(Path.GetFileName)) + ".");
             FrameworkMod.Log.Msg($"Look of {c.MaterialName} ({_scope}) saved to {where}.");
             Rebuild();
+        }
+
+        /// <summary>After the exports moved to their fixed names: the draft names them there too.</summary>
+        private static void PointAtFinal(MaterialOverride final)
+        {
+            if (_draft == null) return;
+            if (final.Iridescence?.Mask is MaskSource mask && mask.File != _draft.Current.Iridescence?.Mask?.File) _draft.SetMask(mask);
+            if (final.Fur?.Mask is MaskSource fur && fur.File != _draft.Current.Fur?.Mask?.File) _draft.SetFurMask(fur, infant: false);
+            PushLive(keywords: false);
         }
 
         private static void Reset()
@@ -401,6 +433,7 @@ namespace Tyrant.Framework
             if (_draft == null) return;
             _draft.Reset();
             Switch.Forget();
+            Staged.Discard();
             _message = "";
             Changed(rebuild: true);
         }
@@ -414,7 +447,11 @@ namespace Tyrant.Framework
                 MaterialsModule.SetAnimalLooks(looks);
             }
             MaterialsModule.Reload(MaterialsModule.Mods);
-            if (_animal != null) MaterialsModule.Reapply(_animal, keywords: true);
+            if (_animal != null)
+            {
+                MaterialsModule.Reapply(_animal, keywords: true);
+                _below = MaterialsModule.Below(_animal, _scope); // the table was read again
+            }
             PushLive(keywords: true);
             _message = "Images read again.";
             Rebuild();
@@ -431,12 +468,17 @@ namespace Tyrant.Framework
                 Footer();
                 return;
             }
-            var folder = TargetFolder(create: true);
-            if (folder == null) return;
-            var file = Path.Combine(folder, _onFurTab ? LookEditing.FurMaskFile : LookEditing.IridescenceMaskFile);
+            var folder = TargetFolder(create: false); // Vanilla Looks is made by Save, not by an export
+            if (folder == null)
+            {
+                _message = "There is nowhere to export this look's mask.";
+                Footer();
+                return;
+            }
+            // Staged until Save: the fixed name may be the saved look's own mask, which Reset or Discard must keep.
+            var file = Staged.Stage(Path.Combine(folder, _onFurTab ? LookEditing.FurMaskFile : LookEditing.IridescenceMaskFile));
             try
             {
-                Directory.CreateDirectory(folder);
                 WriteGreyPng(texture, file);
             }
             catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
@@ -447,35 +489,21 @@ namespace Tyrant.Framework
             }
             if (_onFurTab) _draft.SetFurMask(new MaskSource { File = file }, infant: false);
             else _draft.SetMask(new MaskSource { File = file });
-            _message = "Exported " + Path.GetFileName(file) + "; Save keeps it as the default.";
+            _message = "Exported " + (_onFurTab ? LookEditing.FurMaskFile : LookEditing.IridescenceMaskFile) + "; Save makes it the default, Reset drops it.";
             Changed(rebuild: true);
         }
 
-        /// <summary>The texture's red channel as a grey PNG (through a linear render texture, so compressed maps read too).</summary>
+        /// <summary>The texture's red channel as a grey PNG (read like a mask made from a skin map, so compressed maps read too).</summary>
         private static void WriteGreyPng(Texture source, string file)
         {
-            int width = source.width, height = source.height;
-            var target = RenderTexture.GetTemporary(width, height, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.Linear);
-            var previous = RenderTexture.active;
-            var copy = new Texture2D(width, height, TextureFormat.RGBA32, false, true);
+            var grey = MaterialsModule.ReadGrey(source, 'r', invert: false, mipmaps: false);
             try
             {
-                Graphics.Blit(source, target);
-                RenderTexture.active = target;
-                copy.ReadPixels(new Rect(0, 0, width, height), 0, 0, false);
-                copy.SetPixelData(MaskChannel.Extract(copy.GetPixelData<byte>(0).ToArray(), 'r', false), 0);
-                copy.Apply(false, false);
-                var png = copy.EncodeToPNG();
-                var temp = file + ".tmp";
-                File.WriteAllBytes(temp, png);
-                if (File.Exists(file)) File.Replace(temp, file, null);
-                else File.Move(temp, file);
+                File.WriteAllBytes(file, grey.EncodeToPNG()); // a new staged name each export: nothing is overwritten
             }
             finally
             {
-                RenderTexture.active = previous;
-                RenderTexture.ReleaseTemporary(target);
-                UnityEngine.Object.Destroy(copy);
+                UnityEngine.Object.Destroy(grey);
             }
         }
 

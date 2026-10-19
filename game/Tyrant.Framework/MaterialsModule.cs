@@ -359,13 +359,16 @@ namespace Tyrant.Framework
             foreach (var animal in animals) Reapply(animal, keywords); // after the read lock is released
         }
 
-        /// <summary>What the animal wears now, every layer merged (the editor's live edits included); null when nothing changes it.</summary>
-        public static MaterialOverride? Effective(object animal)
+        /// <summary>
+        /// What lies under one scope's own block for this animal (<see cref="MaterialTable.MergeBelow"/>): the values the editor
+        /// shows when its draft sets none. Null when no layer below sets anything (then the game's own values show).
+        /// </summary>
+        public static MaterialOverride? Below(object animal, LookScope scope)
         {
             if (animal == null) return null;
             try
             {
-                return Resolve(animal, MembersOf(animal.GetType()))?.Override;
+                return Resolve(animal, MembersOf(animal.GetType()), scope)?.Override;
             }
             catch (Exception ex)
             {
@@ -681,7 +684,8 @@ namespace Tyrant.Framework
         }
 
         /// <summary>What the animal wears: null when no layer changes its material.</summary>
-        private static Resolved? Resolve(object animal, Members members)
+        /// <param name="below">For the editor: merge only the layers under this scope's own block.</param>
+        private static Resolved? Resolve(object animal, Members members, LookScope? below = null)
         {
             var species = SpeciesOf(members, animal);
             var skinData = members.SkinData?.GetValue(animal, null);
@@ -708,14 +712,16 @@ namespace Tyrant.Framework
             ReportOtherNames(VanillaBlocks, resolved.VanillaKey, name);
             ReportOtherNames(SpeciesBlocks, species, name);
 
-            var found = MaterialTable.MergeLayers(
-                id is ulong animalId ? Live.Animal(animalId, name) : null,
-                saved != null && saved.TryGetValue(name, out var look) ? look : null,
-                Live.Skin(resolved.SkinKey ?? resolved.VanillaKey, name),
-                resolved.SkinKey != null ? _table.Block(MaterialOwnerKind.Skin, resolved.SkinKey, name) : _table.Block(MaterialOwnerKind.VanillaSkin, resolved.VanillaKey, name),
-                _table.Block(MaterialOwnerKind.Skin, resolved.InheritedKey, name),
-                Live.Species(species, name),
-                _table.Block(MaterialOwnerKind.Species, species, name));
+            var liveAnimal = id is ulong animalId ? Live.Animal(animalId, name) : null;
+            var savedAnimal = saved != null && saved.TryGetValue(name, out var look) ? look : null;
+            var liveSkin = Live.Skin(resolved.SkinKey ?? resolved.VanillaKey, name);
+            var tableSkin = resolved.SkinKey != null ? _table.Block(MaterialOwnerKind.Skin, resolved.SkinKey, name) : _table.Block(MaterialOwnerKind.VanillaSkin, resolved.VanillaKey, name);
+            var baseSkin = _table.Block(MaterialOwnerKind.Skin, resolved.InheritedKey, name);
+            var liveSpecies = Live.Species(species, name);
+            var tableSpecies = _table.Block(MaterialOwnerKind.Species, species, name);
+            var found = below is LookScope scope
+                ? MaterialTable.MergeBelow(scope, liveAnimal, savedAnimal, liveSkin, tableSkin, baseSkin, liveSpecies, tableSpecies)
+                : MaterialTable.MergeLayers(liveAnimal, savedAnimal, liveSkin, tableSkin, baseSkin, liveSpecies, tableSpecies);
             if (found == null) return null;
             resolved.Override = found;
             resolved.ModId = OwnerOf(SkinBlocks, resolved.SkinKey, name) ?? OwnerOf(VanillaBlocks, resolved.VanillaKey, name)
@@ -875,22 +881,40 @@ namespace Tyrant.Framework
             return true;
         }
 
-        /// <summary>One channel of a (possibly compressed, unreadable) texture as a grey mask, through a linear render texture.</summary>
+        /// <summary>One channel of a (possibly compressed, unreadable) texture as a grey mask, compressed and no longer readable.</summary>
         private static Texture2D Extract(Texture source, char channel, bool invert)
+        {
+            var mask = ReadGrey(source, channel, invert, mipmaps: true);
+            try
+            {
+                if (mask.width % 4 == 0 && mask.height % 4 == 0) mask.Compress(true);
+                mask.Apply(false, true); // no longer readable: frees the CPU copy
+                return mask;
+            }
+            catch
+            {
+                UnityEngine.Object.Destroy(mask);
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// One channel of a (possibly compressed, unreadable) texture as a readable grey RGBA texture, through a linear render
+        /// texture; the caller owns it (the editor's Export mask PNG encodes it).
+        /// </summary>
+        public static Texture2D ReadGrey(Texture source, char channel, bool invert, bool mipmaps)
         {
             int width = source.width, height = source.height;
             var target = RenderTexture.GetTemporary(width, height, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.Linear);
             var previous = RenderTexture.active;
-            var mask = new Texture2D(width, height, TextureFormat.RGBA32, true, true) { name = "Tyrant iridescence mask", hideFlags = HideFlags.DontUnloadUnusedAsset };
+            var mask = new Texture2D(width, height, TextureFormat.RGBA32, mipmaps, true) { name = "Tyrant iridescence mask", hideFlags = HideFlags.DontUnloadUnusedAsset };
             try
             {
                 Graphics.Blit(source, target);
                 RenderTexture.active = target;
                 mask.ReadPixels(new Rect(0, 0, width, height), 0, 0, false);
                 mask.SetPixelData(MaskChannel.Extract(mask.GetPixelData<byte>(0).ToArray(), channel, invert), 0);
-                mask.Apply(true, false);
-                if (width % 4 == 0 && height % 4 == 0) mask.Compress(true);
-                mask.Apply(false, true); // no longer readable: frees the CPU copy
+                mask.Apply(mipmaps, false);
                 return mask;
             }
             catch

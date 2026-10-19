@@ -11,9 +11,9 @@ using static Tyrant.Framework.GameUi;
 namespace Tyrant.Framework
 {
     /// <summary>
-    /// The look editor's Iridescence and Fur tabs. Each control shows what this scope's draft sets, else what the animal wears
-    /// now (a lower layer's value), else the game's own; editing it sets it at this scope. A choice redraws the tab; a slider or
-    /// a typed value only re-applies.
+    /// The look editor's Iridescence and Fur tabs. Each control shows what this scope's draft sets, else what the layers under
+    /// this scope set (<see cref="MaterialsModule.Below"/>, never a higher layer's), else the game's own; editing it sets it at
+    /// this scope. A choice redraws the tab; a slider or a typed value only re-applies.
     /// </summary>
     internal static partial class LookEditorWindow
     {
@@ -49,7 +49,7 @@ namespace Tyrant.Framework
             var draft = _draft!;
             var variant = _context!.Variant;
             var own = draft.Current.Iridescence;
-            var below = _effective?.Iridescence;
+            var below = _below?.Iridescence;
             var shown = own?.Strength ?? below?.Strength;
             var strength = shown != null ? LookEditing.StrengthFor(shown, variant) : GameStrength();
 
@@ -59,7 +59,7 @@ namespace Tyrant.Framework
                 Option("On", on, true, () =>
                 {
                     if (ShownOn()) return;
-                    Switch.On(draft, _effective, GameHasRamp());
+                    Switch.On(draft, _below, GameHasRamp());
                     Changed(rebuild: true);
                 }),
                 Option("Off", !on, true, () =>
@@ -173,7 +173,7 @@ namespace Tyrant.Framework
 
         private static bool ShownOn()
         {
-            var strength = _draft?.Current.Iridescence?.Strength ?? _effective?.Iridescence?.Strength;
+            var strength = _draft?.Current.Iridescence?.Strength ?? _below?.Iridescence?.Strength;
             return (strength != null ? LookEditing.StrengthFor(strength, _context?.Variant ?? "normal") : GameStrength()) > 0;
         }
 
@@ -213,7 +213,7 @@ namespace Tyrant.Framework
             NumberRow("_FurWindScale", "Wind scale");
 
             var own = draft.Current.Fur?.Mask;
-            var mask = own ?? _effective?.Fur?.Mask;
+            var mask = own ?? _below?.Fur?.Mask;
             Heading("Fur mask" + (own == null && mask != null ? "  <size=10>(from a lower layer)</size>" : ""));
             Choices(null, new[]
             {
@@ -241,7 +241,7 @@ namespace Tyrant.Framework
         private static MaterialValue? Setting(string key)
         {
             if (_draft != null && _draft.Current.Settings.TryGetValue(key, out var own)) return own;
-            return _effective != null && _effective.Settings.TryGetValue(key, out var below) ? below : (MaterialValue?)null;
+            return _below != null && _below.Settings.TryGetValue(key, out var below) ? below : (MaterialValue?)null;
         }
 
         private static Vector3 Vector(string key) =>
@@ -404,6 +404,15 @@ namespace Tyrant.Framework
 
         /// <summary>A file as the cycler shows it: "Masks/x.png" for the player's own images, else its name.</summary>
         private static string Shown(string file) =>
-            ModPaths.IsInside(file, MasksDirectory) ? "Masks/" + Path.GetFileName(file) : Path.GetFileName(file);
+            Staged.IsStaged(file) ? StagedName(file) + " (not saved)"
+            : ModPaths.IsInside(file, MasksDirectory) ? "Masks/" + Path.GetFileName(file) : Path.GetFileName(file);
+
+        /// <summary>A staged file's fixed name ("&lt;id&gt;-iridescence-mask.png" is iridescence-mask.png).</summary>
+        private static string StagedName(string file)
+        {
+            var name = Path.GetFileName(file);
+            var dash = name.IndexOf('-');
+            return dash >= 0 ? name.Substring(dash + 1) : name;
+        }
     }
 }

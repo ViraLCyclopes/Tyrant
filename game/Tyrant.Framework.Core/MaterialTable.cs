@@ -211,6 +211,19 @@ namespace Tyrant.Framework.Core
         }
 
         /// <summary>
+        /// What lies under one scope's own block, in <see cref="MergeLayers"/> order: for an animal, its skin's and species' layers
+        /// (live and table); for a skin, its base skin and species; for a species, nothing (only the game). The scope's own layers
+        /// and everything above them are left out, so the in-game editor never shows or copies a higher layer's values.
+        /// </summary>
+        public static MaterialOverride? MergeBelow(LookScope scope, MaterialOverride? liveAnimal, MaterialOverride? savedAnimal, MaterialOverride? liveSkin,
+            MaterialOverride? tableSkin, MaterialOverride? baseSkin, MaterialOverride? liveSpecies, MaterialOverride? tableSpecies) => scope switch
+        {
+            LookScope.Animal => MergeLayers(null, null, liveSkin, tableSkin, baseSkin, liveSpecies, tableSpecies),
+            LookScope.Skin => MergeLayers(null, null, null, null, baseSkin, liveSpecies, tableSpecies),
+            _ => null,
+        };
+
+        /// <summary>
         /// A copy whose relative file paths are made full against <paramref name="folder"/> (full paths stay); a path that is not
         /// a path drops that ramp or mask. The input is not changed.
         /// </summary>
