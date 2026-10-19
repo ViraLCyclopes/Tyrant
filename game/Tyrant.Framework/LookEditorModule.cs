@@ -12,7 +12,7 @@ namespace Tyrant.Framework
     /// The in-game look editor's wiring: the per-animal looks, which follow the save file (UserData/Tyrant/Looks/&lt;save&gt;.json,
     /// never the save itself): read from the loaded save's file when a park has loaded, written to each save's own file when
     /// the game saves (Save As and autosaves included), and deleted with the save; pruned of animals that are gone only in the
-    /// file being loaded or written. Also the game's selection, and the window's tick. The game's hooks only queue their news,
+    /// file being loaded or written. Also the window's tick. The game's hooks only queue their news,
     /// handled on the next frame, and every handler is wrapped: an exception is logged once and turns the editor off, never the game.
     /// </summary>
     internal static class LookEditorModule
@@ -28,14 +28,12 @@ namespace Tyrant.Framework
         private static readonly List<string> SavesRemoved = new List<string>(); // OnSaveRemoved's paths, handled in Tick (menus too)
         private static readonly HashSet<ulong> Gone = new HashSet<ulong>(); // removed since the park was loaded or saved: dropped on its save
         private static readonly HashSet<string> WriteWarned = new HashSet<string>(StringComparer.OrdinalIgnoreCase); // looks files a write failed for
-        private static bool _loadedNews, _selectionNews;
+        private static bool _loadedNews;
         private static bool _disabled;
         private static bool _started; // Start ran (the framework loaded): until then Tick does nothing
 
         private static object? _gui; // the park's InterfaceManager: a new one is a new park
         private static bool _parkRead;
-        private static object? _selection; // the SelectionHandler we listen to
-        private static Delegate? _selectionHandler;
 
         /// <summary>The park's per-animal looks, or null outside a park.</summary>
         public static AnimalLooks? Looks { get; private set; }
@@ -94,15 +92,13 @@ namespace Tyrant.Framework
                     SavesDeleted(); // the load menu deletes saves too
                     return;
                 }
-                ListenToSelection();
-
-                bool loaded, selection;
+                bool loaded;
                 List<ulong> removed;
                 List<string> saved;
                 lock (Gate)
                 {
-                    (loaded, selection) = (_loadedNews, _selectionNews);
-                    _loadedNews = _selectionNews = false;
+                    loaded = _loadedNews;
+                    _loadedNews = false;
                     removed = Removed.ToList();
                     Removed.Clear();
                     saved = Saved.ToList();
@@ -113,7 +109,7 @@ namespace Tyrant.Framework
                 if (removed.Count > 0 && _parkRead) AnimalsRemoved(removed); // removals queued while loading belong to the old park
                 if (_parkRead) foreach (var path in saved) ParkSaved(path);
                 SavesDeleted(); // after the saves: a save converted to a new one copies its images before the old one goes
-                LookEditorWindow.Tick(gui, _parkRead, selection);
+                LookEditorWindow.Tick(gui, _parkRead);
             }
             catch (Exception ex)
             {
@@ -139,12 +135,12 @@ namespace Tyrant.Framework
             return metadata == null ? null : AccessTools.Field(metadata.GetType(), "Path")?.GetValue(metadata) as string;
         }
 
-        /// <summary>The single selected object when it is an animal (park or vivarium); null otherwise.</summary>
-        public static object? SelectedAnimal()
+        /// <summary>Game.AnimalPreviewComponent: the Nursery's preview (its currentAnimalPreview); null between parks.</summary>
+        public static object? PreviewComponent()
         {
-            var handler = Property(Game, "Selection");
-            var selected = handler == null ? null : Getter(handler.GetType(), "SingleSelected")?.GetValue(handler, null);
-            return IsAnimal(selected) ? selected : null;
+            if (Game != null && Getter(Game, "AnimalPreviewComponent") == null && Warned.Add("AnimalPreviewComponent"))
+                FrameworkMod.Log.Warning("Game.AnimalPreviewComponent was not found (game updated?); the look editor cannot open on the Nursery's animal.");
+            return Property(Game, "AnimalPreviewComponent");
         }
 
         public static bool IsAnimal(object? value) =>
@@ -206,7 +202,6 @@ namespace Tyrant.Framework
                 FrameworkMod.Log.Msg($"{Looks.Count} single-animal look(s) for save \"{SaveName}\".");
                 MaterialsModule.ReapplyIds(Looks.Ids.ToList(), keywords: true); // the animals were set up before the looks were read
             }
-            LookEditorWindow.ParkLoaded();
         }
 
         /// <summary>
@@ -322,8 +317,6 @@ namespace Tyrant.Framework
                 Saved.Clear();
                 _loadedNews = false;
             }
-            _selection = null;
-            _selectionHandler = null;
             MaterialsModule.SetAnimalLooks(null);
         }
 
@@ -366,11 +359,6 @@ namespace Tyrant.Framework
             }
         }
 
-        private static void OnSelectionChange()
-        {
-            lock (Gate) _selectionNews = true;
-        }
-
         /// <summary>PersistentID.uniqueID of an animal with a valid one.</summary>
         public static ulong? PersistentId(object animal)
         {
@@ -378,24 +366,6 @@ namespace Tyrant.Framework
             if (!(Getter(type, "HasValidPersistentID")?.GetValue(animal, null) is true)) return null;
             var id = Getter(type, "PersistentID")?.GetValue(animal, null);
             return id != null && AccessTools.Field(id.GetType(), "uniqueID")?.GetValue(id) is ulong unique ? unique : (ulong?)null;
-        }
-
-        /// <summary>Game.Selection is made per park: listen to the current one's OnSelectionChange.</summary>
-        private static void ListenToSelection()
-        {
-            var selection = Property(Game, "Selection");
-            if (selection == null || ReferenceEquals(selection, _selection)) return;
-            var changed = selection.GetType().GetEvent("OnSelectionChange");
-            if (changed == null)
-            {
-                _selection = selection;
-                FrameworkMod.Log.Warning("SelectionHandler.OnSelectionChange was not found (game updated?); the look editor follows the selection when it opens.");
-                return;
-            }
-            _selectionHandler ??= Delegate.CreateDelegate(changed.EventHandlerType, AccessTools.Method(typeof(LookEditorModule), nameof(OnSelectionChange)));
-            changed.AddEventHandler(selection, _selectionHandler);
-            _selection = selection;
-            OnSelectionChange();
         }
 
         /// <summary>Adds one of our static handlers to a static game event (a parameter of a reference type binds to object).</summary>

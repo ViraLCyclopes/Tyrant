@@ -12,16 +12,15 @@ using static Tyrant.Framework.GameUi;
 namespace Tyrant.Framework
 {
     /// <summary>
-    /// The Nursery's "All skins" window: a grid button next to "Design" (shown when a species has more than 5 skins) opens a
+    /// The Nursery's "All skins" window: a grid button next to "Design" (shown when a species has any skin to pick) opens a
     /// window on the left with every skin, a search box (skin or mod name) and an X. Clicking a skin selects it the way the row
     /// does: tick its row swatch, then the game's SelectSkin and SetCreationRect. Built from clones of the game's own UI pieces
     /// (uGUI and TextMeshPro by reflection; the repo has no game or UI assemblies).
     /// </summary>
     internal static class SkinBrowser
     {
-        private const int RowLimit = 5;
         private const string ButtonName = "TyrantAllSkinsButton";
-        private const string CloseButtonPath = "Menu/GalleryMenu/GalleryRect/SettingsHeader/AnimalFilterMenu/Header/CloseButton";
+        internal const string CloseButtonPath = "Menu/GalleryMenu/GalleryRect/SettingsHeader/AnimalFilterMenu/Header/CloseButton";
         private static readonly Type? ToggleUtil = AccessTools.TypeByName("PrehistoricKingdom.ToggleUtil") ?? AccessTools.TypeByName("ToggleUtil");
 
         private sealed class Cell
@@ -61,9 +60,9 @@ namespace Tyrant.Framework
             if (Image == null || Button == null || ScrollRect == null || ToggleUtil == null) return;
             _menu = menu;
             var visible = Visible(menu).Count;
-            PlaceButton(menu, visible > RowLimit);
+            PlaceButton(menu, visible > 0);
             if (!IsOpen) return;
-            if (visible <= RowLimit) Close();
+            if (visible == 0) Close(); // nothing to pick (the button is hidden too)
             else if (rebuild) Fill(menu);
             else Highlight(menu);
         }

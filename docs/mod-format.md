@@ -244,13 +244,24 @@ Materials need Tyrant Framework 0.2.0 or newer.
 
 ## The in-game editor
 
-Tyrant Framework adds a **Tyrant** button to the game's top bar (at the top right if a game update changes the bar). It opens
-a floating window: drag it by its title, resize it from the corner (at least 300 × 360; its place is remembered), and switch
-between **This animal**, **Whole skin** and **Whole species**. The tabs **Iridescence** and **Fur** hold the settings above
-as value boxes you can type into.
+Tyrant Framework adds a small **Tyrant** button (a **T**) in two places:
+
+- **In the park:** click an animal (park or vivarium). The button is in the header of its info panel and opens the editor on
+  that animal, on **This animal**.
+- **In the Nursery:** the button is right of the animation list (**Fidget**) and opens the editor on the preview animal, on
+  **Whole skin** (**Whole species** is there too). **This animal** needs a placed animal, so it is greyed out and the status
+  line says so: place the animal in the park to give it its own look. When you change the Nursery's skin, sex or species,
+  the window follows the preview animal. Closing the Nursery is like the animal going away, except that unsaved
+  changes stay in the window until you **Save** or **Reset** them.
+
+The window edits the animal it was opened on until you close it or open it from another animal. Drag it by its title,
+resize it from the corner (at least 300 × 360; its place is remembered), and switch between **This animal**, **Whole skin**
+and **Whole species**. The tabs **Iridescence** and **Fur** hold the settings above as value boxes you can type into. If a
+game update moves the panels and a button cannot be placed, the MelonLoader log says so once, with what it found there.
 
 - **Live preview:** every change shows at once on every animal it affects. It is a preview until **Save**; **Reset** goes
-  back. Closing the window, or picking another animal, asks what to do with unsaved changes (keep or discard).
+  back. Closing the window, opening it on another animal, or a new skin or species in the Nursery asks what to do with
+  unsaved changes (keep or discard). Kept in the Nursery, the window stays on its look until you save or reset it.
 - **Export mask PNG** writes the mask as a PNG to edit in an image editor. It is staged until **Save**, then written under the
   fixed file name (`iridescence-mask.png`, `fur-mask.png`, …) and becomes the mask. **Reload images** picks up your edits
   without restarting. The PNG pickers list the target's folder and `UserData/Tyrant/Masks`.

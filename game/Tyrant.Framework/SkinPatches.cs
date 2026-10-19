@@ -90,6 +90,7 @@ namespace Tyrant.Framework
             {
                 FrameworkMod.Log.Warning("The All skins button could not be updated: " + ex.Message);
             }
+            LookEditorWindow.NurseryChanged(); // a look editor opened from the Nursery looks at its preview animal now
         }
 
         private static void AfterGenerate(object __instance, object __result)

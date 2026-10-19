@@ -313,8 +313,18 @@ Needs a data dump, an asset index and the game. Steps marked **(game)** start th
 
 Needs the game and a Tyrant Framework installed from this build. Steps marked **(app)** are in the Tyrant app.
 
-140. **(game)** Open a park with Titanoboas. Click **Tyrant** in the top bar: a window opens. Drag it by its title, resize it from
-     the corner (it stops at 300 × 360), close and reopen the park: it is where you left it.
+140. **(game)** Open a park with Titanoboas. Click one: its info panel has a **T** button in its header. Click it: a window opens
+     on that animal, on **This animal**. Drag it by its title, resize it from the corner (it stops at 300 × 360). The **T**
+     again closes it. Close and reopen the park, open it again: it is where you left it.
+     - A vivarium animal's panel has the **T** too, and opens the editor on that animal.
+     - **Nursery:** pick Titanoboa. A **T** sits right of the animation list (**Fidget**); click it: the window opens on the
+       preview animal, on **Whole skin**. **This animal** is greyed out and the status line says *Place the animal in the park
+       to give it its own look.* Change the sex: the window stays on the same look. Change the skin with an unsaved change:
+       it asks first; **Discard** follows the new skin, **Keep editing** stays on the old look until **Save** or **Reset**,
+       then follows. Close the Nursery (also with Esc, or another management tab): the window says the Nursery was
+       closed; with an unsaved change it says the changes are kept, and **Save** still writes the skin's look.
+     - The Nursery's grid button next to **Design** shows on a species with only a few skins too, and opens **All skins**.
+     - No top-bar button. If a panel moved in a game update, the log has one warning naming it, with a short hierarchy.
 141. **(game)** On one Titanoboa, **This animal**, tab **Iridescence**: move strength and thickness (type values too); only that
      animal changes. Switch to **Whole skin**: every animal wearing the skin changes with it.
 142. **(game)** **Save** on **This animal**, save the park, reload it: the look is still there and
@@ -332,10 +342,11 @@ Needs the game and a Tyrant Framework installed from this build. Steps marked **
      it as **Vanilla Looks**, and it loads last; its look shows on a second animal and after a restart. With that folder's
      `mod.json` broken, a save into it says Vanilla Looks is turned off or broken instead of "Saved".
 144. **(game)** Save into a mod skin made by someone else: the change lands in that mod's folder in the game, not the workspace.
-145. **(game)** **Export mask PNG**, edit the PNG in an image editor, press **Reload images**: the animals update. Then select
-     another animal (or close the window) without **Save**: the **Discard changes?** prompt appears, and its **Discard** deletes
-     the staged file.
-146. **(game)** Change a value, then select another animal: it asks about the unsaved change (keep or discard). Same on closing the window.
+145. **(game)** **Export mask PNG**, edit the PNG in an image editor, press **Reload images**: the animals update. Then click
+     another animal's **T** (or close the window) without **Save**: the **Discard changes?** prompt appears, and its **Discard**
+     deletes the staged file.
+146. **(game)** Change a value, then click the **T** in another animal's panel: it asks about the unsaved change (keep or
+     discard). Selecting another animal without its **T** changes nothing. Same prompt on closing the window.
 147. **(game)** The vivarium species check: a pooled vivarium animal with a vanilla skin looks vanilla (no sheen from another
      animal's look), and an animal with a look keeps it after being moved.
 148. **(app)** After steps 143 or 144, **Install** the mod (or **Remove from game**): the **Bring in looks made in the game?** dialog lists the
