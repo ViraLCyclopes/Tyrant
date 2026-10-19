@@ -123,6 +123,7 @@ describe('mod sharing actions', () => {
   it('deleteMod deletes, closes the mod tab and returns the list; a failure is returned for the dialog', async () => {
     const { rpc, session } = setup();
     rpc.on('mods.delete', () => ({ mods: [], frameworkInstalled: false, frameworkOutdated: false }));
+    rpc.on('mods.list', () => ({ mods: [], frameworkInstalled: false, frameworkOutdated: false })); // not in the game: no looks to ask about
     const closed: [string, string][] = [];
     const tab = new Tab('tab-test', session.log, { retitle: () => {}, openTool: () => null, closeTool: (tool, key) => void closed.push([tool, key]) });
 
@@ -252,6 +253,57 @@ describe('looks made in the game', () => {
 
     expect(await deleteMod(session, tab, 'red-spot', 'Red spot', false)).toHaveProperty('list'); // kept in the game: nothing to ask
     expect(rpc.callsTo('mods.looksChanges')).toHaveLength(1);
+
+    const order: string[] = [];
+    rpc.on('mods.bringInLooks', () => void order.push('bringInLooks'));
+    rpc.on('mods.delete', () => {
+      order.push('delete');
+      return empty;
+    });
+    const kept = deleteMod(session, tab, 'red-spot', 'Red spot', true);
+    await vi.waitFor(() => expect(session.looksPrompt).toBeTruthy());
+    session.looksPrompt!.answer({ bringIn: { 'red-spot': ['materials/skins/blue'] }, copy: [] });
+    expect(await kept).toHaveProperty('list');
+    expect(rpc.callsTo('mods.bringInLooks')[0]?.params).toEqual({ id: 'red-spot', folders: ['materials/skins/blue'] });
+    expect(order).toEqual(['bringInLooks', 'delete']); // into the folder that goes to the Recycle Bin
+  });
+
+  it('removing a workspace mod brings its game looks in first', async () => {
+    const { rpc, platform, session, tab } = setup();
+    const order: string[] = [];
+    rpc.on('mods.list', () => ({ mods: [modRow({ state: 'installed' })], frameworkInstalled: true, frameworkOutdated: false }));
+    rpc.on('mods.looksChanges', () => ({ changes: [blue, both] }));
+    rpc.on('mods.bringInLooks', () => void order.push('bringInLooks'));
+    rpc.on('mods.remove', () => {
+      order.push('remove');
+      return empty;
+    });
+
+    const done = removeFromGame(session, tab, 'red-spot', 'Red spot');
+    await vi.waitFor(() => expect(session.looksPrompt).toBeTruthy());
+    expect(session.looksPrompt!.action).toBe("Removing 'Red spot' from the game");
+    expect(platform.confirms).toHaveLength(0);
+    session.looksPrompt!.answer({ bringIn: { 'red-spot': ['materials/skins/blue', 'materials/species/Carcharodontosaurus'] }, copy: [] });
+
+    expect(await done).toBe(true);
+    expect(rpc.callsTo('mods.bringInLooks')[0]?.params).toEqual({ id: 'red-spot', folders: ['materials/skins/blue', 'materials/species/Carcharodontosaurus'] });
+    expect(order).toEqual(['bringInLooks', 'remove']);
+  });
+
+  it('when the list cannot be read, install still asks the core about looks instead of assuming none', async () => {
+    const { rpc, session, tab } = setup();
+    rpc.on('mods.list', () => {
+      throw new RpcError('The workspace could not be read.', 'WORKSPACE_INVALID');
+    });
+    rpc.on('mods.looksChanges', () => ({ changes: [blue] }));
+
+    const done = installMod(session, tab, 'red-spot', 'Red spot');
+    await vi.waitFor(() => expect(session.looksPrompt).toBeTruthy());
+    session.looksPrompt!.answer(null);
+
+    expect(await done).toBe(false);
+    expect(rpc.callsTo('mods.looksChanges')).toHaveLength(1);
+    expect(rpc.callsTo('mods.install')).toHaveLength(0);
   });
 
   it('uninstall brings the looks in first and says the animal looks are kept', async () => {

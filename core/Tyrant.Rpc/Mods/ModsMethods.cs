@@ -90,9 +90,10 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
             }
             progress.Report(new JobProgress(0.8, $"Installing {p.Id}"));
             var cooker = Cooker(ws, install, mod);
-            Game.Install(install, mod, staging => cooker.CookForInstall(mod, staging, Cooking(progress, 0.8, 0.98), ct));
+            var warnings = Game.Install(install, mod, staging => cooker.CookForInstall(mod, staging, Cooking(progress, 0.8, 0.98), ct));
             session.Log($"Installed '{p.Id}' into the game.");
-            return new ModInstallResult($"Installed '{p.Id}' into the game. Start the game to see it.", check.Warnings);
+            foreach (var warning in warnings) session.Log(warning);
+            return new ModInstallResult($"Installed '{p.Id}' into the game. Start the game to see it.", check.Warnings.Concat(warnings).ToList());
         });
     }
 
@@ -144,7 +145,7 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
             ModLoaderInstaller.FrameworkStatus(install, Options.DumperDir) == FrameworkState.Outdated);
     }
 
-    /// <summary>Whether the in-game editor changed the installed copy's looks; a file the game holds open counts as no (the list stays readable).</summary>
+    /// <summary>Whether the in-game editor changed the installed copy's looks; a file that cannot be read counts as yes, so the app asks first.</summary>
     private static bool HasGameLooks(GameInstall install, ModProject mod)
     {
         try
@@ -153,7 +154,7 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return false;
+            return true; // unknown: the app asks (mods.looksChanges then says what could not be read) rather than overwrite
         }
     }
 

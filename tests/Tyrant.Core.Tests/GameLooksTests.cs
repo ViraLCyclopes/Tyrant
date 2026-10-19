@@ -64,6 +64,21 @@ public class GameLooksTests
     }
 
     [Fact]
+    public void An_install_whose_stamps_cannot_be_written_still_goes_in_with_a_warning()
+    {
+        var (game, install, ws) = Setup();
+        using var _ = game;
+        var mod = ModWithMaterials(ws, Species);
+        Directory.CreateDirectory(Path.Combine(ModLoaderInstaller.RecordDir(install), "install-stamps.json")); // in the way: no file can go there
+
+        var warnings = new GameMods().Install(install, mod);
+
+        Assert.Contains("could not record", Assert.Single(warnings));
+        Assert.True(File.Exists(Path.Combine(Installed(install), Species, MaterialFolders.FileName)));
+        Assert.Equal(ModInstallState.Installed, new GameMods().StateOf(install, mod));
+    }
+
+    [Fact]
     public void Removing_a_mod_forgets_its_stamps()
     {
         var (game, install, ws) = Setup();

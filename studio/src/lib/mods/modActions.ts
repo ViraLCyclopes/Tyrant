@@ -52,18 +52,23 @@ export async function bringInLooks(session: Session, tab: Tab, row: ModRow): Pro
   return keepGameLooks(session, tab, [row], '');
 }
 
-/** The mod's row in the Mods list, or null when the list cannot be read (the action then goes on without asking about looks). */
-async function rowOf(session: Session, id: string): Promise<ModRow | null> {
+/** The mod's row in the Mods list; when the list cannot be read, one that may have looks made in the game (so keepGameLooks asks). */
+async function rowOf(session: Session, id: string, name: string): Promise<ModRow | null> {
   try {
     return (await session.rpc.call('mods.list')).mods.find((m) => m.id === id) ?? null;
   } catch {
-    return null;
+    return unknownRow(id, name);
   }
+}
+
+/** A mod whose state could not be read: never assume the game changed nothing, ask mods.looksChanges. */
+function unknownRow(id: string, name: string): ModRow {
+  return { id, name, version: '', author: null, replacements: 0, skins: 0, state: 'changed', enabled: null, dir: null, error: null, gameLooks: true };
 }
 
 export async function installMod(session: Session, tab: Tab, id: string, name: string): Promise<boolean> {
   const list = await tab.quietly(() => session.rpc.call('mods.list'));
-  const row = list?.mods.find((m) => m.id === id);
+  const row = list ? list.mods.find((m) => m.id === id) : unknownRow(id, name);
   const state = row?.state;
   if (row && !(await keepGameLooks(session, tab, [row], `Installing '${name}' again`))) return false;
   const where = `UserData\\Tyrant\\Mods\\${id}`;
@@ -83,7 +88,7 @@ export async function installMod(session: Session, tab: Tab, id: string, name: s
 }
 
 export async function removeFromGame(session: Session, tab: Tab, id: string, name: string): Promise<boolean> {
-  const row = await rowOf(session, id);
+  const row = await rowOf(session, id, name);
   if (row && !(await keepGameLooks(session, tab, [row], `Removing '${name}' from the game`))) return false;
   if (!(await session.platform.confirm(`Remove '${name}' from the game?`, 'Remove from game'))) return false;
   return (await tab.safely(() => session.rpc.call('mods.remove', { id }))) !== null;
@@ -184,7 +189,7 @@ export async function deleteMod(
   name: string,
   removeFromGame: boolean,
 ): Promise<{ list: ModsListResult } | { error: string }> {
-  const row = removeFromGame ? await rowOf(session, id) : null;
+  const row = removeFromGame ? await rowOf(session, id, name) : null;
   if (row && !(await keepGameLooks(session, tab, [row], `Deleting '${name}' with its copy in the game`)))
     return { error: 'Nothing was deleted: the looks made in the game were not brought in.' };
   try {

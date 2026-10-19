@@ -57,8 +57,17 @@ public sealed partial class ModsMethods
     public ModLooksChanges LooksChanges(ModIdParams p)
     {
         var (ws, install) = session.Current();
-        return new ModLooksChanges(GameLooks.Changes(install, ModProject.Open(ws, p.Id))
-            .Select(c => new ModLooksChangeDto(c.Folder, c.GameChanged, c.ProjectChanged)).ToList());
+        var mod = ModProject.Open(ws, p.Id);
+        try
+        {
+            return new ModLooksChanges(GameLooks.Changes(install, mod).Select(c => new ModLooksChangeDto(c.Folder, c.GameChanged, c.ProjectChanged)).ToList());
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            throw new TyrantException(TyrantErrorCode.GameLooksPending,
+                $"Tyrant could not compare '{p.Id}' in the game with the workspace, so it cannot tell whether looks made in the game would be lost ({ex.Message}). Close the game or the program holding the file and try again.",
+                FixAction.None, ex);
+        }
     }
 
     /// <summary>Replaces these material folders in the workspace with the game's copy (the rest of the mod stays as it is).</summary>

@@ -83,7 +83,7 @@
         },
         { label: 'Restore cutouts', run: () => void restore(), enabled: () => !!doc.check?.missingCutouts?.length },
         { label: 'Open folder', run: () => void (doc.detail && session.platform.reveal(doc.detail.dir)), enabled: () => !!doc.detail },
-        { label: 'Remove from game', run: () => void (doc.detail && removeFromGame(session, tab, doc.id, doc.detail.name)), enabled: () => !!doc.detail && !session.busy },
+        { label: 'Remove from game', run: () => void removeFromTheGame(), enabled: () => !!doc.detail && !session.busy },
         { label: 'Delete mod…', run: () => void askDelete(), enabled: () => !!doc.detail && !session.busy },
       ],
     },
@@ -129,8 +129,18 @@
     if (doc.detail?.revision) void refreshInstallState();
   });
 
+  // Both may first bring looks made in the game into this mod's material files: take them (undo stays only if mod.json did not change).
   async function install() {
-    if (doc.detail && (await installMod(session, tab, doc.id, doc.detail.name))) await refreshInstallState();
+    if (!doc.detail) return;
+    const installed = await installMod(session, tab, doc.id, doc.detail.name);
+    await doc.refreshIfChanged();
+    if (installed) await refreshInstallState();
+  }
+
+  async function removeFromTheGame() {
+    if (!doc.detail) return;
+    await removeFromGame(session, tab, doc.id, doc.detail.name);
+    await doc.refreshIfChanged();
   }
 
   async function restore() {

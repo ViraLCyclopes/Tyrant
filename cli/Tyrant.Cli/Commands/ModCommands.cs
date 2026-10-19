@@ -231,7 +231,7 @@ public sealed class ModRestoreCutoutsCommand : Command<ModSettings>
 }
 
 /// <summary>--bring-in-looks and --discard-game-looks: what install and remove do with looks the in-game editor saved into the installed copy.</summary>
-public class GameLooksSettings : ModSettings
+public class GameLooksSettings : ModSettings, IGameLooksChoice
 {
     [CommandOption("--bring-in-looks")]
     [Description("First bring the looks made in the game into the workspace (the game's copy wins where both changed).")]
@@ -280,8 +280,9 @@ public sealed class ModInstallCommand : Command<ModInstallCommand.Settings>
             Console.WriteLine("Installed or updated Tyrant's framework in the game.");
         }
         var cooker = ModCli.Cooker(ws, install, mod);
-        new GameMods(launcher.IsRunning).Install(install, mod, staging => cooker.CookForInstall(mod, staging,
+        var warnings = new GameMods(launcher.IsRunning).Install(install, mod, staging => cooker.CookForInstall(mod, staging,
             new SyncProgress(p => Console.WriteLine(p.Message))));
+        foreach (var warning in warnings) Console.WriteLine($"  WARN   {warning}");
         Console.WriteLine($"Installed '{mod.Id}' into {Path.Combine(ModLoaderInstaller.ModsDir(install), mod.Id)}. Start the game to see it; undo with 'tyrant mod remove {mod.Id}'.");
         return ExitCodes.Ok;
     }
@@ -305,10 +306,7 @@ public sealed class ModRemoveCommand : Command<GameLooksSettings>
     public override int Execute(CommandContext context, GameLooksSettings settings)
     {
         var (ws, install) = CliServices.OpenWorkspace(settings);
-        if (ModProject.Ids(ws).Contains(settings.Id, StringComparer.Ordinal))
-            GameLooksCli.Settle(install, ModProject.Open(ws, settings.Id), settings, "removing it");
-        else
-            GameLooksCli.SettleGameOnly(ws, install, settings);
+        GameLooksCli.SettleInstalled(ws, install, settings.Id, settings, "removing it");
         new GameMods(CliServices.Launcher.IsRunning).Remove(install, settings.Id);
         Console.WriteLine($"Removed '{settings.Id}' from the game.");
         return ExitCodes.Ok;

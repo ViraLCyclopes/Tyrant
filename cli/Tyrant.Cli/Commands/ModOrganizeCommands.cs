@@ -10,7 +10,7 @@ namespace Tyrant.Cli.Commands;
 
 public sealed class ModDeleteCommand : Command<ModDeleteCommand.Settings>
 {
-    public sealed class Settings : ModSettings
+    public sealed class Settings : GameLooksSettings
     {
         [CommandOption("--keep-in-game")]
         [Description("Keep the installed copy in the game (by default it is removed too).")]
@@ -30,11 +30,21 @@ public sealed class ModDeleteCommand : Command<ModDeleteCommand.Settings>
                 throw new TyrantException(TyrantErrorCode.ModNotFound, $"There is no mod '{settings.Id}' in this workspace ({ModProject.RootOf(ws)}).");
             Console.WriteLine($"This sends {Path.Combine(ModProject.RootOf(ws), settings.Id)} and its Blender projects to the Recycle Bin" +
                               (settings.KeepInGame ? "." : ", and removes it from the game if it is installed."));
-            if (!settings.KeepInGame && GameLooks.Changes(install, ModProject.Open(ws, settings.Id)).Where(c => c.GameChanged).ToList() is { Count: > 0 } pending)
-                Console.WriteLine($"Its copy in the game has looks made there ({GameLooks.Describe(pending)}); 'tyrant mod looks {settings.Id} --bring-in' first keeps them in the recycled folder.");
+            if (!settings.KeepInGame)
+            {
+                try
+                {
+                    GameLooksCli.SettleInstalled(ws, install, settings.Id, new LooksCheckOnly(), "deleting it with its copy in the game");
+                }
+                catch (TyrantException ex) when (ex.Code == TyrantErrorCode.GameLooksPending)
+                {
+                    Console.WriteLine(ex.Message);
+                }
+            }
             Console.WriteLine($"Run 'tyrant mod delete {settings.Id} --yes{(settings.KeepInGame ? " --keep-in-game" : "")}' to do it.");
             return ExitCodes.Usage;
         }
+        if (!settings.KeepInGame) GameLooksCli.SettleInstalled(ws, install, settings.Id, settings, "deleting it with its copy in the game");
         var removed = ModProject.Delete(ws, install, settings.Id, !settings.KeepInGame, new GameMods(CliServices.Launcher.IsRunning));
         Console.WriteLine($"Deleted '{settings.Id}'. In the Recycle Bin:");
         foreach (var path in removed.Recycled) Console.WriteLine($"  {path}");
@@ -115,4 +125,11 @@ public sealed class ModMoveSkinCommand : Command<ModMoveSkinCommand.Settings>
         Console.WriteLine($"'{skin.Name}' is now {to + 1} of {section.Count}{(skin.Group is null ? " ungrouped skins" : $" in '{skin.Group}'")}.");
         return ExitCodes.Ok;
     }
+}
+
+/// <summary>The delete dry-run: only says what the looks check would refuse.</summary>
+internal sealed class LooksCheckOnly : IGameLooksChoice
+{
+    public bool BringInLooks => false;
+    public bool DiscardGameLooks => false;
 }

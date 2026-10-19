@@ -39,7 +39,8 @@ public sealed class GameMods(Func<GameInstall, bool>? isGameRunning = null)
     public static string ListPath(GameInstall install) => Path.Combine(ModLoaderInstaller.RecordDir(install), ModList.FileName);
 
     /// <param name="prepare">Runs on the staging copy before it replaces the installed one (Tyrant cooks the textures there); if it throws, nothing is installed.</param>
-    public void Install(GameInstall install, ModProject mod, Action<string>? prepare = null)
+    /// <returns>Warnings about an install that went in (the stamps that tell looks made in the game apart could not be written).</returns>
+    public IReadOnlyList<string> Install(GameInstall install, ModProject mod, Action<string>? prepare = null)
     {
         RefuseWhileRunning(install, "installing a mod");
         if (!ModLoaderInstaller.HasFramework(install))
@@ -88,7 +89,16 @@ public sealed class GameMods(Func<GameInstall, bool>? isGameRunning = null)
         if (at >= 0) entries[at] = new ModListEntry(mod.Id, true);
         else entries.Add(new ModListEntry(mod.Id, true));
         WriteList(install, entries);
-        GameLooks.Stamp(install, mod.Id, target); // what went in, so looks the in-game editor saves later can be told apart
+        try
+        {
+            GameLooks.Stamp(install, mod.Id, target); // what went in, so looks the in-game editor saves later can be told apart
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The mod is in: only telling looks made in the game apart suffers (they then show as changed on both sides).
+            return [$"'{mod.Id}' is installed, but Tyrant could not record what went in ({GameLooks.StampFile}: {ex.Message}); looks made in the game later may show as changed in the workspace too."];
+        }
+        return [];
     }
 
     public void Remove(GameInstall install, string id)
