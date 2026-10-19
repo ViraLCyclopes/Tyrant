@@ -256,8 +256,13 @@ Tyrant Framework adds a small **Tyrant** button (a **T**) in two places:
 - **In the park:** click an animal (park or vivarium). The button is at the bottom of its info panel, beside **Sell** (and **Move**), and opens the editor on
   that animal, on **This animal**.
 - **In the Nursery:** the button is right of the animation list (**Fidget**) and opens the editor on the preview animal, on
-  **Whole skin** (**Whole species** is there too). **This animal** needs a placed animal, so it is greyed out and the status
-  line says so: place the animal in the park to give it its own look. When you change the Nursery's skin, sex or species,
+  **Whole skin** (**Whole species** is there too). In its place, **This animal** is **Next created**: the look for the next
+  animal you create from the preview, of that species, skin and sex. **Save** keeps it in memory ("Saved for the next
+  Allosaurus you create."); when that animal is placed, the look becomes its own, in this save's looks file like any
+  **This animal** look, and the next one created gets none. A look that takes its mask from a map of one sex goes only to
+  that sex; any other also goes to the other sex when nothing was saved for it. The looks waiting are dropped when you
+  leave the park, and never saved. **Next created** needs a park that was saved once (the status line says so), and
+  **Export mask PNG** needs the placed animal. When you change the Nursery's skin, sex or species,
   the window follows the preview animal. Closing the Nursery is like the animal going away, except that unsaved
   changes stay in the window until you **Save** or **Reset** them.
 

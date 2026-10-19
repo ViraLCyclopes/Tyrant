@@ -318,8 +318,8 @@ Needs the game and a Tyrant Framework installed from this build. Steps marked **
      again closes it. Close and reopen the park, open it again: it is where you left it.
      - A vivarium animal's panel has the **T** too, and opens the editor on that animal.
      - **Nursery:** pick Titanoboa. A **T** sits right of the animation list (**Fidget**); click it: the window opens on the
-       preview animal, on **Whole skin**. **This animal** is greyed out and the status line says *Place the animal in the park
-       to give it its own look.* Change the sex: the window stays on the same look. Change the skin with an unsaved change:
+       preview animal, on **Whole skin**. The first scope button reads **Next created**; in a park never saved it is greyed
+       out and the status line says *Save the park once to give a new animal its own look.* Change the sex: the window stays on the same look. Change the skin with an unsaved change:
        it asks first; **Discard** follows the new skin, **Keep editing** stays on the old look until **Save** or **Reset**,
        then follows. Close the Nursery (also with Esc, or another management tab): the window says the Nursery was
        closed; with an unsaved change it says the changes are kept, and **Save** still writes the skin's look.
@@ -364,3 +364,11 @@ Needs the game and a Tyrant Framework installed from this build. Steps marked **
      when no mod set that species) has `"fur": { "grow": true }`. Turn the Fur graphics setting's
      tessellation off: the fur goes, the status line in the editor says grown fur needs tessellated fur, and
      `Latest.log` has one warning about it.
+152. **(game)** Next created: save the park, open the Nursery on an Allosaurus (male), click **T**, choose **Next created**
+     (the status line says it saves to the next Allosaurus you create). Change the iridescence strength or a fur setting:
+     the preview shows it. **Save**: the status line says *Saved for the next Allosaurus you create.* and the preview keeps
+     the look. **Create** the animal: once placed it shows the look, and `Latest.log` says the look went to the new
+     Allosaurus; the window's draft starts again empty. Create a second male Allosaurus: it has the vanilla look. Save the
+     park and load it again: the first one still has its look (`UserData/Tyrant/Looks/<save>.json` has its id), the second
+     has none. Save a Next created look, leave the park without creating the animal, come back and create one: it has no
+     look (waiting looks are never saved).
