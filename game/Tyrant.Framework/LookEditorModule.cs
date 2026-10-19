@@ -30,6 +30,7 @@ namespace Tyrant.Framework
         private static readonly List<string> SavesRemoved = new List<string>(); // OnSaveRemoved's paths, handled in Tick (menus too)
         private static readonly List<(object Animal, ulong VirtualId, int Tries)> PlacedNew = new List<(object, ulong, int)>(); // placed animals with a bound look, handled in Tick
         private static readonly List<object> Incubated = new List<object>(); // OnAnimalIncubationStart's virtual animals, handled in Tick
+        private static readonly List<ulong> Mismatched = new List<ulong>(); // bindings an animal of another kind was placed under, dropped in Tick
         private static ConditionalWeakTable<object, StrongBox<ulong>> PlacedFrom = new ConditionalWeakTable<object, StrongBox<ulong>>(); // animal being placed -> its virtual animal's id
         private static readonly HashSet<string> ParkWarned = new HashSet<string>(StringComparer.Ordinal); // once-only warnings, again in the next park
         private static readonly HashSet<ulong> Gone = new HashSet<ulong>(); // removed since the park was loaded or saved: dropped on its save
@@ -45,8 +46,8 @@ namespace Tyrant.Framework
         public static AnimalLooks? Looks { get; private set; }
 
         /// <summary>
-        /// Looks saved in the Nursery for the next animal created ("Next created"): in memory only, dropped with the park; the
-        /// animal placed to match takes its look into <see cref="Looks"/> (and this save's file).
+        /// Looks armed in the Nursery for the next animal incubated ("Next created"): in memory only, dropped with the park; the
+        /// incubation started to match binds its look to that animal in <see cref="Looks"/> (and this save's file).
         /// </summary>
         public static PendingLooks Pending { get; } = new PendingLooks();
 
@@ -117,6 +118,7 @@ namespace Tyrant.Framework
                 List<string> saved;
                 List<(object Animal, ulong VirtualId, int Tries)> placed;
                 List<object> incubated;
+                List<ulong> mismatched;
                 lock (Gate)
                 {
                     loaded = _loadedNews;
@@ -129,11 +131,14 @@ namespace Tyrant.Framework
                     PlacedNew.Clear();
                     incubated = Incubated.ToList();
                     Incubated.Clear();
+                    mismatched = Mismatched.ToList();
+                    Mismatched.Clear();
                 }
                 // The game's event (once per park), or should it be missed the game saying it is fully loaded.
                 if (!_parkRead && (loaded || Property(Core, "IsFullyLoaded") is true)) ParkLoaded();
                 if (removed.Count > 0 && _parkRead) AnimalsRemoved(removed); // removals queued while loading belong to the old park
                 // Placements and incubations first: a save right after must keep (or prune) what they changed.
+                if (_parkRead) foreach (var virtualId in mismatched) BindingMismatched(virtualId);
                 if (_parkRead) foreach (var (animal, virtualId, tries) in placed) AnimalPlaced(animal, virtualId, tries);
                 if (_parkRead) foreach (var virtualAnimal in incubated) IncubationStarted(virtualAnimal);
                 if (_parkRead) foreach (var path in saved) ParkSaved(path);
@@ -224,7 +229,11 @@ namespace Tyrant.Framework
             Looks = path == null ? new AnimalLooks() : AnimalLooks.Read(path, problems);
             foreach (var problem in problems) FrameworkMod.Log.Warning(problem);
             _looksUnreadable = problems.Count > 0;
-            if (Prune(out var alive) > 0) Write(SaveName, alive); // only the loaded save's file, against its own animals
+            // Only the loaded save's file, against its own animals. Bindings of virtual animals this save does not have (bound
+            // after its last save, then left unsaved) go too: the game hands their ids out again (it counts on from the highest
+            // one loaded), and the held animals are already back by now (Game.Load).
+            var pruned = Prune(out var alive);
+            if (PruneIncubating() + pruned > 0) Write(SaveName, alive);
             MaterialsModule.SetAnimalLooks(Looks);
             if (Looks.Count > 0)
             {
@@ -280,14 +289,16 @@ namespace Tyrant.Framework
 
         /// <summary>
         /// Drops the looks bound to virtual animals the park no longer has (an incubation cancelled, a held animal sold), never
-        /// when the virtual animals cannot be read. One whose animal is being placed (queued) is kept.
+        /// when the virtual animals cannot be read. One whose animal is being placed (queued) is kept. A binding stays after its
+        /// animal was placed until this runs on the next park save (the placement may be left unsaved); returns how many went.
         /// </summary>
-        private static void PruneIncubating()
+        private static int PruneIncubating()
         {
-            if (Looks == null || Looks.IncubatingCount == 0 || !(VirtualIds() is { } ids)) return;
+            if (Looks == null || Looks.IncubatingCount == 0 || !(VirtualIds() is { } ids)) return 0;
             lock (Gate) ids.AddRange(PlacedNew.Select(p => p.VirtualId));
             var pruned = Looks.PruneIncubating(ids);
             if (pruned > 0) FrameworkMod.Log.Msg($"{pruned} Nursery look(s) of animals no longer incubating or held were dropped.");
+            return pruned;
         }
 
         /// <summary>The store as this save's file (never a file with problems); a failure logs once per file and changes nothing else.</summary>
@@ -346,22 +357,24 @@ namespace Tyrant.Framework
 
         /// <summary>
         /// An incubation was started from the Nursery (NurseryMenuV2.IncubateAnimal): a look armed for its species, skin and sex
-        /// (<see cref="Pending"/>) is bound to that very animal, by its VirtualAnimal.UniqueID, in this save's looks file
-        /// ("incubating"), and disarmed. It goes on the animal when that animal is placed (<see cref="AnimalPlaced"/>).
+        /// (<see cref="Pending"/>) is bound to that very animal, by its VirtualAnimal.UniqueID and with the species, skin and sex
+        /// it was made for, in this save's looks file ("incubating"), and disarmed. It goes on the animal when that animal is
+        /// placed (<see cref="AnimalPlaced"/>).
         /// </summary>
         private static void IncubationStarted(object virtualAnimal)
         {
             if (Pending.IsEmpty || Looks == null) return;
-            if (!(MaterialsModule.DescribeVirtual(virtualAnimal) is { } va) || va.Id == 0) return;
+            if (!(MaterialsModule.DescribeVirtual(virtualAnimal) is { } va) || va.Id == 0 || !Pending.Has(va.Species, va.SkinKey, va.Sex)) return;
             if (!LooksWritable)
             {
                 if (ParkWarned.Add("pending-unwritable"))
                     FrameworkMod.Log.Warning($"The look saved for the next {va.Species} stays armed: this save's looks file cannot be written (see above).");
                 return;
             }
-            if (!(Pending.Take(va.Species, va.SkinKey, va.Sex) is { } look)) return;
-            Looks.SetIncubating(va.Id, look.ToDictionary(p => p.Key, p => LookFiles.Relative(p.Value, FrameworkMod.TyrantDirectory), StringComparer.Ordinal));
-            if (!TryWrite($"The look for the new {va.Species}"))
+            var look = Pending.Take(va.Species, va.SkinKey, va.Sex)!;
+            var materials = look.ToDictionary(p => p.Key, p => LookFiles.Relative(p.Value, FrameworkMod.TyrantDirectory), StringComparer.Ordinal);
+            Looks.SetIncubating(va.Id, new IncubatingLook(va.Species, va.SkinKey, va.Sex, materials));
+            if (TryWrite($"The look for the new {va.Species}") != Written.Yes)
             {
                 Looks.SetIncubating(va.Id, null);
                 foreach (var pair in look) Pending.Set(va.Species, va.SkinKey, va.Sex, pair.Key, pair.Value); // armed again
@@ -372,14 +385,16 @@ namespace Tyrant.Framework
         }
 
         /// <summary>
-        /// A new animal was placed from the virtual animal <paramref name="virtualId"/> (read in the placement itself, see
-        /// <see cref="BeforeFinalizePlacement"/>): the look bound to that virtual animal becomes the placed animal's own, in this
-        /// save's looks file, and the binding goes. No other animal ever takes it. While the animal's id cannot be read yet it is
-        /// looked at again for a few frames; while the looks file cannot be written, again later (the binding is kept).
+        /// A new animal was placed from the virtual animal <paramref name="virtualId"/>, which matched its binding (checked in
+        /// the placement itself, see <see cref="BeforeFinalizePlacement"/>): the bound look becomes the placed animal's own, in
+        /// this save's looks file. No other animal ever takes it. The binding stays until the next park save drops it (its virtual
+        /// animal is gone by then): loading the save again without saving brings the animal back to the holder with its look
+        /// still bound. While the animal's id cannot be read yet it is looked at again for a few frames; while the looks file
+        /// cannot be written (or a write failed on the disk), again later.
         /// </summary>
         private static void AnimalPlaced(object animal, ulong virtualId, int tries)
         {
-            if (Looks == null || !IsAnimal(animal) || !(Looks.GetIncubating(virtualId) is { } look)) return;
+            if (Looks == null || !IsAnimal(animal) || !(Looks.GetIncubating(virtualId) is { } bound)) return;
             if (!LooksWritable)
             {
                 if (ParkWarned.Add("placed-unwritable"))
@@ -394,49 +409,73 @@ namespace Tyrant.Framework
             }
             var before = Looks.Get(id);
             var map = before != null ? new Dictionary<string, MaterialOverride>(before, StringComparer.Ordinal) : new Dictionary<string, MaterialOverride>(StringComparer.Ordinal);
-            foreach (var pair in look) map[pair.Key] = pair.Value; // stored UserData/Tyrant-relative already
+            foreach (var pair in bound.Materials) map[pair.Key] = pair.Value; // stored UserData/Tyrant-relative already
             Looks.Set(id, map);
-            Looks.SetIncubating(virtualId, null);
-            if (!TryWrite("A placed animal's Nursery look"))
+            var written = TryWrite("A placed animal's Nursery look");
+            if (written != Written.Yes)
             {
                 Looks.Set(id, before);
-                Looks.SetIncubating(virtualId, look);
                 MaterialsModule.SetAnimalLooks(Looks);
+                if (written == Written.Retry) lock (Gate) PlacedNew.Add((animal, virtualId, tries)); // the disk may let it later
                 return;
             }
             MaterialsModule.Reapply(animal, keywords: true);
             FrameworkMod.Log.Msg($"The look bound in the Nursery went to the placed animal {id} (virtual animal {virtualId}).");
         }
 
-        /// <summary><see cref="WriteLooks"/>, with a failure logged; false when nothing was written.</summary>
-        private static bool TryWrite(string what)
+        /// <summary>A virtual animal placed with an id that has a binding for another animal (the id was handed out again): the binding goes.</summary>
+        private static void BindingMismatched(ulong virtualId)
+        {
+            if (Looks == null || Looks.GetIncubating(virtualId) == null) return;
+            var bound = Looks.GetIncubating(virtualId)!;
+            Looks.SetIncubating(virtualId, null);
+            FrameworkMod.Log.Msg($"The Nursery look bound to virtual animal {virtualId} was for a {bound.Species}; an animal placed under that id now is another one, so the look was dropped.");
+            if (LooksWritable) TryWrite("The dropped Nursery look");
+        }
+
+        private enum Written { Yes, Retry, No }
+
+        /// <summary>
+        /// <see cref="WriteLooks"/>, with a failure logged: Retry when the file cannot be written now (a disk or access error, or
+        /// a file with problems), No when the store itself is refused (a look a read would refuse: writing again cannot help).
+        /// </summary>
+        private static Written TryWrite(string what)
         {
             try
             {
-                return WriteLooks(); // also hands the store to the materials
+                return WriteLooks() ? Written.Yes : Written.Retry; // also hands the store to the materials
             }
-            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is ManifestException)
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
             {
                 FrameworkMod.Log.Warning($"{what} could not be written: {ex.Message}");
-                return false;
+                return Written.Retry;
+            }
+            catch (ManifestException ex)
+            {
+                FrameworkMod.Log.Warning($"{what} could not be written: {ex.Message}");
+                return Written.No;
             }
         }
 
         /// <summary>
         /// Prefix on AnimalPlacementPipeline.TryFinalizePlacement(animalBase, baseAnimalData, virtualAnimal, ...): it resets the
-        /// animal's VirtualAnimalID and destroys the virtual animal before OnAnimalPlacedNew fires, so the virtual animal's id is
-        /// read here, and only while some look is bound.
+        /// animal's VirtualAnimalID and destroys the virtual animal before OnAnimalPlacedNew fires, so the virtual animal is read
+        /// here, and only while some look is bound. Its species, skin and sex must still be the binding's (an id the game handed
+        /// out again belongs to another animal); a mismatch drops the binding instead.
         /// </summary>
         private static void BeforeFinalizePlacement(object[] __args)
         {
             try
             {
                 if (Looks == null || Looks.IncubatingCount == 0 || __args.Length < 3 || __args[0] == null || __args[2] == null) return;
-                if (MaterialsModule.DescribeVirtual(__args[2]) is { } va && va.Id != 0 && Looks.GetIncubating(va.Id) != null)
+                if (!(MaterialsModule.DescribeVirtual(__args[2]) is { } va) || va.Id == 0 || !(Looks.GetIncubating(va.Id) is { } bound)) return;
+                if (!bound.Matches(va.Species, va.SkinKey, va.Sex))
                 {
-                    PlacedFrom.Remove(__args[0]);
-                    PlacedFrom.Add(__args[0], new StrongBox<ulong>(va.Id));
+                    lock (Gate) Mismatched.Add(va.Id);
+                    return;
                 }
+                PlacedFrom.Remove(__args[0]);
+                PlacedFrom.Add(__args[0], new StrongBox<ulong>(va.Id));
             }
             catch (Exception)
             {
@@ -507,6 +546,7 @@ namespace Tyrant.Framework
                 Saved.Clear();
                 PlacedNew.Clear();
                 Incubated.Clear();
+                Mismatched.Clear();
                 _loadedNews = false;
             }
             MaterialsModule.SetAnimalLooks(null);

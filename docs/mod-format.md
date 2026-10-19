@@ -261,8 +261,11 @@ Tyrant Framework adds a small **Tyrant** button (a **T**) in two places:
   incubate."), in memory only: leaving the park before an incubation drops it. **Incubate** binds it to that very animal
   ("Bound to <name>, incubating."): the binding is kept in this save's looks file, under `"incubating"` and the animal's
   virtual id, so it survives saving and loading while the animal incubates or waits in the holder. When you place that
-  animal, the look becomes its own (`"animals"`, like any **This animal** look) and the binding goes; no other animal ever
-  takes it. A binding whose animal is gone (incubation cancelled, sold) is dropped when the park is saved. A look that
+  animal, the look becomes its own (`"animals"`, like any **This animal** look); no other animal ever takes it. The binding
+  remembers the species, skin and sex it was made for, and an animal of another kind placed under the same virtual id
+  (the game can hand an id out again) never gets it: the binding is dropped instead. A binding whose animal is gone
+  (placed, incubation cancelled, sold) is dropped when the park is saved, and one the loaded save does not have when the
+  park is loaded (bound, then left without saving). A look that
   takes its mask from a map of one sex arms only for that sex; any other also goes to an incubation of the other sex when
   nothing was armed for it. **Next created** needs a park that was saved once (the status line says so), and **Export mask
   PNG** needs the placed animal. When you change the Nursery's skin, sex or species,

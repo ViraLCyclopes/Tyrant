@@ -375,6 +375,9 @@ Needs the game and a Tyrant Framework installed from this build. Steps marked **
      - Save the park and load it again while the first one still incubates (or waits in the holder): the `"incubating"`
        entry is still there.
      - Place the first one: it shows the look, `Latest.log` says the look went to the placed animal, and the file has it
-       under `"animals"` (its id) and no longer under `"incubating"`. Place the second one: vanilla look.
+       under `"animals"` (its id); after the next park save it is no longer under `"incubating"`. Place the second one:
+       vanilla look.
+     - Bind a look, then quit to the menu without saving and load the save again: the `"incubating"` entry is gone (the
+       log says so), and the next animal incubated and placed has the vanilla look, whatever its species.
      - Arm a look again and leave the park without incubating: back in the park, an incubation gets nothing (an armed look
        is never saved). Bind one, then cancel or sell that animal from the holder and save: the `"incubating"` entry goes.

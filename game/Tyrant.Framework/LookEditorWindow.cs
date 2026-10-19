@@ -337,7 +337,7 @@ namespace Tyrant.Framework
             if (NextCreated) PushLive(keywords: true); // the look kept for the next animal is in memory only: the preview shows it from the draft
         }
 
-        /// <summary>"This animal" in the Nursery: the look for the next animal created from the preview (<see cref="LookEditorModule.Pending"/>).</summary>
+        /// <summary>"This animal" in the Nursery: the look armed for the next animal incubated from the preview (<see cref="LookEditorModule.Pending"/>).</summary>
         private static bool NextCreated => _entry == EditorEntry.Nursery && _scope == LookScope.Animal;
 
         /// <summary>
@@ -460,7 +460,7 @@ namespace Tyrant.Framework
             {
                 if (NextCreated)
                 {
-                    // Kept in memory for the next animal created from this preview: it goes to this save's looks file then.
+                    // Armed in memory for the next incubation from this preview: that animal is bound to it in this save's looks file.
                     if (!LookEditorModule.LooksWritable)
                     {
                         _message = "Not saved: this save's looks file cannot be written (save the park once, or see the MelonLoader log).";
