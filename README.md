@@ -181,7 +181,7 @@ dotnet run --project cli/Tyrant.Cli -- mod add-skin red-spot-carcharo Carcharodo
 dotnet run --project cli/Tyrant.Cli -- sounds list --species Carcharodontosaurus -w D:\tyrant-workspace   # its sounds by moment (needs a data dump); --search click for any game sound
 dotnet run --project cli/Tyrant.Cli -- mod replace-sound red-spot-carcharo "event:/…/TheroLarge_VoxSocialCall" call1.ogg call2.ogg --species Carcharodontosaurus -w D:\tyrant-workspace   # also: set-sound, remove-sound
 dotnet run --project cli/Tyrant.Cli -- mod replace-sounds anax-voice "D:\packs\Ultimasaurus" --species "Allosaurus Anax" --dry-run -w D:\tyrant-workspace   # a whole folder, matched by name
-dotnet run --project cli/Tyrant.Cli -- mod materials red-spot-carcharo red-spot --set materials.json -w D:	yrant-workspace   # a skin's iridescence and material settings (--species <id> for a species; --show, --clear, --ramp, --mask)
+dotnet run --project cli/Tyrant.Cli -- mod materials red-spot-carcharo red-spot --set materials.json -w D:\tyrant-workspace   # a skin's iridescence and material settings (--species <id> for a species; --show, --clear, --ramp, --mask)
 dotnet run --project cli/Tyrant.Cli -- mod check red-spot-carcharo -w D:\tyrant-workspace
 dotnet run --project cli/Tyrant.Cli -- mod restore-cutouts red-spot-carcharo -w D:\tyrant-workspace   # put back see-through feathers/hair an editor flattened
 dotnet run --project cli/Tyrant.Cli -- mod cook red-spot-carcharo -w D:\tyrant-workspace      # textures.tpack into the mod folder, without installing
