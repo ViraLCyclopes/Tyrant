@@ -172,11 +172,7 @@ public class MaterialCheckTests
     public void A_species_entry_with_only_materials_is_not_a_broken_model_or_rig()
     {
         using var s = Make();
-        s.Mod.Manifest.Models.Add(new ModelReplacement
-        {
-            Target = "Carcharodontosaurus", File = "",
-            Materials = new() { [Animal] = Iridescent(new IridescenceSettings { Scale = 1 }) },
-        });
+        s.Mod.Manifest.SpeciesMaterials["Carcharodontosaurus"] = new() { [Animal] = Iridescent(new IridescenceSettings { Scale = 1 }) };
         s.Mod.Save();
 
         var result = s.Check();
@@ -195,7 +191,7 @@ public class MaterialCheckTests
             Id = "start", Species = Custom, Name = "Start", Base = "0", Starting = true, Male = new() { ["diffuse"] = "skins/blue/m.png" },
             CopiedFrom = new SkinSource { Species = "Spinosaurus", Skin = 0 },
         });
-        s.Mod.Manifest.Models.Add(new ModelReplacement { Target = Custom, File = "", Materials = new() { [Animal] = Iridescent(new IridescenceSettings { Scale = 1 }) } });
+        s.Mod.Manifest.SpeciesMaterials[Custom] = new() { [Animal] = Iridescent(new IridescenceSettings { Scale = 1 }) };
         s.Mod.Save();
 
         Assert.Contains(s.Check().Warnings, w => w.Contains("give this skin that model"));

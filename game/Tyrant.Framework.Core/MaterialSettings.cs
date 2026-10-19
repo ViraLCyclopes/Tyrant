@@ -29,6 +29,9 @@ namespace Tyrant.Framework.Core
         public float Min { get; }
 
         public float Max { get; }
+
+        /// <summary>How many numbers a vector holds, 0 for the other kinds; 2 lets 2 to 4 through, 3 means exactly 3.</summary>
+        public int Components { get; init; }
     }
 
     /// <summary>The shader properties Tyrant lets a mod change (types and ranges from the decoded animal shader).</summary>
@@ -41,7 +44,7 @@ namespace Tyrant.Framework.Core
             Number("_OcclusionStrength", "Surface", "Ambient occlusion", 0, 10),
             Number("_AdultNormalIntensity", "Surface", "Adult normal strength", -10, 10),
             Number("_InfantNormalIntensity", "Surface", "Baby normal strength", -10, 10),
-            new MaterialProperty("_DetailScale", "Detail", "Detail tiling", MaterialValueKind.Vector, -100, 100),
+            new MaterialProperty("_DetailScale", "Detail", "Detail tiling", MaterialValueKind.Vector, -100, 100) { Components = 2 },
             Number("_MicroBumpStr", "Detail", "Micro bump strength", 0, 1),
             Number("_MicroBumpMaskedScale", "Detail", "Micro bump (masked) scale", 0, 1),
             Number("_RimIntensity", "Rim / fresnel", "Rim light", 0, 10),
@@ -54,6 +57,8 @@ namespace Tyrant.Framework.Core
             Number("_FurWindStrength", "Fur", "Fur wind strength", 0, 10),
             Number("_FurWindSpeed", "Fur", "Fur wind speed", 0, 10),
             Number("_FurWindScale", "Fur", "Fur wind scale", 0, 10),
+            Number("_Droopage", "Fur", "Fur droop", 0, 2),
+            new MaterialProperty("_DroopDirection", "Fur", "Droop direction", MaterialValueKind.Vector, -1, 1) { Components = 3 },
             Number("_Cutoff", "Cutout", "Cutout threshold", 0, 1),
         };
 
@@ -164,17 +169,28 @@ namespace Tyrant.Framework.Core
             && Scale == null && Power == null && Bias == null;
     }
 
-    /// <summary>One material's changes (mod.json "materials.&lt;name&gt;"): iridescence and/or shader settings.</summary>
+    /// <summary>Fur masks a material takes from files (the fur slots of a skin, replaced for one material); only files, never "everywhere" or "from".</summary>
+    public sealed class FurMasks
+    {
+        public MaskSource? Mask { get; set; }
+        public MaskSource? InfantMask { get; set; }
+
+        public bool IsEmpty => Mask == null && InfantMask == null;
+    }
+
+    /// <summary>One material's changes (materials.json "materials.&lt;name&gt;"): iridescence, shader settings and/or fur masks.</summary>
     public sealed class MaterialOverride
     {
         public IridescenceSettings? Iridescence { get; set; }
 
+        public FurMasks? Fur { get; set; }
+
         public Dictionary<string, MaterialValue> Settings { get; } = new Dictionary<string, MaterialValue>(StringComparer.Ordinal);
 
-        public bool IsEmpty => Iridescence == null && Settings.Count == 0;
+        public bool IsEmpty => Iridescence == null && Fur == null && Settings.Count == 0;
     }
 
-    /// <summary>The "materials" section of a skin or a species' models entry.</summary>
+    /// <summary>The "materials" map of a materials.json (a skin's, a species' or a vanilla skin's).</summary>
     public static class MaterialOverrides
     {
         private static readonly string[] StrengthKeys = { "normal", "albino", "melanistic", "leucistic" };
@@ -202,6 +218,13 @@ namespace Tyrant.Framework.Core
                 if (pair.Value.IsEmpty) continue;
                 var entry = new Dictionary<string, object?>();
                 if (pair.Value.Iridescence != null) entry["iridescence"] = IridescenceJson(pair.Value.Iridescence);
+                if (pair.Value.Fur != null)
+                {
+                    var fur = new Dictionary<string, object?>();
+                    if (pair.Value.Fur.Mask?.File != null) fur["mask"] = pair.Value.Fur.Mask.File;
+                    if (pair.Value.Fur.InfantMask?.File != null) fur["infantMask"] = pair.Value.Fur.InfantMask.File;
+                    entry["fur"] = fur;
+                }
                 if (pair.Value.Settings.Count > 0)
                     entry["settings"] = pair.Value.Settings.ToDictionary(s => s.Key, s => (object?)s.Value.ToJson(), StringComparer.Ordinal);
                 map[pair.Key] = entry;
@@ -214,7 +237,7 @@ namespace Tyrant.Framework.Core
         private static MaterialOverride ParseMaterial(object? value, string owner, string path, bool skinLevel)
         {
             var map = Map(value, owner, path);
-            Known(map, owner, path, "iridescence", "settings");
+            Known(map, owner, path, "iridescence", "settings", "fur");
             var material = new MaterialOverride();
             if (map.TryGetValue("iridescence", out var iridescence) && iridescence != null)
             {
@@ -223,7 +246,23 @@ namespace Tyrant.Framework.Core
             }
             if (map.TryGetValue("settings", out var settings) && settings != null)
                 ParseSettings(settings, owner, path + ".settings", material.Settings);
+            if (map.TryGetValue("fur", out var fur) && fur != null)
+            {
+                var parsed = ParseFur(fur, owner, path + ".fur");
+                if (!parsed.IsEmpty) material.Fur = parsed;
+            }
             return material;
+        }
+
+        private static FurMasks ParseFur(object value, string owner, string path)
+        {
+            var map = Map(value, owner, path);
+            Known(map, owner, path, "mask", "infantMask");
+            MaskSource? File(string key) =>
+                !map.TryGetValue(key, out var v) || v == null ? null
+                : v is string file && file.Length > 0 && file != "everywhere" ? new MaskSource { File = file }
+                : throw new ManifestException($"{owner}: \"{path}.{key}\" must be an image file path.");
+            return new FurMasks { Mask = File("mask"), InfantMask = File("infantMask") };
         }
 
         private static void ParseSettings(object value, string owner, string path, Dictionary<string, MaterialValue> into)
@@ -241,7 +280,7 @@ namespace Tyrant.Framework.Core
                         into[pair.Key] = MaterialValue.OfColor(colour);
                         break;
                     case MaterialValueKind.Vector:
-                        into[pair.Key] = MaterialValue.OfVector(Components(pair.Value, owner, at, property.Min, property.Max));
+                        into[pair.Key] = MaterialValue.OfVector(Components(pair.Value, owner, at, property.Min, property.Max, property.Components));
                         break;
                     default:
                         into[pair.Key] = MaterialValue.OfNumber(Number(pair.Value, owner, at, property.Min, property.Max));
@@ -363,10 +402,11 @@ namespace Tyrant.Framework.Core
         private static float? Optional(Dictionary<string, object?> map, string key, string owner, string path, float min, float max) =>
             map.TryGetValue(key, out var value) && value != null ? Number(value, owner, path + "." + key, min, max) : (float?)null;
 
-        private static float[] Components(object? value, string owner, string path, float min, float max)
+        private static float[] Components(object? value, string owner, string path, float min, float max, int count)
         {
-            if (!(value is List<object?> items) || items.Count < 2 || items.Count > 4 || items.Any(i => !(i is double)))
-                throw new ManifestException($"{owner}: \"{path}\" must be a list of 2 to 4 numbers.");
+            var exact = count == 3;
+            if (!(value is List<object?> items) || (exact ? items.Count != 3 : items.Count < 2 || items.Count > 4) || items.Any(i => !(i is double)))
+                throw new ManifestException($"{owner}: \"{path}\" must be a list of {(exact ? "3" : "2 to 4")} numbers.");
             return items.Select(i => Checked((float)(double)i!, owner, path, min, max)).ToArray();
         }
 

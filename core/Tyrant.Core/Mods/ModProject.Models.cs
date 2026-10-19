@@ -74,13 +74,13 @@ public sealed partial class ModProject
             // The head-look correction belongs to the rig edit: it stays while the rig edit does.
             var headRig = previous?.HeadRig is { } kept && kept.RigHash == RigEdit.Hash(effective) ? kept : null;
             Manifest.Models.RemoveAll(m => string.Equals(m.Target, speciesId, StringComparison.Ordinal));
-            Manifest.Models.Add(new ModelReplacement { Target = speciesId, Key = prefab.ContainerPath, File = file, Rig = effective, HeadRig = headRig, Materials = previous?.Materials });
+            Manifest.Models.Add(new ModelReplacement { Target = speciesId, Key = prefab.ContainerPath, File = file, Rig = effective, HeadRig = headRig });
         }
         Save();
         return report;
     }
 
-    /// <summary>Stops replacing a model (the files stay, so undo can bring it back); a rig edit or material settings stay, on the game's mesh.</summary>
+    /// <summary>Stops replacing a model (the files stay, so undo can bring it back); a rig edit stays, on the game's mesh.</summary>
     public void RemoveModel(string target, string? skinId)
     {
         if (skinId is not null)
@@ -93,7 +93,7 @@ public sealed partial class ModProject
         {
             var entry = Manifest.Models.FirstOrDefault(m => string.Equals(m.Target, target, StringComparison.Ordinal) && m.File.Length > 0)
                 ?? throw new TyrantException(TyrantErrorCode.TargetNotFound, $"'{Id}' does not replace the model of '{target}'.");
-            if (entry.Rig is { Count: > 0 } || entry.Materials != null) entry.File = "";
+            if (entry.Rig is { Count: > 0 }) entry.File = "";
             else Manifest.Models.Remove(entry);
         }
         Save();
@@ -134,7 +134,7 @@ public sealed partial class ModProject
             if (entry is not null)
             {
                 entry.Rig = owned;
-                if (entry.File.Length == 0 && owned is null && entry.Materials == null) Manifest.Models.Remove(entry);
+                if (entry.File.Length == 0 && owned is null) Manifest.Models.Remove(entry);
             }
             file = entry is { File.Length: > 0 } ? entry.File : null;
         }

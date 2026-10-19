@@ -62,8 +62,8 @@ namespace Tyrant.Framework
             {
                 var id = mod.Manifest.Id;
                 ModDirectories.Add((id, mod.Directory));
-                foreach (var model in mod.Manifest.Models)
-                    if (model.Materials != null) Note(SpeciesBlocks, model.Target, model.Materials.Keys, id);
+                foreach (var species in mod.Manifest.SpeciesMaterials)
+                    Note(SpeciesBlocks, species.Key, species.Value.Keys, id);
                 foreach (var skin in mod.Manifest.Skins)
                     if (skin.Materials != null) Note(SkinBlocks, skin.Key(id), skin.Materials.Keys, id);
             }

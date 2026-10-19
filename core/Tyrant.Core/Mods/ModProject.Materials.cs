@@ -15,21 +15,15 @@ public sealed partial class ModProject
     }
 
     /// <summary>
-    /// Sets a species' "materials" JSON (null or {} removes it). They live in the species' models entry, which has no file of its
-    /// own then; clearing them removes an entry that has no model file and no rig edit.
+    /// Sets a species' "materials" JSON (null or {} removes it). They are kept per species id in the manifest, apart from its
+    /// models entry.
     /// </summary>
     public void SetSpeciesMaterials(AssetIndex index, IReadOnlyList<SpeciesSkins> species, string speciesId, string? materialsJson)
     {
-        var (id, prefab) = ResolveModelTarget(index, WithSpecies(species, Manifest), speciesId, null);
+        var (id, _) = ResolveModelTarget(index, WithSpecies(species, Manifest), speciesId, null);
         var materials = ParseMaterials(materialsJson, id, skinLevel: false);
-        var entry = SpeciesEntry(id);
-        if (entry is null && materials is not null)
-            Manifest.Models.Add(entry = new ModelReplacement { Target = id, Key = prefab.ContainerPath, File = "" });
-        if (entry is not null)
-        {
-            entry.Materials = materials;
-            DropIfBare(entry);
-        }
+        if (materials is null) Manifest.SpeciesMaterials.Remove(id);
+        else Manifest.SpeciesMaterials[id] = materials;
         Save();
     }
 
@@ -42,7 +36,6 @@ public sealed partial class ModProject
     public string SetMaterialFile(string? skinId, string? speciesId, string material, string part, string? png)
     {
         if (part is not ("ramp" or "mask")) throw new TyrantException(TyrantErrorCode.ModInvalid, $"A material image is the ramp or the mask (got '{part}').");
-        ModelReplacement? entry = null;
         Dictionary<string, MaterialOverride>? blocks;
         string owner;
         if (skinId is not null)
@@ -52,10 +45,9 @@ public sealed partial class ModProject
         }
         else
         {
-            entry = speciesId is null ? null : SpeciesEntry(speciesId);
-            blocks = entry?.Materials;
-            owner = "species/" + TextureExporter.Sanitize(entry?.Target ?? speciesId ?? "");
-            if (png is not null && entry is null)
+            blocks = speciesId is not null && Manifest.SpeciesMaterials.TryGetValue(speciesId, out var found) ? found : null;
+            owner = "species/" + TextureExporter.Sanitize(speciesId ?? "");
+            if (png is not null && blocks is null)
                 throw new TyrantException(TyrantErrorCode.ModInvalid, $"'{speciesId}' has no material settings yet; set them first.");
         }
 
@@ -78,7 +70,7 @@ public sealed partial class ModProject
             {
                 blocks = new Dictionary<string, MaterialOverride>(StringComparer.Ordinal);
                 if (skinId is not null) Skin(skinId).Materials = blocks;
-                else entry!.Materials = blocks;
+                else Manifest.SpeciesMaterials[speciesId!] = blocks;
             }
             if (!blocks.TryGetValue(material, out var block)) blocks[material] = block = new MaterialOverride();
             block.Iridescence ??= new IridescenceSettings();
@@ -87,40 +79,35 @@ public sealed partial class ModProject
         }
 
         if (skinId is not null) Skin(skinId).Materials = blocks is { Count: > 0 } ? blocks : null;
-        else if (entry is not null)
+        else if (speciesId is not null)
         {
-            entry.Materials = blocks is { Count: > 0 } ? blocks : null;
-            DropIfBare(entry);
+            if (blocks is { Count: > 0 }) Manifest.SpeciesMaterials[speciesId] = blocks;
+            else Manifest.SpeciesMaterials.Remove(speciesId);
         }
         Save();
         return file;
     }
 
     /// <summary>All of this mod's material settings for a species (any case of its id); null for none.</summary>
-    public IReadOnlyDictionary<string, MaterialOverride>? SpeciesMaterials(string speciesId) => SpeciesEntry(speciesId)?.Materials;
+    public IReadOnlyDictionary<string, MaterialOverride>? SpeciesMaterials(string speciesId) =>
+        Manifest.SpeciesMaterials.TryGetValue(speciesId, out var found) ? found : null;
 
     /// <summary>Removes a species' material settings without needing the game's data (any case of its id); false when it had none.</summary>
     public bool ClearSpeciesMaterials(string speciesId)
     {
-        if (SpeciesEntry(speciesId) is not { Materials: not null } entry) return false;
-        entry.Materials = null;
-        DropIfBare(entry);
+        if (!Manifest.SpeciesMaterials.Remove(speciesId)) return false;
         Save();
         return true;
     }
 
     /// <summary>This mod's settings for one material of a species; null for none.</summary>
     public MaterialOverride? SpeciesMaterial(string speciesId, string material) =>
-        SpeciesEntry(speciesId)?.Materials is { } blocks
+        Manifest.SpeciesMaterials.TryGetValue(speciesId, out var blocks)
         && blocks.TryGetValue(material, out var found) ? found : null;
 
     /// <summary>This mod's settings for one material of a skin; null for none.</summary>
     public MaterialOverride? SkinMaterial(string skinId, string material) =>
         Skin(skinId).Materials is { } blocks && blocks.TryGetValue(material, out var found) ? found : null;
-
-    /// <summary>A species' models entry (any case of its id); null for none.</summary>
-    private ModelReplacement? SpeciesEntry(string speciesId) =>
-        Manifest.Models.FirstOrDefault(m => string.Equals(m.Target, speciesId, StringComparison.OrdinalIgnoreCase));
 
     private static Dictionary<string, MaterialOverride>? ParseMaterials(string? json, string who, bool skinLevel)
     {
@@ -141,10 +128,5 @@ public sealed partial class ModProject
         var block = blocks[material];
         if (block.Iridescence is { IsEmpty: true }) block.Iridescence = null;
         if (block.IsEmpty) blocks.Remove(material);
-    }
-
-    private void DropIfBare(ModelReplacement entry)
-    {
-        if (entry.File.Length == 0 && entry.Rig is not { Count: > 0 } && entry.Materials == null) Manifest.Models.Remove(entry);
     }
 }

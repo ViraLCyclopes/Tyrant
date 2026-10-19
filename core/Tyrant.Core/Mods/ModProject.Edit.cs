@@ -279,6 +279,7 @@ public sealed partial class ModProject
         Manifest.Replace.Select(r => r.File)
             .Concat(Manifest.Skins.SelectMany(s => FilesOf(s).Concat(ModSharing.ModelFilesOf(this, s.Model))))
             .Concat(Manifest.Models.SelectMany(EntryFiles))
+            .Concat(Manifest.SpeciesMaterials.Values.Concat(Manifest.VanillaSkinMaterials.Values).SelectMany(MaterialFiles))
             .Concat(Manifest.Sounds.SelectMany(s => s.Files))
             .Concat(Manifest.Species.SelectMany(s => new[] { s.Icon, s.Swatch, s.Prefab?.Bundle }.OfType<string>().Concat(s.Portraits.Values)))
             .Where(f => !string.IsNullOrWhiteSpace(f));
@@ -289,8 +290,8 @@ public sealed partial class ModProject
         .Concat(skin.Thumbnail is null ? [] : [skin.Thumbnail]).Concat(skin.Portraits?.Values ?? Enumerable.Empty<string>())
         .Concat(MaterialFiles(skin.Materials));
 
-    /// <summary>A models entry's files: its model build (none for a rig- or materials-only entry) and its material images.</summary>
-    private IEnumerable<string> EntryFiles(ModelReplacement entry) => ModSharing.ModelFilesOf(this, entry.File).Concat(MaterialFiles(entry.Materials));
+    /// <summary>A models entry's files: its model build (none for a rig-only entry).</summary>
+    private IEnumerable<string> EntryFiles(ModelReplacement entry) => ModSharing.ModelFilesOf(this, entry.File);
 
     /// <summary>The iridescence ramp and mask images a "materials" section names.</summary>
     internal static IEnumerable<string> MaterialFiles(IReadOnlyDictionary<string, MaterialOverride>? materials) =>

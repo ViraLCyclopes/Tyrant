@@ -38,28 +38,24 @@ public class ModMaterialsTests
     }
 
     [Fact]
-    public void Species_materials_live_in_a_models_entry_that_stays_while_it_has_them()
+    public void Species_materials_are_kept_per_species()
     {
         var (game, ws, mod) = ModEditTests.Setup();
         using var _ = game;
 
         mod.SetSpeciesMaterials(Index, Species, "titanoboa", Block);
 
-        var entry = Assert.Single(ModProject.Open(ws, mod.Id).Manifest.Models);
-        Assert.Equal("Titanoboa", entry.Target);
-        Assert.Equal("", entry.File);
-        Assert.Equal("Assets/Titanoboa.prefab", entry.Key);
-        Assert.NotNull(entry.Materials);
+        Assert.Empty(mod.Manifest.Models);
+        Assert.NotNull(mod.Manifest.SpeciesMaterials["Titanoboa"]);
         Assert.Equal(0.3f, mod.SpeciesMaterial("Titanoboa", "Titanoboa")!.Iridescence!.Strength!.Normal);
 
         Assert.Equal(TyrantErrorCode.ModInvalid, Assert.Throws<TyrantException>(() =>
             mod.SetSpeciesMaterials(Index, Species, "Titanoboa", """{"Titanoboa":{"iridescence":{"mask":{"from":"extra"}}}}""")).Code);
 
         Assert.Throws<TyrantException>(() => mod.RemoveModel("Titanoboa", null)); // no model file to remove
-        Assert.Single(mod.Manifest.Models);
 
         mod.SetSpeciesMaterials(Index, Species, "Titanoboa", null);
-        Assert.Empty(ModProject.Open(ws, mod.Id).Manifest.Models);
+        Assert.Empty(mod.Manifest.SpeciesMaterials);
     }
 
     [Fact]
@@ -68,12 +64,12 @@ public class ModMaterialsTests
         var (game, _, mod) = ModEditTests.Setup();
         using var _1 = game;
         mod.SetSpeciesMaterials(Index, Species, "Titanoboa", Block);
-        mod.Manifest.Models[0].File = "models/t.glb";
+        mod.Manifest.Models.Add(new ModelReplacement { Target = "Titanoboa", File = "models/t.glb" });
 
         mod.SetSpeciesMaterials(Index, Species, "Titanoboa", "{}");
 
         var entry = Assert.Single(mod.Manifest.Models);
-        Assert.Null(entry.Materials);
+        Assert.Empty(mod.Manifest.SpeciesMaterials);
         Assert.Equal("models/t.glb", entry.File);
     }
 
@@ -160,8 +156,8 @@ public class ModMaterialsTests
         var (game, ws, mod) = ModEditTests.Setup();
         using var _ = game;
         mod = ModEditTests.WithSkins(ws, mod);
-        mod.Manifest.Models.Add(new ModelReplacement { Target = "Carcharodontosaurus", Key = "k", File = "", Materials = MaterialOverrides.Parse(
-            Json.Parse("""{"Carch":{"iridescence":{"ramp":{"stops":["#ff0000","#0000ff"]}},"settings":{"_Smoothness":0.7}}}"""), "x", false) });
+        mod.Manifest.SpeciesMaterials["Carcharodontosaurus"] = MaterialOverrides.Parse(
+            Json.Parse("""{"Carch":{"iridescence":{"ramp":{"stops":["#ff0000","#0000ff"]}},"settings":{"_Smoothness":0.7}}}"""), "x", false)!;
         var extra = Path.Combine(mod.Dir, "skins", "blue", "male_extra.png");
         var pixels = new byte[4 * 4 * 4];
         for (var p = 0; p < pixels.Length; p += 4) { pixels[p + 1] = 200; pixels[p + 3] = 255; }

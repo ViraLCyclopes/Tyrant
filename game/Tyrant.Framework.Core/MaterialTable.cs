@@ -50,18 +50,17 @@ namespace Tyrant.Framework.Core
             foreach (var mod in mods)
             {
                 var id = mod.Manifest.Id;
-                foreach (var model in mod.Manifest.Models)
+                foreach (var species in mod.Manifest.SpeciesMaterials)
                 {
-                    if (model.Materials == null) continue;
-                    var copies = Copy(model.Materials, mod, messages);
+                    var copies = Copy(species.Value, mod, messages);
                     if (copies.Count == 0) continue;
-                    if (!table._species.TryGetValue(model.Target, out var materials))
-                        table._species[model.Target] = materials = new Dictionary<string, MaterialOverride>(StringComparer.Ordinal);
+                    if (!table._species.TryGetValue(species.Key, out var materials))
+                        table._species[species.Key] = materials = new Dictionary<string, MaterialOverride>(StringComparer.Ordinal);
                     foreach (var pair in copies)
                     {
-                        var key = model.Target + "\n" + pair.Key;
+                        var key = species.Key + "\n" + pair.Key;
                         if (owner.TryGetValue(key, out var earlier) && earlier != id)
-                            messages.Add($"{model.Target}: '{id}' sets its {pair.Key} material settings, overriding '{earlier}' (the later mod in the load order wins).");
+                            messages.Add($"{species.Key}: '{id}' sets its {pair.Key} material settings, overriding '{earlier}' (the later mod in the load order wins).");
                         owner[key] = id;
                         materials[pair.Key] = pair.Value;
                     }
@@ -84,11 +83,11 @@ namespace Tyrant.Framework.Core
             var owner = new Dictionary<string, string>(StringComparer.Ordinal);
             var clashes = new List<MaterialClash>();
             foreach (var (id, manifest) in enabledInLoadOrder)
-                foreach (var model in manifest.Models.Where(m => m.Materials != null))
-                    foreach (var material in model.Materials!.Where(m => !m.Value.IsEmpty).Select(m => m.Key).Distinct(StringComparer.Ordinal))
+                foreach (var species in manifest.SpeciesMaterials)
+                    foreach (var material in species.Value.Where(m => !m.Value.IsEmpty).Select(m => m.Key).Distinct(StringComparer.Ordinal))
                     {
-                        var key = model.Target + "\n" + material;
-                        if (owner.TryGetValue(key, out var earlier) && earlier != id) clashes.Add(new MaterialClash(model.Target, material, earlier, id));
+                        var key = species.Key + "\n" + material;
+                        if (owner.TryGetValue(key, out var earlier) && earlier != id) clashes.Add(new MaterialClash(species.Key, material, earlier, id));
                         owner[key] = id;
                     }
             return clashes;

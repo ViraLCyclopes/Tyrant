@@ -134,8 +134,8 @@ public sealed partial class ModsMethods
 
     private static IReadOnlyList<ModSpeciesMaterialsDto>? SpeciesMaterialsOf(ModManifest m)
     {
-        var list = m.Models.Where(x => x.Materials is not null)
-            .Select(x => new ModSpeciesMaterialsDto(x.Target, Json.Write(MaterialOverrides.ToJson(x.Materials!)))).ToList();
+        var list = m.SpeciesMaterials.Where(x => x.Value.Count > 0)
+            .Select(x => new ModSpeciesMaterialsDto(x.Key, Json.Write(MaterialOverrides.ToJson(x.Value)))).ToList();
         return list.Count == 0 ? null : list;
     }
 }

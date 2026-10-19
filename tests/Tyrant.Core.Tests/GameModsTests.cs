@@ -285,11 +285,7 @@ public class GameModsTests
     private static ModProject MaterialsMod(Workspace ws, string id)
     {
         var mod = Mod(ws, id, "T_A_D.png");
-        mod.Manifest.Models.Add(new ModelReplacement
-        {
-            Target = "Titanoboa",
-            Materials = new() { ["Titanoboa"] = new MaterialOverride { Iridescence = new IridescenceSettings { Scale = 1 } } },
-        });
+        mod.Manifest.SpeciesMaterials["Titanoboa"] = new() { ["Titanoboa"] = new MaterialOverride { Iridescence = new IridescenceSettings { Scale = 1 } } };
         mod.Save();
         return mod;
     }

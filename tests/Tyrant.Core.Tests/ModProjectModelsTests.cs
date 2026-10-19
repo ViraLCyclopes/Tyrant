@@ -154,7 +154,7 @@ public class ModProjectModelsTests
 
         var entry = Assert.Single(mod.Manifest.Models);
         Assert.NotEqual("", entry.File);
-        Assert.Equal(0.5f, entry.Materials!["Carch"].Iridescence!.Strength!.Normal);
+        Assert.Equal(0.5f, mod.Manifest.SpeciesMaterials["Carcharodontosaurus"]["Carch"].Iridescence!.Strength!.Normal);
     }
 
     [Fact]
@@ -163,13 +163,12 @@ public class ModProjectModelsTests
         var (game, ws, install, mod, reader, glb) = Setup();
         using var _ = game;
         mod.ReplaceModel(install, Index(), SpeciesSkinsReader.Load(ws), reader, glb, "Carcharodontosaurus", null, null);
-        mod.Manifest.Models[0].Materials = MaterialOverrides.Parse(Json.Parse("""{"Carch":{"iridescence":{"strength":0.5}}}"""), "x", false);
+        mod.Manifest.SpeciesMaterials["Carcharodontosaurus"] = MaterialOverrides.Parse(Json.Parse("""{"Carch":{"iridescence":{"strength":0.5}}}"""), "x", false)!;
 
         mod.RemoveModel("Carcharodontosaurus", null);
 
-        var entry = Assert.Single(mod.Manifest.Models);
-        Assert.Equal("", entry.File);
-        Assert.NotNull(entry.Materials);
+        Assert.Empty(mod.Manifest.Models);
+        Assert.NotEmpty(mod.Manifest.SpeciesMaterials);
         mod.SetRig(install, Index(), SpeciesSkinsReader.Load(ws), reader, "Carcharodontosaurus", null, null);
         Assert.Single(mod.Manifest.Models);
     }

@@ -57,12 +57,14 @@ public sealed partial class ModProject
         var entry = SpeciesEntryOf(speciesId);
         var key = entry.Key(Id);
         var (skins, models, sounds, prefab) = PartsOf(key);
+        var speciesMaterials = Manifest.SpeciesMaterials.GetValueOrDefault(key);
 
         // mod.json first: a species without skins is still a valid mod, skins whose species is gone are not.
         var (oldSkins, oldModels, oldSounds) = (Manifest.Skins.ToList(), Manifest.Models.ToList(), Manifest.Sounds.ToList());
         Manifest.Skins.RemoveAll(skins.Contains);
         Manifest.Models.RemoveAll(models.Contains);
         Manifest.Sounds.RemoveAll(sounds.Contains);
+        Manifest.SpeciesMaterials.Remove(key);
         Save();
         var at = Manifest.Species.IndexOf(entry);
         try
@@ -76,6 +78,7 @@ public sealed partial class ModProject
             Manifest.Skins.Clear(); Manifest.Skins.AddRange(oldSkins);
             Manifest.Models.Clear(); Manifest.Models.AddRange(oldModels);
             Manifest.Sounds.Clear(); Manifest.Sounds.AddRange(oldSounds);
+            if (speciesMaterials is not null) Manifest.SpeciesMaterials[key] = speciesMaterials;
             Save();
             throw;
         }
@@ -90,6 +93,7 @@ public sealed partial class ModProject
             .Select(path => Normal(Path.GetRelativePath(Dir, path))).ToList();
         var files = skins.SelectMany(s => FilesOf(s).Concat(ModSharing.ModelFilesOf(this, s.Model)))
             .Concat(models.SelectMany(EntryFiles))
+            .Concat(MaterialFiles(speciesMaterials))
             .Concat(sounds.SelectMany(s => s.Files))
             .Concat(new[] { entry.Icon, entry.Swatch, entry.Prefab?.Bundle }.OfType<string>())
             .Concat(entry.Portraits.Values)
@@ -104,7 +108,7 @@ public sealed partial class ModProject
             RecycleBlender(BlenderProjectWriter.FolderOf(WorkspaceDir, Id, key, skin.Id), skin.Id, key, removed, kept);
         }
         RecycleBlender(BlenderProjectWriter.FolderOf(WorkspaceDir, Id, key, null), null, key, removed, kept);
-        DeleteEmptyMaterialFolders(skins.Select(s => s.Materials).Concat(models.Select(m => m.Materials)).SelectMany(MaterialFiles));
+        DeleteEmptyMaterialFolders(skins.Select(s => s.Materials).Append(speciesMaterials).SelectMany(MaterialFiles));
         DeleteIfEmpty(Path.Combine(Dir, PrefabOverrides.Folder, entry.Id));
         RemoveEmptyPrefabFolder();
         var localization = Path.Combine(Dir, "localization");

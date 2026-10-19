@@ -116,6 +116,9 @@ namespace Tyrant.Framework.Core
                     var manifest = ModManifest.Parse(source.ManifestJson, skippedSkins); // one bad skin does not cost the whole mod
                     manifest.Species.AddRange(AnimalDatabaseFile.Read(Path.Combine(source.Directory, AnimalDatabaseFile.FileName)));
                     AnimalLocalization.Load(source.Directory, manifest.Species);
+                    var materialProblems = new List<string>();
+                    MaterialFolders.Load(manifest, source.Directory, materialProblems);
+                    foreach (var problem in materialProblems) plan.Warnings.Add($"{source.Folder}: {problem}");
                     foreach (var skipped in skippedSkins) plan.Warnings.Add($"{source.Folder}: {skipped}");
                     foreach (var (skin, problem) in StartingSkins.Problems(manifest))
                     {

@@ -417,7 +417,7 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
     {
         var owners = mod.Manifest.Skins.Where(s => s.Materials is not null)
             .Select(s => (Key: s.Key(mod.Id), s.Species, Skin: (SkinEntry?)s, Materials: s.Materials!))
-            .Concat(mod.Manifest.Models.Where(m => m.Materials is not null).Select(m => (Key: m.Target, Species: m.Target, Skin: (SkinEntry?)null, Materials: m.Materials!)));
+            .Concat(mod.Manifest.SpeciesMaterials.Select(m => (Key: m.Key, Species: m.Key, Skin: (SkinEntry?)null, Materials: m.Value)));
         var animals = new Dictionary<string, AnimalMaterial?>(StringComparer.OrdinalIgnoreCase);
         foreach (var (key, speciesId, skin, materials) in owners)
         {

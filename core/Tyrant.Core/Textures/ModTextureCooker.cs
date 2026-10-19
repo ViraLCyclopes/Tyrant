@@ -106,7 +106,7 @@ public sealed class ModTextureCooker(string cacheDir, Func<string, SlotKind?>? r
     /// Ramps are not here: the game samples them on the CPU and reads their PNGs directly.
     /// </summary>
     private static IEnumerable<string> MaskFiles(ModManifest manifest) =>
-        manifest.Skins.Select(s => s.Materials).Concat(manifest.Models.Select(m => m.Materials))
+        manifest.Skins.Select(s => s.Materials).Concat(manifest.SpeciesMaterials.Values).Concat(manifest.VanillaSkinMaterials.Values)
             .Where(materials => materials is not null)
             .SelectMany(materials => materials!.Values)
             .Select(material => material.Iridescence?.Mask?.File)

@@ -74,11 +74,7 @@ public class ModTextureCookerTests
                 },
             },
         });
-        m.Models.Add(new ModelReplacement
-        {
-            Target = "Carcharodontosaurus",
-            Materials = new() { ["Carch"] = new MaterialOverride { Iridescence = new IridescenceSettings { Mask = new MaskSource { File = "materials/species/mask.png" } } } },
-        });
+        m.SpeciesMaterials["Carcharodontosaurus"] = new() { ["Carch"] = new MaterialOverride { Iridescence = new IridescenceSettings { Mask = new MaskSource { File = "materials/species/mask.png" } } } };
 
         var targets = new ModTextureCooker(Dir()).Targets(m);
         var files = ModTextureCooker.TextureFiles(m);

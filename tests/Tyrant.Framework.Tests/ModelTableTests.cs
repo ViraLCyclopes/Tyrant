@@ -43,10 +43,11 @@ public class ModelTableTests
     }
 
     [Fact]
-    public void A_materials_only_entry_is_neither_a_model_nor_a_clash()
+    public void Species_materials_are_neither_a_model_nor_a_clash()
     {
         var a = Mod("big-carch", Species);
-        var b = Mod("mod-b", """{"format":1,"id":"mod-b","models":[{"target":"Carcharodontosaurus","materials":{"Body":{"settings":{"_Smoothness":0.5}}}}]}""");
+        var b = Mod("mod-b", """{"format":1,"id":"mod-b"}""");
+        b.Manifest.SpeciesMaterials["Carcharodontosaurus"] = new Dictionary<string, MaterialOverride> { ["Body"] = new MaterialOverride() };
 
         Assert.Empty(ModelTable.Clashes([("big-carch", a.Manifest), ("mod-b", b.Manifest)]));
         Assert.True(ModelTable.Build([a, b]).TryChoose("Carcharodontosaurus", null, out var set));

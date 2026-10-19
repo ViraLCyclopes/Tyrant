@@ -104,11 +104,7 @@ public class ModSharingTests
         var mask = mod.SetMaterialFile("blue", null, "Carch", "mask", png);
         const string speciesRamp = "materials/species/Carcharodontosaurus/iridescence-ramp.png";
         ModEditTests.Png(Path.Combine(mod.Dir, "materials", "species", "Carcharodontosaurus"), "iridescence-ramp.png");
-        mod.Manifest.Models.Add(new ModelReplacement
-        {
-            Target = "Carcharodontosaurus", Key = "k", File = "",
-            Materials = new() { ["Carch"] = new MaterialOverride { Iridescence = new IridescenceSettings { Ramp = new RampSource { File = speciesRamp } } } },
-        });
+        mod.Manifest.SpeciesMaterials["Carcharodontosaurus"] = new() { ["Carch"] = new MaterialOverride { Iridescence = new IridescenceSettings { Ramp = new RampSource { File = speciesRamp } } } };
         mod.Save();
         var zip = TempZip();
 
