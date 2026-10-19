@@ -43,6 +43,17 @@ public class ModelTableTests
     }
 
     [Fact]
+    public void A_materials_only_entry_is_neither_a_model_nor_a_clash()
+    {
+        var a = Mod("big-carch", Species);
+        var b = Mod("mod-b", """{"format":1,"id":"mod-b","models":[{"target":"Carcharodontosaurus","materials":{"Body":{"settings":{"_Smoothness":0.5}}}}]}""");
+
+        Assert.Empty(ModelTable.Clashes([("big-carch", a.Manifest), ("mod-b", b.Manifest)]));
+        Assert.True(ModelTable.Build([a, b]).TryChoose("Carcharodontosaurus", null, out var set));
+        Assert.Equal("big-carch", set.ModId);
+    }
+
+    [Fact]
     public void A_model_for_a_custom_species_identity_is_found()
     {
         var table = ModelTable.Build([Mod("pack", """{"format":1,"id":"pack","models":[{"target":"tyrant.pack.mirabilis","file":"models/a.glb"}]}""")]);

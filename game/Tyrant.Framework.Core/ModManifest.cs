@@ -59,6 +59,12 @@ namespace Tyrant.Framework.Core
 
         /// <summary>How the rig edit changes the species' head-look boom (Tyrant measures it from the skeleton); null for none.</summary>
         public HeadRigCorrection? HeadRig { get; set; }
+
+        /// <summary>Material changes for the species (material name → changes); null for none.</summary>
+        public Dictionary<string, MaterialOverride>? Materials { get; set; }
+
+        /// <summary>Whether the entry replaces the model or edits the rig (an entry with only "materials" does neither).</summary>
+        public bool HasModelOrRig => File.Length > 0 || Rig is { Count: > 0 };
     }
 
     /// <summary>
@@ -139,6 +145,9 @@ namespace Tyrant.Framework.Core
 
         /// <summary>The skin's own colours (mod.json "colors"); null keeps the base skin's.</summary>
         public SkinColors? Colors { get; set; }
+
+        /// <summary>The skin's material changes (mod.json "materials": material name → changes); null for none.</summary>
+        public Dictionary<string, MaterialOverride>? Materials { get; set; }
 
         /// <summary>The skin's own model (a .glb in the mod), overriding the species' model.</summary>
         public string? Model { get; set; }
@@ -290,10 +299,12 @@ namespace Tyrant.Framework.Core
                 if (string.IsNullOrWhiteSpace(target)) throw new ManifestException($"\"models\" entry {n} has no \"target\".");
                 var file = Text(entry, "file");
                 var rig = entry.TryGetValue("rig", out var rigJson) && rigJson != null ? RigEdit.Parse(rigJson, $"\"models\" entry {n} ({target})") : null;
-                if (string.IsNullOrWhiteSpace(file) && (rig == null || rig.Count == 0))
-                    throw new ManifestException($"\"models\" entry {n} ({target}) has no \"file\" or \"rig\".");
+                var materials = entry.TryGetValue("materials", out var materialsJson) && materialsJson != null
+                    ? MaterialOverrides.Parse(materialsJson, $"\"models\" entry {n} ({target})", skinLevel: false) : null;
+                if (string.IsNullOrWhiteSpace(file) && (rig == null || rig.Count == 0) && materials == null)
+                    throw new ManifestException($"\"models\" entry {n} ({target}) has no \"file\", \"rig\" or \"materials\".");
                 var headRig = entry.TryGetValue("headRig", out var headJson) && headJson != null ? HeadRigCorrection.Parse(headJson, $"\"models\" entry {n} ({target})") : null;
-                manifest.Models.Add(new ModelReplacement { Target = target!, Key = Text(entry, "key"), File = file ?? "", Rig = rig is { Count: > 0 } ? rig : null, HeadRig = headRig });
+                manifest.Models.Add(new ModelReplacement { Target = target!, Key = Text(entry, "key"), File = file ?? "", Rig = rig is { Count: > 0 } ? rig : null, HeadRig = headRig, Materials = materials });
             }
             n = 0;
             foreach (var item in Array(map, "sounds"))
@@ -357,6 +368,7 @@ namespace Tyrant.Framework.Core
                     Male = Slots(entry, "male", skinId),
                     Female = Slots(entry, "female", skinId),
                     Colors = entry.TryGetValue("colors", out var colors) && colors != null ? SkinColors.Parse(colors, skinId) : null,
+                    Materials = entry.TryGetValue("materials", out var materials) && materials != null ? MaterialOverrides.Parse(materials, $"Skin \"{skinId}\"", skinLevel: true) : null,
                     Model = Text(entry, "model"),
                     Rig = entry.TryGetValue("rig", out var rig) && rig != null && RigEdit.Parse(rig, $"Skin \"{skinId}\"") is { Count: > 0 } parsed ? parsed : null,
                     Group = SkinEntry.GroupName(Text(entry, "group")),
@@ -404,6 +416,7 @@ namespace Tyrant.Framework.Core
                     if (m.File.Length > 0) entry["file"] = m.File;
                     if (m.Rig is { Count: > 0 }) entry["rig"] = RigEdit.ToJson(m.Rig);
                     if (m.HeadRig != null) entry["headRig"] = m.HeadRig.ToMap();
+                    if (m.Materials != null) entry["materials"] = MaterialOverrides.ToJson(m.Materials);
                     return (object?)entry;
                 }).ToList();
             if (Sounds.Count > 0)
@@ -432,6 +445,7 @@ namespace Tyrant.Framework.Core
                     if (s.Model != null) entry["model"] = s.Model;
                     if (s.Rig is { Count: > 0 }) entry["rig"] = RigEdit.ToJson(s.Rig);
                     if (s.Colors != null) entry["colors"] = s.Colors.ToJson();
+                    if (s.Materials != null) entry["materials"] = MaterialOverrides.ToJson(s.Materials);
                     return (object?)entry;
                 }).ToList();
             if (!Textures.IsDefault)
