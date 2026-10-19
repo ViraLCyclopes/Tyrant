@@ -341,7 +341,12 @@ namespace Tyrant.Framework
                     FrameworkMod.Log.Warning($"The look saved for the next {context.Species} is kept: this save's looks file cannot be written (save the park, or fix the file).");
                 return;
             }
-            if (!(Pending.Take(context.Species, context.SkinKey, context.Sex) is { } look)) return;
+            if (!(Pending.Take(context.Species, context.SkinKey, context.Sex) is { } look))
+            {
+                // A mod skin may be put on the new animal a little after it is placed: look again for a few frames.
+                if (tries < PlacedTries) lock (Gate) PlacedNew.Add((animal, tries + 1));
+                return;
+            }
             var before = Looks.Get(id);
             var map = before != null ? new Dictionary<string, MaterialOverride>(before, StringComparer.Ordinal) : new Dictionary<string, MaterialOverride>(StringComparer.Ordinal);
             foreach (var pair in look) map[pair.Key] = LookFiles.Relative(pair.Value, FrameworkMod.TyrantDirectory); // like the editor's own saves
