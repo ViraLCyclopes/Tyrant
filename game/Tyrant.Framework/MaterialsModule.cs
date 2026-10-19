@@ -15,12 +15,13 @@ namespace Tyrant.Framework
     /// <summary>
     /// Mod material settings, iridescence and fur masks per animal, at draw time and never saved: a transpiler on
     /// AnimalMaterials.CalculateKeywords adds ExtraFeatures (the shader variant with iridescence) when the animal's strength is
-    /// above 0, and postfixes on AnimalVisuals.SetAnimalMaterialVariation and AnimalGrowthManager.UpdateGrowth (the two places
-    /// the game writes _IridescenceStrength and _DroopDirection) write the settings, ramp, masks, shaping and strength into the
-    /// property block, read from the first LOD renderer and written to every LOD like the game's own edit scope. On top of the
-    /// mods' table lie the in-game editor's live edits and the park's per-animal looks (<see cref="MaterialTable.MergeLayers"/>).
-    /// A key Tyrant wrote on a renderer and no longer sets (the Nursery preview reuses one animal for every skin, the vivarium
-    /// reuses pooled animals) goes back to the base material's value, or to the game's for the keys the game writes per animal.
+    /// above 0 and the fur variant when a block grows fur ("fur.grow"), and postfixes on AnimalVisuals.SetAnimalMaterialVariation
+    /// and AnimalGrowthManager.UpdateGrowth (the two places the game writes _IridescenceStrength, _FresnelIntensity and
+    /// _DroopDirection) write the settings, ramp, masks, shaping, strength and grown fur into the property block, read from the
+    /// first LOD renderer and written to every LOD like the game's own edit scope. On top of the mods' table lie the in-game
+    /// editor's live edits and the park's per-animal looks (<see cref="MaterialTable.MergeLayers"/>). A key Tyrant wrote on a
+    /// renderer and no longer sets (the Nursery preview reuses one animal for every skin, the vivarium reuses pooled animals) goes back to the base material's value, or to the game's for the keys the game writes per animal.
+    /// A ramp or mask taken from a species ({ "species": id }) is <see cref="SpeciesLooks"/>' copy, the game's own until it is made.
     /// </summary>
     internal static class MaterialsModule
     {
@@ -31,6 +32,8 @@ namespace Tyrant.Framework
         private const string DroopProperty = "_DroopDirection"; // AnimalShaderData.FuzzDroopinessDirectionID
         private const string AdultFurProperty = "_AdultFurMask";
         private const string InfantFurProperty = "_InfantFurMask";
+        private const string FuzzProperty = "_FresnelIntensity"; // AnimalShaderData.FresnelIntensityID: the game's fur amount, 0 without fur maps
+        private const string FurMaskEmpty = "FurMaskEmpty"; // AnimalShaderData.FurMaskEmptyName: the game's blank fur mask
         private static readonly string[] Variants = { "normal", "albino", "melanistic", "leucistic" };
 
         private static MaterialTable _table = MaterialTable.Build(Array.Empty<LoadedMod>(), out _);
@@ -48,6 +51,9 @@ namespace Tyrant.Framework
         // The editor's unsaved edits and the park's per-animal looks (their files resolved, per animal, while its look is the same object).
         private static readonly LiveLooks Live = new LiveLooks();
         private static readonly PreparedLooks Saved = new PreparedLooks(Prepared);
+        private static WeakReference? _previewAnimal; // SetPreviewLook's animal (a Nursery preview, gone when the Nursery is)
+        private static string? _previewMaterial;
+        private static MaterialOverride? _previewBlock;
 
         private static readonly MaterialPropertyBlock Block = new MaterialPropertyBlock();
         private static readonly List<Renderer> Renderers = new List<Renderer>();
@@ -74,6 +80,11 @@ namespace Tyrant.Framework
         private static readonly Dictionary<Type, PropertyInfo?> GrowthAnimal = new Dictionary<Type, PropertyInfo?>();
         private static MethodInfo? _autoSetMaterial;
         private static bool _autoSetMaterialRead;
+        private static (int Off, int Fur, int Extra)? _furKeywords; // AnimalMaterialKeywords' TessellationOff, TessellationFur, ExtraFeatures
+        private static bool _furKeywordsRead;
+        private static PropertyInfo? _tessellation;
+        private static bool _tessellationRead;
+        private static readonly Dictionary<Type, MethodInfo?> KeyValid = new Dictionary<Type, MethodInfo?>();
 
         /// <summary>The mods whose materials are in the table, in load order (Vanilla Looks last once it exists).</summary>
         public static IReadOnlyList<LoadedMod> Mods => _mods;
@@ -114,6 +125,19 @@ namespace Tyrant.Framework
         }
 
         /// <summary>
+        /// The Nursery editor's Next created draft, on its preview animal (null clears): the preview has no persistent id, so
+        /// the draft is kept by the object, at the live animal layer. Only one at a time; file paths as for <see cref="SetLive"/>.
+        /// </summary>
+        public static void SetPreviewLook(object? animal, string? materialName, MaterialOverride? draft)
+        {
+            var clear = animal == null || materialName == null || draft == null || draft.IsEmpty;
+            _previewAnimal = clear ? null : new WeakReference(animal);
+            _previewMaterial = clear ? null : materialName;
+            _previewBlock = clear ? null : Prepared(draft!);
+            _sweepDue = true;
+        }
+
+        /// <summary>
         /// The park's per-animal looks (null: none), prepared at once (call it again after changing the store): looks that did
         /// not change keep their ramps and masks through the sweep. File paths are full, or relative to UserData/Tyrant.
         /// </summary>
@@ -123,9 +147,20 @@ namespace Tyrant.Framework
             _sweepDue = true;
         }
 
-        /// <summary>Once a frame: destroys the textures of ramps and masks no block uses any more (after the edits re-applied).</summary>
+        /// <summary>
+        /// Once a frame: a species whose look finished loading (<see cref="SpeciesLooks"/>) is shown on every animal at once (its
+        /// references showed the game's own until now); then the textures of ramps and masks no block uses any more are destroyed.
+        /// </summary>
         public static void Tick()
         {
+            try
+            {
+                if (SpeciesLooks.Tick().Count > 0 && _active) ReapplyAll();
+            }
+            catch (Exception ex)
+            {
+                Failed(ex);
+            }
             if (!_sweepDue) return;
             _sweepDue = false;
             try
@@ -239,15 +274,21 @@ namespace Tyrant.Framework
             }
         }
 
-        /// <summary>Adds ExtraFeatures when the animal's iridescence strength for its variant is above 0; never removes a keyword.</summary>
+        /// <summary>
+        /// Adds ExtraFeatures when the animal's iridescence strength for its variant is above 0. When a block grows fur and the
+        /// game's tessellation is on, gives the fur variant as the game gives a skin with a fur map (TessellationFur and
+        /// ExtraFeatures in place of TessellationOff). Never removes another keyword.
+        /// </summary>
         private static int AddKeywords(int keywords, object animal)
         {
             if (!_active || animal == null) return keywords;
             try
             {
                 var found = Resolve(animal, MembersOf(animal.GetType()));
-                var strength = found?.Override.Iridescence?.Strength;
-                if (strength != null && strength.For(SkinTypeOf(found!.Members, animal)) > 0) return keywords | ExtraFeatures;
+                if (found == null) return keywords;
+                var strength = found.Override.Iridescence?.Strength;
+                if (strength != null && strength.For(SkinTypeOf(found.Members, animal)) > 0) keywords |= ExtraFeatures;
+                if (found.Override.Fur?.Grow == true) keywords = WithFur(keywords);
             }
             catch (Exception ex)
             {
@@ -255,6 +296,71 @@ namespace Tyrant.Framework
             }
             return keywords;
         }
+
+        /// <summary>The fur variant's keywords (AnimalMaterials.CalculateKeywords with a fur map); unchanged while tessellation is off.</summary>
+        private static int WithFur(int keywords)
+        {
+            var flags = FurKeywords();
+            if (flags == null) return keywords;
+            var tessellation = TessellationOn;
+            if (tessellation != true)
+            {
+                if (tessellation == false && Announced.Add("tessellation"))
+                    FrameworkMod.Log.Warning("Grow fur: fur needs the game's tessellated fur (the Fur graphics setting); grown fur shows once it is on.");
+                return keywords;
+            }
+            var (off, fur, extra) = flags.Value;
+            return (keywords & ~off) | fur | extra;
+        }
+
+        /// <summary>
+        /// FurManager.EnableTessellation, which the game's Fur graphics setting sets (PKQualityFur.ApplyQuality); without it the
+        /// game gives no animal the tessellated fur variant. Null when it cannot be read.
+        /// </summary>
+        public static bool? TessellationOn
+        {
+            get
+            {
+                if (!_tessellationRead)
+                {
+                    _tessellationRead = true;
+                    var type = AccessTools.TypeByName("FurManager");
+                    _tessellation = type == null ? null : AccessTools.Property(type, "EnableTessellation");
+                    if (_tessellation == null) FrameworkMod.Log.Warning("FurManager.EnableTessellation was not found (game updated?); Grow fur is off.");
+                }
+                try
+                {
+                    return _tessellation?.GetValue(null, null) is bool on ? on : (bool?)null;
+                }
+                catch (Exception ex)
+                {
+                    Failed(ex);
+                    return null;
+                }
+            }
+        }
+
+        /// <summary>AnimalMaterialKeywords' TessellationOff, TessellationFur and ExtraFeatures, read by name once; null when one is missing.</summary>
+        private static (int Off, int Fur, int Extra)? FurKeywords()
+        {
+            if (_furKeywordsRead) return _furKeywords;
+            _furKeywordsRead = true;
+            var type = AccessTools.TypeByName("PrehistoricKingdom.AnimalMaterialKeywords");
+            try
+            {
+                if (type != null && type.IsEnum)
+                    _furKeywords = (Flag(type, "TessellationOff"), Flag(type, "TessellationFur"), Flag(type, "ExtraFeatures"));
+            }
+            catch (Exception ex) when (ex is ArgumentException || ex is OverflowException)
+            {
+                _furKeywords = null;
+            }
+            if (_furKeywords == null)
+                FrameworkMod.Log.Warning("AnimalMaterialKeywords has no TessellationOff, TessellationFur or ExtraFeatures (game updated?); Grow fur is off.");
+            return _furKeywords;
+        }
+
+        private static int Flag(Type type, string name) => Convert.ToInt32(Enum.Parse(type, name), System.Globalization.CultureInfo.InvariantCulture);
 
         // __args[0]: the animal (the extension method's 'this IAnimal'). The game returns early, writing nothing, for an animal
         // that is not visually present: then neither does Tyrant.
@@ -325,6 +431,18 @@ namespace Tyrant.Framework
             }
         }
 
+        /// <summary>
+        /// Every loaded animal, the Nursery's preview animal (a saved look shows on it with the editor closed) and the one showing
+        /// a Next created draft, written again (no keyword change).
+        /// </summary>
+        private static void ReapplyAll()
+        {
+            foreach (var animal in LoadedAnimals()) Reapply(animal, keywords: false);
+            var nursery = LookEditorWindow.NurseryAnimal();
+            if (nursery != null) Reapply(nursery, keywords: false);
+            if (_previewAnimal?.Target is object preview && !ReferenceEquals(preview, nursery)) Reapply(preview, keywords: false);
+        }
+
         /// <summary>The selected animal first, then every loaded animal (park and vivarium) the edit of this scope also reaches.</summary>
         public static IEnumerable<object> AnimalsMatching(LookScope scope, object selected)
         {
@@ -377,6 +495,29 @@ namespace Tyrant.Framework
             }
         }
 
+        /// <summary>
+        /// A VirtualAnimal (incubating, held, being placed) as <see cref="Describe"/> keys a placed one: its BaseAnimalData's
+        /// speciesID, the skin key of its skinsData[skinIdx] (a mod skin's, else the vanilla skin's), its sex, its UniqueID and
+        /// OwnName; null when the species cannot be read.
+        /// </summary>
+        public static (string Species, string? SkinKey, string? Sex, ulong Id, string? Name)? DescribeVirtual(object virtualAnimal)
+        {
+            if (virtualAnimal == null) return null;
+            var data = FieldOf(virtualAnimal, "OwnAD")?.GetValue(virtualAnimal);
+            if (data == null || !(FieldOf(data, "speciesID")?.GetValue(data) is string species)) return null;
+            var skins = FieldOf(data, "skinsData")?.GetValue(data) as IList;
+            var index = FieldOf(virtualAnimal, "skinIdx")?.GetValue(virtualAnimal) is int i ? i : -1;
+            var skinData = skins != null && index >= 0 && index < skins.Count ? skins[index] : null;
+            var skinKey = SkinsModule.TryGet(skinData, out var modId, out var entry, out _) ? modId + "/" + entry.Id : VanillaKeyOf(skinData, species);
+            var sex = FieldOf(virtualAnimal, "Sex")?.GetValue(virtualAnimal) is Enum s ? (s.ToString() == "Male" ? "male" : "female") : null;
+            var type = virtualAnimal.GetType();
+            if (!VirtualIdOf.TryGetValue(type, out var idProperty)) VirtualIdOf[type] = idProperty = AccessTools.Property(type, "UniqueID");
+            var id = idProperty?.GetValue(virtualAnimal, null) is ulong unique ? unique : 0UL;
+            return (species, skinKey, sex, id, FieldOf(virtualAnimal, "OwnName")?.GetValue(virtualAnimal) as string);
+        }
+
+        private static readonly Dictionary<Type, PropertyInfo?> VirtualIdOf = new Dictionary<Type, PropertyInfo?>();
+
         /// <summary>The animal's species, skin, variant, id, material and the skin's source; null when it has no species or material.</summary>
         public static AnimalContext? Describe(object animal)
         {
@@ -394,7 +535,8 @@ namespace Tyrant.Framework
                 var custom = CustomSpecies.TryGetValue(species, out var speciesMod) ? speciesMod : null;
                 var skinType = SkinTypeOf(members, animal);
                 return new AnimalContext(species, own ? (modId, entry.Id) : ((string, string)?)null, vanillaKey,
-                    Variants[skinType >= 0 && skinType < Variants.Length ? skinType : 0], IdOf(members, animal), material.name, source, custom);
+                    Variants[skinType >= 0 && skinType < Variants.Length ? skinType : 0], IdOf(members, animal), material.name, source, custom,
+                    members.Sex == null ? null : IsMale(members, animal) ? "male" : "female");
             }
             catch (Exception ex)
             {
@@ -405,10 +547,16 @@ namespace Tyrant.Framework
 
         /// <summary>
         /// The mask the animal shows now (for export): Tyrant's when a block sets one, else the game's (its fur map, or the
-        /// material's iridescence mask). The infant fur mask falls back to the adult one Tyrant sets. Null when there is none.
+        /// material's iridescence mask). The infant fur mask falls back to the adult one Tyrant sets. Null when there is none,
+        /// and also when the mask is not a texture to read: <paramref name="white"/> is the size of an all-white mask to write
+        /// instead while Grow fur paints Unity's white texture over the whole body (the game's own under it is its blank
+        /// FurMaskEmpty), and <paramref name="species"/> names the species whose iridescence mask the animal shows by reference
+        /// (the game's images are never exported).
         /// </summary>
-        public static Texture? EffectiveMask(object animal, bool fur, bool infant)
+        public static Texture? EffectiveMask(object animal, bool fur, bool infant, out Vector2Int? white, out string? species)
         {
+            white = null;
+            species = null;
             if (animal == null) return null;
             try
             {
@@ -424,7 +572,17 @@ namespace Tyrant.Framework
                     var source = found?.Override.Fur is FurMasks masks ? infant ? masks.InfantMask ?? masks.Mask : masks.Mask : null;
                     if (source != null && FileMask(source) is Texture own && own != null) return own;
                     var property = infant ? InfantFurProperty : AdultFurProperty;
+                    if (record != null && record.Ours.TryGetValue(property, out var ours) && ours == Texture2D.whiteTexture && Block.GetTexture(property) == ours)
+                    {
+                        white = PaintSize(record, material, infant);
+                        return null;
+                    }
                     return Present(GameTexture(record, property)) ?? MaterialTexture(material, property);
+                }
+                if (found?.Override.Iridescence?.Mask is MaskSource { Species: { } taken })
+                {
+                    species = taken;
+                    return null;
                 }
                 if (found?.Override.Iridescence?.Mask is MaskSource mask && MaskTexture(mask, found, IsMale(members, animal), record) is Texture made && made != null)
                     return made;
@@ -435,6 +593,14 @@ namespace Tyrant.Framework
                 Failed(ex);
                 return null;
             }
+        }
+
+        /// <summary>A size to paint a whole-body mask at: the animal's diffuse map's (the block's, else the material's), else 1024 × 1024.</summary>
+        private static Vector2Int PaintSize(Written record, Material? material, bool infant)
+        {
+            var property = SkinSlotNames.Property(infant ? "infantDiffuse" : "diffuse");
+            var diffuse = Present(GameTexture(record, property)) ?? MaterialTexture(material, property);
+            return diffuse != null && diffuse.width >= 64 && diffuse.height >= 64 ? new Vector2Int(diffuse.width, diffuse.height) : new Vector2Int(1024, 1024);
         }
 
         // ---- applying ----
@@ -472,10 +638,12 @@ namespace Tyrant.Framework
 
             // Textures first (a failure is reported and leaves that one out); a mask from the game's map reads the block.
             var male = IsMale(members, animal);
-            var ramp = i?.Ramp == null ? null : RampTexture(i.Ramp);
-            var mask = i?.Mask == null ? null : MaskTexture(i.Mask, found, male, record);
-            var adultFur = o.Fur?.Mask == null ? null : FileMask(o.Fur.Mask);
-            var infantFur = o.Fur?.InfantMask == null ? adultFur : FileMask(o.Fur.InfantMask); // one file covers both ages
+            // "game" (the material's own) writes nothing: a key Tyrant wrote before goes back to the material's value. So does a
+            // species' ramp or mask until its copy is made (SpeciesLooks loads it; the animal is written again then) or when it fails.
+            var ramp = i?.Ramp == null || i.Ramp.Game ? null : i.Ramp.Species != null ? SpeciesLooks.Ramp(i.Ramp.Species) : RampTexture(i.Ramp);
+            var mask = i?.Mask == null || i.Mask.Game ? null : MaskTexture(i.Mask, found, male, record);
+            var adultFur = o.Fur?.Mask == null || o.Fur.Mask.Game ? null : FileMask(o.Fur.Mask); // "game": the game's own per-animal mask stays
+            var infantFur = o.Fur?.InfantMask == null ? adultFur : o.Fur.InfantMask.Game ? null : FileMask(o.Fur.InfantMask); // one file covers both ages
 
             Writing.Clear();
             foreach (var setting in o.Settings)
@@ -505,8 +673,16 @@ namespace Tyrant.Framework
                     SetGameFloat(record, StrengthProperty, strength * Block.GetFloat("_IntegumentMaturity"), fromHook);
                 }
             }
+            // Grown fur: the full fur amount (the game writes 0 without fur maps), and where neither Tyrant nor the game has a
+            // fur mask for an age, white (fur on the whole body); a "game" fur mask keeps the game's. The keywords come from AddKeywords.
+            var grow = o.Fur?.Grow == true;
+            var adultGame = o.Fur?.Mask?.Game == true;
+            var infantGame = o.Fur?.InfantMask?.Game ?? adultGame;
+            if (grow) SetGameFloat(record, FuzzProperty, 1f, fromHook);
             if (adultFur != null) SetGameTexture(record, AdultFurProperty, adultFur);
+            else if (grow && !adultGame && !GameHasFur(members, animal, record, AdultFurProperty, "adultFurMap")) SetGameTexture(record, AdultFurProperty, Texture2D.whiteTexture);
             if (infantFur != null) SetGameTexture(record, InfantFurProperty, infantFur);
+            else if (grow && !infantGame && !GameHasFur(members, animal, record, InfantFurProperty, "infantFurMap")) SetGameTexture(record, InfantFurProperty, Texture2D.whiteTexture);
 
             Restore(record, found.Material, Writing, fromHook);
             foreach (var renderer in Renderers) renderer.SetPropertyBlock(Block);
@@ -700,7 +876,9 @@ namespace Tyrant.Framework
                 || (!string.IsNullOrEmpty(skinName) && _table.CoversVanillaSkinsOf(species)) || Live.CoversSpecies(species)
                 || (Live.HasSkins && Live.CoversSkin(own ? entry.Key(modId) : string.IsNullOrEmpty(skinName) || species == null ? null : species + "/" + skinName));
             var id = Live.HasAnimals || !Saved.IsEmpty ? IdOf(members, animal) : null;
-            if (!covered && !(id is ulong known && (Live.CoversAnimal(known) || Saved.Has(known)))) return null;
+            // The Nursery preview's Next created draft (it has no id of its own): by the object, while one is set.
+            var preview = _previewBlock != null && ReferenceEquals(_previewAnimal?.Target, animal);
+            if (!covered && !preview && !(id is ulong known && (Live.CoversAnimal(known) || Saved.Has(known)))) return null;
             var saved = id is ulong savedId ? Saved.Get(savedId) : null;
             if (!(members.BaseMaterial?.GetValue(animal, null) is Material material) || material == null) return null;
             var name = material.name;
@@ -714,7 +892,8 @@ namespace Tyrant.Framework
             ReportOtherNames(VanillaBlocks, resolved.VanillaKey, name);
             ReportOtherNames(SpeciesBlocks, species, name);
 
-            var liveAnimal = id is ulong animalId ? Live.Animal(animalId, name) : null;
+            var liveAnimal = preview && string.Equals(_previewMaterial, name, StringComparison.Ordinal) ? _previewBlock
+                : id is ulong animalId ? Live.Animal(animalId, name) : null;
             var savedAnimal = saved != null && saved.TryGetValue(name, out var look) ? look : null;
             var liveSkin = Live.Skin(resolved.SkinKey ?? resolved.VanillaKey, name);
             var tableSkin = resolved.SkinKey != null ? _table.Block(MaterialOwnerKind.Skin, resolved.SkinKey, name) : _table.Block(MaterialOwnerKind.VanillaSkin, resolved.VanillaKey, name);
@@ -796,6 +975,7 @@ namespace Tyrant.Framework
 
         private static Texture? MaskTexture(MaskSource mask, Resolved found, bool male, Written? record)
         {
+            if (mask.Species != null) return SpeciesLooks.Mask(mask.Species); // Tyrant's copy, null while it loads
             if (mask.Everywhere || mask.File != null) return FileMask(mask);
             if (mask.From == null) return null;
 
@@ -865,6 +1045,25 @@ namespace Tyrant.Framework
                 : current;
         }
 
+        /// <summary>
+        /// True when the game gives this age a fur mask of its own: its skin data names a fur map (CalculateKeywords' test) and
+        /// the block holds a mask that is not the blank FurMaskEmpty (AnimalVisuals' test). Grow fur leaves such a mask alone. A
+        /// mask in the block without a map is another skin's (the Nursery reuses one animal), so it does not count.
+        /// </summary>
+        private static bool GameHasFur(Members members, object animal, Written record, string property, string mapField)
+        {
+            var texture = Present(GameTexture(record, property));
+            if (texture == null || texture.name == FurMaskEmpty) return false;
+            var data = members.OwnSkinVariationData?.GetValue(animal, null);
+            var field = data == null ? null : FieldOf(data, mapField);
+            if (field == null) return true; // the skin data cannot be read: the block alone tells
+            var map = field.GetValue(data);
+            if (map == null) return false;
+            var type = map.GetType();
+            if (!KeyValid.TryGetValue(type, out var valid)) KeyValid[type] = valid = AccessTools.Method(type, "RuntimeKeyIsValid", Type.EmptyTypes);
+            return valid == null || !(valid.Invoke(map, null) is bool ok) || ok;
+        }
+
         private static Texture? MaterialTexture(Material? material, string property) =>
             material != null && material.HasProperty(property) ? Present(material.GetTexture(property)) : null;
 
@@ -904,24 +1103,32 @@ namespace Tyrant.Framework
         /// One channel of a (possibly compressed, unreadable) texture as a readable grey RGBA texture, through a linear render
         /// texture; the caller owns it (the editor's Export mask PNG encodes it).
         /// </summary>
-        public static Texture2D ReadGrey(Texture source, char channel, bool invert, bool mipmaps)
+        public static Texture2D ReadGrey(Texture source, char channel, bool invert, bool mipmaps) =>
+            ReadPixels(source, mipmaps, pixels => MaskChannel.Extract(pixels, channel, invert));
+
+        /// <summary>
+        /// A (possibly compressed, unreadable) texture as a readable RGBA texture, read back through a linear render texture into
+        /// a linear texture, so the shader samples the values it sampled from the source; <paramref name="change"/> may rework the
+        /// pixels first. The caller owns it.
+        /// </summary>
+        public static Texture2D ReadPixels(Texture source, bool mipmaps, Func<byte[], byte[]>? change = null)
         {
             int width = source.width, height = source.height;
             var target = RenderTexture.GetTemporary(width, height, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.Linear);
             var previous = RenderTexture.active;
-            var mask = new Texture2D(width, height, TextureFormat.RGBA32, mipmaps, true) { name = "Tyrant iridescence mask", hideFlags = HideFlags.DontUnloadUnusedAsset };
+            var copy = new Texture2D(width, height, TextureFormat.RGBA32, mipmaps, true) { name = "Tyrant iridescence mask", hideFlags = HideFlags.DontUnloadUnusedAsset };
             try
             {
                 Graphics.Blit(source, target);
                 RenderTexture.active = target;
-                mask.ReadPixels(new Rect(0, 0, width, height), 0, 0, false);
-                mask.SetPixelData(MaskChannel.Extract(mask.GetPixelData<byte>(0).ToArray(), channel, invert), 0);
-                mask.Apply(mipmaps, false);
-                return mask;
+                copy.ReadPixels(new Rect(0, 0, width, height), 0, 0, false);
+                if (change != null) copy.SetPixelData(change(copy.GetPixelData<byte>(0).ToArray()), 0);
+                copy.Apply(mipmaps, false);
+                return copy;
             }
             catch
             {
-                UnityEngine.Object.Destroy(mask);
+                UnityEngine.Object.Destroy(copy);
                 throw;
             }
             finally
@@ -934,7 +1141,7 @@ namespace Tyrant.Framework
         /// <summary>Forgets the ramps and masks no table, live or saved block uses, and destroys the textures made for them.</summary>
         private static void Sweep()
         {
-            Pool.Retain(_table.Blocks.Concat(Live.Blocks).Concat(Saved.Blocks));
+            Pool.Retain(_table.Blocks.Concat(Live.Blocks).Concat(Saved.Blocks).Concat(_previewBlock == null ? Enumerable.Empty<MaterialOverride>() : new[] { _previewBlock }));
             Drop(Ramps, ramp => Pool.Contains(ramp));
             Drop(FileMasks, mask => Pool.Contains(mask));
             Drop(SlotMasks, key => Pool.Contains(key.Mask));
@@ -990,21 +1197,21 @@ namespace Tyrant.Framework
         }
 
         /// <summary>
-        /// The persistent ids of every animal in the park and the vivarium (an unrealised vivarium animal included); empty outside
-        /// a park, or when the maps cannot be read.
+        /// The persistent ids of every animal in the park and the vivarium (an unrealised vivarium animal included); empty for a
+        /// park without animals, null outside a park or when the maps cannot be read.
         /// </summary>
-        public static List<ulong> LoadedIds()
+        public static List<ulong>? LoadedIds()
         {
             var ids = new List<ulong>();
-            ReadMaps(map =>
+            return ReadMaps(map =>
             {
                 foreach (var key in map.Keys)
                     if (key != null && FieldOf(key, "uniqueID")?.GetValue(key) is ulong id) ids.Add(id);
-            });
-            return ids;
+            }) ? ids : null;
         }
 
-        private static void ReadMaps(Action<IDictionary> read)
+        /// <summary>Calls <paramref name="read"/> with the park's and the vivarium's maps; false when they could not be read.</summary>
+        private static bool ReadMaps(Action<IDictionary> read)
         {
             try
             {
@@ -1017,21 +1224,23 @@ namespace Tyrant.Framework
                     if (_gameType == null || _hasInstance == null || _animalManager == null)
                         FrameworkMod.Log.Warning("Game.AnimalManager was not found (game updated?); live edits of a whole skin or species show on the selected animal only.");
                 }
-                if (_hasInstance == null || _animalManager == null || !(_hasInstance.GetValue(null, null) is bool has) || !has) return;
+                if (_hasInstance == null || _animalManager == null || !(_hasInstance.GetValue(null, null) is bool has) || !has) return false;
                 var manager = _animalManager.GetValue(null, null);
-                if (manager == null) return;
+                if (manager == null) return false;
                 _animals ??= AccessTools.Property(manager.GetType(), "Animals");
                 var collection = _animals?.GetValue(manager, null);
-                if (collection == null) return;
+                if (collection == null) return false;
                 _getReader ??= AccessTools.Method(collection.GetType(), "GetReader", Type.EmptyTypes);
                 var reader = _getReader?.Invoke(collection, null); // a boxed AnimalCollection.Reader, holding the read lock
-                if (reader == null) return;
+                if (reader == null) return false;
                 try
                 {
                     _animalMap ??= AccessTools.Property(reader.GetType(), "PersistentIDToAnimalMap");
                     _vivariumMap ??= AccessTools.Property(reader.GetType(), "PersistentIDToVivariumAnimalMap");
-                    if (_animalMap?.GetValue(reader, null) is IDictionary animals) read(animals);
+                    if (!(_animalMap?.GetValue(reader, null) is IDictionary animals)) return false;
+                    read(animals);
                     if (_vivariumMap?.GetValue(reader, null) is IDictionary vivarium) read(vivarium);
+                    return true;
                 }
                 finally
                 {
@@ -1041,6 +1250,7 @@ namespace Tyrant.Framework
             catch (Exception ex)
             {
                 Failed(ex);
+                return false;
             }
         }
 
@@ -1064,6 +1274,7 @@ namespace Tyrant.Framework
             {
                 BaseData = AccessTools.Property(type, "BaseData");
                 SkinData = AccessTools.Property(type, "SkinData");
+                OwnSkinVariationData = AccessTools.Property(type, "OwnSkinVariationData");
                 SkinType = AccessTools.Property(type, "SkinType");
                 Sex = AccessTools.Property(type, "Sex");
                 BaseMaterial = AccessTools.Property(type, "BaseMaterial");
@@ -1084,6 +1295,10 @@ namespace Tyrant.Framework
 
             public PropertyInfo? BaseData { get; }
             public PropertyInfo? SkinData { get; }
+
+            /// <summary>IAnimal.OwnSkinVariationData (an AnimalSkinVariationAsset): its fur map references say whether the game has fur.</summary>
+            public PropertyInfo? OwnSkinVariationData { get; }
+
             public PropertyInfo? SkinType { get; }
             public PropertyInfo? Sex { get; }
             public PropertyInfo? BaseMaterial { get; }

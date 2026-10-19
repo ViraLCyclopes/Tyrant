@@ -131,17 +131,32 @@ namespace Tyrant.Framework.Core
         public double Index { get; set; } = DefaultIndex;
     }
 
-    /// <summary>Where the iridescence colour comes from; exactly one of the three is set.</summary>
+    /// <summary>Where the iridescence colour comes from; exactly one of the five is set.</summary>
     public sealed class RampSource
     {
+        /// <summary>"game": the material's own ramp, over any lower layer's (Tyrant writes none).</summary>
+        public bool Game { get; set; }
+
+        /// <summary>
+        /// { "species": id }: that vanilla species' ramp, named and never copied into a file. The framework copies the texture
+        /// into one of its own in memory, the app's preview reads it from the game's files.
+        /// </summary>
+        public string? Species { get; set; }
+
         public string? File { get; set; }
         public List<Rgb>? Stops { get; set; }
         public ThinFilmSettings? ThinFilm { get; set; }
     }
 
-    /// <summary>Where the iridescence shows: everywhere, a mask file, or one channel of a skin slot.</summary>
+    /// <summary>Where the iridescence shows (or the fur grows): the game's own, everywhere, a mask file, or one channel of a skin slot.</summary>
     public sealed class MaskSource
     {
+        /// <summary>"game": the game's own mask, over any lower layer's (Tyrant writes none).</summary>
+        public bool Game { get; set; }
+
+        /// <summary>{ "species": id }: that vanilla species' iridescence mask, named like <see cref="RampSource.Species"/>; any level.</summary>
+        public string? Species { get; set; }
+
         public bool Everywhere { get; set; }
         public string? File { get; set; }
 
@@ -171,13 +186,19 @@ namespace Tyrant.Framework.Core
             && Scale == null && Power == null && Bias == null;
     }
 
-    /// <summary>Fur masks a material takes from files (the fur slots of a skin, replaced for one material); only files, never "everywhere" or "from".</summary>
+    /// <summary>
+    /// A material's fur: masks taken from files (the fur slots of a skin, replaced for one material; only files or "game", never
+    /// "everywhere" or "from"), and whether Tyrant grows fur on a skin the game gives none.
+    /// </summary>
     public sealed class FurMasks
     {
         public MaskSource? Mask { get; set; }
         public MaskSource? InfantMask { get; set; }
 
-        public bool IsEmpty => Mask == null && InfantMask == null;
+        /// <summary>True: Tyrant switches the game's fur on. False: Tyrant does not force it (fur the game has stays). Null: lower layers decide.</summary>
+        public bool? Grow { get; set; }
+
+        public bool IsEmpty => Mask == null && InfantMask == null && Grow == null;
     }
 
     /// <summary>One material's changes (materials.json "materials.&lt;name&gt;"): iridescence, shader settings and/or fur masks.</summary>
@@ -244,8 +265,9 @@ namespace Tyrant.Framework.Core
                 if (pair.Value.Fur != null)
                 {
                     var fur = new Dictionary<string, object?>();
-                    if (pair.Value.Fur.Mask?.File != null) fur["mask"] = pair.Value.Fur.Mask.File;
-                    if (pair.Value.Fur.InfantMask?.File != null) fur["infantMask"] = pair.Value.Fur.InfantMask.File;
+                    if (FurJson(pair.Value.Fur.Mask) is string mask) fur["mask"] = mask;
+                    if (FurJson(pair.Value.Fur.InfantMask) is string infant) fur["infantMask"] = infant;
+                    if (pair.Value.Fur.Grow is bool grow) fur["grow"] = grow;
                     entry["fur"] = fur;
                 }
                 if (pair.Value.Settings.Count > 0)
@@ -255,6 +277,10 @@ namespace Tyrant.Framework.Core
             }
             return map;
         }
+
+        private const string GameValue = "game";
+
+        private static string? FurJson(MaskSource? mask) => mask == null ? null : mask.Game ? GameValue : mask.File;
 
         internal static double Num(float value) => double.Parse(value.ToString("R", CultureInfo.InvariantCulture), CultureInfo.InvariantCulture);
 
@@ -281,12 +307,16 @@ namespace Tyrant.Framework.Core
         private static FurMasks ParseFur(object value, string owner, string path)
         {
             var map = Map(value, owner, path);
-            Known(map, owner, path, "mask", "infantMask");
+            Known(map, owner, path, "mask", "infantMask", "grow");
             MaskSource? File(string key) =>
                 !map.TryGetValue(key, out var v) || v == null ? null
+                : v is GameValue ? new MaskSource { Game = true }
                 : v is string file && file.Length > 0 && file != "everywhere" ? new MaskSource { File = file }
-                : throw new ManifestException($"{owner}: \"{path}.{key}\" must be an image file path.");
-            return new FurMasks { Mask = File("mask"), InfantMask = File("infantMask") };
+                : throw new ManifestException($"{owner}: \"{path}.{key}\" must be an image file path or \"game\".");
+            bool? grow = null;
+            if (map.TryGetValue("grow", out var g) && g != null)
+                grow = g as bool? ?? throw new ManifestException($"{owner}: \"{path}.grow\" must be true or false.");
+            return new FurMasks { Mask = File("mask"), InfantMask = File("infantMask"), Grow = grow };
         }
 
         private static void ParseSettings(object value, string owner, string path, Dictionary<string, MaterialValue> into)
@@ -349,14 +379,18 @@ namespace Tyrant.Framework.Core
         {
             if (value is string file)
             {
-                if (file.Length == 0) throw new ManifestException($"{owner}: \"{path}\" must be a file path, or an object with \"stops\" or \"thinFilm\".");
+                if (file == GameValue) return new RampSource { Game = true };
+                if (file.Length == 0) throw new ManifestException($"{owner}: \"{path}\" must be \"game\", a file path, or an object with \"stops\", \"thinFilm\" or \"species\".");
                 return new RampSource { File = file };
             }
             var map = Map(value, owner, path);
-            Known(map, owner, path, "stops", "thinFilm");
+            Known(map, owner, path, "stops", "thinFilm", "species");
             var hasStops = map.TryGetValue("stops", out var stops) && stops != null;
             var hasFilm = map.TryGetValue("thinFilm", out var film) && film != null;
-            if (hasStops == hasFilm) throw new ManifestException($"{owner}: \"{path}\" needs exactly one of \"stops\" or \"thinFilm\".");
+            var hasSpecies = map.TryGetValue("species", out var species) && species != null;
+            if ((hasStops ? 1 : 0) + (hasFilm ? 1 : 0) + (hasSpecies ? 1 : 0) != 1)
+                throw new ManifestException($"{owner}: \"{path}\" needs exactly one of \"stops\", \"thinFilm\" or \"species\".");
+            if (hasSpecies) return new RampSource { Species = SpeciesId(species, owner, path) };
             if (hasStops)
             {
                 var items = stops as List<object?>;
@@ -389,13 +423,19 @@ namespace Tyrant.Framework.Core
         {
             if (value is string text)
             {
+                if (text == GameValue) return new MaskSource { Game = true };
                 if (text == "everywhere") return new MaskSource { Everywhere = true };
-                if (text.Length == 0) throw new ManifestException($"{owner}: \"{path}\" must be \"everywhere\", a file path, or an object with \"from\".");
+                if (text.Length == 0) throw new ManifestException($"{owner}: \"{path}\" must be \"game\", \"everywhere\", a file path, or an object with \"from\" or \"species\".");
                 return new MaskSource { File = text };
             }
             var map = Map(value, owner, path);
-            Known(map, owner, path, "from", "channel", "invert");
-            if (!map.TryGetValue("from", out var from) || from == null) throw new ManifestException($"{owner}: \"{path}\" needs \"from\" (extra, pattern or fur).");
+            Known(map, owner, path, "from", "channel", "invert", "species");
+            if (map.TryGetValue("species", out var species) && species != null)
+            {
+                if (map.Count > 1) throw new ManifestException($"{owner}: \"{path}\" takes \"species\" alone, or \"from\" with \"channel\" and \"invert\".");
+                return new MaskSource { Species = SpeciesId(species, owner, path) }; // any level: it names no skin slot
+            }
+            if (!map.TryGetValue("from", out var from) || from == null) throw new ManifestException($"{owner}: \"{path}\" needs \"from\" (extra, pattern or fur) or \"species\".");
             if (!skinLevel) throw new ManifestException($"{owner}: \"{path}.from\" works only on a skin (a species has no mask from a slot).");
             if (!(from is string slot) || !MaskSlots.Contains(slot)) throw new ManifestException($"{owner}: \"{path}.from\" must be extra, pattern or fur.");
             var channel = 'r';
@@ -410,6 +450,11 @@ namespace Tyrant.Framework.Core
                 invert = inv as bool? ?? throw new ManifestException($"{owner}: \"{path}.invert\" must be true or false.");
             return new MaskSource { From = slot, Channel = channel, Invert = invert };
         }
+
+        /// <summary>A "species" reference: the game's species id (Check holds it against the data dump).</summary>
+        private static string SpeciesId(object? value, string owner, string path) =>
+            value is string id && id.Trim().Length > 0 ? id
+                : throw new ManifestException($"{owner}: \"{path}.species\" must be a species id (the game's, e.g. \"Microraptor\").");
 
         private static float Number(object? value, string owner, string path, float min, float max)
         {
@@ -472,7 +517,9 @@ namespace Tyrant.Framework.Core
             if (i.Variation is float variation) map["variation"] = Num(variation);
             if (i.Ramp is RampSource ramp)
             {
-                if (ramp.File != null) map["ramp"] = ramp.File;
+                if (ramp.Game) map["ramp"] = GameValue;
+                else if (ramp.Species != null) map["ramp"] = new Dictionary<string, object?> { ["species"] = ramp.Species };
+                else if (ramp.File != null) map["ramp"] = ramp.File;
                 else if (ramp.Stops != null) map["ramp"] = new Dictionary<string, object?> { ["stops"] = ramp.Stops.Select(c => (object?)c.ToString()).ToList() };
                 else if (ramp.ThinFilm != null)
                 {
@@ -483,7 +530,9 @@ namespace Tyrant.Framework.Core
             }
             if (i.Mask is MaskSource mask)
             {
-                if (mask.Everywhere) map["mask"] = "everywhere";
+                if (mask.Game) map["mask"] = GameValue;
+                else if (mask.Species != null) map["mask"] = new Dictionary<string, object?> { ["species"] = mask.Species };
+                else if (mask.Everywhere) map["mask"] = "everywhere";
                 else if (mask.File != null) map["mask"] = mask.File;
                 else if (mask.From != null)
                 {

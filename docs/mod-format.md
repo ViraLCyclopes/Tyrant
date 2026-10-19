@@ -178,12 +178,38 @@ name get `-2`, `-3`. The owner comes from the file, not the folder name:
 |---|---|
 | `iridescence.strength` | A number 0–1 for every animal, or an object with `normal` (required) and optionally `albino`, `melanistic`, `leucistic`. A mutation left out uses `normal`. `0` turns iridescence off, also on skins that have it in vanilla. Leaving `iridescence` out keeps the game's settings: only some vanilla skins shimmer (Microraptor's, for example), as their own skin data says. |
 | `iridescence.variation` | 0–1. How much strength differs between animals, as a fraction of the strength (0.15: each lands within ±15 %). Default `0.15` when `strength` is set. Each animal's offset comes from its ID, so it is stable across save and load and nothing is saved. An animal without an ID (the Nursery hologram) uses the set strength. |
-| `iridescence.ramp` | The colours, along the viewing angle: a PNG in the mod (`"materials/skins/rainbow/iridescence-ramp.png"`), `{ "stops": ["#ff0000", …] }` (1 to 32 colours, evenly spaced) or `{ "thinFilm": { "thickness": 420, "index": 1.56 } }` (`thickness` 0–2000 nm, `index` 1–3, default 1.56). Left out: the game's ramp. |
-| `iridescence.mask` | Where it shows: `"everywhere"`, a PNG in the mod, or `{ "from": "extra", "channel": "g", "invert": false }` (`from` is `extra`, `pattern` or `fur`; `channel` is `r`, `g`, `b` or `a`). Left out: the game's mask. |
+| `iridescence.ramp` | The colours, along the viewing angle: a PNG in the mod (`"materials/skins/rainbow/iridescence-ramp.png"`), `{ "stops": ["#ff0000", …] }` (1 to 32 colours, evenly spaced) or `{ "thinFilm": { "thickness": 420, "index": 1.56 } }` (`thickness` 0–2000 nm, `index` 1–3, default 1.56). `"game"`: the game material's own ramp, also over a ramp a lower level (species, starting skin) sets. `{ "species": "Microraptor" }`: that vanilla species' ramp, by reference (see **Starting from a species** below). Left out: the lower level's, else the game's. |
+| `iridescence.mask` | Where it shows: `"everywhere"`, a PNG in the mod, or `{ "from": "extra", "channel": "g", "invert": false }` (`from` is `extra`, `pattern` or `fur`; `channel` is `r`, `g`, `b` or `a`). `"game"`: the game's own mask, over a lower level's. `{ "species": "Microraptor" }`: that vanilla species' mask, by reference, at any level (a species file too). Left out: the lower level's, else the game's. |
 | `iridescence.tiling`, `iridescence.offset` | `[x, y]`, beside `mask`: repeat and shift the mask. |
 | `iridescence.scale`, `power`, `bias` | −10 to 10. Shape the strength across the viewing angle (edge falloff, falloff curve, brightness offset). |
-| `fur.mask`, `fur.infantMask` | The fur mask of adults and of babies: a PNG in the mod (`"materials/skins/rainbow/fur-mask.png"`). Left out: the game's (a baby mask left out uses the adult one). One file serves both sexes. PNG files only: no `everywhere`, no `from`. |
+| `fur.mask`, `fur.infantMask` | The fur mask of adults and of babies: a PNG in the mod (`"materials/skins/rainbow/fur-mask.png"`). `"game"`: the game's own per-animal mask, over a lower level's. Left out: the lower level's, else the game's (a baby mask left out uses the adult one). One file serves both sexes. PNG files or `"game"` only: no `everywhere`, no `from`. |
+| `fur.grow` | `true` grows fur on skins the game gives none (Ouranosaurus, Allosaurus Anax, …): the game's fur shader variant, full fur amount, and, where no level sets a fur mask and the game has none, fur on the whole body (a `"game"` fur mask keeps the game's). `false` means this level does not force fur over a lower one that does; it never takes away fur the game has. Left out: the levels below decide. Works on skins, vanilla skins, species and per-animal looks. |
 | `settings` | Animal shader values, below. |
+
+**Growing fur.** Grown fur needs the game's tessellated fur (its Fur graphics setting); with tessellation off the game draws no grown fur
+(Tyrant still sets the fur amount and masks, so the fur appears when tessellation is turned back on) and the MelonLoader log says so once. Set `_Length` too (the in-game editor
+and the app start it at `0.5` when nothing gives the fur any length). Bodies never made for fur have no fur mask, droop or
+wind tuned for them, so the look needs tuning in game: a fur mask PNG limits where it grows, and `_Length`, `_Droopage`,
+`_DroopDirection` and the wind settings shape it.
+
+**Starting from a species.** A look can start from a vanilla species: its iridescence (the species whose skins shimmer:
+Microraptor, Velociraptor, Oviraptor, Edmontosaurus, …, listed from the game's data, not fixed) or its fur (species with a
+fur map). Picking one (the app's **Start from a species…**, the in-game editor's **Preset** row, or
+`tyrant mod materials … --preset <species> --kind iridescence|fur`) fills the block, and everything stays editable:
+
+- **Iridescence:** `ramp` becomes `{ "species": "<id>" }`; `mask` too when the look is for that same species, and
+  `"everywhere"` on any other species (a mask is painted for its own species' UV layout, so on another body it would land
+  anywhere) or when the species' material has no mask. `scale`, `power` and `bias` are copied from that species' material,
+  `strength` from its first shimmering skin (a mutation's own where it differs; not known: a strength already there stays),
+  and iridescence is on.
+- **Fur:** `fur.grow` is `true`; `_Length`, `_Droopage`, `_FurWindStrength`, `_FurWindSpeed` and `_FurWindScale` are copied
+  from the species' material, `_DroopDirection` from its first furred skin's adult droop (kept within ±20). The fur mask stays.
+- Numbers are copied as plain numbers, kept within their ranges. **The game's images are never copied into a file**: the
+  datamining policy forbids sharing game files in mods, so a ramp or mask stays a reference to the species. In the game,
+  Tyrant loads that species' material in the background and copies the texture into one of its own, in memory only; until it
+  is ready (and if it cannot be read: one warning in the log) the animal shows the game's own ramp or mask. The app's preview
+  reads it from your game files. **Check** reports a `species` that is not a vanilla species of the data dump, is spelt
+  differently from the game's id, or whose material has no such texture.
 
 **Vanilla skins.** A file in `materials/vanilla-skins/` restyles one of the game's own skins in place: every animal wearing it
 changes, in every park, while the mod is on. The key is `"<species>/<skinName>"` (for example `Titanoboa/Alt 1`). A mod skin
@@ -246,17 +272,28 @@ Materials need Tyrant Framework 0.2.0 or newer.
 
 Tyrant Framework adds a small **Tyrant** button (a **T**) in two places:
 
-- **In the park:** click an animal (park or vivarium). The button is in the header of its info panel and opens the editor on
+- **In the park:** click an animal (park or vivarium). The button is at the bottom of its info panel, beside **Sell** (and **Move**), and opens the editor on
   that animal, on **This animal**.
 - **In the Nursery:** the button is right of the animation list (**Fidget**) and opens the editor on the preview animal, on
-  **Whole skin** (**Whole species** is there too). **This animal** needs a placed animal, so it is greyed out and the status
-  line says so: place the animal in the park to give it its own look. When you change the Nursery's skin, sex or species,
+  **Whole skin** (**Whole species** is there too). In its place, **This animal** is **Next created**: the look for the next
+  animal you incubate from the preview, of that species, skin and sex. **Save** arms it ("Saved for the next Allosaurus you
+  incubate."), in memory only: leaving the park before an incubation drops it. **Incubate** binds it to that very animal
+  ("Bound to <name>, incubating."): the binding is kept in this save's looks file, under `"incubating"` and the animal's
+  virtual id, so it survives saving and loading while the animal incubates or waits in the holder. When you place that
+  animal, the look becomes its own (`"animals"`, like any **This animal** look); no other animal ever takes it. The binding
+  remembers the species, skin and sex it was made for, and an animal of another kind placed under the same virtual id
+  (the game can hand an id out again) never gets it: the binding is dropped instead. A binding whose animal is gone
+  (placed, incubation cancelled, sold) is dropped when the park is saved, and one the loaded save does not have when the
+  park is loaded (bound, then left without saving). A look that
+  takes its mask from a map of one sex arms only for that sex; any other also goes to an incubation of the other sex when
+  nothing was armed for it. **Next created** needs a park that was saved once (the status line says so), and **Export mask
+  PNG** needs the placed animal. When you change the Nursery's skin, sex or species,
   the window follows the preview animal. Closing the Nursery is like the animal going away, except that unsaved
   changes stay in the window until you **Save** or **Reset** them.
 
 The window edits the animal it was opened on until you close it or open it from another animal. Drag it by its title,
 resize it from the corner (at least 300 × 360; it opens in the middle of the screen and keeps its size), and switch between **This animal**, **Whole skin**
-and **Whole species**. The tabs **Iridescence** and **Fur** hold the settings above as value boxes you can type into. If a
+and **Whole species**. The tabs **Iridescence** and **Fur** hold the settings above as value boxes you can type into; **Game's** (rainbow, mask, fur mask) saves `"game"`, so the game's own shows even over a whole skin's or species' choice. Each tab starts with a **Preset** row, `‹ None · Microraptor · … ›` and **Apply**: it starts the draft from that species (see **Starting from a species**), with no question asked over unsaved changes (**Reset** still goes back to the saved look); while the species' material still loads, the status line says *Loading …* and the preset applies once it is ready. **Rainbow** and **Mask** also offer **Species**, with `‹ name ›` to pick the species; **Export mask PNG** does not export a species' mask (it stays a reference). If a
 game update moves the panels and a button cannot be placed, the MelonLoader log says so once, with what it found there.
 
 - **Live preview:** every change shows at once on every animal it affects. It is a preview until **Save**; **Reset** goes

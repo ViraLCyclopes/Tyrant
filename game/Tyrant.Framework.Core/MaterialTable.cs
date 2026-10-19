@@ -178,6 +178,7 @@ namespace Tyrant.Framework.Core
                     fur ??= new FurMasks();
                     fur.Mask ??= f.Mask;
                     fur.InfantMask ??= f.InfantMask;
+                    fur.Grow ??= f.Grow; // a higher false beats a lower true: that layer does not force fur
                 }
                 var i = layer.Iridescence;
                 if (i == null) continue;
@@ -285,7 +286,7 @@ namespace Tyrant.Framework.Core
             }
             if (source.Fur is FurMasks fur)
             {
-                var masks = new FurMasks { Mask = CopyMask(fur.Mask, resolve), InfantMask = CopyMask(fur.InfantMask, resolve) };
+                var masks = new FurMasks { Mask = CopyMask(fur.Mask, resolve), InfantMask = CopyMask(fur.InfantMask, resolve), Grow = fur.Grow };
                 if (!masks.IsEmpty) copy.Fur = masks;
             }
             return copy;
@@ -297,6 +298,8 @@ namespace Tyrant.Framework.Core
             if (ramp.File == null)
                 return new RampSource
                 {
+                    Game = ramp.Game,
+                    Species = ramp.Species,
                     Stops = ramp.Stops == null ? null : new List<Rgb>(ramp.Stops),
                     ThinFilm = ramp.ThinFilm == null ? null : new ThinFilmSettings { Thickness = ramp.ThinFilm.Thickness, Index = ramp.ThinFilm.Index },
                 };
@@ -309,7 +312,7 @@ namespace Tyrant.Framework.Core
             if (mask == null) return null;
             var path = mask.File == null ? null : resolve(mask.File);
             if (mask.File != null && path == null) return null;
-            return new MaskSource { Everywhere = mask.Everywhere, File = path, From = mask.From, Channel = mask.Channel, Invert = mask.Invert };
+            return new MaskSource { Game = mask.Game, Species = mask.Species, Everywhere = mask.Everywhere, File = path, From = mask.From, Channel = mask.Channel, Invert = mask.Invert };
         }
 
         private static string? Resolve(string file, LoadedMod mod, List<string> messages)

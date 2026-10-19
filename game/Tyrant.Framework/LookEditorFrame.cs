@@ -61,7 +61,7 @@ namespace Tyrant.Framework
                 Traverse.Create(_info).Property("color").SetValue(Faint);
 
                 var scopes = TopRow(main, 44f, 24f);
-                var names = new[] { (LookScope.Animal, "This animal"), (LookScope.Skin, "Whole skin"), (LookScope.Species, "Whole species") };
+                var names = new[] { LookScope.Animal, LookScope.Skin, LookScope.Species }.Select(s => (s, EditorScopes.Label(EditorEntry.Park, s))).ToArray(); // Header names them for the entry
                 for (var i = 0; i < names.Length; i++)
                 {
                     var scope = names[i].Item1;
@@ -322,6 +322,7 @@ namespace Tyrant.Framework
                 var available = Available(pair.Key);
                 SetColor(pair.Value.Button.GetComponent(Image!), pair.Key == _scope && available ? Green : Idle);
                 SetInteractable(pair.Value.Button.GetComponent(Button!), available);
+                SetText(pair.Value.Label.transform, EditorScopes.Label(_entry, pair.Key)); // "Next created" in the Nursery
                 Traverse.Create(pair.Value.Label).Property("color").SetValue(available ? Color.white : Faint);
             }
             SetColor(_irisTab.Button.GetComponent(Image!), _onFurTab ? Idle : Green);
@@ -334,7 +335,7 @@ namespace Tyrant.Framework
             var editing = _draft != null && _animal != null;
             var dirty = _draft?.IsDirty == true;
             var why = editing ? EditorScopes.WhyNot(_entry, LookScope.Animal, _context, LookEditorModule.SaveName) : null; // "This animal" is off
-            SetText(_status.transform, _message.Length > 0 ? _message : editing ? "Saves to " + TargetName() + "." + (why == null ? "" : " " + why) : "");
+            SetText(_status.transform, _message.Length > 0 ? _message : editing ? "Saves to " + TargetName() + "." + (why == null ? "" : " " + why) + FurNote() : "");
             SetText(_save.Label.transform, dirty ? "Save *" : "Save");
             SetInteractable(_save.Button.GetComponent(Button!), dirty && _target != null);
             SetInteractable(_reset.Button.GetComponent(Button!), dirty);

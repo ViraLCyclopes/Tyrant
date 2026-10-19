@@ -118,6 +118,57 @@ public class ModMaterialsRpcTests
     }
 
     [Fact]
+    public async Task Species_presets_list_the_shimmering_and_furred_species_and_give_a_preset_block()
+    {
+        using var game = new FakeGame();
+        var (h, _, reader) = await WithSkinAndPrefab(game);
+        reader.PrefabMaterials = [new MaterialModel(Animal, [new TextureSlot("_AdultDiffuse", null, 1), new TextureSlot(Tyrant.Core.Mods.AnimalMaterial.RampSlot, null, 2)])
+        {
+            Floats = new Dictionary<string, float> { ["_IridescenceScale"] = -0.25f, ["_IridescencePower"] = -0.3f, ["_IridescenceBias"] = 1.3f },
+        }];
+
+        var lists = await h.Call("mods.speciesPresets", new { });
+        var shimmering = lists.GetProperty("iridescence");
+        Assert.Equal(1, shimmering.GetArrayLength()); // Carcharodontosaurus' Alt 1 male asset shimmers in the test dump
+        Assert.Equal("Carcharodontosaurus", shimmering[0].GetProperty("species").GetString());
+        Assert.Equal("Carcharodontosaurus", shimmering[0].GetProperty("name").GetString());
+        Assert.Equal(0, lists.GetProperty("fur").GetArrayLength());
+        Assert.Equal(JsonValueKind.Null, lists.GetProperty("problem").ValueKind);
+
+        var preset = await h.Call("mods.speciesPreset", new { species = "Carcharodontosaurus", kind = "iridescence", target = "Titanoboa" });
+        using var block = JsonDocument.Parse(preset.GetProperty("materialJson").GetString()!);
+        var i = block.RootElement.GetProperty("iridescence");
+        Assert.Equal("Carcharodontosaurus", i.GetProperty("ramp").GetProperty("species").GetString());
+        Assert.Equal("everywhere", i.GetProperty("mask").GetString()); // its material has no mask texture
+        Assert.Equal(-0.25, i.GetProperty("scale").GetDouble(), 3);
+        Assert.Equal(0.25, i.GetProperty("strength").GetProperty("normal").GetDouble(), 3);
+        Assert.Equal(0, i.GetProperty("strength").GetProperty("albino").GetDouble(), 3); // its albino data's own strength
+
+        var badKind = await Assert.ThrowsAnyAsync<Exception>(() => h.Call("mods.speciesPreset", new { species = "Carcharodontosaurus", kind = "scales" }));
+        Assert.Contains("\"iridescence\" or \"fur\"", badKind.Message);
+        var unknown = await Assert.ThrowsAnyAsync<Exception>(() => h.Call("mods.speciesPreset", new { species = "Nope", kind = "fur" }));
+        Assert.Contains("\"Nope\" is not a species in the game data", unknown.Message);
+    }
+
+    [Fact]
+    public async Task Material_info_carries_the_fur_block_below()
+    {
+        using var game = new FakeGame();
+        var (h, _, reader) = await WithSkinAndPrefab(game);
+        reader.PrefabMaterials = [CarchMaterial()];
+        var before = await h.Call("mods.get", new { id = "red-spot" });
+        await h.Call("mods.setMaterials", new { id = "red-spot", revision = Rev(before), species = "Carcharodontosaurus",
+            materials = "{\"" + Animal + "\":{\"fur\":{\"grow\":true,\"mask\":\"game\"}}}" });
+
+        var info = await h.Call("mods.materialInfo", new { id = "red-spot", skin = "blue" });
+        using var fur = JsonDocument.Parse(info.GetProperty("inheritedFurJson").GetString()!);
+        Assert.True(fur.RootElement.GetProperty("grow").GetBoolean());
+        Assert.Equal("game", fur.RootElement.GetProperty("mask").GetString());
+        var species = await h.Call("mods.materialInfo", new { id = "red-spot", species = "Carcharodontosaurus" });
+        Assert.Equal(JsonValueKind.Null, species.GetProperty("inheritedFurJson").ValueKind); // nothing lies below a species
+    }
+
+    [Fact]
     public async Task Restore_snapshot_brings_back_material_files()
     {
         using var game = new FakeGame();

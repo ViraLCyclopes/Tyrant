@@ -50,9 +50,14 @@ namespace Tyrant.Framework
         private static LookDraft? _draft;
         private static SaveTarget? _target;
         private static MaterialOverride? _below;
-        private static bool? _lastOn;
+        private static bool? _lastOn, _lastGrow;
+        private static string _furNote = ""; // the status line's fur note when Tick last looked
+        private static object? _previewShown; // the Nursery preview a Next created draft shows on (MaterialsModule.SetPreviewLook)
         private static List<object> _matching = new List<object>();
         private static readonly IridescenceSwitch Switch = new IridescenceSwitch();
+        private static readonly FurGrowSwitch FurSwitch = new FurGrowSwitch(); // remembers the length Grow fur seeded, for Off
+        private static readonly Dictionary<PresetKind, string?> PresetPick = new Dictionary<PresetKind, string?>(); // the Preset row's species per tab
+        private static (PresetKind Kind, string Species)? _presetWaiting; // Apply pressed while that species' material still loads
 
         /// <summary>Exported masks waiting for Save, outside every mod (UserData/Tyrant/Looks/.pending).</summary>
         private static StagedFiles? _stagedFiles;
@@ -69,6 +74,7 @@ namespace Tyrant.Framework
             _w = _prefs.CreateEntry("EditorW", 360f);
             _h = _prefs.CreateEntry("EditorH", 600f);
             Staged.Clean(); // exports an earlier run left unsaved
+            SpeciesLooks.Loaded += species => Safe(() => SpeciesLoaded(species))();
         }
 
         /// <summary>Once a frame in a park: the Tyrant buttons, an animal that went away, the Nursery's preview animal.</summary>
@@ -81,6 +87,13 @@ namespace Tyrant.Framework
             Place(); // keeps it on screen when the resolution changes
             if (_entry == EditorEntry.Nursery) FollowNursery(gui);
             else if (!Alive(_animal)) AnimalGone("The animal is gone; open the editor from another one.");
+            // The graphics setting can change while the window is open: the status line's fur note follows (a cached bool read).
+            var note = FurNote();
+            if (note != _furNote)
+            {
+                _furNote = note;
+                Footer();
+            }
         }
 
         /// <summary>The save in use changed (saved, or deleted): "This animal" may have become available or not.</summary>
@@ -222,6 +235,7 @@ namespace Tyrant.Framework
                 ClearLive(reapply: true);
                 _draft?.Reset();
                 Switch.Forget();
+                FurSwitch.Forget();
                 Staged.Discard();
                 then();
             }, keep);
@@ -268,7 +282,9 @@ namespace Tyrant.Framework
             _declined = null;
             _awaitPreview = false;
             _matching = new List<object>();
+            _presetWaiting = null;
             Switch.Forget();
+            FurSwitch.Forget();
             Staged.Discard();
         }
 
@@ -292,7 +308,9 @@ namespace Tyrant.Framework
         /// <summary>A draft of what is saved for the animal at the current scope, where it would save, and who it reaches.</summary>
         private static void NewDraft()
         {
+            _presetWaiting = null; // a preset waits for the draft it was asked for
             Switch.Forget();
+            FurSwitch.Forget();
             Staged.Discard(); // an export belongs to the draft it was made for
             if (_animal == null || _context == null)
             {
@@ -302,6 +320,7 @@ namespace Tyrant.Framework
             var c = _context;
             _draft = new LookDraft(_scope, SavedBlock(c));
             _lastOn = OwnOn();
+            _lastGrow = _draft.Current.Fur?.Grow;
             try
             {
                 _target = SaveTargets.For(_scope, c.Species, c.ModSkin, c.VanillaSkinKey, c.CustomSpeciesModId != null, c.CustomSpeciesModId, MaterialsModule.Table, c.MaterialName);
@@ -320,6 +339,33 @@ namespace Tyrant.Framework
             }
             _matching = MaterialsModule.AnimalsMatching(_scope, _animal).ToList(); // once per draft: a slider move only re-applies
             _below = MaterialsModule.Below(_animal, _scope); // never a higher layer: the draft's scope and above are left out
+            if (NextCreated) PushLive(keywords: true); // the look kept for the next animal is in memory only: the preview shows it from the draft
+        }
+
+        /// <summary>"This animal" in the Nursery: the look armed for the next animal incubated from the preview (<see cref="LookEditorModule.Pending"/>).</summary>
+        private static bool NextCreated => _entry == EditorEntry.Nursery && _scope == LookScope.Animal;
+
+        /// <summary>
+        /// The look armed for the next animal (Next created) was bound to an incubation just started. A clean draft of the same
+        /// species, skin and sex starts again (nothing is armed now); a draft with unsaved changes stays, and the status line says
+        /// its starting point is no longer waiting.
+        /// </summary>
+        public static void PendingTaken(string species, string? skinKey, string? sex, string? name)
+        {
+            if (!IsOpen || !NextCreated || _draft == null || _context == null) return;
+            if (_context.Species != species || !string.Equals(_context.SkinKey, skinKey, StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(_context.Sex, sex, StringComparison.Ordinal))
+                return;
+            var bound = EditorScopes.BoundTo(name, species);
+            if (_draft.IsDirty)
+            {
+                _message = bound + " Your changes here are not armed for the next one until you Save them.";
+                Footer();
+                return;
+            }
+            NewDraft();
+            _message = bound;
+            Rebuild();
         }
 
         /// <summary>The block saved for this scope (files full): the animal's look, or the table's own entry of the skin or species.</summary>
@@ -328,6 +374,8 @@ namespace Tyrant.Framework
             switch (_scope)
             {
                 case LookScope.Animal:
+                    if (NextCreated) // files are full already
+                        return LookEditorModule.Pending.Get(c.Species, c.SkinKey, c.Sex) is { } next && next.TryGetValue(c.MaterialName, out var pending) ? pending : null;
                     var look = c.PersistentId is ulong id ? LookEditorModule.Looks?.Get(id) : null;
                     return look != null && look.TryGetValue(c.MaterialName, out var block) ? MaterialTable.WithFullPaths(block, FrameworkMod.TyrantDirectory) : null;
                 case LookScope.Skin:
@@ -346,8 +394,10 @@ namespace Tyrant.Framework
         {
             if (_draft == null || _context == null) return;
             var on = OwnOn();
-            var keywords = on != _lastOn; // the shader variant changes only when iridescence turns on or off
+            var grow = _draft.Current.Fur?.Grow;
+            var keywords = on != _lastOn || grow != _lastGrow; // the shader variant changes only when iridescence or grown fur turns on or off
             _lastOn = on;
+            _lastGrow = grow;
             PushLive(keywords);
             if (rebuild) Rebuild();
             else Footer();
@@ -362,6 +412,14 @@ namespace Tyrant.Framework
 
         private static void PushLive(bool keywords)
         {
+            if (NextCreated)
+            {
+                if (_draft == null || _context == null || _animal == null || _detached || !Alive(_animal)) return;
+                MaterialsModule.SetPreviewLook(_animal, _context.MaterialName, _draft.Current); // clean too: what was saved waits in memory only
+                _previewShown = _animal;
+                MaterialsModule.Reapply(_animal, keywords);
+                return;
+            }
             if (_draft == null || _context == null || !(_context.KeyFor(_scope) is string key)) return;
             MaterialsModule.SetLive(_scope, key, _context.MaterialName, _draft.IsDirty ? _draft.Current : null); // a clean draft is the saved look
             foreach (var animal in _matching)
@@ -371,6 +429,12 @@ namespace Tyrant.Framework
         /// <summary>Takes the draft's live layer away (the saved look shows again).</summary>
         private static void ClearLive(bool reapply)
         {
+            if (_previewShown is object shownOn) // whatever the scope or entry is by now
+            {
+                _previewShown = null;
+                MaterialsModule.SetPreviewLook(null, null, null);
+                if (reapply && Alive(shownOn)) MaterialsModule.Reapply(shownOn, keywords: true);
+            }
             if (_draft == null || _context == null || !(_context.KeyFor(_scope) is string key)) return;
             MaterialsModule.SetLive(_scope, key, _context.MaterialName, null);
             if (!reapply || !_draft.IsDirty) return;
@@ -399,7 +463,19 @@ namespace Tyrant.Framework
             string where;
             try
             {
-                if (_target.Kind == SaveTargetKind.AnimalLooks)
+                if (NextCreated)
+                {
+                    // Armed in memory for the next incubation from this preview: that animal is bound to it in this save's looks file.
+                    if (!LookEditorModule.LooksWritable)
+                    {
+                        _message = "Not saved: this save's looks file cannot be written (save the park once, or see the MelonLoader log).";
+                        Footer();
+                        return;
+                    }
+                    LookEditorModule.Pending.Set(c.Species, c.SkinKey, c.Sex, c.MaterialName, current);
+                    where = TargetName();
+                }
+                else if (_target.Kind == SaveTargetKind.AnimalLooks)
                 {
                     if (!(c.PersistentId is ulong id) || LookEditorModule.Looks == null || !LookEditorModule.LooksWritable)
                     {
@@ -468,6 +544,7 @@ namespace Tyrant.Framework
                     ? $"Saved into {VanillaLooks.Name}, but it is turned off or broken, so the look does not show (see the MelonLoader log)."
                     : "Saved to " + where + ".")
                 + (missing.Count == 0 ? "" : " Left out (missing): " + string.Join(", ", missing.Select(Path.GetFileName)) + ".");
+            if (NextCreated) _message = EditorScopes.SavedForNext(c.Species);
             FrameworkMod.Log.Msg($"Look of {c.MaterialName} ({_scope}) saved to {where}.");
             Rebuild();
         }
@@ -484,8 +561,10 @@ namespace Tyrant.Framework
         private static void Reset()
         {
             if (_draft == null) return;
+            _presetWaiting = null;
             _draft.Reset();
             Switch.Forget();
+            FurSwitch.Forget();
             Staged.Discard();
             _message = "";
             Changed(rebuild: true);
@@ -520,8 +599,15 @@ namespace Tyrant.Framework
                 Footer();
                 return;
             }
-            var texture = MaterialsModule.EffectiveMask(_animal, fur: _onFurTab, infant: false);
-            if (texture == null)
+            var texture = MaterialsModule.EffectiveMask(_animal, fur: _onFurTab, infant: false, out var white, out var taken);
+            // The game's images never go into files: a species' mask stays a reference (the draft's, or the one the animal wears).
+            if (!_onFurTab && (taken ?? (_draft.Current.Iridescence?.Mask ?? _below?.Iridescence?.Mask)?.Species) is string species)
+            {
+                _message = SpeciesLooks.NameOf(species) + "'s mask stays a reference and is not exported; pick Channel or PNG to make one of your own.";
+                Footer();
+                return;
+            }
+            if (texture == null && white == null)
             {
                 _message = _onFurTab ? "This animal has no fur mask to export." : "This animal shows no iridescence mask to export.";
                 Footer();
@@ -530,7 +616,9 @@ namespace Tyrant.Framework
             var folder = TargetFolder(create: false); // Vanilla Looks is made by Save, not by an export
             if (folder == null)
             {
-                _message = "There is nowhere to export this look's mask.";
+                _message = NextCreated
+                    ? "Export mask PNG needs a placed animal: Save, incubate and place the animal, then export from its own panel."
+                    : "There is nowhere to export this look's mask.";
                 Footer();
                 return;
             }
@@ -538,7 +626,8 @@ namespace Tyrant.Framework
             var file = Staged.Stage(Path.Combine(folder, _onFurTab ? LookEditing.FurMaskFile : LookEditing.IridescenceMaskFile));
             try
             {
-                WriteGreyPng(texture, file);
+                if (white is Vector2Int size) WriteWhitePng(size, file); // grown fur over the whole body: a white mask to paint on
+                else WriteGreyPng(texture!, file);
             }
             catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
             {
@@ -550,6 +639,24 @@ namespace Tyrant.Framework
             else _draft.SetMask(new MaskSource { File = file });
             _message = "Exported " + (_onFurTab ? LookEditing.FurMaskFile : LookEditing.IridescenceMaskFile) + "; Save makes it the default, Reset drops it.";
             Changed(rebuild: true);
+        }
+
+        /// <summary>An all-white PNG of this size (fur everywhere), to paint the fur's limits on.</summary>
+        private static void WriteWhitePng(Vector2Int size, string file)
+        {
+            var white = new Texture2D(size.x, size.y, TextureFormat.RGBA32, false, true);
+            try
+            {
+                var pixels = new byte[size.x * size.y * 4];
+                for (var i = 0; i < pixels.Length; i++) pixels[i] = 255;
+                white.SetPixelData(pixels, 0);
+                white.Apply(false, false);
+                File.WriteAllBytes(file, white.EncodeToPNG());
+            }
+            finally
+            {
+                UnityEngine.Object.Destroy(white);
+            }
         }
 
         /// <summary>The texture's red channel as a grey PNG (read like a mask made from a skin map, so compressed maps read too).</summary>
@@ -586,7 +693,7 @@ namespace Tyrant.Framework
         /// <summary>The folder exports go to and PNGs are offered from: the owner's material folder, or this animal's folder under Looks.</summary>
         private static string? TargetFolder(bool create)
         {
-            if (_target == null || _context == null) return null;
+            if (_target == null || _context == null || NextCreated) return null; // the next animal has no folder until it exists
             if (_target.Kind == SaveTargetKind.AnimalLooks)
             {
                 var folder = AnimalLooks.FolderFor(FrameworkMod.TyrantDirectory, LookEditorModule.SaveName);
@@ -600,6 +707,7 @@ namespace Tyrant.Framework
         private static string TargetName()
         {
             if (_target == null) return "nowhere";
+            if (NextCreated && _context != null) return $"the next {_context.Species} you incubate";
             switch (_target.Kind)
             {
                 case SaveTargetKind.AnimalLooks:

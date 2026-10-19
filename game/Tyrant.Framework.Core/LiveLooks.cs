@@ -8,10 +8,11 @@ namespace Tyrant.Framework.Core
     /// <summary>
     /// What the in-game editor knows about one animal: its species, its skin (a mod skin, or a vanilla skin's
     /// "&lt;species&gt;/&lt;skin name&gt;"), its variant (normal, albino, melanistic or leucistic), its persistent id (null when it has
-    /// none, like the Nursery preview), the material Tyrant changes and where the skin comes from ("vanilla" or the mod's name).
+    /// none, like the Nursery preview), the material Tyrant changes, where the skin comes from ("vanilla" or the mod's name) and
+    /// its sex ("male", "female"; null when it cannot be read).
     /// </summary>
     public sealed record AnimalContext(string Species, (string ModId, string SkinId)? ModSkin, string? VanillaSkinKey, string Variant,
-        ulong? PersistentId, string MaterialName, string Source, string? CustomSpeciesModId)
+        ulong? PersistentId, string MaterialName, string Source, string? CustomSpeciesModId, string? Sex = null)
     {
         /// <summary>The skin's key: "&lt;mod&gt;/&lt;skin&gt;" for a mod skin, else the vanilla skin's key.</summary>
         public string? SkinKey => ModSkin is { } skin ? skin.ModId + "/" + skin.SkinId : VanillaSkinKey;

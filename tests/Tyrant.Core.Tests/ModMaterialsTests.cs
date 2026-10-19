@@ -38,6 +38,26 @@ public class ModMaterialsTests
     }
 
     [Fact]
+    public void Fur_grow_is_saved_and_survives_removing_the_fur_mask()
+    {
+        var (game, ws, mod) = ModEditTests.Setup();
+        using var _ = game;
+        mod = ModEditTests.WithSkins(ws, mod);
+        var png = ModEditTests.Png(Path.Combine(ws.Dir, "src"));
+
+        mod.SetSkinMaterials("blue", """{"Titanoboa":{"fur":{"grow":true}}}""");
+        Assert.True(ModProject.Open(ws, mod.Id).SkinMaterial("blue", "Titanoboa")!.Fur!.Grow);
+        Assert.Contains("\"grow\": true", File.ReadAllText(Path.Combine(mod.Dir, "materials", "skins", "blue", MaterialFolders.FileName)));
+
+        mod.SetMaterialFile("blue", null, "Titanoboa", "furMask", png);
+        mod.SetMaterialFile("blue", null, "Titanoboa", "furMask", null);
+        var fur = ModProject.Open(ws, mod.Id).SkinMaterial("blue", "Titanoboa")!.Fur!;
+        Assert.True(fur.Grow); // the block is not empty: grow stays
+        Assert.Null(fur.Mask);
+        Assert.Equal(TyrantErrorCode.ModInvalid, Assert.Throws<TyrantException>(() => mod.SetSkinMaterials("blue", """{"Titanoboa":{"fur":{"grow":1}}}""")).Code);
+    }
+
+    [Fact]
     public void Skin_materials_are_saved_to_their_folder_not_mod_json()
     {
         var (game, ws, mod) = ModEditTests.Setup();
@@ -358,6 +378,60 @@ public class ModMaterialsTests
         Assert.True(result.On);
         var mask = ImageResult.FromMemory(File.ReadAllBytes(result.MaskFile!), ColorComponents.RedGreenBlueAlpha);
         Assert.Equal((90, 90, 90), (mask.Data[0], mask.Data[1], mask.Data[2]));
+    }
+
+    [Fact]
+    public void A_game_ramp_or_mask_previews_the_game_material_s_own_over_a_lower_layer()
+    {
+        var (game, ws, mod) = ModEditTests.Setup();
+        using var _ = game;
+        mod = ModEditTests.WithSkins(ws, mod);
+        mod.Manifest.SpeciesMaterials["Carcharodontosaurus"] = MaterialOverrides.Parse(
+            Json.Parse("""{"Carch":{"iridescence":{"ramp":{"stops":["#ff0000","#0000ff"]},"mask":"everywhere"}}}"""), "x", false)!;
+        var outDir = Path.Combine(ws.Dir, "preview");
+        var rampPng = ModEditTests.Png(Path.Combine(ws.Dir, "game"), "ramp.png");
+        var maskPng = ModEditTests.Png(Path.Combine(ws.Dir, "game"), "mask.png");
+        var rampAsset = new AssetRecord("m.bundle", 7, "Texture2D", "Ramp", null, "feed", null);
+        var maskAsset = new AssetRecord("m.bundle", 8, "Texture2D", "Mask", null, "beef", null);
+        var gameMaterial = new AnimalMaterial("Carch", new Dictionary<string, float>(), new Dictionary<string, float[]>(), rampAsset, maskAsset);
+        var draft = MaterialOverrides.Parse(Json.Parse("""{"Carch":{"iridescence":{"strength":0.4,"ramp":"game","mask":"game"}}}"""), "x", true)!["Carch"];
+
+        var result = MaterialPreview.Build(mod, "blue", null, "Carch", draft, "male", gameMaterial, outDir, a => a == rampAsset ? rampPng : maskPng);
+
+        Assert.True(result.On);
+        Assert.Equal(rampPng, result.RampFile);
+        Assert.Equal(maskPng, result.MaskFile);
+        mod.SetSkinMaterials("blue", """{"Carch":{"iridescence":{"ramp":"game"},"fur":{"mask":"game","infantMask":"game"}}}"""); // saved and read back
+        Assert.True(ModProject.Open(ws, mod.Id).SkinMaterial("blue", "Carch")!.Fur!.InfantMask!.Game);
+    }
+
+    [Fact]
+    public void A_species_ramp_or_mask_previews_that_species_material_s_own()
+    {
+        var (game, ws, mod) = ModEditTests.Setup();
+        using var _ = game;
+        mod = ModEditTests.WithSkins(ws, mod);
+        var outDir = Path.Combine(ws.Dir, "preview");
+        var ownRamp = ModEditTests.Png(Path.Combine(ws.Dir, "game"), "own-ramp.png");
+        var microRamp = ModEditTests.Png(Path.Combine(ws.Dir, "game"), "micro-ramp.png");
+        var microMask = ModEditTests.Png(Path.Combine(ws.Dir, "game"), "micro-mask.png");
+        var ownAsset = new AssetRecord("m.bundle", 7, "Texture2D", "Ramp", null, "feed", null);
+        var rampAsset = new AssetRecord("micro.bundle", 1, "Texture2D", "MicroRamp", null, "aaaa", null);
+        var maskAsset = new AssetRecord("micro.bundle", 2, "Texture2D", "MicroMask", null, "bbbb", null);
+        var gameMaterial = new AnimalMaterial("Carch", new Dictionary<string, float>(), new Dictionary<string, float[]>(), ownAsset, null);
+        var micro = new AnimalMaterial("Microraptor", new Dictionary<string, float>(), new Dictionary<string, float[]>(), rampAsset, maskAsset);
+        var draft = MaterialOverrides.Parse(Json.Parse("""{"Carch":{"iridescence":{"strength":0.4,"ramp":{"species":"Microraptor"},"mask":{"species":"Microraptor"}}}}"""), "x", true)!["Carch"];
+        string? Export(AssetRecord a) => a == rampAsset ? microRamp : a == maskAsset ? microMask : a == ownAsset ? ownRamp : null;
+
+        var result = MaterialPreview.Build(mod, "blue", null, "Carch", draft, "male", gameMaterial, outDir, Export,
+            speciesMaterial: id => id == "Microraptor" ? micro : null);
+
+        Assert.True(result.On);
+        Assert.Equal(microRamp, result.RampFile);
+        Assert.Equal(microMask, result.MaskFile);
+        var unknown = MaterialOverrides.Parse(Json.Parse("""{"Carch":{"iridescence":{"strength":0.4,"ramp":{"species":"Nope"}}}}"""), "x", true)!["Carch"];
+        var fallback = MaterialPreview.Build(mod, "blue", null, "Carch", unknown, "male", gameMaterial, outDir, Export, speciesMaterial: _ => null);
+        Assert.Equal(ownRamp, fallback.RampFile); // as in the game: a species that cannot be read leaves the material's own
     }
 
     [Fact]

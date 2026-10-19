@@ -313,13 +313,13 @@ Needs a data dump, an asset index and the game. Steps marked **(game)** start th
 
 Needs the game and a Tyrant Framework installed from this build. Steps marked **(app)** are in the Tyrant app.
 
-140. **(game)** Open a park with Titanoboas. Click one: its info panel has a **T** button in its header. Click it: a window opens
+140. **(game)** Open a park with Titanoboas. Click one: its info panel has a **T** button at the bottom, beside **Sell** and **Move**, clear of the panel's close X (the same in the vivarium's panel). Click it: a window opens
      on that animal, on **This animal**. Drag it by its title, resize it from the corner (it stops at 300 × 360). The **T**
      again closes it. Close and reopen the park, open it again: it is where you left it.
      - A vivarium animal's panel has the **T** too, and opens the editor on that animal.
      - **Nursery:** pick Titanoboa. A **T** sits right of the animation list (**Fidget**); click it: the window opens on the
-       preview animal, on **Whole skin**. **This animal** is greyed out and the status line says *Place the animal in the park
-       to give it its own look.* Change the sex: the window stays on the same look. Change the skin with an unsaved change:
+       preview animal, on **Whole skin**. The first scope button reads **Next created**; in a park never saved it is greyed
+       out and the status line says *Save the park once to give a new animal its own look.* Change the sex: the window stays on the same look. Change the skin with an unsaved change:
        it asks first; **Discard** follows the new skin, **Keep editing** stays on the old look until **Save** or **Reset**,
        then follows. Close the Nursery (also with Esc, or another management tab): the window says the Nursery was
        closed; with an unsaved change it says the changes are kept, and **Save** still writes the skin's look.
@@ -357,3 +357,49 @@ Needs the game and a Tyrant Framework installed from this build. Steps marked **
 150. **(app)** **Uninstall from game**: the dialog asks first and says the looks and masks are kept; afterwards `UserData/Tyrant/Looks`
      and `UserData/Tyrant/Masks` are still there. **(game)** Remove Tyrant:
      the park loads vanilla, with no error.
+151. **(game)** Grow fur: with the game's Fur graphics setting on (tessellation), open the Nursery on Ouranosaurus, click
+     **T**, choose **Whole species**, then **Fur** → **Grow fur** **On**: fur appears over the whole body at once, and
+     **Length** shows 0.5. Change **Length** and **Droop**: the fur follows. **Off**: the bare skin is back. **On** again,
+     **Save**, close the Nursery and place an Ouranosaurus: it has fur; the species' `materials.json` (in **Vanilla Looks**
+     when no mod set that species) has `"fur": { "grow": true }`. Turn the Fur graphics setting's
+     tessellation off: the fur goes, the status line in the editor says grown fur needs tessellated fur, and
+     `Latest.log` has one warning about it.
+152. **(game)** Next created: save the park, open the Nursery on an Allosaurus (male), click **T**, choose **Next created**
+     (the status line says it saves to the next Allosaurus you incubate). Change the iridescence strength or a fur setting:
+     the preview shows it. **Save**: the status line says *Saved for the next Allosaurus you incubate.* and the preview keeps
+     the look.
+     - Have an older Allosaurus already waiting in the holder; place it now: it keeps the vanilla look.
+     - **Incubate**: the status line says *Bound to <name>, incubating.*, `Latest.log` says the look is bound, and
+       `UserData/Tyrant/Looks/<save>.json` has an `"incubating"` entry. The window's draft starts again empty.
+     - Incubate a second male Allosaurus: nothing is bound to it.
+     - Save the park and load it again while the first one still incubates (or waits in the holder): the `"incubating"`
+       entry is still there.
+     - Place the first one: it shows the look, `Latest.log` says the look went to the placed animal, and the file has it
+       under `"animals"` (its id); after the next park save it is no longer under `"incubating"`. Place the second one:
+       vanilla look.
+     - Bind a look, then quit to the menu without saving and load the save again: the `"incubating"` entry is gone (the
+       log says so), and the next animal incubated and placed has the vanilla look, whatever its species.
+     - Arm a look again and leave the park without incubating: back in the park, an incubation gets nothing (an armed look
+       is never saved). Bind one, then cancel or sell that animal from the holder and save: the `"incubating"` entry goes.
+153. **(game)** Presets: open the Nursery on an Ouranosaurus, click **T**, **Whole species**, tab **Iridescence**. The **Preset** row
+     lists the shimmering species by name (Microraptor, Velociraptor, Oviraptor, Edmontosaurus, … from the game's data). Pick
+     **Microraptor** and **Apply**: the preview shimmers with Microraptor's blue sheen (on a first use the status line may say
+     *Loading Microraptor's look…* for a moment, then it applies), **Rainbow** shows **Species** ‹ Microraptor › and **Mask**
+     **Everywhere** (Microraptor's mask is painted for Microraptor's body),
+     and the shaping shows Microraptor's numbers. Move **Strength**: it follows. **Save**, close the Nursery, place an
+     Ouranosaurus: it shimmers. The species' `materials.json` has `"ramp": { "species": "Microraptor" }` and
+     `"mask": "everywhere"`, and no image of Microraptor's is in the mod folder. On a Microraptor skin the same preset keeps
+     `"mask": { "species": "Microraptor" }`. Restart the game and open the Nursery on Ouranosaurus without opening the
+     editor: the preview shimmers once Tyrant's copy is ready (for a moment it shows the game's own). Wait in the park with no
+     Microraptor for a minute: the sheen stays (Tyrant's copy). `Latest.log` has one line saying Microraptor's look is ready.
+     - Tab **Fur**, on an Allosaurus (tessellated fur on): pick a furred species in **Preset**, **Apply**: **Grow fur** is on,
+       **Length**, **Droop**, wind and droop direction show that species' values; the fur mask is unchanged. Tweak **Length**,
+       **Save**: a placed Allosaurus has the fur.
+     - **Reset** after an **Apply** goes back to the saved look. **Export mask PNG** with a species mask says it stays a reference.
+     - Fur tab on a furless species with **Grow fur** on and no fur mask: **Export mask PNG** writes an all-white
+       `fur-mask.png` the size of the animal's diffuse map; the fur stays (paint black where it should not grow).
+154. **(app)** Material card of a skin: **Start from a species…** → Microraptor fills **Colours** and **Where** with **Species**
+     (Microraptor), the shaping and strength; the 3D view shimmers with Microraptor's ramp. **Check** is clean; edit the
+     species' id in `materials.json` to `Microraptorr`: **Check** reports it is not in the game data. In the **Fur** group,
+     **Start from a species…** ticks **Grow fur** and fills the fur settings. CLI:
+     `tyrant mod materials <mod> <skin> --preset Microraptor --kind iridescence`, then `--show`: the same block.

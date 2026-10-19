@@ -90,6 +90,25 @@ public class LookDraftTests
     }
 
     [Fact]
+    public void Fur_grow_is_kept_beside_the_masks_and_null_drops_it()
+    {
+        var draft = new LookDraft(LookScope.Animal, null);
+        draft.SetFurGrow(true);
+        Assert.True(draft.Current.Fur!.Grow);
+        Assert.True(draft.IsDirty);
+
+        draft.SetFurMask(new MaskSource { File = "fur.png" }, false);
+        draft.SetFurMask(null, false);
+        Assert.True(draft.Current.Fur!.Grow); // removing the mask keeps grow
+
+        draft.SetFurGrow(false);
+        Assert.False(draft.Current.Fur!.Grow);
+        draft.SetFurGrow(null);
+        Assert.Null(draft.Current.Fur);
+        Assert.False(draft.IsDirty);
+    }
+
+    [Fact]
     public void Iridescence_off_writes_zero_strength_and_on_restores_it()
     {
         var draft = new LookDraft(LookScope.Skin, Strength(0.4f, 0.2f));

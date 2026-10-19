@@ -74,6 +74,39 @@ public class MaterialCheckTests
     }
 
     [Fact]
+    public void The_game_s_own_ramp_mask_and_fur_masks_check_clean()
+    {
+        using var s = Make();
+        var skin = Skin(s, new IridescenceSettings { Strength = new VariantNumbers { Normal = 0.3f }, Ramp = new RampSource { Game = true }, Mask = new MaskSource { Game = true } });
+        skin.Materials![Animal].Fur = new FurMasks { Mask = new MaskSource { Game = true }, InfantMask = new MaskSource { Game = true } };
+        s.Mod.Save();
+
+        Assert.Empty(s.Check().Errors);
+    }
+
+    [Fact]
+    public void A_species_reference_must_name_a_dump_species_whose_material_has_that_texture()
+    {
+        using var s = Make(baseRamp: true); // Carcharodontosaurus' material has a ramp and no mask
+        Skin(s, new IridescenceSettings
+        {
+            Strength = new VariantNumbers { Normal = 0.3f },
+            Ramp = new RampSource { Species = "Carcharodontosaurus" },
+            Mask = new MaskSource { Species = "Carcharodontosaurus" },
+        });
+        s.Mod.Manifest.SpeciesMaterials["Carcharodontosaurus"] = new() { [Animal] = Iridescent(new IridescenceSettings { Ramp = new RampSource { Species = "Microraptor" } }) };
+        s.Mod.Save();
+
+        var result = s.Check();
+
+        Assert.DoesNotContain(result.Errors, e => e.Contains("iridescence ramp") && e.Contains("red-spot-carcharo/blue"));
+        Assert.Contains("red-spot-carcharo/blue iridescence mask: Carcharodontosaurus's material has no iridescence mask to take.", result.Errors);
+        Assert.Contains("Carcharodontosaurus iridescence ramp: species \"Microraptor\" is not in the game data.", result.Errors);
+        var noDump = new ModChecker(_ => (4, 4)).Check(s.Mod, s.Index, species: null);
+        Assert.Contains("Carcharodontosaurus iridescence ramp: species \"Microraptor\" was not checked (there is no data dump).", noDump.Warnings);
+    }
+
+    [Fact]
     public void A_ramp_outside_the_mod_uses_the_usual_wording()
     {
         using var s = Make();

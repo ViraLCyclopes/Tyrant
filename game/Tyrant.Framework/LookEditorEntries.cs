@@ -25,6 +25,7 @@ namespace Tyrant.Framework
 
         private static GameObject? _nurseryButton;
         private static readonly Dictionary<string, GameObject> PanelButtons = new Dictionary<string, GameObject>(StringComparer.Ordinal);
+        private static readonly Dictionary<string, int> PanelShown = new Dictionary<string, int>(StringComparer.Ordinal); // actions shown when placed beside them (ActionsShown)
         private static readonly HashSet<string> Logged = new HashSet<string>(StringComparer.Ordinal); // placement news, once a game run
         private static readonly HashSet<string> Broken = new HashSet<string>(StringComparer.Ordinal); // placements that threw: not tried again this park
         private static readonly Dictionary<(Type, string), MemberInfo?> Members = new Dictionary<(Type, string), MemberInfo?>();
@@ -51,10 +52,15 @@ namespace Tyrant.Framework
                 _nurseryButton = TryPlace("nursery", nursery, () => NurseryButton(nursery));
             foreach (var field in Panels)
             {
-                if (PanelButtons.TryGetValue(field, out var placed) && placed != null) continue;
-                if (Read(gui, field, PanelName(field) + " has no Tyrant button.") is Component panel && panel != null && panel.gameObject.activeInHierarchy
-                    && TryPlace(field, panel, () => PanelButton(panel, field)) is GameObject button)
-                    PanelButtons[field] = button;
+                if (!(Read(gui, field, PanelName(field) + " has no Tyrant button.") is Component panel) || panel == null || !panel.gameObject.activeInHierarchy) continue;
+                if (PanelButtons.TryGetValue(field, out var placed) && placed != null)
+                {
+                    // Placed beside the actions (no layout group): an action shown or hidden since (Sell on a dead animal) moves it.
+                    if (PanelShown.TryGetValue(field, out var shown) && shown != ActionsShown(panel))
+                        TryPlace(field, panel, () => Arrange((RectTransform)placed.transform, panel, field));
+                    continue;
+                }
+                if (TryPlace(field, panel, () => PanelButton(panel, field)) is GameObject button) PanelButtons[field] = button;
             }
         }
 
@@ -87,6 +93,7 @@ namespace Tyrant.Framework
                 if (button != null) UnityEngine.Object.Destroy(button);
             _nurseryButton = null;
             PanelButtons.Clear();
+            PanelShown.Clear();
             Broken.Clear();
             _nextButtonTry = 0f;
         }
@@ -109,31 +116,134 @@ namespace Tyrant.Framework
             return button.gameObject;
         }
 
-        /// <summary>In an info panel's header, right of its next-animal arrow (left of the previous one when that runs off the panel).</summary>
+        /// <summary>The bottom row's buttons of the info panels ("Actions Panel"): AnimalInfomenuManager's, VivariumAnimalInfomenuManager's sellButton.</summary>
+        private static readonly string[] Actions = { "moveButton", "sellButton" };
+
+        /// <summary>
+        /// At the bottom of an info panel, in its actions row (move, sell): the row's last child when a layout group places them,
+        /// else right of the right-most action (left of the left-most when that runs off the panel). Without that row, the panel's
+        /// bottom-right corner, 8 px in. The header's previous/next arrow is the template, so it looks like the panel's own
+        /// small buttons (the header's close X covered it there).
+        /// </summary>
         private static GameObject? PanelButton(Component panel, string field)
         {
-            var next = Read(panel, "nextButton") as Component;
-            var previous = Read(panel, "previousButton") as Component;
-            var anchor = next != null ? next : previous;
-            var where = PanelName(field);
-            if (anchor == null || !(anchor.transform is RectTransform rect) || rect.parent == null)
-            {
-                Once(field, true, () => $"{where}'s header buttons were not found (game updated?); it has no Tyrant button. Panel: " + Hierarchy(panel.transform, 1));
-                return null;
-            }
-            var button = IconButton(anchor.gameObject, rect.parent, Safe(() => OpenOnPanel(panel)));
-            var size = rect.rect.height > 1f ? rect.rect.height : 28f;
-            var laidOut = PlaceBeside(button, rect, size, right: anchor == next);
-            var side = anchor == next ? "right of" : "left of";
-            if (!laidOut && anchor == next && previous != null && previous.transform is RectTransform left && left.parent == rect.parent
-                && panel.transform is RectTransform bounds && !Inside(button, bounds))
-            {
-                PlaceBeside(button, left, size, right: false); // the panel's edge is right of the arrow
-                (rect, side) = (left, "left of");
-            }
+            var template = Read(panel, "nextButton") as Component ?? Read(panel, "previousButton") as Component;
+            var actions = ActionRow(panel);
+            var button = IconButton(template != null ? template.gameObject : null, actions.Count > 0 ? actions[0].parent : panel.transform, Safe(() => OpenOnPanel(panel)));
+            Arrange(button, panel, field);
             button.gameObject.SetActive(true);
-            Once(field + "-placed", false, $"{where} has the Tyrant looks button {side} {rect.name} (in {rect.parent.name}{(laidOut ? ", laid out by its group" : "")}).");
             return button.gameObject;
+        }
+
+        /// <summary>The panel's action buttons that share the first one's parent (the bottom row); empty when there are none.</summary>
+        private static List<RectTransform> ActionRow(Component panel)
+        {
+            var actions = Actions.Select(name => Read(panel, name) as Component)
+                .Select(c => c != null ? c.transform as RectTransform : null).Where(r => r != null && r.parent != null).Select(r => r!).ToList();
+            var row = actions.Count > 0 ? actions[0].parent : null;
+            return actions.Where(a => a.parent == row).ToList();
+        }
+
+        /// <summary>
+        /// Which actions of the row show, to tell when the button needs placing again: bit i set when the row's i-th action is
+        /// active, and the row's size above bit 16. Read as <see cref="ActionRow"/> does, without a list or a string (it runs a
+        /// few times a second per panel).
+        /// </summary>
+        private static int ActionsShown(Component panel)
+        {
+            Transform? row = null;
+            int count = 0, shown = 0;
+            foreach (var name in Actions)
+            {
+                if (!(Read(panel, name) is Component action) || action == null || !(action.transform is RectTransform rect) || rect.parent == null) continue;
+                if (row == null) row = rect.parent;
+                else if (rect.parent != row) continue;
+                if (rect.gameObject.activeSelf) shown |= 1 << count;
+                count++;
+            }
+            return shown | count << 16;
+        }
+
+        /// <summary>Places the panel's button (see <see cref="PanelButton"/>); a placement beside the actions remembers which showed.</summary>
+        private static GameObject? Arrange(RectTransform button, Component panel, string field)
+        {
+            var where = PanelName(field);
+            var actions = ActionRow(panel);
+            var row = actions.Count > 0 ? actions[0].parent : null;
+            PanelShown.Remove(field);
+            string place;
+            if (row == null)
+            {
+                Once(field, true, () => $"{where}'s action buttons were not found (game updated?); its Tyrant button sits in its bottom-right corner. Panel: " + Hierarchy(panel.transform, 1));
+                Corner(button, panel.transform, 28f);
+                place = "in the bottom-right corner of " + panel.name;
+            }
+            else
+            {
+                var height = actions.Max(a => a.rect.height);
+                var size = height > 1f ? height : 28f;
+                if (HasLayoutGroup(row))
+                {
+                    button.SetParent(row, false);
+                    button.localScale = actions[0].localScale;
+                    button.localRotation = Quaternion.identity;
+                    button.SetAsLastSibling();
+                    SizeInLayout(button, size);
+                    place = $"at the end of {row.name} (laid out by its group)";
+                }
+                else
+                {
+                    // A hidden action (Sell on a dead animal) does not count: the T would sit in the gap it leaves.
+                    var shown = actions.Where(a => a.gameObject.activeSelf).ToList();
+                    if (shown.Count == 0) shown = actions;
+                    var rightMost = shown.OrderByDescending(a => Edge(a, right: true)).First();
+                    PlaceBeside(button, rightMost, size, right: true);
+                    place = $"right of {rightMost.name} (in {row.name})";
+                    if (panel.transform is RectTransform bounds && !Inside(button, bounds))
+                    {
+                        var leftMost = shown.OrderBy(a => Edge(a, right: false)).First();
+                        PlaceBeside(button, leftMost, size, right: false); // the panel's edge is right of the row
+                        place = $"left of {leftMost.name} (in {row.name})";
+                    }
+                    PanelShown[field] = ActionsShown(panel);
+                }
+            }
+            Once(field + "-placed", false, $"{where} has the Tyrant looks button {place}.");
+            return button.gameObject;
+        }
+
+        /// <summary>The bottom-right corner of <paramref name="parent"/>, 8 px in, <paramref name="size"/> square (never laid out by a group).</summary>
+        private static void Corner(RectTransform button, Transform parent, float size)
+        {
+            if (button.parent != parent) button.SetParent(parent, false);
+            button.SetAsLastSibling();
+            if (LayoutElement != null) Traverse.Create(button.GetComponent(LayoutElement) ?? button.gameObject.AddComponent(LayoutElement)).Property("ignoreLayout").SetValue(true);
+            button.localScale = Vector3.one;
+            button.localRotation = Quaternion.identity;
+            button.anchorMin = button.anchorMax = button.pivot = new Vector2(1f, 0f);
+            button.sizeDelta = new Vector2(size, size);
+            button.anchoredPosition = new Vector2(-8f, 8f);
+        }
+
+        /// <summary>A rect's left or right edge on screen.</summary>
+        private static float Edge(RectTransform rect, bool right)
+        {
+            var corners = new Vector3[4];
+            rect.GetWorldCorners(corners);
+            return right ? corners[2].x : corners[0].x;
+        }
+
+        private static bool HasLayoutGroup(Transform t) => t.GetComponents<Component>().Any(c => c != null && IsLayoutGroup(c.GetType()));
+
+        /// <summary>Its LayoutElement: <paramref name="size"/> square, never stretched.</summary>
+        private static void SizeInLayout(RectTransform button, float size)
+        {
+            if (LayoutElement == null) return;
+            var element = Traverse.Create(button.GetComponent(LayoutElement) ?? button.gameObject.AddComponent(LayoutElement));
+            element.Property("ignoreLayout").SetValue(false);
+            foreach (var name in new[] { "minWidth", "preferredWidth", "minHeight", "preferredHeight" }) element.Property(name).SetValue(size);
+            element.Property("flexibleWidth").SetValue(0f);
+            element.Property("flexibleHeight").SetValue(0f);
         }
 
         private static void OpenOnPanel(Component panel)
@@ -196,16 +306,9 @@ namespace Tyrant.Framework
             button.SetSiblingIndex(Mathf.Clamp(anchor.GetSiblingIndex() + (right ? 1 : 0), 0, parent.childCount - 1));
             var anchorElement = LayoutElement == null ? null : anchor.GetComponent(LayoutElement);
             var ignored = anchorElement != null && Traverse.Create(anchorElement).Property("ignoreLayout").GetValue() is true;
-            if (!ignored && parent.GetComponents<Component>().Any(c => c != null && IsLayoutGroup(c.GetType())))
+            if (!ignored && HasLayoutGroup(parent))
             {
-                if (LayoutElement != null)
-                {
-                    var element = Traverse.Create(button.GetComponent(LayoutElement) ?? button.gameObject.AddComponent(LayoutElement));
-                    element.Property("ignoreLayout").SetValue(false);
-                    foreach (var name in new[] { "minWidth", "preferredWidth", "minHeight", "preferredHeight" }) element.Property(name).SetValue(size);
-                    element.Property("flexibleWidth").SetValue(0f);
-                    element.Property("flexibleHeight").SetValue(0f);
-                }
+                SizeInLayout(button, size);
                 return true;
             }
             // Anchored on the anchor's right (or left) edge and its vertical middle, whatever its own anchors are.
@@ -264,6 +367,9 @@ namespace Tyrant.Framework
 
         // ---- the Nursery's preview animal ----
 
+        /// <summary>The Nursery's preview animal (<see cref="NurseryPreview"/>), for the materials to write it again; null outside a park.</summary>
+        public static object? NurseryAnimal() => LookEditorModule.Looks == null ? null : NurseryPreview();
+
         /// <summary>Game.AnimalPreviewComponent.currentAnimalPreview once loaded; null while it loads or when there is none.</summary>
         private static object? NurseryPreview()
         {
@@ -316,7 +422,7 @@ namespace Tyrant.Framework
             }
             var context = MaterialsModule.Describe(current);
             if (context == null) return;
-            if (EditorScopes.SameLook(context, _context))
+            if (EditorScopes.SameLook(context, _context, _scope)) // a Next created look is per sex
             {
                 if (_detached || !ReferenceEquals(current, _animal) || context.Variant != _context!.Variant) Repoint(current, context);
                 return;
@@ -326,7 +432,7 @@ namespace Tyrant.Framework
                 Select(current, keepMessage: _detached); // after a save made while it showed another look, "Saved to …" stays
                 return;
             }
-            if (_detached && EditorScopes.SameLook(context, _declined)) return; // the player kept editing
+            if (_detached && EditorScopes.SameLook(context, _declined, _scope)) return; // the player kept editing
             Confirm(FollowNow, () => Detach(current, context));
         }
 
@@ -364,7 +470,8 @@ namespace Tyrant.Framework
             ReadHeader();
             _matching = MaterialsModule.AnimalsMatching(_scope, current).ToList();
             _below = MaterialsModule.Below(current, _scope);
-            MaterialsModule.Reapply(current, keywords: true); // the draft's live edit on the new animal
+            if (NextCreated) PushLive(keywords: true); // the draft is kept by the preview object: it moves to the new one
+            else MaterialsModule.Reapply(current, keywords: true); // the draft's live edit on the new animal
             Rebuild();
         }
 

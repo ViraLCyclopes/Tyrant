@@ -1,14 +1,16 @@
 <script lang="ts">
   import { asRpcError } from '$lib/rpc/client';
-  import type { ModDetail, ModMaterialInfo, ModMaterialProperty, ModSkinDto } from '$lib/rpc/types.gen';
+  import type { ModDetail, ModMaterialInfo, ModMaterialProperty, ModSkinDto, ModSpeciesPresets } from '$lib/rpc/types.gen';
   import { getSession } from '$lib/stores/session.svelte';
   import IridescencePanel from './IridescencePanel.svelte';
-  import { cloneMaterial, parseIridescenceJson, parseMaterial, replaceMaterial, toMaterialsJson, type MaterialModel } from './materials';
+  import { applyPresetBlock, cloneMaterial, GAME, parseFurJson, parseIridescenceJson, parseMaterial, replaceMaterial, START_FUR_LENGTH, toMaterialsJson, type MaterialModel } from './materials';
   import type { ModDoc } from './modDoc.svelte';
 
   /**
    * The Material card of a skin or a species: iridescence and the shader settings, over what applies below (species, starting
    * skin, the game). Saves like the colour editor (undo for free); `onDraft` gets what it would save, for a live preview.
+   * "Start from a species…" fills the iridescence or the fur from a vanilla species (mods.speciesPreset, the in-game editor's
+   * preset logic): its ramp and mask by reference, its numbers copied; everything stays editable.
    */
   let { doc, skin, species, vanillaSkin, onDraft }: { doc: ModDoc; skin?: ModSkinDto; species?: string; vanillaSkin?: { species: string; skin: string }; onDraft?: (materialsJson: string | null) => void } = $props();
   const session = getSession();
@@ -50,6 +52,30 @@
     } catch (e) {
       if (mine !== generation) return;
       info = null;
+      reason = asRpcError(e).message;
+    }
+  }
+
+  /** The vanilla species to start from (shimmering ones, furred ones), read once. */
+  let presets = $state.raw<ModSpeciesPresets | null>(null);
+  $effect(() => {
+    void session.rpc.call('mods.speciesPresets').then(
+      (r) => (presets = r),
+      () => (presets = null), // no lists: the pickers stay empty
+    );
+  });
+
+  /** The species this card's look is for: a preset keeps its mask only on its own species (another's UV layout differs). */
+  const targetSpecies = $derived(skin ? skin.species : vanillaSkin ? vanillaSkin.species : (species ?? null));
+
+  /** Merges the species' preset into this level's block and saves it (Undo takes it back). */
+  async function startFrom(kind: 'iridescence' | 'fur', id: string) {
+    if (!id) return;
+    try {
+      const r = await session.rpc.call('mods.speciesPreset', { species: id, kind, target: targetSpecies });
+      if (kind === 'fur') seededLength = false; // the length is the preset's now: unticking Grow fur keeps it
+      void edit((m) => applyPresetBlock(m, r.materialJson), true);
+    } catch (e) {
       reason = asRpcError(e).message;
     }
   }
@@ -126,6 +152,66 @@
     return doc.edit('mods.setMaterialFile', { ...target, material: name, part, png: null });
   }
 
+  /** The fur block under this level (masks, grow), from mods.materialInfo. */
+  const inheritedFur = $derived(parseFurJson(info?.inheritedFurJson));
+  /** Grown here, else by a level below. */
+  const growing = $derived((shown?.fur?.grow ?? inheritedFur?.grow) === true);
+  /** True while the fur length is the one ticking Grow fur set: unticking takes it back. */
+  let seededLength = false;
+  // The card can move to another skin, species or vanilla skin without being made again: a length seeded there is not this one's.
+  // A string, so a new skin object for the same skin (after every save) changes nothing.
+  const targetKey = $derived(JSON.stringify(target));
+  $effect(() => {
+    void targetKey;
+    seededLength = false;
+  });
+
+  /** A fur block with one change, or none when nothing is left in it. */
+  function setFur(m: MaterialModel, change: (fur: NonNullable<MaterialModel['fur']>) => void) {
+    const fur = { ...(m.fur ?? {}) };
+    change(fur);
+    if (fur.mask || fur.infantMask || fur.grow !== undefined) m.fur = fur;
+    else delete m.fur;
+  }
+
+  /**
+   * Grow fur (fur.grow): on also sets a starting fur length when neither this level nor anything below gives the fur one, so it
+   * shows at once. Off writes false over a level below that grows fur, else removes the key; it also takes back the starting
+   * length while it is still the one on set.
+   */
+  function setGrow(on: boolean) {
+    const below = info?.properties.find((p) => p.key === '_Length');
+    const inheritedLength = below ? inheritedOf(below) : null;
+    const own = shown?.settings._Length;
+    const length = typeof own === 'number' ? own : typeof inheritedLength === 'number' ? inheritedLength : 0;
+    const seed = on && length <= 0;
+    const unseed = !on && seededLength && own === START_FUR_LENGTH;
+    const overBelow = inheritedFur?.grow === true;
+    void edit((m) => {
+      setFur(m, (fur) => {
+        if (on) fur.grow = true;
+        else if (overBelow) fur.grow = false;
+        else delete fur.grow;
+      });
+      if (seed) m.settings._Length = START_FUR_LENGTH;
+      if (unseed) delete m.settings._Length;
+    }, true);
+    seededLength = seed;
+  }
+
+  /** The fur mask's Game's over a level below that sets one: "game" (leaving it out would show that one again). */
+  function gameFur(part: 'mask' | 'infantMask') {
+    void edit((m) => setFur(m, (fur) => (fur[part] = GAME)), true);
+  }
+
+  /** What a fur mask row shows: this level's file or the game's, else the one below, else the skin's own. */
+  function furShown(own: string | undefined, below: string | undefined): string {
+    if (own === GAME) return 'the game’s';
+    if (own) return own;
+    if (below === GAME) return 'the game’s (from below)';
+    return below ? `${below} (from below)` : "the skin's own";
+  }
+
   function setComponent(p: ModMaterialProperty, n: number, text: string) {
     const count = countOf(p);
     const own = shown?.settings[p.key];
@@ -143,11 +229,25 @@
     {#if !reason}<p class="hint">Loading the material…</p>{/if}
   {:else if shown && name}
     <IridescencePanel {doc} material={name} model={shown.iridescence} {inherited} gameStrength={info.gameIridescence} gameHasRamp={info.gameHasRamp} {skin} {species} {vanillaSkin}
-      canImport={canImportFile} onEdit={(change, save) => void edit(change, save)} />
+      canImport={canImportFile} presets={presets?.iridescence ?? []} onPreset={(id) => void startFrom('iridescence', id)}
+      onEdit={(change, save) => void edit(change, save)} />
 
     {#each groups as [group, rows] (group)}
       <fieldset class="group">
         <legend>{group}</legend>
+        {#if group === 'Fur'}
+          <select class="preset" aria-label="Start the fur from a species" value="" disabled={!presets?.fur.length}
+            onchange={(e) => { const id = e.currentTarget.value; e.currentTarget.value = ''; void startFrom('fur', id); }}>
+            <option value="">Start from a species…</option>
+            {#each presets?.fur ?? [] as p (p.species)}<option value={p.species}>{p.name}</option>{/each}
+          </select>
+          <label class="grow">
+            <input type="checkbox" checked={growing} onchange={(e) => setGrow(e.currentTarget.checked)} />
+            Grow fur on skins without fur
+          </label>
+          {#if shown.fur?.grow === undefined && inheritedFur?.grow === true}<p class="hint">Fur is grown by a level below; untick to turn it off here.</p>{/if}
+          <p class="hint">Needs tessellated fur in the game's graphics settings. The preview here shows no fur; tune the look in game.</p>
+        {/if}
         {#each rows as p (p.key)}
           {@const own = shown.settings[p.key]}
           {@const below = inheritedOf(p)}
@@ -172,14 +272,21 @@
           </div>
         {/each}
         {#if group === 'Fur'}
-          {#each [{ part: 'furMask' as const, label: 'Fur mask', file: shown.fur?.mask }, { part: 'furInfantMask' as const, label: 'Baby fur mask', file: shown.fur?.infantMask }] as row (row.part)}
+          {#each [
+            { part: 'furMask' as const, key: 'mask' as const, label: 'Fur mask', file: shown.fur?.mask, below: inheritedFur?.mask },
+            { part: 'furInfantMask' as const, key: 'infantMask' as const, label: 'Baby fur mask', file: shown.fur?.infantMask, below: inheritedFur?.infantMask },
+          ] as row (row.part)}
             <div class="setting" role="group" aria-label={row.label}>
               <span class="label">{row.label}</span>
-              <span class="inherited">{row.file ?? "the skin's own"}</span>
+              <span class="inherited">{furShown(row.file, row.below)}</span>
               <span class="field">
                 <button aria-label="Import {row.label.toLowerCase()}" disabled={!canImportFile} onclick={() => void importFur(row.part)}>Import…</button>
+                {#if row.below && row.below !== GAME && row.file !== GAME}
+                  <button aria-label="Game's {row.label.toLowerCase()}" title="The game's own, over the one below" onclick={() => gameFur(row.key)}>Game's</button>
+                {/if}
               </span>
-              <button class="ghost x" aria-label="Remove {row.label.toLowerCase()}" title="Use the skin's own" disabled={!row.file} onclick={() => void removeFur(row.part)}>✕</button>
+              <button class="ghost x" aria-label="Remove {row.label.toLowerCase()}" title="Use the one below" disabled={!row.file}
+                onclick={() => (row.file === GAME ? void edit((m) => setFur(m, (fur) => delete fur[row.key]), true) : void removeFur(row.part))}>✕</button>
             </div>
           {/each}
         {/if}
@@ -200,4 +307,6 @@
   .field input[type='number'] { width: 80px; }
   input[type='color'] { width: 28px; height: 24px; padding: 0; border: 1px solid var(--border); border-radius: 4px; background: none; }
   .x { padding: 0 4px; font-size: 10px; }
+  .grow { display: flex; align-items: center; gap: 6px; }
+  .preset { justify-self: start; }
 </style>

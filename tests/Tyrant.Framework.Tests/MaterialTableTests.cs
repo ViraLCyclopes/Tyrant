@@ -186,6 +186,80 @@ public class MaterialTableTests
     }
 
     [Fact]
+    public void Fur_grow_merges_per_field_and_a_grow_only_block_covers_the_animal()
+    {
+        var a = Mod("mod-a", "{\"format\":1,\"id\":\"mod-a\",\"skins\":[" + Skin("bare") + "]}",
+            SpeciesFile("Titanoboa", """{"Titanoboa":{"fur":{"grow":true}}}"""),
+            SkinFile("bare", """{"Titanoboa":{"fur":{"grow":false}}}"""),
+            VanillaFile("Titanoboa", "Skin A", """{"Titanoboa":{"fur":{"mask":"top.png"}}}"""));
+        var table = MaterialTable.Build([a], out var messages);
+
+        Assert.Empty(messages);
+        Assert.True(table.CoversSpecies("Titanoboa")); // a block holding only grow is not empty
+        Assert.True(table.CoversSkin("mod-a", "bare"));
+        var species = table.For("Titanoboa", null, null, null, "Titanoboa")!.Fur!;
+        Assert.True(species.Grow);
+        var vanilla = table.For("Titanoboa", null, null, "Titanoboa/Skin A", "Titanoboa")!.Fur!;
+        Assert.True(vanilla.Grow); // from the species, beside the vanilla skin's own mask
+        Assert.Equal(Path.GetFullPath(Path.Combine(a.Directory, "top.png")), vanilla.Mask!.File);
+        Assert.False(table.For("Titanoboa", "mod-a/bare", null, null, "Titanoboa")!.Fur!.Grow); // the skin's false wins
+
+        var live = new MaterialOverride { Fur = new FurMasks { Grow = true } };
+        Assert.True(MaterialTable.MergeLayers(live, null, null, null, null, null, null)!.Fur!.Grow);
+        Assert.True(MaterialTable.MergeBelow(LookScope.Animal, null, null, live, null, null, null, null)!.Fur!.Grow);
+        Assert.True(MaterialTable.WithFullPaths(live, Path.GetTempPath()).Fur!.Grow);
+        Assert.False(MaterialTable.WithFullPaths(live, Path.GetTempPath()).IsEmpty);
+    }
+
+    [Fact]
+    public void A_game_ramp_or_mask_beats_lower_layers_and_survives_copies()
+    {
+        var a = Mod("mod-a", "{\"format\":1,\"id\":\"mod-a\",\"skins\":[" + Skin("mine") + "]}",
+            SpeciesFile("Titanoboa", """{"Titanoboa":{"iridescence":{"ramp":"r.png","mask":"everywhere"},"fur":{"mask":"f.png"}}}"""),
+            SkinFile("mine", """{"Titanoboa":{"iridescence":{"ramp":"game","mask":"game"},"fur":{"mask":"game"}}}"""));
+        var table = MaterialTable.Build([a], out var messages);
+
+        Assert.Empty(messages);
+        var merged = table.For("Titanoboa", "mod-a/mine", null, null, "Titanoboa")!;
+        Assert.True(merged.Iridescence!.Ramp!.Game);
+        Assert.True(merged.Iridescence.Mask!.Game);
+        Assert.True(merged.Fur!.Mask!.Game);
+        var species = table.For("Titanoboa", null, null, null, "Titanoboa")!; // the species alone keeps its own
+        Assert.EndsWith("r.png", species.Iridescence!.Ramp!.File);
+
+        var live = new MaterialOverride { Iridescence = new IridescenceSettings { Ramp = new RampSource { Game = true }, Mask = new MaskSource { Game = true } } };
+        var below = new MaterialOverride { Iridescence = new IridescenceSettings { Ramp = new RampSource { File = "x.png" }, Mask = new MaskSource { Everywhere = true } } };
+        var layered = MaterialTable.MergeLayers(live, null, null, below, null, null, null)!;
+        Assert.True(layered.Iridescence!.Ramp!.Game);
+        Assert.True(layered.Iridescence.Mask!.Game);
+        var copy = MaterialTable.WithFullPaths(live, Path.GetTempPath());
+        Assert.True(copy.Iridescence!.Ramp!.Game);
+        Assert.True(copy.Iridescence.Mask!.Game);
+    }
+
+    [Fact]
+    public void A_species_ramp_or_mask_merges_per_field_and_survives_copies()
+    {
+        var a = Mod("mod-a", "{\"format\":1,\"id\":\"mod-a\",\"skins\":[" + Skin("mine") + "]}",
+            SpeciesFile("Titanoboa", """{"Titanoboa":{"iridescence":{"ramp":{"species":"Microraptor"},"mask":"m.png","scale":-0.25}}}"""),
+            SkinFile("mine", """{"Titanoboa":{"iridescence":{"mask":{"species":"Oviraptor"}}}}"""));
+        var table = MaterialTable.Build([a], out var messages);
+
+        Assert.Empty(messages);
+        var merged = table.For("Titanoboa", "mod-a/mine", null, null, "Titanoboa")!;
+        Assert.Equal("Microraptor", merged.Iridescence!.Ramp!.Species); // from the species: the skin sets no ramp
+        Assert.Equal("Oviraptor", merged.Iridescence.Mask!.Species); // the skin's mask beats the species' file
+        Assert.Equal(-0.25f, merged.Iridescence.Scale);
+        Assert.EndsWith("m.png", table.For("Titanoboa", null, null, null, "Titanoboa")!.Iridescence!.Mask!.File);
+
+        var live = new MaterialOverride { Iridescence = new IridescenceSettings { Ramp = new RampSource { Species = "Microraptor" }, Mask = new MaskSource { Species = "Microraptor" } } };
+        var copy = MaterialTable.WithFullPaths(live, Path.GetTempPath());
+        Assert.Equal("Microraptor", copy.Iridescence!.Ramp!.Species);
+        Assert.Equal("Microraptor", copy.Iridescence.Mask!.Species);
+        Assert.NotSame(live.Iridescence.Ramp, copy.Iridescence.Ramp);
+    }
+
+    [Fact]
     public void Merge_does_not_change_its_inputs_and_variation_defaults()
     {
         var top = new MaterialOverride { Iridescence = new IridescenceSettings { Scale = 1f } };

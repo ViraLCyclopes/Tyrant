@@ -27,6 +27,7 @@ public class LookEditingTests
             Assert.Contains(MaskKind.Everywhere, LookEditing.MaskKinds(scope));
             Assert.Contains(MaskKind.Game, LookEditing.MaskKinds(scope));
             Assert.Contains(MaskKind.File, LookEditing.MaskKinds(scope));
+            Assert.Contains(MaskKind.Species, LookEditing.MaskKinds(scope)); // another species' mask is valid at every level
         }
     }
 
@@ -41,6 +42,10 @@ public class LookEditingTests
         Assert.Equal(MaskKind.Everywhere, LookEditing.MaskKindOf(new MaskSource { Everywhere = true }));
         Assert.Equal(MaskKind.File, LookEditing.MaskKindOf(new MaskSource { File = "m.png" }));
         Assert.Equal(MaskKind.Channel, LookEditing.MaskKindOf(new MaskSource { From = "extra", Channel = 'g' }));
+        Assert.Equal(RampKind.Game, LookEditing.RampKindOf(new RampSource { Game = true })); // the explicit "game" value
+        Assert.Equal(MaskKind.Game, LookEditing.MaskKindOf(new MaskSource { Game = true }));
+        Assert.Equal(RampKind.Species, LookEditing.RampKindOf(new RampSource { Species = "Microraptor" }));
+        Assert.Equal(MaskKind.Species, LookEditing.MaskKindOf(new MaskSource { Species = "Microraptor" }));
     }
 
     [Theory]
@@ -117,6 +122,25 @@ public class LookEditingTests
         Assert.Equal(-0.25f, i.Scale);
         Assert.Equal(-0.3f, i.Power);
         Assert.Equal(1.3f, i.Bias);
+    }
+
+    [Fact]
+    public void A_game_ramp_on_a_material_without_one_still_seeds_a_thin_film()
+    {
+        // Game's picked on an animal whose material has no ramp: on must still show a rainbow.
+        var own = new LookDraft(LookScope.Animal, null);
+        own.SetRamp(new RampSource { Game = true });
+        new IridescenceSwitch().On(own, null, gameHasRamp: false);
+        Assert.Equal(LookEditing.DefaultThickness, own.Current.Iridescence!.Ramp!.ThinFilm!.Thickness);
+
+        var below = new LookDraft(LookScope.Animal, null);
+        new IridescenceSwitch().On(below, new MaterialOverride { Iridescence = new IridescenceSettings { Ramp = new RampSource { Game = true } } }, gameHasRamp: false);
+        Assert.NotNull(below.Current.Iridescence!.Ramp!.ThinFilm);
+
+        var gameRamp = new LookDraft(LookScope.Animal, null);
+        gameRamp.SetRamp(new RampSource { Game = true });
+        new IridescenceSwitch().On(gameRamp, null, gameHasRamp: true); // the game's own ramp is there: kept
+        Assert.True(gameRamp.Current.Iridescence!.Ramp!.Game);
     }
 
     [Fact]
@@ -325,6 +349,86 @@ public class LookEditingTests
 
         Assert.Equal(new[] { 0.25f, -20f, 20f }, draft.Current.Settings["_DroopDirection"].Vector.Take(3));
         AssertSaveable(draft, skinLevel: true);
+    }
+
+    private static MaterialOverride Length(float length) => new() { Settings = { ["_Length"] = MaterialValue.OfNumber(length) } };
+
+    private readonly FurGrowSwitch Grow = new();
+
+    [Fact]
+    public void Off_takes_back_the_length_on_seeded_but_not_one_the_player_changed_or_set()
+    {
+        var draft = new LookDraft(LookScope.Species, null);
+        Grow.Set(draft, null, gameLength: 0, on: true);
+        Grow.Set(draft, null, gameLength: 0, on: false);
+        Assert.True(draft.Current.IsEmpty); // the seeded length went with grow
+        Assert.False(draft.IsDirty);
+
+        Grow.Set(draft, null, gameLength: 0, on: true);
+        draft.SetSetting("_Length", MaterialValue.OfNumber(1.25f));
+        Grow.Set(draft, null, gameLength: 0, on: false);
+        Assert.Equal(1.25f, draft.Current.Settings["_Length"].Number); // the player's own length stays
+
+        var set = new LookDraft(LookScope.Species, Length(LookEditing.StartFurLength));
+        var fresh = new FurGrowSwitch();
+        fresh.Set(set, null, gameLength: 0, on: true); // 0.5 was already there: not seeded by this switch
+        fresh.Set(set, null, gameLength: 0, on: false);
+        Assert.Equal(LookEditing.StartFurLength, set.Current.Settings["_Length"].Number);
+
+        var forgotten = new LookDraft(LookScope.Species, null);
+        fresh.Set(forgotten, null, gameLength: 0, on: true);
+        fresh.Forget(); // a new draft: what it seeded is not this one's
+        fresh.Set(forgotten, null, gameLength: 0, on: false);
+        Assert.Equal(LookEditing.StartFurLength, forgotten.Current.Settings["_Length"].Number);
+    }
+
+    [Fact]
+    public void Growing_fur_where_nothing_gives_it_length_seeds_a_visible_length()
+    {
+        var bare = new LookDraft(LookScope.Species, null);
+        Grow.Set(bare, null, gameLength: 0, on: true);
+        Assert.True(bare.Current.Fur!.Grow);
+        Assert.Equal(LookEditing.StartFurLength, bare.Current.Settings["_Length"].Number);
+        Assert.True(LookEditing.GrowsFur(bare, null));
+        AssertSaveable(bare, skinLevel: false);
+
+        var zeroBelow = new LookDraft(LookScope.Animal, null);
+        Grow.Set(zeroBelow, Length(0), gameLength: 0, on: true);
+        Assert.Equal(LookEditing.StartFurLength, zeroBelow.Current.Settings["_Length"].Number);
+    }
+
+    [Fact]
+    public void Growing_fur_keeps_a_length_the_draft_a_layer_below_or_the_game_already_has()
+    {
+        var own = new LookDraft(LookScope.Skin, Length(1.5f));
+        Grow.Set(own, null, gameLength: 0, on: true);
+        Assert.Equal(1.5f, own.Current.Settings["_Length"].Number);
+
+        var below = new LookDraft(LookScope.Animal, null);
+        Grow.Set(below, Length(0.8f), gameLength: 0, on: true);
+        Assert.False(below.Current.Settings.ContainsKey("_Length"));
+
+        var game = new LookDraft(LookScope.Animal, null);
+        Grow.Set(game, null, gameLength: 1.2f, on: true);
+        Assert.False(game.Current.Settings.ContainsKey("_Length"));
+    }
+
+    [Fact]
+    public void Turning_grow_off_writes_false_only_over_a_layer_that_grows()
+    {
+        var alone = new LookDraft(LookScope.Skin, null);
+        Grow.Set(alone, null, gameLength: 1, on: true);
+        Grow.Set(alone, null, gameLength: 1, on: false);
+        Assert.Null(alone.Current.Fur); // nothing below grows: the key goes
+        Assert.False(LookEditing.GrowsFur(alone, null));
+
+        var growing = new MaterialOverride { Fur = new FurMasks { Grow = true } };
+        var over = new LookDraft(LookScope.Animal, null);
+        Assert.True(LookEditing.GrowsFur(over, growing)); // shown on: a lower layer grows
+        Grow.Set(over, growing, gameLength: 1, on: false);
+        Assert.False(over.Current.Fur!.Grow);
+        Assert.False(LookEditing.GrowsFur(over, growing));
+        AssertSaveable(over, skinLevel: true);
     }
 
     [Fact]

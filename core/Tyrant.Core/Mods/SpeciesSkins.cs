@@ -27,6 +27,12 @@ public sealed record VanillaSkin(int Index, string Name, IReadOnlyDictionary<str
     /// <summary>The same from the female variation asset.</summary>
     public float? FemaleIridescence { get; init; }
 
+    /// <summary>The male variation asset as a species preset reads it (shimmer, strengths, fur, droop); null when the dump lacks it.</summary>
+    public PresetSkin? MalePreset { get; init; }
+
+    /// <summary>The same from the female variation asset.</summary>
+    public PresetSkin? FemalePreset { get; init; }
+
     /// <summary>The skin's own iridescence for a sex (infants wear the male asset); null sex: the stronger of the two known.</summary>
     public float? Iridescence(string? sex) => sex switch
     {
@@ -40,6 +46,12 @@ public sealed record SpeciesSkins(string SpeciesId, bool Vivarium, IReadOnlyList
 {
     /// <summary>The species prefab's Addressables GUID (AnimalData.animalRef); null when the dump has none.</summary>
     public string? PrefabGuid { get; init; }
+
+    /// <summary>Its "displayName" in the dump; null when it has none.</summary>
+    public string? DisplayName { get; init; }
+
+    /// <summary>The name the game shows: the display name, else the species id (BaseAnimalData.DisplayName).</summary>
+    public string Name => string.IsNullOrEmpty(DisplayName) ? SpeciesId : DisplayName;
 }
 
 /// <summary>Reads species and their skins from the data dump (AnimalData / VivariumAnimalData and their skin variation assets).</summary>
@@ -94,18 +106,26 @@ public static class SpeciesSkinsReader
                     foreach (var skin in list.EnumerateArray())
                     {
                         var name = skin.TryGetProperty("skinName", out var n) && n.ValueKind == JsonValueKind.String ? n.GetString()! : $"Skin {index}";
-                        skins.Add(new VanillaSkin(index, name, Textures(skin, "maleVariationData", variations), Textures(skin, "femaleVariationData", variations))
+                        var male = Textures(skin, "maleVariationData", variations);
+                        var female = Textures(skin, "femaleVariationData", variations);
+                        skins.Add(new VanillaSkin(index, name, male, female)
                         {
                             Portraits = PortraitGuids(skin),
                             MaleMorphs = Morphs(skin, "maleVariationData", variations),
                             FemaleMorphs = Morphs(skin, "femaleVariationData", variations),
                             MaleIridescence = IridescenceOf(Variation(skin, "maleVariationData", variations)),
                             FemaleIridescence = IridescenceOf(Variation(skin, "femaleVariationData", variations)),
+                            MalePreset = PresetOf(Variation(skin, "maleVariationData", variations), male),
+                            FemalePreset = PresetOf(Variation(skin, "femaleVariationData", variations), female),
                         });
                         index++;
                     }
                 }
-                result.Add(new SpeciesSkins(speciesId, type.FullName == VivariumType, skins) { PrefabGuid = PrefabGuidOf(root) });
+                result.Add(new SpeciesSkins(speciesId, type.FullName == VivariumType, skins)
+                {
+                    PrefabGuid = PrefabGuidOf(root),
+                    DisplayName = root.TryGetProperty("displayName", out var shown) && shown.ValueKind == JsonValueKind.String ? shown.GetString() : null,
+                });
             }
         }
         return result.OrderBy(s => s.SpeciesId, StringComparer.OrdinalIgnoreCase).ToList();
@@ -144,6 +164,34 @@ public static class SpeciesSkinsReader
         return data.TryGetProperty("iridescenceStrength", out var strength) && strength.ValueKind == JsonValueKind.Number && strength.TryGetSingle(out var value)
             ? Math.Clamp(value, 0f, 1f)
             : null;
+    }
+
+    /// <summary>
+    /// A variation asset as a preset reads it: defaultVariationData's iridescence and strength (a mutation's own where it
+    /// differs: AnimalSkinVariation gives a mutated animal its genetic data's strength), whether its adultFurMap names a texture
+    /// (<paramref name="textures"/>' "fur"), and its adultFuzzDroopiness. Null without the asset.
+    /// </summary>
+    private static PresetSkin? PresetOf(JsonElement? variation, IReadOnlyDictionary<string, string> textures)
+    {
+        if (variation is not { } v) return null;
+        static float? Strength(JsonElement owner, string field) =>
+            owner.TryGetProperty(field, out var data) && data.ValueKind == JsonValueKind.Object && data.TryGetProperty("iridescenceStrength", out var s)
+            && s.ValueKind == JsonValueKind.Number && s.TryGetSingle(out var value) ? Math.Clamp(value, 0f, 1f) : null;
+        var shimmers = v.TryGetProperty("defaultVariationData", out var d) && d.ValueKind == JsonValueKind.Object
+            && d.TryGetProperty("iridescence", out var on) && on.ValueKind == JsonValueKind.True;
+        VariantNumbers? strength = null;
+        if (Strength(v, "defaultVariationData") is { } normal)
+        {
+            float? Own(string field) => Strength(v, field) is { } m && m != normal ? m : null;
+            strength = new VariantNumbers { Normal = normal, Albino = Own("albinoVariationData"), Melanistic = Own("melanisticVariationData"), Leucistic = Own("leucisticVariationData") };
+        }
+        float[]? droop = null;
+        if (v.TryGetProperty("adultFuzzDroopiness", out var fuzz) && fuzz.ValueKind == JsonValueKind.Object)
+        {
+            static float Axis(JsonElement e, string name) => e.TryGetProperty(name, out var a) && a.ValueKind == JsonValueKind.Number && a.TryGetSingle(out var f) ? f : 0f;
+            droop = [Axis(fuzz, "x"), Axis(fuzz, "y"), Axis(fuzz, "z")];
+        }
+        return new PresetSkin { Shimmers = shimmers, Strength = strength, HasFur = textures.ContainsKey("fur"), Droop = droop };
     }
 
     private static IReadOnlyDictionary<string, SkinColorSet> Morphs(JsonElement skin, string field, Dictionary<long, JsonElement> variations) =>

@@ -429,15 +429,17 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
                 if (!known) warnings.Add($"Vanilla skin \"{key}\" is not in the game data; it applies to no animal.");
             }
         var animals = new Dictionary<string, AnimalMaterial?>(StringComparer.OrdinalIgnoreCase);
+        AnimalMaterial? MaterialOf(string speciesId)
+        {
+            if (index is null || animalMaterialOf is null) return null;
+            if (animals.TryGetValue(speciesId, out var known)) return known;
+            var guid = species?.FirstOrDefault(s => string.Equals(s.SpeciesId, speciesId, StringComparison.OrdinalIgnoreCase))?.PrefabGuid;
+            var prefab = guid is null ? null : index.Assets.FirstOrDefault(a => a.Type == "GameObject" && string.Equals(a.Guid, guid, StringComparison.OrdinalIgnoreCase));
+            return animals[speciesId] = prefab is null ? null : animalMaterialOf(index, prefab);
+        }
         foreach (var (key, speciesId, skin, materials) in owners)
         {
-            AnimalMaterial? animal = null;
-            if (index is not null && animalMaterialOf is not null && !animals.TryGetValue(speciesId, out animal))
-            {
-                var guid = species?.FirstOrDefault(s => string.Equals(s.SpeciesId, speciesId, StringComparison.OrdinalIgnoreCase))?.PrefabGuid;
-                var prefab = guid is null ? null : index.Assets.FirstOrDefault(a => a.Type == "GameObject" && string.Equals(a.Guid, guid, StringComparison.OrdinalIgnoreCase));
-                animals[speciesId] = animal = prefab is null ? null : animalMaterialOf(index, prefab);
-            }
+            var animal = MaterialOf(speciesId);
             foreach (var (name, material) in materials)
             {
                 var isAnimals = animal is null || string.Equals(name, animal.Name, StringComparison.Ordinal);
@@ -448,12 +450,34 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
                 if (iridescence.Ramp?.File is { } ramp && Image(mod, $"{key} iridescence ramp", ramp, errors) is { } rampImage && rampImage.Width < RampSamples)
                     warnings.Add($"{key} iridescence ramp: {ramp} is {rampImage.Width} px wide; the game samples {RampSamples} or more.");
                 if (iridescence.Mask?.File is { } mask) Image(mod, $"{key} iridescence mask", mask, errors);
+                SpeciesReference($"{key} iridescence ramp", iridescence.Ramp?.Species, "ramp", m => m.Ramp, species, MaterialOf, errors, warnings);
+                SpeciesReference($"{key} iridescence mask", iridescence.Mask?.Species, "mask", m => m.Mask, species, MaterialOf, errors, warnings);
                 // A mask "from" a slot the mod skin has no PNG for is fine: the framework takes the game's map, as for vanilla skins.
                 if (isAnimals && animal is not null && animal.Ramp is null && iridescence.Strength is { } strength
                     && strength.Normal == 0 && (strength.Albino ?? 0) == 0 && (strength.Melanistic ?? 0) == 0 && (strength.Leucistic ?? 0) == 0)
                     warnings.Add($"{key}: iridescence strength is 0 everywhere, so it is off.");
             }
         }
+    }
+
+    /// <summary>
+    /// A ramp or mask taken from a species (<c>{ "species": id }</c>): the id must be a vanilla species of the dump, written as
+    /// the game writes it, whose material has that texture (checked when its material can be read).
+    /// </summary>
+    private static void SpeciesReference(string label, string? id, string part, Func<AnimalMaterial, AssetRecord?> texture, IReadOnlyList<SpeciesSkins>? species,
+        Func<string, AnimalMaterial?> materialOf, List<string> errors, List<string> warnings)
+    {
+        if (id is null) return;
+        if (species is null)
+        {
+            warnings.Add($"{label}: species \"{id}\" was not checked (there is no data dump).");
+            return;
+        }
+        var target = species.FirstOrDefault(s => string.Equals(s.SpeciesId, id, StringComparison.OrdinalIgnoreCase) && SpeciesUse.ModOf(s.SpeciesId) is null);
+        if (target is null) errors.Add($"{label}: species \"{id}\" is not in the game data.");
+        else if (!string.Equals(target.SpeciesId, id, StringComparison.Ordinal)) errors.Add($"{label}: species \"{id}\" must be written \"{target.SpeciesId}\" (the game matches the exact spelling).");
+        else if (materialOf(target.SpeciesId) is { } material && texture(material) is null)
+            errors.Add($"{label}: {target.SpeciesId}'s material has no iridescence {part} to take.");
     }
 
     /// <summary>Pattern colours that could never show (no red in the pattern map); extra maps that the game would colour as eyes (red above 0.9).</summary>
