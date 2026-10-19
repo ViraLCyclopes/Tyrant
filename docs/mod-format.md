@@ -197,9 +197,11 @@ Microraptor, Velociraptor, Oviraptor, Edmontosaurus, …, listed from the game's
 fur map). Picking one (the app's **Start from a species…**, the in-game editor's **Preset** row, or
 `tyrant mod materials … --preset <species> --kind iridescence|fur`) fills the block, and everything stays editable:
 
-- **Iridescence:** `ramp` and `mask` become `{ "species": "<id>" }` (a species whose material has no mask: `"everywhere"`),
-  `scale`, `power` and `bias` are copied from that species' material, `strength` from its first shimmering skin (a mutation's
-  own where it differs), and iridescence is on.
+- **Iridescence:** `ramp` becomes `{ "species": "<id>" }`; `mask` too when the look is for that same species, and
+  `"everywhere"` on any other species (a mask is painted for its own species' UV layout, so on another body it would land
+  anywhere) or when the species' material has no mask. `scale`, `power` and `bias` are copied from that species' material,
+  `strength` from its first shimmering skin (a mutation's own where it differs; not known: a strength already there stays),
+  and iridescence is on.
 - **Fur:** `fur.grow` is `true`; `_Length`, `_Droopage`, `_FurWindStrength`, `_FurWindSpeed` and `_FurWindScale` are copied
   from the species' material, `_DroopDirection` from its first furred skin's adult droop (kept within ±20). The fur mask stays.
 - Numbers are copied as plain numbers, kept within their ranges. **The game's images are never copied into a file**: the
