@@ -200,7 +200,7 @@ species' material name (for example `Titanoboa`); any other name is an error. Ex
 | `_Cutoff` | Cutout · Cutout threshold | 0–1 |
 
 **Which setting wins**, per field: the skin's, else its base (starting) skin's, else its species', else the game's. Between
-mods, the later mod in the load order wins a species' material block, and Check lists the clash.
+mods, the later mod in the load order wins a species' material block, and the Mods tab lists the clash (the framework logs it in the game too). Mod Check does not report it.
 
 **What it can and cannot do:**
 - The shimmer's hue follows the **viewing angle** only, not the light, and runs across the body's curve rather than
