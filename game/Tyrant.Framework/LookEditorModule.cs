@@ -29,6 +29,7 @@ namespace Tyrant.Framework
         private static readonly List<string> Saved = new List<string>(); // OnSaveCompleted's paths, handled in Tick
         private static readonly List<string> SavesRemoved = new List<string>(); // OnSaveRemoved's paths, handled in Tick (menus too)
         private static readonly List<(object Animal, ulong VirtualId, int Tries)> PlacedNew = new List<(object, ulong, int)>(); // placed animals with a bound look, handled in Tick
+        private static readonly List<(object Animal, ulong VirtualId, int Tries)> WriteWaits = new List<(object, ulong, int)>(); // placements the looks file could not take yet, again after RetrySeconds
         private static readonly List<object> Incubated = new List<object>(); // OnAnimalIncubationStart's virtual animals, handled in Tick
         private static readonly List<ulong> Mismatched = new List<ulong>(); // bindings an animal of another kind was placed under, dropped in Tick
         private static ConditionalWeakTable<object, StrongBox<ulong>> PlacedFrom = new ConditionalWeakTable<object, StrongBox<ulong>>(); // animal being placed -> its virtual animal's id
@@ -53,6 +54,11 @@ namespace Tyrant.Framework
 
         /// <summary>How many frames a new animal is looked at again while its id or material cannot be read yet.</summary>
         private const int PlacedTries = 120;
+
+        /// <summary>How often a placement whose look the looks file could not take (it has problems, or the disk refused) is tried again.</summary>
+        private const float RetrySeconds = 1f;
+
+        private static float _retryAt; // when the WriteWaits go back into PlacedNew
 
         /// <summary>True when the current save's looks file had problems: it is then never written over (the player can fix it).</summary>
         private static bool _looksUnreadable;
@@ -133,6 +139,11 @@ namespace Tyrant.Framework
                     Incubated.Clear();
                     mismatched = Mismatched.ToList();
                     Mismatched.Clear();
+                    if (WriteWaits.Count > 0 && UnityEngine.Time.realtimeSinceStartup >= _retryAt)
+                    {
+                        placed.AddRange(WriteWaits);
+                        WriteWaits.Clear();
+                    }
                 }
                 // The game's event (once per park), or should it be missed the game saying it is fully loaded.
                 if (!_parkRead && (loaded || Property(Core, "IsFullyLoaded") is true)) ParkLoaded();
@@ -229,9 +240,10 @@ namespace Tyrant.Framework
             Looks = path == null ? new AnimalLooks() : AnimalLooks.Read(path, problems);
             foreach (var problem in problems) FrameworkMod.Log.Warning(problem);
             _looksUnreadable = problems.Count > 0;
-            // Only the loaded save's file, against its own animals. Bindings of virtual animals this save does not have (bound
-            // after its last save, then left unsaved) go too: the game hands their ids out again (it counts on from the highest
-            // one loaded), and the held animals are already back by now (Game.Load).
+            // Only the loaded save's file, against its own animals, also when the park has none: Game.Load registers the park's
+            // and the held animals before the park counts as loaded, so a look of an id the park lacks belongs to no animal here
+            // (the game would hand that id to a new one). Bindings of virtual animals this save does not have (bound after its
+            // last save, then left unsaved) go too: the game hands their ids out again (it counts on from the highest one loaded).
             var pruned = Prune(out var alive);
             if (PruneIncubating() + pruned > 0) Write(SaveName, alive);
             MaterialsModule.SetAnimalLooks(Looks);
@@ -275,13 +287,17 @@ namespace Tyrant.Framework
             LookEditorWindow.SaveChanged();
         }
 
-        /// <summary>Drops looks whose animal is not in the park (never on an empty read); returns how many, and the animals read.</summary>
+        /// <summary>
+        /// Drops looks whose animal is not in the park (a park without animals keeps none; nothing goes when the animals cannot be
+        /// read); returns how many, and the animals read (empty when they could not be).
+        /// </summary>
         private static int Prune(out List<ulong> alive)
         {
             alive = new List<ulong>();
             if (Looks == null) return 0;
-            alive = MaterialsModule.LoadedIds();
-            if (Looks.Count == 0 || alive.Count == 0) return 0; // no animals read (or none yet): nothing is dropped on a guess
+            if (!(MaterialsModule.LoadedIds() is { } ids)) return 0; // the maps cannot be read: nothing is dropped on a guess
+            alive = ids;
+            if (Looks.Count == 0) return 0;
             var pruned = Looks.Prune(alive);
             if (pruned > 0) FrameworkMod.Log.Msg($"{pruned} look(s) of animals no longer in the park were dropped.");
             return pruned;
@@ -295,7 +311,7 @@ namespace Tyrant.Framework
         private static int PruneIncubating()
         {
             if (Looks == null || Looks.IncubatingCount == 0 || !(VirtualIds() is { } ids)) return 0;
-            lock (Gate) ids.AddRange(PlacedNew.Select(p => p.VirtualId));
+            lock (Gate) ids.AddRange(PlacedNew.Concat(WriteWaits).Select(p => p.VirtualId));
             var pruned = Looks.PruneIncubating(ids);
             if (pruned > 0) FrameworkMod.Log.Msg($"{pruned} Nursery look(s) of animals no longer incubating or held were dropped.");
             return pruned;
@@ -390,7 +406,7 @@ namespace Tyrant.Framework
         /// this save's looks file. No other animal ever takes it. The binding stays until the next park save drops it (its virtual
         /// animal is gone by then): loading the save again without saving brings the animal back to the holder with its look
         /// still bound. While the animal's id cannot be read yet it is looked at again for a few frames; while the looks file
-        /// cannot be written (or a write failed on the disk), again later.
+        /// cannot be written (or a write failed on the disk), again every <see cref="RetrySeconds"/>.
         /// </summary>
         private static void AnimalPlaced(object animal, ulong virtualId, int tries)
         {
@@ -399,7 +415,7 @@ namespace Tyrant.Framework
             {
                 if (ParkWarned.Add("placed-unwritable"))
                     FrameworkMod.Log.Warning("A placed animal's Nursery look waits: this save's looks file cannot be written (see above).");
-                lock (Gate) PlacedNew.Add((animal, virtualId, tries)); // the binding stays; tried again on the next frames
+                WaitForWrite(animal, virtualId, tries); // the binding stays
                 return;
             }
             if (!(PersistentId(animal) is ulong id))
@@ -416,11 +432,21 @@ namespace Tyrant.Framework
             {
                 Looks.Set(id, before);
                 MaterialsModule.SetAnimalLooks(Looks);
-                if (written == Written.Retry) lock (Gate) PlacedNew.Add((animal, virtualId, tries)); // the disk may let it later
+                if (written == Written.Retry) WaitForWrite(animal, virtualId, tries); // the disk may let it later
                 return;
             }
             MaterialsModule.Reapply(animal, keywords: true);
             FrameworkMod.Log.Msg($"The look bound in the Nursery went to the placed animal {id} (virtual animal {virtualId}).");
+        }
+
+        /// <summary>A placement tried again once <see cref="RetrySeconds"/> have passed (not every frame: a disk error may last).</summary>
+        private static void WaitForWrite(object animal, ulong virtualId, int tries)
+        {
+            lock (Gate)
+            {
+                if (WriteWaits.Count == 0) _retryAt = UnityEngine.Time.realtimeSinceStartup + RetrySeconds;
+                WriteWaits.Add((animal, virtualId, tries));
+            }
         }
 
         /// <summary>A virtual animal placed with an id that has a binding for another animal (the id was handed out again): the binding goes.</summary>
@@ -438,6 +464,7 @@ namespace Tyrant.Framework
         /// <summary>
         /// <see cref="WriteLooks"/>, with a failure logged: Retry when the file cannot be written now (a disk or access error, or
         /// a file with problems), No when the store itself is refused (a look a read would refuse: writing again cannot help).
+        /// A disk error is logged once per park: a placement meets it again on each retry.
         /// </summary>
         private static Written TryWrite(string what)
         {
@@ -447,7 +474,8 @@ namespace Tyrant.Framework
             }
             catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
             {
-                FrameworkMod.Log.Warning($"{what} could not be written: {ex.Message}");
+                if (ParkWarned.Add("write|" + what))
+                    FrameworkMod.Log.Warning($"{what} could not be written (tried again each second, logged once): {ex.Message}");
                 return Written.Retry;
             }
             catch (ManifestException ex)
@@ -545,6 +573,7 @@ namespace Tyrant.Framework
                 Removed.Clear();
                 Saved.Clear();
                 PlacedNew.Clear();
+                WriteWaits.Clear();
                 Incubated.Clear();
                 Mismatched.Clear();
                 _loadedNews = false;

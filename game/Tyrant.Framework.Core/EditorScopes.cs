@@ -39,7 +39,9 @@ namespace Tyrant.Framework.Core
             switch (scope)
             {
                 case LookScope.Animal:
-                    // Next created: the look waits in memory for the animal, then goes to this save's looks file like any other.
+                    // Next created: Save arms the look in memory; the next incubation started from this preview binds it to that
+                    // animal in this save's looks file ("incubating"), and its placement gives it the look. The file is named after
+                    // the save, so the park must have been saved once.
                     if (entry == EditorEntry.Nursery) return string.IsNullOrWhiteSpace(saveName) ? "Save the park once to give a new animal its own look." : null;
                     if (context.PersistentId == null) return "This animal has no id, so it cannot have its own look.";
                     return VanillaLooks.IsAvailable(LookScope.Animal, context.PersistentId, saveName)

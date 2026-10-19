@@ -117,7 +117,7 @@ namespace Tyrant.Framework.Core
         {
             var owner = $"Incubating animal {id}";
             if (!(value is Dictionary<string, object?> map) || !(map.TryGetValue("species", out var s) && s is string species && species.Length > 0))
-                throw new ManifestException($"{owner} needs \"species\" (the animal the look is for); it is dropped.");
+                throw new ManifestException($"{owner} needs \"species\" (the animal the look is for); fix or delete this looks file (Tyrant never writes over a file with problems).");
             string? Text(string key) => map.TryGetValue(key, out var v) ? v as string : null;
             var materials = map.TryGetValue("materials", out var m) ? MaterialOverrides.Parse(m, owner, true) : null;
             return materials == null ? null : new IncubatingLook(species, Text("skin"), Text("sex"), materials);

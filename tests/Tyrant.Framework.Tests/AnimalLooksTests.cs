@@ -92,7 +92,8 @@ public class AnimalLooksTests
         read = AnimalLooks.Read(bad, problems);
         Assert.Equal(2, problems.Count);
         Assert.Contains("incubating animal \"x\" is not an id", problems[0]);
-        Assert.Contains("needs \"species\"", problems[1]); // a binding that does not say which animal it is for is dropped
+        Assert.Contains("needs \"species\"", problems[1]); // a binding that does not say which animal it is for
+        Assert.Contains("fix or delete this looks file", problems[1]); // a file with problems is never written over
         Assert.Null(read.GetIncubating(7));
         Assert.Equal("female", read.GetIncubating(8)!.Sex);
     }

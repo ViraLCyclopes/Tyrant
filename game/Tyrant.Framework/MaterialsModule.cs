@@ -1139,21 +1139,21 @@ namespace Tyrant.Framework
         }
 
         /// <summary>
-        /// The persistent ids of every animal in the park and the vivarium (an unrealised vivarium animal included); empty outside
-        /// a park, or when the maps cannot be read.
+        /// The persistent ids of every animal in the park and the vivarium (an unrealised vivarium animal included); empty for a
+        /// park without animals, null outside a park or when the maps cannot be read.
         /// </summary>
-        public static List<ulong> LoadedIds()
+        public static List<ulong>? LoadedIds()
         {
             var ids = new List<ulong>();
-            ReadMaps(map =>
+            return ReadMaps(map =>
             {
                 foreach (var key in map.Keys)
                     if (key != null && FieldOf(key, "uniqueID")?.GetValue(key) is ulong id) ids.Add(id);
-            });
-            return ids;
+            }) ? ids : null;
         }
 
-        private static void ReadMaps(Action<IDictionary> read)
+        /// <summary>Calls <paramref name="read"/> with the park's and the vivarium's maps; false when they could not be read.</summary>
+        private static bool ReadMaps(Action<IDictionary> read)
         {
             try
             {
@@ -1166,21 +1166,23 @@ namespace Tyrant.Framework
                     if (_gameType == null || _hasInstance == null || _animalManager == null)
                         FrameworkMod.Log.Warning("Game.AnimalManager was not found (game updated?); live edits of a whole skin or species show on the selected animal only.");
                 }
-                if (_hasInstance == null || _animalManager == null || !(_hasInstance.GetValue(null, null) is bool has) || !has) return;
+                if (_hasInstance == null || _animalManager == null || !(_hasInstance.GetValue(null, null) is bool has) || !has) return false;
                 var manager = _animalManager.GetValue(null, null);
-                if (manager == null) return;
+                if (manager == null) return false;
                 _animals ??= AccessTools.Property(manager.GetType(), "Animals");
                 var collection = _animals?.GetValue(manager, null);
-                if (collection == null) return;
+                if (collection == null) return false;
                 _getReader ??= AccessTools.Method(collection.GetType(), "GetReader", Type.EmptyTypes);
                 var reader = _getReader?.Invoke(collection, null); // a boxed AnimalCollection.Reader, holding the read lock
-                if (reader == null) return;
+                if (reader == null) return false;
                 try
                 {
                     _animalMap ??= AccessTools.Property(reader.GetType(), "PersistentIDToAnimalMap");
                     _vivariumMap ??= AccessTools.Property(reader.GetType(), "PersistentIDToVivariumAnimalMap");
-                    if (_animalMap?.GetValue(reader, null) is IDictionary animals) read(animals);
+                    if (!(_animalMap?.GetValue(reader, null) is IDictionary animals)) return false;
+                    read(animals);
                     if (_vivariumMap?.GetValue(reader, null) is IDictionary vivarium) read(vivarium);
+                    return true;
                 }
                 finally
                 {
@@ -1190,6 +1192,7 @@ namespace Tyrant.Framework
             catch (Exception ex)
             {
                 Failed(ex);
+                return false;
             }
         }
 
