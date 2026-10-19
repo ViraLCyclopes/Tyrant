@@ -359,7 +359,7 @@ namespace Tyrant.Framework
             ReportOtherNames(SkinBlocks, resolved.InheritedKey, name);
             ReportOtherNames(SpeciesBlocks, species, name);
 
-            var found = _table.For(species, resolved.SkinKey, resolved.InheritedKey, name);
+            var found = _table.For(species, resolved.SkinKey, resolved.InheritedKey, null, name);
             if (found == null) return null;
             resolved.Override = found;
             resolved.ModId = OwnerOf(SkinBlocks, resolved.SkinKey, name) ?? OwnerOf(SkinBlocks, resolved.InheritedKey, name) ?? OwnerOf(SpeciesBlocks, species, name) ?? "";

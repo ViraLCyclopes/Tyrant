@@ -21,6 +21,16 @@ public class ModCatalogTests
     }
 
     [Fact]
+    public void Vanilla_looks_loads_last_even_when_listed_first()
+    {
+        var list = """{ "format": 1, "mods": [ { "id": "vanilla-looks", "enabled": true }, { "id": "zeta", "enabled": true } ] }""";
+
+        var plan = ModCatalog.Plan([Mod("alpha"), Mod(ModCatalog.VanillaLooksId), Mod("zeta")], list, "0.1.0");
+
+        Assert.Equal(new[] { "zeta", "alpha", "vanilla-looks" }, Ids(plan));
+    }
+
+    [Fact]
     public void Disabled_mods_are_skipped_as_disabled()
     {
         var list = """{ "format": 1, "mods": [ { "id": "alpha", "enabled": false } ] }""";
