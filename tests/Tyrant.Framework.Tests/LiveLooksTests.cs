@@ -24,6 +24,14 @@ public class LiveLooksTests
         Assert.Null(live.Skin(null, "Titanoboa"));
         Assert.Null(live.Species("Other", "Titanoboa"));
         Assert.True(live.HasAnimals && live.HasSkins && live.HasSpecies);
+        Assert.True(live.CoversAnimal(42));
+        Assert.False(live.CoversAnimal(43));
+        Assert.True(live.CoversSkin("MOD-A/rainbow"));
+        Assert.False(live.CoversSkin("mod-a/other"));
+        Assert.False(live.CoversSkin(null));
+        Assert.True(live.CoversSpecies("Titanoboa"));
+        Assert.False(live.CoversSpecies("Other"));
+        Assert.False(live.CoversSpecies(null));
         Assert.Equal(3, live.Blocks.Count());
     }
 

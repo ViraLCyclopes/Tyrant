@@ -72,6 +72,9 @@ namespace Tyrant.Framework.Core
 
         public Dictionary<string, MaterialOverride>? Get(ulong id) => _animals.TryGetValue(id, out var materials) ? materials : null;
 
+        /// <summary>The ids of the animals that have a look.</summary>
+        public IEnumerable<ulong> Ids => _animals.Keys;
+
         /// <summary>Null or a map with nothing in it removes the animal's look.</summary>
         public void Set(ulong id, Dictionary<string, MaterialOverride>? materials)
         {

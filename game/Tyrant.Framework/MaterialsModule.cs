@@ -43,12 +43,11 @@ namespace Tyrant.Framework
         private static readonly Dictionary<string, Dictionary<string, string>> SkinBlocks = new Dictionary<string, Dictionary<string, string>>(StringComparer.Ordinal);
         private static readonly Dictionary<string, Dictionary<string, string>> VanillaBlocks = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
         private static readonly List<(string Id, string Directory)> ModDirectories = new List<(string, string)>();
+        private static readonly Dictionary<string, string> CustomSpecies = new Dictionary<string, string>(StringComparer.Ordinal); // species key -> its mod
 
         // The editor's unsaved edits and the park's per-animal looks (their files resolved, per animal, while its look is the same object).
         private static readonly LiveLooks Live = new LiveLooks();
-        private static AnimalLooks? _looks;
-        private static readonly Dictionary<ulong, (Dictionary<string, MaterialOverride> Source, Dictionary<string, MaterialOverride> Resolved)> SavedLooks =
-            new Dictionary<ulong, (Dictionary<string, MaterialOverride>, Dictionary<string, MaterialOverride>)>();
+        private static readonly PreparedLooks Saved = new PreparedLooks(Prepared);
 
         private static readonly MaterialPropertyBlock Block = new MaterialPropertyBlock();
         private static readonly List<Renderer> Renderers = new List<Renderer>();
@@ -115,13 +114,12 @@ namespace Tyrant.Framework
         }
 
         /// <summary>
-        /// The park's per-animal looks (null: none), read again from the store on the next write of each animal (call it again
-        /// after changing the store); file paths are full, or relative to UserData/Tyrant.
+        /// The park's per-animal looks (null: none), prepared at once (call it again after changing the store): looks that did
+        /// not change keep their ramps and masks through the sweep. File paths are full, or relative to UserData/Tyrant.
         /// </summary>
         public static void SetAnimalLooks(AnimalLooks? looks)
         {
-            _looks = looks;
-            SavedLooks.Clear(); // the pool keeps the textures of images that did not change
+            Saved.Use(looks);
             _sweepDue = true;
         }
 
@@ -155,10 +153,12 @@ namespace Tyrant.Framework
             SkinBlocks.Clear();
             VanillaBlocks.Clear();
             ModDirectories.Clear();
+            CustomSpecies.Clear();
             foreach (var mod in _mods)
             {
                 var id = mod.Manifest.Id;
                 ModDirectories.Add((id, mod.Directory));
+                foreach (var species in mod.Manifest.Species) CustomSpecies[species.Key(id)] = id;
                 foreach (var species in mod.Manifest.SpeciesMaterials)
                     Note(SpeciesBlocks, species.Key, species.Value.Keys, id);
                 foreach (var skin in mod.Manifest.VanillaSkinMaterials)
@@ -306,7 +306,17 @@ namespace Tyrant.Framework
             try
             {
                 if (!IsVisuallyPresent(MembersOf(animal.GetType()), animal)) return; // its own setup runs the hooks when it shows
-                if (keywords && AutoSetMaterial() is MethodInfo autoSet) autoSet.Invoke(null, new[] { animal });
+                if (keywords && AutoSetMaterial() is MethodInfo autoSet)
+                {
+                    try
+                    {
+                        autoSet.Invoke(null, new[] { animal });
+                    }
+                    catch (Exception ex)
+                    {
+                        Failed(ex); // e.g. its asset is not loaded (AddUpdateAnimal throws): its block is still written below
+                    }
+                }
                 ApplyTo(animal, fromHook: false);
             }
             catch (Exception ex)
@@ -344,7 +354,7 @@ namespace Tyrant.Framework
                 var vanillaKey = own ? null : VanillaKeyOf(skinData, species);
                 var modName = own ? _mods.FirstOrDefault(m => m.Manifest.Id == modId)?.Manifest.Name : null;
                 var source = !own ? "vanilla" : string.IsNullOrEmpty(modName) ? modId : modName!;
-                var custom = _mods.FirstOrDefault(m => m.Manifest.Species.Any(s => s.Key(m.Manifest.Id) == species))?.Manifest.Id;
+                var custom = CustomSpecies.TryGetValue(species, out var speciesMod) ? speciesMod : null;
                 var skinType = SkinTypeOf(members, animal);
                 return new AnimalContext(species, own ? (modId, entry.Id) : ((string, string)?)null, vanillaKey,
                     Variants[skinType >= 0 && skinType < Variants.Length ? skinType : 0], IdOf(members, animal), material.name, source, custom);
@@ -644,12 +654,14 @@ namespace Tyrant.Framework
             var own = SkinsModule.TryGet(skinData, out var modId, out var entry, out var directory);
             var inherited = SkinsModule.TryGetInherited(skinData, out var baseModId, out var baseEntry, out var baseDirectory);
             var skinName = own || skinData == null ? null : FieldOf(skinData, "skinName")?.GetValue(skinData) as string;
-            var id = Live.HasAnimals || _looks?.Count > 0 ? IdOf(members, animal) : null;
-            var saved = id is ulong savedId ? SavedLook(savedId) : null;
-            // Most animals: nothing changes them. Said before the material is read or any key or result is built.
-            if (!_table.CoversSpecies(species) && !(own && _table.CoversSkin(modId, entry.Id)) && !(inherited && _table.CoversSkin(baseModId, baseEntry.Id))
-                && !(!string.IsNullOrEmpty(skinName) && _table.CoversVanillaSkinsOf(species)) && Live.IsEmpty && saved == null)
-                return null;
+            // Most animals: nothing changes them. Said before the material is read or any result is built; a skin key is built
+            // only while live skin edits exist, the id read only while live animal edits or saved looks exist.
+            var covered = _table.CoversSpecies(species) || (own && _table.CoversSkin(modId, entry.Id)) || (inherited && _table.CoversSkin(baseModId, baseEntry.Id))
+                || (!string.IsNullOrEmpty(skinName) && _table.CoversVanillaSkinsOf(species)) || Live.CoversSpecies(species)
+                || (Live.HasSkins && Live.CoversSkin(own ? entry.Key(modId) : string.IsNullOrEmpty(skinName) || species == null ? null : species + "/" + skinName));
+            var id = Live.HasAnimals || !Saved.IsEmpty ? IdOf(members, animal) : null;
+            if (!covered && !(id is ulong known && (Live.CoversAnimal(known) || Saved.Has(known)))) return null;
+            var saved = id is ulong savedId ? Saved.Get(savedId) : null;
             if (!(members.BaseMaterial?.GetValue(animal, null) is Material material) || material == null) return null;
             var name = material.name;
             var resolved = new Resolved(members, species ?? "", material);
@@ -674,19 +686,6 @@ namespace Tyrant.Framework
             resolved.Override = found;
             resolved.ModId = OwnerOf(SkinBlocks, resolved.SkinKey, name) ?? OwnerOf(VanillaBlocks, resolved.VanillaKey, name)
                 ?? OwnerOf(SkinBlocks, resolved.InheritedKey, name) ?? OwnerOf(SpeciesBlocks, species, name) ?? "";
-            return resolved;
-        }
-
-        /// <summary>The animal's saved look with its files resolved, kept while the store hands out the same object for it.</summary>
-        private static Dictionary<string, MaterialOverride>? SavedLook(ulong id)
-        {
-            var source = _looks?.Get(id);
-            if (source == null) return null;
-            if (SavedLooks.TryGetValue(id, out var cached) && ReferenceEquals(cached.Source, source)) return cached.Resolved;
-            var resolved = new Dictionary<string, MaterialOverride>(StringComparer.Ordinal);
-            foreach (var pair in source) resolved[pair.Key] = Prepared(pair.Value);
-            SavedLooks[id] = (source, resolved);
-            _sweepDue = true; // the look it replaced may have used other images
             return resolved;
         }
 
@@ -875,7 +874,7 @@ namespace Tyrant.Framework
         /// <summary>Forgets the ramps and masks no table, live or saved block uses, and destroys the textures made for them.</summary>
         private static void Sweep()
         {
-            Pool.Retain(_table.Blocks.Concat(Live.Blocks).Concat(SavedLooks.Values.SelectMany(look => look.Resolved.Values)));
+            Pool.Retain(_table.Blocks.Concat(Live.Blocks).Concat(Saved.Blocks));
             Drop(Ramps, ramp => Pool.Contains(ramp));
             Drop(FileMasks, mask => Pool.Contains(mask));
             Drop(SlotMasks, key => Pool.Contains(key.Mask));

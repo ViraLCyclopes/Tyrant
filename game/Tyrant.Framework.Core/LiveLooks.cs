@@ -52,6 +52,13 @@ namespace Tyrant.Framework.Core
             else Put(scope == LookScope.Skin ? _skins : _species, key, materialName, block);
         }
 
+        /// <summary>True when this animal, skin or species has a live block (any material); cheap, before a material is read.</summary>
+        public bool CoversAnimal(ulong id) => _animals.ContainsKey(id);
+
+        public bool CoversSkin(string? key) => key != null && _skins.ContainsKey(key);
+
+        public bool CoversSpecies(string? id) => id != null && _species.ContainsKey(id);
+
         public MaterialOverride? Animal(ulong id, string materialName) => Find(_animals, id, materialName);
 
         public MaterialOverride? Skin(string? key, string materialName) => key == null ? null : Find(_skins, key, materialName);
