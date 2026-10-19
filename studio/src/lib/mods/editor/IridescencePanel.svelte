@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { ModSkinDto } from '$lib/rpc/types.gen';
+  import type { ModSkinDto, ModSpeciesPresetDto } from '$lib/rpc/types.gen';
   import { getSession } from '$lib/stores/session.svelte';
   import ColourStops from './ColourStops.svelte';
   import {
@@ -24,7 +24,8 @@
    * The Material card's iridescence: on/off, strength, variation, ramp, mask and shaping. `model` is this skin's or species' own
    * block, `inherited` what applies below it (species or starting skin). `gameStrength` is the vanilla skin's own shimmer in the
    * game (0: none; null: cannot tell, as on a species page, where only some skins shimmer); `gameHasRamp` says the game material
-   * has its own ramp and shaping. `onEdit` saves a change, or only previews it (save false).
+   * has its own ramp and shaping. `onEdit` saves a change, or only previews it (save false). `presets` are the vanilla species
+   * that shimmer: "Start from a species…" hands one to `onPreset`, and a ramp or mask can be taken from one (`{ "species" }`).
    */
   let {
     doc,
@@ -37,6 +38,8 @@
     species,
     vanillaSkin,
     canImport,
+    presets,
+    onPreset,
     onEdit,
   }: {
     doc: ModDoc;
@@ -49,6 +52,8 @@
     species?: string;
     vanillaSkin?: { species: string; skin: string };
     canImport: boolean;
+    presets: ModSpeciesPresetDto[];
+    onPreset: (species: string) => void;
     onEdit: (change: (m: MaterialModel) => void, save: boolean) => void;
   } = $props();
   const session = getSession();
@@ -115,13 +120,26 @@
 
   // Game's over a lower level's choice writes "game" (leaving it out would show that choice again); with none below it only
   // clears this level's.
+  /** The shimmering species a ramp or mask can be taken from, with the one in use when it is not among them. */
+  function speciesOptions(current: string): ModSpeciesPresetDto[] {
+    return presets.some((p) => p.species === current) ? presets : [{ species: current, name: current }, ...presets];
+  }
+
   function pickRamp(id: string) {
+    if (id === 'species') {
+      if (ramp.kind !== 'species' && presets.length) edit((i) => (i.ramp = { kind: 'species', species: presets[0].species }));
+      return;
+    }
     if (id === 'file') void importPart('ramp');
     else if (id === 'game') edit((i) => (i.ramp = picked(inherited?.ramp) ? { kind: 'game' } : { kind: 'inherit' }));
     else if (ramp.kind !== 'stops' && ramp.kind !== 'thinFilm') edit((i) => (i.ramp = { kind: 'stops', stops: ['#3060ff', '#ff60c0'] }));
   }
 
   function pickMask(id: string) {
+    if (id === 'species') {
+      if (mask.kind !== 'species' && presets.length) edit((i) => (i.mask = { kind: 'species', species: ramp.kind === 'species' ? ramp.species : presets[0].species }));
+      return;
+    }
     if (id === 'file') void importPart('mask');
     else if (id === 'game') edit((i) => (i.mask = picked(inherited?.mask) ? { kind: 'game' } : { kind: 'inherit' }));
     else if (id === 'everywhere') edit((i) => (i.mask = { kind: 'everywhere' }));
@@ -191,6 +209,11 @@
 
 <fieldset class="irid">
   <legend><label><input type="checkbox" checked={on} onchange={(e) => toggle(e.currentTarget.checked)} /> Iridescence</label></legend>
+  <select class="preset" aria-label="Start the iridescence from a species" value="" disabled={!presets.length}
+    onchange={(e) => { const id = e.currentTarget.value; e.currentTarget.value = ''; if (id) onPreset(id); }}>
+    <option value="">Start from a species…</option>
+    {#each presets as p (p.species)}<option value={p.species}>{p.name}</option>{/each}
+  </select>
   {#if !on}
     <p class="hint">{baselineOn ? 'Turned off here.' : gameStrength === null ? 'Game’s (only some skins shimmer).' : skin ? 'This skin has none in the game.' : 'This material has none.'}</p>
   {:else}
@@ -226,9 +249,17 @@
         { id: 'game', label: 'Game’s' },
         { id: 'file', label: 'Import image', disabled: !canImport },
         { id: 'gradient', label: 'Gradient' },
+        { id: 'species', label: 'Species', disabled: !presets.length && ramp.kind !== 'species' },
       ], ramp.kind === 'stops' || ramp.kind === 'thinFilm' ? 'gradient' : ramp.kind === 'inherit' ? 'game' : ramp.kind, pickRamp)}
       <button onclick={() => setThickness(DEFAULT_THICKNESS, true)}>Real iridescence (thin film)</button>
       {#if ramp.kind === 'file'}<span class="hint">{ramp.file}</span>{/if}
+      {#if ramp.kind === 'species'}
+        {@const taken = ramp.species}
+        <select aria-label="Ramp species" value={taken} onchange={(e) => { const v = e.currentTarget.value; edit((i) => (i.ramp = { kind: 'species', species: v })); }}>
+          {#each speciesOptions(taken) as p (p.species)}<option value={p.species}>{p.name}</option>{/each}
+        </select>
+        <span class="hint">the game's own, read from your game files; never copied into the mod</span>
+      {/if}
     </div>
     {#if stops}
       {#if stops.length}
@@ -249,19 +280,26 @@
         { id: 'game', label: 'Game’s' },
         { id: 'file', label: 'Import image', disabled: !canImport },
         ...(skin ? [{ id: 'from', label: 'From a map channel' }] : []),
+        { id: 'species', label: 'Species', disabled: !presets.length && mask.kind !== 'species' },
       ], mask.kind === 'inherit' ? 'game' : mask.kind, pickMask)}
       {#if mask.kind === 'file'}<span class="hint">{mask.file}</span>{/if}
+      {#if mask.kind === 'species'}
+        {@const taken = mask.species}
+        <select aria-label="Mask species" value={taken} onchange={(e) => { const v = e.currentTarget.value; edit((i) => (i.mask = { kind: 'species', species: v })); }}>
+          {#each speciesOptions(taken) as p (p.species)}<option value={p.species}>{p.name}</option>{/each}
+        </select>
+      {/if}
     </div>
     {#if mask.kind === 'from'}
       {@const from = mask}
       <div class="row">
-        <select aria-label="Mask map" value={from.slot} onchange={(e) => edit((i) => (i.mask = { ...from, slot: e.currentTarget.value as typeof from.slot }))}>
+        <select aria-label="Mask map" value={from.slot} onchange={(e) => { const v = e.currentTarget.value as typeof from.slot; edit((i) => (i.mask = { ...from, slot: v })); }}>
           {#each MASK_SLOTS as s (s)}<option value={s}>{s}</option>{/each}
         </select>
-        <select aria-label="Mask channel" value={from.channel} onchange={(e) => edit((i) => (i.mask = { ...from, channel: e.currentTarget.value as typeof from.channel }))}>
+        <select aria-label="Mask channel" value={from.channel} onchange={(e) => { const v = e.currentTarget.value as typeof from.channel; edit((i) => (i.mask = { ...from, channel: v })); }}>
           {#each CHANNELS as c (c)}<option value={c}>{c.toUpperCase()}</option>{/each}
         </select>
-        <label><input type="checkbox" checked={from.invert} onchange={(e) => edit((i) => (i.mask = { ...from, invert: e.currentTarget.checked }))} /> Invert</label>
+        <label><input type="checkbox" checked={from.invert} onchange={(e) => { const v = e.currentTarget.checked; edit((i) => (i.mask = { ...from, invert: v })); }} /> Invert</label>
         {#if copyable.length}
           <span class="hint">This skin uses the base skin's {from.slot} map; the mask needs its own copy.</span>
           <button onclick={() => copyBase(from.slot)}>Edit a copy</button>
@@ -285,6 +323,7 @@
 <style>
   .irid { border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; display: grid; gap: 8px; }
   .irid p { margin: 0; }
+  .preset { justify-self: start; }
   .slider, .part, .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .label { color: var(--muted); min-width: 90px; }
   details { display: grid; gap: 6px; }

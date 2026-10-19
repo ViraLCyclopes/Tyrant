@@ -1,14 +1,16 @@
 <script lang="ts">
   import { asRpcError } from '$lib/rpc/client';
-  import type { ModDetail, ModMaterialInfo, ModMaterialProperty, ModSkinDto } from '$lib/rpc/types.gen';
+  import type { ModDetail, ModMaterialInfo, ModMaterialProperty, ModSkinDto, ModSpeciesPresets } from '$lib/rpc/types.gen';
   import { getSession } from '$lib/stores/session.svelte';
   import IridescencePanel from './IridescencePanel.svelte';
-  import { cloneMaterial, GAME, parseFurJson, parseIridescenceJson, parseMaterial, replaceMaterial, START_FUR_LENGTH, toMaterialsJson, type MaterialModel } from './materials';
+  import { applyPresetBlock, cloneMaterial, GAME, parseFurJson, parseIridescenceJson, parseMaterial, replaceMaterial, START_FUR_LENGTH, toMaterialsJson, type MaterialModel } from './materials';
   import type { ModDoc } from './modDoc.svelte';
 
   /**
    * The Material card of a skin or a species: iridescence and the shader settings, over what applies below (species, starting
    * skin, the game). Saves like the colour editor (undo for free); `onDraft` gets what it would save, for a live preview.
+   * "Start from a species…" fills the iridescence or the fur from a vanilla species (mods.speciesPreset, the in-game editor's
+   * preset logic): its ramp and mask by reference, its numbers copied; everything stays editable.
    */
   let { doc, skin, species, vanillaSkin, onDraft }: { doc: ModDoc; skin?: ModSkinDto; species?: string; vanillaSkin?: { species: string; skin: string }; onDraft?: (materialsJson: string | null) => void } = $props();
   const session = getSession();
@@ -50,6 +52,26 @@
     } catch (e) {
       if (mine !== generation) return;
       info = null;
+      reason = asRpcError(e).message;
+    }
+  }
+
+  /** The vanilla species to start from (shimmering ones, furred ones), read once. */
+  let presets = $state.raw<ModSpeciesPresets | null>(null);
+  $effect(() => {
+    void session.rpc.call('mods.speciesPresets').then(
+      (r) => (presets = r),
+      () => (presets = null), // no lists: the pickers stay empty
+    );
+  });
+
+  /** Merges the species' preset into this level's block and saves it (Undo takes it back). */
+  async function startFrom(kind: 'iridescence' | 'fur', species: string) {
+    if (!species) return;
+    try {
+      const r = await session.rpc.call('mods.speciesPreset', { species, kind });
+      void edit((m) => applyPresetBlock(m, r.materialJson), true);
+    } catch (e) {
       reason = asRpcError(e).message;
     }
   }
@@ -203,12 +225,18 @@
     {#if !reason}<p class="hint">Loading the material…</p>{/if}
   {:else if shown && name}
     <IridescencePanel {doc} material={name} model={shown.iridescence} {inherited} gameStrength={info.gameIridescence} gameHasRamp={info.gameHasRamp} {skin} {species} {vanillaSkin}
-      canImport={canImportFile} onEdit={(change, save) => void edit(change, save)} />
+      canImport={canImportFile} presets={presets?.iridescence ?? []} onPreset={(id) => void startFrom('iridescence', id)}
+      onEdit={(change, save) => void edit(change, save)} />
 
     {#each groups as [group, rows] (group)}
       <fieldset class="group">
         <legend>{group}</legend>
         {#if group === 'Fur'}
+          <select class="preset" aria-label="Start the fur from a species" value="" disabled={!presets?.fur.length}
+            onchange={(e) => { const id = e.currentTarget.value; e.currentTarget.value = ''; void startFrom('fur', id); }}>
+            <option value="">Start from a species…</option>
+            {#each presets?.fur ?? [] as p (p.species)}<option value={p.species}>{p.name}</option>{/each}
+          </select>
           <label class="grow">
             <input type="checkbox" checked={growing} onchange={(e) => setGrow(e.currentTarget.checked)} />
             Grow fur on skins without fur
@@ -276,4 +304,5 @@
   input[type='color'] { width: 28px; height: 24px; padding: 0; border: 1px solid var(--border); border-radius: 4px; background: none; }
   .x { padding: 0 4px; font-size: 10px; }
   .grow { display: flex; align-items: center; gap: 6px; }
+  .preset { justify-self: start; }
 </style>

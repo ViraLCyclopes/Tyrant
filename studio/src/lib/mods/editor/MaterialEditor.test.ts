@@ -36,7 +36,19 @@ async function setup({ materialsJson = null, onDraft, infoOver = {} }: { materia
     .on('mods.check', () => ({ errors: [], warnings: [], missingCutouts: [] }))
     .on('mods.materialInfo', () => info(infoOver))
     .on('mods.thinFilm', (p) => ({ stops: Array.from({ length: p.count ?? 32 }, (_, i) => `#${(i * 7).toString(16).padStart(2, '0')}4080`) }))
-    .on('mods.setMaterials', (p) => modDetail({ revision: `r-${++saves}`, skins: skinsWith(p.materials ?? null) }));
+    .on('mods.setMaterials', (p) => modDetail({ revision: `r-${++saves}`, skins: skinsWith(p.materials ?? null) }))
+    .on('mods.speciesPresets', () => ({
+      iridescence: [{ species: 'Microraptor', name: 'Microraptor' }, { species: 'Velociraptor', name: 'Velociraptor' }],
+      fur: [{ species: 'Mammoth', name: 'Woolly mammoth' }],
+      problem: null,
+    }))
+    .on('mods.speciesPreset', (p) => ({
+      species: p.species,
+      name: p.species,
+      materialJson: p.kind === 'fur'
+        ? '{"fur":{"grow":true},"settings":{"_Length":1.5,"_DroopDirection":[0,-10.3,8.11]}}'
+        : `{"iridescence":{"strength":0.25,"ramp":{"species":"${p.species}"},"mask":{"species":"${p.species}"},"scale":-0.25,"power":-0.3,"bias":1.3}}`,
+    }));
   const platform = new FakePlatform();
   const session = new Session(rpc, platform, memoryStore());
   const tab = new Tab('tab-mod', session.log, { retitle: () => {}, openTool: () => null });
@@ -50,6 +62,63 @@ async function setup({ materialsJson = null, onDraft, infoOver = {} }: { materia
 const sent = (rpc: FakeRpc, n = 0) => JSON.parse((rpc.callsTo('mods.setMaterials')[n].params as { materials: string }).materials);
 
 describe('MaterialEditor', () => {
+  it('starting the iridescence from a species merges its preset into this level and saves it', async () => {
+    const { rpc } = await setup({ materialsJson: '{"Titanoboa":{"iridescence":{"variation":0.3},"settings":{"_Smoothness":0.5}}}' });
+    const picker = await screen.findByRole('combobox', { name: 'Start the iridescence from a species' });
+    await waitFor(() => expect(within(picker).getByRole('option', { name: 'Microraptor' })).toBeInTheDocument());
+    await fireEvent.change(picker, { target: { value: 'Microraptor' } });
+    await waitFor(() => expect(rpc.callsTo('mods.setMaterials')).toHaveLength(1));
+    expect(rpc.callsTo('mods.speciesPreset')[0].params).toEqual({ species: 'Microraptor', kind: 'iridescence' });
+    expect(sent(rpc)).toEqual({
+      Titanoboa: {
+        iridescence: { strength: 0.25, variation: 0.3, ramp: { species: 'Microraptor' }, mask: { species: 'Microraptor' }, scale: -0.25, power: -0.3, bias: 1.3 },
+        settings: { _Smoothness: 0.5 },
+      },
+    });
+  });
+
+  it('a ramp and mask taken from a species show its name, and another one can be picked', async () => {
+    const { rpc } = await setup({ materialsJson: '{"Titanoboa":{"iridescence":{"strength":0.3,"ramp":{"species":"Microraptor"},"mask":{"species":"Microraptor"}}}}' });
+    expect(within(screen.getByRole('radiogroup', { name: 'Ramp source' })).getByRole('radio', { name: 'Species' })).toBeChecked();
+    expect(within(screen.getByRole('radiogroup', { name: 'Mask' })).getByRole('radio', { name: 'Species' })).toBeChecked();
+    const ramp = await screen.findByRole('combobox', { name: 'Ramp species' });
+    await waitFor(() => expect(within(ramp).getByRole('option', { name: 'Velociraptor' })).toBeInTheDocument());
+    expect(ramp).toHaveValue('Microraptor');
+    expect(screen.getByRole('combobox', { name: 'Mask species' })).toHaveValue('Microraptor');
+    await fireEvent.change(ramp, { target: { value: 'Velociraptor' } });
+    await waitFor(() => expect(rpc.callsTo('mods.setMaterials')).toHaveLength(1));
+    expect(sent(rpc)).toEqual({ Titanoboa: { iridescence: { strength: 0.3, ramp: { species: 'Velociraptor' }, mask: { species: 'Microraptor' } } } });
+  });
+
+  it("the ramp's Species choice takes the first shimmering species", async () => {
+    const { rpc } = await setup({ materialsJson: '{"Titanoboa":{"iridescence":{"strength":0.3}}}' });
+    const picker = await screen.findByRole('combobox', { name: 'Start the iridescence from a species' });
+    await waitFor(() => expect(within(picker).getByRole('option', { name: 'Microraptor' })).toBeInTheDocument());
+    await fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Ramp source' })).getByRole('radio', { name: 'Species' }));
+    await waitFor(() => expect(rpc.callsTo('mods.setMaterials')).toHaveLength(1));
+    expect(sent(rpc)).toEqual({ Titanoboa: { iridescence: { strength: 0.3, ramp: { species: 'Microraptor' } } } });
+  });
+
+  it("changing a mask's map channel saves it (the value is read before the save runs)", async () => {
+    const { rpc } = await setup({ materialsJson: '{"Titanoboa":{"iridescence":{"strength":0.3,"mask":{"from":"extra","channel":"r","invert":false}}}}' });
+    await fireEvent.change(screen.getByRole('combobox', { name: 'Mask channel' }), { target: { value: 'g' } });
+    await waitFor(() => expect(rpc.callsTo('mods.setMaterials')).toHaveLength(1));
+    expect(sent(rpc)).toEqual({ Titanoboa: { iridescence: { strength: 0.3, mask: { from: 'extra', channel: 'g', invert: false } } } });
+  });
+
+  it('starting the fur from a species grows fur with its numbers and keeps the fur mask', async () => {
+    const { rpc } = await setup({
+      materialsJson: '{"Titanoboa":{"fur":{"mask":"materials/f.png"},"settings":{"_Smoothness":0.5}}}',
+      infoOver: { properties: [{ key: '_Length', group: 'Fur', label: 'Fur length', kind: 'number', min: 0, max: 4, inherited: null, source: 'default' }] },
+    });
+    const picker = await screen.findByRole('combobox', { name: 'Start the fur from a species' });
+    await waitFor(() => expect(within(picker).getByRole('option', { name: 'Woolly mammoth' })).toBeInTheDocument());
+    await fireEvent.change(picker, { target: { value: 'Mammoth' } });
+    await waitFor(() => expect(rpc.callsTo('mods.setMaterials')).toHaveLength(1));
+    expect(rpc.callsTo('mods.speciesPreset')[0].params).toEqual({ species: 'Mammoth', kind: 'fur' });
+    expect(sent(rpc)).toEqual({ Titanoboa: { fur: { mask: 'materials/f.png', grow: true }, settings: { _Smoothness: 0.5, _Length: 1.5, _DroopDirection: [0, -10.3, 8.11] } } });
+  });
+
   it('turning iridescence on for a species without it starts visible: strength 0.25 and Microraptor-like shaping', async () => {
     const { rpc } = await setup();
     await fireEvent.click(screen.getByRole('checkbox', { name: 'Iridescence' }));

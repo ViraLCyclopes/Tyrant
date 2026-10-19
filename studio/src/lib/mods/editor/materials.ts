@@ -1,7 +1,8 @@
 /**
  * One material's block of a skin's or species' "materials" in mod.json (keyed by material name), as the Material card edits
  * it. Unset (null, or "inherit") values are left out of mod.json; keys the editor does not know are dropped when parsing.
- * "game" is the explicit `"game"` value: the game's own ramp or mask, over whatever a lower level sets.
+ * "game" is the explicit `"game"` value: the game's own ramp or mask, over whatever a lower level sets. "species" names a
+ * vanilla species whose ramp or mask is taken (`{ "species": id }`): a reference, never a copy of the game's image.
  */
 export type MaskSlot = 'extra' | 'pattern' | 'fur';
 export type Channel = 'r' | 'g' | 'b' | 'a';
@@ -12,6 +13,7 @@ export const GAME = 'game';
 export type RampModel =
   | { kind: 'inherit' }
   | { kind: 'game' }
+  | { kind: 'species'; species: string }
   | { kind: 'file'; file: string }
   | { kind: 'stops'; stops: string[] }
   | { kind: 'thinFilm'; thickness: number; index: number };
@@ -19,6 +21,7 @@ export type RampModel =
 export type MaskModel =
   | { kind: 'inherit' }
   | { kind: 'game' }
+  | { kind: 'species'; species: string }
   | { kind: 'everywhere' }
   | { kind: 'file'; file: string }
   | { kind: 'from'; slot: MaskSlot; channel: Channel; invert: boolean };
@@ -106,6 +109,28 @@ export function replaceMaterial(saved: string | null, name: string, model: Mater
   return Object.keys(root).length ? JSON.stringify(root) : null;
 }
 
+/**
+ * Merges a species preset's block (mods.speciesPreset's materialJson, one material's entry) into a model: what the preset sets
+ * replaces this level's (iridescence fields, settings, fur.grow), everything else stays, as the in-game editor's Apply does.
+ */
+export function applyPresetBlock(model: MaterialModel, blockJson: string): void {
+  const block = asObject(JSON.parse(blockJson));
+  const preset = readIridescence(block?.iridescence);
+  if (preset) {
+    const i = (model.iridescence ??= emptyIridescence());
+    if (preset.strength) i.strength = preset.strength;
+    if (preset.variation !== null) i.variation = preset.variation;
+    if (preset.ramp.kind !== 'inherit') i.ramp = preset.ramp;
+    if (preset.mask.kind !== 'inherit') i.mask = preset.mask;
+    if (preset.scale !== null) i.scale = preset.scale;
+    if (preset.power !== null) i.power = preset.power;
+    if (preset.bias !== null) i.bias = preset.bias;
+  }
+  Object.assign(model.settings, readSettings(block?.settings));
+  const fur = readFur(block?.fur);
+  if (fur?.grow !== undefined) model.fur = { ...(model.fur ?? {}), grow: fur.grow };
+}
+
 /** A plain deep copy (also of Svelte state, which structuredClone refuses). */
 export function cloneMaterial(model: MaterialModel): MaterialModel {
   return JSON.parse(JSON.stringify(model)) as MaterialModel;
@@ -153,10 +178,17 @@ function readStrength(value: unknown): StrengthModel | null {
   return out;
 }
 
+/** `{ "species": id }`'s id; null for anything else. */
+function speciesOf(value: Json | null): string | null {
+  return typeof value?.species === 'string' && value.species.trim() ? value.species : null;
+}
+
 function readRamp(value: unknown): RampModel {
   if (value === GAME) return { kind: 'game' };
   if (typeof value === 'string' && value) return { kind: 'file', file: value };
   const r = asObject(value);
+  const species = speciesOf(r);
+  if (species) return { kind: 'species', species };
   if (Array.isArray(r?.stops) && r.stops.length && r.stops.every((c) => typeof c === 'string')) return { kind: 'stops', stops: (r.stops as string[]).map((c) => c.toLowerCase()) };
   const film = asObject(r?.thinFilm);
   if (film && num(film.thickness) !== null) return { kind: 'thinFilm', thickness: film.thickness as number, index: num(film.index) ?? DEFAULT_INDEX };
@@ -168,6 +200,8 @@ function readMask(value: unknown): MaskModel {
   if (value === 'everywhere') return { kind: 'everywhere' };
   if (typeof value === 'string' && value) return { kind: 'file', file: value };
   const m = asObject(value);
+  const species = speciesOf(m);
+  if (species) return { kind: 'species', species };
   if (!m || !MASK_SLOTS.includes(m.from as MaskSlot)) return { kind: 'inherit' };
   const channel = typeof m.channel === 'string' ? (m.channel.toLowerCase() as Channel) : 'r';
   return { kind: 'from', slot: m.from as MaskSlot, channel: CHANNELS.includes(channel) ? channel : 'r', invert: m.invert === true };
@@ -229,6 +263,8 @@ function writeRamp(r: RampModel): unknown {
   switch (r.kind) {
     case 'game':
       return GAME;
+    case 'species':
+      return { species: r.species };
     case 'file':
       return r.file;
     case 'stops':
@@ -244,6 +280,8 @@ function writeMask(m: MaskModel): unknown {
   switch (m.kind) {
     case 'game':
       return GAME;
+    case 'species':
+      return { species: m.species };
     case 'everywhere':
       return 'everywhere';
     case 'file':

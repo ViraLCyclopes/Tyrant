@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { emptyIridescence, parseFurJson, parseIridescenceJson, parseMaterial, replaceMaterial, toMaterialsJson, type MaterialModel } from './materials';
+import { applyPresetBlock, emptyIridescence, parseFurJson, parseIridescenceJson, parseMaterial, replaceMaterial, toMaterialsJson, type MaterialModel } from './materials';
 
 /** Parses one material block and writes it back. */
 const roundTrip = (block: unknown) => toMaterialsJson('Titanoboa', parseMaterial(JSON.stringify({ Titanoboa: block }), 'Titanoboa'));
@@ -79,6 +79,31 @@ describe('materials', () => {
     const saved = '{"Other":{"settings":{"_Cutoff":0.2}},"T":{"settings":{"_Smoothness":0.5}}}';
     expect(JSON.parse(replaceMaterial(saved, 'T', { iridescence: null, settings: { _Smoothness: 0.6 } })!)).toEqual({ Other: { settings: { _Cutoff: 0.2 } }, T: { settings: { _Smoothness: 0.6 } } });
     expect(replaceMaterial('{"T":{"settings":{"_Smoothness":0.5}}}', 'T', { iridescence: null, settings: {} })).toBeNull();
+  });
+
+  it('round-trips a ramp and a mask taken from a species', () => {
+    same({ iridescence: { ramp: { species: 'Microraptor' }, mask: { species: 'Oviraptor' } } });
+    expect(parseMaterial('{"T":{"iridescence":{"ramp":{"species":"Microraptor"}}}}', 'T').iridescence?.ramp).toEqual({ kind: 'species', species: 'Microraptor' });
+    expect(parseMaterial('{"T":{"iridescence":{"mask":{"species":""}}}}', 'T').iridescence?.mask).toEqual({ kind: 'inherit' }); // no id: dropped
+  });
+
+  it('a preset block replaces what it sets and keeps everything else', () => {
+    const model = parseMaterial(
+      JSON.stringify({ T: { iridescence: { strength: 0.6, variation: 0.3, ramp: { thinFilm: { thickness: 300 } }, tiling: [2, 2] }, settings: { _Smoothness: 0.4, _Length: 1 }, fur: { mask: 'f.png' } } }),
+      'T',
+    );
+    applyPresetBlock(model, '{"iridescence":{"strength":{"normal":0.25,"albino":0.1},"ramp":{"species":"Microraptor"},"mask":{"species":"Microraptor"},"scale":-0.25,"power":-0.3,"bias":1.3}}');
+    expect(JSON.parse(toMaterialsJson('T', model)!)).toEqual({
+      T: {
+        iridescence: { strength: { normal: 0.25, albino: 0.1 }, variation: 0.3, ramp: { species: 'Microraptor' }, mask: { species: 'Microraptor' }, tiling: [2, 2], scale: -0.25, power: -0.3, bias: 1.3 },
+        settings: { _Smoothness: 0.4, _Length: 1 },
+        fur: { mask: 'f.png' },
+      },
+    });
+    applyPresetBlock(model, '{"fur":{"grow":true},"settings":{"_Length":1.5,"_DroopDirection":[0,-10.3,8.11]}}');
+    expect(model.fur).toEqual({ mask: 'f.png', grow: true });
+    expect(model.settings).toEqual({ _Smoothness: 0.4, _Length: 1.5, _DroopDirection: [0, -10.3, 8.11] });
+    expect(model.iridescence?.ramp).toEqual({ kind: 'species', species: 'Microraptor' }); // the fur preset leaves the iridescence alone
   });
 
   it('reads an inherited iridescence block', () => {
