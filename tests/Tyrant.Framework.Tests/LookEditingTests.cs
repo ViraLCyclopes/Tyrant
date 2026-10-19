@@ -27,6 +27,7 @@ public class LookEditingTests
             Assert.Contains(MaskKind.Everywhere, LookEditing.MaskKinds(scope));
             Assert.Contains(MaskKind.Game, LookEditing.MaskKinds(scope));
             Assert.Contains(MaskKind.File, LookEditing.MaskKinds(scope));
+            Assert.Contains(MaskKind.Species, LookEditing.MaskKinds(scope)); // another species' mask is valid at every level
         }
     }
 
@@ -43,6 +44,8 @@ public class LookEditingTests
         Assert.Equal(MaskKind.Channel, LookEditing.MaskKindOf(new MaskSource { From = "extra", Channel = 'g' }));
         Assert.Equal(RampKind.Game, LookEditing.RampKindOf(new RampSource { Game = true })); // the explicit "game" value
         Assert.Equal(MaskKind.Game, LookEditing.MaskKindOf(new MaskSource { Game = true }));
+        Assert.Equal(RampKind.Species, LookEditing.RampKindOf(new RampSource { Species = "Microraptor" }));
+        Assert.Equal(MaskKind.Species, LookEditing.MaskKindOf(new MaskSource { Species = "Microraptor" }));
     }
 
     [Theory]

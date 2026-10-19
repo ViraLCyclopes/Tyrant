@@ -7,13 +7,13 @@ using System.Linq;
 namespace Tyrant.Framework.Core
 {
     /// <summary>Where the iridescence colour comes from, as the in-game editor offers it (colour stops come from the app).</summary>
-    public enum RampKind { Game, ThinFilm, Stops, File }
+    public enum RampKind { Game, ThinFilm, Stops, File, Species }
 
     /// <summary>Where the iridescence shows, as the in-game editor offers it.</summary>
-    public enum MaskKind { Everywhere, Game, Channel, File }
+    public enum MaskKind { Everywhere, Game, Channel, File, Species }
 
     /// <summary>The in-game editor's choices and typed values: what each scope offers, ranges, parsing and the starting look.</summary>
-    public static class LookEditing
+    public static partial class LookEditing
     {
         /// <summary>The app's starting film thickness (nm), and part A's starting shaping (Microraptor's) that makes a new sheen visible at once.</summary>
         public const float DefaultThickness = 420;
@@ -36,19 +36,21 @@ namespace Tyrant.Framework.Core
         /// <summary>The variants a strength holds, in the game's AnimalSkinType order.</summary>
         public static readonly IReadOnlyList<string> Variants = new[] { "normal", "albino", "melanistic", "leucistic" };
 
-        private static readonly MaskKind[] AllMasks = { MaskKind.Everywhere, MaskKind.Game, MaskKind.Channel, MaskKind.File };
-        private static readonly MaskKind[] SpeciesMasks = { MaskKind.Everywhere, MaskKind.Game, MaskKind.File };
+        private static readonly MaskKind[] AllMasks = { MaskKind.Everywhere, MaskKind.Game, MaskKind.Channel, MaskKind.File, MaskKind.Species };
+        private static readonly MaskKind[] SpeciesMasks = { MaskKind.Everywhere, MaskKind.Game, MaskKind.File, MaskKind.Species };
 
         /// <summary>The mask choices of a scope: a species file cannot hold a mask from a skin slot ("from"), so it never offers one.</summary>
         public static IReadOnlyList<MaskKind> MaskKinds(LookScope scope) => scope == LookScope.Species ? SpeciesMasks : AllMasks;
 
         /// <summary>Game for no ramp and for the explicit "game" one.</summary>
         public static RampKind RampKindOf(RampSource? ramp) =>
-            ramp == null || ramp.Game ? RampKind.Game : ramp.File != null ? RampKind.File : ramp.ThinFilm != null ? RampKind.ThinFilm : RampKind.Stops;
+            ramp == null || ramp.Game ? RampKind.Game : ramp.Species != null ? RampKind.Species : ramp.File != null ? RampKind.File
+            : ramp.ThinFilm != null ? RampKind.ThinFilm : RampKind.Stops;
 
         /// <summary>Game for no mask and for the explicit "game" one.</summary>
         public static MaskKind MaskKindOf(MaskSource? mask) =>
-            mask == null || mask.Game ? MaskKind.Game : mask.Everywhere ? MaskKind.Everywhere : mask.File != null ? MaskKind.File : MaskKind.Channel;
+            mask == null || mask.Game ? MaskKind.Game : mask.Species != null ? MaskKind.Species : mask.Everywhere ? MaskKind.Everywhere
+            : mask.File != null ? MaskKind.File : MaskKind.Channel;
 
         /// <summary>A typed number ("0.5" or "0,5"), kept within min..max; false when the text is not a number.</summary>
         public static bool TryParse(string? text, float min, float max, out float value)

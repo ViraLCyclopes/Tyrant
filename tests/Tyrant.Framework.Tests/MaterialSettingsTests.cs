@@ -106,6 +106,23 @@ public class MaterialSettingsTests
     }
 
     [Fact]
+    public void Species_ramp_and_mask_read_and_write_back_at_any_level()
+    {
+        const string Block = """{ "Titanoboa": { "iridescence": { "ramp": { "species": "Microraptor" }, "mask": { "species": "Velociraptor" } } } }""";
+        var m = Titanoboa(Block);
+        Assert.Equal("Microraptor", m.Iridescence!.Ramp!.Species);
+        Assert.Null(m.Iridescence.Ramp.File);
+        Assert.False(m.Iridescence.Ramp.Game);
+        Assert.Equal("Velociraptor", m.Iridescence.Mask!.Species);
+        Assert.Null(m.Iridescence.Mask.From);
+
+        var json = Json.Write(MaterialOverrides.ToJson(new Dictionary<string, MaterialOverride> { ["Titanoboa"] = m }));
+        Assert.Equal(Json.Write(Json.Parse(Block)), json);
+        var species = MaterialOverrides.Parse(Json.Parse(Block), "Species", skinLevel: false)!["Titanoboa"]; // valid on a species too
+        Assert.Equal("Velociraptor", species.Iridescence!.Mask!.Species);
+    }
+
+    [Fact]
     public void A_single_strength_applies_to_every_variant()
     {
         var s = Titanoboa("""{ "Titanoboa": { "iridescence": { "strength": 0.3 } } }""").Iridescence!.Strength!;
@@ -144,6 +161,13 @@ public class MaterialSettingsTests
     [InlineData("""{ "Titanoboa": { "fur": { "grow": "yes" } } }""", "\"materials.Titanoboa.fur.grow\" must be true or false")]
     [InlineData("""{ "Titanoboa": { "fur": { "length": 1 } } }""", "use mask, infantMask, grow")]
     [InlineData("""{ "Titanoboa": { "fur": { "mask": "everywhere" } } }""", "\"materials.Titanoboa.fur.mask\" must be an image file path or \"game\"")]
+    [InlineData("""{ "Titanoboa": { "iridescence": { "ramp": { "species": "" } } } }""", "\"materials.Titanoboa.iridescence.ramp.species\" must be a species id")]
+    [InlineData("""{ "Titanoboa": { "iridescence": { "ramp": { "species": 3 } } } }""", "\"materials.Titanoboa.iridescence.ramp.species\" must be a species id")]
+    [InlineData("""{ "Titanoboa": { "iridescence": { "ramp": { "species": "Microraptor", "stops": ["#ffffff"] } } } }""", "needs exactly one of \"stops\", \"thinFilm\" or \"species\"")]
+    [InlineData("""{ "Titanoboa": { "iridescence": { "ramp": { } } } }""", "needs exactly one of \"stops\", \"thinFilm\" or \"species\"")]
+    [InlineData("""{ "Titanoboa": { "iridescence": { "mask": { "species": " " } } } }""", "\"materials.Titanoboa.iridescence.mask.species\" must be a species id")]
+    [InlineData("""{ "Titanoboa": { "iridescence": { "mask": { "species": "Microraptor", "channel": "g" } } } }""", "\"species\" alone, or \"from\"")]
+    [InlineData("""{ "Titanoboa": { "iridescence": { "mask": { } } } }""", "needs \"from\" (extra, pattern or fur) or \"species\"")]
     public void Material_problems_are_explained(string materials, string expected)
     {
         var (manifest, problems) = WithMaterials(materials);

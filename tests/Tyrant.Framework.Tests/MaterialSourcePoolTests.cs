@@ -51,6 +51,23 @@ public class MaterialSourcePoolTests
     }
 
     [Fact]
+    public void A_species_ramp_or_mask_is_one_source_per_species()
+    {
+        var pool = new MaterialSourcePool(_ => "1");
+        var micro = Block(new RampSource { Species = "Microraptor" }, new MaskSource { Species = "Microraptor" });
+        var again = Block(new RampSource { Species = "Microraptor" }, new MaskSource { Species = "Microraptor" });
+        var other = Block(new RampSource { Species = "Oviraptor" }, new MaskSource { Species = "Oviraptor" });
+        var game = Block(new RampSource { Game = true }, new MaskSource { Game = true });
+        foreach (var block in new[] { micro, again, other, game }) pool.Intern(block);
+
+        Assert.Same(micro.Iridescence!.Ramp, again.Iridescence!.Ramp);
+        Assert.Same(micro.Iridescence.Mask, again.Iridescence.Mask);
+        Assert.NotSame(micro.Iridescence.Ramp, other.Iridescence!.Ramp);
+        Assert.NotSame(micro.Iridescence.Ramp, game.Iridescence!.Ramp);
+        Assert.NotSame(micro.Iridescence.Mask, game.Iridescence.Mask);
+    }
+
+    [Fact]
     public void A_file_whose_stamp_changed_is_a_new_source()
     {
         var stamp = "t1";

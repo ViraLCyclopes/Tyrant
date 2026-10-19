@@ -238,6 +238,28 @@ public class MaterialTableTests
     }
 
     [Fact]
+    public void A_species_ramp_or_mask_merges_per_field_and_survives_copies()
+    {
+        var a = Mod("mod-a", "{\"format\":1,\"id\":\"mod-a\",\"skins\":[" + Skin("mine") + "]}",
+            SpeciesFile("Titanoboa", """{"Titanoboa":{"iridescence":{"ramp":{"species":"Microraptor"},"mask":"m.png","scale":-0.25}}}"""),
+            SkinFile("mine", """{"Titanoboa":{"iridescence":{"mask":{"species":"Oviraptor"}}}}"""));
+        var table = MaterialTable.Build([a], out var messages);
+
+        Assert.Empty(messages);
+        var merged = table.For("Titanoboa", "mod-a/mine", null, null, "Titanoboa")!;
+        Assert.Equal("Microraptor", merged.Iridescence!.Ramp!.Species); // from the species: the skin sets no ramp
+        Assert.Equal("Oviraptor", merged.Iridescence.Mask!.Species); // the skin's mask beats the species' file
+        Assert.Equal(-0.25f, merged.Iridescence.Scale);
+        Assert.EndsWith("m.png", table.For("Titanoboa", null, null, null, "Titanoboa")!.Iridescence!.Mask!.File);
+
+        var live = new MaterialOverride { Iridescence = new IridescenceSettings { Ramp = new RampSource { Species = "Microraptor" }, Mask = new MaskSource { Species = "Microraptor" } } };
+        var copy = MaterialTable.WithFullPaths(live, Path.GetTempPath());
+        Assert.Equal("Microraptor", copy.Iridescence!.Ramp!.Species);
+        Assert.Equal("Microraptor", copy.Iridescence.Mask!.Species);
+        Assert.NotSame(live.Iridescence.Ramp, copy.Iridescence.Ramp);
+    }
+
+    [Fact]
     public void Merge_does_not_change_its_inputs_and_variation_defaults()
     {
         var top = new MaterialOverride { Iridescence = new IridescenceSettings { Scale = 1f } };

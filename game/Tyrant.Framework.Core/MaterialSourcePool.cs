@@ -74,6 +74,7 @@ namespace Tyrant.Framework.Core
         private string Key(RampSource ramp)
         {
             if (ramp.Game) return "game";
+            if (ramp.Species != null) return "species|" + ramp.Species;
             if (ramp.File != null) return "file|" + ramp.File + "|" + _fileStamp(ramp.File);
             if (ramp.ThinFilm != null)
                 return "film|" + ramp.ThinFilm.Thickness.ToString("R", CultureInfo.InvariantCulture) + "|" + ramp.ThinFilm.Index.ToString("R", CultureInfo.InvariantCulture);
@@ -87,6 +88,7 @@ namespace Tyrant.Framework.Core
         private string Key(MaskSource mask)
         {
             if (mask.Game) return "game";
+            if (mask.Species != null) return "species|" + mask.Species;
             if (mask.Everywhere) return "everywhere";
             if (mask.File != null) return "file|" + mask.File + "|" + _fileStamp(mask.File);
             return "from|" + mask.From + "|" + mask.Channel + "|" + (mask.Invert ? "1" : "0");
