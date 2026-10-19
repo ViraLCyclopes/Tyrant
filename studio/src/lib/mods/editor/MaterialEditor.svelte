@@ -65,11 +65,15 @@
     );
   });
 
+  /** The species this card's look is for: a preset keeps its mask only on its own species (another's UV layout differs). */
+  const targetSpecies = $derived(skin ? skin.species : vanillaSkin ? vanillaSkin.species : (species ?? null));
+
   /** Merges the species' preset into this level's block and saves it (Undo takes it back). */
-  async function startFrom(kind: 'iridescence' | 'fur', species: string) {
-    if (!species) return;
+  async function startFrom(kind: 'iridescence' | 'fur', id: string) {
+    if (!id) return;
     try {
-      const r = await session.rpc.call('mods.speciesPreset', { species, kind });
+      const r = await session.rpc.call('mods.speciesPreset', { species: id, kind, target: targetSpecies });
+      if (kind === 'fur') seededLength = false; // the length is the preset's now: unticking Grow fur keeps it
       void edit((m) => applyPresetBlock(m, r.materialJson), true);
     } catch (e) {
       reason = asRpcError(e).message;

@@ -112,6 +112,7 @@ export function replaceMaterial(saved: string | null, name: string, model: Mater
 /**
  * Merges a species preset's block (mods.speciesPreset's materialJson, one material's entry) into a model: what the preset sets
  * replaces this level's (iridescence fields, settings, fur.grow), everything else stays, as the in-game editor's Apply does.
+ * A block without a strength (the species' is not known) turns iridescence on: a strength of 0 everywhere, or none, becomes 1.
  */
 export function applyPresetBlock(model: MaterialModel, blockJson: string): void {
   const block = asObject(JSON.parse(blockJson));
@@ -119,6 +120,8 @@ export function applyPresetBlock(model: MaterialModel, blockJson: string): void 
   if (preset) {
     const i = (model.iridescence ??= emptyIridescence());
     if (preset.strength) i.strength = preset.strength;
+    else if (!i.strength || maxStrength(i.strength) <= 0)
+      i.strength = { normal: 1, ...Object.fromEntries(MUTATIONS.filter((m) => i.strength?.[m] !== undefined).map((m) => [m, 1])) };
     if (preset.variation !== null) i.variation = preset.variation;
     if (preset.ramp.kind !== 'inherit') i.ramp = preset.ramp;
     if (preset.mask.kind !== 'inherit') i.mask = preset.mask;

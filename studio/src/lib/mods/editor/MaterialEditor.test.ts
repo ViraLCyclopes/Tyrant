@@ -39,14 +39,14 @@ async function setup({ materialsJson = null, onDraft, infoOver = {} }: { materia
     .on('mods.setMaterials', (p) => modDetail({ revision: `r-${++saves}`, skins: skinsWith(p.materials ?? null) }))
     .on('mods.speciesPresets', () => ({
       iridescence: [{ species: 'Microraptor', name: 'Microraptor' }, { species: 'Velociraptor', name: 'Velociraptor' }],
-      fur: [{ species: 'Mammoth', name: 'Woolly mammoth' }],
+      fur: [{ species: 'Mammoth', name: 'Woolly mammoth' }, { species: 'Short', name: 'Short fur' }],
       problem: null,
     }))
     .on('mods.speciesPreset', (p) => ({
       species: p.species,
       name: p.species,
       materialJson: p.kind === 'fur'
-        ? '{"fur":{"grow":true},"settings":{"_Length":1.5,"_DroopDirection":[0,-10.3,8.11]}}'
+        ? `{"fur":{"grow":true},"settings":{"_Length":${p.species === 'Short' ? 0.5 : 1.5},"_DroopDirection":[0,-10.3,8.11]}}`
         : `{"iridescence":{"strength":0.25,"ramp":{"species":"${p.species}"},"mask":{"species":"${p.species}"},"scale":-0.25,"power":-0.3,"bias":1.3}}`,
     }));
   const platform = new FakePlatform();
@@ -68,7 +68,7 @@ describe('MaterialEditor', () => {
     await waitFor(() => expect(within(picker).getByRole('option', { name: 'Microraptor' })).toBeInTheDocument());
     await fireEvent.change(picker, { target: { value: 'Microraptor' } });
     await waitFor(() => expect(rpc.callsTo('mods.setMaterials')).toHaveLength(1));
-    expect(rpc.callsTo('mods.speciesPreset')[0].params).toEqual({ species: 'Microraptor', kind: 'iridescence' });
+    expect(rpc.callsTo('mods.speciesPreset')[0].params).toEqual({ species: 'Microraptor', kind: 'iridescence', target: 'Titanoboa' }); // a mask is kept only on its own species
     expect(sent(rpc)).toEqual({
       Titanoboa: {
         iridescence: { strength: 0.25, variation: 0.3, ramp: { species: 'Microraptor' }, mask: { species: 'Microraptor' }, scale: -0.25, power: -0.3, bias: 1.3 },
@@ -115,7 +115,7 @@ describe('MaterialEditor', () => {
     await waitFor(() => expect(within(picker).getByRole('option', { name: 'Woolly mammoth' })).toBeInTheDocument());
     await fireEvent.change(picker, { target: { value: 'Mammoth' } });
     await waitFor(() => expect(rpc.callsTo('mods.setMaterials')).toHaveLength(1));
-    expect(rpc.callsTo('mods.speciesPreset')[0].params).toEqual({ species: 'Mammoth', kind: 'fur' });
+    expect(rpc.callsTo('mods.speciesPreset')[0].params).toEqual({ species: 'Mammoth', kind: 'fur', target: 'Titanoboa' });
     expect(sent(rpc)).toEqual({ Titanoboa: { fur: { mask: 'materials/f.png', grow: true }, settings: { _Smoothness: 0.5, _Length: 1.5, _DroopDirection: [0, -10.3, 8.11] } } });
   });
 
@@ -280,6 +280,19 @@ describe('MaterialEditor', () => {
     await fireEvent.click(screen.getByRole('checkbox', { name: 'Grow fur on skins without fur' }));
     await waitFor(() => expect(rpc.callsTo('mods.setMaterials')).toHaveLength(2));
     expect((rpc.callsTo('mods.setMaterials')[1].params as { materials: string | null }).materials).toBeNull();
+  });
+
+  it("a fur preset's length is the preset's: unticking Grow fur afterwards keeps it, even at the starting length", async () => {
+    const { rpc } = await setup({ infoOver: furLength('0') });
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Grow fur on skins without fur' })); // seeds _Length 0.5
+    await waitFor(() => expect(rpc.callsTo('mods.setMaterials')).toHaveLength(1));
+    const picker = screen.getByRole('combobox', { name: 'Start the fur from a species' });
+    await waitFor(() => expect(within(picker).getByRole('option', { name: 'Short fur' })).toBeInTheDocument());
+    await fireEvent.change(picker, { target: { value: 'Short' } }); // its length is 0.5 too
+    await waitFor(() => expect(rpc.callsTo('mods.setMaterials')).toHaveLength(2));
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Grow fur on skins without fur' }));
+    await waitFor(() => expect(rpc.callsTo('mods.setMaterials')).toHaveLength(3));
+    expect(sent(rpc, 2)).toEqual({ Titanoboa: { settings: { _Length: 0.5, _DroopDirection: [0, -10.3, 8.11] } } });
   });
 
   it('the starting length is still taken back after the page hands the card a fresh object for the same skin', async () => {

@@ -106,6 +106,18 @@ describe('materials', () => {
     expect(model.iridescence?.ramp).toEqual({ kind: 'species', species: 'Microraptor' }); // the fur preset leaves the iridescence alone
   });
 
+  it('a preset block without a strength turns iridescence on but keeps a strength this level has', () => {
+    const kept = parseMaterial('{"T":{"iridescence":{"strength":{"normal":0.6,"albino":0.2}}}}', 'T');
+    applyPresetBlock(kept, '{"iridescence":{"ramp":{"species":"Edmontosaurus"},"mask":"everywhere"}}');
+    expect(kept.iridescence?.strength).toEqual({ normal: 0.6, albino: 0.2 });
+    const off = parseMaterial('{"T":{"iridescence":{"strength":{"normal":0,"albino":0}}}}', 'T');
+    applyPresetBlock(off, '{"iridescence":{"ramp":{"species":"Edmontosaurus"}}}');
+    expect(off.iridescence?.strength).toEqual({ normal: 1, albino: 1 }); // off everywhere: on, as the game's preset does
+    const none = parseMaterial(null, 'T');
+    applyPresetBlock(none, '{"iridescence":{"ramp":{"species":"Edmontosaurus"}}}');
+    expect(none.iridescence?.strength).toEqual({ normal: 1 });
+  });
+
   it('reads an inherited iridescence block', () => {
     expect(parseIridescenceJson('{"strength":0.2,"scale":-1}')).toMatchObject({ strength: { normal: 0.2 }, scale: -1, power: null });
     expect(parseIridescenceJson(null)).toBeNull();
