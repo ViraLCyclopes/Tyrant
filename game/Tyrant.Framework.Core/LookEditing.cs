@@ -157,12 +157,15 @@ namespace Tyrant.Framework.Core
             }
             var below = effective?.Iridescence;
             var own = draft.Current.Iridescence;
-            var seed = !gameHasRamp && below?.Ramp == null && own?.Ramp == null && !Shaped(below) && !Shaped(own);
+            // A "game" ramp on a material without one is no ramp at all: it seeds like none.
+            var seed = !gameHasRamp && Unramped(below?.Ramp) && Unramped(own?.Ramp) && !Shaped(below) && !Shaped(own);
             draft.SetIridescenceOn(true);
             if (!seed) return;
             draft.SetThinFilm(LookEditing.DefaultThickness);
             draft.SetShaping(LookEditing.StartScale, LookEditing.StartPower, LookEditing.StartBias);
         }
+
+        private static bool Unramped(RampSource? ramp) => ramp == null || ramp.Game;
 
         private static bool Shaped(IridescenceSettings? i) => i != null && (i.Scale != null || i.Power != null || i.Bias != null);
     }

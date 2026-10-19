@@ -122,6 +122,25 @@ public class LookEditingTests
     }
 
     [Fact]
+    public void A_game_ramp_on_a_material_without_one_still_seeds_a_thin_film()
+    {
+        // Game's picked on an animal whose material has no ramp: on must still show a rainbow.
+        var own = new LookDraft(LookScope.Animal, null);
+        own.SetRamp(new RampSource { Game = true });
+        new IridescenceSwitch().On(own, null, gameHasRamp: false);
+        Assert.Equal(LookEditing.DefaultThickness, own.Current.Iridescence!.Ramp!.ThinFilm!.Thickness);
+
+        var below = new LookDraft(LookScope.Animal, null);
+        new IridescenceSwitch().On(below, new MaterialOverride { Iridescence = new IridescenceSettings { Ramp = new RampSource { Game = true } } }, gameHasRamp: false);
+        Assert.NotNull(below.Current.Iridescence!.Ramp!.ThinFilm);
+
+        var gameRamp = new LookDraft(LookScope.Animal, null);
+        gameRamp.SetRamp(new RampSource { Game = true });
+        new IridescenceSwitch().On(gameRamp, null, gameHasRamp: true); // the game's own ramp is there: kept
+        Assert.True(gameRamp.Current.Iridescence!.Ramp!.Game);
+    }
+
+    [Fact]
     public void A_fresh_on_seeds_nothing_when_the_game_or_a_layer_already_has_a_ramp_or_shaping()
     {
         var gameRamp = new LookDraft(LookScope.Skin, null);

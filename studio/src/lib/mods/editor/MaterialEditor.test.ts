@@ -42,9 +42,9 @@ async function setup({ materialsJson = null, onDraft, infoOver = {} }: { materia
   const tab = new Tab('tab-mod', session.log, { retitle: () => {}, openTool: () => null });
   const doc = new ModDoc('red-spot', rpc, tab, () => {});
   await doc.load();
-  renderWith(MaterialEditor, session, { doc, skin: doc.detail!.skins[0], onDraft }, tab);
+  const view = renderWith(MaterialEditor, session, { doc, skin: doc.detail!.skins[0], onDraft }, tab);
   await screen.findByText('Material: Titanoboa');
-  return { rpc, platform, session, doc };
+  return { rpc, platform, session, doc, view };
 }
 
 const sent = (rpc: FakeRpc, n = 0) => JSON.parse((rpc.callsTo('mods.setMaterials')[n].params as { materials: string }).materials);
@@ -211,6 +211,47 @@ describe('MaterialEditor', () => {
     await fireEvent.click(screen.getByRole('checkbox', { name: 'Grow fur on skins without fur' }));
     await waitFor(() => expect(rpc.callsTo('mods.setMaterials')).toHaveLength(2));
     expect((rpc.callsTo('mods.setMaterials')[1].params as { materials: string | null }).materials).toBeNull();
+  });
+
+  it('the starting length is still taken back after the page hands the card a fresh object for the same skin', async () => {
+    const { rpc, doc, view } = await setup({ infoOver: furLength('0') });
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Grow fur on skins without fur' }));
+    await waitFor(() => expect(rpc.callsTo('mods.setMaterials')).toHaveLength(1));
+    await view.rerender({ doc, skin: { ...doc.detail!.skins[0] } }); // as a page reading the saved detail again does
+    await waitFor(() => expect(screen.getByRole('checkbox', { name: 'Grow fur on skins without fur' })).toBeChecked());
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Grow fur on skins without fur' }));
+    await waitFor(() => expect(rpc.callsTo('mods.setMaterials')).toHaveLength(2));
+    expect((rpc.callsTo('mods.setMaterials')[1].params as { materials: string | null }).materials).toBeNull();
+  });
+
+  it('a starting length set on one skin is not taken back on another one the card moves to', async () => {
+    const red = '{"Titanoboa":{"fur":{"grow":true},"settings":{"_Length":0.5}}}';
+    let blue: string | null = null;
+    let saves = 0;
+    const skins = () => modDetail().skins.map((s) => ({ ...s, species: 'Titanoboa', materialsJson: s.id === 'blue' ? blue : red }));
+    const rpc = new FakeRpc()
+      .on('mods.get', () => modDetail({ skins: skins() }))
+      .on('mods.check', () => ({ errors: [], warnings: [], missingCutouts: [] }))
+      .on('mods.materialInfo', () => info(furLength('0')))
+      .on('mods.setMaterials', (p) => {
+        if (p.skin === 'blue') blue = p.materials ?? null;
+        return modDetail({ revision: `r-${++saves}`, skins: skins() });
+      });
+    const session = new Session(rpc, new FakePlatform(), memoryStore());
+    const tab = new Tab('tab-mod', session.log, { retitle: () => {}, openTool: () => null });
+    const doc = new ModDoc('red-spot', rpc, tab, () => {});
+    await doc.load();
+    const view = renderWith(MaterialEditor, session, { doc, skin: doc.detail!.skins[0] }, tab);
+    await screen.findByText('Material: Titanoboa');
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Grow fur on skins without fur' })); // seeds 0.5 on blue
+    await waitFor(() => expect(rpc.callsTo('mods.setMaterials')).toHaveLength(1));
+
+    await view.rerender({ doc, skin: doc.detail!.skins[1] }); // the same card, now on red (its own 0.5)
+    await waitFor(() => expect(screen.getByRole('checkbox', { name: 'Grow fur on skins without fur' })).toBeChecked());
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Grow fur on skins without fur' }));
+    await waitFor(() => expect(rpc.callsTo('mods.setMaterials')).toHaveLength(2));
+    expect(rpc.callsTo('mods.setMaterials')[1].params).toMatchObject({ skin: 'red' });
+    expect(sent(rpc, 1)).toEqual({ Titanoboa: { settings: { _Length: 0.5 } } }); // red's own length stays
   });
 
   it('unticking keeps a length the player changed after ticking', async () => {

@@ -25,6 +25,7 @@ namespace Tyrant.Framework
 
         private static GameObject? _nurseryButton;
         private static readonly Dictionary<string, GameObject> PanelButtons = new Dictionary<string, GameObject>(StringComparer.Ordinal);
+        private static readonly Dictionary<string, string> PanelShown = new Dictionary<string, string>(StringComparer.Ordinal); // actions shown when placed beside them
         private static readonly HashSet<string> Logged = new HashSet<string>(StringComparer.Ordinal); // placement news, once a game run
         private static readonly HashSet<string> Broken = new HashSet<string>(StringComparer.Ordinal); // placements that threw: not tried again this park
         private static readonly Dictionary<(Type, string), MemberInfo?> Members = new Dictionary<(Type, string), MemberInfo?>();
@@ -51,10 +52,15 @@ namespace Tyrant.Framework
                 _nurseryButton = TryPlace("nursery", nursery, () => NurseryButton(nursery));
             foreach (var field in Panels)
             {
-                if (PanelButtons.TryGetValue(field, out var placed) && placed != null) continue;
-                if (Read(gui, field, PanelName(field) + " has no Tyrant button.") is Component panel && panel != null && panel.gameObject.activeInHierarchy
-                    && TryPlace(field, panel, () => PanelButton(panel, field)) is GameObject button)
-                    PanelButtons[field] = button;
+                if (!(Read(gui, field, PanelName(field) + " has no Tyrant button.") is Component panel) || panel == null || !panel.gameObject.activeInHierarchy) continue;
+                if (PanelButtons.TryGetValue(field, out var placed) && placed != null)
+                {
+                    // Placed beside the actions (no layout group): an action shown or hidden since (Sell on a dead animal) moves it.
+                    if (PanelShown.TryGetValue(field, out var shown) && shown != ActionsShown(panel))
+                        TryPlace(field, panel, () => Arrange((RectTransform)placed.transform, panel, field));
+                    continue;
+                }
+                if (TryPlace(field, panel, () => PanelButton(panel, field)) is GameObject button) PanelButtons[field] = button;
             }
         }
 
@@ -87,6 +93,7 @@ namespace Tyrant.Framework
                 if (button != null) UnityEngine.Object.Destroy(button);
             _nurseryButton = null;
             PanelButtons.Clear();
+            PanelShown.Clear();
             Broken.Clear();
             _nextButtonTry = 0f;
         }
@@ -120,13 +127,33 @@ namespace Tyrant.Framework
         /// </summary>
         private static GameObject? PanelButton(Component panel, string field)
         {
-            var where = PanelName(field);
             var template = Read(panel, "nextButton") as Component ?? Read(panel, "previousButton") as Component;
+            var actions = ActionRow(panel);
+            var button = IconButton(template != null ? template.gameObject : null, actions.Count > 0 ? actions[0].parent : panel.transform, Safe(() => OpenOnPanel(panel)));
+            Arrange(button, panel, field);
+            button.gameObject.SetActive(true);
+            return button.gameObject;
+        }
+
+        /// <summary>The panel's action buttons that share the first one's parent (the bottom row); empty when there are none.</summary>
+        private static List<RectTransform> ActionRow(Component panel)
+        {
             var actions = Actions.Select(name => Read(panel, name) as Component)
                 .Select(c => c != null ? c.transform as RectTransform : null).Where(r => r != null && r.parent != null).Select(r => r!).ToList();
             var row = actions.Count > 0 ? actions[0].parent : null;
-            actions = actions.Where(a => a.parent == row).ToList();
-            var button = IconButton(template != null ? template.gameObject : null, row ?? panel.transform, Safe(() => OpenOnPanel(panel)));
+            return actions.Where(a => a.parent == row).ToList();
+        }
+
+        /// <summary>Which actions show ("10": move shown, sell hidden), to tell when the button needs placing again.</summary>
+        private static string ActionsShown(Component panel) => string.Concat(ActionRow(panel).Select(a => a.gameObject.activeSelf ? '1' : '0'));
+
+        /// <summary>Places the panel's button (see <see cref="PanelButton"/>); a placement beside the actions remembers which showed.</summary>
+        private static GameObject? Arrange(RectTransform button, Component panel, string field)
+        {
+            var where = PanelName(field);
+            var actions = ActionRow(panel);
+            var row = actions.Count > 0 ? actions[0].parent : null;
+            PanelShown.Remove(field);
             string place;
             if (row == null)
             {
@@ -149,18 +176,21 @@ namespace Tyrant.Framework
                 }
                 else
                 {
-                    var rightMost = actions.OrderByDescending(a => Edge(a, right: true)).First();
+                    // A hidden action (Sell on a dead animal) does not count: the T would sit in the gap it leaves.
+                    var shown = actions.Where(a => a.gameObject.activeSelf).ToList();
+                    if (shown.Count == 0) shown = actions;
+                    var rightMost = shown.OrderByDescending(a => Edge(a, right: true)).First();
                     PlaceBeside(button, rightMost, size, right: true);
                     place = $"right of {rightMost.name} (in {row.name})";
                     if (panel.transform is RectTransform bounds && !Inside(button, bounds))
                     {
-                        var leftMost = actions.OrderBy(a => Edge(a, right: false)).First();
+                        var leftMost = shown.OrderBy(a => Edge(a, right: false)).First();
                         PlaceBeside(button, leftMost, size, right: false); // the panel's edge is right of the row
                         place = $"left of {leftMost.name} (in {row.name})";
                     }
+                    PanelShown[field] = ActionsShown(panel);
                 }
             }
-            button.gameObject.SetActive(true);
             Once(field + "-placed", false, $"{where} has the Tyrant looks button {place}.");
             return button.gameObject;
         }

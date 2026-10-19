@@ -132,6 +132,13 @@
   const growing = $derived((shown?.fur?.grow ?? inheritedFur?.grow) === true);
   /** True while the fur length is the one ticking Grow fur set: unticking takes it back. */
   let seededLength = false;
+  // The card can move to another skin, species or vanilla skin without being made again: a length seeded there is not this one's.
+  // A string, so a new skin object for the same skin (after every save) changes nothing.
+  const targetKey = $derived(JSON.stringify(target));
+  $effect(() => {
+    void targetKey;
+    seededLength = false;
+  });
 
   /** A fur block with one change, or none when nothing is left in it. */
   function setFur(m: MaterialModel, change: (fur: NonNullable<MaterialModel['fur']>) => void) {
