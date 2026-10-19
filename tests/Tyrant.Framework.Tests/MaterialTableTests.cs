@@ -88,4 +88,41 @@ public class MaterialTableTests
         Assert.Equal(0f, MaterialTable.EffectiveVariation(top.Iridescence));
         Assert.Null(MaterialTable.Merge(null, null));
     }
+
+    [Fact]
+    public void Merging_nothing_and_looking_up_an_animal_no_mod_covers_allocate_nothing()
+    {
+        // Every growth tick of every animal asks: the answer for the animals no mod covers must cost no garbage.
+        var table = MaterialTable.Build([Mod("mod-a", Species("mod-a", "Titanoboa", "0.1"))], out _);
+        var none = new MaterialOverride?[3];
+        MaterialTable.Merge(none);
+        table.For("Other", null, null, "Titanoboa");
+        table.For("Titanoboa", null, null, "Eyes");
+
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        var merged = MaterialTable.Merge(none);
+        var other = table.For("Other", null, null, "Titanoboa");
+        var otherMaterial = table.For("Titanoboa", null, null, "Eyes");
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        Assert.Null(merged);
+        Assert.Null(other);
+        Assert.Null(otherMaterial);
+        Assert.Equal(0, allocated);
+    }
+
+    [Fact]
+    public void The_table_says_which_species_and_skins_it_covers_before_any_material_is_read()
+    {
+        var a = Mod("mod-a", "{\"format\":1,\"id\":\"mod-a\",\"models\":[{\"target\":\"Titanoboa\",\"materials\":{\"Titanoboa\":{\"settings\":{\"_Smoothness\":0.2}}}}],\"skins\":["
+            + Skin("mine", """{"Titanoboa":{"iridescence":{"strength":0.35}}}""") + "," + Skin("bare", "{}") + "]}");
+        var table = MaterialTable.Build([a], out _);
+
+        Assert.True(table.CoversSpecies("Titanoboa"));
+        Assert.False(table.CoversSpecies("Other"));
+        Assert.False(table.CoversSpecies(null));
+        Assert.True(table.CoversSkin("mod-a", "mine"));
+        Assert.False(table.CoversSkin("mod-a", "bare"));
+        Assert.False(table.CoversSkin("mod-b", "mine"));
+    }
 }

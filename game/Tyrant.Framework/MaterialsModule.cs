@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
+using System.Runtime.CompilerServices;
 using HarmonyLib;
 using Tyrant.Framework.Core;
 using UnityEngine;
@@ -16,7 +17,8 @@ namespace Tyrant.Framework
     /// AnimalMaterials.CalculateKeywords adds ExtraFeatures (the shader variant with iridescence) when the animal's strength is
     /// above 0, and postfixes on AnimalVisuals.SetAnimalMaterialVariation and AnimalGrowthManager.UpdateGrowth (the two places
     /// the game writes _IridescenceStrength) write the settings, ramp, mask, shaping and strength into the property block,
-    /// read from the first LOD renderer and written to every LOD like the game's own edit scope.
+    /// read from the first LOD renderer and written to every LOD like the game's own edit scope. A key Tyrant wrote for an animal and
+    /// no longer sets (the Nursery preview reuses one animal for every skin) goes back to the material's own value.
     /// </summary>
     internal static class MaterialsModule
     {
@@ -33,8 +35,18 @@ namespace Tyrant.Framework
         private static readonly MaterialPropertyBlock Block = new MaterialPropertyBlock();
         private static readonly List<Renderer> Renderers = new List<Renderer>();
         private static readonly HashSet<string> Announced = new HashSet<string>(StringComparer.Ordinal);
-        private static readonly Dictionary<string, Texture2D?> Ramps = new Dictionary<string, Texture2D?>(StringComparer.OrdinalIgnoreCase);
-        private static readonly Dictionary<string, Texture?> Masks = new Dictionary<string, Texture?>(StringComparer.Ordinal);
+        private static readonly HashSet<(string Kind, string Owner, string Name)> Reported = new HashSet<(string, string, string)>();
+
+        // Textures by the table's ramp and mask objects (they live as long as the table): nothing is built or keyed per tick.
+        private static readonly Dictionary<RampSource, Texture2D?> Ramps = new Dictionary<RampSource, Texture2D?>(ReferenceComparer.Instance);
+        private static readonly Dictionary<MaskSource, Texture?> FileMasks = new Dictionary<MaskSource, Texture?>(ReferenceComparer.Instance);
+        private static readonly Dictionary<(MaskSource Mask, string Skin, bool Male), Texture?> SlotMasks = new Dictionary<(MaskSource, string, bool), Texture?>();
+
+        /// <summary>Per animal: the first LOD renderer Tyrant wrote to and the property names it set there.</summary>
+        private static readonly ConditionalWeakTable<object, Written> WrittenTo = new ConditionalWeakTable<object, Written>();
+        private static readonly Dictionary<string, Kind> Writing = new Dictionary<string, Kind>(StringComparer.Ordinal);
+        private static Enum? _materialFlag;
+        private static bool _materialFlagRead;
         private static readonly Dictionary<Type, Members> MembersByType = new Dictionary<Type, Members>();
         private static readonly Dictionary<(Type, string), FieldInfo?> Fields = new Dictionary<(Type, string), FieldInfo?>();
         private static readonly Dictionary<Type, PropertyInfo?> GrowthAnimal = new Dictionary<Type, PropertyInfo?>();
@@ -118,7 +130,7 @@ namespace Tyrant.Framework
             if (!_active || animal == null) return keywords;
             try
             {
-                var found = Resolve(animal);
+                var found = Resolve(animal, MembersOf(animal.GetType()));
                 var strength = found?.Override.Iridescence?.Strength;
                 if (strength != null && strength.For(SkinTypeOf(found!.Members, animal)) > 0) return keywords | ExtraFeatures;
             }
@@ -132,9 +144,10 @@ namespace Tyrant.Framework
         // __args[0]: the animal (the extension method's 'this IAnimal').
         private static void AfterVariation(object[] __args) => Apply(__args.Length > 0 ? __args[0] : null);
 
-        private static void AfterGrowth(object __instance)
+        // __args[0]: the AnimalGrowthFlags; only a Material update writes _IridescenceStrength (the rest is bones and shapes).
+        private static void AfterGrowth(object __instance, object[] __args)
         {
-            if (!_active || __instance == null) return;
+            if (!_active || __instance == null || (__args.Length > 0 && !UpdatesMaterial(__args[0]))) return;
             object? animal;
             try
             {
@@ -167,59 +180,180 @@ namespace Tyrant.Framework
 
         private static void ApplyTo(object animal)
         {
-            var found = Resolve(animal);
-            if (found == null || !Lods(found.Members, animal)) return;
+            var members = MembersOf(animal.GetType());
+            var found = Resolve(animal, members);
+            if (found == null)
+            {
+                Forget(animal, members);
+                return;
+            }
+            if (!Lods(members, animal)) return;
             var o = found.Override;
             var i = o.Iridescence;
 
             // Textures first: a failure there leaves the block untouched.
-            var male = string.Equals(found.Members.Sex?.GetValue(animal, null)?.ToString(), "Male", StringComparison.Ordinal);
+            var male = IsMale(members, animal);
             var ramp = i?.Ramp == null ? null : RampTexture(i.Ramp);
             var mask = i?.Mask == null ? null : MaskTexture(i.Mask, found, male);
 
-            Renderers[0].GetPropertyBlock(Block);
+            var first = Renderers[0];
+            first.GetPropertyBlock(Block);
+            Writing.Clear();
             foreach (var setting in o.Settings)
             {
                 var v = setting.Value;
-                if (v.Kind == MaterialValueKind.Color) Block.SetColor(setting.Key, new Color(v.Color.R, v.Color.G, v.Color.B, 1f)); // sRGB; Unity converts
-                else if (v.Kind == MaterialValueKind.Vector) Block.SetVector(setting.Key, new Vector4(v.Vector[0], v.Vector[1], v.Vector[2], v.Vector[3]));
-                else Block.SetFloat(setting.Key, v.Number);
+                if (v.Kind == MaterialValueKind.Color) SetColor(setting.Key, new Color(v.Color.R, v.Color.G, v.Color.B, 1f)); // sRGB; Unity converts
+                else if (v.Kind == MaterialValueKind.Vector) SetVector(setting.Key, new Vector4(v.Vector[0], v.Vector[1], v.Vector[2], v.Vector[3]));
+                else SetFloat(setting.Key, v.Number);
             }
             if (i != null)
             {
-                if (i.Scale is float scale) Block.SetFloat("_IridescenceScale", scale);
-                if (i.Power is float power) Block.SetFloat("_IridescencePower", power);
-                if (i.Bias is float bias) Block.SetFloat("_IridescenceBias", bias);
+                if (i.Scale is float scale) SetFloat("_IridescenceScale", scale);
+                if (i.Power is float power) SetFloat("_IridescencePower", power);
+                if (i.Bias is float bias) SetFloat("_IridescenceBias", bias);
                 if (i.Tiling != null || i.Offset != null)
-                    Block.SetVector("_IridescenceMask_ST", new Vector4(i.Tiling?[0] ?? 1, i.Tiling?[1] ?? 1, i.Offset?[0] ?? 0, i.Offset?[1] ?? 0));
-                if (ramp != null) Block.SetTexture("_IridescenceTexture", ramp);
-                if (mask != null) Block.SetTexture("_IridescenceMask", mask);
+                    SetVector("_IridescenceMask_ST", new Vector4(i.Tiling?[0] ?? 1, i.Tiling?[1] ?? 1, i.Offset?[0] ?? 0, i.Offset?[1] ?? 0));
+                if (ramp != null) SetTexture(RampProperty, ramp);
+                if (mask != null) SetTexture(MaskProperty, mask);
                 if (i.Strength != null)
                 {
-                    var strength = MaterialStrength.For(i.Strength.For(SkinTypeOf(found.Members, animal)), MaterialTable.EffectiveVariation(i), IdOf(found.Members, animal));
-                    Block.SetFloat("_IridescenceStrength", strength * Block.GetFloat("_IntegumentMaturity")); // the game wrote it just before
+                    // Not remembered: the game writes it just before each of these hooks, so a later skin starts from the game's again.
+                    var strength = MaterialStrength.For(i.Strength.For(SkinTypeOf(members, animal)), MaterialTable.EffectiveVariation(i), IdOf(members, animal));
+                    Block.SetFloat("_IridescenceStrength", strength * Block.GetFloat("_IntegumentMaturity"));
                 }
             }
+            var id = first.GetInstanceID();
+            if (WrittenTo.TryGetValue(animal, out var before) && before.Renderer == id) Restore(before, first.sharedMaterial, Writing);
             foreach (var renderer in Renderers) renderer.SetPropertyBlock(Block);
+            Remember(animal, before, id);
 
-            if (Announced.Add("on|" + (found.SkinKey ?? found.Species)))
+            if (Reported.Add(("on", found.SkinKey ?? found.Species, "")))
                 FrameworkMod.Log.Msg($"materials on {found.Species}{(found.SkinKey == null ? "" : ", skin " + found.SkinKey)} ({found.ModId})");
         }
 
-        /// <summary>What the animal wears: null when no mod changes its material.</summary>
-        private static Resolved? Resolve(object animal)
+        private const string RampProperty = "_IridescenceTexture";
+        private const string MaskProperty = "_IridescenceMask";
+
+        private enum Kind { Float, Color, Vector, Texture }
+
+        private sealed class Written
         {
-            var members = MembersOf(animal.GetType());
-            if (!(members.BaseMaterial?.GetValue(animal, null) is Material material) || material == null) return null;
-            var name = material.name;
+            public int Renderer;
+            public readonly Dictionary<string, Kind> Keys = new Dictionary<string, Kind>(StringComparer.Ordinal);
+        }
+
+        private static void SetFloat(string key, float value)
+        {
+            Block.SetFloat(key, value);
+            Writing[key] = Kind.Float;
+        }
+
+        private static void SetColor(string key, Color value)
+        {
+            Block.SetColor(key, value);
+            Writing[key] = Kind.Color;
+        }
+
+        private static void SetVector(string key, Vector4 value)
+        {
+            Block.SetVector(key, value);
+            Writing[key] = Kind.Vector;
+        }
+
+        private static void SetTexture(string key, Texture value)
+        {
+            Block.SetTexture(key, value);
+            Writing[key] = Kind.Texture;
+        }
+
+        /// <summary>What this Apply wrote becomes what the next one starts from (nothing written: the animal is forgotten).</summary>
+        private static void Remember(object animal, Written? before, int renderer)
+        {
+            if (Writing.Count == 0)
+            {
+                if (before != null) WrittenTo.Remove(animal);
+                return;
+            }
+            var record = before;
+            if (record == null) WrittenTo.Add(animal, record = new Written());
+            record.Renderer = renderer;
+            record.Keys.Clear();
+            foreach (var pair in Writing) record.Keys[pair.Key] = pair.Value;
+        }
+
+        /// <summary>No mod changes the animal's material now: the keys Tyrant wrote go back to the material's values, then it is forgotten.</summary>
+        private static void Forget(object animal, Members members)
+        {
+            if (!WrittenTo.TryGetValue(animal, out var before)) return; // no work and no garbage for the animals no mod ever covered
+            WrittenTo.Remove(animal);
+            if (!Lods(members, animal) || Renderers[0].GetInstanceID() != before.Renderer) return; // new renderers: a fresh block
+            Renderers[0].GetPropertyBlock(Block);
+            Restore(before, Renderers[0].sharedMaterial, null);
+            foreach (var renderer in Renderers) renderer.SetPropertyBlock(Block);
+        }
+
+        /// <summary>Into <see cref="Block"/>: each key written before and not in <paramref name="keep"/>, from the material's own value.</summary>
+        private static void Restore(Written before, Material? material, Dictionary<string, Kind>? keep)
+        {
+            if (material == null) return;
+            foreach (var pair in before.Keys)
+            {
+                if ((keep != null && keep.ContainsKey(pair.Key)) || !material.HasProperty(pair.Key)) continue;
+                switch (pair.Value)
+                {
+                    case Kind.Color:
+                        Block.SetColor(pair.Key, material.GetColor(pair.Key));
+                        break;
+                    case Kind.Vector:
+                        Block.SetVector(pair.Key, material.GetVector(pair.Key));
+                        break;
+                    case Kind.Texture:
+                        // A block cannot hold null: no texture of its own is a ramp adding nothing, or a mask showing all.
+                        var texture = material.GetTexture(pair.Key);
+                        Block.SetTexture(pair.Key, texture != null ? texture : pair.Key == MaskProperty ? Texture2D.whiteTexture : Texture2D.blackTexture);
+                        break;
+                    default:
+                        Block.SetFloat(pair.Key, material.GetFloat(pair.Key));
+                        break;
+                }
+            }
+        }
+
+        /// <summary>False when an AnimalGrowthFlags value has no Material flag (read by name once); true when that cannot be told.</summary>
+        private static bool UpdatesMaterial(object? flags)
+        {
+            if (!(flags is Enum value)) return true;
+            if (!_materialFlagRead)
+            {
+                _materialFlagRead = true;
+                try
+                {
+                    _materialFlag = (Enum)Enum.Parse(value.GetType(), "Material");
+                }
+                catch (Exception ex) when (ex is ArgumentException || ex is OverflowException)
+                {
+                    FrameworkMod.Log.Warning("AnimalGrowthFlags has no Material flag (game updated?); mod materials are written on every growth update.");
+                }
+            }
+            return _materialFlag == null || value.HasFlag(_materialFlag);
+        }
+
+        /// <summary>What the animal wears: null when no mod changes its material.</summary>
+        private static Resolved? Resolve(object animal, Members members)
+        {
             var data = members.BaseData?.GetValue(animal, null);
             var species = data == null ? null : FieldOf(data, "speciesID")?.GetValue(data) as string;
             var skinData = members.SkinData?.GetValue(animal, null);
+            var own = SkinsModule.TryGet(skinData, out var modId, out var entry, out var directory);
+            var inherited = SkinsModule.TryGetInherited(skinData, out var baseModId, out var baseEntry, out var baseDirectory);
+            // Most animals: no mod changes them. Said before the material is read or any key or result is built.
+            if (!_table.CoversSpecies(species) && !(own && _table.CoversSkin(modId, entry.Id)) && !(inherited && _table.CoversSkin(baseModId, baseEntry.Id)))
+                return null;
+            if (!(members.BaseMaterial?.GetValue(animal, null) is Material material) || material == null) return null;
+            var name = material.name;
             var resolved = new Resolved(members, species ?? "");
-            if (SkinsModule.TryGet(skinData, out var modId, out var entry, out var directory))
-                (resolved.SkinKey, resolved.SkinModId, resolved.Entry, resolved.Directory) = (entry.Key(modId), modId, entry, directory);
-            if (SkinsModule.TryGetInherited(skinData, out var baseModId, out var baseEntry, out var baseDirectory))
-                (resolved.InheritedKey, resolved.BaseModId, resolved.BaseEntry, resolved.BaseDirectory) = (baseEntry.Key(baseModId), baseModId, baseEntry, baseDirectory);
+            if (own) (resolved.SkinKey, resolved.SkinModId, resolved.Entry, resolved.Directory) = (entry.Key(modId), modId, entry, directory);
+            if (inherited) (resolved.InheritedKey, resolved.BaseModId, resolved.BaseEntry, resolved.BaseDirectory) = (baseEntry.Key(baseModId), baseModId, baseEntry, baseDirectory);
 
             ReportOtherNames(SkinBlocks, resolved.SkinKey, name);
             ReportOtherNames(SkinBlocks, resolved.InheritedKey, name);
@@ -237,45 +371,58 @@ namespace Tyrant.Framework
         /// <summary>The ramp texture (32×32 from stops or a thin film, or the mod's PNG), uncompressed and without mips; null when it cannot be made.</summary>
         private static Texture2D? RampTexture(RampSource ramp)
         {
-            var stops = IridescenceRamp.Stops(ramp);
-            if (stops == null && ramp.File == null) return null;
-            var key = stops != null ? "stops|" + string.Join(",", stops) : "file|" + ramp.File;
-            if (Ramps.TryGetValue(key, out var cached)) return cached;
-            var texture = new Texture2D(32, 32, TextureFormat.RGBA32, false, false) { name = "Tyrant iridescence ramp", hideFlags = HideFlags.DontUnloadUnusedAsset };
+            if (Ramps.TryGetValue(ramp, out var cached)) return cached;
+            Texture2D? texture = null;
             try
             {
+                var stops = IridescenceRamp.Stops(ramp); // a thin film is worked out here, once
                 if (stops != null)
                 {
+                    texture = NewRamp();
                     texture.LoadRawTextureData(IridescenceRamp.Pixels(stops));
                     texture.Apply(false, true);
                 }
-                else if (!texture.LoadImage(File.ReadAllBytes(ramp.File!), true))
+                else if (ramp.File != null)
                 {
-                    UnityEngine.Object.Destroy(texture);
-                    texture = null;
-                    FrameworkMod.Log.Warning($"{ModOf(ramp.File!)}: {Path.GetFileName(ramp.File)} is not a readable PNG; the iridescence keeps the material's own ramp.");
+                    var bytes = File.ReadAllBytes(ramp.File);
+                    texture = NewRamp();
+                    if (!texture.LoadImage(bytes, true))
+                    {
+                        UnityEngine.Object.Destroy(texture);
+                        texture = null;
+                        FrameworkMod.Log.Warning($"{ModOf(ramp.File)}: {Path.GetFileName(ramp.File)} is not a readable PNG; the iridescence keeps the material's own ramp.");
+                    }
                 }
                 if (texture != null) texture.wrapMode = TextureWrapMode.Clamp;
             }
-            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is UnityException || ex is ArgumentException)
+            catch (Exception ex)
             {
                 if (texture != null) UnityEngine.Object.Destroy(texture);
                 texture = null;
-                FrameworkMod.Log.Warning($"{ModOf(ramp.File ?? "")}: the iridescence ramp {Path.GetFileName(ramp.File ?? "")} could not be made ({ex.Message}); the iridescence keeps the material's own ramp.");
+                FrameworkMod.Log.Warning($"{ModOf(ramp.File ?? "")}: the iridescence ramp {Path.GetFileName(ramp.File ?? "")} could not be made ({ex.GetBaseException().Message}); the iridescence keeps the material's own ramp.");
             }
-            Ramps[key] = texture; // a failure is remembered too, so it is reported once
+            Ramps[ramp] = texture; // a failure is remembered too, so it is reported once and not retried every tick
             return texture;
         }
+
+        private static Texture2D NewRamp() =>
+            new Texture2D(32, 32, TextureFormat.RGBA32, false, false) { name = "Tyrant iridescence ramp", hideFlags = HideFlags.DontUnloadUnusedAsset };
 
         private static Texture? MaskTexture(MaskSource mask, Resolved found, bool male)
         {
             if (mask.Everywhere) return Texture2D.whiteTexture;
-            if (mask.File != null) return TextureCache.Get(new Replacement(ModOf(mask.File), "material mask", mask.File), SlotKind.Data);
+            if (mask.File != null)
+            {
+                if (!FileMasks.TryGetValue(mask, out var file))
+                    FileMasks[mask] = file = TextureCache.Get(new Replacement(ModOf(mask.File), "material mask", mask.File), SlotKind.Data);
+                return file;
+            }
             if (mask.From == null) return null;
 
+            // One mask object can serve several skins (a starting skin's, inherited): each skin's own map makes its own mask.
             var skin = found.SkinKey ?? found.InheritedKey ?? found.Species;
-            var key = $"{skin}|{(male ? "male" : "female")}|{mask.From}|{mask.Channel}|{mask.Invert}";
-            if (Masks.TryGetValue(key, out var cached)) return cached;
+            var key = (mask, skin, male);
+            if (SlotMasks.TryGetValue(key, out var cached)) return cached;
             Texture? result = Texture2D.whiteTexture;
             var has = SlotFile(found.Entry, found.SkinModId, found.Directory, male, mask.From, out var source)
                 || SlotFile(found.BaseEntry, found.BaseModId, found.BaseDirectory, male, mask.From, out source);
@@ -291,7 +438,7 @@ namespace Tyrant.Framework
                     FrameworkMod.Log.Warning($"{skin}: its iridescence mask could not be made from {mask.From} ({ex.GetBaseException().Message}); the whole body shimmers.");
                 }
             }
-            Masks[key] = result;
+            SlotMasks[key] = result;
             return result;
         }
 
@@ -351,6 +498,15 @@ namespace Tyrant.Framework
                 HasValidPersistentId = AccessTools.Property(type, "HasValidPersistentID");
                 PersistentId = AccessTools.Property(type, "PersistentID");
                 Lods = AccessTools.Property(type, "Lods");
+                try
+                {
+                    var sex = Sex?.PropertyType;
+                    if (sex != null && sex.IsEnum) Male = Enum.Parse(sex, "Male");
+                }
+                catch (ArgumentException)
+                {
+                    // no Male in the game's Sex: every animal counts as female for masks from a map
+                }
             }
 
             public PropertyInfo? BaseData { get; }
@@ -361,6 +517,9 @@ namespace Tyrant.Framework
             public PropertyInfo? HasValidPersistentId { get; }
             public PropertyInfo? PersistentId { get; }
             public PropertyInfo? Lods { get; }
+
+            /// <summary>The game's Sex.Male, boxed once: comparing to it needs no string per animal.</summary>
+            public object? Male { get; }
         }
 
         private sealed class Resolved
@@ -398,6 +557,9 @@ namespace Tyrant.Framework
             return field;
         }
 
+        private static bool IsMale(Members members, object animal) =>
+            members.Male != null && members.Male.Equals(members.Sex?.GetValue(animal, null));
+
         /// <summary>IAnimal.SkinType as the game's AnimalSkinType number (0 base, 1 albino, 2 melanistic, 3 leucistic).</summary>
         private static int SkinTypeOf(Members members, object animal) =>
             members.SkinType?.GetValue(animal, null) is IConvertible value ? value.ToInt32(null) : 0;
@@ -434,7 +596,7 @@ namespace Tyrant.Framework
         {
             if (owner == null || !blocks.TryGetValue(owner, out var names)) return;
             foreach (var pair in names)
-                if (!string.Equals(pair.Key, material, StringComparison.Ordinal) && Announced.Add("name|" + owner + "|" + pair.Key))
+                if (!string.Equals(pair.Key, material, StringComparison.Ordinal) && Reported.Add(("name", owner, pair.Key)))
                     FrameworkMod.Log.Warning($"{pair.Value}: \"{pair.Key}\" is not this animal's material ({owner}); extra materials come in a later Tyrant.");
         }
 

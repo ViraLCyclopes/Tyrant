@@ -31,8 +31,15 @@ namespace Tyrant.Framework.Core
     {
         private readonly Dictionary<string, Dictionary<string, MaterialOverride>> _species = new Dictionary<string, Dictionary<string, MaterialOverride>>(StringComparer.Ordinal);
         private readonly Dictionary<string, Dictionary<string, MaterialOverride>> _skins = new Dictionary<string, Dictionary<string, MaterialOverride>>(StringComparer.Ordinal);
+        private readonly HashSet<(string ModId, string SkinId)> _skinIds = new HashSet<(string, string)>();
 
         public bool HasAny => _species.Count > 0 || _skins.Count > 0;
+
+        /// <summary>True when a mod sets materials for this species (any material); cheap, for animals no mod covers.</summary>
+        public bool CoversSpecies(string? speciesId) => speciesId != null && _species.ContainsKey(speciesId);
+
+        /// <summary>True when this mod's skin sets materials; without building its key, for animals no mod covers.</summary>
+        public bool CoversSkin(string modId, string skinId) => _skinIds.Contains((modId, skinId));
 
         /// <param name="messages">Overridden species materials and files outside their mod, for the log.</param>
         public static MaterialTable Build(IReadOnlyList<LoadedMod> mods, out List<string> messages)
@@ -63,7 +70,9 @@ namespace Tyrant.Framework.Core
                 {
                     if (skin.Materials == null) continue;
                     var copies = Copy(skin.Materials, mod, messages);
-                    if (copies.Count > 0) table._skins[skin.Key(id)] = copies;
+                    if (copies.Count == 0) continue;
+                    table._skins[skin.Key(id)] = copies;
+                    table._skinIds.Add((id, skin.Id));
                 }
             }
             return table;
@@ -86,8 +95,13 @@ namespace Tyrant.Framework.Core
         }
 
         /// <summary>The changes to one material: skin over base skin over species, field by field; null when none apply.</summary>
-        public MaterialOverride? For(string? speciesId, string? skinKey, string? inheritedKey, string materialName) =>
-            Merge(Find(_skins, skinKey, materialName), Find(_skins, inheritedKey, materialName), Find(_species, speciesId, materialName));
+        public MaterialOverride? For(string? speciesId, string? skinKey, string? inheritedKey, string materialName)
+        {
+            var skin = Find(_skins, skinKey, materialName);
+            var inherited = Find(_skins, inheritedKey, materialName);
+            var species = Find(_species, speciesId, materialName);
+            return skin == null && inherited == null && species == null ? null : Merge(skin, inherited, species);
+        }
 
         /// <summary>
         /// One override from several, highest priority first: each iridescence field comes from the first that sets it, and each
@@ -95,6 +109,7 @@ namespace Tyrant.Framework.Core
         /// </summary>
         public static MaterialOverride? Merge(params MaterialOverride?[] highestFirst)
         {
+            if (Array.TrueForAll(highestFirst, layer => layer == null)) return null; // before allocating: the common case, every tick
             var result = new MaterialOverride();
             IridescenceSettings? iridescence = null;
             foreach (var layer in highestFirst)
