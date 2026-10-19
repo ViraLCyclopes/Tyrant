@@ -14,8 +14,9 @@ namespace Tyrant.Framework.Core
         private static readonly LookScope[] Order = { LookScope.Animal, LookScope.Skin, LookScope.Species };
 
         /// <summary>
-        /// True when this scope can be edited and saved: "This animal" needs a placed animal with an id in a saved park (the
-        /// Nursery's preview is never one, even with an id), "Whole skin" a known skin; "Whole species" always.
+        /// True when this scope can be edited and saved: "This animal" needs a placed animal with an id in a saved park; in the
+        /// Nursery it is "Next created" (the next animal created from the preview) and needs a saved park only; "Whole skin" a
+        /// known skin; "Whole species" always.
         /// </summary>
         public static bool Offers(EditorEntry entry, LookScope scope, AnimalContext? context, string? saveName) =>
             context != null && WhyNot(entry, scope, context, saveName) == null;
@@ -38,7 +39,8 @@ namespace Tyrant.Framework.Core
             switch (scope)
             {
                 case LookScope.Animal:
-                    if (entry == EditorEntry.Nursery) return "Place the animal in the park to give it its own look.";
+                    // Next created: the look waits in memory for the animal, then goes to this save's looks file like any other.
+                    if (entry == EditorEntry.Nursery) return string.IsNullOrWhiteSpace(saveName) ? "Save the park once to give a new animal its own look." : null;
                     if (context.PersistentId == null) return "This animal has no id, so it cannot have its own look.";
                     return VanillaLooks.IsAvailable(LookScope.Animal, context.PersistentId, saveName)
                         ? null
@@ -49,6 +51,17 @@ namespace Tyrant.Framework.Core
                     return null;
             }
         }
+
+        /// <summary>The scope's button: "This animal" is "Next created" in the Nursery, the next animal created from its preview.</summary>
+        public static string Label(EditorEntry entry, LookScope scope) => scope switch
+        {
+            LookScope.Animal => entry == EditorEntry.Nursery ? "Next created" : "This animal",
+            LookScope.Skin => "Whole skin",
+            _ => "Whole species",
+        };
+
+        /// <summary>The status line after a Next created save.</summary>
+        public static string SavedForNext(string species) => $"Saved for the next {species} you create.";
 
         /// <summary>
         /// The Nursery closed under a window opened on it: a draft with unsaved changes is kept on its look (Save still writes
@@ -73,5 +86,12 @@ namespace Tyrant.Framework.Core
             && string.Equals(a.SkinKey, b.SkinKey, StringComparison.OrdinalIgnoreCase)
             && (a.ModSkin == null) == (b.ModSkin == null)
             && string.Equals(a.MaterialName, b.MaterialName, StringComparison.Ordinal);
+
+        /// <summary>
+        /// <see cref="SameLook(AnimalContext?, AnimalContext?)"/> for a draft of this scope: a Next created look is kept per sex
+        /// too (<see cref="PendingLooks"/>), so a preview of the other sex is another look there.
+        /// </summary>
+        public static bool SameLook(AnimalContext? a, AnimalContext? b, LookScope scope) =>
+            SameLook(a, b) && (scope != LookScope.Animal || string.Equals(a!.Sex, b!.Sex, StringComparison.Ordinal));
     }
 }

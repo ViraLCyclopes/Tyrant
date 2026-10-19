@@ -18,16 +18,48 @@ public class EditorScopesTests
     }
 
     [Fact]
-    public void The_nursery_never_offers_this_animal_even_when_its_preview_has_an_id()
+    public void The_nursery_offers_next_created_in_a_saved_park_with_or_without_an_id()
     {
-        var preview = Placed(id: 7); // a vivarium preview gets a fresh id
-        Assert.False(EditorScopes.Offers(EditorEntry.Nursery, LookScope.Animal, preview, "Park 1"));
-        Assert.True(EditorScopes.Offers(EditorEntry.Nursery, LookScope.Skin, preview, "Park 1"));
-        Assert.True(EditorScopes.Offers(EditorEntry.Nursery, LookScope.Species, preview, "Park 1"));
+        foreach (var preview in new[] { Placed(id: 7), Placed(id: null) }) // a vivarium preview gets a fresh id; a park one none
+        {
+            Assert.True(EditorScopes.Offers(EditorEntry.Nursery, LookScope.Animal, preview, "Park 1"));
+            Assert.Null(EditorScopes.WhyNot(EditorEntry.Nursery, LookScope.Animal, preview, "Park 1"));
+            Assert.True(EditorScopes.Offers(EditorEntry.Nursery, LookScope.Skin, preview, "Park 1"));
+            Assert.True(EditorScopes.Offers(EditorEntry.Nursery, LookScope.Species, preview, "Park 1"));
+            Assert.Equal(LookScope.Skin, EditorScopes.Default(EditorEntry.Nursery, preview, "Park 1")); // the Nursery still starts on the skin
+        }
         Assert.Equal(LookScope.Skin, EditorScopes.Preferred(EditorEntry.Nursery));
         Assert.Equal(LookScope.Animal, EditorScopes.Preferred(EditorEntry.Park));
-        Assert.Equal(LookScope.Skin, EditorScopes.Default(EditorEntry.Nursery, preview, "Park 1"));
-        Assert.Equal("Place the animal in the park to give it its own look.", EditorScopes.WhyNot(EditorEntry.Nursery, LookScope.Animal, preview, "Park 1"));
+    }
+
+    [Fact]
+    public void Next_created_needs_a_saved_park_and_says_so()
+    {
+        foreach (var save in new[] { null, " " })
+        {
+            Assert.False(EditorScopes.Offers(EditorEntry.Nursery, LookScope.Animal, Placed(id: null), save));
+            Assert.Equal("Save the park once to give a new animal its own look.", EditorScopes.WhyNot(EditorEntry.Nursery, LookScope.Animal, Placed(id: null), save));
+        }
+    }
+
+    [Fact]
+    public void The_animal_scope_is_called_next_created_in_the_nursery()
+    {
+        Assert.Equal("Next created", EditorScopes.Label(EditorEntry.Nursery, LookScope.Animal));
+        Assert.Equal("This animal", EditorScopes.Label(EditorEntry.Park, LookScope.Animal));
+        Assert.Equal("Whole skin", EditorScopes.Label(EditorEntry.Nursery, LookScope.Skin));
+        Assert.Equal("Whole species", EditorScopes.Label(EditorEntry.Park, LookScope.Species));
+        Assert.Equal("Saved for the next Allosaurus you create.", EditorScopes.SavedForNext("Allosaurus"));
+    }
+
+    [Fact]
+    public void Next_created_treats_another_sex_as_another_look()
+    {
+        var male = Placed(id: null) with { Sex = "male" };
+        Assert.True(EditorScopes.SameLook(male, male with { Sex = "female" })); // the skin and species drafts follow
+        Assert.False(EditorScopes.SameLook(male, male with { Sex = "female" }, LookScope.Animal));
+        Assert.True(EditorScopes.SameLook(male, male with { Variant = "albino" }, LookScope.Animal));
+        Assert.True(EditorScopes.SameLook(male, male with { Sex = "female" }, LookScope.Skin));
     }
 
     [Fact]
