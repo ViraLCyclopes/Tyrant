@@ -333,7 +333,7 @@ export class Session {
         ? `It also removes ${installed.length} installed mod(s)${gameOnly ? `; ${gameOnly} of them ${gameOnly === 1 ? 'is' : 'are'} not in this workspace, so Tyrant cannot reinstall ${gameOnly === 1 ? 'it' : 'them'}` : ''}.`
         : '',
       'Mods in your workspace stay; you can install them again.',
-      "Your animals' looks saved in parks (UserData\\Tyrant\\Looks) stay too.",
+      "Your animals' looks saved in parks (UserData\\Tyrant\\Looks) and your mask images (UserData\\Tyrant\\Masks) stay too.",
     ].filter(Boolean).join(' ');
     if (!(await this.platform.confirm(message, unchecked ? 'Uninstall anyway' : 'Uninstall from game'))) return;
     const result = tab ? await tab.safely(() => this.rpc.call('dump.uninstall')) : await this.safely(() => this.rpc.call('dump.uninstall'));

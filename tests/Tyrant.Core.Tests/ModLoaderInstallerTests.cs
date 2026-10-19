@@ -434,6 +434,9 @@ public class ModLoaderInstallerTests
         Directory.CreateDirectory(Path.Combine(looks, "My Park", "12"));
         File.WriteAllText(Path.Combine(looks, "My Park.json"), "{}");
         File.WriteAllText(Path.Combine(looks, "My Park", "12", "fur-mask.png"), "png");
+        var masks = Path.Combine(ModLoaderInstaller.RecordDir(install), "Masks");
+        Directory.CreateDirectory(masks);
+        File.WriteAllText(Path.Combine(masks, "spots.png"), "png"); // a look may point at it ("Masks/spots.png")
         File.WriteAllText(Path.Combine(ModLoaderInstaller.RecordDir(install), "install-stamps.json"), "{}");
 
         var result = new ModLoaderInstaller(sha).Uninstall(install);
@@ -441,10 +444,35 @@ public class ModLoaderInstallerTests
         Assert.Equal(installsLoader, result.RemovedLoader);
         Assert.True(File.Exists(Path.Combine(looks, "My Park.json")));
         Assert.True(File.Exists(Path.Combine(looks, "My Park", "12", "fur-mask.png")));
-        Assert.Equal([looks], Directory.GetFileSystemEntries(ModLoaderInstaller.RecordDir(install)));
+        Assert.True(File.Exists(Path.Combine(masks, "spots.png")));
+        Assert.Equal([looks, masks], Directory.GetFileSystemEntries(ModLoaderInstaller.RecordDir(install)).Order());
         Assert.False(ModLoaderInstaller.HasFramework(install));
         Assert.Equal(installsLoader ? InstallState.NotInstalled : InstallState.LoaderOnly, ModLoaderInstaller.GetState(install));
         Assert.Contains("UserData\\Tyrant\\Looks", ModLoaderInstaller.UninstallSummary(result));
+        Assert.Contains("UserData\\Tyrant\\Masks", ModLoaderInstaller.UninstallSummary(result));
+    }
+
+    [Fact]
+    public void Uninstall_keeps_the_masks_alone_and_userdata_with_them()
+    {
+        using var game = new FakeGame();
+        var (zip, sha) = FakeMelonLoaderZip();
+        var install = new GameInstall(game.Root, null);
+        new ModLoaderInstaller(sha).Install(install, zip, FakeGameModsDir());
+        var masks = Path.Combine(ModLoaderInstaller.RecordDir(install), "Masks");
+        Directory.CreateDirectory(masks);
+        File.WriteAllText(Path.Combine(masks, "spots.png"), "png");
+        Directory.CreateDirectory(Path.Combine(ModLoaderInstaller.RecordDir(install), "Looks", ".pending")); // empty: goes
+
+        var result = new ModLoaderInstaller(sha).Uninstall(install);
+
+        Assert.True(result.RemovedLoader);
+        Assert.True(File.Exists(Path.Combine(masks, "spots.png")));
+        Assert.Equal([masks], Directory.GetFileSystemEntries(ModLoaderInstaller.RecordDir(install)));
+        Assert.Equal([ModLoaderInstaller.RecordDir(install)], Directory.GetFileSystemEntries(Path.Combine(game.Root, "UserData")));
+        var summary = ModLoaderInstaller.UninstallSummary(result);
+        Assert.Contains("UserData\\Tyrant\\Masks", summary);
+        Assert.DoesNotContain("UserData\\Tyrant\\Looks", summary);
     }
 
     [Fact]
@@ -455,11 +483,13 @@ public class ModLoaderInstallerTests
         var install = new GameInstall(game.Root, null);
         new ModLoaderInstaller(sha).Install(install, zip, FakeGameModsDir());
         Directory.CreateDirectory(Path.Combine(ModLoaderInstaller.RecordDir(install), "Looks", ".pending"));
+        Directory.CreateDirectory(Path.Combine(ModLoaderInstaller.RecordDir(install), "Masks"));
 
         var result = new ModLoaderInstaller(sha).Uninstall(install);
 
         Assert.False(Directory.Exists(Path.Combine(game.Root, "UserData")));
         Assert.DoesNotContain("Looks", ModLoaderInstaller.UninstallSummary(result));
+        Assert.DoesNotContain("Masks", ModLoaderInstaller.UninstallSummary(result));
     }
 
     [Fact]

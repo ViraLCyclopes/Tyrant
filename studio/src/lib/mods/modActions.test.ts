@@ -340,6 +340,7 @@ describe('looks made in the game', () => {
 
     expect(rpc.callsTo('mods.bringInLooks')).toHaveLength(1);
     expect(platform.confirms[0]).toContain('UserData\\Tyrant\\Looks');
+    expect(platform.confirms[0]).toContain('UserData\\Tyrant\\Masks'); // looks point at images there
     expect(rpc.callsTo('dump.uninstall')).toHaveLength(1);
   });
 });
