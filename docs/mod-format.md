@@ -255,7 +255,7 @@ Tyrant Framework adds a small **Tyrant** button (a **T**) in two places:
   changes stay in the window until you **Save** or **Reset** them.
 
 The window edits the animal it was opened on until you close it or open it from another animal. Drag it by its title,
-resize it from the corner (at least 300 × 360; its place is remembered), and switch between **This animal**, **Whole skin**
+resize it from the corner (at least 300 × 360; it opens in the middle of the screen and keeps its size), and switch between **This animal**, **Whole skin**
 and **Whole species**. The tabs **Iridescence** and **Fur** hold the settings above as value boxes you can type into. If a
 game update moves the panels and a button cannot be placed, the MelonLoader log says so once, with what it found there.
 

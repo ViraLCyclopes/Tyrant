@@ -192,7 +192,12 @@ namespace Tyrant.Framework
             {
                 Keep(_w, Mathf.Clamp(_w.Value, MinWidth, Mathf.Max(MinWidth, screen.x)));
                 Keep(_h, Mathf.Clamp(_h.Value, MinHeight, Mathf.Max(MinHeight, screen.y)));
-                if (_x.Value <= Unplaced / 2f) Keep(_x, screen.x - _w.Value - 16f); // first time: the top right, under the top bar
+                if (_centre || _x.Value <= Unplaced / 2f) // it opens in the middle of the screen; a drag moves it from there
+                {
+                    _centre = false;
+                    Keep(_x, (screen.x - _w.Value) / 2f);
+                    Keep(_y, Mathf.Max(0f, (screen.y - _h.Value) / 2f));
+                }
                 Keep(_x, Mathf.Clamp(_x.Value, 60f - _w.Value, Mathf.Max(0f, screen.x - 60f)));
                 Keep(_y, Mathf.Clamp(_y.Value, 0f, Mathf.Max(0f, screen.y - TitleHeight)));
             }

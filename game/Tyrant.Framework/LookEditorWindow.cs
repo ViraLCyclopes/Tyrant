@@ -38,6 +38,7 @@ namespace Tyrant.Framework
         private static (GameObject Button, Component Label) _irisTab, _furTab, _export, _reload, _reset, _save;
         private static Sprite? _icon;
         private static bool _minimised, _shapingOpen, _onFurTab;
+        private static bool _centre; // the window was just shown: Place puts it in the middle of the screen
         private static string _message = "";
         private static string? _title, _details; // the header, read when the animal was chosen (the Nursery's may be gone since)
 
@@ -181,6 +182,7 @@ namespace Tyrant.Framework
             if (_window == null) return false;
             if (_window.activeSelf) return true;
             _window.SetActive(true);
+            _centre = true; // placed in the middle once the canvas has its size
             Place();
             try
             {
