@@ -1,6 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import type { ModelViewer } from '$lib/assets/viewer';
+  import { iridescenceUniforms } from '$lib/assets/viewerMaterials';
   import { asRpcError } from '$lib/rpc/client';
   import type { ModSkinDto, ModSkinOwnModel } from '$lib/rpc/types.gen';
   import { getTab } from '$lib/shell/tab.svelte';
@@ -8,8 +9,12 @@
   import type { Variant } from './colors';
   import type { ModDoc } from './modDoc.svelte';
 
-  /** One animal of the skin in 3D: the model it wears (its own, the mod's species model, or the game's) with the skin's maps and the 2D strip's first animal's colours. */
-  let { doc, skin, colorsJson, variant }: { doc: ModDoc; skin: ModSkinDto; colorsJson: string | null; variant: Variant } = $props();
+  /**
+   * One animal of the skin in 3D: the model it wears (its own, the mod's species model, or the game's) with the skin's maps,
+   * the 2D strip's first animal's colours and its material (iridescence): `materialsJson` is the Material card's draft, null for what is saved.
+   */
+  let { doc, skin, colorsJson, variant, materialsJson = null }: { doc: ModDoc; skin: ModSkinDto; colorsJson: string | null; variant: Variant; materialsJson?: string | null } =
+    $props();
   const session = getSession();
   const tab = getTab();
   type Sex = 'male' | 'female' | 'infant';
@@ -23,6 +28,7 @@
   let wantedPrefab: string | null = null;
   let loading: Promise<void> | null = null;
   let generation = 0;
+  let materialCall = 0;
   let disposed = false;
   let sexFor: string | null = null;
 
@@ -45,7 +51,7 @@
       if (mine !== generation || disposed || !viewer || shownPrefab !== key) return;
       viewer.setAnimalMaps(Object.fromEntries(Object.entries(model.maps).map(([slot, file]) => [slot, session.platform.fileUrl(file)])));
       reason = null;
-      await colour(mine);
+      await Promise.all([colour(mine), material(mine)]);
     } catch (e) {
       if (mine === generation) reason = asRpcError(e).message;
     }
@@ -99,6 +105,19 @@
     }
   }
 
+  /** The material's iridescence on the model; the newest call wins. */
+  async function material(mine = generation) {
+    const call = ++materialCall;
+    try {
+      const p = await session.rpc.call('mods.materialPreview', { id: doc.id, skin: skin.id, materials: materialsJson, sex });
+      if (mine !== generation || call !== materialCall) return;
+      const url = (file: string | null) => (file ? session.platform.fileUrl(file) : null);
+      viewer?.setIridescence({ uniforms: iridescenceUniforms(p), ramp: url(p.ramp), mask: url(p.mask) });
+    } catch {
+      // the material could not be previewed (the Material card shows why); the model keeps what it shows
+    }
+  }
+
   // The skin, its files (the mod's revision) or the sex changed: dress again.
   $effect(() => {
     void skin.id;
@@ -113,6 +132,13 @@
     void variant;
     void seed;
     const timer = setTimeout(() => void colour(), 250);
+    return () => clearTimeout(timer);
+  });
+
+  // The material draft changed: preview it, shortly after typing stops.
+  $effect(() => {
+    void materialsJson;
+    const timer = setTimeout(() => void material(), 250);
     return () => clearTimeout(timer);
   });
 

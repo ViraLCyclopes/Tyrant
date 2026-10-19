@@ -28,7 +28,7 @@ import type { ModSampledColors, PreviewMaterial } from '$lib/rpc/types.gen';
 import { clampBeta, dragMode, keyAction, orthoExtents, orthoZoom, ROTATE_PER_PIXEL, unitsPerPixel, type DragMode } from './navigation';
 import { PkAnimalPlugin } from './pkAnimalPlugin';
 import { babylonFaces, linkedFile, loadParts } from './viewerFiles';
-import { animalUniforms, planMaterial } from './viewerMaterials';
+import { animalUniforms, iridescenceUniforms, planMaterial, type IridescenceUniforms } from './viewerMaterials';
 
 /** A .glb preview file and the URL the page loads it from. */
 export interface ModelFile {
@@ -41,6 +41,13 @@ export interface ViewerOptions {
   fileUrl(path: string): string;
   /** The preview's materials: how each is dressed (animal plugin, cutout) and which take a chosen skin. */
   materials: PreviewMaterial[];
+}
+
+/** A material's iridescence (and smoothness) for the animal materials; the ramp and mask as URLs (no mask: everywhere). */
+export interface IridescencePreview {
+  uniforms: IridescenceUniforms;
+  ramp: string | null;
+  mask: string | null;
 }
 
 /** A skin's maps as URLs; a missing map keeps the model's own. */
@@ -62,6 +69,8 @@ export interface ModelViewer {
   setAnimalMaps(maps: AnimalMaps | null): void;
   /** One animal's colours on the animal materials; null leaves the textures untouched. */
   setColors(colors: ModSampledColors | null): void;
+  /** Iridescence and the smoothness override on the animal materials; null takes them off. */
+  setIridescence(p: IridescencePreview | null): void;
   /** A terrain texture tiled on a floor under the model; null removes the floor. */
   setGround(url: string | null): void;
   /** Six faces in Unity's order (+X, -X, +Y, -Y, +Z, -Z); null for the plain background. */
@@ -184,6 +193,7 @@ async function build(canvas: HTMLCanvasElement, models: ModelFile[], options: Vi
   }
   let texturesOn = true;
   let skin: { diffuse: Nullable<Texture>; normal: Nullable<Texture>; extra: Nullable<Texture>; pattern: Nullable<Texture> } | null = null;
+  let iridescence: { uniforms: IridescenceUniforms; ramp: Nullable<Texture>; mask: Nullable<Texture> } = { uniforms: iridescenceUniforms(null), ramp: null, mask: null };
   const applyTextures = () => {
     for (const [material, textures] of own) {
       const worn = skin && skinnable.has(material.name) ? skin : null;
@@ -194,9 +204,20 @@ async function build(canvas: HTMLCanvasElement, models: ModelFile[], options: Vi
       if (plugin) {
         plugin.extra = !texturesOn ? null : (worn?.extra ?? textures.extra);
         plugin.pattern = !texturesOn ? null : (worn?.pattern ?? textures.pattern);
+        plugin.ramp = !texturesOn ? null : iridescence.ramp;
+        plugin.mask = !texturesOn ? null : iridescence.mask;
+        plugin.iridescence = !texturesOn ? iridescenceUniforms(null) : iridescence.uniforms;
         material.markAsDirty(Material.TextureDirtyFlag);
       }
     }
+  };
+  const setIridescence = (p: IridescencePreview | null) => {
+    const previous = iridescence;
+    const ramp = p?.ramp ? new Texture(p.ramp, scene, false, true) : null; // invertY: the game samples the ramp at (N·V, N·V) with V up
+    if (ramp) ramp.wrapU = ramp.wrapV = Texture.CLAMP_ADDRESSMODE;
+    iridescence = { uniforms: p?.uniforms ?? iridescenceUniforms(null), ramp, mask: load(ramp ? p?.mask : null) };
+    applyTextures();
+    for (const texture of [previous.ramp, previous.mask]) texture?.dispose(); // after the new ones exist: the same file is not loaded again
   };
   const setAnimalMaps = (maps: AnimalMaps | null) => {
     const previous = skin;
@@ -400,6 +421,7 @@ async function build(canvas: HTMLCanvasElement, models: ModelFile[], options: Vi
       const uniforms = animalUniforms(colors);
       for (const plugin of plugins.values()) plugin.uniforms = uniforms;
     },
+    setIridescence,
     setGround,
     setSky,
     frame,
