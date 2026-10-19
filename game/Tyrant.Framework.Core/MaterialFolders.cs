@@ -115,6 +115,72 @@ namespace Tyrant.Framework.Core
             DeleteIfEmpty(Path.Combine(modDir, Root));
         }
 
+        /// <summary>
+        /// Read-modify-write of ONE owner's materials.json: the given materials replace those of the same names (an empty block
+        /// removes it), the file's other materials stay, and no other owner's file is touched. Null or an empty map removes the
+        /// owner's file (and folders left empty). Throws <see cref="ManifestException"/> when the existing file cannot be read.
+        /// </summary>
+        public static void SaveOwner(string modDir, MaterialOwner owner, Dictionary<string, MaterialOverride>? materials)
+        {
+            var folder = ResolveFolder(modDir, owner);
+            var directory = Path.Combine(modDir, folder.Replace('/', Path.DirectorySeparatorChar));
+            var file = Path.Combine(directory, FileName);
+            var merged = new Dictionary<string, MaterialOverride>(StringComparer.Ordinal);
+            if (materials != null && materials.Count > 0)
+            {
+                if (File.Exists(file) && ReadMap(file) is { } existing)
+                    foreach (var pair in MaterialOverrides.Parse(existing.TryGetValue("materials", out var m) ? m : null, folder + "/" + FileName, owner.Kind != MaterialOwnerKind.Species) ?? new Dictionary<string, MaterialOverride>())
+                        merged[pair.Key] = pair.Value;
+                foreach (var pair in materials)
+                    if (pair.Value.IsEmpty) merged.Remove(pair.Key);
+                    else merged[pair.Key] = pair.Value;
+            }
+            if (merged.Count == 0)
+            {
+                if (File.Exists(file)) File.Delete(file);
+                DeleteIfEmpty(directory);
+                foreach (var root in new[] { SkinsFolder, SpeciesFolder, VanillaFolder }) DeleteIfEmpty(Path.Combine(modDir, root.Replace('/', Path.DirectorySeparatorChar)));
+                DeleteIfEmpty(Path.Combine(modDir, Root));
+                return;
+            }
+            var map = new Dictionary<string, object?> { ["format"] = Format };
+            if (owner.Kind != MaterialOwnerKind.Skin) map["species"] = owner.Species;
+            if (owner.Kind == MaterialOwnerKind.VanillaSkin) map["skin"] = owner.SkinName;
+            map["materials"] = MaterialOverrides.ToJson(merged);
+            Directory.CreateDirectory(directory);
+            AtomicFile.Write(file, Json.Write(map) + "\n");
+        }
+
+        // The owner's own folder: for species and vanilla skins one already holding its identity (names that sanitize alike share
+        // "-2", "-3" folders), else the first free name, like Save.
+        private static string ResolveFolder(string modDir, MaterialOwner owner)
+        {
+            var folder = FolderOf(owner);
+            if (owner.Kind == MaterialOwnerKind.Skin) return folder;
+            for (var n = 1; ; n++)
+            {
+                var candidate = n == 1 ? folder : folder + "-" + n;
+                var file = Path.Combine(modDir, candidate.Replace('/', Path.DirectorySeparatorChar), FileName);
+                if (!File.Exists(file)) return candidate;
+                var map = ReadMap(file);
+                if (map != null && map.TryGetValue("species", out var species) && species as string == owner.Species
+                    && (owner.Kind == MaterialOwnerKind.Species || (map.TryGetValue("skin", out var skin) && skin as string == owner.SkinName)))
+                    return candidate;
+            }
+        }
+
+        private static Dictionary<string, object?>? ReadMap(string file)
+        {
+            try
+            {
+                return Json.Parse(File.ReadAllText(file)) as Dictionary<string, object?>;
+            }
+            catch (FormatException ex)
+            {
+                throw new ManifestException($"\"{file}\" is not valid JSON: {ex.Message}");
+            }
+        }
+
         /// <summary>Mod-relative paths of every materials.json the manifest has, and of every image its blocks name.</summary>
         public static IEnumerable<string> Files(ModManifest manifest)
         {
