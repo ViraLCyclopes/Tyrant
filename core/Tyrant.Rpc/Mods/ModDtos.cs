@@ -239,7 +239,11 @@ public sealed record ModMaterialInfo(string Name, string Animal, IReadOnlyList<M
 
 public sealed record ModMaterialPreviewParams(string Id, string? Skin = null, string? Species = null, string? Materials = null, string Sex = "male");
 
-/// <summary>Ramp and Mask are files in the preview cache the app may load (null: none).</summary>
+/// <summary>
+/// Ramp and Mask are files in the preview cache the app may load (null: none). Smoothness multiplies the extra map's smoothness:
+/// the mod's _Smoothness over the game material's (the mod's value itself when the game has none, or 0); null when no draft or
+/// mod layer sets _Smoothness (the extra map's own is kept).
+/// </summary>
 public sealed record ModMaterialPreview(bool On, float Strength, float Scale, float Power, float Bias, string? Ramp, string? Mask,
     IReadOnlyList<float> MaskSt, float? Smoothness);
 

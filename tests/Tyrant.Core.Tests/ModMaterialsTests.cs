@@ -159,4 +159,26 @@ public class ModMaterialsTests
         Assert.Null(off.RampFile);
         Assert.False(MaterialPreview.Build(mod, "blue", null, "Carch", null, "male", null, outDir, _ => null).On); // no strength
     }
+
+    [Fact]
+    public void Preview_smoothness_is_a_multiplier_on_the_extra_map_only_when_the_mod_sets_it()
+    {
+        var (game, ws, mod) = ModEditTests.Setup();
+        using var _ = game;
+        mod = ModEditTests.WithSkins(ws, mod);
+        var outDir = Path.Combine(ws.Dir, "preview");
+        var gameMaterial = new AnimalMaterial("Carch", new Dictionary<string, float> { ["_Smoothness"] = 1.5f }, new Dictionary<string, float[]>(), null, null);
+
+        // Nothing set: the extra map's smoothness is left alone, whatever the game material says.
+        var none = MaterialPreview.Build(mod, "blue", null, "Carch", null, "male", gameMaterial, outDir, _ => null);
+        Assert.False(none.Numbers.ContainsKey("_Smoothness"));
+
+        var draft = MaterialOverrides.Parse(Json.Parse("""{"Carch":{"settings":{"_Smoothness":0.6}}}"""), "x", true)!["Carch"];
+        var set = MaterialPreview.Build(mod, "blue", null, "Carch", draft, "male", gameMaterial, outDir, _ => null);
+        Assert.Equal(0.4f, set.Numbers["_Smoothness"], 5);
+
+        // No usable game value: the override itself.
+        var zero = gameMaterial with { Floats = new Dictionary<string, float> { ["_Smoothness"] = 0f } };
+        Assert.Equal(0.6f, MaterialPreview.Build(mod, "blue", null, "Carch", draft, "male", zero, outDir, _ => null).Numbers["_Smoothness"], 5);
+    }
 }

@@ -86,5 +86,6 @@ public class ModMaterialsRpcTests
         Assert.Equal(0.8, preview.GetProperty("strength").GetDouble(), 3);
         Assert.True(File.Exists(preview.GetProperty("ramp").GetString()));
         Assert.Equal(4, preview.GetProperty("maskSt").GetArrayLength());
+        Assert.Equal(JsonValueKind.Null, preview.GetProperty("smoothness").ValueKind); // the game's 0.3 alone leaves the extra map's smoothness alone
     }
 }

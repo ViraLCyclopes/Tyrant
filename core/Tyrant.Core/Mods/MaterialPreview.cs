@@ -6,7 +6,10 @@ using Tyrant.Framework.Core;
 
 namespace Tyrant.Core.Mods;
 
-/// <summary>What the editor's iridescence preview needs: the numbers and the ramp and mask as PNG files (null mask: everywhere).</summary>
+/// <summary>
+/// What the editor's iridescence preview needs: the numbers and the ramp and mask as PNG files (null mask: everywhere).
+/// <c>Numbers["_Smoothness"]</c>, when present, multiplies the extra map's smoothness (the mod's value over the game's).
+/// </summary>
 public sealed record MaterialPreviewResult(bool On, float Strength, float Scale, float Power, float Bias, string? RampFile, string? MaskFile, float[] MaskSt,
     IReadOnlyDictionary<string, float> Numbers);
 
@@ -49,9 +52,10 @@ public static class MaterialPreview
         var i = merged?.Iridescence;
         var strength = i?.Strength?.Normal ?? 0f;
         var numbers = new Dictionary<string, float>(StringComparer.Ordinal);
-        var smoothness = merged is not null && merged.Settings.TryGetValue("_Smoothness", out var s) && s.Kind == MaterialValueKind.Number ? s.Number
-            : game is not null && game.Floats.TryGetValue("_Smoothness", out var g) ? g : (float?)null;
-        if (smoothness is { } value) numbers["_Smoothness"] = value;
+        // _Smoothness: a multiplier on the extra map's smoothness (R), the mod's value over the game's, so a material without
+        // one keeps the map's per-pixel smoothness; only when the draft or a mod layer sets it.
+        if (merged is not null && merged.Settings.TryGetValue("_Smoothness", out var s) && s.Kind == MaterialValueKind.Number)
+            numbers["_Smoothness"] = game is not null && game.Floats.TryGetValue("_Smoothness", out var g) && g > 0 ? s.Number / g : s.Number;
 
         string? rampFile = null, maskFile = null;
         if (i?.Ramp is { } ramp)

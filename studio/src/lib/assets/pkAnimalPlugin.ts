@@ -7,7 +7,7 @@ import { animalUniforms, iridescenceUniforms, type AnimalUniforms, type Iridesce
  * strength, pattern G takes the secondary colour, and the hue/saturation/value tint applies where pattern R > 0.
  * Iridescence is the game's deferred add, `saturate((1 - (scale·(1 − N·V)^power + bias)) · ramp(N·V) · strength · mask(uv·ST))`
  * on the gamma-space albedo, with the normal-mapped normal (the game's ramp lookup uses the geometric one). A material
- * smoothness replaces the extra map's. Lighting, rim and fur are Babylon's own.
+ * smoothness multiplies the extra map's. Lighting, rim and fur are Babylon's own.
  */
 export class PkAnimalPlugin extends MaterialPluginBase {
   extra: Nullable<BaseTexture> = null;
@@ -72,7 +72,7 @@ export class PkAnimalPlugin extends MaterialPluginBase {
     ubo.updateFloat4('pkFlags', ...u.flags);
     ubo.updateFloat4('pkShape', ...u.shape);
     const i = this.iridescence;
-    // on, strength, scale, power; bias, smoothness (−1: the extra map's)
+    // on, strength, scale, power; bias, smoothness multiplier (−1: the extra map's alone)
     ubo.updateFloat4('pkIrid', i.on ? 1 : 0, i.strength, i.shaping[0], i.shaping[1]);
     ubo.updateFloat4('pkIrid2', i.shaping[2], i.smoothness ?? -1, 0, 0);
     ubo.updateFloat4('pkMaskSt', ...i.maskSt);
@@ -133,8 +133,10 @@ export class PkAnimalPlugin extends MaterialPluginBase {
       CUSTOM_FRAGMENT_UPDATE_METALLICROUGHNESS: `
         #if defined(PK_EXTRA) && defined(MAINUV1)
           metallicRoughness = vec2(0.0, 1.0 - texture2D(pkExtraSampler, vMainUV1).r);
+          if (pkIrid2.y >= 0.0) metallicRoughness.y = 1.0 - clamp(texture2D(pkExtraSampler, vMainUV1).r * pkIrid2.y, 0.0, 1.0);
+        #else
+          if (pkIrid2.y >= 0.0) metallicRoughness.y = 1.0 - clamp(pkIrid2.y, 0.0, 1.0);
         #endif
-        if (pkIrid2.y >= 0.0) metallicRoughness.y = 1.0 - pkIrid2.y;
       `,
       // Iridescence needs the normal and the view direction, which CUSTOM_FRAGMENT_UPDATE_ALBEDO (inside albedoOpacityBlock)
       // cannot see; this is the first point in main after the albedo. The add is in gamma space, like the colours there.

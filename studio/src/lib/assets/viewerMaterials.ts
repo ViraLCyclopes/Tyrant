@@ -62,7 +62,7 @@ export interface IridescenceUniforms {
   shaping: [number, number, number];
   /** The mask's tiling (xy) and offset (zw) in the viewer's texture space, where V points down (the .glb's UVs are flipped). */
   maskSt: [number, number, number, number];
-  /** The material's smoothness, which replaces the extra map's; null keeps the map's. */
+  /** Multiplies the extra map's smoothness (the mod's _Smoothness over the game's); null keeps the map's own. */
   smoothness: number | null;
 }
 
