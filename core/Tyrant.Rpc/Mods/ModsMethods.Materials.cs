@@ -68,14 +68,15 @@ public sealed partial class ModsMethods
             if (GameValue(game, x) is { } value) return Property(x, Json.Write(value.ToJson(Count(x))), "game");
             return Property(x, null, "default");
         }).ToList();
-        string? iridescence = null;
-        if (below?.Iridescence is { } i)
-        {
-            var json = MaterialOverrides.ToJson(new Dictionary<string, MaterialOverride> { [game.Name] = new MaterialOverride { Iridescence = i } });
-            if (json[game.Name] is Dictionary<string, object?> entry && entry.TryGetValue("iridescence", out var block)) iridescence = Json.Write(block);
-        }
-        return new ModMaterialInfo(game.Name, speciesId, rows, iridescence, VanillaIridescence(mod, species, p.Skin, p.VanillaSkin, null), game.Ramp is not null, null);
+        var iridescence = below?.Iridescence is { } i ? Part(game.Name, new MaterialOverride { Iridescence = i }, "iridescence") : null;
+        var fur = below?.Fur is { } f ? Part(game.Name, new MaterialOverride { Fur = f }, "fur") : null;
+        return new ModMaterialInfo(game.Name, speciesId, rows, iridescence, VanillaIridescence(mod, species, p.Skin, p.VanillaSkin, null), game.Ramp is not null, null, fur);
     }
+
+    /// <summary>One part ("iridescence", "fur") of a block as materials.json writes it; null when it writes nothing.</summary>
+    private static string? Part(string material, MaterialOverride block, string part) =>
+        MaterialOverrides.ToJson(new Dictionary<string, MaterialOverride> { [material] = block }).TryGetValue(material, out var written)
+        && written is Dictionary<string, object?> entry && entry.TryGetValue(part, out var value) ? Json.Write(value) : null;
 
     [RpcMethod("mods.materialPreview")]
     public ModMaterialPreview MaterialPreviewOf(ModMaterialPreviewParams p)

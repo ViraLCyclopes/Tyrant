@@ -74,6 +74,17 @@ public class MaterialCheckTests
     }
 
     [Fact]
+    public void The_game_s_own_ramp_mask_and_fur_masks_check_clean()
+    {
+        using var s = Make();
+        var skin = Skin(s, new IridescenceSettings { Strength = new VariantNumbers { Normal = 0.3f }, Ramp = new RampSource { Game = true }, Mask = new MaskSource { Game = true } });
+        skin.Materials![Animal].Fur = new FurMasks { Mask = new MaskSource { Game = true }, InfantMask = new MaskSource { Game = true } };
+        s.Mod.Save();
+
+        Assert.Empty(s.Check().Errors);
+    }
+
+    [Fact]
     public void A_ramp_outside_the_mod_uses_the_usual_wording()
     {
         using var s = Make();

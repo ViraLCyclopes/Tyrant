@@ -88,6 +88,24 @@ public class MaterialSettingsTests
     }
 
     [Fact]
+    public void Game_ramp_mask_and_fur_masks_read_and_write_back_at_any_level()
+    {
+        const string Block = """{ "Titanoboa": { "iridescence": { "ramp": "game", "mask": "game" }, "fur": { "mask": "game", "infantMask": "game" } } }""";
+        var m = Titanoboa(Block);
+        Assert.True(m.Iridescence!.Ramp!.Game);
+        Assert.Null(m.Iridescence.Ramp.File);
+        Assert.True(m.Iridescence.Mask!.Game);
+        Assert.Null(m.Iridescence.Mask.File);
+        Assert.True(m.Fur!.Mask!.Game);
+        Assert.True(m.Fur.InfantMask!.Game);
+
+        var json = Json.Write(MaterialOverrides.ToJson(new Dictionary<string, MaterialOverride> { ["Titanoboa"] = m }));
+        Assert.Equal(Json.Write(Json.Parse(Block)), json);
+        var species = MaterialOverrides.Parse(Json.Parse(Block), "Species", skinLevel: false)!["Titanoboa"]; // a species may say "game" too
+        Assert.True(species.Iridescence!.Mask!.Game);
+    }
+
+    [Fact]
     public void A_single_strength_applies_to_every_variant()
     {
         var s = Titanoboa("""{ "Titanoboa": { "iridescence": { "strength": 0.3 } } }""").Iridescence!.Strength!;
@@ -125,6 +143,7 @@ public class MaterialSettingsTests
     [InlineData("""{ "Titanoboa": { "iridescence": { "mask": { "from": "extra", "channel": "x" } } } }""", "r, g, b or a")]
     [InlineData("""{ "Titanoboa": { "fur": { "grow": "yes" } } }""", "\"materials.Titanoboa.fur.grow\" must be true or false")]
     [InlineData("""{ "Titanoboa": { "fur": { "length": 1 } } }""", "use mask, infantMask, grow")]
+    [InlineData("""{ "Titanoboa": { "fur": { "mask": "everywhere" } } }""", "\"materials.Titanoboa.fur.mask\" must be an image file path or \"game\"")]
     public void Material_problems_are_explained(string materials, string expected)
     {
         var (manifest, problems) = WithMaterials(materials);

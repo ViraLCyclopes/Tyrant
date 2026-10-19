@@ -298,6 +298,7 @@ namespace Tyrant.Framework.Core
             if (ramp.File == null)
                 return new RampSource
                 {
+                    Game = ramp.Game,
                     Stops = ramp.Stops == null ? null : new List<Rgb>(ramp.Stops),
                     ThinFilm = ramp.ThinFilm == null ? null : new ThinFilmSettings { Thickness = ramp.ThinFilm.Thickness, Index = ramp.ThinFilm.Index },
                 };
@@ -310,7 +311,7 @@ namespace Tyrant.Framework.Core
             if (mask == null) return null;
             var path = mask.File == null ? null : resolve(mask.File);
             if (mask.File != null && path == null) return null;
-            return new MaskSource { Everywhere = mask.Everywhere, File = path, From = mask.From, Channel = mask.Channel, Invert = mask.Invert };
+            return new MaskSource { Game = mask.Game, Everywhere = mask.Everywhere, File = path, From = mask.From, Channel = mask.Channel, Invert = mask.Invert };
         }
 
         private static string? Resolve(string file, LoadedMod mod, List<string> messages)

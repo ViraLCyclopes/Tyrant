@@ -381,6 +381,31 @@ public class ModMaterialsTests
     }
 
     [Fact]
+    public void A_game_ramp_or_mask_previews_the_game_material_s_own_over_a_lower_layer()
+    {
+        var (game, ws, mod) = ModEditTests.Setup();
+        using var _ = game;
+        mod = ModEditTests.WithSkins(ws, mod);
+        mod.Manifest.SpeciesMaterials["Carcharodontosaurus"] = MaterialOverrides.Parse(
+            Json.Parse("""{"Carch":{"iridescence":{"ramp":{"stops":["#ff0000","#0000ff"]},"mask":"everywhere"}}}"""), "x", false)!;
+        var outDir = Path.Combine(ws.Dir, "preview");
+        var rampPng = ModEditTests.Png(Path.Combine(ws.Dir, "game"), "ramp.png");
+        var maskPng = ModEditTests.Png(Path.Combine(ws.Dir, "game"), "mask.png");
+        var rampAsset = new AssetRecord("m.bundle", 7, "Texture2D", "Ramp", null, "feed", null);
+        var maskAsset = new AssetRecord("m.bundle", 8, "Texture2D", "Mask", null, "beef", null);
+        var gameMaterial = new AnimalMaterial("Carch", new Dictionary<string, float>(), new Dictionary<string, float[]>(), rampAsset, maskAsset);
+        var draft = MaterialOverrides.Parse(Json.Parse("""{"Carch":{"iridescence":{"strength":0.4,"ramp":"game","mask":"game"}}}"""), "x", true)!["Carch"];
+
+        var result = MaterialPreview.Build(mod, "blue", null, "Carch", draft, "male", gameMaterial, outDir, a => a == rampAsset ? rampPng : maskPng);
+
+        Assert.True(result.On);
+        Assert.Equal(rampPng, result.RampFile);
+        Assert.Equal(maskPng, result.MaskFile);
+        mod.SetSkinMaterials("blue", """{"Carch":{"iridescence":{"ramp":"game"},"fur":{"mask":"game","infantMask":"game"}}}"""); // saved and read back
+        Assert.True(ModProject.Open(ws, mod.Id).SkinMaterial("blue", "Carch")!.Fur!.InfantMask!.Game);
+    }
+
+    [Fact]
     public void Preview_without_a_mod_strength_shows_the_vanilla_skins_own_iridescence()
     {
         var (game, ws, mod) = ModEditTests.Setup();

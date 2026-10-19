@@ -34,6 +34,23 @@ public class MaterialSourcePoolTests
     }
 
     [Fact]
+    public void A_game_ramp_or_mask_is_its_own_source()
+    {
+        var pool = new MaterialSourcePool(_ => "1");
+        var game = Block(new RampSource { Game = true }, new MaskSource { Game = true });
+        var again = Block(new RampSource { Game = true }, new MaskSource { Game = true });
+        var other = Block(new RampSource { Stops = [] }, new MaskSource { From = "extra" });
+        pool.Intern(game);
+        pool.Intern(again);
+        pool.Intern(other);
+
+        Assert.Same(game.Iridescence!.Ramp, again.Iridescence!.Ramp);
+        Assert.NotSame(game.Iridescence.Ramp, other.Iridescence!.Ramp);
+        Assert.NotSame(game.Iridescence.Mask, other.Iridescence.Mask);
+        Assert.True(game.Iridescence.Ramp!.Game);
+    }
+
+    [Fact]
     public void A_file_whose_stamp_changed_is_a_new_source()
     {
         var stamp = "t1";

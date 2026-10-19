@@ -69,14 +69,15 @@ public static class MaterialPreview
             numbers["_Smoothness"] = game is not null && game.Floats.TryGetValue("_Smoothness", out var g) && g > 0 ? s.Number / g : s.Number;
 
         string? rampFile = null, maskFile = null;
-        if (i?.Ramp is { } ramp)
+        // "game" is the game material's own ramp and mask, over any lower layer's.
+        if (i?.Ramp is { Game: false } ramp)
         {
             if (ramp.File is not null) rampFile = ModFile(mod, ramp.File);
             else if (IridescenceRamp.Stops(ramp) is { Count: > 0 } stops) rampFile = WritePng(outDir, IridescenceRamp.Pixels(stops), 32, 32);
         }
         else if (game?.Ramp is { } gameRamp) rampFile = exportTexture(gameRamp);
 
-        if (i?.Mask is { } mask)
+        if (i?.Mask is { Game: false } mask)
         {
             if (mask.File is not null) maskFile = ModFile(mod, mask.File);
             else if (mask.From is not null

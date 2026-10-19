@@ -212,6 +212,32 @@ public class MaterialTableTests
     }
 
     [Fact]
+    public void A_game_ramp_or_mask_beats_lower_layers_and_survives_copies()
+    {
+        var a = Mod("mod-a", "{\"format\":1,\"id\":\"mod-a\",\"skins\":[" + Skin("mine") + "]}",
+            SpeciesFile("Titanoboa", """{"Titanoboa":{"iridescence":{"ramp":"r.png","mask":"everywhere"},"fur":{"mask":"f.png"}}}"""),
+            SkinFile("mine", """{"Titanoboa":{"iridescence":{"ramp":"game","mask":"game"},"fur":{"mask":"game"}}}"""));
+        var table = MaterialTable.Build([a], out var messages);
+
+        Assert.Empty(messages);
+        var merged = table.For("Titanoboa", "mod-a/mine", null, null, "Titanoboa")!;
+        Assert.True(merged.Iridescence!.Ramp!.Game);
+        Assert.True(merged.Iridescence.Mask!.Game);
+        Assert.True(merged.Fur!.Mask!.Game);
+        var species = table.For("Titanoboa", null, null, null, "Titanoboa")!; // the species alone keeps its own
+        Assert.EndsWith("r.png", species.Iridescence!.Ramp!.File);
+
+        var live = new MaterialOverride { Iridescence = new IridescenceSettings { Ramp = new RampSource { Game = true }, Mask = new MaskSource { Game = true } } };
+        var below = new MaterialOverride { Iridescence = new IridescenceSettings { Ramp = new RampSource { File = "x.png" }, Mask = new MaskSource { Everywhere = true } } };
+        var layered = MaterialTable.MergeLayers(live, null, null, below, null, null, null)!;
+        Assert.True(layered.Iridescence!.Ramp!.Game);
+        Assert.True(layered.Iridescence.Mask!.Game);
+        var copy = MaterialTable.WithFullPaths(live, Path.GetTempPath());
+        Assert.True(copy.Iridescence!.Ramp!.Game);
+        Assert.True(copy.Iridescence.Mask!.Game);
+    }
+
+    [Fact]
     public void Merge_does_not_change_its_inputs_and_variation_defaults()
     {
         var top = new MaterialOverride { Iridescence = new IridescenceSettings { Scale = 1f } };

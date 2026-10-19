@@ -42,11 +42,13 @@ namespace Tyrant.Framework.Core
         /// <summary>The mask choices of a scope: a species file cannot hold a mask from a skin slot ("from"), so it never offers one.</summary>
         public static IReadOnlyList<MaskKind> MaskKinds(LookScope scope) => scope == LookScope.Species ? SpeciesMasks : AllMasks;
 
+        /// <summary>Game for no ramp and for the explicit "game" one.</summary>
         public static RampKind RampKindOf(RampSource? ramp) =>
-            ramp == null ? RampKind.Game : ramp.File != null ? RampKind.File : ramp.ThinFilm != null ? RampKind.ThinFilm : RampKind.Stops;
+            ramp == null || ramp.Game ? RampKind.Game : ramp.File != null ? RampKind.File : ramp.ThinFilm != null ? RampKind.ThinFilm : RampKind.Stops;
 
+        /// <summary>Game for no mask and for the explicit "game" one.</summary>
         public static MaskKind MaskKindOf(MaskSource? mask) =>
-            mask == null ? MaskKind.Game : mask.Everywhere ? MaskKind.Everywhere : mask.File != null ? MaskKind.File : MaskKind.Channel;
+            mask == null || mask.Game ? MaskKind.Game : mask.Everywhere ? MaskKind.Everywhere : mask.File != null ? MaskKind.File : MaskKind.Channel;
 
         /// <summary>A typed number ("0.5" or "0,5"), kept within min..max; false when the text is not a number.</summary>
         public static bool TryParse(string? text, float min, float max, out float value)
@@ -101,24 +103,7 @@ namespace Tyrant.Framework.Core
         /// <param name="below">What the layers under the draft's scope set (<see cref="MaterialTable.MergeBelow"/>), or null.</param>
         public static bool GrowsFur(LookDraft draft, MaterialOverride? below) => (draft.Current.Fur?.Grow ?? below?.Fur?.Grow) == true;
 
-        /// <summary>
-        /// The editor's Grow fur on/off. On where nothing gives the fur any length (the draft, the layers below and the game all
-        /// 0 or unset) also sets <see cref="StartFurLength"/>, so the fur shows at once. Off writes false only over a lower layer
-        /// that grows fur; otherwise the key goes (false never takes away fur the game has).
-        /// </summary>
-        /// <param name="gameLength">The animal's own _Length (its property block, else its material).</param>
-        public static void SetFurGrow(LookDraft draft, MaterialOverride? below, float gameLength, bool on)
-        {
-            if (!on)
-            {
-                draft.SetFurGrow(below?.Fur?.Grow == true ? false : (bool?)null);
-                return;
-            }
-            draft.SetFurGrow(true);
-            if ((LengthOf(draft.Current) ?? LengthOf(below) ?? gameLength) <= 0) draft.SetSetting("_Length", MaterialValue.OfNumber(StartFurLength));
-        }
-
-        private static float? LengthOf(MaterialOverride? block) =>
+        internal static float? LengthOf(MaterialOverride? block) =>
             block != null && block.Settings.TryGetValue("_Length", out var v) && v.Kind == MaterialValueKind.Number ? v.Number : (float?)null;
 
         internal static VariantNumbers? Copy(VariantNumbers? s) =>
@@ -180,6 +165,37 @@ namespace Tyrant.Framework.Core
         }
 
         private static bool Shaped(IridescenceSettings? i) => i != null && (i.Scale != null || i.Power != null || i.Bias != null);
+    }
+
+    /// <summary>
+    /// The editor's Grow fur on/off. On where nothing gives the fur any length (the draft, the layers below and the game all 0
+    /// or unset) also sets <see cref="LookEditing.StartFurLength"/>, so the fur shows at once; off takes that length back while
+    /// it is still the one this switch set. Off writes false only over a lower layer that grows fur; otherwise the key goes
+    /// (false never takes away fur the game has).
+    /// </summary>
+    public sealed class FurGrowSwitch
+    {
+        private bool _seeded;
+
+        /// <summary>A new draft (another animal, scope, a reset or a save): a length seeded before is no longer this switch's.</summary>
+        public void Forget() => _seeded = false;
+
+        /// <param name="below">What the layers under the draft's scope set (<see cref="MaterialTable.MergeBelow"/>), or null.</param>
+        /// <param name="gameLength">The animal's own _Length (its property block, else its material).</param>
+        public void Set(LookDraft draft, MaterialOverride? below, float gameLength, bool on)
+        {
+            if (!on)
+            {
+                draft.SetFurGrow(below?.Fur?.Grow == true ? false : (bool?)null);
+                if (_seeded && LookEditing.LengthOf(draft.Current) == LookEditing.StartFurLength) draft.SetSetting("_Length", null);
+                _seeded = false;
+                return;
+            }
+            draft.SetFurGrow(true);
+            if ((LookEditing.LengthOf(draft.Current) ?? LookEditing.LengthOf(below) ?? gameLength) > 0) return;
+            draft.SetSetting("_Length", MaterialValue.OfNumber(LookEditing.StartFurLength));
+            _seeded = true;
+        }
     }
 
     /// <summary>The image files of an edited look: how they are stored for each save target, and the PNGs the editor offers.</summary>

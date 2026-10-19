@@ -131,17 +131,23 @@ namespace Tyrant.Framework.Core
         public double Index { get; set; } = DefaultIndex;
     }
 
-    /// <summary>Where the iridescence colour comes from; exactly one of the three is set.</summary>
+    /// <summary>Where the iridescence colour comes from; exactly one of the four is set.</summary>
     public sealed class RampSource
     {
+        /// <summary>"game": the material's own ramp, over any lower layer's (Tyrant writes none).</summary>
+        public bool Game { get; set; }
+
         public string? File { get; set; }
         public List<Rgb>? Stops { get; set; }
         public ThinFilmSettings? ThinFilm { get; set; }
     }
 
-    /// <summary>Where the iridescence shows: everywhere, a mask file, or one channel of a skin slot.</summary>
+    /// <summary>Where the iridescence shows (or the fur grows): the game's own, everywhere, a mask file, or one channel of a skin slot.</summary>
     public sealed class MaskSource
     {
+        /// <summary>"game": the game's own mask, over any lower layer's (Tyrant writes none).</summary>
+        public bool Game { get; set; }
+
         public bool Everywhere { get; set; }
         public string? File { get; set; }
 
@@ -172,7 +178,7 @@ namespace Tyrant.Framework.Core
     }
 
     /// <summary>
-    /// A material's fur: masks taken from files (the fur slots of a skin, replaced for one material; only files, never
+    /// A material's fur: masks taken from files (the fur slots of a skin, replaced for one material; only files or "game", never
     /// "everywhere" or "from"), and whether Tyrant grows fur on a skin the game gives none.
     /// </summary>
     public sealed class FurMasks
@@ -250,8 +256,8 @@ namespace Tyrant.Framework.Core
                 if (pair.Value.Fur != null)
                 {
                     var fur = new Dictionary<string, object?>();
-                    if (pair.Value.Fur.Mask?.File != null) fur["mask"] = pair.Value.Fur.Mask.File;
-                    if (pair.Value.Fur.InfantMask?.File != null) fur["infantMask"] = pair.Value.Fur.InfantMask.File;
+                    if (FurJson(pair.Value.Fur.Mask) is string mask) fur["mask"] = mask;
+                    if (FurJson(pair.Value.Fur.InfantMask) is string infant) fur["infantMask"] = infant;
                     if (pair.Value.Fur.Grow is bool grow) fur["grow"] = grow;
                     entry["fur"] = fur;
                 }
@@ -262,6 +268,10 @@ namespace Tyrant.Framework.Core
             }
             return map;
         }
+
+        private const string GameValue = "game";
+
+        private static string? FurJson(MaskSource? mask) => mask == null ? null : mask.Game ? GameValue : mask.File;
 
         internal static double Num(float value) => double.Parse(value.ToString("R", CultureInfo.InvariantCulture), CultureInfo.InvariantCulture);
 
@@ -291,8 +301,9 @@ namespace Tyrant.Framework.Core
             Known(map, owner, path, "mask", "infantMask", "grow");
             MaskSource? File(string key) =>
                 !map.TryGetValue(key, out var v) || v == null ? null
+                : v is GameValue ? new MaskSource { Game = true }
                 : v is string file && file.Length > 0 && file != "everywhere" ? new MaskSource { File = file }
-                : throw new ManifestException($"{owner}: \"{path}.{key}\" must be an image file path.");
+                : throw new ManifestException($"{owner}: \"{path}.{key}\" must be an image file path or \"game\".");
             bool? grow = null;
             if (map.TryGetValue("grow", out var g) && g != null)
                 grow = g as bool? ?? throw new ManifestException($"{owner}: \"{path}.grow\" must be true or false.");
@@ -359,7 +370,8 @@ namespace Tyrant.Framework.Core
         {
             if (value is string file)
             {
-                if (file.Length == 0) throw new ManifestException($"{owner}: \"{path}\" must be a file path, or an object with \"stops\" or \"thinFilm\".");
+                if (file == GameValue) return new RampSource { Game = true };
+                if (file.Length == 0) throw new ManifestException($"{owner}: \"{path}\" must be \"game\", a file path, or an object with \"stops\" or \"thinFilm\".");
                 return new RampSource { File = file };
             }
             var map = Map(value, owner, path);
@@ -399,8 +411,9 @@ namespace Tyrant.Framework.Core
         {
             if (value is string text)
             {
+                if (text == GameValue) return new MaskSource { Game = true };
                 if (text == "everywhere") return new MaskSource { Everywhere = true };
-                if (text.Length == 0) throw new ManifestException($"{owner}: \"{path}\" must be \"everywhere\", a file path, or an object with \"from\".");
+                if (text.Length == 0) throw new ManifestException($"{owner}: \"{path}\" must be \"game\", \"everywhere\", a file path, or an object with \"from\".");
                 return new MaskSource { File = text };
             }
             var map = Map(value, owner, path);
@@ -482,7 +495,8 @@ namespace Tyrant.Framework.Core
             if (i.Variation is float variation) map["variation"] = Num(variation);
             if (i.Ramp is RampSource ramp)
             {
-                if (ramp.File != null) map["ramp"] = ramp.File;
+                if (ramp.Game) map["ramp"] = GameValue;
+                else if (ramp.File != null) map["ramp"] = ramp.File;
                 else if (ramp.Stops != null) map["ramp"] = new Dictionary<string, object?> { ["stops"] = ramp.Stops.Select(c => (object?)c.ToString()).ToList() };
                 else if (ramp.ThinFilm != null)
                 {
@@ -493,7 +507,8 @@ namespace Tyrant.Framework.Core
             }
             if (i.Mask is MaskSource mask)
             {
-                if (mask.Everywhere) map["mask"] = "everywhere";
+                if (mask.Game) map["mask"] = GameValue;
+                else if (mask.Everywhere) map["mask"] = "everywhere";
                 else if (mask.File != null) map["mask"] = mask.File;
                 else if (mask.From != null)
                 {

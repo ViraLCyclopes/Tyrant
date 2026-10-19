@@ -118,6 +118,24 @@ public class ModMaterialsRpcTests
     }
 
     [Fact]
+    public async Task Material_info_carries_the_fur_block_below()
+    {
+        using var game = new FakeGame();
+        var (h, _, reader) = await WithSkinAndPrefab(game);
+        reader.PrefabMaterials = [CarchMaterial()];
+        var before = await h.Call("mods.get", new { id = "red-spot" });
+        await h.Call("mods.setMaterials", new { id = "red-spot", revision = Rev(before), species = "Carcharodontosaurus",
+            materials = "{\"" + Animal + "\":{\"fur\":{\"grow\":true,\"mask\":\"game\"}}}" });
+
+        var info = await h.Call("mods.materialInfo", new { id = "red-spot", skin = "blue" });
+        using var fur = JsonDocument.Parse(info.GetProperty("inheritedFurJson").GetString()!);
+        Assert.True(fur.RootElement.GetProperty("grow").GetBoolean());
+        Assert.Equal("game", fur.RootElement.GetProperty("mask").GetString());
+        var species = await h.Call("mods.materialInfo", new { id = "red-spot", species = "Carcharodontosaurus" });
+        Assert.Equal(JsonValueKind.Null, species.GetProperty("inheritedFurJson").ValueKind); // nothing lies below a species
+    }
+
+    [Fact]
     public async Task Restore_snapshot_brings_back_material_files()
     {
         using var game = new FakeGame();
