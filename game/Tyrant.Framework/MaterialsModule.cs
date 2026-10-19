@@ -287,7 +287,7 @@ namespace Tyrant.Framework
 
         /// <summary>
         /// FurManager.EnableTessellation, which the game's Fur graphics setting sets (PKQualityFur.ApplyQuality); without it the
-        /// game draws no fur at all. Null when it cannot be read.
+        /// game gives no animal the tessellated fur variant. Null when it cannot be read.
         /// </summary>
         public static bool? TessellationOn
         {

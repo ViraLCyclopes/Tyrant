@@ -186,8 +186,8 @@ name get `-2`, `-3`. The owner comes from the file, not the folder name:
 | `fur.grow` | `true` grows fur on skins the game gives none (Ouranosaurus, Allosaurus Anax, …): the game's fur shader variant, full fur amount, and, where neither this file nor the game has a fur mask, fur on the whole body. `false` means this level does not force fur over a lower one that does; it never takes away fur the game has. Left out: the levels below decide. Works on skins, vanilla skins, species and per-animal looks. |
 | `settings` | Animal shader values, below. |
 
-**Growing fur.** Fur needs the game's tessellated fur (its Fur graphics setting); with tessellation off the game draws no
-fur on any animal, so `fur.grow` changes nothing and the MelonLoader log says so once. Set `_Length` too (the in-game editor
+**Growing fur.** Grown fur needs the game's tessellated fur (its Fur graphics setting); with tessellation off `fur.grow`
+changes nothing and the MelonLoader log says so once. Set `_Length` too (the in-game editor
 and the app start it at `0.5` when nothing gives the fur any length). Bodies never made for fur have no fur mask, droop or
 wind tuned for them, so the look needs tuning in game: a fur mask PNG limits where it grows, and `_Length`, `_Droopage`,
 `_DroopDirection` and the wind settings shape it.
