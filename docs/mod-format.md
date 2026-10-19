@@ -178,16 +178,16 @@ name get `-2`, `-3`. The owner comes from the file, not the folder name:
 |---|---|
 | `iridescence.strength` | A number 0–1 for every animal, or an object with `normal` (required) and optionally `albino`, `melanistic`, `leucistic`. A mutation left out uses `normal`. `0` turns iridescence off, also on skins that have it in vanilla. Leaving `iridescence` out keeps the game's settings: only some vanilla skins shimmer (Microraptor's, for example), as their own skin data says. |
 | `iridescence.variation` | 0–1. How much strength differs between animals, as a fraction of the strength (0.15: each lands within ±15 %). Default `0.15` when `strength` is set. Each animal's offset comes from its ID, so it is stable across save and load and nothing is saved. An animal without an ID (the Nursery hologram) uses the set strength. |
-| `iridescence.ramp` | The colours, along the viewing angle: a PNG in the mod (`"materials/skins/rainbow/iridescence-ramp.png"`), `{ "stops": ["#ff0000", …] }` (1 to 32 colours, evenly spaced) or `{ "thinFilm": { "thickness": 420, "index": 1.56 } }` (`thickness` 0–2000 nm, `index` 1–3, default 1.56). Left out: the game's ramp. |
-| `iridescence.mask` | Where it shows: `"everywhere"`, a PNG in the mod, or `{ "from": "extra", "channel": "g", "invert": false }` (`from` is `extra`, `pattern` or `fur`; `channel` is `r`, `g`, `b` or `a`). Left out: the game's mask. |
+| `iridescence.ramp` | The colours, along the viewing angle: a PNG in the mod (`"materials/skins/rainbow/iridescence-ramp.png"`), `{ "stops": ["#ff0000", …] }` (1 to 32 colours, evenly spaced) or `{ "thinFilm": { "thickness": 420, "index": 1.56 } }` (`thickness` 0–2000 nm, `index` 1–3, default 1.56). `"game"`: the game material's own ramp, also over a ramp a lower level (species, starting skin) sets. Left out: the lower level's, else the game's. |
+| `iridescence.mask` | Where it shows: `"everywhere"`, a PNG in the mod, or `{ "from": "extra", "channel": "g", "invert": false }` (`from` is `extra`, `pattern` or `fur`; `channel` is `r`, `g`, `b` or `a`). `"game"`: the game's own mask, over a lower level's. Left out: the lower level's, else the game's. |
 | `iridescence.tiling`, `iridescence.offset` | `[x, y]`, beside `mask`: repeat and shift the mask. |
 | `iridescence.scale`, `power`, `bias` | −10 to 10. Shape the strength across the viewing angle (edge falloff, falloff curve, brightness offset). |
-| `fur.mask`, `fur.infantMask` | The fur mask of adults and of babies: a PNG in the mod (`"materials/skins/rainbow/fur-mask.png"`). Left out: the game's (a baby mask left out uses the adult one). One file serves both sexes. PNG files only: no `everywhere`, no `from`. |
-| `fur.grow` | `true` grows fur on skins the game gives none (Ouranosaurus, Allosaurus Anax, …): the game's fur shader variant, full fur amount, and, where neither this file nor the game has a fur mask, fur on the whole body. `false` means this level does not force fur over a lower one that does; it never takes away fur the game has. Left out: the levels below decide. Works on skins, vanilla skins, species and per-animal looks. |
+| `fur.mask`, `fur.infantMask` | The fur mask of adults and of babies: a PNG in the mod (`"materials/skins/rainbow/fur-mask.png"`). `"game"`: the game's own per-animal mask, over a lower level's. Left out: the lower level's, else the game's (a baby mask left out uses the adult one). One file serves both sexes. PNG files or `"game"` only: no `everywhere`, no `from`. |
+| `fur.grow` | `true` grows fur on skins the game gives none (Ouranosaurus, Allosaurus Anax, …): the game's fur shader variant, full fur amount, and, where no level sets a fur mask and the game has none, fur on the whole body (a `"game"` fur mask keeps the game's). `false` means this level does not force fur over a lower one that does; it never takes away fur the game has. Left out: the levels below decide. Works on skins, vanilla skins, species and per-animal looks. |
 | `settings` | Animal shader values, below. |
 
-**Growing fur.** Grown fur needs the game's tessellated fur (its Fur graphics setting); with tessellation off `fur.grow`
-changes nothing and the MelonLoader log says so once. Set `_Length` too (the in-game editor
+**Growing fur.** Grown fur needs the game's tessellated fur (its Fur graphics setting); with tessellation off the game draws no grown fur
+(Tyrant still sets the fur amount and masks, so the fur appears when tessellation is turned back on) and the MelonLoader log says so once. Set `_Length` too (the in-game editor
 and the app start it at `0.5` when nothing gives the fur any length). Bodies never made for fur have no fur mask, droop or
 wind tuned for them, so the look needs tuning in game: a fur mask PNG limits where it grows, and `_Length`, `_Droopage`,
 `_DroopDirection` and the wind settings shape it.
@@ -263,7 +263,7 @@ Tyrant Framework adds a small **Tyrant** button (a **T**) in two places:
 
 The window edits the animal it was opened on until you close it or open it from another animal. Drag it by its title,
 resize it from the corner (at least 300 × 360; it opens in the middle of the screen and keeps its size), and switch between **This animal**, **Whole skin**
-and **Whole species**. The tabs **Iridescence** and **Fur** hold the settings above as value boxes you can type into. If a
+and **Whole species**. The tabs **Iridescence** and **Fur** hold the settings above as value boxes you can type into; **Game's** (rainbow, mask, fur mask) saves `"game"`, so the game's own shows even over a whole skin's or species' choice. If a
 game update moves the panels and a button cannot be placed, the MelonLoader log says so once, with what it found there.
 
 - **Live preview:** every change shows at once on every animal it affects. It is a preview until **Save**; **Reset** goes
