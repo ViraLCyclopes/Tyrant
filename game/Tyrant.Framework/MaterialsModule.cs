@@ -550,10 +550,11 @@ namespace Tyrant.Framework
 
             // Textures first (a failure is reported and leaves that one out); a mask from the game's map reads the block.
             var male = IsMale(members, animal);
-            var ramp = i?.Ramp == null ? null : RampTexture(i.Ramp);
-            var mask = i?.Mask == null ? null : MaskTexture(i.Mask, found, male, record);
-            var adultFur = o.Fur?.Mask == null ? null : FileMask(o.Fur.Mask);
-            var infantFur = o.Fur?.InfantMask == null ? adultFur : FileMask(o.Fur.InfantMask); // one file covers both ages
+            // "game" (the material's own) writes nothing: a key Tyrant wrote before goes back to the material's value.
+            var ramp = i?.Ramp == null || i.Ramp.Game ? null : RampTexture(i.Ramp);
+            var mask = i?.Mask == null || i.Mask.Game ? null : MaskTexture(i.Mask, found, male, record);
+            var adultFur = o.Fur?.Mask == null || o.Fur.Mask.Game ? null : FileMask(o.Fur.Mask); // "game": the game's own per-animal mask stays
+            var infantFur = o.Fur?.InfantMask == null ? adultFur : o.Fur.InfantMask.Game ? null : FileMask(o.Fur.InfantMask); // one file covers both ages
 
             Writing.Clear();
             foreach (var setting in o.Settings)
@@ -584,13 +585,15 @@ namespace Tyrant.Framework
                 }
             }
             // Grown fur: the full fur amount (the game writes 0 without fur maps), and where neither Tyrant nor the game has a
-            // fur mask for an age, white (fur on the whole body). The keywords come from AddKeywords.
+            // fur mask for an age, white (fur on the whole body); a "game" fur mask keeps the game's. The keywords come from AddKeywords.
             var grow = o.Fur?.Grow == true;
+            var adultGame = o.Fur?.Mask?.Game == true;
+            var infantGame = o.Fur?.InfantMask?.Game ?? adultGame;
             if (grow) SetGameFloat(record, FuzzProperty, 1f, fromHook);
             if (adultFur != null) SetGameTexture(record, AdultFurProperty, adultFur);
-            else if (grow && !GameHasFur(members, animal, record, AdultFurProperty, "adultFurMap")) SetGameTexture(record, AdultFurProperty, Texture2D.whiteTexture);
+            else if (grow && !adultGame && !GameHasFur(members, animal, record, AdultFurProperty, "adultFurMap")) SetGameTexture(record, AdultFurProperty, Texture2D.whiteTexture);
             if (infantFur != null) SetGameTexture(record, InfantFurProperty, infantFur);
-            else if (grow && !GameHasFur(members, animal, record, InfantFurProperty, "infantFurMap")) SetGameTexture(record, InfantFurProperty, Texture2D.whiteTexture);
+            else if (grow && !infantGame && !GameHasFur(members, animal, record, InfantFurProperty, "infantFurMap")) SetGameTexture(record, InfantFurProperty, Texture2D.whiteTexture);
 
             Restore(record, found.Material, Writing, fromHook);
             foreach (var renderer in Renderers) renderer.SetPropertyBlock(Block);

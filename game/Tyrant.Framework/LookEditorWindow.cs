@@ -51,8 +51,10 @@ namespace Tyrant.Framework
         private static SaveTarget? _target;
         private static MaterialOverride? _below;
         private static bool? _lastOn, _lastGrow;
+        private static string _furNote = ""; // the status line's fur note when Tick last looked
         private static List<object> _matching = new List<object>();
         private static readonly IridescenceSwitch Switch = new IridescenceSwitch();
+        private static readonly FurGrowSwitch FurSwitch = new FurGrowSwitch(); // remembers the length Grow fur seeded, for Off
 
         /// <summary>Exported masks waiting for Save, outside every mod (UserData/Tyrant/Looks/.pending).</summary>
         private static StagedFiles? _stagedFiles;
@@ -81,6 +83,13 @@ namespace Tyrant.Framework
             Place(); // keeps it on screen when the resolution changes
             if (_entry == EditorEntry.Nursery) FollowNursery(gui);
             else if (!Alive(_animal)) AnimalGone("The animal is gone; open the editor from another one.");
+            // The graphics setting can change while the window is open: the status line's fur note follows (a cached bool read).
+            var note = FurNote();
+            if (note != _furNote)
+            {
+                _furNote = note;
+                Footer();
+            }
         }
 
         /// <summary>The save in use changed (saved, or deleted): "This animal" may have become available or not.</summary>
@@ -222,6 +231,7 @@ namespace Tyrant.Framework
                 ClearLive(reapply: true);
                 _draft?.Reset();
                 Switch.Forget();
+                FurSwitch.Forget();
                 Staged.Discard();
                 then();
             }, keep);
@@ -269,6 +279,7 @@ namespace Tyrant.Framework
             _awaitPreview = false;
             _matching = new List<object>();
             Switch.Forget();
+            FurSwitch.Forget();
             Staged.Discard();
         }
 
@@ -293,6 +304,7 @@ namespace Tyrant.Framework
         private static void NewDraft()
         {
             Switch.Forget();
+            FurSwitch.Forget();
             Staged.Discard(); // an export belongs to the draft it was made for
             if (_animal == null || _context == null)
             {
@@ -489,6 +501,7 @@ namespace Tyrant.Framework
             if (_draft == null) return;
             _draft.Reset();
             Switch.Forget();
+            FurSwitch.Forget();
             Staged.Discard();
             _message = "";
             Changed(rebuild: true);

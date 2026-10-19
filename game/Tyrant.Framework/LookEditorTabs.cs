@@ -87,7 +87,7 @@ namespace Tyrant.Framework
                 Option("Thin film", rampKind == RampKind.ThinFilm, true, () => SetFilm((float)(ramp?.ThinFilm?.Thickness ?? LookEditing.DefaultThickness), ramp?.ThinFilm?.Index, rebuild: true)),
                 Option("Game's", rampKind == RampKind.Game, true, () =>
                 {
-                    draft.SetRamp(null);
+                    draft.SetRamp(new RampSource { Game = true }); // "game" beats a lower layer's ramp (null would show it again)
                     Changed(rebuild: true);
                 }),
                 Option("PNG", rampKind == RampKind.File, true, () => PickFirst(ramp?.File, file => draft.SetRamp(new RampSource { File = file }))),
@@ -110,7 +110,7 @@ namespace Tyrant.Framework
             Choices(null, LookEditing.MaskKinds(_scope).Select(kind => kind switch
             {
                 MaskKind.Everywhere => Option("Everywhere", maskKind == kind, true, () => SetMask(new MaskSource { Everywhere = true })),
-                MaskKind.Game => Option("Game's", maskKind == kind, true, () => SetMask(null)),
+                MaskKind.Game => Option("Game's", maskKind == kind, true, () => SetMask(new MaskSource { Game = true })),
                 MaskKind.Channel => Option("Channel", maskKind == kind, true, () =>
                     SetMask(new MaskSource { From = mask?.From ?? LookEditing.Slots[0], Channel = mask?.From != null ? mask.Channel : 'r', Invert = mask?.From != null && mask.Invert })),
                 _ => Option("PNG", maskKind == kind, true, () => PickFirst(mask?.File, file => draft.SetMask(new MaskSource { File = file }))),
@@ -223,12 +223,12 @@ namespace Tyrant.Framework
             Heading("Fur mask" + (own == null && mask != null ? "  <size=10>(from a lower layer)</size>" : ""));
             Choices(null, new[]
             {
-                Option("Game's", mask == null, true, () =>
+                Option("Game's", mask == null || mask.Game, true, () =>
                 {
-                    draft.SetFurMask(null, infant: false);
+                    draft.SetFurMask(new MaskSource { Game = true }, infant: false); // beats a lower layer's mask
                     Changed(rebuild: true);
                 }),
-                Option("PNG", mask != null, true, () => PickFirst(mask?.File, file => draft.SetFurMask(new MaskSource { File = file }, infant: false))),
+                Option("PNG", mask?.File != null, true, () => PickFirst(mask?.File, file => draft.SetFurMask(new MaskSource { File = file }, infant: false))),
             });
             if (mask?.File != null) Cycler("Mask", Pngs(mask.File), mask.File, file => draft.SetFurMask(new MaskSource { File = file }, infant: false));
             Note("Export mask PNG writes the fur mask the animal shows now as fur-mask.png.");
@@ -237,7 +237,7 @@ namespace Tyrant.Framework
         private static void SetGrow(bool on)
         {
             if (_draft == null || LookEditing.GrowsFur(_draft, _below) == on) return;
-            LookEditing.SetFurGrow(_draft, _below, MaterialFloat("_Length"), on);
+            FurSwitch.Set(_draft, _below, MaterialFloat("_Length"), on);
             _message = ""; // the status line can say when the game draws no fur
             Changed(rebuild: true); // the shader variant changes: Changed re-picks the keywords
         }
