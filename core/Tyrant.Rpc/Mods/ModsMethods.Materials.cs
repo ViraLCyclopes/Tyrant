@@ -140,7 +140,7 @@ public sealed partial class ModsMethods
         var species = dump.FirstOrDefault(s => string.Equals(s.SpeciesId, p.Species, StringComparison.Ordinal))
             ?? throw new TyrantException(TyrantErrorCode.TargetNotFound, $"\"{p.Species}\" is not a species in the game data.");
         var preset = GamePresets.Of(species, GameMaterial(install, dump, index, species.SpeciesId));
-        return new ModSpeciesPreset(species.SpeciesId, species.Name, GamePresets.FragmentJson(preset, kind));
+        return new ModSpeciesPreset(species.SpeciesId, species.Name, GamePresets.FragmentJson(preset, kind, p.Target));
     }
 
     [RpcMethod("mods.vanillaSkins")]

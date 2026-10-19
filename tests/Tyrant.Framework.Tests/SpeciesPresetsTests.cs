@@ -60,7 +60,7 @@ public class SpeciesPresetsTests
             Settings = { ["_Smoothness"] = MaterialValue.OfNumber(0.3f) },
         });
 
-        Assert.True(LookEditing.ApplyPreset(draft, PresetKind.Iridescence, new FakePresets(Microraptor()), "Microraptor"));
+        Assert.True(LookEditing.ApplyPreset(draft, PresetKind.Iridescence, new FakePresets(Microraptor()), "Microraptor", targetSpecies: "Microraptor"));
 
         var i = draft.Current.Iridescence!;
         Assert.Equal("Microraptor", i.Ramp!.Species);
@@ -81,7 +81,7 @@ public class SpeciesPresetsTests
         var bare = SpeciesPreset.Of("Edmontosaurus", "Edmontosaurus", [new PresetSkin { Shimmers = true }], null, hasRamp: false, hasMask: false);
         var draft = new LookDraft(LookScope.Animal, new MaterialOverride { Iridescence = new IridescenceSettings { Ramp = new RampSource { File = "r.png" } } });
 
-        LookEditing.ApplyPreset(draft, PresetKind.Iridescence, bare);
+        LookEditing.ApplyPreset(draft, PresetKind.Iridescence, bare, targetSpecies: "Edmontosaurus");
 
         var i = draft.Current.Iridescence!;
         Assert.Equal("r.png", i.Ramp!.File);
@@ -99,7 +99,7 @@ public class SpeciesPresetsTests
             Iridescence = new IridescenceSettings { Scale = 2 },
         });
 
-        Assert.True(LookEditing.ApplyPreset(draft, PresetKind.Fur, new FakePresets(Woolly()), "Mammoth"));
+        Assert.True(LookEditing.ApplyPreset(draft, PresetKind.Fur, new FakePresets(Woolly()), "Mammoth", targetSpecies: "Allosaurus"));
 
         var c = draft.Current;
         Assert.True(c.Fur!.Grow);
@@ -115,23 +115,49 @@ public class SpeciesPresetsTests
     }
 
     [Fact]
+    public void On_another_species_the_mask_is_everywhere_and_the_ramp_still_a_reference()
+    {
+        // An iridescence mask is painted for its own species' UV layout (Ruling 15): on another species it would land anywhere.
+        var draft = new LookDraft(LookScope.Species, null);
+
+        LookEditing.ApplyPreset(draft, PresetKind.Iridescence, Microraptor(), targetSpecies: "Ouranosaurus");
+
+        Assert.True(draft.Current.Iridescence!.Mask!.Everywhere);
+        Assert.Equal("Microraptor", draft.Current.Iridescence.Ramp!.Species);
+        Assert.True(LookEditing.PresetBlock(Microraptor(), PresetKind.Iridescence, targetSpecies: null).Iridescence!.Mask!.Everywhere); // unknown: another
+        Assert.Equal("Microraptor", LookEditing.PresetBlock(Microraptor(), PresetKind.Iridescence, targetSpecies: "Microraptor").Iridescence!.Mask!.Species);
+    }
+
+    [Fact]
+    public void A_preset_without_a_known_strength_leaves_a_strength_alone_and_its_block_has_none()
+    {
+        var unknown = SpeciesPreset.Of("Edmontosaurus", "Edmontosaurus", [new PresetSkin { Shimmers = true }], null, hasRamp: true, hasMask: false);
+        var draft = new LookDraft(LookScope.Skin, new MaterialOverride { Iridescence = new IridescenceSettings { Strength = new VariantNumbers { Normal = 0.6f } } });
+
+        LookEditing.ApplyPreset(draft, PresetKind.Iridescence, unknown, targetSpecies: "Ouranosaurus");
+
+        Assert.Equal(0.6f, draft.Current.Iridescence!.Strength!.Normal); // kept: it is on already
+        Assert.Null(LookEditing.PresetBlock(unknown, PresetKind.Iridescence, targetSpecies: "Ouranosaurus").Iridescence!.Strength); // the merge decides
+    }
+
+    [Fact]
     public void A_preset_still_loading_changes_nothing()
     {
         var draft = new LookDraft(LookScope.Skin, null);
 
-        Assert.False(LookEditing.ApplyPreset(draft, PresetKind.Iridescence, new FakePresets(), "Microraptor"));
+        Assert.False(LookEditing.ApplyPreset(draft, PresetKind.Iridescence, new FakePresets(), "Microraptor", targetSpecies: "Microraptor"));
         Assert.False(draft.IsDirty);
     }
 
     [Fact]
     public void A_preset_block_holds_only_what_the_preset_sets()
     {
-        var iridescence = LookEditing.PresetBlock(Microraptor(), PresetKind.Iridescence);
+        var iridescence = LookEditing.PresetBlock(Microraptor(), PresetKind.Iridescence, targetSpecies: "Microraptor");
         Assert.Null(iridescence.Fur);
         Assert.Empty(iridescence.Settings);
         Assert.Equal("Microraptor", iridescence.Iridescence!.Ramp!.Species);
 
-        var fur = LookEditing.PresetBlock(Woolly(), PresetKind.Fur);
+        var fur = LookEditing.PresetBlock(Woolly(), PresetKind.Fur, targetSpecies: "Allosaurus");
         Assert.Null(fur.Iridescence);
         Assert.True(fur.Fur!.Grow);
         Assert.Null(fur.Fur.Mask);

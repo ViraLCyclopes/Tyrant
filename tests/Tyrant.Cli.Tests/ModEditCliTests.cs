@@ -190,6 +190,9 @@ public class ModEditCliTests
             var noKind = Run("mod", "materials", "red-spot", "blue", "--preset", "Carcharodontosaurus", "-w", ws);
             Assert.Equal(ExitCodes.Error, noKind.Code);
             Assert.Contains("--kind iridescence or --kind fur", noKind.Err);
+            var kindAlone = Run("mod", "materials", "red-spot", "blue", "--show", "--kind", "fur", "-w", ws);
+            Assert.Equal(ExitCodes.Error, kindAlone.Code);
+            Assert.Contains("--kind goes with --preset", kindAlone.Err);
         }
         finally
         {

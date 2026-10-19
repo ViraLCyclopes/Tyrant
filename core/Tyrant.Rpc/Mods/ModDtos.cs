@@ -276,8 +276,8 @@ public sealed record ModSpeciesPresetDto(string Species, string Name);
 /// <summary>The species whose skins shimmer (Iridescence) and those with fur (Fur), by name; Problem says why both are empty (no data dump).</summary>
 public sealed record ModSpeciesPresets(IReadOnlyList<ModSpeciesPresetDto> Iridescence, IReadOnlyList<ModSpeciesPresetDto> Fur, string? Problem);
 
-/// <summary>Kind: "iridescence" or "fur".</summary>
-public sealed record ModSpeciesPresetParams(string Species, string Kind);
+/// <summary>Kind: "iridescence" or "fur". Target: the species the look is for (a mask is kept only on the same species).</summary>
+public sealed record ModSpeciesPresetParams(string Species, string Kind, string? Target = null);
 
 /// <summary>
 /// MaterialJson: one material's block as materials.json writes it, holding only what the preset sets (the species' ramp and mask

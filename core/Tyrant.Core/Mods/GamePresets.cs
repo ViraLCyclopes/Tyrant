@@ -20,11 +20,14 @@ public static class GamePresets
         SpeciesPreset.Of(species.SpeciesId, species.Name, species.Skins.SelectMany(v => new[] { v.MalePreset, v.FemalePreset }).OfType<PresetSkin>(),
             material?.Floats, material?.Ramp is not null, material?.Mask is not null);
 
-    /// <summary>The block the preset alone makes, as materials.json writes one material's entry (what the app merges into its draft).</summary>
-    public static string FragmentJson(SpeciesPreset preset, PresetKind kind)
+    /// <summary>
+    /// The block the preset alone makes for a look of <paramref name="targetSpecies"/> (null: not known), as materials.json writes
+    /// one material's entry (what the app merges into its draft).
+    /// </summary>
+    public static string FragmentJson(SpeciesPreset preset, PresetKind kind, string? targetSpecies)
     {
         const string name = "m";
-        var written = MaterialOverrides.ToJson(new Dictionary<string, MaterialOverride> { [name] = LookEditing.PresetBlock(preset, kind) });
+        var written = MaterialOverrides.ToJson(new Dictionary<string, MaterialOverride> { [name] = LookEditing.PresetBlock(preset, kind, targetSpecies) });
         return Json.Write(written.TryGetValue(name, out var block) ? block : new Dictionary<string, object?>());
     }
 

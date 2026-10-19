@@ -1210,6 +1210,7 @@ export interface ModSpeciesPresetDto {
 export interface ModSpeciesPresetParams {
   species: string;
   kind: string;
+  target?: string | null;
 }
 
 export interface ModSpeciesPresets {

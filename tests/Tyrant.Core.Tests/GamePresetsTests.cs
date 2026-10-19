@@ -88,11 +88,15 @@ public class GamePresetsTests
     {
         var micro = Dump().Single(s => s.SpeciesId == "Microraptor");
 
-        var json = GamePresets.FragmentJson(GamePresets.Of(micro, Material(ramp: true, mask: true)), PresetKind.Iridescence);
+        var preset = GamePresets.Of(micro, Material(ramp: true, mask: true));
+        var json = GamePresets.FragmentJson(preset, PresetKind.Iridescence, "Microraptor");
 
         Assert.Equal(Json.Write(Json.Parse("""
             {"iridescence":{"strength":{"normal":0.25,"albino":0.1},"ramp":{"species":"Microraptor"},"mask":{"species":"Microraptor"},
              "scale":-0.25,"power":-0.3,"bias":1.3}}
             """)), json);
+        // On another species the mask is everywhere: Microraptor's is painted for Microraptor's UV layout.
+        var other = (Dictionary<string, object?>)((Dictionary<string, object?>)Json.Parse(GamePresets.FragmentJson(preset, PresetKind.Iridescence, "Titanoboa"))!)["iridescence"]!;
+        Assert.Equal("everywhere", other["mask"]);
     }
 }

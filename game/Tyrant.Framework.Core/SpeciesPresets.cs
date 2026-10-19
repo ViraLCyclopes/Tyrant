@@ -109,21 +109,23 @@ namespace Tyrant.Framework.Core
 
         private const string DroopDirection = "_DroopDirection";
 
-        /// <summary>Applies the species' preset (<see cref="ApplyPreset(LookDraft, PresetKind, SpeciesPreset)"/>); false, changing nothing, while it is not known.</summary>
-        public static bool ApplyPreset(LookDraft draft, PresetKind kind, ISpeciesPresets source, string species)
+        /// <summary>Applies the species' preset (<see cref="ApplyPreset(LookDraft, PresetKind, SpeciesPreset, string)"/>); false, changing nothing, while it is not known.</summary>
+        public static bool ApplyPreset(LookDraft draft, PresetKind kind, ISpeciesPresets source, string species, string? targetSpecies)
         {
             if (!(source.Preset(species) is SpeciesPreset preset)) return false;
-            ApplyPreset(draft, kind, preset);
+            ApplyPreset(draft, kind, preset, targetSpecies);
             return true;
         }
 
         /// <summary>
-        /// Starts the draft from a species. Iridescence: its ramp and mask by reference (no mask texture: everywhere; no ramp
-        /// texture: the draft's ramp stays), its material's scale, power and bias, its first shimmering skin's strength, and on.
-        /// Fur: grow on, its material's length, droop and wind, its skin's droop direction; the fur mask stays. Every number is
-        /// kept within its setting's range, so the look can be saved; everything else in the draft stays, and stays editable.
+        /// Starts the draft from a species. Iridescence: its ramp by reference (no ramp texture: the draft's ramp stays), its mask
+        /// by reference on the same species (<paramref name="targetSpecies"/>, the one the look is for) and everywhere on another
+        /// or an unknown one (a mask is painted for its own species' UV layout), its material's scale, power and bias, its first
+        /// shimmering skin's strength (not known: the draft's stays), and on. Fur: grow on, its material's length, droop and wind,
+        /// its skin's droop direction; the fur mask stays. Every number is kept within its setting's range, so the look can be
+        /// saved; everything else in the draft stays, and stays editable.
         /// </summary>
-        public static void ApplyPreset(LookDraft draft, PresetKind kind, SpeciesPreset preset)
+        public static void ApplyPreset(LookDraft draft, PresetKind kind, SpeciesPreset preset, string? targetSpecies)
         {
             if (kind == PresetKind.Fur)
             {
@@ -136,7 +138,8 @@ namespace Tyrant.Framework.Core
                 return;
             }
             if (preset.HasRamp) draft.SetRamp(new RampSource { Species = preset.Species });
-            draft.SetMask(preset.HasMask ? new MaskSource { Species = preset.Species } : new MaskSource { Everywhere = true });
+            var sameSpecies = string.Equals(targetSpecies, preset.Species, StringComparison.Ordinal);
+            draft.SetMask(preset.HasMask && sameSpecies ? new MaskSource { Species = preset.Species } : new MaskSource { Everywhere = true });
             var current = draft.Current.Iridescence;
             float? Shaping(string key, float? now) => preset.Floats.TryGetValue(key, out var v) ? Clamp(v, MinShaping, MaxShaping) : now;
             draft.SetShaping(Shaping("_IridescenceScale", current?.Scale), Shaping("_IridescencePower", current?.Power), Shaping("_IridescenceBias", current?.Bias));
@@ -152,11 +155,15 @@ namespace Tyrant.Framework.Core
             draft.SetIridescenceOn(true); // a strength of 0 everywhere (or none, when the skin's is not known) becomes 1
         }
 
-        /// <summary>The block a preset alone makes (what the app merges into its draft, and the CLI over a saved block).</summary>
-        public static MaterialOverride PresetBlock(SpeciesPreset preset, PresetKind kind)
+        /// <summary>
+        /// The block a preset alone makes (what the app merges into its draft). Without a known strength it holds none: the merge
+        /// turns iridescence on without replacing a strength the draft has, as <see cref="ApplyPreset(LookDraft, PresetKind, SpeciesPreset, string)"/> does.
+        /// </summary>
+        public static MaterialOverride PresetBlock(SpeciesPreset preset, PresetKind kind, string? targetSpecies)
         {
             var draft = new LookDraft(LookScope.Species, null);
-            ApplyPreset(draft, kind, preset);
+            ApplyPreset(draft, kind, preset, targetSpecies);
+            if (kind == PresetKind.Iridescence && preset.Strength == null && draft.Current.Iridescence != null) draft.Current.Iridescence.Strength = null;
             return draft.Current;
         }
     }

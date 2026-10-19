@@ -135,7 +135,7 @@ public class ModMaterialsRpcTests
         Assert.Equal(0, lists.GetProperty("fur").GetArrayLength());
         Assert.Equal(JsonValueKind.Null, lists.GetProperty("problem").ValueKind);
 
-        var preset = await h.Call("mods.speciesPreset", new { species = "Carcharodontosaurus", kind = "iridescence" });
+        var preset = await h.Call("mods.speciesPreset", new { species = "Carcharodontosaurus", kind = "iridescence", target = "Titanoboa" });
         using var block = JsonDocument.Parse(preset.GetProperty("materialJson").GetString()!);
         var i = block.RootElement.GetProperty("iridescence");
         Assert.Equal("Carcharodontosaurus", i.GetProperty("ramp").GetProperty("species").GetString());

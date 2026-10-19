@@ -243,6 +243,11 @@ public sealed class ModMaterialsCommand : Command<ModMaterialsCommand.Settings>
             return ExitCodes.Error;
         }
         var kind = GamePresets.KindOf(settings.Kind);
+        if (settings.Preset is null && settings.Kind is not null)
+        {
+            Console.Error.WriteLine("--kind goes with --preset <species>.");
+            return ExitCodes.Error;
+        }
         if (settings.Preset is not null && kind is null)
         {
             Console.Error.WriteLine("Give --kind iridescence or --kind fur with --preset.");
@@ -343,7 +348,8 @@ public sealed class ModMaterialsCommand : Command<ModMaterialsCommand.Settings>
         }
         var map = blocks is null ? new Dictionary<string, MaterialOverride>(StringComparer.Ordinal) : blocks.ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
         var draft = new LookDraft(settings.Skin is null && settings.VanillaSkin is null ? LookScope.Species : LookScope.Skin, map.TryGetValue(material, out var own) ? own : null);
-        LookEditing.ApplyPreset(draft, kind, preset);
+        var target = settings.Skin is not null ? mod.Skin(settings.Skin).Species : speciesId; // the mask is kept only on the same species
+        LookEditing.ApplyPreset(draft, kind, preset, target);
         map[material] = draft.Current;
         var json = Json.Write(MaterialOverrides.ToJson(map));
         if (settings.Skin is not null) mod.SetSkinMaterials(settings.Skin, json);
