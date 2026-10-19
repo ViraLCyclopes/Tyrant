@@ -160,7 +160,7 @@ namespace Tyrant.Framework.Core
         public float? Power { get; set; }
         public float? Bias { get; set; }
 
-        internal bool IsEmpty => Strength == null && Variation == null && Ramp == null && Mask == null && Tiling == null && Offset == null
+        public bool IsEmpty => Strength == null && Variation == null && Ramp == null && Mask == null && Tiling == null && Offset == null
             && Scale == null && Power == null && Bias == null;
     }
 
