@@ -272,7 +272,9 @@ public class MaterialFoldersTests
 
     [Theory]
     [InlineData("[0, 0, -1]", true)]
-    [InlineData("[0, 0, -2]", false)]
+    [InlineData("[0, -10.3, 8.11]", true)] // the Velociraptor adult's own droop
+    [InlineData("[0, 0, -20]", true)]
+    [InlineData("[0, 0, -21]", false)]
     [InlineData("[0, 0]", false)]
     public void Droop_direction_is_known(string value, bool accepted) => AssertSetting("_DroopDirection", value, accepted);
 

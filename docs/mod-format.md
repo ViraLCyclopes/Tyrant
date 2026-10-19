@@ -222,7 +222,7 @@ materials**; the CLI takes `--species` with `--vanilla-skin`.
 | `_EyeSpecularity` | Eyes · Eye specularity | 0–1 |
 | `_Length` | Fur · Fur length | 0–4 |
 | `_Droopage` | Fur · Fur droop | 0–2 |
-| `_DroopDirection` | Fur · Droop direction | 3 numbers (x, y, z), each −1–1 |
+| `_DroopDirection` | Fur · Droop direction | 3 numbers (x, y, z), each −20–20 (not a unit vector: vanilla skins go from about −10 to 8) |
 | `_FurWindStrength` | Fur · Fur wind strength | 0–10 |
 | `_FurWindSpeed` | Fur · Fur wind speed | 0–10 |
 | `_FurWindScale` | Fur · Fur wind scale | 0–10 |
@@ -260,13 +260,16 @@ as value boxes you can type into.
 | A mod skin | That mod's folder in the game (whoever made it) |
 | A vanilla skin | The mod whose block for it currently applies; otherwise the `vanilla-looks` mod, created for it |
 | A custom species | Its own mod |
-| **This animal** | `UserData/Tyrant/Looks/<park>.json`, keyed by the animal's persistent ID; never the park save |
+| **This animal** | `UserData/Tyrant/Looks/<save>.json`, named after the save file and keyed by the animal's persistent ID (its images in `Looks/<save>/<id>/`); never the park save |
 
+- Looks of single animals follow the **save file**, not the park's name: loading a save reads its own file, and every save
+  (Save As and autosaves too) writes its own copy, with the animal's images copied into that save's folder. Deleting a save
+  in the game deletes its looks. A new park needs its first save before **This animal** can be saved.
 - A look on **This animal** stays with the animal when you move it. Looks of animals that have left the park are dropped
-  the next time the park is saved.
+  (with their images) the next time the park is saved; only the file of the save being loaded or written is ever changed.
 - Saves into a mod change the **game's copy**; a manual mod update replaces those edits. Before you install, remove, delete or
   uninstall, the app offers to bring them into the project (**Bring in looks**, see the app guide), or use
-  `tyrant mod looks <mod> --bring-in`. Uninstalling Tyrant keeps `UserData/Tyrant/Looks`; without Tyrant the park loads vanilla.
+  `tyrant mod looks <mod> --bring-in`. Uninstalling Tyrant keeps `UserData/Tyrant/Looks` and `UserData/Tyrant/Masks` (looks point at images there); without Tyrant the park loads vanilla.
 - Install records what it copied in `UserData/Tyrant/install-stamps.json`, which is how Tyrant tells what was changed in the game.
 
 ## Texture compression (`textures`)

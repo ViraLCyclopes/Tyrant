@@ -296,4 +296,48 @@ public class LookEditingTests
 
         Assert.Equal(new[] { Path.Combine(b, "a.PNG"), Path.Combine(a, "b.png") }, pngs);
     }
+
+    private static void AssertSaveable(LookDraft draft, bool skinLevel)
+    {
+        var map = new Dictionary<string, MaterialOverride> { ["Body"] = draft.Current };
+        Assert.Null(MaterialOverrides.Problem(map, "Look", skinLevel));
+        Assert.NotNull(MaterialOverrides.Parse(Json.Parse(Json.Write(MaterialOverrides.ToJson(map))), "Look", skinLevel));
+    }
+
+    [Fact]
+    public void Moving_one_droop_component_keeps_the_game_s_others_and_the_draft_still_parses()
+    {
+        // The Velociraptor adult's own droop (0, -10.3, 8.11) is outside the old -1..1: moving X must not make the look unsaveable.
+        var draft = new LookDraft(LookScope.Skin, null);
+
+        LookEditing.SetComponent(draft, "_DroopDirection", new[] { 0f, -10.3f, 8.11f }, 0, 0.5f);
+
+        Assert.Equal(new[] { 0.5f, -10.3f, 8.11f }, draft.Current.Settings["_DroopDirection"].Vector.Take(3));
+        AssertSaveable(draft, skinLevel: true);
+    }
+
+    [Fact]
+    public void A_game_value_beyond_any_range_is_brought_into_it_when_a_component_moves()
+    {
+        var draft = new LookDraft(LookScope.Animal, null);
+
+        LookEditing.SetComponent(draft, "_DroopDirection", new[] { 0f, -35f, 40f }, 0, 0.25f);
+
+        Assert.Equal(new[] { 0.25f, -20f, 20f }, draft.Current.Settings["_DroopDirection"].Vector.Take(3));
+        AssertSaveable(draft, skinLevel: true);
+    }
+
+    [Fact]
+    public void A_block_a_load_would_refuse_is_named_before_it_is_written()
+    {
+        var bad = new MaterialOverride();
+        bad.Settings["_DroopDirection"] = MaterialValue.OfVector(0, 0, -21);
+        var mask = new MaterialOverride { Iridescence = new IridescenceSettings { Mask = new MaskSource { From = "extra" } } };
+
+        var problem = MaterialOverrides.Problem(new Dictionary<string, MaterialOverride> { ["Body"] = bad }, "This look", true);
+
+        Assert.Equal("This look: \"materials.Body.settings._DroopDirection\" must be from -20 to 20 (got -21).", problem);
+        Assert.Null(MaterialOverrides.Problem(new Dictionary<string, MaterialOverride> { ["Body"] = mask }, "Skin", true));
+        Assert.Contains("works only on a skin", MaterialOverrides.Problem(new Dictionary<string, MaterialOverride> { ["Body"] = mask }, "Species", false));
+    }
 }

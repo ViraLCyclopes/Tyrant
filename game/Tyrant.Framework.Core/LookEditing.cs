@@ -80,6 +80,20 @@ namespace Tyrant.Framework.Core
             draft.SetStrength(variant, value);
         }
 
+        /// <summary>
+        /// Sets one component of a vector setting; the others come from <paramref name="shown"/> (what the animal wears now, often
+        /// the game's own value). Every component is kept within the setting's range, so a game value beyond it never makes the
+        /// look unsaveable.
+        /// </summary>
+        public static void SetComponent(LookDraft draft, string key, IReadOnlyList<float> shown, int component, float value)
+        {
+            var property = MaterialProperties.Find(key) ?? throw new ArgumentException($"Unknown setting \"{key}\".", nameof(key));
+            var count = property.Components == 3 ? 3 : Math.Max(2, Math.Min(4, shown.Count));
+            var vector = new float[count];
+            for (var i = 0; i < count; i++) vector[i] = Clamp(i == component ? value : i < shown.Count ? shown[i] : 0, property.Min, property.Max);
+            draft.SetSetting(key, MaterialValue.OfVector(vector));
+        }
+
         internal static VariantNumbers? Copy(VariantNumbers? s) =>
             s == null ? null : new VariantNumbers { Normal = s.Normal, Albino = s.Albino, Melanistic = s.Melanistic, Leucistic = s.Leucistic };
 

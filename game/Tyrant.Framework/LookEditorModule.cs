@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using HarmonyLib;
@@ -8,22 +9,26 @@ using Tyrant.Framework.Core;
 namespace Tyrant.Framework
 {
     /// <summary>
-    /// The in-game look editor's wiring: the park's per-animal looks (UserData/Tyrant/Looks/&lt;park&gt;.json, never the save),
-    /// read when a park has loaded and pruned of animals that are gone when it loads or saves; the game's selection; and the
-    /// window's tick. The game's hooks only queue their news, handled on the next frame, and every handler is wrapped: an
-    /// exception is logged once and turns the editor off, never the game.
+    /// The in-game look editor's wiring: the per-animal looks, which follow the save file (UserData/Tyrant/Looks/&lt;save&gt;.json,
+    /// never the save itself): read from the loaded save's file when a park has loaded, written to each save's own file when
+    /// the game saves (Save As and autosaves included), and deleted with the save; pruned of animals that are gone only in the
+    /// file being loaded or written. Also the game's selection, and the window's tick. The game's hooks only queue their news,
+    /// handled on the next frame, and every handler is wrapped: an exception is logged once and turns the editor off, never the game.
     /// </summary>
     internal static class LookEditorModule
     {
         private static readonly Type? Game = AccessTools.TypeByName("PrehistoricKingdom.Game");
         private static readonly Type? Core = AccessTools.TypeByName("Utility.GameCore");
-        private static readonly Type? SimManager = AccessTools.TypeByName("PrehistoricKingdom.SimManager");
         private static readonly Type? AnimalType = AccessTools.TypeByName("PrehistoricKingdom.IAnimal");
+        private static readonly Type? SceneLoader = AccessTools.TypeByName("PrehistoricKingdom.PersistentSceneLoader");
 
         private static readonly object Gate = new object();
         private static readonly List<ulong> Removed = new List<ulong>(); // OnAnimalRemoved, handled in Tick
+        private static readonly List<string> Saved = new List<string>(); // OnSaveCompleted's paths, handled in Tick
+        private static readonly List<string> SavesRemoved = new List<string>(); // OnSaveRemoved's paths, handled in Tick (menus too)
         private static readonly HashSet<ulong> Gone = new HashSet<ulong>(); // removed since the park was loaded or saved: dropped on its save
-        private static bool _loadedNews, _savedNews, _selectionNews;
+        private static readonly HashSet<string> WriteWarned = new HashSet<string>(StringComparer.OrdinalIgnoreCase); // looks files a write failed for
+        private static bool _loadedNews, _selectionNews;
         private static bool _disabled;
         private static bool _started; // Start ran (the framework loaded): until then Tick does nothing
 
@@ -35,12 +40,15 @@ namespace Tyrant.Framework
         /// <summary>The park's per-animal looks, or null outside a park.</summary>
         public static AnimalLooks? Looks { get; private set; }
 
-        /// <summary>True when the park's looks file had problems: it is then never written over (the player can fix it).</summary>
+        /// <summary>True when the current save's looks file had problems: it is then never written over (the player can fix it).</summary>
         private static bool _looksUnreadable;
+
+        /// <summary>The save the park was loaded from or last saved to (whose looks file is in use); null for a park never saved.</summary>
+        private static string? _savePath;
 
         public static bool Disabled => _disabled;
 
-        /// <summary>True when the park's looks file can be written (a park with a name, a file without problems).</summary>
+        /// <summary>True when the current save's looks file can be written (a park that was saved, a file without problems).</summary>
         public static bool LooksWritable => Looks != null && LooksPath != null && !_looksUnreadable;
 
         public static void Start()
@@ -56,6 +64,7 @@ namespace Tyrant.Framework
                 LookEditorWindow.Start();
                 Subscribe(Core, "OnLoadingProcessComplete", nameof(OnLoadingProcessComplete), null); // Game's event forwards to GameCore's
                 Subscribe(AccessTools.TypeByName("PrehistoricKingdom.SaveLoadManager"), "OnSaveCompleted", nameof(OnSaveCompleted), null);
+                Subscribe(AccessTools.TypeByName("PrehistoricKingdom.SaveLoadManager"), "OnSaveRemoved", nameof(OnSaveRemoved), null);
                 Subscribe(AccessTools.TypeByName("PrehistoricKingdom.AnimalManager"), "OnAnimalRemoved", nameof(OnAnimalRemoved), null);
                 _started = true;
             }
@@ -80,22 +89,30 @@ namespace Tyrant.Framework
                     // GameCore clears its listeners after each invocation and on shutdown: listen again for every park.
                     if (gui != null) Subscribe(Core, "OnLoadingProcessComplete", nameof(OnLoadingProcessComplete), null);
                 }
-                if (gui == null) return;
+                if (gui == null)
+                {
+                    SavesDeleted(); // the load menu deletes saves too
+                    return;
+                }
                 ListenToSelection();
 
-                bool loaded, saved, selection;
+                bool loaded, selection;
                 List<ulong> removed;
+                List<string> saved;
                 lock (Gate)
                 {
-                    (loaded, saved, selection) = (_loadedNews, _savedNews, _selectionNews);
-                    _loadedNews = _savedNews = _selectionNews = false;
+                    (loaded, selection) = (_loadedNews, _selectionNews);
+                    _loadedNews = _selectionNews = false;
                     removed = Removed.ToList();
                     Removed.Clear();
+                    saved = Saved.ToList();
+                    Saved.Clear();
                 }
                 // The game's event (once per park), or should it be missed the game saying it is fully loaded.
                 if (!_parkRead && (loaded || Property(Core, "IsFullyLoaded") is true)) ParkLoaded();
                 if (removed.Count > 0 && _parkRead) AnimalsRemoved(removed); // removals queued while loading belong to the old park
-                if (saved && _parkRead) ParkSaved();
+                if (_parkRead) foreach (var path in saved) ParkSaved(path);
+                SavesDeleted(); // after the saves: a save converted to a new one copies its images before the old one goes
                 LookEditorWindow.Tick(gui, _parkRead, selection);
             }
             catch (Exception ex)
@@ -104,13 +121,23 @@ namespace Tyrant.Framework
             }
         }
 
-        private static readonly FieldInfo? ParkNameField = SimManager == null ? null : AccessTools.Field(SimManager, "parkName");
+        /// <summary>The name of the save in use (its looks file); null outside a park and for a park never saved.</summary>
+        public static string? SaveName => AnimalLooks.SaveNameOf(_savePath);
 
-        /// <summary>The park's name (its looks file); null outside a park.</summary>
-        public static string? ParkName => ParkNameField?.GetValue(null) as string;
+        /// <summary>The current save's looks file, or null when the park was never saved.</summary>
+        public static string? LooksPath => AnimalLooks.PathFor(FrameworkMod.TyrantDirectory, SaveName);
 
-        /// <summary>The park's looks file, or null when the park has no name.</summary>
-        public static string? LooksPath => ParkName is string park ? AnimalLooks.PathFor(FrameworkMod.TyrantDirectory, park) : null;
+        /// <summary>
+        /// The save the park was loaded from: PersistentSceneLoader.AssociatedSaveMetadata.Path (set by LoadGameDelayed), or null for
+        /// a new game (a new scenario may carry an older save's metadata, which is not this park's).
+        /// </summary>
+        private static string? LoadedSavePath()
+        {
+            if (SceneLoader == null) return null;
+            if (AccessTools.Field(SceneLoader, "IsNewGame")?.GetValue(null) is true) return null;
+            var metadata = Property(SceneLoader, "AssociatedSaveMetadata");
+            return metadata == null ? null : AccessTools.Field(metadata.GetType(), "Path")?.GetValue(metadata) as string;
+        }
 
         /// <summary>The single selected object when it is an animal (park or vivarium); null otherwise.</summary>
         public static object? SelectedAnimal()
@@ -136,7 +163,7 @@ namespace Tyrant.Framework
                 FrameworkMod.Log.Warning($"\"{path}\" has problems (see above); fix or delete it before saving looks for single animals.");
                 return false;
             }
-            Looks.Write(path);
+            Looks.WriteFor(FrameworkMod.TyrantDirectory, SaveName!);
             MaterialsModule.SetAnimalLooks(Looks);
             return true;
         }
@@ -166,25 +193,32 @@ namespace Tyrant.Framework
             _parkRead = true;
             Gone.Clear();
             lock (Gate) Removed.Clear(); // ids of the park that was left
+            _savePath = LoadedSavePath();
             var path = LooksPath;
             var problems = new List<string>();
             Looks = path == null ? new AnimalLooks() : AnimalLooks.Read(path, problems);
             foreach (var problem in problems) FrameworkMod.Log.Warning(problem);
             _looksUnreadable = problems.Count > 0;
-            Prune(path, write: true);
+            if (Prune(out var alive) > 0) Write(SaveName, alive); // only the loaded save's file, against its own animals
             MaterialsModule.SetAnimalLooks(Looks);
             if (Looks.Count > 0)
             {
-                FrameworkMod.Log.Msg($"{Looks.Count} single-animal look(s) for this park.");
+                FrameworkMod.Log.Msg($"{Looks.Count} single-animal look(s) for save \"{SaveName}\".");
                 MaterialsModule.ReapplyIds(Looks.Ids.ToList(), keywords: true); // the animals were set up before the looks were read
             }
             LookEditorWindow.ParkLoaded();
         }
 
-        /// <summary>The park was saved: the looks of animals removed since, and of animals no longer in it, go (file included).</summary>
-        private static void ParkSaved()
+        /// <summary>
+        /// The game saved the park to <paramref name="savePath"/>, which is now the save in use: the looks of animals removed
+        /// since, and of animals no longer in it, go, and the store is written to that save's own file (images of the save it came
+        /// from copied over). Other saves' files are never touched. A failure only logs: the park is saved, the editor stays on.
+        /// </summary>
+        private static void ParkSaved(string savePath)
         {
             if (Looks == null) return;
+            var before = LooksPath;
+            _savePath = savePath;
             var dropped = 0;
             foreach (var id in Gone)
                 if (Looks.Get(id) != null)
@@ -194,22 +228,73 @@ namespace Tyrant.Framework
                 }
             Gone.Clear();
             if (dropped > 0) FrameworkMod.Log.Msg($"{dropped} look(s) of animals removed from the park were dropped.");
-            if (dropped + Prune(LooksPath, write: false) == 0) return;
-            if (LooksPath is string path && !_looksUnreadable) Looks.Write(path);
-            MaterialsModule.SetAnimalLooks(Looks);
+            Prune(out var alive);
+            if (_looksUnreadable)
+            {
+                // The file with problems is kept for the player to fix; a new save gets what could be read.
+                if (string.Equals(before, LooksPath, StringComparison.OrdinalIgnoreCase)) return;
+                FrameworkMod.Log.Warning($"Save \"{SaveName}\" gets the looks that could be read from \"{before}\"; the ones with problems stay there.");
+                _looksUnreadable = false;
+            }
+            Write(SaveName, alive);
+            MaterialsModule.SetAnimalLooks(Looks); // the store may point at the new save's images
+            LookEditorWindow.SaveChanged();
         }
 
-        /// <summary>Drops looks whose animal is not in the park (never on an empty read); returns how many. Writes when asked and any went.</summary>
-        private static int Prune(string? path, bool write)
+        /// <summary>Drops looks whose animal is not in the park (never on an empty read); returns how many, and the animals read.</summary>
+        private static int Prune(out List<ulong> alive)
         {
-            if (Looks == null || Looks.Count == 0) return 0;
-            var alive = MaterialsModule.LoadedIds();
-            if (alive.Count == 0) return 0; // no animals read (or none yet): nothing is dropped on a guess
+            alive = new List<ulong>();
+            if (Looks == null) return 0;
+            alive = MaterialsModule.LoadedIds();
+            if (Looks.Count == 0 || alive.Count == 0) return 0; // no animals read (or none yet): nothing is dropped on a guess
             var pruned = Looks.Prune(alive);
-            if (pruned == 0) return 0;
-            FrameworkMod.Log.Msg($"{pruned} look(s) of animals no longer in the park were dropped.");
-            if (write && path != null && !_looksUnreadable) Looks.Write(path);
+            if (pruned > 0) FrameworkMod.Log.Msg($"{pruned} look(s) of animals no longer in the park were dropped.");
             return pruned;
+        }
+
+        /// <summary>The store as this save's file (never a file with problems); a failure logs once per file and changes nothing else.</summary>
+        private static void Write(string? saveName, List<ulong> alive)
+        {
+            if (Looks == null || saveName == null || _looksUnreadable) return;
+            try
+            {
+                Looks.WriteFor(FrameworkMod.TyrantDirectory, saveName, alive);
+            }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is ManifestException)
+            {
+                if (WriteWarned.Add(saveName)) FrameworkMod.Log.Warning($"The single-animal looks of save \"{saveName}\" could not be written: {ex.Message}");
+            }
+        }
+
+        /// <summary>Saves the game deleted: their looks file and images go (the save in use is then none until the next save).</summary>
+        private static void SavesDeleted()
+        {
+            List<string> paths;
+            lock (Gate)
+            {
+                if (SavesRemoved.Count == 0) return;
+                paths = SavesRemoved.ToList();
+                SavesRemoved.Clear();
+            }
+            foreach (var path in paths)
+            {
+                if (!(AnimalLooks.SaveNameOf(path) is string name)) continue;
+                if (string.Equals(AnimalLooks.PathFor(FrameworkMod.TyrantDirectory, name), LooksPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    _savePath = null; // the store stays in memory and goes to the next save's file
+                    _looksUnreadable = false;
+                    LookEditorWindow.SaveChanged();
+                }
+                try
+                {
+                    AnimalLooks.DeleteSave(FrameworkMod.TyrantDirectory, name);
+                }
+                catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+                {
+                    FrameworkMod.Log.Warning($"The single-animal looks of deleted save \"{name}\" could not be removed: {ex.Message}");
+                }
+            }
         }
 
         /// <summary>
@@ -228,12 +313,14 @@ namespace Tyrant.Framework
             LookEditorWindow.LeavePark();
             Looks = null;
             _looksUnreadable = false;
+            _savePath = null;
             _parkRead = false;
             Gone.Clear();
             lock (Gate)
             {
                 Removed.Clear();
-                _loadedNews = _savedNews = false;
+                Saved.Clear();
+                _loadedNews = false;
             }
             _selection = null;
             _selectionHandler = null;
@@ -249,7 +336,21 @@ namespace Tyrant.Framework
 
         private static void OnSaveCompleted(string savePath)
         {
-            lock (Gate) _savedNews = true;
+            if (string.IsNullOrWhiteSpace(savePath)) return;
+            lock (Gate) Saved.Add(savePath);
+        }
+
+        private static void OnSaveRemoved(object metadata)
+        {
+            try
+            {
+                if (metadata != null && AccessTools.Field(metadata.GetType(), "Path")?.GetValue(metadata) is string path && path.Length > 0)
+                    lock (Gate) SavesRemoved.Add(path);
+            }
+            catch (Exception)
+            {
+                // a save whose path cannot be read keeps its looks file (harmless: nothing reads it again)
+            }
         }
 
         private static void OnAnimalRemoved(object animal)

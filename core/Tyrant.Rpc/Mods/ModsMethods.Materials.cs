@@ -64,8 +64,8 @@ public sealed partial class ModsMethods
         var rows = MaterialProperties.All.Select(x =>
         {
             if (below is not null && below.Settings.TryGetValue(x.Key, out var set))
-                return Property(x, Json.Write(set.ToJson()), sources.GetValueOrDefault(x.Key, "species"));
-            if (GameValue(game, x) is { } value) return Property(x, Json.Write(value.ToJson()), "game");
+                return Property(x, Json.Write(set.ToJson(Count(x))), sources.GetValueOrDefault(x.Key, "species"));
+            if (GameValue(game, x) is { } value) return Property(x, Json.Write(value.ToJson(Count(x))), "game");
             return Property(x, null, "default");
         }).ToList();
         string? iridescence = null;
@@ -170,6 +170,9 @@ public sealed partial class ModsMethods
         MaterialValueKind.Color => game.Colors.TryGetValue(x.Key, out var c) && c.Length >= 3 ? MaterialValue.OfColor(new Rgb(c[0], c[1], c[2])) : null,
         _ => game.Colors.TryGetValue(x.Key, out var v) ? MaterialValue.OfVector(x.Components == 3 && v.Length > 3 ? v[..3] : v) : null,
     };
+
+    /// <summary>How many numbers a vector setting is written with (exactly 3, or all four).</summary>
+    private static int Count(MaterialProperty x) => x.Components == 3 ? 3 : 4;
 
     private static ModMaterialProperty Property(MaterialProperty x, string? inherited, string source) =>
         new(x.Key, x.Group, x.Label, x.Kind.ToString().ToLowerInvariant(), x.Min, x.Max, inherited, source, x.Components);

@@ -58,7 +58,8 @@ namespace Tyrant.Framework.Core
             Number("_FurWindSpeed", "Fur", "Fur wind speed", 0, 10),
             Number("_FurWindScale", "Fur", "Fur wind scale", 0, 10),
             Number("_Droopage", "Fur", "Fur droop", 0, 2),
-            new MaterialProperty("_DroopDirection", "Fur", "Droop direction", MaterialValueKind.Vector, -1, 1) { Components = 3 },
+            // Not a unit vector: vanilla skins go from -10.3 to 8.11 (the Velociraptor adult's is 0, -10.3, 8.11).
+            new MaterialProperty("_DroopDirection", "Fur", "Droop direction", MaterialValueKind.Vector, -20, 20) { Components = 3 },
             Number("_Cutoff", "Cutout", "Cutout threshold", 0, 1),
         };
 
@@ -100,10 +101,11 @@ namespace Tyrant.Framework.Core
             return new MaterialValue(MaterialValueKind.Vector, 0, default, four);
         }
 
-        public object ToJson() => Kind switch
+        /// <param name="components">How many vector components to write (a setting of exactly 3 must not get a fourth).</param>
+        public object ToJson(int components = 4) => Kind switch
         {
             MaterialValueKind.Color => Color.ToString(),
-            MaterialValueKind.Vector => Vector.Select(v => (object?)MaterialOverrides.Num(v)).ToList(),
+            MaterialValueKind.Vector => Vector.Take(components).Select(v => (object?)MaterialOverrides.Num(v)).ToList(),
             _ => MaterialOverrides.Num(Number),
         };
     }
@@ -210,6 +212,27 @@ namespace Tyrant.Framework.Core
             return result.Count == 0 ? null : result;
         }
 
+        /// <summary>
+        /// What <see cref="Parse"/> would refuse in these materials once written (null when they read back): a save checks this
+        /// first, so nothing is written that a load rejects.
+        /// </summary>
+        public static string? Problem(IReadOnlyDictionary<string, MaterialOverride> materials, string owner, bool skinLevel)
+        {
+            try
+            {
+                Parse(Json.Parse(Json.Write(ToJson(materials))), owner, skinLevel);
+                return null;
+            }
+            catch (ManifestException ex)
+            {
+                return ex.Message;
+            }
+            catch (FormatException ex)
+            {
+                return $"{owner}: {ex.Message}";
+            }
+        }
+
         public static Dictionary<string, object?> ToJson(IReadOnlyDictionary<string, MaterialOverride> materials)
         {
             var map = new Dictionary<string, object?>();
@@ -226,7 +249,8 @@ namespace Tyrant.Framework.Core
                     entry["fur"] = fur;
                 }
                 if (pair.Value.Settings.Count > 0)
-                    entry["settings"] = pair.Value.Settings.ToDictionary(s => s.Key, s => (object?)s.Value.ToJson(), StringComparer.Ordinal);
+                    entry["settings"] = pair.Value.Settings.ToDictionary(s => s.Key,
+                        s => (object?)s.Value.ToJson(MaterialProperties.Find(s.Key)?.Components == 3 ? 3 : 4), StringComparer.Ordinal);
                 map[pair.Key] = entry;
             }
             return map;

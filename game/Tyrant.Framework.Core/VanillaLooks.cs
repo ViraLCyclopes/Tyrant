@@ -25,8 +25,8 @@ namespace Tyrant.Framework.Core
             return folder;
         }
 
-        /// <summary>This animal's look needs a park (its file) and the animal's id; the other scopes can always be saved.</summary>
-        public static bool IsAvailable(LookScope scope, ulong? animalId, string? parkName) =>
-            scope != LookScope.Animal || (animalId != null && !string.IsNullOrWhiteSpace(parkName));
+        /// <summary>This animal's look needs a saved park (its file is named after the save) and the animal's id; the other scopes can always be saved.</summary>
+        public static bool IsAvailable(LookScope scope, ulong? animalId, string? saveName) =>
+            scope != LookScope.Animal || (animalId != null && !string.IsNullOrWhiteSpace(saveName));
     }
 }

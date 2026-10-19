@@ -318,13 +318,23 @@ Needs the game and a Tyrant Framework installed from this build. Steps marked **
 141. **(game)** On one Titanoboa, **This animal**, tab **Iridescence**: move strength and thickness (type values too); only that
      animal changes. Switch to **Whole skin**: every animal wearing the skin changes with it.
 142. **(game)** **Save** on **This animal**, save the park, reload it: the look is still there and
-     `UserData/Tyrant/Looks/<park>.json` has the animal's entry (the park save has nothing new). Sell the animal, save the park:
-     its entry is gone.
-143. **(game)** Save a vanilla skin of a species no mod touches: the `vanilla-looks` mod appears in `Mods` (**Vanilla Looks** in
-     the Mods tab) and loads last; its look shows on a second animal and after a restart.
+     `UserData/Tyrant/Looks/<save>.json` (named after the save file) has the animal's entry (the park save has nothing new). Sell
+     the animal, save the park: its entry (and its `Looks/<save>/<id>/` folder) is gone. Then load another park and come back
+     (a scene reload), sell a second animal with a look and save: its entry is dropped too.
+     - In a new park, **This animal** is greyed out until the park's first save.
+     - **Save As** under a new name: `Looks/<new name>.json` appears with the same looks, the exported images are copied into
+       `Looks/<new name>/<id>/`, and the old save's file is unchanged. Change a look, save again, load the old save: it has
+       the old look.
+     - Two saves of parks with the same name keep separate looks. Delete a save in the game's load menu: its looks file and
+       folder go, the other saves' stay.
+143. **(game)** Save a vanilla skin of a species no mod touches: a `vanilla-looks` folder appears in the game folder's
+     `UserData/Tyrant/Mods` (not the game's own `Mods` folder, which holds the MelonLoader mods), the app's **Mods** tab lists
+     it as **Vanilla Looks**, and it loads last; its look shows on a second animal and after a restart. With that folder's
+     `mod.json` broken, a save into it says Vanilla Looks is turned off or broken instead of "Saved".
 144. **(game)** Save into a mod skin made by someone else: the change lands in that mod's folder in the game, not the workspace.
-145. **(game)** **Export mask PNG**, edit the PNG in an image editor, press **Reload images**: the animals update. Without
-     **Save**, **Discard** deletes the staged file.
+145. **(game)** **Export mask PNG**, edit the PNG in an image editor, press **Reload images**: the animals update. Then select
+     another animal (or close the window) without **Save**: the **Discard changes?** prompt appears, and its **Discard** deletes
+     the staged file.
 146. **(game)** Change a value, then select another animal: it asks about the unsaved change (keep or discard). Same on closing the window.
 147. **(game)** The vivarium species check: a pooled vivarium animal with a vanilla skin looks vanilla (no sheen from another
      animal's look), and an animal with a look keeps it after being moved.
@@ -333,5 +343,6 @@ Needs the game and a Tyrant Framework installed from this build. Steps marked **
      sides changed, **Game's** and **Project's** each win as chosen.
 149. **(app)** `vanilla-looks` is listed as a game-only mod with **Copy to workspace first**. CLI: `tyrant mod looks <mod>` lists
      the folders; `tyrant mod install <mod>` stops with `GAME_LOOKS_PENDING` until `--bring-in-looks` or `--discard-game-looks`.
-150. **(app)** **Uninstall from game**: the dialog asks first; afterwards `UserData/Tyrant/Looks` is still there. **(game)** Remove Tyrant:
+150. **(app)** **Uninstall from game**: the dialog asks first and says the looks and masks are kept; afterwards `UserData/Tyrant/Looks`
+     and `UserData/Tyrant/Masks` are still there. **(game)** Remove Tyrant:
      the park loads vanilla, with no error.

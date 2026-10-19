@@ -200,11 +200,10 @@ namespace Tyrant.Framework
             for (var c = 0; c < 3; c++)
             {
                 var component = c;
-                SliderRow(names[c], droop[c], range?.Min ?? -1f, range?.Max ?? 1f, range?.Min ?? -1f, range?.Max ?? 1f, true, v =>
+                SliderRow(names[c], droop[c], range?.Min ?? -20f, range?.Max ?? 20f, range?.Min ?? -20f, range?.Max ?? 20f, true, v =>
                 {
-                    var now = Vector("_DroopDirection");
-                    now[component] = v;
-                    draft.SetSetting("_DroopDirection", MaterialValue.OfVector(now.x, now.y, now.z));
+                    var now = Vector("_DroopDirection"); // the other two are the ones shown (often the game's own)
+                    LookEditing.SetComponent(draft, "_DroopDirection", new[] { now.x, now.y, now.z }, component, v);
                 });
             }
             NumberRow("_Length", "Length");

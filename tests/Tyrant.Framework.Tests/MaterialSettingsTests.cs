@@ -55,6 +55,19 @@ public class MaterialSettingsTests
     }
 
     [Fact]
+    public void A_droop_direction_is_written_with_exactly_three_numbers_and_reads_back()
+    {
+        var m = new MaterialOverride();
+        m.Settings["_DroopDirection"] = MaterialValue.OfVector(0, -10.3f, 8.11f);
+        m.Settings["_DetailScale"] = MaterialValue.OfVector(4, 4);
+        var json = Json.Write(MaterialOverrides.ToJson(new Dictionary<string, MaterialOverride> { ["Titanoboa"] = m }));
+
+        Assert.Contains("[0,-10.3,8.11]", string.Concat(json.Where(c => !char.IsWhiteSpace(c))));
+        var read = MaterialOverrides.Parse(Json.Parse(json), "Skin", true)!["Titanoboa"];
+        Assert.Equal(new[] { 0f, -10.3f, 8.11f, 0f }, read.Settings["_DroopDirection"].Vector);
+    }
+
+    [Fact]
     public void A_single_strength_applies_to_every_variant()
     {
         var s = Titanoboa("""{ "Titanoboa": { "iridescence": { "strength": 0.3 } } }""").Iridescence!.Strength!;

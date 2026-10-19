@@ -89,6 +89,12 @@ namespace Tyrant.Framework
 
         public static void ParkLoaded() => _openWhenReady = _open?.Value == true;
 
+        /// <summary>The save in use changed (saved, or deleted): "This animal" may have become available or not.</summary>
+        public static void SaveChanged()
+        {
+            if (IsOpen) Rebuild();
+        }
+
         /// <summary>The park is gone with every object of ours in it; unsaved edits are dropped.</summary>
         public static void LeavePark()
         {
@@ -243,7 +249,7 @@ namespace Tyrant.Framework
 
         private static bool Available(LookScope scope) => _context != null && scope switch
         {
-            LookScope.Animal => VanillaLooks.IsAvailable(LookScope.Animal, _context.PersistentId, LookEditorModule.ParkName),
+            LookScope.Animal => VanillaLooks.IsAvailable(LookScope.Animal, _context.PersistentId, LookEditorModule.SaveName), // a park never saved has no looks file yet
             LookScope.Skin => _context.SkinKey != null,
             _ => true,
         };
@@ -347,6 +353,14 @@ namespace Tyrant.Framework
             if (_draft == null || _context == null || _target == null) return;
             var c = _context;
             var current = Staged.Final(_draft.Current); // exports under their fixed names (iridescence-mask.png, fur-mask.png)
+            // Never write what a load rejects: the block is read back as the loader reads it first (a species has no mask "from").
+            var skinLevel = _target.Kind == SaveTargetKind.AnimalLooks || _target.Owner?.Kind != MaterialOwnerKind.Species;
+            if (MaterialOverrides.Problem(new Dictionary<string, MaterialOverride>(StringComparer.Ordinal) { [c.MaterialName] = current }, "This look", skinLevel) is string problem)
+            {
+                _message = "Not saved: " + problem;
+                Footer();
+                return;
+            }
             var missing = new List<string>();
             var committed = false;
             string where;
@@ -356,9 +370,9 @@ namespace Tyrant.Framework
                 {
                     if (!(c.PersistentId is ulong id) || LookEditorModule.Looks == null || !LookEditorModule.LooksWritable)
                     {
-                        _message = LookEditorModule.Looks != null && c.PersistentId != null
-                            ? "Not saved: this park's looks file has problems (see the MelonLoader log)."
-                            : "This animal's look cannot be saved: the park has no name or the animal no id.";
+                        _message = LookEditorModule.Looks != null && c.PersistentId != null && LookEditorModule.SaveName != null
+                            ? "Not saved: this save's looks file has problems (see the MelonLoader log)."
+                            : "This animal's look cannot be saved: save the park first (its looks follow the save), or the animal has no id.";
                         Footer();
                         return;
                     }
@@ -384,11 +398,11 @@ namespace Tyrant.Framework
                     if (!written)
                     {
                         looks.Set(id, before);
-                        _message = "Not saved: this park's looks file has problems (see the MelonLoader log).";
+                        _message = "Not saved: this save's looks file has problems (see the MelonLoader log).";
                         Footer();
                         return;
                     }
-                    where = "this park's looks";
+                    where = "this save's looks";
                 }
                 else
                 {
@@ -530,9 +544,9 @@ namespace Tyrant.Framework
             if (_target == null || _context == null) return null;
             if (_target.Kind == SaveTargetKind.AnimalLooks)
             {
-                var park = LookEditorModule.ParkName;
-                if (string.IsNullOrWhiteSpace(park) || _context.PersistentId == null) return null;
-                return Path.Combine(FrameworkMod.TyrantDirectory, "Looks", MaterialFolders.Sanitize(park!.Trim()), _context.PersistentId.Value.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                var folder = AnimalLooks.FolderFor(FrameworkMod.TyrantDirectory, LookEditorModule.SaveName);
+                if (folder == null || _context.PersistentId == null) return null;
+                return Path.Combine(folder, _context.PersistentId.Value.ToString(System.Globalization.CultureInfo.InvariantCulture));
             }
             var modDir = ModDirectory(create);
             return modDir == null ? null : Path.Combine(modDir, MaterialFolders.FolderOf(_target.Owner!).Replace('/', Path.DirectorySeparatorChar));
@@ -544,7 +558,7 @@ namespace Tyrant.Framework
             switch (_target.Kind)
             {
                 case SaveTargetKind.AnimalLooks:
-                    return "this park's looks";
+                    return "this save's looks";
                 case SaveTargetKind.CreateVanillaLooks:
                     return VanillaLooks.Name + (File.Exists(Path.Combine(FrameworkMod.ModsDirectory, ModCatalog.VanillaLooksId, ModManifest.FileName)) ? "" : " (new)");
                 default:
