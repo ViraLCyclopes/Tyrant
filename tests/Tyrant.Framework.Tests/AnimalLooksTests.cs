@@ -36,6 +36,69 @@ public class AnimalLooksTests
     }
 
     [Fact]
+    public void Looks_bound_to_incubating_animals_round_trip_beside_the_animals()
+    {
+        var path = AnimalLooks.PathFor(TempDir(), "Park A")!;
+        var looks = new AnimalLooks();
+        looks.Set(1, Look(0.2f));
+        looks.SetIncubating(900, Look(0.7f));
+        looks.Write(path);
+        Assert.Contains("\"incubating\"", File.ReadAllText(path));
+
+        var problems = new List<string>();
+        var read = AnimalLooks.Read(path, problems);
+        Assert.Empty(problems);
+        Assert.Equal(1, read.Count); // the animals only
+        Assert.Equal(1, read.IncubatingCount);
+        Assert.Equal(0.7f, read.GetIncubating(900)!["Body"].Iridescence!.Strength!.Normal);
+        Assert.Null(read.Get(900)); // a virtual animal's id is not an animal's
+        Assert.Equal(new ulong[] { 900 }, read.IncubatingIds);
+
+        read.SetIncubating(900, null);
+        Assert.Equal(0, read.IncubatingCount);
+        read.Write(path);
+        Assert.DoesNotContain("incubating", File.ReadAllText(path)); // no empty section
+    }
+
+    [Fact]
+    public void A_file_without_the_incubating_section_reads_as_before_and_a_bad_one_is_a_problem()
+    {
+        var dir = TempDir();
+        var old = Path.Combine(dir, "old.json");
+        File.WriteAllText(old, """{"format":1,"animals":{"6":{"Body":{"settings":{"_Smoothness":0.5}}}}}""");
+        var problems = new List<string>();
+        var read = AnimalLooks.Read(old, problems);
+        Assert.Empty(problems);
+        Assert.Equal(1, read.Count);
+        Assert.Equal(0, read.IncubatingCount);
+
+        var bad = Path.Combine(dir, "bad.json");
+        File.WriteAllText(bad, """{"format":1,"incubating":{"x":{},"7":{"Body":{"settings":{"_Smoothness":0.4}}}}}""");
+        read = AnimalLooks.Read(bad, problems);
+        Assert.Single(problems);
+        Assert.Contains("incubating animal \"x\" is not an id", problems[0]);
+        Assert.NotNull(read.GetIncubating(7));
+    }
+
+    [Fact]
+    public void Bindings_whose_virtual_animal_is_gone_are_pruned_and_a_binding_alone_keeps_the_file()
+    {
+        var dir = TempDir();
+        var looks = new AnimalLooks();
+        looks.SetIncubating(5, Look(0.1f));
+        looks.SetIncubating(6, Look(0.2f));
+        Assert.Equal(1, looks.PruneIncubating(new ulong[] { 6, 99 }));
+        Assert.Null(looks.GetIncubating(5));
+        Assert.NotNull(looks.GetIncubating(6));
+
+        looks.WriteFor(dir, "Park B");
+        Assert.True(File.Exists(AnimalLooks.PathFor(dir, "Park B"))); // only a binding: still written
+        looks.SetIncubating(6, null);
+        looks.WriteFor(dir, "Park B");
+        Assert.False(File.Exists(AnimalLooks.PathFor(dir, "Park B")));
+    }
+
+    [Fact]
     public void A_missing_file_is_an_empty_store_and_a_bad_animal_is_a_problem()
     {
         var dir = TempDir();

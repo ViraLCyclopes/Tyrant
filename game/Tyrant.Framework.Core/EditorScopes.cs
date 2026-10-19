@@ -15,7 +15,7 @@ namespace Tyrant.Framework.Core
 
         /// <summary>
         /// True when this scope can be edited and saved: "This animal" needs a placed animal with an id in a saved park; in the
-        /// Nursery it is "Next created" (the next animal created from the preview) and needs a saved park only; "Whole skin" a
+        /// Nursery it is "Next created" (the next animal incubated from the preview) and needs a saved park only; "Whole skin" a
         /// known skin; "Whole species" always.
         /// </summary>
         public static bool Offers(EditorEntry entry, LookScope scope, AnimalContext? context, string? saveName) =>
@@ -52,7 +52,7 @@ namespace Tyrant.Framework.Core
             }
         }
 
-        /// <summary>The scope's button: "This animal" is "Next created" in the Nursery, the next animal created from its preview.</summary>
+        /// <summary>The scope's button: "This animal" is "Next created" in the Nursery, the next animal incubated from its preview.</summary>
         public static string Label(EditorEntry entry, LookScope scope) => scope switch
         {
             LookScope.Animal => entry == EditorEntry.Nursery ? "Next created" : "This animal",
@@ -60,8 +60,12 @@ namespace Tyrant.Framework.Core
             _ => "Whole species",
         };
 
-        /// <summary>The status line after a Next created save.</summary>
-        public static string SavedForNext(string species) => $"Saved for the next {species} you create.";
+        /// <summary>The status line after a Next created save: the look waits for the next incubation started from the Nursery.</summary>
+        public static string SavedForNext(string species) => $"Saved for the next {species} you incubate.";
+
+        /// <summary>The status line once an incubation took the look: it is that animal's, and goes on it when it is placed.</summary>
+        public static string BoundTo(string? name, string species = "") =>
+            $"Bound to {(string.IsNullOrWhiteSpace(name) ? "the new " + species : name)}, incubating.";
 
         /// <summary>
         /// The Nursery closed under a window opened on it: a draft with unsaved changes is kept on its look (Save still writes

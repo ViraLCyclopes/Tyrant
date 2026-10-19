@@ -5,10 +5,10 @@ using System.Linq;
 namespace Tyrant.Framework.Core
 {
     /// <summary>
-    /// Looks saved in the Nursery for the next animal created (the editor's "Next created"): one per species, skin (a mod skin's
-    /// key or a vanilla skin's, any case) and sex, by material name; kept in memory only, until an animal created to match takes
-    /// it. A look takes an animal of its own sex first; one that does not depend on sex (no mask from a sex's own map) also
-    /// takes the other sex's. Everything handed in or out is a copy.
+    /// Looks saved in the Nursery for the next animal incubated (the editor's "Next created"), armed in memory until an
+    /// incubation started from the Nursery takes one: one per species, skin (a mod skin's key or a vanilla skin's, any case)
+    /// and sex, by material name. An incubation takes the look of its own sex first; one that does not depend on sex (no mask
+    /// from a sex's own map) also goes to the other sex. Everything handed in or out is a copy.
     /// </summary>
     public sealed class PendingLooks
     {

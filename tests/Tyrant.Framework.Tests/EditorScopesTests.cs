@@ -49,7 +49,9 @@ public class EditorScopesTests
         Assert.Equal("This animal", EditorScopes.Label(EditorEntry.Park, LookScope.Animal));
         Assert.Equal("Whole skin", EditorScopes.Label(EditorEntry.Nursery, LookScope.Skin));
         Assert.Equal("Whole species", EditorScopes.Label(EditorEntry.Park, LookScope.Species));
-        Assert.Equal("Saved for the next Allosaurus you create.", EditorScopes.SavedForNext("Allosaurus"));
+        Assert.Equal("Saved for the next Allosaurus you incubate.", EditorScopes.SavedForNext("Allosaurus"));
+        Assert.Equal("Bound to Rex, incubating.", EditorScopes.BoundTo("Rex"));
+        Assert.Equal("Bound to the new Allosaurus, incubating.", EditorScopes.BoundTo(null, "Allosaurus")); // a nameless one
     }
 
     [Fact]

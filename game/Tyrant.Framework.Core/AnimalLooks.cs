@@ -7,7 +7,10 @@ using System.Linq;
 namespace Tyrant.Framework.Core
 {
     /// <summary>
-    /// The looks tuned for single animals in one save: { "format":1, "animals": { "&lt;id&gt;": &lt;materials map&gt; } }.
+    /// The looks tuned for single animals in one save: { "format":1, "animals": { "&lt;id&gt;": &lt;materials map&gt; },
+    /// "incubating": { "&lt;virtual animal id&gt;": &lt;materials map&gt; } }. "incubating" holds the looks saved in the Nursery for
+    /// an animal being incubated (or waiting in the holder), by its VirtualAnimal.UniqueID, which the save keeps; the look moves
+    /// to "animals" when that animal is placed. A file without "incubating" reads as before.
     /// Lives in UserData/Tyrant/Looks/&lt;save&gt;.json, named after the save file (persistent ids are counted per save, and a
     /// park's name is not unique), with the images exported for an animal in Looks/&lt;save&gt;/&lt;id&gt;/; nothing goes into the save.
     /// </summary>
@@ -16,8 +19,12 @@ namespace Tyrant.Framework.Core
         private const string LooksFolder = "Looks";
 
         private readonly SortedDictionary<ulong, Dictionary<string, MaterialOverride>> _animals = new SortedDictionary<ulong, Dictionary<string, MaterialOverride>>();
+        private readonly SortedDictionary<ulong, Dictionary<string, MaterialOverride>> _incubating = new SortedDictionary<ulong, Dictionary<string, MaterialOverride>>();
 
+        /// <summary>How many placed animals have a look (the incubating ones are <see cref="IncubatingCount"/>).</summary>
         public int Count => _animals.Count;
+
+        public int IncubatingCount => _incubating.Count;
 
         /// <summary>The save's name: the last part of the path the game saved to or loaded from (".../Saves/My Park"); null when none.</summary>
         public static string? SaveNameOf(string? savePath)
@@ -52,26 +59,8 @@ namespace Tyrant.Framework.Core
             {
                 if (!(Json.Parse(File.ReadAllText(path)) is Dictionary<string, object?> root)) throw new ManifestException("It must be a JSON object.");
                 if (!(root.TryGetValue("format", out var format) && format is double f && f == 1)) throw new ManifestException("\"format\" must be 1.");
-                if (root.TryGetValue("animals", out var animals) && animals != null)
-                {
-                    if (!(animals is Dictionary<string, object?> map)) throw new ManifestException("\"animals\" must be an object.");
-                    foreach (var pair in map)
-                    {
-                        if (!ulong.TryParse(pair.Key, NumberStyles.None, CultureInfo.InvariantCulture, out var id))
-                        {
-                            problems.Add($"{path}: animal \"{pair.Key}\" is not an id.");
-                            continue;
-                        }
-                        try
-                        {
-                            if (MaterialOverrides.Parse(pair.Value, $"Animal {pair.Key}", true) is { } materials) looks._animals[id] = materials;
-                        }
-                        catch (ManifestException ex)
-                        {
-                            problems.Add($"{path}: {ex.Message}");
-                        }
-                    }
-                }
+                ReadSection(root, "animals", "animal", "Animal", looks._animals, path, problems);
+                ReadSection(root, "incubating", "incubating animal", "Incubating animal", looks._incubating, path, problems);
             }
             catch (Exception ex) when (ex is ManifestException || ex is FormatException)
             {
@@ -84,19 +73,50 @@ namespace Tyrant.Framework.Core
             return looks;
         }
 
+        /// <summary>One id-keyed section ("animals", "incubating"); a missing one is empty, a bad id or look a problem that is skipped.</summary>
+        private static void ReadSection(Dictionary<string, object?> root, string key, string what, string owner,
+            SortedDictionary<ulong, Dictionary<string, MaterialOverride>> into, string path, List<string> problems)
+        {
+            if (!root.TryGetValue(key, out var section) || section == null) return;
+            if (!(section is Dictionary<string, object?> map)) throw new ManifestException($"\"{key}\" must be an object.");
+            foreach (var pair in map)
+            {
+                if (!ulong.TryParse(pair.Key, NumberStyles.None, CultureInfo.InvariantCulture, out var id))
+                {
+                    problems.Add($"{path}: {what} \"{pair.Key}\" is not an id.");
+                    continue;
+                }
+                try
+                {
+                    if (MaterialOverrides.Parse(pair.Value, $"{owner} {pair.Key}", true) is { } materials) into[id] = materials;
+                }
+                catch (ManifestException ex)
+                {
+                    problems.Add($"{path}: {ex.Message}");
+                }
+            }
+        }
+
         /// <summary>Throws <see cref="ManifestException"/>, writing nothing, when an animal's look is one <see cref="Read"/> would refuse.</summary>
         public void Write(string path)
         {
-            var animals = new Dictionary<string, object?>();
-            foreach (var pair in _animals)
-            {
-                var key = pair.Key.ToString(CultureInfo.InvariantCulture);
-                if (MaterialOverrides.Problem(pair.Value, $"Animal {key}", true) is string problem) throw new ManifestException(problem);
-                animals[key] = MaterialOverrides.ToJson(pair.Value);
-            }
+            var root = new Dictionary<string, object?> { ["format"] = 1, ["animals"] = Section(_animals, "Animal") };
+            if (_incubating.Count > 0) root["incubating"] = Section(_incubating, "Incubating animal"); // left out when empty: older Tyrants read the file as before
             var directory = Path.GetDirectoryName(path);
             if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
-            AtomicFile.Write(path, Json.Write(new Dictionary<string, object?> { ["format"] = 1, ["animals"] = animals }) + "\n");
+            AtomicFile.Write(path, Json.Write(root) + "\n");
+        }
+
+        private static Dictionary<string, object?> Section(SortedDictionary<ulong, Dictionary<string, MaterialOverride>> looks, string owner)
+        {
+            var map = new Dictionary<string, object?>();
+            foreach (var pair in looks)
+            {
+                var key = pair.Key.ToString(CultureInfo.InvariantCulture);
+                if (MaterialOverrides.Problem(pair.Value, $"{owner} {key}", true) is string problem) throw new ManifestException(problem);
+                map[key] = MaterialOverrides.ToJson(pair.Value);
+            }
+            return map;
         }
 
         /// <summary>
@@ -126,7 +146,7 @@ namespace Tyrant.Framework.Core
                     return into + file.Substring(from.Length + 1);
                 }), StringComparer.Ordinal);
             }
-            if (_animals.Count == 0)
+            if (_animals.Count == 0 && _incubating.Count == 0)
             {
                 if (File.Exists(path)) File.Delete(path);
             }
@@ -173,6 +193,28 @@ namespace Tyrant.Framework.Core
         {
             if (materials == null || materials.Values.All(m => m.IsEmpty)) _animals.Remove(id);
             else _animals[id] = materials;
+        }
+
+        /// <summary>The look bound to an incubating (or held) animal, by its VirtualAnimal.UniqueID; null when none.</summary>
+        public Dictionary<string, MaterialOverride>? GetIncubating(ulong virtualId) => _incubating.TryGetValue(virtualId, out var materials) ? materials : null;
+
+        /// <summary>The virtual animal ids that have a look bound.</summary>
+        public IEnumerable<ulong> IncubatingIds => _incubating.Keys;
+
+        /// <summary>Binds a look to an incubating animal; null or a map with nothing in it removes the binding.</summary>
+        public void SetIncubating(ulong virtualId, Dictionary<string, MaterialOverride>? materials)
+        {
+            if (materials == null || materials.Values.All(m => m.IsEmpty)) _incubating.Remove(virtualId);
+            else _incubating[virtualId] = materials;
+        }
+
+        /// <summary>Forgets bindings whose virtual animal is no longer in the park (cancelled, sold, placed); returns how many.</summary>
+        public int PruneIncubating(IReadOnlyCollection<ulong> alive)
+        {
+            var set = new HashSet<ulong>(alive);
+            var gone = _incubating.Keys.Where(id => !set.Contains(id)).ToList();
+            foreach (var id in gone) _incubating.Remove(id);
+            return gone.Count;
         }
 
         /// <summary>Forgets animals that are no longer in the park; returns how many.</summary>
