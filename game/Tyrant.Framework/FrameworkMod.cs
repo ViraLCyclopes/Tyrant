@@ -86,6 +86,8 @@ namespace Tyrant.Framework
             ModelModule.Start(plan.Mods);
             if (ModelModule.HasModels) RigModule.Start(HarmonyInstance);
             HeadRigModule.Start(plan.Mods, HarmonyInstance);
+            MaterialsModule.Start(plan.Mods);
+            if (MaterialsModule.HasMaterials) MaterialsModule.Patch(HarmonyInstance);
             SoundsModule.Start(plan.Mods, HarmonyInstance);
             if (Replacements.Count > 0 || CodeMods.Count > 0 || SkinsModule.HasSkins || ModelModule.HasModels) AnimalTexturePatch.Apply(HarmonyInstance);
             if (SkinsModule.HasSkins) SkinPatches.Apply(HarmonyInstance);
