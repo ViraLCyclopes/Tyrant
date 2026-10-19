@@ -226,8 +226,15 @@ namespace Tyrant.Framework
                 Footer();
                 return;
             }
-            if (!LookEditing.ApplyPreset(_draft, kind, SpeciesLooks.Source, species))
+            if (!LookEditing.ApplyPreset(_draft, kind, SpeciesLooks.Source, species, _context?.Species))
             {
+                if (SpeciesLooks.Unavailable(species)) // its load could not even start
+                {
+                    _presetWaiting = null;
+                    _message = SpeciesLooks.NameOf(species) + "'s look could not be read (see the MelonLoader log).";
+                    Footer();
+                    return;
+                }
                 _presetWaiting = (kind, species); // SpeciesLoaded applies it once the material is read
                 _message = "Loading " + SpeciesLooks.NameOf(species) + "'s look…";
                 Footer();

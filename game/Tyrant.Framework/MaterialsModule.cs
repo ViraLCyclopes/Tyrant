@@ -431,11 +431,16 @@ namespace Tyrant.Framework
             }
         }
 
-        /// <summary>Every loaded animal, and the Nursery preview showing a Next created draft, written again (no keyword change).</summary>
+        /// <summary>
+        /// Every loaded animal, the Nursery's preview animal (a saved look shows on it with the editor closed) and the one showing
+        /// a Next created draft, written again (no keyword change).
+        /// </summary>
         private static void ReapplyAll()
         {
             foreach (var animal in LoadedAnimals()) Reapply(animal, keywords: false);
-            if (_previewAnimal?.Target is object preview) Reapply(preview, keywords: false);
+            var nursery = LookEditorWindow.NurseryAnimal();
+            if (nursery != null) Reapply(nursery, keywords: false);
+            if (_previewAnimal?.Target is object preview && !ReferenceEquals(preview, nursery)) Reapply(preview, keywords: false);
         }
 
         /// <summary>The selected animal first, then every loaded animal (park and vivarium) the edit of this scope also reaches.</summary>
@@ -542,10 +547,16 @@ namespace Tyrant.Framework
 
         /// <summary>
         /// The mask the animal shows now (for export): Tyrant's when a block sets one, else the game's (its fur map, or the
-        /// material's iridescence mask). The infant fur mask falls back to the adult one Tyrant sets. Null when there is none.
+        /// material's iridescence mask). The infant fur mask falls back to the adult one Tyrant sets. Null when there is none,
+        /// and also when the mask is not a texture to read: <paramref name="white"/> is the size of an all-white mask to write
+        /// instead while Grow fur paints Unity's white texture over the whole body (the game's own under it is its blank
+        /// FurMaskEmpty), and <paramref name="species"/> names the species whose iridescence mask the animal shows by reference
+        /// (the game's images are never exported).
         /// </summary>
-        public static Texture? EffectiveMask(object animal, bool fur, bool infant)
+        public static Texture? EffectiveMask(object animal, bool fur, bool infant, out Vector2Int? white, out string? species)
         {
+            white = null;
+            species = null;
             if (animal == null) return null;
             try
             {
@@ -561,7 +572,17 @@ namespace Tyrant.Framework
                     var source = found?.Override.Fur is FurMasks masks ? infant ? masks.InfantMask ?? masks.Mask : masks.Mask : null;
                     if (source != null && FileMask(source) is Texture own && own != null) return own;
                     var property = infant ? InfantFurProperty : AdultFurProperty;
+                    if (record != null && record.Ours.TryGetValue(property, out var ours) && ours == Texture2D.whiteTexture && Block.GetTexture(property) == ours)
+                    {
+                        white = PaintSize(record, material, infant);
+                        return null;
+                    }
                     return Present(GameTexture(record, property)) ?? MaterialTexture(material, property);
+                }
+                if (found?.Override.Iridescence?.Mask is MaskSource { Species: { } taken })
+                {
+                    species = taken;
+                    return null;
                 }
                 if (found?.Override.Iridescence?.Mask is MaskSource mask && MaskTexture(mask, found, IsMale(members, animal), record) is Texture made && made != null)
                     return made;
@@ -572,6 +593,14 @@ namespace Tyrant.Framework
                 Failed(ex);
                 return null;
             }
+        }
+
+        /// <summary>A size to paint a whole-body mask at: the animal's diffuse map's (the block's, else the material's), else 1024 × 1024.</summary>
+        private static Vector2Int PaintSize(Written record, Material? material, bool infant)
+        {
+            var property = SkinSlotNames.Property(infant ? "infantDiffuse" : "diffuse");
+            var diffuse = Present(GameTexture(record, property)) ?? MaterialTexture(material, property);
+            return diffuse != null && diffuse.width >= 64 && diffuse.height >= 64 ? new Vector2Int(diffuse.width, diffuse.height) : new Vector2Int(1024, 1024);
         }
 
         // ---- applying ----

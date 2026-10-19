@@ -272,7 +272,7 @@ namespace Tyrant.Framework
             }
             if (!(LoadMethod() is MethodInfo load))
             {
-                s.Failed = true;
+                Fail(s, "the game's Addressables loader was not found");
                 return;
             }
             try

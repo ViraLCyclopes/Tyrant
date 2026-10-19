@@ -25,7 +25,7 @@ namespace Tyrant.Framework
 
         private static GameObject? _nurseryButton;
         private static readonly Dictionary<string, GameObject> PanelButtons = new Dictionary<string, GameObject>(StringComparer.Ordinal);
-        private static readonly Dictionary<string, string> PanelShown = new Dictionary<string, string>(StringComparer.Ordinal); // actions shown when placed beside them
+        private static readonly Dictionary<string, int> PanelShown = new Dictionary<string, int>(StringComparer.Ordinal); // actions shown when placed beside them (ActionsShown)
         private static readonly HashSet<string> Logged = new HashSet<string>(StringComparer.Ordinal); // placement news, once a game run
         private static readonly HashSet<string> Broken = new HashSet<string>(StringComparer.Ordinal); // placements that threw: not tried again this park
         private static readonly Dictionary<(Type, string), MemberInfo?> Members = new Dictionary<(Type, string), MemberInfo?>();
@@ -144,8 +144,25 @@ namespace Tyrant.Framework
             return actions.Where(a => a.parent == row).ToList();
         }
 
-        /// <summary>Which actions show ("10": move shown, sell hidden), to tell when the button needs placing again.</summary>
-        private static string ActionsShown(Component panel) => string.Concat(ActionRow(panel).Select(a => a.gameObject.activeSelf ? '1' : '0'));
+        /// <summary>
+        /// Which actions of the row show, to tell when the button needs placing again: bit i set when the row's i-th action is
+        /// active, and the row's size above bit 16. Read as <see cref="ActionRow"/> does, without a list or a string (it runs a
+        /// few times a second per panel).
+        /// </summary>
+        private static int ActionsShown(Component panel)
+        {
+            Transform? row = null;
+            int count = 0, shown = 0;
+            foreach (var name in Actions)
+            {
+                if (!(Read(panel, name) is Component action) || action == null || !(action.transform is RectTransform rect) || rect.parent == null) continue;
+                if (row == null) row = rect.parent;
+                else if (rect.parent != row) continue;
+                if (rect.gameObject.activeSelf) shown |= 1 << count;
+                count++;
+            }
+            return shown | count << 16;
+        }
 
         /// <summary>Places the panel's button (see <see cref="PanelButton"/>); a placement beside the actions remembers which showed.</summary>
         private static GameObject? Arrange(RectTransform button, Component panel, string field)
@@ -349,6 +366,9 @@ namespace Tyrant.Framework
         }
 
         // ---- the Nursery's preview animal ----
+
+        /// <summary>The Nursery's preview animal (<see cref="NurseryPreview"/>), for the materials to write it again; null outside a park.</summary>
+        public static object? NurseryAnimal() => LookEditorModule.Looks == null ? null : NurseryPreview();
 
         /// <summary>Game.AnimalPreviewComponent.currentAnimalPreview once loaded; null while it loads or when there is none.</summary>
         private static object? NurseryPreview()

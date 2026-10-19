@@ -599,16 +599,15 @@ namespace Tyrant.Framework
                 Footer();
                 return;
             }
-            var shownMask = _draft.Current.Iridescence?.Mask ?? _below?.Iridescence?.Mask;
-            if (!_onFurTab && shownMask?.Species != null)
+            var texture = MaterialsModule.EffectiveMask(_animal, fur: _onFurTab, infant: false, out var white, out var taken);
+            // The game's images never go into files: a species' mask stays a reference (the draft's, or the one the animal wears).
+            if (!_onFurTab && (taken ?? (_draft.Current.Iridescence?.Mask ?? _below?.Iridescence?.Mask)?.Species) is string species)
             {
-                // The game's images never go into files: a species' mask stays a reference.
-                _message = SpeciesLooks.NameOf(shownMask.Species) + "'s mask stays a reference and is not exported; pick Channel or PNG to make one of your own.";
+                _message = SpeciesLooks.NameOf(species) + "'s mask stays a reference and is not exported; pick Channel or PNG to make one of your own.";
                 Footer();
                 return;
             }
-            var texture = MaterialsModule.EffectiveMask(_animal, fur: _onFurTab, infant: false);
-            if (texture == null)
+            if (texture == null && white == null)
             {
                 _message = _onFurTab ? "This animal has no fur mask to export." : "This animal shows no iridescence mask to export.";
                 Footer();
@@ -627,7 +626,8 @@ namespace Tyrant.Framework
             var file = Staged.Stage(Path.Combine(folder, _onFurTab ? LookEditing.FurMaskFile : LookEditing.IridescenceMaskFile));
             try
             {
-                WriteGreyPng(texture, file);
+                if (white is Vector2Int size) WriteWhitePng(size, file); // grown fur over the whole body: a white mask to paint on
+                else WriteGreyPng(texture!, file);
             }
             catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
             {
@@ -639,6 +639,24 @@ namespace Tyrant.Framework
             else _draft.SetMask(new MaskSource { File = file });
             _message = "Exported " + (_onFurTab ? LookEditing.FurMaskFile : LookEditing.IridescenceMaskFile) + "; Save makes it the default, Reset drops it.";
             Changed(rebuild: true);
+        }
+
+        /// <summary>An all-white PNG of this size (fur everywhere), to paint the fur's limits on.</summary>
+        private static void WriteWhitePng(Vector2Int size, string file)
+        {
+            var white = new Texture2D(size.x, size.y, TextureFormat.RGBA32, false, true);
+            try
+            {
+                var pixels = new byte[size.x * size.y * 4];
+                for (var i = 0; i < pixels.Length; i++) pixels[i] = 255;
+                white.SetPixelData(pixels, 0);
+                white.Apply(false, false);
+                File.WriteAllBytes(file, white.EncodeToPNG());
+            }
+            finally
+            {
+                UnityEngine.Object.Destroy(white);
+            }
         }
 
         /// <summary>The texture's red channel as a grey PNG (read like a mask made from a skin map, so compressed maps read too).</summary>
