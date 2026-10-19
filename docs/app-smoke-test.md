@@ -321,7 +321,8 @@ Needs the game and a Tyrant Framework installed from this build. Steps marked **
        preview animal, on **Whole skin**. **This animal** is greyed out and the status line says *Place the animal in the park
        to give it its own look.* Change the sex: the window stays on the same look. Change the skin with an unsaved change:
        it asks first; **Discard** follows the new skin, **Keep editing** stays on the old look until **Save** or **Reset**,
-       then follows. Close the Nursery: the window says the Nursery was closed.
+       then follows. Close the Nursery (also with Esc, or another management tab): the window says the Nursery was
+       closed; with an unsaved change it says the changes are kept, and **Save** still writes the skin's look.
      - The Nursery's grid button next to **Design** shows on a species with only a few skins too, and opens **All skins**.
      - No top-bar button. If a panel moved in a game update, the log has one warning naming it, with a short hierarchy.
 141. **(game)** On one Titanoboa, **This animal**, tab **Iridescence**: move strength and thickness (type values too); only that

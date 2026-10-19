@@ -251,7 +251,8 @@ Tyrant Framework adds a small **Tyrant** button (a **T**) in two places:
 - **In the Nursery:** the button is right of the animation list (**Fidget**) and opens the editor on the preview animal, on
   **Whole skin** (**Whole species** is there too). **This animal** needs a placed animal, so it is greyed out and the status
   line says so: place the animal in the park to give it its own look. When you change the Nursery's skin, sex or species,
-  the window follows the preview animal. Closing the Nursery is like the animal going away.
+  the window follows the preview animal. Closing the Nursery is like the animal going away, except that unsaved
+  changes stay in the window until you **Save** or **Reset** them.
 
 The window edits the animal it was opened on until you close it or open it from another animal. Drag it by its title,
 resize it from the corner (at least 300 × 360; its place is remembered), and switch between **This animal**, **Whole skin**

@@ -270,24 +270,38 @@ namespace Tyrant.Framework
 
         // ---- the header and the footer ----
 
-        /// <summary>The header's texts, read from the animal when it is chosen: the Nursery's preview may be gone while its draft is kept.</summary>
+        /// <summary>
+        /// The header's texts, read from the animal (again on every redraw while it is there, so a new name shows); a kept
+        /// Nursery draft keeps the texts of its look. A read that fails (an animal being disposed) keeps the earlier texts.
+        /// </summary>
         private static void ReadHeader()
         {
-            _title = _details = null;
-            if (_animal == null || _context == null) return;
-            var name = AccessTools.Property(_animal.GetType(), "Name")?.GetValue(_animal, null) as string;
-            var data = AccessTools.Property(_animal.GetType(), "BaseData")?.GetValue(_animal, null);
-            var species = data == null ? null : AccessTools.Property(data.GetType(), "DisplayName")?.GetValue(data, null) as string;
-            var skinData = AccessTools.Property(_animal.GetType(), "SkinData")?.GetValue(_animal, null);
-            var skin = skinData == null ? null : AccessTools.Field(skinData.GetType(), "skinName")?.GetValue(skinData) as string;
-            _title = "<b>" + (string.IsNullOrEmpty(name) ? species ?? _context.Species : name) + "</b>" + (_entry == EditorEntry.Nursery ? "  (Nursery)" : "");
-            var variant = _context.Variant == "normal" ? "" : " (" + _context.Variant + ")";
-            _details = $"{species ?? _context.Species} · {skin ?? "?"}{variant} · {_context.Source}";
+            if (_animal == null || _context == null)
+            {
+                _title = _details = null;
+                return;
+            }
+            try
+            {
+                var name = AccessTools.Property(_animal.GetType(), "Name")?.GetValue(_animal, null) as string;
+                var data = AccessTools.Property(_animal.GetType(), "BaseData")?.GetValue(_animal, null);
+                var species = data == null ? null : AccessTools.Property(data.GetType(), "DisplayName")?.GetValue(data, null) as string;
+                var skinData = AccessTools.Property(_animal.GetType(), "SkinData")?.GetValue(_animal, null);
+                var skin = skinData == null ? null : AccessTools.Field(skinData.GetType(), "skinName")?.GetValue(skinData) as string;
+                _title = "<b>" + (string.IsNullOrEmpty(name) ? species ?? _context.Species : name) + "</b>" + (_entry == EditorEntry.Nursery ? "  (Nursery)" : "");
+                var variant = _context.Variant == "normal" ? "" : " (" + _context.Variant + ")";
+                _details = $"{species ?? _context.Species} · {skin ?? "?"}{variant} · {_context.Source}";
+            }
+            catch (System.Reflection.TargetInvocationException)
+            {
+                // the texts read before stay
+            }
         }
 
         private static void Header()
         {
             if (_name == null || _info == null) return;
+            if (!_detached && Alive(_animal)) ReadHeader(); // a park animal renamed while the window is open
             if (_context == null || _title == null)
             {
                 SetText(_name.transform, "No animal");

@@ -234,6 +234,7 @@ namespace Tyrant.Framework
             _animal = animal;
             _context = MaterialsModule.Describe(animal);
             _detached = false;
+            _closedKept = false;
             _declined = null;
             _awaitPreview = false;
             if (!keepMessage) _message = "";
@@ -245,6 +246,7 @@ namespace Tyrant.Framework
 
         private static void AnimalGone(string message)
         {
+            CloseModal(); // its "Discard changes?" is moot: the draft goes
             ClearLive(reapply: true); // the others of its skin or species show their saved look again
             Forget();
             _message = message;
@@ -260,6 +262,7 @@ namespace Tyrant.Framework
             _below = null;
             _title = _details = null;
             _detached = false;
+            _closedKept = false;
             _declined = null;
             _awaitPreview = false;
             _matching = new List<object>();

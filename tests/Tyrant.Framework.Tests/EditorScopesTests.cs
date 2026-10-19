@@ -52,6 +52,19 @@ public class EditorScopesTests
     }
 
     [Fact]
+    public void Closing_the_nursery_keeps_unsaved_changes_and_lets_a_clean_draft_go()
+    {
+        var kept = EditorScopes.NurseryClosed(dirty: true, out var keep);
+        Assert.True(keep);
+        Assert.Contains("kept", kept);
+        Assert.Contains("Save or Reset", kept);
+        var gone = EditorScopes.NurseryClosed(dirty: false, out keep);
+        Assert.False(keep);
+        Assert.Contains("open the editor", gone);
+        Assert.NotEqual(kept, gone);
+    }
+
+    [Fact]
     public void Nothing_is_offered_without_an_animal()
     {
         foreach (var scope in new[] { LookScope.Animal, LookScope.Skin, LookScope.Species })

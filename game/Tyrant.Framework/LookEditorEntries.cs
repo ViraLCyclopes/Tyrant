@@ -33,7 +33,8 @@ namespace Tyrant.Framework
         // ---- following the Nursery ----
         private static bool _awaitPreview; // opened from the Nursery while its animal was loading
         private static bool _nurseryNews; // the Nursery rebuilt its creation panel (SkinPatches): look at the preview now
-        private static bool _detached; // the Nursery shows another look and the player kept editing this one
+        private static bool _detached; // the Nursery shows another look (or closed) and the player kept editing this one
+        private static bool _closedKept; // the Nursery closed under a draft with unsaved changes, which was kept
         private static AnimalContext? _declined; // that other look (not asked about again)
 
         /// <summary>The Nursery's creation panel changed (skin, sex, species): the window looks at its preview animal now.</summary>
@@ -46,15 +47,22 @@ namespace Tyrant.Framework
         {
             if (Time.unscaledTime < _nextButtonTry || Button == null || Image == null) return;
             _nextButtonTry = Time.unscaledTime + 0.25f;
-            if (_nurseryButton == null && Read(Read(gui, "managementGUI"), "NurseryGUIManagerV2") is Component nursery && nursery != null && nursery.gameObject.activeInHierarchy)
+            if (_nurseryButton == null && NurseryMenu(gui) is Component nursery && nursery != null && nursery.gameObject.activeInHierarchy)
                 _nurseryButton = TryPlace("nursery", nursery, () => NurseryButton(nursery));
             foreach (var field in Panels)
             {
                 if (PanelButtons.TryGetValue(field, out var placed) && placed != null) continue;
-                if (Read(gui, field) is Component panel && panel != null && panel.gameObject.activeInHierarchy && TryPlace(field, panel, () => PanelButton(panel, field)) is GameObject button)
+                if (Read(gui, field, PanelName(field) + " has no Tyrant button.") is Component panel && panel != null && panel.gameObject.activeInHierarchy
+                    && TryPlace(field, panel, () => PanelButton(panel, field)) is GameObject button)
                     PanelButtons[field] = button;
             }
         }
+
+        /// <summary>InterfaceManager.managementGUI.NurseryGUIManagerV2 (a missing member is logged once).</summary>
+        private static Component? NurseryMenu(object gui) =>
+            Read(Read(gui, "managementGUI", "the Nursery has no Tyrant button."), "NurseryGUIManagerV2", "the Nursery has no Tyrant button.") as Component;
+
+        private static string PanelName(string field) => field == Panels[0] ? "The animal info panel" : "The vivarium animal info panel";
 
         /// <summary>A placement that throws (an unexpected screen) is logged once and left out; the editor and the game go on.</summary>
         private static GameObject? TryPlace(string key, Component screen, Func<GameObject?> place)
@@ -67,7 +75,7 @@ namespace Tyrant.Framework
             catch (Exception ex)
             {
                 Broken.Add(key);
-                Once(key + "-failed", true, $"The Tyrant looks button could not be placed in {screen.name} (game updated?): {ex.GetBaseException().Message}. Screen: " + Hierarchy(screen.transform, 1));
+                Once(key + "-failed", true, () => $"The Tyrant looks button could not be placed in {screen.name} (game updated?): {ex.GetBaseException().Message}. Screen: " + Hierarchy(screen.transform, 1));
                 return null;
             }
         }
@@ -88,12 +96,12 @@ namespace Tyrant.Framework
         {
             if (!(Read(nursery, "animationDropdown") is Component dropdown) || dropdown == null || !(dropdown.transform is RectTransform anchor) || anchor.parent == null)
             {
-                Once("nursery", true, "The Nursery's animation list was not found (game updated?); the Nursery has no Tyrant button. Nursery: " + Hierarchy(nursery.transform, 1));
+                Once("nursery", true, () => "The Nursery's animation list was not found (game updated?); the Nursery has no Tyrant button. Nursery: " + Hierarchy(nursery.transform, 1));
                 return null;
             }
             var template = nursery.transform.Find(SkinBrowser.CloseButtonPath);
             if (template == null)
-                Once("nursery-template", true, "The Nursery's filter close button was not found (game updated?); its Tyrant button is a plain one. Beside the list: " + Hierarchy(anchor.parent, 1));
+                Once("nursery-template", true, () => "The Nursery's filter close button was not found (game updated?); its Tyrant button is a plain one. Beside the list: " + Hierarchy(anchor.parent, 1));
             var button = IconButton(template == null ? null : template.gameObject, anchor.parent, Safe(() => OpenOn(NurseryPreview(), EditorEntry.Nursery)));
             var laidOut = PlaceBeside(button, anchor, anchor.rect.height > 1f ? anchor.rect.height : 32f, right: true);
             button.gameObject.SetActive(true);
@@ -107,10 +115,10 @@ namespace Tyrant.Framework
             var next = Read(panel, "nextButton") as Component;
             var previous = Read(panel, "previousButton") as Component;
             var anchor = next != null ? next : previous;
-            var where = field == Panels[0] ? "The animal info panel" : "The vivarium animal info panel";
+            var where = PanelName(field);
             if (anchor == null || !(anchor.transform is RectTransform rect) || rect.parent == null)
             {
-                Once(field, true, $"{where}'s header buttons were not found (game updated?); it has no Tyrant button. Panel: " + Hierarchy(panel.transform, 1));
+                Once(field, true, () => $"{where}'s header buttons were not found (game updated?); it has no Tyrant button. Panel: " + Hierarchy(panel.transform, 1));
                 return null;
             }
             var button = IconButton(anchor.gameObject, rect.parent, Safe(() => OpenOnPanel(panel)));
@@ -130,7 +138,7 @@ namespace Tyrant.Framework
 
         private static void OpenOnPanel(Component panel)
         {
-            var animal = Read(panel, "refAnimal"); // AnimalInfomenuManager's Animal, VivariumAnimalInfomenuManager's VivariumAnimal
+            var animal = Read(panel, "refAnimal", "its Tyrant button opens nothing."); // AnimalInfomenuManager's Animal, VivariumAnimalInfomenuManager's VivariumAnimal
             if (LookEditorModule.IsAnimal(animal)) OpenOn(animal, EditorEntry.Park);
         }
 
@@ -244,11 +252,14 @@ namespace Tyrant.Framework
         private static Sprite Icon() =>
             _icon != null ? _icon : _icon = DrawIcon(32, (x, y) => (y >= 23 && y <= 27 && x >= 5 && x <= 26) || (x >= 14 && x <= 17 && y >= 4 && y <= 27), "Tyrant looks icon");
 
-        private static void Once(string key, bool warning, string text)
+        private static void Once(string key, bool warning, string text) => Once(key, warning, () => text);
+
+        /// <summary>Logs once a game run; the text (a hierarchy dump, say) is only made then.</summary>
+        private static void Once(string key, bool warning, Func<string> text)
         {
             if (!Logged.Add(key)) return;
-            if (warning) FrameworkMod.Log.Warning(text);
-            else FrameworkMod.Log.Msg(text);
+            if (warning) FrameworkMod.Log.Warning(text());
+            else FrameworkMod.Log.Msg(text());
         }
 
         // ---- the Nursery's preview animal ----
@@ -257,31 +268,44 @@ namespace Tyrant.Framework
         private static object? NurseryPreview()
         {
             var component = LookEditorModule.PreviewComponent();
-            if (component == null || Read(component, "IsLoadingAnimal") is true) return null;
-            var animal = Read(component, "currentAnimalPreview");
+            if (component == null || Read(component, "IsLoadingAnimal", NoPreview) is true) return null;
+            var animal = Read(component, "currentAnimalPreview", NoPreview);
             return LookEditorModule.IsAnimal(animal) ? animal : null;
         }
 
+        private const string NoPreview = "the look editor cannot open on the Nursery's animal.";
+
         /// <summary>
-        /// Once a frame while the window is open on the Nursery: a closed Nursery is like the animal going away; a new preview
-        /// of the same look (a new sex) is followed quietly; another skin or species is followed after "Discard changes?" when
-        /// the draft has unsaved changes (keeping them leaves the window on its look until it is saved or reset).
+        /// Once a frame while the window is open on the Nursery: a closed Nursery is like the animal going away, except that a
+        /// draft with unsaved changes is kept on its look (Save still writes it); a new preview of the same look (a new sex) is
+        /// followed quietly; another skin or species is followed after "Discard changes?" when the draft has unsaved changes
+        /// (keeping them leaves the window on its look until it is saved or reset).
         /// </summary>
         private static void FollowNursery(object gui)
         {
-            var nursery = Read(Read(gui, "managementGUI"), "NurseryGUIManagerV2") as Component;
-            var shown = nursery != null && nursery.gameObject.activeInHierarchy && Read(gui, "isManagementMenuOpen") is true;
+            var nursery = NurseryMenu(gui);
+            // Closing the management menu only fades it (the Nursery stays active); a missing flag leaves the Nursery's own state.
+            var shown = nursery != null && nursery.gameObject.activeInHierarchy
+                && !(Read(gui, "isManagementMenuOpen", "a Nursery closed with its menu may look open to the look editor.") is false);
             if (!shown)
             {
-                if (_animal != null || _awaitPreview) AnimalGone("The Nursery was closed; open the editor from an animal or the Nursery again.");
+                if (_animal == null && !_awaitPreview) return;
+                var message = EditorScopes.NurseryClosed(_draft?.IsDirty == true, out var keep);
+                if (!keep) AnimalGone(_closedKept && _message.Length > 0 && _message != ClosedKeptMessage ? _message : message); // "Saved to …" stays
+                else if (!_closedKept) KeepClosed(message);
                 return;
+            }
+            if (_closedKept)
+            {
+                _closedKept = false; // open again: an ordinary kept draft, which follows the preview once it shows its look
+                if (_message == ClosedKeptMessage) _message = DetachedMessage;
             }
             if (_animal == null && !_awaitPreview) return; // gone: the Nursery's button opens it again
             var component = LookEditorModule.PreviewComponent();
-            var current = Read(component, "currentAnimalPreview");
+            var current = Read(component, "currentAnimalPreview", NoPreview);
             if (_animal != null && !ReferenceEquals(current, _animal) && _matching.Count > 0 && ReferenceEquals(_matching[0], _animal))
                 _matching.RemoveAt(0); // the Nursery disposed of it: never re-applied again
-            if (_modal != null || current == null || !LookEditorModule.IsAnimal(current) || Read(component, "IsLoadingAnimal") is true) return; // the new one loads
+            if (_modal != null || current == null || !LookEditorModule.IsAnimal(current) || Read(component, "IsLoadingAnimal", NoPreview) is true) return; // the new one loads
             if (!_nurseryNews && Time.unscaledTime < _nextNurseryCheck) return;
             _nurseryNews = false;
             _nextNurseryCheck = Time.unscaledTime + 0.25f; // without the Nursery's news (no skin mods: not hooked), a few times a second
@@ -306,6 +330,22 @@ namespace Tyrant.Framework
             Confirm(FollowNow, () => Detach(current, context));
         }
 
+        private static readonly string ClosedKeptMessage = EditorScopes.NurseryClosed(dirty: true, out _);
+
+        /// <summary>The Nursery closed under unsaved changes: they stay, on their look, with no preview animal to show them on.</summary>
+        private static void KeepClosed(string message)
+        {
+            CloseModal(); // a question about the Nursery's next animal is moot now
+            _closedKept = true;
+            _detached = true;
+            _declined = null;
+            _awaitPreview = false;
+            var preview = Read(LookEditorModule.PreviewComponent(), "currentAnimalPreview");
+            _matching.RemoveAll(a => ReferenceEquals(a, _animal) || ReferenceEquals(a, preview));
+            _message = message;
+            Rebuild();
+        }
+
         /// <summary>After "Discard": the preview the Nursery shows by now (or the next one to load).</summary>
         private static void FollowNow()
         {
@@ -320,7 +360,7 @@ namespace Tyrant.Framework
             _context = context;
             _detached = false;
             _declined = null;
-            if (_message == DetachedMessage) _message = "";
+            if (_message == DetachedMessage || _message == ClosedKeptMessage) _message = "";
             ReadHeader();
             _matching = MaterialsModule.AnimalsMatching(_scope, current).ToList();
             _below = MaterialsModule.Below(current, _scope);
@@ -340,13 +380,17 @@ namespace Tyrant.Framework
 
         // ---- reflection ----
 
-        /// <summary>A field or property of a game object, looked up once per type; null when missing, destroyed or not readable now.</summary>
-        private static object? Read(object? target, string name)
+        /// <summary>
+        /// A field or property of a game object, looked up once per type; null when missing, destroyed or not readable now. With
+        /// <paramref name="missing"/> (what is lost then), a member the type does not have is logged once (a game update renamed it).
+        /// </summary>
+        private static object? Read(object? target, string name, string? missing = null)
         {
             if (target == null || (target is UnityEngine.Object unity && unity == null)) return null;
             var type = target.GetType();
             if (!Members.TryGetValue((type, name), out var member))
                 Members[(type, name)] = member = (MemberInfo?)AccessTools.Field(type, name) ?? AccessTools.Property(type, name);
+            if (member == null && missing != null) Once("member|" + type.FullName + "." + name, true, $"{type.Name}.{name} was not found (game updated?); {missing}");
             try
             {
                 return member is FieldInfo field ? field.GetValue(target) : member is PropertyInfo property ? property.GetValue(target, null) : null;

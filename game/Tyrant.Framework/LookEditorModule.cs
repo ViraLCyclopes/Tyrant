@@ -136,7 +136,12 @@ namespace Tyrant.Framework
         }
 
         /// <summary>Game.AnimalPreviewComponent: the Nursery's preview (its currentAnimalPreview); null between parks.</summary>
-        public static object? PreviewComponent() => Property(Game, "AnimalPreviewComponent");
+        public static object? PreviewComponent()
+        {
+            if (Game != null && Getter(Game, "AnimalPreviewComponent") == null && Warned.Add("AnimalPreviewComponent"))
+                FrameworkMod.Log.Warning("Game.AnimalPreviewComponent was not found (game updated?); the look editor cannot open on the Nursery's animal.");
+            return Property(Game, "AnimalPreviewComponent");
+        }
 
         public static bool IsAnimal(object? value) =>
             value != null && AnimalType != null && AnimalType.IsInstanceOfType(value) && !(value is UnityEngine.Object unity && unity == null);

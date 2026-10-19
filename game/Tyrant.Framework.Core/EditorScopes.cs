@@ -51,6 +51,18 @@ namespace Tyrant.Framework.Core
         }
 
         /// <summary>
+        /// The Nursery closed under a window opened on it: a draft with unsaved changes is kept on its look (Save still writes
+        /// its skin or species look), a clean one goes with the animal. Returns the status line.
+        /// </summary>
+        public static string NurseryClosed(bool dirty, out bool keep)
+        {
+            keep = dirty;
+            return dirty
+                ? "The Nursery was closed; your changes are kept. Save or Reset them."
+                : "The Nursery was closed; open the editor from an animal or the Nursery again.";
+        }
+
+        /// <summary>
         /// True when both are the same look to edit: species, skin and material. The id, the variant (a draft holds every
         /// variant's strength) and the skin's source do not matter: the Nursery makes a new preview animal for a new sex, and a
         /// new mutation keeps the skin.
