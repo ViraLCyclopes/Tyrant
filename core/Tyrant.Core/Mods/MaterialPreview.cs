@@ -128,9 +128,23 @@ public static class MaterialPreview
         Directory.CreateDirectory(outDir);
         var hash = Convert.ToHexString(SHA256.HashData(rgba))[..16].ToLowerInvariant();
         var path = Path.Combine(outDir, $"material-{width}x{height}-{hash}.png");
-        if (!File.Exists(path))
-            using (var stream = File.Create(path))
+        if (File.Exists(path)) return path;
+        // Written aside and moved in whole: a file under the final name is always complete, so a later preview may reuse it.
+        var temp = path + "." + Guid.NewGuid().ToString("N") + ".writing";
+        try
+        {
+            using (var stream = File.Create(temp))
                 new ImageWriter().WritePng(rgba, width, height, StbImageWriteSharp.ColorComponents.RedGreenBlueAlpha, stream);
+            File.Move(temp, path, overwrite: true);
+        }
+        catch (IOException) when (File.Exists(path))
+        {
+            // another preview wrote the same image (same name, same content) and has it open
+        }
+        finally
+        {
+            if (File.Exists(temp)) File.Delete(temp);
+        }
         return path;
     }
 }

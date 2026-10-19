@@ -118,7 +118,8 @@ public sealed partial class ModProject
 
     /// <summary>
     /// Removes a skin. With <paramref name="deleteFiles"/>, its files go to the Recycle Bin too: its PNGs, its own model (with its
-    /// LODs and report) and its Blender project, except files another skin, model or texture replacement still uses. Its number in
+    /// LODs and report), its material images and its Blender project, except files another skin, model or texture replacement
+    /// still uses. Its number in
     /// the game stays reserved, so other skins keep theirs. Returns what went to the bin and what stayed (with why).
     /// </summary>
     public RemovedFiles RemoveSkin(string skinId, bool deleteFiles)
@@ -132,6 +133,7 @@ public sealed partial class ModProject
         RecycleUnused(FilesOf(skin).Concat(ModSharing.ModelFilesOf(this, skin.Model)), removed, kept);
         DeleteIfEmpty(Path.Combine(Dir, "skins", skinId, "portraits"));
         DeleteIfEmpty(Path.Combine(Dir, "skins", skinId));
+        DeleteEmptyMaterialFolders(MaterialFiles(skin.Materials));
         RecycleBlender(BlenderProjectWriter.FolderOf(WorkspaceDir, Id, skin.Species, skin.Id), skin.Id, skin.Species, removed, kept);
         return new RemovedFiles(removed, kept);
     }
@@ -258,9 +260,7 @@ public sealed partial class ModProject
     /// </summary>
     public string FilesStamp()
     {
-        var files = Manifest.Replace.Select(r => r.File).Concat(Manifest.Skins.SelectMany(FilesOf)).Concat(Manifest.Skins.Select(s => s.Model))
-            .Concat(Manifest.Models.Select(m => m.File)).Concat(Manifest.Sounds.SelectMany(s => s.Files)).Concat(Manifest.Species.SelectMany(s => new[] { s.Icon, s.Swatch }.Concat(s.Portraits.Values))).OfType<string>()
-            .Select(Normal).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(f => f, StringComparer.Ordinal);
+        var files = NamedFiles().Select(Normal).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(f => f, StringComparer.Ordinal);
         var text = new System.Text.StringBuilder();
         foreach (var file in files)
         {
@@ -270,9 +270,43 @@ public sealed partial class ModProject
         return Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(text.ToString())))[..16];
     }
 
+    /// <summary>
+    /// Every file mod.json names, as written and whether or not it exists, except mod.json, animals.db, prefab settings and
+    /// language files: texture replacements, each skin's files and model build, each models entry's build and material images,
+    /// sounds, and each species' icon, swatch, portraits and prefab bundle. Sharing, the files stamp and removals all use it.
+    /// </summary>
+    internal IEnumerable<string> NamedFiles() =>
+        Manifest.Replace.Select(r => r.File)
+            .Concat(Manifest.Skins.SelectMany(s => FilesOf(s).Concat(ModSharing.ModelFilesOf(this, s.Model))))
+            .Concat(Manifest.Models.SelectMany(EntryFiles))
+            .Concat(Manifest.Sounds.SelectMany(s => s.Files))
+            .Concat(Manifest.Species.SelectMany(s => new[] { s.Icon, s.Swatch, s.Prefab?.Bundle }.OfType<string>().Concat(s.Portraits.Values)))
+            .Where(f => !string.IsNullOrWhiteSpace(f));
+
+    /// <summary>A skin's own files: its PNGs, swatch, portraits and material images (not its model build).</summary>
     private static IEnumerable<string> FilesOf(SkinEntry skin) =>
         (skin.Male?.Values ?? Enumerable.Empty<string>()).Concat(skin.Female?.Values ?? Enumerable.Empty<string>())
-        .Concat(skin.Thumbnail is null ? [] : [skin.Thumbnail]).Concat(skin.Portraits?.Values ?? Enumerable.Empty<string>());
+        .Concat(skin.Thumbnail is null ? [] : [skin.Thumbnail]).Concat(skin.Portraits?.Values ?? Enumerable.Empty<string>())
+        .Concat(MaterialFiles(skin.Materials));
+
+    /// <summary>A models entry's files: its model build (none for a rig- or materials-only entry) and its material images.</summary>
+    private IEnumerable<string> EntryFiles(ModelReplacement entry) => ModSharing.ModelFilesOf(this, entry.File).Concat(MaterialFiles(entry.Materials));
+
+    /// <summary>The iridescence ramp and mask images a "materials" section names.</summary>
+    internal static IEnumerable<string> MaterialFiles(IReadOnlyDictionary<string, MaterialOverride>? materials) =>
+        materials is null ? [] : materials.Values.SelectMany(m => new[] { m.Iridescence?.Ramp?.File, m.Iridescence?.Mask?.File }).OfType<string>();
+
+    /// <summary>After a removal: the folders of these material images that are left empty, up to (not including) the mod folder.</summary>
+    private void DeleteEmptyMaterialFolders(IEnumerable<string> files)
+    {
+        var root = Path.GetFullPath(Dir).TrimEnd(Path.DirectorySeparatorChar);
+        foreach (var file in files)
+        {
+            var dir = Path.GetDirectoryName(Path.GetFullPath(Path.Combine(Dir, file)));
+            for (; dir != null && dir.Length > root.Length && ModPaths.IsInside(dir, Dir); dir = Path.GetDirectoryName(dir))
+                if (!DeleteIfEmpty(dir)) break;
+        }
+    }
 
     private static string Normal(string file) => file.Replace('\\', '/');
 }

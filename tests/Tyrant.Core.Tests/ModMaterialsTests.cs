@@ -89,11 +89,11 @@ public class ModMaterialsTests
 
         var file = mod.SetMaterialFile("blue", null, "Titanoboa", "ramp", png);
 
-        Assert.Equal("materials/blue/iridescence-ramp.png", file);
+        Assert.Equal("materials/skins/blue/iridescence-ramp.png", file);
         Assert.True(File.Exists(Path.Combine(mod.Dir, file)));
         Assert.Equal(file, ModProject.Open(ws, mod.Id).Skin("blue").Materials!["Titanoboa"].Iridescence!.Ramp!.File);
 
-        Assert.Equal("materials/blue/iridescence-mask.png", mod.SetMaterialFile("blue", null, "Titanoboa", "mask", png));
+        Assert.Equal("materials/skins/blue/iridescence-mask.png", mod.SetMaterialFile("blue", null, "Titanoboa", "mask", png));
         Assert.Equal("", mod.SetMaterialFile("blue", null, "Titanoboa", "ramp", null));
         var iridescence = mod.Skin("blue").Materials!["Titanoboa"].Iridescence!;
         Assert.Null(iridescence.Ramp);
@@ -113,10 +113,45 @@ public class ModMaterialsTests
         Assert.Equal(TyrantErrorCode.ModInvalid, Assert.Throws<TyrantException>(() => mod.SetMaterialFile(null, "Titanoboa", "Titanoboa", "ramp", png)).Code);
 
         mod.SetSpeciesMaterials(Index, Species, "Titanoboa", Block);
-        Assert.Equal("materials/Titanoboa/iridescence-ramp.png", mod.SetMaterialFile(null, "titanoboa", "Titanoboa", "ramp", png));
+        Assert.Equal("materials/species/Titanoboa/iridescence-ramp.png", mod.SetMaterialFile(null, "titanoboa", "Titanoboa", "ramp", png));
         mod.SetMaterialFile(null, "Titanoboa", "Titanoboa", "ramp", null);
 
         Assert.Equal(0.3f, mod.SpeciesMaterial("Titanoboa", "Titanoboa")!.Iridescence!.Strength!.Normal); // the strength stays
+    }
+
+    [Fact]
+    public void A_skin_and_a_species_with_the_same_id_never_share_an_image()
+    {
+        var (game, ws, mod) = ModEditTests.Setup();
+        using var _ = game;
+        mod = ModEditTests.WithSkins(ws, mod);
+        var png = ModEditTests.Png(Path.Combine(ws.Dir, "src"));
+        mod.SetSpeciesMaterials(Index, Species, "Titanoboa", Block);
+        mod.Manifest.Skins[0].Id = "titanoboa"; // a skin id equal to a species id, any case
+        mod.Save();
+
+        var skinRamp = mod.SetMaterialFile("titanoboa", null, "Titanoboa", "ramp", png);
+        var speciesRamp = mod.SetMaterialFile(null, "Titanoboa", "Titanoboa", "ramp", png);
+
+        Assert.NotEqual(skinRamp.ToLowerInvariant(), speciesRamp.ToLowerInvariant());
+    }
+
+    [Fact]
+    public void Removing_a_skin_with_its_files_takes_its_material_images_and_their_folder()
+    {
+        var (game, ws, mod) = ModEditTests.Setup();
+        using var _ = game;
+        mod = ModEditTests.WithSkins(ws, mod);
+        var png = ModEditTests.Png(Path.Combine(ws.Dir, "src"));
+        var ramp = mod.SetMaterialFile("blue", null, "Carch", "ramp", png);
+        var mask = mod.SetMaterialFile("blue", null, "Carch", "mask", png);
+
+        var removed = mod.RemoveSkin("blue", deleteFiles: true);
+
+        Assert.Contains(ramp, removed.Recycled);
+        Assert.Contains(mask, removed.Recycled);
+        Assert.False(Directory.Exists(Path.Combine(mod.Dir, "materials", "skins", "blue")));
+        Assert.False(Directory.Exists(Path.Combine(mod.Dir, "materials"))); // nothing else in it
     }
 
     [Fact]

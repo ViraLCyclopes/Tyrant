@@ -89,7 +89,7 @@ public sealed partial class ModProject
         var languageFiles = AnimalLocalization.Codes.SelectMany(code => entry.Localization.Values.Select(term => AnimalLocalization.FileFor(Dir, code, term)))
             .Select(path => Normal(Path.GetRelativePath(Dir, path))).ToList();
         var files = skins.SelectMany(s => FilesOf(s).Concat(ModSharing.ModelFilesOf(this, s.Model)))
-            .Concat(models.SelectMany(m => ModSharing.ModelFilesOf(this, m.File)))
+            .Concat(models.SelectMany(EntryFiles))
             .Concat(sounds.SelectMany(s => s.Files))
             .Concat(new[] { entry.Icon, entry.Swatch, entry.Prefab?.Bundle }.OfType<string>())
             .Concat(entry.Portraits.Values)
@@ -104,6 +104,7 @@ public sealed partial class ModProject
             RecycleBlender(BlenderProjectWriter.FolderOf(WorkspaceDir, Id, key, skin.Id), skin.Id, key, removed, kept);
         }
         RecycleBlender(BlenderProjectWriter.FolderOf(WorkspaceDir, Id, key, null), null, key, removed, kept);
+        DeleteEmptyMaterialFolders(skins.Select(s => s.Materials).Concat(models.Select(m => m.Materials)).SelectMany(MaterialFiles));
         DeleteIfEmpty(Path.Combine(Dir, PrefabOverrides.Folder, entry.Id));
         RemoveEmptyPrefabFolder();
         var localization = Path.Combine(Dir, "localization");
@@ -116,12 +117,8 @@ public sealed partial class ModProject
     }
 
     /// <summary>Every file this mod still names (mod.json, its species' files and language files), normalised.</summary>
-    private HashSet<string> NamedFiles() =>
-        new(Manifest.Skins.SelectMany(s => FilesOf(s).Concat(ModSharing.ModelFilesOf(this, s.Model)))
-            .Concat(Manifest.Replace.Select(r => r.File))
-            .Concat(Manifest.Models.SelectMany(m => ModSharing.ModelFilesOf(this, m.File)))
-            .Concat(Manifest.Sounds.SelectMany(s => s.Files))
-            .Concat(Manifest.Species.SelectMany(s => new[] { s.Icon, s.Swatch, s.Prefab?.Bundle }.OfType<string>().Concat(s.Portraits.Values)))
+    private HashSet<string> StillNamed() =>
+        new(NamedFiles()
             .Concat(Manifest.Species.SelectMany(s => s.Localization.Values).SelectMany(term =>
                 AnimalLocalization.Codes.Select(code => Path.GetRelativePath(Dir, AnimalLocalization.FileFor(Dir, code, term)))))
             .Select(Normal), StringComparer.OrdinalIgnoreCase);
@@ -129,7 +126,7 @@ public sealed partial class ModProject
     /// <summary>Sends each file to the Recycle Bin unless the mod still names it (or it is outside the mod, or gone).</summary>
     private void RecycleUnused(IEnumerable<string> files, List<string> removed, List<string> kept)
     {
-        var stillUsed = NamedFiles();
+        var stillUsed = StillNamed();
         foreach (var file in files.Select(Normal).Distinct(StringComparer.OrdinalIgnoreCase))
         {
             var path = Path.GetFullPath(Path.Combine(Dir, file));

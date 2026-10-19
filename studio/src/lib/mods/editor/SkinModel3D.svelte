@@ -118,11 +118,13 @@
     }
   }
 
-  // The skin, its files (the mod's revision) or the sex changed: dress again.
+  // The skin, mod.json (the revision), a file it names (the files stamp: a PNG or material image re-imported under the same
+  // name) or the sex changed: dress again, which previews the material again too.
   $effect(() => {
     void skin.id;
     void sex;
     void doc.detail?.revision;
+    void doc.detail?.filesStamp;
     void dress();
   });
 

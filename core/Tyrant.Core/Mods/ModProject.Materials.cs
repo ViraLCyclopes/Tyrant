@@ -34,7 +34,8 @@ public sealed partial class ModProject
     }
 
     /// <summary>
-    /// Copies a ramp or mask PNG into the mod (materials/&lt;skin or species&gt;/iridescence-&lt;part&gt;.png) and names it in the block
+    /// Copies a ramp or mask PNG into the mod (materials/skins/&lt;skin&gt;/ or materials/species/&lt;species&gt;/iridescence-&lt;part&gt;.png:
+    /// apart, so a skin and a species with the same id never share an image) and names it in the block
     /// of <paramref name="material"/>, or (null) removes it from the block. Returns the mod-relative path, or "" on removal.
     /// A species' materials must be set first (SetSpeciesMaterials).
     /// </summary>
@@ -47,13 +48,13 @@ public sealed partial class ModProject
         if (skinId is not null)
         {
             blocks = Skin(skinId).Materials;
-            owner = skinId;
+            owner = "skins/" + skinId;
         }
         else
         {
             entry = speciesId is null ? null : SpeciesEntry(speciesId);
             blocks = entry?.Materials;
-            owner = TextureExporter.Sanitize(entry?.Target ?? speciesId ?? "");
+            owner = "species/" + TextureExporter.Sanitize(entry?.Target ?? speciesId ?? "");
             if (png is not null && entry is null)
                 throw new TyrantException(TyrantErrorCode.ModInvalid, $"'{speciesId}' has no material settings yet; set them first.");
         }

@@ -107,11 +107,11 @@ describe('MaterialEditor', () => {
 
   it('Import image picks a PNG and copies it in as the ramp', async () => {
     const { rpc, platform } = await setup({ materialsJson: '{"Titanoboa":{"iridescence":{"strength":0.3}}}' });
-    rpc.on('mods.setMaterialFile', () => modDetail({ revision: 'r2', skins: skinsWith('{"Titanoboa":{"iridescence":{"strength":0.3,"ramp":"materials/blue/iridescence-ramp.png"}}}') }));
+    rpc.on('mods.setMaterialFile', () => modDetail({ revision: 'r2', skins: skinsWith('{"Titanoboa":{"iridescence":{"strength":0.3,"ramp":"materials/skins/blue/iridescence-ramp.png"}}}') }));
     platform.files = ['C:\\paint\\ramp.png'];
     await fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Ramp source' })).getByRole('radio', { name: 'Import image' }));
     await waitFor(() => expect(rpc.callsTo('mods.setMaterialFile')[0]?.params).toMatchObject({ skin: 'blue', material: 'Titanoboa', part: 'ramp', png: 'C:\\paint\\ramp.png' }));
-    expect(await screen.findByText('materials/blue/iridescence-ramp.png')).toBeInTheDocument();
+    expect(await screen.findByText('materials/skins/blue/iridescence-ramp.png')).toBeInTheDocument();
   });
 
   it("a mask from a map the skin takes from its base offers Edit a copy", async () => {

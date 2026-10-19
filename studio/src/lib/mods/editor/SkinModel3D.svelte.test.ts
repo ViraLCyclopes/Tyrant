@@ -69,4 +69,28 @@ describe('SkinModel3D (props that change)', () => {
     await waitFor(() => expect(viewer.setIridescence).toHaveBeenLastCalledWith(expect.objectContaining({ ramp: 'asset://D:\\p\\ramp.png', mask: null })));
     expect(viewer.setIridescence.mock.lastCall![0].uniforms).toMatchObject({ on: true, strength: 0.25, shaping: [-0.25, -0.3, 1.3] });
   });
+
+  it('an image re-imported under the same name (files stamp only) previews the material again', async () => {
+    const preview = { on: true, strength: 0.25, scale: -0.25, power: -0.3, bias: 1.3, ramp: 'D:\\p\\ramp.png', mask: null, maskSt: [1, 1, 0, 0], smoothness: null };
+    const rpc = new FakeRpc()
+      .on('mods.skinModel', () => ({ prefabRef: 'acro#1', maps: { diffuse: 'D:\\m\\male_D.png' } }))
+      .on('mods.sampleColors', () => ({ a: null, b: null, secondary: null, eye: null, strength: 1, softness: 0.25, hue: 0, saturation: 0, value: 0 }))
+      .on('mods.materialPreview', () => preview)
+      .on('assets.preview', () => model);
+    const { showModels, ...methods } = viewer;
+    showModels.mockResolvedValue({ ...methods, failures: [] });
+    const session = new Session(rpc, new FakePlatform(), memoryStore());
+    const skin = { id: 'blue', male: { diffuse: 'skins/blue/male_D.png' } } as unknown as ModSkinDto;
+    const props = $state({ doc: { id: 'red-spot', detail: { revision: 'r1', filesStamp: 'a' } } as { id: string; detail: { revision: string; filesStamp: string } },
+      skin, colorsJson: null as string | null, variant: 'normal' as Variant, materialsJson: null as string | null });
+    render(SkinModel3D, { props: props as never, context: new Map<symbol, unknown>([[SESSION_KEY, session], [TAB_KEY, testTab(session)]]) });
+    await waitFor(() => expect(rpc.callsTo('mods.materialPreview').length).toBeGreaterThan(0));
+    await new Promise((r) => setTimeout(r, 300)); // the draft effect's first preview settles
+    const before = rpc.callsTo('mods.materialPreview').length;
+
+    props.doc.detail.filesStamp = 'b'; // only the stamp: the PNG changed, mod.json did not
+    flushSync();
+
+    await waitFor(() => expect(rpc.callsTo('mods.materialPreview').length).toBeGreaterThan(before));
+  });
 });

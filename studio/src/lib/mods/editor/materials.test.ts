@@ -24,7 +24,7 @@ describe('materials', () => {
   });
 
   it('round-trips every ramp form', () => {
-    same({ iridescence: { ramp: 'materials/blue/iridescence-ramp.png' } });
+    same({ iridescence: { ramp: 'materials/skins/blue/iridescence-ramp.png' } });
     same({ iridescence: { ramp: { stops: ['#3060ff', '#ff60c0'] } } });
     same({ iridescence: { ramp: { thinFilm: { thickness: 500, index: 1.4 } } } });
     same({ iridescence: { strength: 0.3 } }); // no ramp: the game's
@@ -34,7 +34,7 @@ describe('materials', () => {
 
   it('round-trips every mask form', () => {
     same({ iridescence: { mask: 'everywhere' } });
-    same({ iridescence: { mask: 'materials/blue/iridescence-mask.png' } });
+    same({ iridescence: { mask: 'materials/skins/blue/iridescence-mask.png' } });
     same({ iridescence: { mask: { from: 'pattern', channel: 'a', invert: true } } });
     expect(parseMaterial('{"T":{"iridescence":{"mask":{"from":"fur"}}}}', 'T').iridescence?.mask).toEqual({ kind: 'from', slot: 'fur', channel: 'r', invert: false });
     expect(parseMaterial('{"T":{"iridescence":{"strength":1}}}', 'T').iridescence?.mask).toEqual({ kind: 'game' });
