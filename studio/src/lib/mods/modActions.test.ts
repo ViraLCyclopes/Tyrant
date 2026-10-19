@@ -306,6 +306,25 @@ describe('looks made in the game', () => {
     expect(rpc.callsTo('mods.install')).toHaveLength(0);
   });
 
+  it('uninstall says so when it could not check the installed mods for looks, and stops when declined', async () => {
+    const { rpc, platform, session, tab } = setup();
+    rpc.on('mods.list', () => {
+      throw new RpcError('The workspace could not be read.', 'WORKSPACE_INVALID');
+    });
+    rpc.on('dump.uninstall', () => ({ removedLoader: true, message: 'Removed.' }));
+    platform.confirmAnswer = false;
+
+    await session.uninstallDumper(tab);
+
+    expect(platform.confirms[0]).toMatch(/^Tyrant could not list the installed mods \(The workspace could not be read\.\), so it could not check them for looks made in the game/);
+    expect(session.looksPrompt).toBeNull();
+    expect(rpc.callsTo('dump.uninstall')).toHaveLength(0);
+
+    platform.confirmAnswer = true; // the user read it and goes ahead
+    await session.uninstallDumper(tab);
+    expect(rpc.callsTo('dump.uninstall')).toHaveLength(1);
+  });
+
   it('uninstall brings the looks in first and says the animal looks are kept', async () => {
     const { rpc, platform, session, tab } = setup();
     rpc.on('mods.list', () => ({ mods: [modRow(), modRow({ id: 'vanilla-looks', name: 'Vanilla Looks', state: 'gameOnly' })], frameworkInstalled: true, frameworkOutdated: false }));

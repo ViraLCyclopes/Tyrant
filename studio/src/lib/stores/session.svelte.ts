@@ -311,14 +311,23 @@ export class Session {
   /** Removes Tyrant from the game after asking: this also deletes every installed mod, some of which may exist nowhere else. */
   async uninstallDumper(tab?: Tab): Promise<void> {
     let installed: ModRow[] = [];
+    let unlisted: string | null = null; // why the installed mods could not be listed (and so not checked for looks made in the game)
     try {
       installed = (await this.rpc.call('mods.list')).mods.filter((m) => m.state !== 'notInstalled');
-    } catch {
-      // no workspace mods to describe; the question below still covers what is removed
+    } catch (e) {
+      unlisted = asRpcError(e).message;
     }
-    if (tab && !(await keepGameLooks(this, tab, installed, 'Uninstalling Tyrant from the game'))) return;
+    if (unlisted === null && tab && !(await keepGameLooks(this, tab, installed, 'Uninstalling Tyrant from the game'))) return;
+    // Never assume no looks: when they could not be checked, the question says so first and the user decides.
+    const unchecked =
+      unlisted !== null
+        ? `Tyrant could not list the installed mods (${unlisted}), so it could not check them for looks made in the game: any there would be lost with them.`
+        : !tab && installed.some((m) => m.gameLooks)
+          ? 'Some installed mods have looks made in the game; they would be lost with them.'
+          : '';
     const gameOnly = installed.filter((m) => m.state === 'gameOnly').length;
     const message = [
+      unchecked,
       "Remove Tyrant from the game? This removes Tyrant's dumper and framework, and MelonLoader if Tyrant installed it and no other mods use it.",
       installed.length
         ? `It also removes ${installed.length} installed mod(s)${gameOnly ? `; ${gameOnly} of them ${gameOnly === 1 ? 'is' : 'are'} not in this workspace, so Tyrant cannot reinstall ${gameOnly === 1 ? 'it' : 'them'}` : ''}.`
@@ -326,7 +335,7 @@ export class Session {
       'Mods in your workspace stay; you can install them again.',
       "Your animals' looks saved in parks (UserData\\Tyrant\\Looks) stay too.",
     ].filter(Boolean).join(' ');
-    if (!(await this.platform.confirm(message, 'Uninstall from game'))) return;
+    if (!(await this.platform.confirm(message, unchecked ? 'Uninstall anyway' : 'Uninstall from game'))) return;
     const result = tab ? await tab.safely(() => this.rpc.call('dump.uninstall')) : await this.safely(() => this.rpc.call('dump.uninstall'));
     if (result) this.tell(result.message, tab);
     await this.refreshStatus();
