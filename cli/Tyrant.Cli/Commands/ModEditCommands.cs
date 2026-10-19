@@ -176,15 +176,19 @@ public sealed class ModMaterialsCommand : Command<ModMaterialsCommand.Settings>
         public string? Skin { get; set; }
 
         [CommandOption("--species <ID>")]
-        [Description("Work on a species' material settings instead of a skin's.")]
+        [Description("Work on a species' material settings instead of a skin's (with --vanilla-skin: that skin's species).")]
         public string? Species { get; set; }
+
+        [CommandOption("--vanilla-skin <NAME>")]
+        [Description("Work on a vanilla skin of --species (its name in the game, e.g. \"Alt 1\").")]
+        public string? VanillaSkin { get; set; }
 
         [CommandOption("--show")]
         [Description("Print the material settings as JSON.")]
         public bool Show { get; set; }
 
         [CommandOption("--set <FILE>")]
-        [Description("Set them from a JSON file (the \"materials\" section of mod.json).")]
+        [Description("Set them from a JSON file (a materials.json's \"materials\" map).")]
         public string? Set { get; set; }
 
         [CommandOption("--clear")]
@@ -199,32 +203,47 @@ public sealed class ModMaterialsCommand : Command<ModMaterialsCommand.Settings>
         [Description("Use your PNG as the iridescence mask of a material.")]
         public string? Mask { get; set; }
 
+        [CommandOption("--fur-mask <PNG>")]
+        [Description("Use your PNG as the fur mask of a material.")]
+        public string? FurMask { get; set; }
+
+        [CommandOption("--fur-infant-mask <PNG>")]
+        [Description("Use your PNG as the baby fur mask of a material.")]
+        public string? FurInfantMask { get; set; }
+
         [CommandOption("--material <NAME>")]
-        [Description("The material for --ramp or --mask (default: the only one in the settings, else the animal's material).")]
+        [Description("The material for the image options (default: the only one in the settings, else the animal's material).")]
         public string? Material { get; set; }
     }
 
     public override int Execute(CommandContext context, Settings settings)
     {
+        if (settings.VanillaSkin is not null && (settings.Species is null || settings.Skin is not null))
+        {
+            Console.Error.WriteLine("Give a vanilla skin with --species (and no skin).");
+            return ExitCodes.Error;
+        }
         if ((settings.Skin is null) == (settings.Species is null))
         {
             Console.Error.WriteLine("Give a skin or --species (not both).");
             return ExitCodes.Error;
         }
-        if ((settings.Show ? 1 : 0) + (settings.Set is null ? 0 : 1) + (settings.Clear ? 1 : 0) + (settings.Ramp is null ? 0 : 1) + (settings.Mask is null ? 0 : 1) != 1)
+        string?[] images = [settings.Ramp, settings.Mask, settings.FurMask, settings.FurInfantMask];
+        if ((settings.Show ? 1 : 0) + (settings.Set is null ? 0 : 1) + (settings.Clear ? 1 : 0) + images.Count(i => i is not null) != 1)
         {
-            Console.Error.WriteLine("Use exactly one of --show, --set <file.json>, --clear, --ramp <png> or --mask <png>.");
+            Console.Error.WriteLine("Use exactly one of --show, --set <file.json>, --clear, --ramp <png>, --mask <png>, --fur-mask <png> or --fur-infant-mask <png>.");
             return ExitCodes.Error;
         }
         var (ws, install) = CliServices.OpenWorkspace(settings);
         var mod = ModProject.Open(ws, settings.Id);
-        var who = settings.Skin ?? settings.Species!;
+        var who = settings.Skin ?? (settings.VanillaSkin is null ? settings.Species! : settings.Species + "/" + settings.VanillaSkin);
         // The index and the data dump are read once; without them a species is found by its name, in any case, among the mod's own entries.
         var index = ModCli.TryIndex(ws);
         var dump = ModCli.TrySpecies(ws);
         var species = index is not null && dump is not null ? mod.SpeciesFor(ws, install, dump) : null;
         var speciesId = settings.Species is null ? null : ResolveSpeciesId(index, species, mod, settings.Species);
-        var blocks = settings.Skin is not null ? mod.Skin(settings.Skin).Materials : mod.SpeciesMaterials(speciesId!);
+        var blocks = settings.Skin is not null ? mod.Skin(settings.Skin).Materials
+            : settings.VanillaSkin is not null ? mod.VanillaSkinMaterials(speciesId + "/" + settings.VanillaSkin) : mod.SpeciesMaterials(speciesId!);
 
         if (settings.Show)
         {
@@ -235,6 +254,7 @@ public sealed class ModMaterialsCommand : Command<ModMaterialsCommand.Settings>
         {
             var json = settings.Clear ? null : File.ReadAllText(settings.Set!);
             if (settings.Skin is not null) mod.SetSkinMaterials(settings.Skin, json);
+            else if (settings.VanillaSkin is not null) mod.SetVanillaSkinMaterials(speciesId!, settings.VanillaSkin, json);
             else if (species is not null) mod.SetSpeciesMaterials(index!, species, speciesId!, json);
             else if (settings.Clear) mod.ClearSpeciesMaterials(speciesId!);
             else
@@ -246,7 +266,7 @@ public sealed class ModMaterialsCommand : Command<ModMaterialsCommand.Settings>
             return ExitCodes.Ok;
         }
 
-        if (speciesId is not null && blocks is null && species is null)
+        if (speciesId is not null && settings.VanillaSkin is null && blocks is null && species is null)
         {
             Console.Error.WriteLine($"'{who}' has no material settings in this mod, and the game's data is missing to look the species up; set them first with --set.");
             return ExitCodes.Error;
@@ -268,7 +288,12 @@ public sealed class ModMaterialsCommand : Command<ModMaterialsCommand.Settings>
                 return ExitCodes.Error;
             }
         }
-        var file = mod.SetMaterialFile(settings.Skin, speciesId, material, settings.Ramp is not null ? "ramp" : "mask", settings.Ramp ?? settings.Mask);
+        var owner = settings.Skin is not null ? new MaterialOwner(MaterialOwnerKind.Skin, settings.Skin, null, null)
+            : settings.VanillaSkin is not null ? new MaterialOwner(MaterialOwnerKind.VanillaSkin, null, speciesId, settings.VanillaSkin)
+            : new MaterialOwner(MaterialOwnerKind.Species, null, speciesId, null);
+        var (part, png) = settings.Ramp is not null ? ("ramp", settings.Ramp) : settings.Mask is not null ? ("mask", settings.Mask)
+            : settings.FurMask is not null ? ("furMask", settings.FurMask) : ("furInfantMask", settings.FurInfantMask);
+        var file = mod.SetMaterialFile(owner, material, part, png);
         Console.WriteLine($"Imported {file}.");
         return ExitCodes.Ok;
     }

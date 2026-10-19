@@ -37,6 +37,9 @@ public class ModEditCliTests
 
     private static string ModJson(string ws) => File.ReadAllText(Path.Combine(ws, "mods", "red-spot", "mod.json"));
 
+    private static string MaterialsPath(string ws, string folder) =>
+        Path.Combine(ws, "mods", "red-spot", "materials", folder, "materials.json");
+
     private static string Field(string ws, string name) =>
         System.Text.Json.JsonDocument.Parse(ModJson(ws)).RootElement.TryGetProperty(name, out var v) ? v.ToString() : "";
 
@@ -120,12 +123,18 @@ public class ModEditCliTests
         Assert.Equal(ExitCodes.Ok, Run("mod", "materials", "red-spot", "blue", "--set", file, "-w", ws).Code);
         Assert.Contains("\"strength\"", Run("mod", "materials", "red-spot", "blue", "--show", "-w", ws).Out);
         Assert.Equal(ExitCodes.Ok, Run("mod", "materials", "red-spot", "blue", "--ramp", ramp, "--material", "Titanoboa", "-w", ws).Code);
-        Assert.Contains("materials/skins/blue/iridescence-ramp.png", ModJson(ws));
+        Assert.Contains("materials/skins/blue/iridescence-ramp.png", File.ReadAllText(MaterialsPath(ws, "skins/blue")));
         var mask = Png(Path.Combine(ws, "art", "mask.png"));
         Assert.Equal(ExitCodes.Ok, Run("mod", "materials", "red-spot", "blue", "--mask", mask, "--material", "Titanoboa", "-w", ws).Code);
-        Assert.Contains("materials/skins/blue/iridescence-mask.png", ModJson(ws));
+        Assert.Contains("materials/skins/blue/iridescence-mask.png", File.ReadAllText(MaterialsPath(ws, "skins/blue")));
+        var fur = Png(Path.Combine(ws, "art", "fur.png"));
+        Assert.Equal(ExitCodes.Ok, Run("mod", "materials", "red-spot", "blue", "--fur-mask", fur, "--material", "Titanoboa", "-w", ws).Code);
+        Assert.Equal(ExitCodes.Ok, Run("mod", "materials", "red-spot", "blue", "--fur-infant-mask", fur, "--material", "Titanoboa", "-w", ws).Code);
+        var text = File.ReadAllText(MaterialsPath(ws, "skins/blue"));
+        Assert.Contains("materials/skins/blue/fur-mask.png", text);
+        Assert.Contains("materials/skins/blue/fur-infant-mask.png", text);
         Assert.Equal(ExitCodes.Ok, Run("mod", "materials", "red-spot", "blue", "--clear", "-w", ws).Code);
-        Assert.DoesNotContain("\"materials\"", ModJson(ws));
+        Assert.False(File.Exists(MaterialsPath(ws, "skins/blue")));
         Assert.Equal(ExitCodes.Error, Run("mod", "materials", "red-spot", "blue", "-w", ws).Code); // no action
         Assert.Equal(ExitCodes.Error, Run("mod", "materials", "red-spot", "blue", "--species", "Trex", "--show", "-w", ws).Code); // skin and species
     }
@@ -135,21 +144,44 @@ public class ModEditCliTests
     {
         using var game = new FakeGame();
         var ws = WorkspaceWithSkin(game);
-        File.WriteAllText(Path.Combine(ws, "mods", "red-spot", "mod.json"),
-            "{\"format\":1,\"id\":\"red-spot\",\"name\":\"Red spot\",\"version\":\"1.0.0\",\"replace\":[],\"models\":[{\"target\":\"Titanoboa\",\"materials\":{\"Titanoboa\":{\"iridescence\":{\"strength\":0.3}}}}]}");
+        Directory.CreateDirectory(Path.GetDirectoryName(MaterialsPath(ws, "species/Titanoboa"))!);
+        File.WriteAllText(MaterialsPath(ws, "species/Titanoboa"),
+            "{\"format\":1,\"species\":\"Titanoboa\",\"materials\":{\"Titanoboa\":{\"iridescence\":{\"strength\":0.3}}}}");
         var mask = Png(Path.Combine(ws, "art", "mask.png"));
         var set = Path.Combine(ws, "materials.json");
         File.WriteAllText(set, "{\"Titanoboa\":{\"iridescence\":{\"strength\":0.5}}}");
 
         Assert.Contains("\"strength\"", Run("mod", "materials", "red-spot", "--species", "titanoboa", "--show", "-w", ws).Out);
         Assert.Equal(ExitCodes.Ok, Run("mod", "materials", "red-spot", "--species", "titanoboa", "--mask", mask, "--material", "Titanoboa", "-w", ws).Code);
-        Assert.Contains("materials/species/Titanoboa/iridescence-mask.png", ModJson(ws));
+        Assert.Contains("materials/species/Titanoboa/iridescence-mask.png", File.ReadAllText(MaterialsPath(ws, "species/Titanoboa")));
         var noGame = Run("mod", "materials", "red-spot", "--species", "Titanoboa", "--set", set, "-w", ws);
         Assert.Equal(ExitCodes.Error, noGame.Code);
         Assert.Contains("needs the game's data", noGame.Err);
         Assert.Equal(ExitCodes.Error, Run("mod", "materials", "red-spot", "--species", "Nobody", "--mask", mask, "--material", "X", "-w", ws).Code);
         Assert.Equal(ExitCodes.Ok, Run("mod", "materials", "red-spot", "--species", "titanoboa", "--clear", "-w", ws).Code);
-        Assert.DoesNotContain("Titanoboa", ModJson(ws));
+        Assert.False(File.Exists(MaterialsPath(ws, "species/Titanoboa")));
+    }
+
+    [Fact]
+    public void Materials_of_a_vanilla_skin_show_set_clear()
+    {
+        using var game = new FakeGame();
+        var ws = WorkspaceWithSkin(game);
+        var set = Path.Combine(ws, "materials.json");
+        File.WriteAllText(set, "{\"Titanoboa\":{\"iridescence\":{\"strength\":0.3,\"mask\":{\"from\":\"extra\"}}}}");
+        var fur = Png(Path.Combine(ws, "art", "fur.png"));
+        string[] skin = ["mod", "materials", "red-spot", "--species", "Titanoboa", "--vanilla-skin", "Alt 1"];
+        string[] Plus(params string[] more) => [.. skin, .. more, "-w", ws];
+
+        Assert.Equal(ExitCodes.Ok, Run(Plus("--set", set)).Code);
+        Assert.Contains("\"strength\"", Run(Plus("--show")).Out);
+        Assert.Contains("\"extra\"", File.ReadAllText(MaterialsPath(ws, "vanilla-skins/Titanoboa-Alt 1")));
+        Assert.Equal(ExitCodes.Ok, Run(Plus("--fur-mask", fur, "--material", "Titanoboa")).Code);
+        Assert.Contains("materials/vanilla-skins/Titanoboa-Alt 1/fur-mask.png", File.ReadAllText(MaterialsPath(ws, "vanilla-skins/Titanoboa-Alt 1")));
+        Assert.Equal(ExitCodes.Error, Run("mod", "materials", "red-spot", "--vanilla-skin", "Alt 1", "--show", "-w", ws).Code); // needs --species
+        Assert.Equal(ExitCodes.Error, Run("mod", "materials", "red-spot", "blue", "--species", "Titanoboa", "--vanilla-skin", "Alt 1", "--show", "-w", ws).Code);
+        Assert.Equal(ExitCodes.Ok, Run(Plus("--clear")).Code);
+        Assert.False(File.Exists(MaterialsPath(ws, "vanilla-skins/Titanoboa-Alt 1")));
     }
 
     [Fact]

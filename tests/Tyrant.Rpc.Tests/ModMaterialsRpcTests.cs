@@ -33,7 +33,7 @@ public class ModMaterialsRpcTests
 
         var both = await Assert.ThrowsAnyAsync<Exception>(() =>
             h.Call("mods.setMaterials", new { id = "red-spot", revision = Rev(detail), skin = "blue", species = "Carcharodontosaurus", materials = json }));
-        Assert.Contains("Give a skin or a species, not both.", both.Message);
+        Assert.Contains("Give a skin, a species or a vanilla skin, only one.", both.Message);
     }
 
     [Fact]
@@ -47,7 +47,7 @@ public class ModMaterialsRpcTests
 
         Assert.Equal(Animal, info.GetProperty("name").GetString());
         var rows = info.GetProperty("properties");
-        Assert.Equal(19, rows.GetArrayLength());
+        Assert.Equal(21, rows.GetArrayLength());
         var smooth = rows.EnumerateArray().Single(r => r.GetProperty("key").GetString() == "_Smoothness");
         Assert.Equal(0.3, double.Parse(smooth.GetProperty("inherited").GetString()!, System.Globalization.CultureInfo.InvariantCulture), 3);
         Assert.Equal("game", smooth.GetProperty("source").GetString());
@@ -57,6 +57,98 @@ public class ModMaterialsRpcTests
         // A species page cannot tell: only some of its skins shimmer.
         var species = await h.Call("mods.materialInfo", new { id = "red-spot", species = "Carcharodontosaurus" });
         Assert.Equal(JsonValueKind.Null, species.GetProperty("gameIridescence").ValueKind);
+    }
+
+    [Fact]
+    public async Task Vanilla_skin_materials_round_trip_through_the_detail()
+    {
+        using var game = new FakeGame();
+        var (h, ws, reader) = await WithSkinAndPrefab(game);
+        reader.PrefabMaterials = [CarchMaterial()];
+        var json = "{\"" + Animal + "\":{\"settings\":{\"_Smoothness\":0.6},\"iridescence\":{\"strength\":0.5}}}";
+        const string vanilla = "Carcharodontosaurus/Alt 1";
+
+        var picker = await h.Call("mods.vanillaSkins", new { id = "red-spot", species = "Carcharodontosaurus" });
+        Assert.Contains("Alt 1", picker.GetProperty("names").EnumerateArray().Select(n => n.GetString()!));
+
+        var detail = await h.Call("mods.get", new { id = "red-spot" });
+        detail = await h.Call("mods.setMaterials", new { id = "red-spot", revision = Rev(detail), vanillaSkin = vanilla, materials = json });
+        var row = detail.GetProperty("vanillaSkinMaterials")[0];
+        Assert.Equal("Carcharodontosaurus", row.GetProperty("species").GetString());
+        Assert.Equal("Alt 1", row.GetProperty("skin").GetString());
+        Assert.Contains("\"strength\"", row.GetProperty("materialsJson").GetString());
+        Assert.Contains("materials/vanilla-skins/Carcharodontosaurus-Alt 1/materials.json", detail.GetProperty("materialFiles").EnumerateObject().Select(f => f.Name));
+
+        var png = Png(Path.Combine(ws, "art"), "fur.png");
+        detail = await h.Call("mods.setMaterialFile", new { id = "red-spot", revision = Rev(detail), vanillaSkin = vanilla, material = Animal, part = "furMask", png });
+        Assert.Contains("fur-mask.png", detail.GetProperty("vanillaSkinMaterials")[0].GetProperty("materialsJson").GetString());
+        Assert.True(File.Exists(Path.Combine(ws, "mods", "red-spot", "materials", "vanilla-skins", "Carcharodontosaurus-Alt 1", "fur-mask.png")));
+
+        var info = await h.Call("mods.materialInfo", new { id = "red-spot", vanillaSkin = vanilla });
+        Assert.Equal(Animal, info.GetProperty("name").GetString());
+        Assert.Equal(0.25, info.GetProperty("gameIridescence").GetDouble(), 3);
+        var smooth = info.GetProperty("properties").EnumerateArray().Single(r => r.GetProperty("key").GetString() == "_Smoothness");
+        Assert.Equal("game", smooth.GetProperty("source").GetString()); // a vanilla skin sits on its species layer, which is empty here
+        var preview = await h.Call("mods.materialPreview", new { id = "red-spot", vanillaSkin = vanilla, materials = json });
+        Assert.Equal(0.5, preview.GetProperty("strength").GetDouble(), 3);
+
+        detail = await h.Call("mods.setMaterials", new { id = "red-spot", revision = Rev(detail), vanillaSkin = vanilla });
+        Assert.Equal(JsonValueKind.Null, detail.GetProperty("vanillaSkinMaterials").ValueKind);
+
+        var two = await Assert.ThrowsAnyAsync<Exception>(() =>
+            h.Call("mods.setMaterials", new { id = "red-spot", revision = Rev(detail), species = "Carcharodontosaurus", vanillaSkin = vanilla, materials = json }));
+        Assert.Contains("only one", two.Message);
+    }
+
+    [Fact]
+    public async Task Material_info_lists_droop_direction_with_three_components()
+    {
+        using var game = new FakeGame();
+        var (h, _, reader) = await WithSkinAndPrefab(game);
+        reader.PrefabMaterials = [CarchMaterial()];
+
+        var info = await h.Call("mods.materialInfo", new { id = "red-spot", skin = "blue" });
+
+        var rows = info.GetProperty("properties").EnumerateArray().ToList();
+        int Components(string key) => rows.Single(r => r.GetProperty("key").GetString() == key).GetProperty("components").GetInt32();
+        Assert.Equal("vector", rows.Single(r => r.GetProperty("key").GetString() == "_DroopDirection").GetProperty("kind").GetString());
+        Assert.Equal(3, Components("_DroopDirection"));
+        Assert.Equal(2, Components("_DetailScale"));
+        Assert.Equal(0, Components("_Smoothness"));
+    }
+
+    [Fact]
+    public async Task Restore_snapshot_brings_back_material_files()
+    {
+        using var game = new FakeGame();
+        var (h, ws, reader) = await WithSkinAndPrefab(game);
+        reader.PrefabMaterials = [CarchMaterial()];
+        var json = "{\"" + Animal + "\":{\"iridescence\":{\"strength\":0.5}}}";
+        var before = await h.Call("mods.get", new { id = "red-spot" });
+        var withSkin = await h.Call("mods.setMaterials", new { id = "red-spot", revision = Rev(before), skin = "blue", materials = json });
+        var detail = await h.Call("mods.setMaterials", new { id = "red-spot", revision = Rev(withSkin), vanillaSkin = "Carcharodontosaurus/Alt 1", materials = json });
+        var skinFile = Path.Combine(ws, "mods", "red-spot", "materials", "skins", "blue", "materials.json");
+        var vanillaFile = Path.Combine(ws, "mods", "red-spot", "materials", "vanilla-skins", "Carcharodontosaurus-Alt 1", "materials.json");
+
+        // Without a materials map the files stay as they are.
+        var kept = await h.Call("mods.restoreSnapshot", new
+        {
+            id = "red-spot", revision = Rev(detail), manifest = before.GetProperty("manifestJson").GetString(), prefabs = new Dictionary<string, string>(),
+        });
+        Assert.True(File.Exists(skinFile));
+        Assert.True(File.Exists(vanillaFile));
+        Assert.Equal(JsonValueKind.Array, kept.GetProperty("vanillaSkinMaterials").ValueKind);
+
+        // With one, they are put back exactly: the vanilla skin's file goes, the skin's stays.
+        var files = withSkin.GetProperty("materialFiles").EnumerateObject().ToDictionary(f => f.Name, f => f.Value.GetString()!);
+        var back = await h.Call("mods.restoreSnapshot", new
+        {
+            id = "red-spot", revision = Rev(kept), manifest = withSkin.GetProperty("manifestJson").GetString(), prefabs = new Dictionary<string, string>(), materials = files,
+        });
+        Assert.True(File.Exists(skinFile));
+        Assert.False(File.Exists(vanillaFile));
+        Assert.Contains("\"strength\"", back.GetProperty("skins")[0].GetProperty("materialsJson").GetString());
+        Assert.Equal(JsonValueKind.Null, back.GetProperty("vanillaSkinMaterials").ValueKind);
     }
 
     [Fact]

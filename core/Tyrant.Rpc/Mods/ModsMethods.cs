@@ -397,7 +397,9 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
             PrefabFiles: mod.PrefabFiles(),
             PrefabTargets: mod.PrefabTargets().Select(t => new ModPrefabTargetDto(t.Overrides.Target, t.File, t.Overrides.Fields.Count)).ToList(),
             UsesSpeciesFrom: UsesOf(uses, others),
-            SpeciesMaterials: SpeciesMaterialsOf(m));
+            SpeciesMaterials: SpeciesMaterialsOf(m),
+            VanillaSkinMaterials: VanillaSkinMaterialsOf(m),
+            MaterialFiles: mod.MaterialFileTexts());
     }
 
     /// <summary>The other mods whose species the skins use, with whether each is here, installed and on; null for none.</summary>
