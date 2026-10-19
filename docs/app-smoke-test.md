@@ -272,3 +272,27 @@ Release build: `npm run build:app`, install `studio/src-tauri/target/release/bun
 123. On a species with a starting skin and a second skin with only a diffuse PNG, **Make default** on the second skin:
      after confirming it is tagged *starting skin* and listed first and looks the same; in game a new animal of the species
      starts with it, and the old starting skin is still in the skin picker.
+
+## Skin materials and iridescence
+
+Needs a data dump, an asset index and the game. Steps marked **(game)** start the game.
+
+124. Mod editor → a Titanoboa skin → **Material**: the card says *Material: Titanoboa*. Tick **Iridescence**, press
+     **Real iridescence (thin film)** (420 nm), set **Varies between animals** to 15 %, **Where** → **Everywhere**: the 3D view above shimmers
+     and turning the view changes the colours. A **Smoothness** override changes the preview's shine (it is a multiplier on the extra map's).
+125. **(game)** Install. A park with several of that skin: they shimmer, and two animals differ slightly. In the
+     vivarium the animal shimmers too, and `MelonLoader\Latest.log` has no "is not this animal's material" warning (the
+     vivarium prefab's material name may differ from the park's).
+126. **(game)** The Nursery hologram of that skin shows the shimmer.
+127. **(game)** `MelonLoader\Latest.log` has one line like `materials on Titanoboa (…)` for the skin.
+128. **(game)** A species-level shimmer: **+ Add** under **Species materials**, Titanoboa, strength 0.4, **Everywhere**: vanilla
+     Titanoboa skins shimmer, and a skin with its own **Material** wins over it.
+129. **(game)** Strength per mutation: **Albino** at 0 on a skin that shimmers: an albino animal has no sheen, the others do.
+130. **(game)** Save the park, reload: the shimmer looks the same on every animal (each animal's spread is stable).
+131. **(game)** Compare the app preview with the game for a **Smoothness** override (they are close, not identical).
+132. **(game)** Remove the mod from the game: every animal is vanilla and the park loads with no error.
+133. **(game)** A Microraptor species-level material with strength 0: no sheen on it in the game.
+134. Import a ramp image and a mask image (**Import image**): they appear as `materials/<skin>/iridescence-ramp.png` and
+     `iridescence-mask.png` in the mod folder; **Check** is clean. Choose **From a map channel** on a skin with no map of its own:
+     Check reports an error, and **Edit a copy** fixes it.
+135. CLI: `tyrant mod materials <mod> <skin> --show` prints the JSON; `--clear` empties the card.
