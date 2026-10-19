@@ -74,7 +74,7 @@ public sealed partial class ModProject
             // The head-look correction belongs to the rig edit: it stays while the rig edit does.
             var headRig = previous?.HeadRig is { } kept && kept.RigHash == RigEdit.Hash(effective) ? kept : null;
             Manifest.Models.RemoveAll(m => string.Equals(m.Target, speciesId, StringComparison.Ordinal));
-            Manifest.Models.Add(new ModelReplacement { Target = speciesId, Key = prefab.ContainerPath, File = file, Rig = effective, HeadRig = headRig });
+            Manifest.Models.Add(new ModelReplacement { Target = speciesId, Key = prefab.ContainerPath, File = file, Rig = effective, HeadRig = headRig, Materials = previous?.Materials });
         }
         Save();
         return report;

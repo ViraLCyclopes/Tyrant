@@ -22,7 +22,7 @@ public sealed partial class ModProject
     {
         var (id, prefab) = ResolveModelTarget(index, WithSpecies(species, Manifest), speciesId, null);
         var materials = ParseMaterials(materialsJson, id, skinLevel: false);
-        var entry = Manifest.Models.FirstOrDefault(m => string.Equals(m.Target, id, StringComparison.Ordinal));
+        var entry = SpeciesEntry(id);
         if (entry is null && materials is not null)
             Manifest.Models.Add(entry = new ModelReplacement { Target = id, Key = prefab.ContainerPath, File = "" });
         if (entry is not null)
@@ -51,7 +51,7 @@ public sealed partial class ModProject
         }
         else
         {
-            entry = Manifest.Models.FirstOrDefault(m => string.Equals(m.Target, speciesId, StringComparison.OrdinalIgnoreCase));
+            entry = speciesId is null ? null : SpeciesEntry(speciesId);
             blocks = entry?.Materials;
             owner = TextureExporter.Sanitize(entry?.Target ?? speciesId ?? "");
             if (png is not null && entry is null)
@@ -97,12 +97,16 @@ public sealed partial class ModProject
 
     /// <summary>This mod's settings for one material of a species; null for none.</summary>
     public MaterialOverride? SpeciesMaterial(string speciesId, string material) =>
-        Manifest.Models.FirstOrDefault(m => string.Equals(m.Target, speciesId, StringComparison.OrdinalIgnoreCase))?.Materials is { } blocks
+        SpeciesEntry(speciesId)?.Materials is { } blocks
         && blocks.TryGetValue(material, out var found) ? found : null;
 
     /// <summary>This mod's settings for one material of a skin; null for none.</summary>
     public MaterialOverride? SkinMaterial(string skinId, string material) =>
         Skin(skinId).Materials is { } blocks && blocks.TryGetValue(material, out var found) ? found : null;
+
+    /// <summary>A species' models entry (any case of its id); null for none.</summary>
+    private ModelReplacement? SpeciesEntry(string speciesId) =>
+        Manifest.Models.FirstOrDefault(m => string.Equals(m.Target, speciesId, StringComparison.OrdinalIgnoreCase));
 
     private static Dictionary<string, MaterialOverride>? ParseMaterials(string? json, string who, bool skinLevel)
     {
