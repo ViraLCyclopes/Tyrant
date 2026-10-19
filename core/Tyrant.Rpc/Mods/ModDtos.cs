@@ -234,8 +234,13 @@ public sealed record ModMaterialInfoParams(string Id, string? Skin = null, strin
 /// <summary>Kind is number|color|vector; Inherited is the JSON text of the value below the edited layer; Source is game|species|starting skin|default.</summary>
 public sealed record ModMaterialProperty(string Key, string Group, string Label, string Kind, float Min, float Max, string? Inherited, string Source);
 
+/// <summary>
+/// GameIridescence: a skin's vanilla base skin's own iridescence strength in the game (0 when it has none; the stronger sex), the
+/// baseline below every mod layer; null for a species page or when the data dump cannot tell. GameHasRamp: the game material has
+/// its own ramp (and so its own shaping).
+/// </summary>
 public sealed record ModMaterialInfo(string Name, string Animal, IReadOnlyList<ModMaterialProperty> Properties, string? InheritedIridescenceJson,
-    bool GameHasIridescence, string? Problem);
+    float? GameIridescence, bool GameHasRamp, string? Problem);
 
 public sealed record ModMaterialPreviewParams(string Id, string? Skin = null, string? Species = null, string? Materials = null, string Sex = "male");
 

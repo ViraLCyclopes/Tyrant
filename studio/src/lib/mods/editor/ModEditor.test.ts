@@ -44,7 +44,7 @@ describe('ModEditor', () => {
     const { rpc } = setup(modDetail({ speciesMaterials: [{ species: 'Titanoboa', materialsJson: '{"Titanoboa":{"settings":{"_Smoothness":0.5}}}' }] }));
     rpc.on('mods.species', () => ({ hasDump: true, species: [{ speciesId: 'Spinosaurus', vivarium: false, skins: [] }] }))
       .on('mods.animalDatabase', () => ({ animals: [], fields: [] }))
-      .on('mods.materialInfo', (p) => ({ name: p.species!, animal: p.species!, properties: [], inheritedIridescenceJson: null, gameHasIridescence: false, problem: null }))
+      .on('mods.materialInfo', (p) => ({ name: p.species!, animal: p.species!, properties: [], inheritedIridescenceJson: null, gameIridescence: null, gameHasRamp: false, problem: null }))
       .on('mods.setMaterials', () => modDetail({ revision: 'r2' }));
 
     await fireEvent.click(await screen.findByRole('button', { name: 'Add species materials' }));

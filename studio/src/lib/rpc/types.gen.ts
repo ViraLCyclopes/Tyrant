@@ -644,7 +644,8 @@ export interface ModMaterialInfo {
   animal: string;
   properties: ModMaterialProperty[];
   inheritedIridescenceJson: string | null;
-  gameHasIridescence: boolean;
+  gameIridescence: number | null;
+  gameHasRamp: boolean;
   problem: string | null;
 }
 

@@ -21,14 +21,17 @@
 
   /**
    * The Material card's iridescence: on/off, strength, variation, ramp, mask and shaping. `model` is this skin's or species' own
-   * block, `inherited` what applies below it (species or starting skin). `onEdit` saves a change, or only previews it (save false).
+   * block, `inherited` what applies below it (species or starting skin). `gameStrength` is the vanilla skin's own shimmer in the
+   * game (0: none; null: cannot tell, as on a species page, where only some skins shimmer); `gameHasRamp` says the game material
+   * has its own ramp and shaping. `onEdit` saves a change, or only previews it (save false).
    */
   let {
     doc,
     material,
     model,
     inherited,
-    gameHas,
+    gameStrength,
+    gameHasRamp,
     skin,
     species,
     canImport,
@@ -38,7 +41,8 @@
     material: string;
     model: IridescenceModel | null;
     inherited: IridescenceModel | null;
-    gameHas: boolean;
+    gameStrength: number | null;
+    gameHasRamp: boolean;
     skin?: ModSkinDto;
     species?: string;
     canImport: boolean;
@@ -53,9 +57,13 @@
     { key: 'bias', label: 'Brightness offset' },
   ] as const;
 
-  const baselineOn = $derived(inherited?.strength ? maxStrength(inherited.strength) > 0 : gameHas);
+  /** The game's own shimmer for this skin; unknown counts as none (a neutral "Game's" state). */
+  const gameOn = $derived((gameStrength ?? 0) > 0);
+  const baselineOn = $derived(inherited?.strength ? maxStrength(inherited.strength) > 0 : gameOn);
   const strength = $derived<StrengthModel | null>(model?.strength ?? inherited?.strength ?? null);
-  const on = $derived(strength ? maxStrength(strength) > 0 : gameHas);
+  const on = $derived(strength ? maxStrength(strength) > 0 : gameOn);
+  /** What a strength edit starts from when no layer sets one: the game's own, else a visible default. */
+  const startStrength = $derived(gameOn ? gameStrength! : DEFAULT_STRENGTH);
   const variation = $derived(model?.variation ?? inherited?.variation ?? DEFAULT_VARIATION);
   const ramp = $derived(model && model.ramp.kind !== 'game' ? model.ramp : (inherited?.ramp ?? model?.ramp ?? { kind: 'game' as const }));
   const mask = $derived(model && model.mask.kind !== 'game' ? model.mask : (inherited?.mask ?? model?.mask ?? { kind: 'game' as const }));
@@ -82,13 +90,13 @@
       const i = (m.iridescence ??= emptyIridescence());
       i.strength = baselineOn ? null : { normal: DEFAULT_STRENGTH };
       const shaped = [inherited?.scale, inherited?.power, inherited?.bias, i.scale, i.power, i.bias].some((v) => v != null);
-      if (!gameHas && !shaped) Object.assign(i, DEFAULT_SHAPING);
+      if (!gameHasRamp && !shaped) Object.assign(i, DEFAULT_SHAPING);
     }, true);
   }
 
   function setStrength(variant: 'normal' | (typeof MUTATIONS)[number], value: number | undefined, save: boolean) {
     edit((i) => {
-      const next: StrengthModel = { ...(i.strength ?? strength ?? { normal: DEFAULT_STRENGTH }) };
+      const next: StrengthModel = { ...(i.strength ?? strength ?? { normal: startStrength }) };
       if (variant === 'normal') next.normal = value ?? 0;
       else if (value === undefined) delete next[variant];
       else next[variant] = value;
@@ -178,21 +186,21 @@
 <fieldset class="irid">
   <legend><label><input type="checkbox" checked={on} onchange={(e) => toggle(e.currentTarget.checked)} /> Iridescence</label></legend>
   {#if !on}
-    <p class="hint">{baselineOn ? 'Turned off here.' : 'This material has none.'}</p>
+    <p class="hint">{baselineOn ? 'Turned off here.' : gameStrength === null ? 'Game’s (only some skins shimmer).' : skin ? 'This skin has none in the game.' : 'This material has none.'}</p>
   {:else}
     {#if !model}<p class="hint">Uses {inherited ? 'the settings below this one' : 'the game’s'}; a change here overrides them.</p>{/if}
     <div class="slider">
       <span class="label">Strength</span>
-      <input type="range" aria-label="Strength" min="0" max="1" step="0.01" value={strength?.normal ?? DEFAULT_STRENGTH}
+      <input type="range" aria-label="Strength" min="0" max="1" step="0.01" value={strength?.normal ?? startStrength}
         oninput={(e) => setStrength('normal', num(e), false)} onchange={(e) => setStrength('normal', num(e), true)} />
-      <span>{strength ? pct(strength.normal) : 'game’s'}</span>
+      <span>{strength ? pct(strength.normal) : gameOn ? `game’s, ${pct(gameStrength!)}` : 'game’s'}</span>
     </div>
     <details>
       <summary>Per mutation</summary>
       {#each MUTATIONS as m (m)}
         <div class="slider">
           <span class="label">{NAMES[m]}</span>
-          <input type="range" aria-label="{NAMES[m]} strength" min="0" max="1" step="0.01" value={strength?.[m] ?? strength?.normal ?? DEFAULT_STRENGTH}
+          <input type="range" aria-label="{NAMES[m]} strength" min="0" max="1" step="0.01" value={strength?.[m] ?? strength?.normal ?? startStrength}
             oninput={(e) => setStrength(m, num(e), false)} onchange={(e) => setStrength(m, num(e), true)} />
           <span>{strength?.[m] !== undefined ? pct(strength[m]) : 'as normal'}</span>
           <button class="ghost x" aria-label="{NAMES[m]} as normal" disabled={model?.strength?.[m] === undefined} onclick={() => setStrength(m, undefined, true)}>✕</button>

@@ -41,10 +41,11 @@ public sealed partial class ModsMethods
         var mod = ModProject.Open(ws, p.Id);
         var speciesId = Target(p.Skin, p.Species) is { } skinId ? mod.Skin(skinId).Species : p.Species!;
         var empty = MaterialProperties.All.Select(x => Property(x, null, "default")).ToList();
-        if (TrySpecies(ws) is not { } dump) return new ModMaterialInfo(speciesId, speciesId, empty, null, false, NeedsDump);
-        if (TryIndex(ws) is not { } index) return new ModMaterialInfo(speciesId, speciesId, empty, null, false, NeedsIndex);
-        var game = GameMaterial(install, mod.SpeciesFor(ws, install, dump), index, speciesId);
-        if (game is null) return new ModMaterialInfo(speciesId, speciesId, empty, null, false, $"'{speciesId}' has no animal material to change.");
+        if (TrySpecies(ws) is not { } dump) return new ModMaterialInfo(speciesId, speciesId, empty, null, null, false, NeedsDump);
+        if (TryIndex(ws) is not { } index) return new ModMaterialInfo(speciesId, speciesId, empty, null, null, false, NeedsIndex);
+        var species = mod.SpeciesFor(ws, install, dump);
+        var game = GameMaterial(install, species, index, speciesId);
+        if (game is null) return new ModMaterialInfo(speciesId, speciesId, empty, null, null, false, $"'{speciesId}' has no animal material to change.");
 
         var (below, sources) = MaterialPreview.Inherited(mod, p.Skin, p.Species, game.Name);
         var rows = MaterialProperties.All.Select(x =>
@@ -60,7 +61,7 @@ public sealed partial class ModsMethods
             var json = MaterialOverrides.ToJson(new Dictionary<string, MaterialOverride> { [game.Name] = new MaterialOverride { Iridescence = i } });
             if (json[game.Name] is Dictionary<string, object?> entry && entry.TryGetValue("iridescence", out var block)) iridescence = Json.Write(block);
         }
-        return new ModMaterialInfo(game.Name, speciesId, rows, iridescence, game.Ramp is not null, null);
+        return new ModMaterialInfo(game.Name, speciesId, rows, iridescence, VanillaIridescence(mod, species, p.Skin, null), game.Ramp is not null, null);
     }
 
     [RpcMethod("mods.materialPreview")]
@@ -71,7 +72,8 @@ public sealed partial class ModsMethods
         var speciesId = Target(p.Skin, p.Species) is { } skinId ? mod.Skin(skinId).Species : p.Species!;
         var dump = TrySpecies(ws);
         var index = TryIndex(ws);
-        var game = dump is null || index is null ? null : GameMaterial(install, mod.SpeciesFor(ws, install, dump), index, speciesId);
+        var species = dump is null ? null : mod.SpeciesFor(ws, install, dump);
+        var game = species is null || index is null ? null : GameMaterial(install, species, index, speciesId);
         Dictionary<string, MaterialOverride>? blocks;
         try
         {
@@ -86,7 +88,8 @@ public sealed partial class ModsMethods
         var dir = PreviewsDir(ws, "materials");
         var result = MaterialPreview.Build(mod, p.Skin, p.Species, material, draft, p.Sex, game, dir,
             record => record.Guid is null || index is null ? null
-                : SkinMaps.Write("guid:" + record.Guid, install, index, Options.AssetReader, Path.Combine(dir, $"{record.Guid}.png")));
+                : SkinMaps.Write("guid:" + record.Guid, install, index, Options.AssetReader, Path.Combine(dir, $"{record.Guid}.png")),
+            species is null ? null : VanillaIridescence(mod, species, p.Skin, p.Sex));
         return new ModMaterialPreview(result.On, result.Strength, result.Scale, result.Power, result.Bias, InCache(ws, mod, dir, result.RampFile),
             InCache(ws, mod, dir, result.MaskFile), result.MaskSt, result.Numbers.TryGetValue("_Smoothness", out var smoothness) ? smoothness : null);
     }
@@ -101,6 +104,10 @@ public sealed partial class ModsMethods
         if ((skin is null) == (species is null)) throw new TyrantException(TyrantErrorCode.ModInvalid, "Give a skin or a species, not both.");
         return skin;
     }
+
+    /// <summary>A skin's base (vanilla) skin's own iridescence for a sex (null: the stronger); null for a species or when the dump cannot tell.</summary>
+    private static float? VanillaIridescence(ModProject mod, IReadOnlyList<SpeciesSkins> species, string? skinId, string? sex) =>
+        skinId is null ? null : SkinMaps.BaseOf(species, mod.Skin(skinId))?.Iridescence(sex);
 
     private AnimalMaterial? GameMaterial(GameInstall install, IReadOnlyList<SpeciesSkins> species, AssetIndex index, string speciesId)
     {

@@ -196,6 +196,27 @@ public class ModMaterialsTests
     }
 
     [Fact]
+    public void Preview_without_a_mod_strength_shows_the_vanilla_skins_own_iridescence()
+    {
+        var (game, ws, mod) = ModEditTests.Setup();
+        using var _ = game;
+        mod = ModEditTests.WithSkins(ws, mod);
+        var outDir = Path.Combine(ws.Dir, "preview");
+        var rampPng = ModEditTests.Png(Path.Combine(ws.Dir, "game"), "ramp.png");
+        var rampAsset = new AssetRecord("m.bundle", 7, "Texture2D", "MicroraptorRamp", null, "feed", null);
+        var gameMaterial = new AnimalMaterial("Carch", new Dictionary<string, float>(), new Dictionary<string, float[]>(), rampAsset, null);
+
+        var vanilla = MaterialPreview.Build(mod, "blue", null, "Carch", null, "male", gameMaterial, outDir, _ => rampPng, gameStrength: 0.25f);
+        Assert.True(vanilla.On);
+        Assert.Equal(0.25f, vanilla.Strength);
+        Assert.Equal(rampPng, vanilla.RampFile);
+
+        var off = MaterialOverrides.Parse(Json.Parse("""{"Carch":{"iridescence":{"strength":0}}}"""), "x", true)!["Carch"];
+        Assert.False(MaterialPreview.Build(mod, "blue", null, "Carch", off, "male", gameMaterial, outDir, _ => rampPng, gameStrength: 0.25f).On);
+        Assert.False(MaterialPreview.Build(mod, "blue", null, "Carch", null, "male", gameMaterial, outDir, _ => rampPng, gameStrength: null).On);
+    }
+
+    [Fact]
     public void Preview_smoothness_is_a_multiplier_on_the_extra_map_only_when_the_mod_sets_it()
     {
         var (game, ws, mod) = ModEditTests.Setup();

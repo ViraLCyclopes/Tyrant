@@ -20,7 +20,8 @@ const info = (over: Partial<ModMaterialInfo> = {}): ModMaterialInfo => ({
     { key: '_FresnelColor', group: 'Rim / fresnel', label: 'Rim colour', kind: 'color', min: 0, max: 0, inherited: '"#ffffff"', source: 'game' },
   ],
   inheritedIridescenceJson: null,
-  gameHasIridescence: false,
+  gameIridescence: 0,
+  gameHasRamp: false,
   problem: null,
   ...over,
 });
@@ -60,11 +61,40 @@ describe('MaterialEditor', () => {
   it("turning it off over the game's iridescence saves strength 0 and keeps this skin's ramp and tiling", async () => {
     const { rpc } = await setup({
       materialsJson: '{"Titanoboa":{"iridescence":{"strength":0.3,"ramp":{"stops":["#3060ff","#ff60c0"]},"tiling":[2,2],"scale":-1}}}',
-      infoOver: { gameHasIridescence: true },
+      infoOver: { gameIridescence: 0.25, gameHasRamp: true },
     });
     await fireEvent.click(screen.getByRole('checkbox', { name: 'Iridescence' }));
     await waitFor(() => expect(rpc.callsTo('mods.setMaterials')).toHaveLength(1));
     expect(sent(rpc)).toEqual({ Titanoboa: { iridescence: { strength: 0, ramp: { stops: ['#3060ff', '#ff60c0'] }, tiling: [2, 2], scale: -1 } } });
+  });
+
+  it("a skin whose vanilla base shimmers is ticked as the game's, with the game's strength", async () => {
+    await setup({ infoOver: { gameIridescence: 0.25, gameHasRamp: true } });
+    expect(screen.getByRole('checkbox', { name: 'Iridescence' })).toBeChecked();
+    expect(screen.getByText('game’s, 25 %')).toBeInTheDocument();
+    expect(screen.getByRole('slider', { name: 'Strength' })).toHaveValue('0.25');
+  });
+
+  it("turning it off over the vanilla skin's own shimmer saves strength 0", async () => {
+    const { rpc } = await setup({ infoOver: { gameIridescence: 0.25, gameHasRamp: true } });
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Iridescence' }));
+    await waitFor(() => expect(rpc.callsTo('mods.setMaterials')).toHaveLength(1));
+    expect(sent(rpc)).toEqual({ Titanoboa: { iridescence: { strength: 0 } } });
+  });
+
+  it('a game material with a ramp on a skin that does not shimmer is unticked, and on sets a strength of its own', async () => {
+    const { rpc } = await setup({ infoOver: { gameIridescence: 0, gameHasRamp: true } });
+    expect(screen.getByRole('checkbox', { name: 'Iridescence' })).not.toBeChecked();
+    expect(screen.getByText('This skin has none in the game.')).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Iridescence' }));
+    await waitFor(() => expect(rpc.callsTo('mods.setMaterials')).toHaveLength(1));
+    expect(sent(rpc)).toEqual({ Titanoboa: { iridescence: { strength: 0.25 } } }); // the material's own shaping stays
+  });
+
+  it("when the game's cannot be told (a species page) it is unticked and neutral", async () => {
+    await setup({ infoOver: { gameIridescence: null, gameHasRamp: true } });
+    expect(screen.getByRole('checkbox', { name: 'Iridescence' })).not.toBeChecked();
+    expect(screen.getByText('Game’s (only some skins shimmer).')).toBeInTheDocument();
   });
 
   it('turning it off over inherited iridescence also keeps the block, at strength 0', async () => {

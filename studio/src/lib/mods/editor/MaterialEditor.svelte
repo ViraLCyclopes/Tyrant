@@ -119,7 +119,7 @@
   {#if !info}
     {#if !reason}<p class="hint">Loading the material…</p>{/if}
   {:else if shown && name}
-    <IridescencePanel {doc} material={name} model={shown.iridescence} {inherited} gameHas={info.gameHasIridescence} {skin} {species}
+    <IridescencePanel {doc} material={name} model={shown.iridescence} {inherited} gameStrength={info.gameIridescence} gameHasRamp={info.gameHasRamp} {skin} {species}
       canImport={!!skin || saved !== null} onEdit={(change, save) => void edit(change, save)} />
 
     {#each groups as [group, rows] (group)}

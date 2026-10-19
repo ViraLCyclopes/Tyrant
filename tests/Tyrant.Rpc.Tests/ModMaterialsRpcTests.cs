@@ -51,7 +51,26 @@ public class ModMaterialsRpcTests
         var smooth = rows.EnumerateArray().Single(r => r.GetProperty("key").GetString() == "_Smoothness");
         Assert.Equal(0.3, double.Parse(smooth.GetProperty("inherited").GetString()!, System.Globalization.CultureInfo.InvariantCulture), 3);
         Assert.Equal("game", smooth.GetProperty("source").GetString());
-        Assert.False(info.GetProperty("gameHasIridescence").GetBoolean());
+        Assert.False(info.GetProperty("gameHasRamp").GetBoolean());
+        // The skin is based on Alt 1, whose male asset shimmers at 0.25 (its female one does not): the skin's baseline.
+        Assert.Equal(0.25, info.GetProperty("gameIridescence").GetDouble(), 3);
+        // A species page cannot tell: only some of its skins shimmer.
+        var species = await h.Call("mods.materialInfo", new { id = "red-spot", species = "Carcharodontosaurus" });
+        Assert.Equal(JsonValueKind.Null, species.GetProperty("gameIridescence").ValueKind);
+    }
+
+    [Fact]
+    public async Task Material_preview_without_a_mod_strength_has_the_vanilla_skins_own_per_sex()
+    {
+        using var game = new FakeGame();
+        var (h, _, reader) = await WithSkinAndPrefab(game);
+        reader.PrefabMaterials = [CarchMaterial()];
+
+        var male = await h.Call("mods.materialPreview", new { id = "red-spot", skin = "blue", sex = "male" });
+        var female = await h.Call("mods.materialPreview", new { id = "red-spot", skin = "blue", sex = "female" });
+
+        Assert.Equal(0.25, male.GetProperty("strength").GetDouble(), 3);
+        Assert.Equal(0, female.GetProperty("strength").GetDouble(), 3);
     }
 
     [Fact]

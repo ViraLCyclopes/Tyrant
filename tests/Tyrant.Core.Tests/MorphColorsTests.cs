@@ -18,6 +18,22 @@ public class MorphColorsTests
     private static List<Rgb>? Ramp(string json) => MorphColors.Ramp(JsonDocument.Parse(json).RootElement);
 
     [Fact]
+    public void A_vanilla_skins_own_iridescence_is_read_per_sex_from_its_default_variation()
+    {
+        var alt1 = SkinMaps.Vanilla(Species(), "Carcharodontosaurus", "Alt 1")!;
+        var plain = SkinMaps.Vanilla(Species(), "Carcharodontosaurus", "Base")!;
+
+        Assert.Equal(0.25f, alt1.MaleIridescence);
+        Assert.Equal(0f, alt1.FemaleIridescence); // iridescence off: none, whatever its strength says
+        Assert.Equal(0.25f, alt1.Iridescence("male"));
+        Assert.Equal(0.25f, alt1.Iridescence("infant")); // infants wear the male asset
+        Assert.Equal(0f, alt1.Iridescence("female"));
+        Assert.Equal(0.25f, alt1.Iridescence(null)); // either sex: the stronger
+        Assert.Null(plain.MaleIridescence); // the dump does not say
+        Assert.Null(plain.Iridescence(null));
+    }
+
+    [Fact]
     public void A_vanilla_skins_mutation_colours_are_read_from_its_variation_asset()
     {
         var alt1 = SkinMaps.Vanilla(Species(), "Carcharodontosaurus", "Alt 1")!;

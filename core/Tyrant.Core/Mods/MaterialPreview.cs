@@ -44,13 +44,15 @@ public static class MaterialPreview
     /// <summary>
     /// The preview of <paramref name="draft"/> (the settings being edited) over this mod's lower layers and the game's material.
     /// Files are written under <paramref name="outDir"/> named by their content; <paramref name="exportTexture"/> gives a game texture as a PNG.
+    /// <paramref name="gameStrength"/> is the vanilla skin's own iridescence for this sex (<see cref="VanillaSkin.Iridescence"/>),
+    /// used when no layer sets a strength; null when unknown (none).
     /// </summary>
     public static MaterialPreviewResult Build(ModProject mod, string? skinId, string? speciesId, string material, MaterialOverride? draft, string sex,
-        AnimalMaterial? game, string outDir, Func<AssetRecord, string?> exportTexture)
+        AnimalMaterial? game, string outDir, Func<AssetRecord, string?> exportTexture, float? gameStrength = null)
     {
         var merged = MaterialTable.Merge(draft, Inherited(mod, skinId, speciesId, material).Below);
         var i = merged?.Iridescence;
-        var strength = i?.Strength?.Normal ?? 0f;
+        var strength = i?.Strength?.Normal ?? gameStrength ?? 0f;
         var numbers = new Dictionary<string, float>(StringComparer.Ordinal);
         // _Smoothness: a multiplier on the extra map's smoothness (R), the mod's value over the game's, so a material without
         // one keeps the map's per-pixel smoothness; only when the draft or a mod layer sets it.
