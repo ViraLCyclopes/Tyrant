@@ -99,7 +99,9 @@ public sealed partial class ModsMethods
         var material = game?.Name ?? blocks?.Keys.FirstOrDefault() ?? "";
         var draft = blocks is not null && blocks.TryGetValue(material, out var found) ? found : null;
         var dir = PreviewsDir(ws, "materials");
-        var vanilla = species is null || p.VanillaSkin is null ? null : VanillaOf(species, p.VanillaSkin);
+        // The game's maps for masks taken from a slot: the vanilla skin's, or a mod skin's base skin's (for a slot it has no PNG for).
+        var vanilla = species is null ? null : p.VanillaSkin is not null ? VanillaOf(species, p.VanillaSkin)
+            : p.Skin is not null ? SkinMaps.BaseOf(species, mod.Skin(p.Skin)) : null;
         var result = MaterialPreview.Build(mod, p.Skin, p.Species, material, draft, p.Sex, game, dir,
             record => record.Guid is null || index is null ? null
                 : SkinMaps.Write("guid:" + record.Guid, install, index, Options.AssetReader, Path.Combine(dir, $"{record.Guid}.png")),

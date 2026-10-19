@@ -295,7 +295,7 @@ Needs a data dump, an asset index and the game. Steps marked **(game)** start th
 133. **(game)** A Microraptor species-level material with strength 0: no sheen on it in the game.
 134. Import a ramp image and a mask image (**Import image**): they appear as `materials/skins/<skin>/iridescence-ramp.png` and
      `iridescence-mask.png` in the mod folder; **Check** is clean. Choose **From a map channel** on a skin with no map of its own:
-     Check reports an error, and **Edit a copy** fixes it.
+     **Check** is still clean, and the 3D view (and the game) take the mask from the base skin's map.
 135. CLI: `tyrant mod materials <mod> <skin> --show` prints the JSON; `--clear` empties the card.
 136. **(game)** In the Nursery, pick the park skin with a **Material** (it shimmers), then cycle to a vanilla skin of the same
      species: the next vanilla skin looks vanilla (no sheen, no changed shine, rim or fur left from the previous skin), and

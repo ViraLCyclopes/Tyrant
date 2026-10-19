@@ -336,6 +336,31 @@ public class ModMaterialsTests
     }
 
     [Fact]
+    public void A_mod_skin_without_its_own_map_takes_the_mask_from_its_base_skins_map_like_the_game()
+    {
+        var (game, ws, mod) = ModEditTests.Setup();
+        using var _ = game;
+        mod = ModEditTests.WithSkins(ws, mod);
+        mod.Manifest.SpeciesMaterials["Carcharodontosaurus"] = MaterialOverrides.Parse(
+            Json.Parse("""{"Carch":{"iridescence":{"ramp":{"stops":["#ff0000","#0000ff"]}}}}"""), "x", false)!;
+        var extra = Path.Combine(ws.Dir, "game", "base-extra.png");
+        Directory.CreateDirectory(Path.GetDirectoryName(extra)!);
+        var pixels = new byte[4 * 4 * 4];
+        for (var p = 0; p < pixels.Length; p += 4) { pixels[p + 1] = 90; pixels[p + 3] = 255; }
+        using (var stream = File.Create(extra))
+            new StbImageWriteSharp.ImageWriter().WritePng(pixels, 4, 4, StbImageWriteSharp.ColorComponents.RedGreenBlueAlpha, stream);
+        Assert.False(mod.Skin("blue").Male?.ContainsKey("extra") == true); // the mod has no extra map for this skin
+        var draft = MaterialOverrides.Parse(Json.Parse("""{"Carch":{"iridescence":{"strength":0.4,"mask":{"from":"extra","channel":"g"}}}}"""), "x", true)!["Carch"];
+
+        var result = MaterialPreview.Build(mod, "blue", null, "Carch", draft, "male", null, Path.Combine(ws.Dir, "preview"), _ => null,
+            vanillaMap: slot => slot == "extra" ? extra : null);
+
+        Assert.True(result.On);
+        var mask = ImageResult.FromMemory(File.ReadAllBytes(result.MaskFile!), ColorComponents.RedGreenBlueAlpha);
+        Assert.Equal((90, 90, 90), (mask.Data[0], mask.Data[1], mask.Data[2]));
+    }
+
+    [Fact]
     public void Preview_without_a_mod_strength_shows_the_vanilla_skins_own_iridescence()
     {
         var (game, ws, mod) = ModEditTests.Setup();

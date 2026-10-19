@@ -83,18 +83,13 @@ public class MaterialCheckTests
     }
 
     [Fact]
-    public void A_mask_taken_from_a_map_the_skin_lacks_is_an_error_until_it_has_one()
+    public void A_mask_taken_from_a_map_the_skin_lacks_uses_the_game_s_map_and_is_fine()
     {
+        // The framework takes the game's (base skin's) map for a slot the mod has no PNG for, as for vanilla skins.
         using var s = Make();
-        var skin = Skin(s, new IridescenceSettings { Mask = new MaskSource { From = "extra" } });
-        const string text = "red-spot-carcharo/blue iridescence mask: the skin has no extra map in the mod; import one or use Edit a copy first.";
+        Skin(s, new IridescenceSettings { Mask = new MaskSource { From = "extra" } });
 
-        Assert.Contains(text, s.Check().Errors);
-
-        Png(s.Mod, "skins/blue/f_extra.png", 4);
-        skin.Female = new() { ["extra"] = "skins/blue/f_extra.png" };
-        s.Mod.Save();
-        Assert.DoesNotContain(text, s.Check().Errors);
+        Assert.DoesNotContain(s.Check().Errors, e => e.Contains("iridescence mask"));
     }
 
     [Fact]

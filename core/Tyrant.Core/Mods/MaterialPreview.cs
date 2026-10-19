@@ -51,8 +51,9 @@ public static class MaterialPreview
     /// The preview of <paramref name="draft"/> (the settings being edited) over this mod's lower layers and the game's material.
     /// Files are written under <paramref name="outDir"/> named by their content; <paramref name="exportTexture"/> gives a game texture as a PNG.
     /// <paramref name="gameStrength"/> is the vanilla skin's own iridescence for this sex (<see cref="VanillaSkin.Iridescence"/>),
-    /// used when no layer sets a strength; null when unknown (none). For a vanilla skin (<paramref name="vanillaSkin"/>),
-    /// <paramref name="vanillaMap"/> gives its map in a slot, for this sex, as a PNG file (null: none), for masks taken from one.
+    /// used when no layer sets a strength; null when unknown (none). <paramref name="vanillaMap"/> gives the game's map in a slot,
+    /// for this sex, as a PNG file (null: none), for masks taken from one: a vanilla skin's (<paramref name="vanillaSkin"/>) own, or a
+    /// mod skin's base skin's for a slot the mod has no PNG for (the framework does the same in the game).
     /// </summary>
     public static MaterialPreviewResult Build(ModProject mod, string? skinId, string? speciesId, string material, MaterialOverride? draft, string sex,
         AnimalMaterial? game, string outDir, Func<AssetRecord, string?> exportTexture, float? gameStrength = null,
@@ -79,7 +80,8 @@ public static class MaterialPreview
         {
             if (mask.File is not null) maskFile = ModFile(mod, mask.File);
             else if (mask.From is not null
-                     && (skinId is not null ? SlotImage(mod, skinId, sex, mask.From) : vanillaSkin is not null ? Decode(vanillaMap?.Invoke(mask.From)) : null) is { } slot)
+                     && (skinId is not null ? SlotImage(mod, skinId, sex, mask.From) ?? Decode(vanillaMap?.Invoke(mask.From))
+                         : vanillaSkin is not null ? Decode(vanillaMap?.Invoke(mask.From)) : null) is { } slot)
                 maskFile = WritePng(outDir, MaskChannel.Extract(slot.Data, mask.Channel, mask.Invert), slot.Width, slot.Height);
         }
         else if (game?.Mask is { } gameMask) maskFile = exportTexture(gameMask);

@@ -409,8 +409,7 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
     private const int RampSamples = 32;
 
     /// <summary>
-    /// Each skin's, species' and vanilla skin's material settings: ramp and mask files, a mask taken from a map a mod skin lacks,
-    /// material names that are not the animal's (only with the asset index and a way to read the prefab's materials),
+    /// Each skin's, species' and vanilla skin's material settings: ramp and mask files, material names that are not the animal's (only with the asset index and a way to read the prefab's materials),
     /// iridescence turned off everywhere, and vanilla skins the game data does not have.
     /// </summary>
     private static void MaterialProblems(ModProject mod, AssetIndex? index, IReadOnlyList<SpeciesSkins>? species,
@@ -449,21 +448,12 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
                 if (iridescence.Ramp?.File is { } ramp && Image(mod, $"{key} iridescence ramp", ramp, errors) is { } rampImage && rampImage.Width < RampSamples)
                     warnings.Add($"{key} iridescence ramp: {ramp} is {rampImage.Width} px wide; the game samples {RampSamples} or more.");
                 if (iridescence.Mask?.File is { } mask) Image(mod, $"{key} iridescence mask", mask, errors);
-                if (iridescence.Mask?.From is { } from && skin is not null && !HasSlotFile(mod, skin, from))
-                    errors.Add($"{key} iridescence mask: the skin has no {from} map in the mod; import one or use Edit a copy first.");
+                // A mask "from" a slot the mod skin has no PNG for is fine: the framework takes the game's map, as for vanilla skins.
                 if (isAnimals && animal is not null && animal.Ramp is null && iridescence.Strength is { } strength
                     && strength.Normal == 0 && (strength.Albino ?? 0) == 0 && (strength.Melanistic ?? 0) == 0 && (strength.Leucistic ?? 0) == 0)
                     warnings.Add($"{key}: iridescence strength is 0 everywhere, so it is off.");
             }
         }
-    }
-
-    /// <summary>Whether the skin, or the starting skin it inherits from, has a PNG in the slot for either sex.</summary>
-    private static bool HasSlotFile(ModProject mod, SkinEntry skin, string slot)
-    {
-        var skins = new List<SkinEntry> { skin };
-        if (StartingSkins.InheritsFrom(mod.Manifest, skin, out var starting)) skins.Add(starting);
-        return skins.Any(s => new[] { s.Male, s.Female }.Any(files => files is not null && files.TryGetValue(slot, out var file) && !string.IsNullOrWhiteSpace(file)));
     }
 
     /// <summary>Pattern colours that could never show (no red in the pattern map); extra maps that the game would colour as eyes (red above 0.9).</summary>

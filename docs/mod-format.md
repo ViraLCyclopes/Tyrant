@@ -192,9 +192,9 @@ materials**; the CLI takes `--species` with `--vanilla-skin`.
 
 **Masks and ramps:**
 - **`from` masks** (a channel of a skin's map) work on mod skins and on vanilla skins, not on species (a species has no map
-  of its own). On a mod skin the map must be in the mod: its own, or its starting skin's; otherwise Check reports an error
-  (and in the game the whole body shimmers). On a vanilla skin they point at the game's own texture at runtime, so no image
-  from the game is written anywhere.
+  of its own). On a mod skin they use the mod's map for that slot (its own, or its starting skin's); for a slot the mod has
+  no PNG for, the game's map (its base skin's) at runtime, the same as on a vanilla skin, which always points at the game's
+  own texture. No image from the game is written anywhere, and the app's preview does the same.
 - **Ramp PNGs** are never compressed, and slim installs keep them. **Mask PNGs** (iridescence and fur) are cooked like other data maps.
 - Images imported in the app (**Import image**) or with `--ramp` / `--mask` / `--fur-mask` / `--fur-infant-mask` are copied into
   the owner's folder with fixed names: `iridescence-ramp.png`, `iridescence-mask.png`, `fur-mask.png` and `fur-infant-mask.png`.
