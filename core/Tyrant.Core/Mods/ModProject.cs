@@ -60,12 +60,21 @@ public sealed partial class ModProject
             var manifest = ModManifest.Parse(File.ReadAllText(path));
             manifest.Species.AddRange(AnimalDatabaseFile.Read(Path.Combine(dir, AnimalDatabaseFile.FileName)));
             if (manifest.Id != id) throw new ManifestException($"its id \"{manifest.Id}\" does not match its folder \"{id}\"");
+            LoadMaterials(manifest, dir);
             return new ModProject(dir, manifest);
         }
         catch (ManifestException ex)
         {
             throw new TyrantException(TyrantErrorCode.ModInvalid, $"Mod '{id}' cannot be read: {ex.Message}");
         }
+    }
+
+    /// <summary>Reads the mod's material folders into the manifest: a bad materials.json stops the mod opening, as a bad mod.json does.</summary>
+    private static void LoadMaterials(ModManifest manifest, string dir)
+    {
+        var problems = new List<string>();
+        MaterialFolders.Load(manifest, dir, problems);
+        if (problems.Count > 0) throw new ManifestException(string.Join(" ", problems));
     }
 
     /// <summary>
@@ -98,10 +107,19 @@ public sealed partial class ModProject
         return entry;
     }
 
+    /// <summary>Writes mod.json, then the material folders (one materials.json per skin, species and vanilla skin with materials).</summary>
     public void Save()
     {
         PruneTextureOverrides(Manifest);
         WriteSafely(Path.Combine(Dir, ModManifest.FileName), Manifest.ToJson());
+        try
+        {
+            MaterialFolders.Save(Manifest, Dir);
+        }
+        catch (ManifestException ex)
+        {
+            throw new TyrantException(TyrantErrorCode.ModInvalid, $"The materials of '{Id}' cannot be saved: {ex.Message}");
+        }
     }
 
     /// <summary>Writes a temp file in the same folder, then moves it over the old one: a failure never leaves half a mod.json.</summary>

@@ -130,6 +130,8 @@ public sealed class GameMods(Func<GameInstall, bool>? isGameRunning = null)
                 if (!File.Exists(path)) throw new ManifestException("mod.json is missing.");
                 var manifest = ModManifest.Parse(File.ReadAllText(path));
                 manifest.Species.AddRange(AnimalDatabaseFile.Read(Path.Combine(dir, AnimalDatabaseFile.FileName)));
+                // As the framework does: a bad materials.json is skipped (its log says why) and the rest load.
+                MaterialFolders.Load(manifest, dir, []);
                 if (enabled) manifests[folder] = manifest;
                 result.Add(new InstalledMod(folder, manifest.Name, manifest.Version, manifest.Replace.Count, manifest.Skins.Count, enabled, dir, null) { Cooked = CookedPacks.StateOf(dir, manifest) });
             }
@@ -138,9 +140,10 @@ public sealed class GameMods(Func<GameInstall, bool>? isGameRunning = null)
                 result.Add(new InstalledMod(folder, folder, "", 0, 0, enabled, dir, ex.Message));
             }
         }
-        // The framework's load order: mods.json's order, then mods it does not list by name.
+        // The framework's load order: mods.json's order, then mods it does not list by name; Vanilla Looks always last.
         var order = entries.Select(e => e.Id).Where(manifests.ContainsKey)
             .Concat(manifests.Keys.Where(id => entries.All(e => e.Id != id)).Order(StringComparer.Ordinal))
+            .OrderBy(id => id == ModCatalog.VanillaLooksId)
             .Select(id => (id, manifests[id])).ToList();
         var clashes = ModelTable.Clashes(order);
         var prefabClashes = PrefabTable.Clashes(order.Select(o => (o.id, Path.Combine(root, o.id))).ToList());
@@ -148,7 +151,8 @@ public sealed class GameMods(Func<GameInstall, bool>? isGameRunning = null)
         IEnumerable<string> ClashesOf(string id) =>
             clashes.Where(c => c.Loser == id).Select(c => c.Message).Concat(prefabClashes.Where(c => c.Loser == id).Select(c => c.Message))
                 .Concat(materialClashes.Where(c => c.Loser == id).Select(c => c.Message));
-        return result.Select(m => ClashesOf(m.Id).Any() ? m with { Clashes = ClashesOf(m.Id).ToList() } : m).ToList();
+        return result.OrderBy(m => m.Id == ModCatalog.VanillaLooksId) // listed where it loads
+            .Select(m => ClashesOf(m.Id).Any() ? m with { Clashes = ClashesOf(m.Id).ToList() } : m).ToList();
     }
 
     public ModInstallState StateOf(GameInstall install, ModProject mod)

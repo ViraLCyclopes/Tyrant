@@ -409,15 +409,26 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
     private const int RampSamples = 32;
 
     /// <summary>
-    /// Each skin's and species' material settings: ramp and mask files, a mask taken from a map the skin lacks, material names that are
-    /// not the animal's (only with the asset index and a way to read the prefab's materials), and iridescence turned off everywhere.
+    /// Each skin's, species' and vanilla skin's material settings: ramp and mask files, a mask taken from a map a mod skin lacks,
+    /// material names that are not the animal's (only with the asset index and a way to read the prefab's materials),
+    /// iridescence turned off everywhere, and vanilla skins the game data does not have.
     /// </summary>
     private static void MaterialProblems(ModProject mod, AssetIndex? index, IReadOnlyList<SpeciesSkins>? species,
         Func<AssetIndex, AssetRecord, AnimalMaterial?>? animalMaterialOf, List<string> errors, List<string> warnings)
     {
+        static string SpeciesOf(string vanillaKey) => vanillaKey[..Math.Max(0, vanillaKey.IndexOf('/'))];
         var owners = mod.Manifest.Skins.Where(s => s.Materials is not null)
             .Select(s => (Key: s.Key(mod.Id), s.Species, Skin: (SkinEntry?)s, Materials: s.Materials!))
-            .Concat(mod.Manifest.SpeciesMaterials.Select(m => (Key: m.Key, Species: m.Key, Skin: (SkinEntry?)null, Materials: m.Value)));
+            .Concat(mod.Manifest.SpeciesMaterials.Select(m => (Key: m.Key, Species: m.Key, Skin: (SkinEntry?)null, Materials: m.Value)))
+            .Concat(mod.Manifest.VanillaSkinMaterials.Select(m => (Key: m.Key, Species: SpeciesOf(m.Key), Skin: (SkinEntry?)null, Materials: m.Value)));
+        if (species is not null)
+            foreach (var key in mod.Manifest.VanillaSkinMaterials.Keys)
+            {
+                var skinName = key[(key.IndexOf('/') + 1)..];
+                var known = species.FirstOrDefault(s => string.Equals(s.SpeciesId, SpeciesOf(key), StringComparison.OrdinalIgnoreCase))?.Skins
+                    .Any(v => string.Equals(v.Name, skinName, StringComparison.OrdinalIgnoreCase)) == true;
+                if (!known) warnings.Add($"Vanilla skin \"{key}\" is not in the game data; it applies to no animal.");
+            }
         var animals = new Dictionary<string, AnimalMaterial?>(StringComparer.OrdinalIgnoreCase);
         foreach (var (key, speciesId, skin, materials) in owners)
         {
@@ -432,6 +443,8 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
             {
                 var isAnimals = animal is null || string.Equals(name, animal.Name, StringComparison.Ordinal);
                 if (!isAnimals) errors.Add($"{key}: {MaterialMessages.NotAnimalMaterial(name, animal!.Name)}");
+                if (material.Fur?.Mask?.File is { } furMask) Image(mod, $"{key} fur mask", furMask, errors);
+                if (material.Fur?.InfantMask?.File is { } infantMask) Image(mod, $"{key} baby fur mask", infantMask, errors);
                 if (material.Iridescence is not { } iridescence) continue;
                 if (iridescence.Ramp?.File is { } ramp && Image(mod, $"{key} iridescence ramp", ramp, errors) is { } rampImage && rampImage.Width < RampSamples)
                     warnings.Add($"{key} iridescence ramp: {ramp} is {rampImage.Width} px wide; the game samples {RampSamples} or more.");

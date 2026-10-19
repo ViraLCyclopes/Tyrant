@@ -10,6 +10,9 @@ public static class SkinMaps
     public static readonly string[] Slots =
         ["diffuse", "normal", "extra", "pattern", "fur", "infantDiffuse", "infantNormal", "infantExtra", "infantPattern", "infantFur"];
 
+    /// <summary>The key a vanilla skin's materials go under: "&lt;species&gt;/&lt;skin name&gt;" (the framework matches it in any case).</summary>
+    public static string VanillaKey(string species, VanillaSkin skin) => species + "/" + skin.Name;
+
     public static VanillaSkin? BaseOf(IReadOnlyList<SpeciesSkins>? species, SkinEntry skin) =>
         species is null ? null : Vanilla(species, skin.Species, skin.Base);
 

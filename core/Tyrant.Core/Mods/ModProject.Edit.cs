@@ -12,7 +12,7 @@ public sealed record RemovedFiles(IReadOnlyList<string> Recycled, IReadOnlyList<
 /// <summary>Editing a mod in place (the app's mod editor and the matching 'tyrant mod …' commands).</summary>
 public sealed partial class ModProject
 {
-    /// <summary>Revision of the manifest and committed SQLite species data, including external WAL edits.</summary>
+    /// <summary>Revision of the manifest, committed SQLite species data (including external WAL edits), language, prefab and material files.</summary>
     public string Revision() => Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(
         File.ReadAllText(Path.Combine(Dir, ModManifest.FileName)) + "\n" + AnimalDatabaseFile.Snapshot(AnimalDatabaseFile.Read(DatabasePath)) +
         string.Concat(AnimalLocalization.Codes.SelectMany(code => new[] { code + ".txt", code + ".json" }).Select(file =>
@@ -24,7 +24,39 @@ public sealed partial class ModProject
             {
                 var path = AnimalLocalization.FileFor(Dir, code, term);
                 return "\n" + code + "/" + term + "\n" + (File.Exists(path) ? File.ReadAllText(path) : "");
-            }))) + string.Concat(PrefabFiles().Select(p => "\nprefabs/" + p.Key + "\n" + p.Value)))));
+            }))) + string.Concat(PrefabFiles().Select(p => "\nprefabs/" + p.Key + "\n" + p.Value))
+        + string.Concat(MaterialFileTexts().Select(p => "\n" + p.Key + "\n" + p.Value)))));
+
+    /// <summary>The three kinds of material folder under materials/ (<see cref="MaterialFolders"/>).</summary>
+    private static readonly string[] MaterialKinds = ["skins", "species", "vanilla-skins"];
+
+    /// <summary>
+    /// Every materials/&lt;kind&gt;/&lt;folder&gt;/materials.json on disk, mod-relative path to its text, sorted: the editor's undo
+    /// keeps them (not their images, as part A's undo did not).
+    /// </summary>
+    public IReadOnlyDictionary<string, string> MaterialFileTexts()
+    {
+        var texts = new SortedDictionary<string, string>(StringComparer.Ordinal);
+        foreach (var kind in MaterialKinds)
+        {
+            var root = Path.Combine(Dir, MaterialFolders.Root, kind);
+            if (!Directory.Exists(root)) continue;
+            foreach (var folder in Directory.GetDirectories(root))
+            {
+                var file = Path.Combine(folder, MaterialFolders.FileName);
+                if (File.Exists(file)) texts[$"{MaterialFolders.Root}/{kind}/{Path.GetFileName(folder)}/{MaterialFolders.FileName}"] = File.ReadAllText(file);
+            }
+        }
+        return texts;
+    }
+
+    /// <summary>Whether a name is one MaterialFileTexts gives: materials/&lt;kind&gt;/&lt;one plain folder name&gt;/materials.json.</summary>
+    private static bool IsMaterialFileName(string name)
+    {
+        var parts = name.Split('/');
+        return parts.Length == 4 && parts[0] == MaterialFolders.Root && MaterialKinds.Contains(parts[1]) && parts[3] == MaterialFolders.FileName
+               && parts[2].Length > 0 && MaterialFolders.Sanitize(parts[2]) == parts[2];
+    }
 
     /// <summary>Opens the mod, refusing when its manifest or animal database changed since the editor's revision.</summary>
     public static ModProject Open(Workspace ws, string id, string? expectedRevision)
@@ -32,7 +64,7 @@ public sealed partial class ModProject
         var mod = Open(ws, id);
         if (expectedRevision is not null && !string.Equals(mod.Revision(), expectedRevision, StringComparison.OrdinalIgnoreCase))
             throw new TyrantException(TyrantErrorCode.ModChanged,
-                $"'{id}' changed outside this editor (mod.json, animals.db or prefab settings files were edited elsewhere). It was reloaded; make your change again.");
+                $"'{id}' changed outside this editor (mod.json, animals.db, prefab or material settings files were edited elsewhere). It was reloaded; make your change again.");
         return mod;
     }
 
@@ -52,15 +84,26 @@ public sealed partial class ModProject
         if (manifest.Id != id)
             throw new TyrantException(TyrantErrorCode.ModInvalid, $"That mod.json belongs to '{manifest.Id}', not '{id}'.");
         manifest.Species.AddRange(mod.Manifest.Species);
+        try
+        {
+            LoadMaterials(manifest, mod.Dir); // mod.json does not hold them: the folders stay as they are
+        }
+        catch (ManifestException ex)
+        {
+            throw new TyrantException(TyrantErrorCode.ModInvalid, $"Mod '{id}' cannot be read: {ex.Message}");
+        }
         var saved = new ModProject(mod.Dir, manifest);
         saved.Save();
         return saved;
     }
 
     /// <summary>
-    /// The editor's undo and redo: mod.json (checked like SaveManifest) and the prefabs/ files exactly as they were, by file name.
+    /// The editor's undo and redo: mod.json (checked like SaveManifest), and the prefabs/ files and the materials.json files
+    /// (<see cref="MaterialFileTexts"/>) exactly as they were, by name. Null <paramref name="materials"/> leaves the material
+    /// files as they are.
     /// </summary>
-    public static ModProject RestoreSnapshot(Workspace ws, string id, string manifestJson, IReadOnlyDictionary<string, string> prefabs, string expectedRevision)
+    public static ModProject RestoreSnapshot(Workspace ws, string id, string manifestJson, IReadOnlyDictionary<string, string> prefabs, string expectedRevision,
+        IReadOnlyDictionary<string, string>? materials)
     {
         // Only the names are checked: undo puts back exactly what was there, even a file that cannot be parsed.
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -70,6 +113,10 @@ public sealed partial class ModProject
                 || name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 || !seen.Add(name))
                 throw new TyrantException(TyrantErrorCode.ModInvalid, $"'{name}' is not a prefab settings file name.");
         }
+        seen.Clear();
+        foreach (var name in materials?.Keys ?? Enumerable.Empty<string>())
+            if (!IsMaterialFileName(name) || !seen.Add(name))
+                throw new TyrantException(TyrantErrorCode.ModInvalid, $"'{name}' is not a material settings file (materials/<skins, species or vanilla-skins>/<folder>/materials.json).");
         var saved = SaveManifest(ws, id, manifestJson, expectedRevision);
         var folder = Path.Combine(saved.Dir, PrefabOverrides.Folder);
         if (Directory.Exists(folder))
@@ -78,7 +125,20 @@ public sealed partial class ModProject
         if (prefabs.Count > 0) Directory.CreateDirectory(folder);
         foreach (var (name, text) in prefabs) WriteSafely(Path.Combine(folder, name), text);
         saved.RemoveEmptyPrefabFolder();
+        if (materials is not null) saved.RestoreMaterialFiles(materials);
         return saved;
+    }
+
+    /// <summary>Puts back exactly these materials.json files (by mod-relative name) and removes the others; images stay.</summary>
+    private void RestoreMaterialFiles(IReadOnlyDictionary<string, string> materials)
+    {
+        var wanted = new HashSet<string>(materials.Keys, StringComparer.OrdinalIgnoreCase);
+        var gone = MaterialFileTexts().Keys.Where(name => !wanted.Contains(name)).ToList();
+        foreach (var name in gone) File.Delete(Path.Combine(Dir, name));
+        foreach (var (name, text) in materials) WriteSafely(Path.Combine(Dir, name), text);
+        DeleteEmptyMaterialFolders(gone);
+        // Exactly what was there, even a file that cannot be read: opening the mod reports it.
+        MaterialFolders.Load(Manifest, Dir, []);
     }
 
     public void SetDetails(string name, string version, string? author, string? description)
@@ -118,9 +178,9 @@ public sealed partial class ModProject
 
     /// <summary>
     /// Removes a skin. With <paramref name="deleteFiles"/>, its files go to the Recycle Bin too: its PNGs, its own model (with its
-    /// LODs and report), its material images and its Blender project, except files another skin, model or texture replacement
-    /// still uses. Its number in
-    /// the game stays reserved, so other skins keep theirs. Returns what went to the bin and what stayed (with why).
+    /// LODs and report), its material folder (materials/skins/&lt;id&gt;/, whatever is in it) and its Blender project, except
+    /// files another skin, model or texture replacement still uses. Its materials.json goes with the skin either way. Its
+    /// number in the game stays reserved, so other skins keep theirs. Returns what went to the bin and what stayed (with why).
     /// </summary>
     public RemovedFiles RemoveSkin(string skinId, bool deleteFiles)
     {
@@ -130,10 +190,12 @@ public sealed partial class ModProject
         if (!deleteFiles) return new RemovedFiles([], []);
         var removed = new List<string>();
         var kept = new List<string>();
-        RecycleUnused(FilesOf(skin).Concat(ModSharing.ModelFilesOf(this, skin.Model)), removed, kept);
+        var materials = MaterialFolders.FolderOf(new MaterialOwner(MaterialOwnerKind.Skin, skin.Id, null, null));
+        var inFolder = FilesIn(materials).Append(materials + "/" + MaterialFolders.FileName).ToList();
+        RecycleUnused(FilesOf(skin).Concat(ModSharing.ModelFilesOf(this, skin.Model)).Concat(inFolder), removed, kept);
         DeleteIfEmpty(Path.Combine(Dir, "skins", skinId, "portraits"));
         DeleteIfEmpty(Path.Combine(Dir, "skins", skinId));
-        DeleteEmptyMaterialFolders(MaterialFiles(skin.Materials));
+        DeleteEmptyMaterialFolders(MaterialFiles(skin.Materials).Concat(inFolder));
         RecycleBlender(BlenderProjectWriter.FolderOf(WorkspaceDir, Id, skin.Species, skin.Id), skin.Id, skin.Species, removed, kept);
         return new RemovedFiles(removed, kept);
     }
@@ -271,15 +333,16 @@ public sealed partial class ModProject
     }
 
     /// <summary>
-    /// Every file mod.json names, as written and whether or not it exists, except mod.json, animals.db, prefab settings and
-    /// language files: texture replacements, each skin's files and model build, each models entry's build and material images,
-    /// sounds, and each species' icon, swatch, portraits and prefab bundle. Sharing, the files stamp and removals all use it.
+    /// Every file mod.json and the material folders name, as written and whether or not it exists, except mod.json,
+    /// animals.db, prefab settings and language files: texture replacements, each skin's files and model build, each models
+    /// entry's build, each materials.json with the ramps and masks it names, sounds, and each species' icon, swatch, portraits
+    /// and prefab bundle. Sharing, the files stamp and removals all use it.
     /// </summary>
     internal IEnumerable<string> NamedFiles() =>
         Manifest.Replace.Select(r => r.File)
             .Concat(Manifest.Skins.SelectMany(s => FilesOf(s).Concat(ModSharing.ModelFilesOf(this, s.Model))))
             .Concat(Manifest.Models.SelectMany(EntryFiles))
-            .Concat(Manifest.SpeciesMaterials.Values.Concat(Manifest.VanillaSkinMaterials.Values).SelectMany(MaterialFiles))
+            .Concat(MaterialFolders.Files(Manifest))
             .Concat(Manifest.Sounds.SelectMany(s => s.Files))
             .Concat(Manifest.Species.SelectMany(s => new[] { s.Icon, s.Swatch, s.Prefab?.Bundle }.OfType<string>().Concat(s.Portraits.Values)))
             .Where(f => !string.IsNullOrWhiteSpace(f));
@@ -293,9 +356,20 @@ public sealed partial class ModProject
     /// <summary>A models entry's files: its model build (none for a rig-only entry).</summary>
     private IEnumerable<string> EntryFiles(ModelReplacement entry) => ModSharing.ModelFilesOf(this, entry.File);
 
-    /// <summary>The iridescence ramp and mask images a "materials" section names.</summary>
+    /// <summary>The iridescence ramp and mask and the fur mask images an owner's materials name.</summary>
     internal static IEnumerable<string> MaterialFiles(IReadOnlyDictionary<string, MaterialOverride>? materials) =>
-        materials is null ? [] : materials.Values.SelectMany(m => new[] { m.Iridescence?.Ramp?.File, m.Iridescence?.Mask?.File }).OfType<string>();
+        materials is null ? []
+            : materials.Values.SelectMany(m => new[] { m.Iridescence?.Ramp?.File, m.Iridescence?.Mask?.File, m.Fur?.Mask?.File, m.Fur?.InfantMask?.File })
+                .OfType<string>();
+
+    /// <summary>Every file under a mod-relative folder, as mod-relative '/' paths; none when it does not exist.</summary>
+    private IEnumerable<string> FilesIn(string folder)
+    {
+        var path = Path.Combine(Dir, folder.Replace('/', Path.DirectorySeparatorChar));
+        return Directory.Exists(path)
+            ? Directory.GetFiles(path, "*", SearchOption.AllDirectories).Select(f => Normal(Path.GetRelativePath(Dir, f)))
+            : [];
+    }
 
     /// <summary>After a removal: the folders of these material images that are left empty, up to (not including) the mod folder.</summary>
     private void DeleteEmptyMaterialFolders(IEnumerable<string> files)

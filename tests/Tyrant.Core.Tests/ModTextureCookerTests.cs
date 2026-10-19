@@ -88,6 +88,42 @@ public class ModTextureCookerTests
     }
 
     [Fact]
+    public void Fur_masks_are_cooked_as_data()
+    {
+        var m = new ModManifest { Id = "red-spot" };
+        m.Skins.Add(new SkinEntry
+        {
+            Id = "blue", Species = "Carcharodontosaurus", Male = new() { ["diffuse"] = "skins/blue/male_D.png" },
+            Materials = new() { ["Carch"] = new MaterialOverride { Fur = new FurMasks { Mask = new MaskSource { File = "materials/skins/blue/fur-mask.png" } } } },
+        });
+        m.SpeciesMaterials["Carcharodontosaurus"] = new()
+        {
+            ["Carch"] = new MaterialOverride { Fur = new FurMasks { InfantMask = new MaskSource { File = "materials/species/Carcharodontosaurus/fur-infant-mask.png" } } },
+        };
+        m.VanillaSkinMaterials["Carcharodontosaurus/Alt 1"] = new()
+        {
+            ["Carch"] = new MaterialOverride
+            {
+                Iridescence = new IridescenceSettings { Mask = new MaskSource { File = "materials/vanilla-skins/Carcharodontosaurus-Alt 1/iridescence-mask.png" } },
+                Fur = new FurMasks { Mask = new MaskSource { File = "materials/vanilla-skins/Carcharodontosaurus-Alt 1/fur-mask.png" } },
+            },
+        };
+
+        var targets = new ModTextureCooker(Dir()).Targets(m);
+        var files = ModTextureCooker.TextureFiles(m);
+
+        foreach (var file in new[]
+                 {
+                     "materials/skins/blue/fur-mask.png", "materials/species/Carcharodontosaurus/fur-infant-mask.png",
+                     "materials/vanilla-skins/Carcharodontosaurus-Alt 1/iridescence-mask.png", "materials/vanilla-skins/Carcharodontosaurus-Alt 1/fur-mask.png",
+                 })
+        {
+            Assert.Contains(new CookTarget(file, SlotKind.Data, TextureCompression.Auto), targets);
+            Assert.Contains(file, files);
+        }
+    }
+
+    [Fact]
     public void Replacement_kinds_come_from_the_vanilla_skin_slot_the_texture_fills()
     {
         var assets = new[]

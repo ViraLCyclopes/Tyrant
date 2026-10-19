@@ -23,7 +23,7 @@ public static class ModSharing
     /// <summary>Where a mod sits inside an exported zip (and in the game folder).</summary>
     public const string ZipRoot = "UserData/Tyrant/Mods/";
 
-    /// <summary>mod.json and every file it references that exists inside the mod, as sorted forward-slash paths.</summary>
+    /// <summary>mod.json and every file it or the material folders reference that exists inside the mod, as sorted forward-slash paths.</summary>
     public static IReadOnlyList<string> SharedFiles(ModProject mod)
     {
         var m = mod.Manifest;
@@ -195,6 +195,11 @@ public static class ModSharing
                 using var output = File.Create(destination);
                 input.CopyTo(output);
             }
+            // The material folders before Restore: the masks they name come back from the pack too.
+            var problems = new List<string>();
+            MaterialFolders.Load(manifest, staging, problems);
+            if (problems.Count > 0)
+                throw new TyrantException(TyrantErrorCode.ModInvalid, $"The mod in '{zipName}' cannot be read: {string.Join(" ", problems)}");
             (extracted, warnings) = Restore(staging, manifest, ModTextureCooker.CacheDirOf(ws));
             // Validate the database before replacing an existing workspace mod.
             try { AnimalDatabaseFile.Read(Path.Combine(staging, AnimalDatabaseFile.FileName)); }

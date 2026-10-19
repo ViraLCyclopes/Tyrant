@@ -49,7 +49,7 @@ public sealed partial class ModsMethods
     public ModDetail RestoreSnapshot(ModRestoreSnapshotParams p)
     {
         var (ws, _) = session.Current();
-        var mod = ModProject.RestoreSnapshot(ws, p.Id, p.Manifest, p.Prefabs, p.Revision);
+        var mod = ModProject.RestoreSnapshot(ws, p.Id, p.Manifest, p.Prefabs, p.Revision, null);
         session.Log($"'{p.Id}': put back to an earlier version (undo/redo).");
         return DetailOf(ws, mod);
     }

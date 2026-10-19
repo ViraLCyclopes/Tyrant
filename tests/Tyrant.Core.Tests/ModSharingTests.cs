@@ -123,6 +123,42 @@ public class ModSharingTests
             Assert.True(File.Exists(Path.Combine(imported.Mod.Dir, file)), file);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)] // slim: fur masks are cooked, so they come back from the pack
+    public void Shared_mods_carry_material_json_and_fur_masks(bool withPngs)
+    {
+        var (game, ws, mod) = ModEditTests.Setup();
+        using var _ = game;
+        mod = ModEditTests.WithSkins(ws, mod);
+        var png = ModEditTests.Png(Path.Combine(ws.Dir, "src"));
+        var skinFur = mod.SetMaterialFile("blue", null, "Carch", "furMask", png);
+        mod.SetVanillaSkinMaterials("Carcharodontosaurus", "Alt 1", """{"Carch":{"iridescence":{"strength":0.5}}}""");
+        var vanillaFur = mod.SetMaterialFile(new MaterialOwner(MaterialOwnerKind.VanillaSkin, null, "Carcharodontosaurus", "Alt 1"), "Carch", "furInfantMask", png);
+        const string skinJson = "materials/skins/blue/materials.json";
+        const string vanillaJson = "materials/vanilla-skins/Carcharodontosaurus-Alt 1/materials.json";
+        Assert.Contains(skinJson, ModSharing.SharedFiles(mod));
+        Assert.Contains(vanillaJson, ModSharing.SharedFiles(mod));
+        var zip = TempZip();
+
+        ModSharing.Export(mod, zip, "0.2.0", dir => Tyrant.Core.Textures.ModTextureCooker.For(ws, null, null).WritePack(mod.Manifest, mod.Dir, dir), includePngs: withPngs);
+
+        using (var archive = ZipFile.OpenRead(zip))
+        {
+            var names = archive.Entries.Select(e => e.FullName).ToList();
+            Assert.Contains("UserData/Tyrant/Mods/red-spot/" + skinJson, names);
+            Assert.Contains("UserData/Tyrant/Mods/red-spot/" + vanillaJson, names);
+            Assert.Equal(withPngs, names.Contains("UserData/Tyrant/Mods/red-spot/" + skinFur));
+            Assert.Equal(withPngs, names.Contains("UserData/Tyrant/Mods/red-spot/" + vanillaFur));
+        }
+        var imported = ModSharing.ImportReported(NewWorkspace(game), zip, replace: false);
+        Assert.Empty(imported.Warnings);
+        foreach (var file in new[] { skinFur, vanillaFur, skinJson, vanillaJson })
+            Assert.True(File.Exists(Path.Combine(imported.Mod.Dir, file)), file);
+        Assert.Equal(skinFur, imported.Mod.SkinMaterial("blue", "Carch")!.Fur!.Mask!.File);
+        Assert.Equal(vanillaFur, imported.Mod.VanillaSkinMaterials("Carcharodontosaurus/Alt 1")!["Carch"].Fur!.InfantMask!.File);
+    }
+
     [Fact]
     public void Material_images_are_shared_and_stamped_like_every_file_mod_json_names()
     {
@@ -137,6 +173,10 @@ public class ModSharingTests
 
         Assert.Contains(ramp, ModSharing.SharedFiles(mod));
         Assert.NotEqual(before, mod.FilesStamp());
+
+        var stamped = mod.FilesStamp();
+        File.SetLastWriteTimeUtc(Path.Combine(mod.Dir, "materials", "skins", "blue", MaterialFolders.FileName), DateTime.UtcNow.AddMinutes(10)); // saved in game
+        Assert.NotEqual(stamped, mod.FilesStamp());
     }
 
     private static string ZipWith(params (string Name, string Content)[] entries)

@@ -48,8 +48,9 @@ public sealed partial class ModProject
 
     /// <summary>
     /// Removes one of this mod's species: its animals.db row, its skins (the starting skin too), its models and rig edits, the
-    /// sounds for it or its skins, and its prefab settings. With <paramref name="deleteFiles"/>, their files, its language files,
-    /// icon, swatch, portraits, prefab bundle and Blender projects go to the Recycle Bin too, except files something else still
+    /// sounds for it or its skins, its and its skins' materials, and its prefab settings. With <paramref name="deleteFiles"/>,
+    /// their files, its and its skins' material folders, its language files, icon, swatch, portraits, prefab bundle and Blender
+    /// projects go to the Recycle Bin too, except files something else still
     /// uses. Saved animals of the species no longer load, as when its mod is removed.
     /// </summary>
     public RemovedFiles RemoveSpecies(string speciesId, bool deleteFiles)
@@ -91,9 +92,14 @@ public sealed partial class ModProject
 
         var languageFiles = AnimalLocalization.Codes.SelectMany(code => entry.Localization.Values.Select(term => AnimalLocalization.FileFor(Dir, code, term)))
             .Select(path => Normal(Path.GetRelativePath(Dir, path))).ToList();
+        // Its material folders and the skins' go whole, whatever is in them.
+        var materialFolders = skins.Select(s => new MaterialOwner(MaterialOwnerKind.Skin, s.Id, null, null))
+            .Append(new MaterialOwner(MaterialOwnerKind.Species, null, key, null)).Select(MaterialFolders.FolderOf);
+        var inMaterialFolders = materialFolders.SelectMany(f => FilesIn(f).Append(f + "/" + MaterialFolders.FileName)).ToList();
         var files = skins.SelectMany(s => FilesOf(s).Concat(ModSharing.ModelFilesOf(this, s.Model)))
             .Concat(models.SelectMany(EntryFiles))
             .Concat(MaterialFiles(speciesMaterials))
+            .Concat(inMaterialFolders)
             .Concat(sounds.SelectMany(s => s.Files))
             .Concat(new[] { entry.Icon, entry.Swatch, entry.Prefab?.Bundle }.OfType<string>())
             .Concat(entry.Portraits.Values)
@@ -108,7 +114,7 @@ public sealed partial class ModProject
             RecycleBlender(BlenderProjectWriter.FolderOf(WorkspaceDir, Id, key, skin.Id), skin.Id, key, removed, kept);
         }
         RecycleBlender(BlenderProjectWriter.FolderOf(WorkspaceDir, Id, key, null), null, key, removed, kept);
-        DeleteEmptyMaterialFolders(skins.Select(s => s.Materials).Append(speciesMaterials).SelectMany(MaterialFiles));
+        DeleteEmptyMaterialFolders(skins.Select(s => s.Materials).Append(speciesMaterials).SelectMany(MaterialFiles).Concat(inMaterialFolders));
         DeleteIfEmpty(Path.Combine(Dir, PrefabOverrides.Folder, entry.Id));
         RemoveEmptyPrefabFolder();
         var localization = Path.Combine(Dir, "localization");

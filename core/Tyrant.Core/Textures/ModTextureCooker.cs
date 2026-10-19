@@ -102,14 +102,14 @@ public sealed class ModTextureCooker(string cacheDir, Func<string, SlotKind?>? r
             .ToList();
 
     /// <summary>
-    /// The iridescence mask files of the skins' and species' material settings: data textures the framework loads from the pack.
-    /// Ramps are not here: the game samples them on the CPU and reads their PNGs directly.
+    /// The iridescence and fur mask files of the skins', species' and vanilla skins' material settings: data textures the
+    /// framework loads from the pack. Ramps are not here: the game samples them on the CPU and reads their PNGs directly.
     /// </summary>
     private static IEnumerable<string> MaskFiles(ModManifest manifest) =>
         manifest.Skins.Select(s => s.Materials).Concat(manifest.SpeciesMaterials.Values).Concat(manifest.VanillaSkinMaterials.Values)
             .Where(materials => materials is not null)
             .SelectMany(materials => materials!.Values)
-            .Select(material => material.Iridescence?.Mask?.File)
+            .SelectMany(material => new[] { material.Iridescence?.Mask?.File, material.Fur?.Mask?.File, material.Fur?.InfantMask?.File })
             .Where(file => !string.IsNullOrWhiteSpace(file))!;
 
     public IReadOnlyList<CookTarget> Targets(ModManifest manifest)
