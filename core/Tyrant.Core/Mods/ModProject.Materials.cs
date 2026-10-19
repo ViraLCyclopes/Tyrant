@@ -95,6 +95,19 @@ public sealed partial class ModProject
         return file;
     }
 
+    /// <summary>All of this mod's material settings for a species (any case of its id); null for none.</summary>
+    public IReadOnlyDictionary<string, MaterialOverride>? SpeciesMaterials(string speciesId) => SpeciesEntry(speciesId)?.Materials;
+
+    /// <summary>Removes a species' material settings without needing the game's data (any case of its id); false when it had none.</summary>
+    public bool ClearSpeciesMaterials(string speciesId)
+    {
+        if (SpeciesEntry(speciesId) is not { Materials: not null } entry) return false;
+        entry.Materials = null;
+        DropIfBare(entry);
+        Save();
+        return true;
+    }
+
     /// <summary>This mod's settings for one material of a species; null for none.</summary>
     public MaterialOverride? SpeciesMaterial(string speciesId, string material) =>
         SpeciesEntry(speciesId)?.Materials is { } blocks

@@ -121,10 +121,35 @@ public class ModEditCliTests
         Assert.Contains("\"strength\"", Run("mod", "materials", "red-spot", "blue", "--show", "-w", ws).Out);
         Assert.Equal(ExitCodes.Ok, Run("mod", "materials", "red-spot", "blue", "--ramp", ramp, "--material", "Titanoboa", "-w", ws).Code);
         Assert.Contains("materials/blue/iridescence-ramp.png", ModJson(ws));
+        var mask = Png(Path.Combine(ws, "art", "mask.png"));
+        Assert.Equal(ExitCodes.Ok, Run("mod", "materials", "red-spot", "blue", "--mask", mask, "--material", "Titanoboa", "-w", ws).Code);
+        Assert.Contains("materials/blue/iridescence-mask.png", ModJson(ws));
         Assert.Equal(ExitCodes.Ok, Run("mod", "materials", "red-spot", "blue", "--clear", "-w", ws).Code);
         Assert.DoesNotContain("\"materials\"", ModJson(ws));
         Assert.Equal(ExitCodes.Error, Run("mod", "materials", "red-spot", "blue", "-w", ws).Code); // no action
         Assert.Equal(ExitCodes.Error, Run("mod", "materials", "red-spot", "blue", "--species", "Trex", "--show", "-w", ws).Code); // skin and species
+    }
+
+    [Fact]
+    public void Materials_of_a_species_without_the_game_data()
+    {
+        using var game = new FakeGame();
+        var ws = WorkspaceWithSkin(game);
+        File.WriteAllText(Path.Combine(ws, "mods", "red-spot", "mod.json"),
+            "{\"format\":1,\"id\":\"red-spot\",\"name\":\"Red spot\",\"version\":\"1.0.0\",\"replace\":[],\"models\":[{\"target\":\"Titanoboa\",\"materials\":{\"Titanoboa\":{\"iridescence\":{\"strength\":0.3}}}}]}");
+        var mask = Png(Path.Combine(ws, "art", "mask.png"));
+        var set = Path.Combine(ws, "materials.json");
+        File.WriteAllText(set, "{\"Titanoboa\":{\"iridescence\":{\"strength\":0.5}}}");
+
+        Assert.Contains("\"strength\"", Run("mod", "materials", "red-spot", "--species", "titanoboa", "--show", "-w", ws).Out);
+        Assert.Equal(ExitCodes.Ok, Run("mod", "materials", "red-spot", "--species", "titanoboa", "--mask", mask, "--material", "Titanoboa", "-w", ws).Code);
+        Assert.Contains("materials/Titanoboa/iridescence-mask.png", ModJson(ws));
+        var noGame = Run("mod", "materials", "red-spot", "--species", "Titanoboa", "--set", set, "-w", ws);
+        Assert.Equal(ExitCodes.Error, noGame.Code);
+        Assert.Contains("needs the game's data", noGame.Err);
+        Assert.Equal(ExitCodes.Error, Run("mod", "materials", "red-spot", "--species", "Nobody", "--mask", mask, "--material", "X", "-w", ws).Code);
+        Assert.Equal(ExitCodes.Ok, Run("mod", "materials", "red-spot", "--species", "titanoboa", "--clear", "-w", ws).Code);
+        Assert.DoesNotContain("Titanoboa", ModJson(ws));
     }
 
     [Fact]
