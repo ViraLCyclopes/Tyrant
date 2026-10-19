@@ -313,7 +313,7 @@ Needs a data dump, an asset index and the game. Steps marked **(game)** start th
 
 Needs the game and a Tyrant Framework installed from this build. Steps marked **(app)** are in the Tyrant app.
 
-140. **(game)** Open a park with Titanoboas. Click one: its info panel has a **T** button in its header. Click it: a window opens
+140. **(game)** Open a park with Titanoboas. Click one: its info panel has a **T** button at the bottom, beside **Sell** and **Move**, clear of the panel's close X (the same in the vivarium's panel). Click it: a window opens
      on that animal, on **This animal**. Drag it by its title, resize it from the corner (it stops at 300 × 360). The **T**
      again closes it. Close and reopen the park, open it again: it is where you left it.
      - A vivarium animal's panel has the **T** too, and opens the editor on that animal.

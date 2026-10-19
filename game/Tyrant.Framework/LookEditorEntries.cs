@@ -109,31 +109,94 @@ namespace Tyrant.Framework
             return button.gameObject;
         }
 
-        /// <summary>In an info panel's header, right of its next-animal arrow (left of the previous one when that runs off the panel).</summary>
+        /// <summary>The bottom row's buttons of the info panels ("Actions Panel"): AnimalInfomenuManager's, VivariumAnimalInfomenuManager's sellButton.</summary>
+        private static readonly string[] Actions = { "moveButton", "sellButton" };
+
+        /// <summary>
+        /// At the bottom of an info panel, in its actions row (move, sell): the row's last child when a layout group places them,
+        /// else right of the right-most action (left of the left-most when that runs off the panel). Without that row, the panel's
+        /// bottom-right corner, 8 px in. The header's previous/next arrow is the template, so it looks like the panel's own
+        /// small buttons (the header's close X covered it there).
+        /// </summary>
         private static GameObject? PanelButton(Component panel, string field)
         {
-            var next = Read(panel, "nextButton") as Component;
-            var previous = Read(panel, "previousButton") as Component;
-            var anchor = next != null ? next : previous;
             var where = PanelName(field);
-            if (anchor == null || !(anchor.transform is RectTransform rect) || rect.parent == null)
+            var template = Read(panel, "nextButton") as Component ?? Read(panel, "previousButton") as Component;
+            var actions = Actions.Select(name => Read(panel, name) as Component)
+                .Select(c => c != null ? c.transform as RectTransform : null).Where(r => r != null && r.parent != null).Select(r => r!).ToList();
+            var row = actions.Count > 0 ? actions[0].parent : null;
+            actions = actions.Where(a => a.parent == row).ToList();
+            var button = IconButton(template != null ? template.gameObject : null, row ?? panel.transform, Safe(() => OpenOnPanel(panel)));
+            string place;
+            if (row == null)
             {
-                Once(field, true, () => $"{where}'s header buttons were not found (game updated?); it has no Tyrant button. Panel: " + Hierarchy(panel.transform, 1));
-                return null;
+                Once(field, true, () => $"{where}'s action buttons were not found (game updated?); its Tyrant button sits in its bottom-right corner. Panel: " + Hierarchy(panel.transform, 1));
+                Corner(button, panel.transform, 28f);
+                place = "in the bottom-right corner of " + panel.name;
             }
-            var button = IconButton(anchor.gameObject, rect.parent, Safe(() => OpenOnPanel(panel)));
-            var size = rect.rect.height > 1f ? rect.rect.height : 28f;
-            var laidOut = PlaceBeside(button, rect, size, right: anchor == next);
-            var side = anchor == next ? "right of" : "left of";
-            if (!laidOut && anchor == next && previous != null && previous.transform is RectTransform left && left.parent == rect.parent
-                && panel.transform is RectTransform bounds && !Inside(button, bounds))
+            else
             {
-                PlaceBeside(button, left, size, right: false); // the panel's edge is right of the arrow
-                (rect, side) = (left, "left of");
+                var height = actions.Max(a => a.rect.height);
+                var size = height > 1f ? height : 28f;
+                if (HasLayoutGroup(row))
+                {
+                    button.SetParent(row, false);
+                    button.localScale = actions[0].localScale;
+                    button.localRotation = Quaternion.identity;
+                    button.SetAsLastSibling();
+                    SizeInLayout(button, size);
+                    place = $"at the end of {row.name} (laid out by its group)";
+                }
+                else
+                {
+                    var rightMost = actions.OrderByDescending(a => Edge(a, right: true)).First();
+                    PlaceBeside(button, rightMost, size, right: true);
+                    place = $"right of {rightMost.name} (in {row.name})";
+                    if (panel.transform is RectTransform bounds && !Inside(button, bounds))
+                    {
+                        var leftMost = actions.OrderBy(a => Edge(a, right: false)).First();
+                        PlaceBeside(button, leftMost, size, right: false); // the panel's edge is right of the row
+                        place = $"left of {leftMost.name} (in {row.name})";
+                    }
+                }
             }
             button.gameObject.SetActive(true);
-            Once(field + "-placed", false, $"{where} has the Tyrant looks button {side} {rect.name} (in {rect.parent.name}{(laidOut ? ", laid out by its group" : "")}).");
+            Once(field + "-placed", false, $"{where} has the Tyrant looks button {place}.");
             return button.gameObject;
+        }
+
+        /// <summary>The bottom-right corner of <paramref name="parent"/>, 8 px in, <paramref name="size"/> square (never laid out by a group).</summary>
+        private static void Corner(RectTransform button, Transform parent, float size)
+        {
+            if (button.parent != parent) button.SetParent(parent, false);
+            button.SetAsLastSibling();
+            if (LayoutElement != null) Traverse.Create(button.GetComponent(LayoutElement) ?? button.gameObject.AddComponent(LayoutElement)).Property("ignoreLayout").SetValue(true);
+            button.localScale = Vector3.one;
+            button.localRotation = Quaternion.identity;
+            button.anchorMin = button.anchorMax = button.pivot = new Vector2(1f, 0f);
+            button.sizeDelta = new Vector2(size, size);
+            button.anchoredPosition = new Vector2(-8f, 8f);
+        }
+
+        /// <summary>A rect's left or right edge on screen.</summary>
+        private static float Edge(RectTransform rect, bool right)
+        {
+            var corners = new Vector3[4];
+            rect.GetWorldCorners(corners);
+            return right ? corners[2].x : corners[0].x;
+        }
+
+        private static bool HasLayoutGroup(Transform t) => t.GetComponents<Component>().Any(c => c != null && IsLayoutGroup(c.GetType()));
+
+        /// <summary>Its LayoutElement: <paramref name="size"/> square, never stretched.</summary>
+        private static void SizeInLayout(RectTransform button, float size)
+        {
+            if (LayoutElement == null) return;
+            var element = Traverse.Create(button.GetComponent(LayoutElement) ?? button.gameObject.AddComponent(LayoutElement));
+            element.Property("ignoreLayout").SetValue(false);
+            foreach (var name in new[] { "minWidth", "preferredWidth", "minHeight", "preferredHeight" }) element.Property(name).SetValue(size);
+            element.Property("flexibleWidth").SetValue(0f);
+            element.Property("flexibleHeight").SetValue(0f);
         }
 
         private static void OpenOnPanel(Component panel)
@@ -196,16 +259,9 @@ namespace Tyrant.Framework
             button.SetSiblingIndex(Mathf.Clamp(anchor.GetSiblingIndex() + (right ? 1 : 0), 0, parent.childCount - 1));
             var anchorElement = LayoutElement == null ? null : anchor.GetComponent(LayoutElement);
             var ignored = anchorElement != null && Traverse.Create(anchorElement).Property("ignoreLayout").GetValue() is true;
-            if (!ignored && parent.GetComponents<Component>().Any(c => c != null && IsLayoutGroup(c.GetType())))
+            if (!ignored && HasLayoutGroup(parent))
             {
-                if (LayoutElement != null)
-                {
-                    var element = Traverse.Create(button.GetComponent(LayoutElement) ?? button.gameObject.AddComponent(LayoutElement));
-                    element.Property("ignoreLayout").SetValue(false);
-                    foreach (var name in new[] { "minWidth", "preferredWidth", "minHeight", "preferredHeight" }) element.Property(name).SetValue(size);
-                    element.Property("flexibleWidth").SetValue(0f);
-                    element.Property("flexibleHeight").SetValue(0f);
-                }
+                SizeInLayout(button, size);
                 return true;
             }
             // Anchored on the anchor's right (or left) edge and its vertical middle, whatever its own anchors are.

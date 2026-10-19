@@ -253,7 +253,7 @@ Materials need Tyrant Framework 0.2.0 or newer.
 
 Tyrant Framework adds a small **Tyrant** button (a **T**) in two places:
 
-- **In the park:** click an animal (park or vivarium). The button is in the header of its info panel and opens the editor on
+- **In the park:** click an animal (park or vivarium). The button is at the bottom of its info panel, beside **Sell** (and **Move**), and opens the editor on
   that animal, on **This animal**.
 - **In the Nursery:** the button is right of the animation list (**Fidget**) and opens the editor on the preview animal, on
   **Whole skin** (**Whole species** is there too). **This animal** needs a placed animal, so it is greyed out and the status
