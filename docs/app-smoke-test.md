@@ -365,10 +365,16 @@ Needs the game and a Tyrant Framework installed from this build. Steps marked **
      tessellation off: the fur goes, the status line in the editor says grown fur needs tessellated fur, and
      `Latest.log` has one warning about it.
 152. **(game)** Next created: save the park, open the Nursery on an Allosaurus (male), click **T**, choose **Next created**
-     (the status line says it saves to the next Allosaurus you create). Change the iridescence strength or a fur setting:
-     the preview shows it. **Save**: the status line says *Saved for the next Allosaurus you create.* and the preview keeps
-     the look. **Create** the animal: once placed it shows the look, and `Latest.log` says the look went to the new
-     Allosaurus; the window's draft starts again empty. Create a second male Allosaurus: it has the vanilla look. Save the
-     park and load it again: the first one still has its look (`UserData/Tyrant/Looks/<save>.json` has its id), the second
-     has none. Save a Next created look, leave the park without creating the animal, come back and create one: it has no
-     look (waiting looks are never saved).
+     (the status line says it saves to the next Allosaurus you incubate). Change the iridescence strength or a fur setting:
+     the preview shows it. **Save**: the status line says *Saved for the next Allosaurus you incubate.* and the preview keeps
+     the look.
+     - Have an older Allosaurus already waiting in the holder; place it now: it keeps the vanilla look.
+     - **Incubate**: the status line says *Bound to <name>, incubating.*, `Latest.log` says the look is bound, and
+       `UserData/Tyrant/Looks/<save>.json` has an `"incubating"` entry. The window's draft starts again empty.
+     - Incubate a second male Allosaurus: nothing is bound to it.
+     - Save the park and load it again while the first one still incubates (or waits in the holder): the `"incubating"`
+       entry is still there.
+     - Place the first one: it shows the look, `Latest.log` says the look went to the placed animal, and the file has it
+       under `"animals"` (its id) and no longer under `"incubating"`. Place the second one: vanilla look.
+     - Arm a look again and leave the park without incubating: back in the park, an incubation gets nothing (an armed look
+       is never saved). Bind one, then cancel or sell that animal from the holder and save: the `"incubating"` entry goes.

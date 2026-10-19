@@ -257,12 +257,15 @@ Tyrant Framework adds a small **Tyrant** button (a **T**) in two places:
   that animal, on **This animal**.
 - **In the Nursery:** the button is right of the animation list (**Fidget**) and opens the editor on the preview animal, on
   **Whole skin** (**Whole species** is there too). In its place, **This animal** is **Next created**: the look for the next
-  animal you create from the preview, of that species, skin and sex. **Save** keeps it in memory ("Saved for the next
-  Allosaurus you create."); when that animal is placed, the look becomes its own, in this save's looks file like any
-  **This animal** look, and the next one created gets none. A look that takes its mask from a map of one sex goes only to
-  that sex; any other also goes to the other sex when nothing was saved for it. The looks waiting are dropped when you
-  leave the park, and never saved. **Next created** needs a park that was saved once (the status line says so), and
-  **Export mask PNG** needs the placed animal. When you change the Nursery's skin, sex or species,
+  animal you incubate from the preview, of that species, skin and sex. **Save** arms it ("Saved for the next Allosaurus you
+  incubate."), in memory only: leaving the park before an incubation drops it. **Incubate** binds it to that very animal
+  ("Bound to <name>, incubating."): the binding is kept in this save's looks file, under `"incubating"` and the animal's
+  virtual id, so it survives saving and loading while the animal incubates or waits in the holder. When you place that
+  animal, the look becomes its own (`"animals"`, like any **This animal** look) and the binding goes; no other animal ever
+  takes it. A binding whose animal is gone (incubation cancelled, sold) is dropped when the park is saved. A look that
+  takes its mask from a map of one sex arms only for that sex; any other also goes to an incubation of the other sex when
+  nothing was armed for it. **Next created** needs a park that was saved once (the status line says so), and **Export mask
+  PNG** needs the placed animal. When you change the Nursery's skin, sex or species,
   the window follows the preview animal. Closing the Nursery is like the animal going away, except that unsaved
   changes stay in the window until you **Save** or **Reset** them.
 
