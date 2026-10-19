@@ -107,8 +107,8 @@ Above it, each loaded mod has a line saying what it changes (textures, skins, mo
 has a warning line `<mod id>: skipped — <reason>`, for example a missing file or a mod that needs a newer framework.
 The log also lists each texture a mod replaced, and each replaced sound the first time it plays.
 
-New skins show up in the **Nursery** next to the game's own. For species with many skins, a grid button next to
-**Design** opens **All skins**, with a search box.
+New skins show up in the **Nursery** next to the game's own. A grid button next to **Design** opens **All skins**, with a
+search box.
 
 ## When something goes wrong
 

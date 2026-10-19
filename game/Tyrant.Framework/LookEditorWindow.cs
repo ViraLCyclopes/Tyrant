@@ -10,11 +10,12 @@ using static Tyrant.Framework.GameUi;
 namespace Tyrant.Framework
 {
     /// <summary>
-    /// The in-game look editor: a Tyrant button in the game's top bar opens a floating window (drag it by its title, resize it
-    /// from its corner, minimise or close it; where it is, its size and whether it is open are kept in MelonPreferences) that
-    /// edits the fur and iridescence of the selected animal, for that animal, its whole skin or its whole species. Every change
-    /// is a live preview (<see cref="MaterialsModule.SetLive"/>) until Save. Built from the game's uGUI by reflection, with
-    /// the game's font; the tab contents are in LookEditorTabs.cs.
+    /// The in-game look editor: a Tyrant button in a placed animal's info panel, or beside the Nursery's animation list, opens
+    /// a floating window (drag it by its title, resize it from its corner, minimise or close it; where it is and its size are
+    /// kept in MelonPreferences) that edits the fur and iridescence of the animal it was opened on, for that animal, its whole
+    /// skin or its whole species. Opened from the Nursery it follows the preview animal. Every change is a live preview
+    /// (<see cref="MaterialsModule.SetLive"/>) until Save. Built from the game's uGUI by reflection, with the game's font; the
+    /// buttons are in LookEditorEntries.cs, the frame in LookEditorFrame.cs and the tab contents in LookEditorTabs.cs.
     /// </summary>
     internal static partial class LookEditorWindow
     {
@@ -27,21 +28,21 @@ namespace Tyrant.Framework
         // ---- kept between sessions ----
         private static MelonPreferences_Category? _prefs;
         private static MelonPreferences_Entry<float>? _x, _y, _w, _h;
-        private static MelonPreferences_Entry<bool>? _open;
 
         // ---- the game's pieces and ours (rebuilt in every park) ----
         private static object? _gui;
-        private static GameObject? _canvas, _window, _main, _modal, _button;
+        private static GameObject? _canvas, _window, _main, _modal;
         private static RectTransform? _content;
         private static Component? _font, _inputTemplate, _name, _info, _status;
         private static readonly Dictionary<LookScope, (GameObject Button, Component Label)> ScopeButtons = new Dictionary<LookScope, (GameObject, Component)>();
         private static (GameObject Button, Component Label) _irisTab, _furTab, _export, _reload, _reset, _save;
         private static Sprite? _icon;
-        private static bool _minimised, _shapingOpen, _onFurTab, _openWhenReady, _hierarchyLogged;
+        private static bool _minimised, _shapingOpen, _onFurTab;
         private static string _message = "";
-        private static float _nextButtonTry;
+        private static string? _title, _details; // the header, read when the animal was chosen (the Nursery's may be gone since)
 
         // ---- what is being edited ----
+        private static EditorEntry _entry = EditorEntry.Park;
         private static object? _animal;
         private static AnimalContext? _context;
         private static LookScope _scope = LookScope.Animal;
@@ -66,28 +67,20 @@ namespace Tyrant.Framework
             _y = _prefs.CreateEntry("EditorY", 96f);
             _w = _prefs.CreateEntry("EditorW", 360f);
             _h = _prefs.CreateEntry("EditorH", 600f);
-            _open = _prefs.CreateEntry("EditorOpen", false);
             Staged.Clean(); // exports an earlier run left unsaved
         }
 
-        /// <summary>Once a frame in a park: the top-bar button, an animal that went away, a new selection.</summary>
-        public static void Tick(object gui, bool parkReady, bool selectionChanged)
+        /// <summary>Once a frame in a park: the Tyrant buttons, an animal that went away, the Nursery's preview animal.</summary>
+        public static void Tick(object gui, bool parkReady)
         {
             _gui = gui;
             if (!parkReady) return;
-            EnsureButton(gui);
-            if (_openWhenReady)
-            {
-                _openWhenReady = false;
-                Open();
-            }
+            EnsureButtons(gui);
             if (!IsOpen) return;
             Place(); // keeps it on screen when the resolution changes
-            if (_animal is UnityEngine.Object unity && unity == null) AnimalGone();
-            if (selectionChanged) FollowSelection();
+            if (_entry == EditorEntry.Nursery) FollowNursery(gui);
+            else if (!Alive(_animal)) AnimalGone("The animal is gone; open the editor from another one.");
         }
-
-        public static void ParkLoaded() => _openWhenReady = _open?.Value == true;
 
         /// <summary>The save in use changed (saved, or deleted): "This animal" may have become available or not.</summary>
         public static void SaveChanged()
@@ -100,19 +93,19 @@ namespace Tyrant.Framework
         {
             ClearLive(reapply: false);
             if (_canvas != null) UnityEngine.Object.Destroy(_canvas);
-            if (_button != null) UnityEngine.Object.Destroy(_button);
-            _canvas = _window = _main = _modal = _button = null;
-            _nextButtonTry = 0f;
+            DestroyButtons();
+            _canvas = _window = _main = _modal = null;
             _content = null;
             _gui = _font = _inputTemplate = _name = _info = _status = null;
             ScopeButtons.Clear();
             Forget();
+            _entry = EditorEntry.Park;
         }
 
         public static void AnimalsRemoved(List<ulong> ids)
         {
             _matching.RemoveAll(a => a is UnityEngine.Object unity && unity == null);
-            if (_context?.PersistentId is ulong id && ids.Contains(id)) AnimalGone();
+            if (_entry == EditorEntry.Park && _context?.PersistentId is ulong id && ids.Contains(id)) AnimalGone("The animal is gone; open the editor from another one.");
         }
 
         /// <summary>After a failure: unsaved edits go, the window and button are removed.</summary>
@@ -125,8 +118,8 @@ namespace Tyrant.Framework
             finally
             {
                 if (_canvas != null) UnityEngine.Object.Destroy(_canvas);
-                if (_button != null) UnityEngine.Object.Destroy(_button);
-                _canvas = _window = _button = null;
+                DestroyButtons();
+                _canvas = _window = null;
                 Forget();
             }
         }
@@ -149,21 +142,46 @@ namespace Tyrant.Framework
 
         // ---- opening and closing ----
 
-        private static void Toggle()
+        /// <summary>
+        /// A Tyrant button was clicked: the window opens on that animal (null: the Nursery's, still loading), after "Discard
+        /// changes?" when another one has unsaved edits. The same button again closes it.
+        /// </summary>
+        private static void OpenOn(object? animal, EditorEntry entry)
         {
-            if (IsOpen) RequestClose();
-            else Open();
+            var same = entry == _entry && (entry == EditorEntry.Nursery ? _animal != null || _awaitPreview : animal != null && ReferenceEquals(animal, _animal));
+            if (IsOpen && same && _modal == null)
+            {
+                RequestClose();
+                return;
+            }
+            if (_modal != null || !ShowWindow()) return;
+            Confirm(() => Target(animal, entry));
         }
 
-        private static void Open()
+        private static void Target(object? animal, EditorEntry entry)
         {
-            if (_gui == null) return;
+            ClearLive(reapply: true);
+            Forget();
+            _entry = entry;
+            _scope = EditorScopes.Preferred(entry); // checked against the animal in Select
+            if (animal != null)
+            {
+                Select(animal);
+                return;
+            }
+            _awaitPreview = true; // FollowNursery picks it up once loaded
+            _message = "The Nursery's animal is still loading.";
+            Rebuild();
+        }
+
+        private static bool ShowWindow()
+        {
+            if (_gui == null) return false;
             if (_window == null) Build(_gui);
-            if (_window == null) return;
+            if (_window == null) return false;
+            if (_window.activeSelf) return true;
             _window.SetActive(true);
             Place();
-            if (_open != null) _open.Value = true;
-            SavePrefs();
             try
             {
                 Directory.CreateDirectory(MasksDirectory); // where the player's own images go
@@ -172,9 +190,7 @@ namespace Tyrant.Framework
             {
                 FrameworkMod.Log.Warning($"\"{MasksDirectory}\" could not be made: {ex.Message}");
             }
-            if (_animal is UnityEngine.Object unity && unity == null) AnimalGone(); // went while the window was closed
-            if (LookEditorModule.SelectedAnimal() is object selected && !ReferenceEquals(selected, _animal)) Select(selected);
-            else Rebuild();
+            return true;
         }
 
         private static void RequestClose() => Confirm(Hide);
@@ -184,13 +200,15 @@ namespace Tyrant.Framework
             ClearLive(reapply: true);
             _draft?.Reset();
             Staged.Discard();
+            _awaitPreview = false;
             if (_window != null) _window.SetActive(false);
-            if (_open != null) _open.Value = false;
-            SavePrefs();
         }
 
-        /// <summary>Runs <paramref name="then"/> at once, or after "Discard changes?" when the draft has unsaved changes.</summary>
-        private static void Confirm(Action then)
+        /// <summary>
+        /// Runs <paramref name="then"/> at once, or after "Discard changes?" when the draft has unsaved changes; <paramref name="keep"/>
+        /// runs when the player keeps editing instead.
+        /// </summary>
+        private static void Confirm(Action then, Action? keep = null)
         {
             if (_draft == null || !_draft.IsDirty)
             {
@@ -204,34 +222,32 @@ namespace Tyrant.Framework
                 Switch.Forget();
                 Staged.Discard();
                 then();
-            });
+            }, keep);
         }
 
-        // ---- following the selection ----
+        // ---- the animal ----
 
-        private static void FollowSelection()
-        {
-            var selected = LookEditorModule.SelectedAnimal();
-            if (selected == null || ReferenceEquals(selected, _animal) || _modal != null) return; // another pick keeps this animal
-            Confirm(() => Select(selected));
-        }
-
-        private static void Select(object animal)
+        /// <summary>Edits this animal: the scope chosen stays when the animal offers it, else the entry's default.</summary>
+        private static void Select(object animal, bool keepMessage = false)
         {
             ClearLive(reapply: true);
             _animal = animal;
             _context = MaterialsModule.Describe(animal);
-            _message = "";
-            if (_context != null && !Available(_scope)) _scope = new[] { LookScope.Animal, LookScope.Skin, LookScope.Species }.First(Available);
+            _detached = false;
+            _declined = null;
+            _awaitPreview = false;
+            if (!keepMessage) _message = "";
+            ReadHeader();
+            if (_context != null && !Available(_scope)) _scope = EditorScopes.Default(_entry, _context, LookEditorModule.SaveName);
             NewDraft();
             Rebuild();
         }
 
-        private static void AnimalGone()
+        private static void AnimalGone(string message)
         {
-            ClearLive(reapply: false);
+            ClearLive(reapply: true); // the others of its skin or species show their saved look again
             Forget();
-            _message = "The animal is gone; select another.";
+            _message = message;
             if (IsOpen) Rebuild();
         }
 
@@ -242,17 +258,19 @@ namespace Tyrant.Framework
             _draft = null;
             _target = null;
             _below = null;
+            _title = _details = null;
+            _detached = false;
+            _declined = null;
+            _awaitPreview = false;
             _matching = new List<object>();
             Switch.Forget();
             Staged.Discard();
         }
 
-        private static bool Available(LookScope scope) => _context != null && scope switch
-        {
-            LookScope.Animal => VanillaLooks.IsAvailable(LookScope.Animal, _context.PersistentId, LookEditorModule.SaveName), // a park never saved has no looks file yet
-            LookScope.Skin => _context.SkinKey != null,
-            _ => true,
-        };
+        /// <summary>False for a game object that was destroyed (a Nursery preview, a sold animal); a VivariumAnimal is a plain object.</summary>
+        private static bool Alive(object? animal) => !(animal is UnityEngine.Object unity && unity == null);
+
+        private static bool Available(LookScope scope) => EditorScopes.Offers(_entry, scope, _context, LookEditorModule.SaveName);
 
         private static void ChooseScope(LookScope scope)
         {
@@ -287,6 +305,13 @@ namespace Tyrant.Framework
             {
                 _target = null;
                 _message = ex.Message;
+            }
+            if (_detached || !Alive(_animal))
+            {
+                // The Nursery shows another look (or its animal went): nothing to read from it until the window follows it.
+                _matching = new List<object>();
+                _below = null;
+                return;
             }
             _matching = MaterialsModule.AnimalsMatching(_scope, _animal).ToList(); // once per draft: a slider move only re-applies
             _below = MaterialsModule.Below(_animal, _scope); // never a higher layer: the draft's scope and above are left out
@@ -334,7 +359,8 @@ namespace Tyrant.Framework
         {
             if (_draft == null || _context == null || !(_context.KeyFor(_scope) is string key)) return;
             MaterialsModule.SetLive(_scope, key, _context.MaterialName, _draft.IsDirty ? _draft.Current : null); // a clean draft is the saved look
-            foreach (var animal in _matching) MaterialsModule.Reapply(animal, keywords);
+            foreach (var animal in _matching)
+                if (Alive(animal)) MaterialsModule.Reapply(animal, keywords);
         }
 
         /// <summary>Takes the draft's live layer away (the saved look shows again).</summary>
@@ -343,7 +369,8 @@ namespace Tyrant.Framework
             if (_draft == null || _context == null || !(_context.KeyFor(_scope) is string key)) return;
             MaterialsModule.SetLive(_scope, key, _context.MaterialName, null);
             if (!reapply || !_draft.IsDirty) return;
-            foreach (var animal in _matching) MaterialsModule.Reapply(animal, keywords: true);
+            foreach (var animal in _matching)
+                if (Alive(animal)) MaterialsModule.Reapply(animal, keywords: true);
         }
 
         // ---- the buttons at the bottom ----
@@ -426,7 +453,7 @@ namespace Tyrant.Framework
             }
             ClearLive(reapply: false);
             if (_target.Kind != SaveTargetKind.AnimalLooks) MaterialsModule.Reload(MaterialsModule.Mods); // re-reads the folders, re-applies the park
-            if (_animal != null) MaterialsModule.Reapply(_animal, keywords: true); // the Nursery preview is not in the park's lists
+            if (_animal != null && !_detached && Alive(_animal)) MaterialsModule.Reapply(_animal, keywords: true); // the Nursery preview is not in the park's lists
             _draft.MarkSaved();
             NewDraft(); // from what was saved (images a mod adopted have their new place)
             // Vanilla Looks turned off (or broken) at the start is never loaded behind the player's back: the save does not show.
@@ -468,7 +495,7 @@ namespace Tyrant.Framework
                 MaterialsModule.SetAnimalLooks(looks);
             }
             MaterialsModule.Reload(MaterialsModule.Mods);
-            if (_animal != null)
+            if (_animal != null && !_detached && Alive(_animal))
             {
                 MaterialsModule.Reapply(_animal, keywords: true);
                 _below = MaterialsModule.Below(_animal, _scope); // the table was read again
@@ -482,6 +509,12 @@ namespace Tyrant.Framework
         private static void ExportMask()
         {
             if (_animal == null || _draft == null || _target == null) return;
+            if (_detached || !Alive(_animal))
+            {
+                _message = "The Nursery shows another look now: Save or Reset first, then export from the animal it shows.";
+                Footer();
+                return;
+            }
             var texture = MaterialsModule.EffectiveMask(_animal, fur: _onFurTab, infant: false);
             if (texture == null)
             {

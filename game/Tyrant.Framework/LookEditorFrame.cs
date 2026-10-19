@@ -9,95 +9,11 @@ using static Tyrant.Framework.GameUi;
 namespace Tyrant.Framework
 {
     /// <summary>
-    /// The look editor's frame: the top-bar button, the window (title to drag, corner to resize, minimise and X), its place
-    /// kept in MelonPreferences, the "Discard changes?" box, and the header and footer texts.
+    /// The look editor's frame: the window (title to drag, corner to resize, minimise and X), its place kept in
+    /// MelonPreferences, the "Discard changes?" box, and the header and footer texts.
     /// </summary>
     internal static partial class LookEditorWindow
     {
-        // ---- the top-bar button ----
-
-        private static void EnsureButton(object gui)
-        {
-            if (_button != null || Time.unscaledTime < _nextButtonTry) return;
-            _nextButtonTry = Time.unscaledTime + 0.5f; // until the top bar shows, not every frame
-            var board = Traverse.Create(gui).Field("mainBoardGUI").GetValue() as Component;
-            if (board == null || Button == null || Image == null) return;
-            var actions = Traverse.Create(board).Field("middleActions").GetValue() as GameObject;
-            if (actions != null && !actions.activeInHierarchy) return; // not shown yet: its buttons are looked for when it is
-            var source = actions == null ? null : actions.GetComponentsInChildren(Button, false).FirstOrDefault(c => c != null && c.gameObject != actions);
-            if (source != null)
-            {
-                var clone = CloneInactive(source.gameObject, source.transform.parent);
-                clone.name = ButtonName;
-                foreach (var extra in clone.GetComponentsInChildren<Component>(true).Where(c => c != null && IsForeign(c)).ToList())
-                    UnityEngine.Object.DestroyImmediate(extra); // the original's tooltip and hover actions
-                foreach (var text in clone.GetComponentsInChildren<Component>(true).Where(c => c != null && c.GetType().FullName?.StartsWith("TMPro.") == true))
-                    Traverse.Create(text).Property("text").SetValue("");
-                var hasIcon = Enumerable.Range(0, clone.transform.childCount).Any(i => clone.transform.GetChild(i).GetComponent(Image) != null);
-                if (hasIcon) SetIcon(clone.transform, Icon());
-                else if (clone.GetComponent(Image) is Component own) Traverse.Create(own).Property("sprite").SetValue(Icon());
-                clone.transform.SetAsLastSibling();
-                BesideSiblings((RectTransform)clone.transform);
-                OnClick(clone, Safe(Toggle));
-                clone.SetActive(true);
-                _button = clone;
-                return;
-            }
-            if (!_hierarchyLogged)
-            {
-                _hierarchyLogged = true;
-                FrameworkMod.Log.Warning("The top bar has no button to copy (game updated?); the Tyrant button sits at the top right. Top bar: "
-                    + (actions == null ? "(no middleActions)" : Hierarchy(actions.transform, 0)));
-            }
-            var canvas = Traverse.Create(gui).Field("MainBoardCanvas").GetValue() as Component;
-            if (canvas == null || !(Traverse.Create(board).Field("staffAmtTxt").GetValue() is Component font)) return;
-            var rect = Child(canvas.transform, ButtonName, Vector2.one, Vector2.one, Vector2.one, new Vector2(-12f, -12f), new Vector2(36f, 36f));
-            var (button, label) = FlatButton(rect, font, "", GameUi.Panel, Safe(Toggle));
-            UnityEngine.Object.Destroy(label.gameObject);
-            var icon = Child(button.transform, "Icon", Vector2.zero, Vector2.one, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(-8f, -8f));
-            var image = icon.gameObject.AddComponent(Image);
-            Traverse.Create(image).Property("sprite").SetValue(Icon());
-            Traverse.Create(image).Property("raycastTarget").SetValue(false);
-            _button = rect.gameObject;
-        }
-
-        /// <summary>Without a layout group the clone would cover its original: it goes right of the right-most sibling.</summary>
-        private static void BesideSiblings(RectTransform clone)
-        {
-            var parent = clone.parent;
-            if (parent == null || parent.GetComponents<Component>().Any(c => c != null && IsLayoutGroup(c.GetType()))) return;
-            var right = float.MinValue;
-            for (var i = 0; i < parent.childCount; i++)
-                if (parent.GetChild(i) is RectTransform sibling && sibling != clone && sibling.gameObject.activeSelf)
-                    right = Mathf.Max(right, sibling.anchoredPosition.x + sibling.rect.width * (1f - sibling.pivot.x));
-            if (right > float.MinValue) clone.anchoredPosition = new Vector2(right + 6f + clone.rect.width * clone.pivot.x, clone.anchoredPosition.y);
-        }
-
-        private static bool IsLayoutGroup(Type? type)
-        {
-            for (; type != null; type = type.BaseType)
-                if (type.FullName == "UnityEngine.UI.LayoutGroup") return true;
-            return false;
-        }
-
-        private static bool IsForeign(Component c)
-        {
-            var name = c.GetType().Name;
-            return name.Contains("Tooltip") || name == "EventTrigger" || name == "ToggleUtil";
-        }
-
-        private static string Hierarchy(Transform t, int depth)
-        {
-            var parts = t.GetComponents<Component>().Where(c => c != null && !(c is Transform)).Select(c => c.GetType().Name);
-            var line = $"{t.name} [{string.Join(", ", parts)}]";
-            if (depth >= 2 || t.childCount == 0) return line;
-            return line + " { " + string.Join("; ", Enumerable.Range(0, t.childCount).Select(i => Hierarchy(t.GetChild(i), depth + 1))) + " }";
-        }
-
-        /// <summary>A "T", drawn once.</summary>
-        private static Sprite Icon() =>
-            _icon != null ? _icon : _icon = DrawIcon(32, (x, y) => (y >= 23 && y <= 27 && x >= 5 && x <= 26) || (x >= 14 && x <= 17 && y >= 4 && y <= 27), "Tyrant looks icon");
-
         // ---- the window frame ----
 
         private static void Build(object gui)
@@ -160,12 +76,13 @@ namespace Tyrant.Framework
                 Place((RectTransform)_furTab.Button.transform, 0.5f, 1f, 2f, 0f);
 
                 var body = Child(main, "Body", Vector2.zero, Vector2.one, new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
-                body.offsetMin = new Vector2(0f, 84f);
+                body.offsetMin = new Vector2(0f, 92f);
                 body.offsetMax = new Vector2(0f, -104f);
                 _content = ScrollView(body, "Viewport");
 
-                _status = Label(BottomRow(main, 62f, 18f), _font, "", 10f);
+                _status = Label(BottomRow(main, 62f, 26f), _font, "", 10f);
                 Traverse.Create(_status).Property("color").SetValue(Faint);
+                Traverse.Create(_status).Property("enableWordWrapping").SetValue(true); // two lines: where it saves, and why "This animal" is off
                 var upper = BottomRow(main, 34f, 24f);
                 _export = FlatButton(upper, _font, "Export mask PNG", Idle, Safe(ExportMask));
                 Place((RectTransform)_export.Button.transform, 0f, 0.5f, 0f, -2f);
@@ -316,7 +233,7 @@ namespace Tyrant.Framework
 
         // ---- the "Discard changes?" box ----
 
-        private static void ShowModal(string question, string detail, Action discard)
+        private static void ShowModal(string question, string detail, Action discard, Action? keep = null)
         {
             if (_window == null || _font == null) return;
             CloseModal();
@@ -336,8 +253,12 @@ namespace Tyrant.Framework
                 discard();
             }));
             Place((RectTransform)yes.Button.transform, 0f, 0.5f, 0f, -3f);
-            var keep = FlatButton(buttons, _font, "Keep editing", Idle, Safe(CloseModal));
-            Place((RectTransform)keep.Button.transform, 0.5f, 1f, 3f, 0f);
+            var stay = FlatButton(buttons, _font, "Keep editing", Idle, Safe(() =>
+            {
+                CloseModal();
+                keep?.Invoke();
+            }));
+            Place((RectTransform)stay.Button.transform, 0.5f, 1f, 3f, 0f);
             _modal = shade.gameObject;
         }
 
@@ -349,24 +270,33 @@ namespace Tyrant.Framework
 
         // ---- the header and the footer ----
 
+        /// <summary>The header's texts, read from the animal when it is chosen: the Nursery's preview may be gone while its draft is kept.</summary>
+        private static void ReadHeader()
+        {
+            _title = _details = null;
+            if (_animal == null || _context == null) return;
+            var name = AccessTools.Property(_animal.GetType(), "Name")?.GetValue(_animal, null) as string;
+            var data = AccessTools.Property(_animal.GetType(), "BaseData")?.GetValue(_animal, null);
+            var species = data == null ? null : AccessTools.Property(data.GetType(), "DisplayName")?.GetValue(data, null) as string;
+            var skinData = AccessTools.Property(_animal.GetType(), "SkinData")?.GetValue(_animal, null);
+            var skin = skinData == null ? null : AccessTools.Field(skinData.GetType(), "skinName")?.GetValue(skinData) as string;
+            _title = "<b>" + (string.IsNullOrEmpty(name) ? species ?? _context.Species : name) + "</b>" + (_entry == EditorEntry.Nursery ? "  (Nursery)" : "");
+            var variant = _context.Variant == "normal" ? "" : " (" + _context.Variant + ")";
+            _details = $"{species ?? _context.Species} · {skin ?? "?"}{variant} · {_context.Source}";
+        }
+
         private static void Header()
         {
             if (_name == null || _info == null) return;
-            if (_animal == null || _context == null)
+            if (_context == null || _title == null)
             {
-                SetText(_name.transform, "No animal selected");
-                SetText(_info.transform, "Select an animal in the park to edit its fur and iridescence.");
+                SetText(_name.transform, "No animal");
+                SetText(_info.transform, "Open the editor from an animal's info panel or the Nursery.");
             }
             else
             {
-                var name = AccessTools.Property(_animal.GetType(), "Name")?.GetValue(_animal, null) as string;
-                var data = AccessTools.Property(_animal.GetType(), "BaseData")?.GetValue(_animal, null);
-                var species = data == null ? null : AccessTools.Property(data.GetType(), "DisplayName")?.GetValue(data, null) as string;
-                var skinData = AccessTools.Property(_animal.GetType(), "SkinData")?.GetValue(_animal, null);
-                var skin = skinData == null ? null : AccessTools.Field(skinData.GetType(), "skinName")?.GetValue(skinData) as string;
-                SetText(_name.transform, "<b>" + (string.IsNullOrEmpty(name) ? species ?? _context.Species : name) + "</b>");
-                var variant = _context.Variant == "normal" ? "" : " (" + _context.Variant + ")";
-                SetText(_info.transform, $"{species ?? _context.Species} · {skin ?? "?"}{variant} · {_context.Source}");
+                SetText(_name.transform, _title);
+                SetText(_info.transform, _details ?? "");
             }
             foreach (var pair in ScopeButtons)
             {
@@ -384,7 +314,8 @@ namespace Tyrant.Framework
             if (_status == null) return;
             var editing = _draft != null && _animal != null;
             var dirty = _draft?.IsDirty == true;
-            SetText(_status.transform, _message.Length > 0 ? _message : editing ? "Saves to " + TargetName() + "." : "");
+            var why = editing ? EditorScopes.WhyNot(_entry, LookScope.Animal, _context, LookEditorModule.SaveName) : null; // "This animal" is off
+            SetText(_status.transform, _message.Length > 0 ? _message : editing ? "Saves to " + TargetName() + "." + (why == null ? "" : " " + why) : "");
             SetText(_save.Label.transform, dirty ? "Save *" : "Save");
             SetInteractable(_save.Button.GetComponent(Button!), dirty && _target != null);
             SetInteractable(_reset.Button.GetComponent(Button!), dirty);
