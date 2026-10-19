@@ -74,7 +74,9 @@
   function toggle(turnOn: boolean) {
     onEdit((m) => {
       if (!turnOn) {
-        m.iridescence = baselineOn ? { ...emptyIridescence(), strength: { normal: 0 } } : null;
+        // Over iridescence from below, off is strength 0, keeping this level's ramp, mask and shaping for turning it on again.
+        if (baselineOn) (m.iridescence ??= emptyIridescence()).strength = { normal: 0 };
+        else m.iridescence = null;
         return;
       }
       const i = (m.iridescence ??= emptyIridescence());

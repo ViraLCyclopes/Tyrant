@@ -28,12 +28,12 @@ const info = (over: Partial<ModMaterialInfo> = {}): ModMaterialInfo => ({
 const skinsWith = (materialsJson: string | null): ModSkinDto[] =>
   modDetail().skins.map((s) => (s.id === 'blue' ? { ...s, species: 'Titanoboa', materialsJson } : s));
 
-async function setup({ materialsJson = null, onDraft }: { materialsJson?: string | null; onDraft?: (json: string | null) => void } = {}) {
+async function setup({ materialsJson = null, onDraft, infoOver = {} }: { materialsJson?: string | null; onDraft?: (json: string | null) => void; infoOver?: Partial<ModMaterialInfo> } = {}) {
   let saves = 0;
   const rpc = new FakeRpc()
     .on('mods.get', () => modDetail({ skins: skinsWith(materialsJson) }))
     .on('mods.check', () => ({ errors: [], warnings: [], missingCutouts: [] }))
-    .on('mods.materialInfo', () => info())
+    .on('mods.materialInfo', () => info(infoOver))
     .on('mods.thinFilm', (p) => ({ stops: Array.from({ length: p.count ?? 32 }, (_, i) => `#${(i * 7).toString(16).padStart(2, '0')}4080`) }))
     .on('mods.setMaterials', (p) => modDetail({ revision: `r-${++saves}`, skins: skinsWith(p.materials ?? null) }));
   const platform = new FakePlatform();
@@ -55,6 +55,33 @@ describe('MaterialEditor', () => {
     await waitFor(() => expect(rpc.callsTo('mods.setMaterials')).toHaveLength(1));
     expect(rpc.callsTo('mods.setMaterials')[0].params).toMatchObject({ skin: 'blue' });
     expect(sent(rpc)).toEqual({ Titanoboa: { iridescence: { strength: 0.25, scale: -0.25, power: -0.3, bias: 1.3 } } });
+  });
+
+  it("turning it off over the game's iridescence saves strength 0 and keeps this skin's ramp and tiling", async () => {
+    const { rpc } = await setup({
+      materialsJson: '{"Titanoboa":{"iridescence":{"strength":0.3,"ramp":{"stops":["#3060ff","#ff60c0"]},"tiling":[2,2],"scale":-1}}}',
+      infoOver: { gameHasIridescence: true },
+    });
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Iridescence' }));
+    await waitFor(() => expect(rpc.callsTo('mods.setMaterials')).toHaveLength(1));
+    expect(sent(rpc)).toEqual({ Titanoboa: { iridescence: { strength: 0, ramp: { stops: ['#3060ff', '#ff60c0'] }, tiling: [2, 2], scale: -1 } } });
+  });
+
+  it('turning it off over inherited iridescence also keeps the block, at strength 0', async () => {
+    const { rpc } = await setup({
+      materialsJson: '{"Titanoboa":{"iridescence":{"strength":0.3,"mask":"everywhere","offset":[0.5,0]}}}',
+      infoOver: { inheritedIridescenceJson: '{"strength":0.5}' },
+    });
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Iridescence' }));
+    await waitFor(() => expect(rpc.callsTo('mods.setMaterials')).toHaveLength(1));
+    expect(sent(rpc)).toEqual({ Titanoboa: { iridescence: { strength: 0, mask: 'everywhere', offset: [0.5, 0] } } });
+  });
+
+  it('turning it off with no iridescence below removes the block', async () => {
+    const { rpc } = await setup({ materialsJson: '{"Titanoboa":{"iridescence":{"strength":0.3,"ramp":{"stops":["#3060ff"]}}}}' });
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Iridescence' }));
+    await waitFor(() => expect(rpc.callsTo('mods.setMaterials')).toHaveLength(1));
+    expect((rpc.callsTo('mods.setMaterials')[0].params as { materials: string | null }).materials).toBeNull();
   });
 
   it('Real iridescence saves a thin-film ramp and shows its 32 stops', async () => {
@@ -81,9 +108,9 @@ describe('MaterialEditor', () => {
   it('Import image picks a PNG and copies it in as the ramp', async () => {
     const { rpc, platform } = await setup({ materialsJson: '{"Titanoboa":{"iridescence":{"strength":0.3}}}' });
     rpc.on('mods.setMaterialFile', () => modDetail({ revision: 'r2', skins: skinsWith('{"Titanoboa":{"iridescence":{"strength":0.3,"ramp":"materials/blue/iridescence-ramp.png"}}}') }));
-    platform.files = ['C:\paint\ramp.png'];
+    platform.files = ['C:\\paint\\ramp.png'];
     await fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Ramp source' })).getByRole('radio', { name: 'Import image' }));
-    await waitFor(() => expect(rpc.callsTo('mods.setMaterialFile')[0]?.params).toMatchObject({ skin: 'blue', material: 'Titanoboa', part: 'ramp', png: 'C:\paint\ramp.png' }));
+    await waitFor(() => expect(rpc.callsTo('mods.setMaterialFile')[0]?.params).toMatchObject({ skin: 'blue', material: 'Titanoboa', part: 'ramp', png: 'C:\\paint\\ramp.png' }));
     expect(await screen.findByText('materials/blue/iridescence-ramp.png')).toBeInTheDocument();
   });
 
