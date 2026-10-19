@@ -148,7 +148,20 @@ public static class ModSharing
             throw new TyrantException(TyrantErrorCode.TargetNotFound, $"'{id}' is not in the game's mods folder.");
         var files = Directory.GetFiles(dir, "*", SearchOption.AllDirectories)
             .Select(f => new SourceFile(Path.GetRelativePath(dir, f).Replace('\\', '/'), () => File.OpenRead(f))).ToList();
-        return Unpack(ws, files, id, replace);
+        var imported = Unpack(ws, files, id, replace);
+        // The workspace now matches the game's copy: stamped as if installed, so a later in-game save shows on the game's side only.
+        if (imported.Mod.Id == id)
+        {
+            try
+            {
+                GameLooks.Stamp(install, id, dir);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                return imported with { Warnings = [.. imported.Warnings, $"The game's looks of '{id}' could not be recorded ({ex.Message}); later changes in the game may show as changed on both sides."] };
+            }
+        }
+        return imported;
     }
 
     private static ImportedMod Unpack(Workspace ws, List<SourceFile> files, string zipName, bool replace)

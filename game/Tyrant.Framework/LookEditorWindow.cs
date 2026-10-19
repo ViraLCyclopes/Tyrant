@@ -352,6 +352,7 @@ namespace Tyrant.Framework
         {
             if (_draft == null || _context == null || _target == null) return;
             var c = _context;
+            var target = _target; // NewDraft below picks the target again
             var current = Staged.Final(_draft.Current); // exports under their fixed names (iridescence-mask.png, fur-mask.png)
             // Never write what a load rejects: the block is read back as the loader reads it first (a species has no mask "from").
             var skinLevel = _target.Kind == SaveTargetKind.AnimalLooks || _target.Owner?.Kind != MaterialOwnerKind.Species;
@@ -428,7 +429,13 @@ namespace Tyrant.Framework
             if (_animal != null) MaterialsModule.Reapply(_animal, keywords: true); // the Nursery preview is not in the park's lists
             _draft.MarkSaved();
             NewDraft(); // from what was saved (images a mod adopted have their new place)
-            _message = "Saved to " + where + "." + (missing.Count == 0 ? "" : " Left out (missing): " + string.Join(", ", missing.Select(Path.GetFileName)) + ".");
+            // Vanilla Looks turned off (or broken) at the start is never loaded behind the player's back: the save does not show.
+            var vanillaOff = (target.Kind == SaveTargetKind.CreateVanillaLooks || target.ModId == ModCatalog.VanillaLooksId)
+                && MaterialsModule.Mods.All(m => m.Manifest.Id != ModCatalog.VanillaLooksId);
+            _message = (vanillaOff
+                    ? $"Saved into {VanillaLooks.Name}, but it is turned off or broken, so the look does not show (see the MelonLoader log)."
+                    : "Saved to " + where + ".")
+                + (missing.Count == 0 ? "" : " Left out (missing): " + string.Join(", ", missing.Select(Path.GetFileName)) + ".");
             FrameworkMod.Log.Msg($"Look of {c.MaterialName} ({_scope}) saved to {where}.");
             Rebuild();
         }

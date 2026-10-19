@@ -194,6 +194,25 @@ public class GameLooksTests
     }
 
     [Fact]
+    public void A_mod_copied_from_the_game_is_stamped_so_later_game_edits_show_on_the_game_side_only()
+    {
+        var (game, install, ws) = Setup();
+        using var _ = game;
+        // A mod made in the game (Vanilla Looks): only in the game's mods folder.
+        var installed = Installed(install, ModCatalog.VanillaLooksId);
+        Directory.CreateDirectory(installed);
+        File.WriteAllText(Path.Combine(installed, ModManifest.FileName), $"{{\"format\":1,\"id\":\"{ModCatalog.VanillaLooksId}\",\"name\":\"Vanilla Looks\"}}");
+        WriteMaterials(installed, Species, "0.5");
+
+        var copied = ModSharing.CopyFromGame(ws, install, ModCatalog.VanillaLooksId, replace: false).Mod;
+        Assert.Empty(GameLooks.Changes(install, copied));
+
+        WriteMaterials(installed, Species, "0.8"); // the in-game editor saves again
+
+        Assert.Equal([new LooksChange(Species, true, false)], GameLooks.Changes(install, copied));
+    }
+
+    [Fact]
     public void Bring_in_refuses_a_folder_that_is_not_a_material_folder()
     {
         var (game, install, ws) = Setup();

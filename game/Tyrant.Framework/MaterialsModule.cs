@@ -691,7 +691,9 @@ namespace Tyrant.Framework
             var skinData = members.SkinData?.GetValue(animal, null);
             var own = SkinsModule.TryGet(skinData, out var modId, out var entry, out var directory);
             var inherited = SkinsModule.TryGetInherited(skinData, out var baseModId, out var baseEntry, out var baseDirectory);
-            var skinName = own || skinData == null ? null : FieldOf(skinData, "skinName")?.GetValue(skinData) as string;
+            // The vanilla skin's name (a reflection read) only when a vanilla skin block or a live skin edit could use it.
+            var skinName = own || skinData == null || !(_table.CoversVanillaSkinsOf(species) || Live.HasSkins)
+                ? null : FieldOf(skinData, "skinName")?.GetValue(skinData) as string;
             // Most animals: nothing changes them. Said before the material is read or any result is built; a skin key is built
             // only while live skin edits exist, the id read only while live animal edits or saved looks exist.
             var covered = _table.CoversSpecies(species) || (own && _table.CoversSkin(modId, entry.Id)) || (inherited && _table.CoversSkin(baseModId, baseEntry.Id))
