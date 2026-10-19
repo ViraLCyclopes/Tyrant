@@ -135,7 +135,9 @@ files that changed; again after a game update).
   - **A skin:** rename it (its id stays, so saved animals keep it), pick a swatch, and for each sex replace a texture with your PNG (**Replace…**) or go back to the base skin's (**Use base**).
   - **Colours** sets the pattern colours of normal animals and the colours of albino, melanistic and leucistic ones, with a 2D preview of six random animals (approximate: no lighting). Pick one colour or a gradient, and a range or a **Fixed** value; **From base skin** leaves a field to the base skin, and **Exact colours** turns off the random tint.
   - **Material** (on a skin's page) sets how the animal's material looks, for the animal's own material (named at the top, for example *Material: Titanoboa*):
-    - **Iridescence** (tick to turn it on; unticked keeps the game's settings):
+    - **Iridescence** (tick to turn it on; unticked keeps the game's settings). It starts ticked when the skin's base skin
+      shimmers in the game (Microraptor's: its strength reads *game's, 25 %*), and unticking it then saves strength 0. On a
+      species page it starts unticked with *Game's (only some skins shimmer)*, since only some of a species' skins do:
       - **Strength**, and under **Per mutation** **Albino / Melanistic / Leucistic** (✕ = same as normal). Strength 0 turns the sheen off, even on species that have it in the game.
       - **Varies between animals**: 15 % by default; each animal's spread is stable and nothing is saved.
       - **Colours**: **Game's**, **Import image** (a ramp PNG), **Gradient** (up to 32 stops) or **Real iridescence (thin film)** with a **Film thickness** slider (starts at 420 nm).

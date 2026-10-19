@@ -280,10 +280,11 @@ Needs a data dump, an asset index and the game. Steps marked **(game)** start th
 124. Mod editor → a Titanoboa skin → **Material**: the card says *Material: Titanoboa*. Tick **Iridescence**, press
      **Real iridescence (thin film)** (420 nm), set **Varies between animals** to 15 %, **Where** → **Everywhere**: the 3D view above shimmers
      and turning the view changes the colours. A **Smoothness** override changes the preview's shine (it is a multiplier on the extra map's).
-125. **(game)** Install. A park with several of that skin: they shimmer, and two animals differ slightly. In the
-     vivarium the animal shimmers too, and `MelonLoader\Latest.log` has no "is not this animal's material" warning (the
-     vivarium prefab's material name may differ from the park's).
-126. **(game)** The Nursery hologram of that skin shows the shimmer.
+125. **(game)** Install. Titanoboa is a vivarium species (vivarium animals are species of their own): a vivarium with several
+     of that skin: they shimmer, two animals differ slightly, and `MelonLoader\Latest.log` has no "is not this animal's material"
+     warning (a vivarium prefab's material may be named differently). Then the same on a park species (a Carcharodontosaurus
+     skin with its own **Material**): several in a habitat shimmer and differ slightly.
+126. **(game)** The Nursery hologram of that park skin shows the shimmer.
 127. **(game)** `MelonLoader\Latest.log` has one line like `materials on Titanoboa (…)` for the skin.
 128. **(game)** A species-level shimmer: **+ Add** under **Species materials**, Titanoboa, strength 0.4, **Everywhere**: vanilla
      Titanoboa skins shimmer, and a skin with its own **Material** wins over it.
@@ -292,7 +293,18 @@ Needs a data dump, an asset index and the game. Steps marked **(game)** start th
 131. **(game)** Compare the app preview with the game for a **Smoothness** override (they are close, not identical).
 132. **(game)** Remove the mod from the game: every animal is vanilla and the park loads with no error.
 133. **(game)** A Microraptor species-level material with strength 0: no sheen on it in the game.
-134. Import a ramp image and a mask image (**Import image**): they appear as `materials/<skin>/iridescence-ramp.png` and
+134. Import a ramp image and a mask image (**Import image**): they appear as `materials/skins/<skin>/iridescence-ramp.png` and
      `iridescence-mask.png` in the mod folder; **Check** is clean. Choose **From a map channel** on a skin with no map of its own:
      Check reports an error, and **Edit a copy** fixes it.
 135. CLI: `tyrant mod materials <mod> <skin> --show` prints the JSON; `--clear` empties the card.
+136. **(game)** In the Nursery, pick the park skin with a **Material** (it shimmers), then cycle to a vanilla skin of the same
+     species: the next vanilla skin looks vanilla (no sheen, no changed shine, rim or fur left from the previous skin), and
+     cycling back shows the shimmer again.
+137. Share the mod with an imported ramp image (step 134): Mod → **Export for sharing…** with and without **Include the original
+     PNGs**, then Mods → **Add mod from zip…** with each zip in another workspace: the skin's 3D view shimmers with the
+     imported ramp, `materials/skins/<skin>/iridescence-ramp.png` is in the mod folder and **Check** is clean. **(game)** Unzip
+     one into the game folder: the animal shimmers with that ramp.
+138. Re-import a different ramp image on the same skin: the 3D view shows the new colours without reopening the mod.
+139. On the **Material** card of a skin based on Microraptor's vanilla skin, **Iridescence** is ticked as the game's
+     (strength *game's, 25 %*) and the 3D view shimmers with no mod strength; on a species page (**Species materials**) it is
+     unticked and says *Game's (only some skins shimmer)*.

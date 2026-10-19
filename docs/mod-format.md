@@ -160,9 +160,9 @@ species' material name (for example `Titanoboa`); any other name is an error. Ex
 
 | Key | Meaning |
 |---|---|
-| `iridescence.strength` | A number 0–1 for every animal, or an object with `normal` (required) and optionally `albino`, `melanistic`, `leucistic`. A mutation left out uses `normal`. `0` turns iridescence off, also on species that have it in vanilla. Leaving `iridescence` out keeps the game's settings. |
+| `iridescence.strength` | A number 0–1 for every animal, or an object with `normal` (required) and optionally `albino`, `melanistic`, `leucistic`. A mutation left out uses `normal`. `0` turns iridescence off, also on skins that have it in vanilla. Leaving `iridescence` out keeps the game's settings: only some vanilla skins shimmer (Microraptor's, for example), as their own skin data says. |
 | `iridescence.variation` | 0–1. How much strength differs between animals, as a fraction of the strength (0.15: each lands within ±15 %). Default `0.15` when `strength` is set. Each animal's offset comes from its ID, so it is stable across save and load and nothing is saved. An animal without an ID (the Nursery hologram) uses the set strength. |
-| `iridescence.ramp` | The colours, along the viewing angle: a PNG in the mod (`"materials/rainbow/iridescence-ramp.png"`), `{ "stops": ["#ff0000", …] }` (1 to 32 colours, evenly spaced) or `{ "thinFilm": { "thickness": 420, "index": 1.56 } }` (`thickness` 0–2000 nm, `index` 1–3, default 1.56). Left out: the game's ramp. |
+| `iridescence.ramp` | The colours, along the viewing angle: a PNG in the mod (`"materials/skins/rainbow/iridescence-ramp.png"`), `{ "stops": ["#ff0000", …] }` (1 to 32 colours, evenly spaced) or `{ "thinFilm": { "thickness": 420, "index": 1.56 } }` (`thickness` 0–2000 nm, `index` 1–3, default 1.56). Left out: the game's ramp. |
 | `iridescence.mask` | Where it shows: `"everywhere"`, a PNG in the mod, or `{ "from": "extra", "channel": "g", "invert": false }` (`from` is `extra`, `pattern` or `fur`; `channel` is `r`, `g`, `b` or `a`). Left out: the game's mask. |
 | `iridescence.tiling`, `iridescence.offset` | `[x, y]`, beside `mask`: repeat and shift the mask. |
 | `iridescence.scale`, `power`, `bias` | −10 to 10. Shape the strength across the viewing angle (edge falloff, falloff curve, brightness offset). |
@@ -173,7 +173,10 @@ species' material name (for example `Titanoboa`); any other name is an error. Ex
   its own, or its starting skin's. Otherwise Check reports an error (and in the game the whole body shimmers).
 - **Ramp PNGs** are never compressed, and slim installs keep them. **Mask PNGs** are cooked like other data maps.
 - Images imported in the app (**Import image**) or with `--ramp` / `--mask` are copied to
-  `materials/<skin or species>/iridescence-ramp.png` and `iridescence-mask.png`.
+  `materials/skins/<skin>/iridescence-ramp.png` and `iridescence-mask.png`, or `materials/species/<species>/…` for a species.
+- **Sharing** carries them: ramp PNGs always go in the zip; mask PNGs too, or inside `textures.tpack` when the export
+  leaves the PNGs out, and **Add mod from zip** brings them back. Removing a skin with its files sends its images to the
+  Recycle Bin.
 
 **Settings** (`settings`; numbers outside the range are errors, and a key not in this table is an error):
 
@@ -208,6 +211,8 @@ mods, the later mod in the load order wins a species' material block, and the Mo
 - The app's 3D preview approximates the game too. A `_Smoothness` override is previewed as a multiplier on the extra map's
   smoothness; check the real look in the game.
 - Nothing is written into parks or saves. Remove the mod and every animal is vanilla again.
+
+Materials need Tyrant Framework 0.2.0 or newer.
 
 ## Texture compression (`textures`)
 
