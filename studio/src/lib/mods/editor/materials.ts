@@ -36,9 +36,15 @@ export interface IridescenceModel {
 export interface MaterialModel {
   iridescence: IridescenceModel | null;
   settings: Record<string, number | string | number[]>;
-  /** Fur masks taken from files (mod-relative paths): the adult one and the baby one. */
-  fur?: { mask?: string; infantMask?: string };
+  /**
+   * Fur masks taken from files (mod-relative paths): the adult one and the baby one. `grow` true turns the game's fur on for
+   * skins without any; false says this level does not (over a lower one that does); left out, the levels below decide.
+   */
+  fur?: { mask?: string; infantMask?: string; grow?: boolean };
 }
+
+/** The fur length growing fur starts with when nothing gives the fur any (the shader's `_Length` runs 0 to 4). */
+export const START_FUR_LENGTH = 0.5;
 
 export const MAX_RAMP_STOPS = 32;
 export const DEFAULT_SHAPING = { scale: -0.25, power: -0.3, bias: 1.3 };
@@ -151,7 +157,10 @@ function readFur(value: unknown): MaterialModel['fur'] | null {
   const f = asObject(value);
   const mask = typeof f?.mask === 'string' && f.mask ? f.mask : undefined;
   const infantMask = typeof f?.infantMask === 'string' && f.infantMask ? f.infantMask : undefined;
-  return mask || infantMask ? { ...(mask ? { mask } : {}), ...(infantMask ? { infantMask } : {}) } : null;
+  const grow = typeof f?.grow === 'boolean' ? f.grow : undefined;
+  return mask || infantMask || grow !== undefined
+    ? { ...(mask ? { mask } : {}), ...(infantMask ? { infantMask } : {}), ...(grow !== undefined ? { grow } : {}) }
+    : null;
 }
 
 function readSettings(value: unknown): MaterialModel['settings'] {
@@ -168,7 +177,7 @@ function writeBlock(model: MaterialModel): Json | null {
   const block: Json = {};
   const iridescence = model.iridescence ? writeIridescence(model.iridescence) : null;
   if (iridescence) block.iridescence = iridescence;
-  if (model.fur && (model.fur.mask || model.fur.infantMask)) block.fur = { ...model.fur };
+  if (model.fur && (model.fur.mask || model.fur.infantMask || typeof model.fur.grow === 'boolean')) block.fur = { ...model.fur };
   if (Object.keys(model.settings).length) block.settings = { ...model.settings };
   return Object.keys(block).length ? block : null;
 }

@@ -40,6 +40,15 @@ describe('materials', () => {
     expect(parseMaterial('{"T":{"iridescence":{"strength":1}}}', 'T').iridescence?.mask).toEqual({ kind: 'game' });
   });
 
+  it('round-trips fur grow on its own, as false, and beside a mask', () => {
+    same({ fur: { grow: true } });
+    same({ fur: { grow: false } }); // false is kept: it overrides a lower layer that grows fur
+    same({ fur: { mask: 'materials/skins/blue/fur-mask.png', grow: true } });
+    expect(parseMaterial('{"T":{"fur":{"grow":true}}}', 'T').fur).toEqual({ grow: true });
+    expect(parseMaterial('{"T":{"fur":{"grow":"yes"}}}', 'T').fur).toBeUndefined();
+    expect(toMaterialsJson('T', { iridescence: null, settings: {}, fur: {} })).toBeNull();
+  });
+
   it('writes a per-variant strength that is the same for every variant as one number', () => {
     const model: MaterialModel = { iridescence: { ...emptyIridescence(), strength: { normal: 0.4, albino: 0.4, leucistic: 0.4 } }, settings: {} };
     expect(toMaterialsJson('T', model)).toBe('{"T":{"iridescence":{"strength":0.4}}}');

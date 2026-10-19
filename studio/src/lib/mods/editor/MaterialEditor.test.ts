@@ -195,6 +195,35 @@ describe('MaterialEditor', () => {
     expect(sent(rpc)).toEqual({ Titanoboa: { settings: { _DroopDirection: [0, -1, 0.25] } } });
   });
 
+  const furLength = (inherited: string | null) => ({
+    properties: [{ key: '_Length', group: 'Fur', label: 'Fur length', kind: 'number', min: 0, max: 4, inherited, source: inherited === null ? 'default' : 'game' }],
+  });
+
+  it('growing fur where nothing gives it length saves grow and a starting length', async () => {
+    const { rpc } = await setup({ infoOver: furLength('0') });
+    const grow = screen.getByRole('checkbox', { name: 'Grow fur on skins without fur' });
+    expect(grow).not.toBeChecked();
+    await fireEvent.click(grow);
+    await waitFor(() => expect(rpc.callsTo('mods.setMaterials')).toHaveLength(1));
+    expect(sent(rpc)).toEqual({ Titanoboa: { fur: { grow: true }, settings: { _Length: 0.5 } } });
+  });
+
+  it('growing fur keeps a length that is already there, and unticking removes grow', async () => {
+    const { rpc } = await setup({ infoOver: furLength('1') });
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Grow fur on skins without fur' }));
+    await waitFor(() => expect(rpc.callsTo('mods.setMaterials')).toHaveLength(1));
+    expect(sent(rpc)).toEqual({ Titanoboa: { fur: { grow: true } } });
+    await waitFor(() => expect(screen.getByRole('checkbox', { name: 'Grow fur on skins without fur' })).toBeChecked());
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Grow fur on skins without fur' }));
+    await waitFor(() => expect(rpc.callsTo('mods.setMaterials')).toHaveLength(2));
+    expect((rpc.callsTo('mods.setMaterials')[1].params as { materials: string | null }).materials).toBeNull();
+  });
+
+  it('a saved grow false shows unticked', async () => {
+    await setup({ materialsJson: '{"Titanoboa":{"fur":{"grow":false,"mask":"materials/skins/blue/fur-mask.png"}}}', infoOver: furLength('1') });
+    expect(screen.getByRole('checkbox', { name: 'Grow fur on skins without fur' })).not.toBeChecked();
+  });
+
   it('importing a fur mask calls setMaterialFile with part furMask', async () => {
     const { rpc, platform } = await setup({
       infoOver: { properties: [{ key: '_Length', group: 'Fur', label: 'Fur length', kind: 'number', min: 0, max: 4, inherited: '1', source: 'game' }] },

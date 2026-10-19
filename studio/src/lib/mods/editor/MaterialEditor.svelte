@@ -3,7 +3,7 @@
   import type { ModDetail, ModMaterialInfo, ModMaterialProperty, ModSkinDto } from '$lib/rpc/types.gen';
   import { getSession } from '$lib/stores/session.svelte';
   import IridescencePanel from './IridescencePanel.svelte';
-  import { cloneMaterial, parseIridescenceJson, parseMaterial, replaceMaterial, toMaterialsJson, type MaterialModel } from './materials';
+  import { cloneMaterial, parseIridescenceJson, parseMaterial, replaceMaterial, START_FUR_LENGTH, toMaterialsJson, type MaterialModel } from './materials';
   import type { ModDoc } from './modDoc.svelte';
 
   /**
@@ -126,6 +126,25 @@
     return doc.edit('mods.setMaterialFile', { ...target, material: name, part, png: null });
   }
 
+  /**
+   * Grow fur (fur.grow): on also sets a starting fur length when neither this level nor anything below gives the fur one, so it
+   * shows at once; off removes the key (the levels below decide again).
+   */
+  function setGrow(on: boolean) {
+    const below = info?.properties.find((p) => p.key === '_Length');
+    const inheritedLength = below ? inheritedOf(below) : null;
+    void edit((m) => {
+      const fur = { ...(m.fur ?? {}) };
+      if (on) fur.grow = true;
+      else delete fur.grow;
+      if (fur.mask || fur.infantMask || fur.grow !== undefined) m.fur = fur;
+      else delete m.fur;
+      const own = m.settings._Length;
+      const length = typeof own === 'number' ? own : typeof inheritedLength === 'number' ? inheritedLength : 0;
+      if (on && length <= 0) m.settings._Length = START_FUR_LENGTH;
+    }, true);
+  }
+
   function setComponent(p: ModMaterialProperty, n: number, text: string) {
     const count = countOf(p);
     const own = shown?.settings[p.key];
@@ -148,6 +167,13 @@
     {#each groups as [group, rows] (group)}
       <fieldset class="group">
         <legend>{group}</legend>
+        {#if group === 'Fur'}
+          <label class="grow">
+            <input type="checkbox" checked={shown.fur?.grow === true} onchange={(e) => setGrow(e.currentTarget.checked)} />
+            Grow fur on skins without fur
+          </label>
+          <p class="hint">Needs tessellated fur in the game's graphics settings. The preview here shows no fur; tune the look in game.</p>
+        {/if}
         {#each rows as p (p.key)}
           {@const own = shown.settings[p.key]}
           {@const below = inheritedOf(p)}
@@ -200,4 +226,5 @@
   .field input[type='number'] { width: 80px; }
   input[type='color'] { width: 28px; height: 24px; padding: 0; border: 1px solid var(--border); border-radius: 4px; background: none; }
   .x { padding: 0 4px; font-size: 10px; }
+  .grow { display: flex; align-items: center; gap: 6px; }
 </style>
