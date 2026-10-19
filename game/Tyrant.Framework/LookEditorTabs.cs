@@ -193,6 +193,13 @@ namespace Tyrant.Framework
         private static void FurRows()
         {
             var draft = _draft!;
+            // Grow fur: the game's fur on a skin it gives none (fur.grow), at any scope; on also gives a length when none shows.
+            var growing = LookEditing.GrowsFur(draft, _below);
+            Choices("Grow fur", new[]
+            {
+                Option("On", growing, true, () => SetGrow(true)),
+                Option("Off", !growing, true, () => SetGrow(false)),
+            });
             NumberRow("_Droopage", "Droop");
             var droop = Vector("_DroopDirection");
             var range = MaterialProperties.Find("_DroopDirection");
@@ -226,6 +233,20 @@ namespace Tyrant.Framework
             if (mask?.File != null) Cycler("Mask", Pngs(mask.File), mask.File, file => draft.SetFurMask(new MaskSource { File = file }, infant: false));
             Note("Export mask PNG writes the fur mask the animal shows now as fur-mask.png.");
         }
+
+        private static void SetGrow(bool on)
+        {
+            if (_draft == null || LookEditing.GrowsFur(_draft, _below) == on) return;
+            LookEditing.SetFurGrow(_draft, _below, MaterialFloat("_Length"), on);
+            _message = ""; // the status line can say when the game draws no fur
+            Changed(rebuild: true); // the shader variant changes: Changed re-picks the keywords
+        }
+
+        /// <summary>A note for the status line while this look grows fur and the game draws none (its Fur graphics setting); "" otherwise.</summary>
+        private static string FurNote() =>
+            _draft != null && LookEditing.GrowsFur(_draft, _below) && MaterialsModule.TessellationOn == false
+                ? " Grown fur needs tessellated fur in the game's graphics settings."
+                : "";
 
         private static void NumberRow(string key, string label)
         {

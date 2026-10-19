@@ -50,7 +50,7 @@ namespace Tyrant.Framework
         private static LookDraft? _draft;
         private static SaveTarget? _target;
         private static MaterialOverride? _below;
-        private static bool? _lastOn;
+        private static bool? _lastOn, _lastGrow;
         private static List<object> _matching = new List<object>();
         private static readonly IridescenceSwitch Switch = new IridescenceSwitch();
 
@@ -302,6 +302,7 @@ namespace Tyrant.Framework
             var c = _context;
             _draft = new LookDraft(_scope, SavedBlock(c));
             _lastOn = OwnOn();
+            _lastGrow = _draft.Current.Fur?.Grow;
             try
             {
                 _target = SaveTargets.For(_scope, c.Species, c.ModSkin, c.VanillaSkinKey, c.CustomSpeciesModId != null, c.CustomSpeciesModId, MaterialsModule.Table, c.MaterialName);
@@ -346,8 +347,10 @@ namespace Tyrant.Framework
         {
             if (_draft == null || _context == null) return;
             var on = OwnOn();
-            var keywords = on != _lastOn; // the shader variant changes only when iridescence turns on or off
+            var grow = _draft.Current.Fur?.Grow;
+            var keywords = on != _lastOn || grow != _lastGrow; // the shader variant changes only when iridescence or grown fur turns on or off
             _lastOn = on;
+            _lastGrow = grow;
             PushLive(keywords);
             if (rebuild) Rebuild();
             else Footer();

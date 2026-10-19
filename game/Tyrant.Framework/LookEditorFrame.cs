@@ -334,7 +334,7 @@ namespace Tyrant.Framework
             var editing = _draft != null && _animal != null;
             var dirty = _draft?.IsDirty == true;
             var why = editing ? EditorScopes.WhyNot(_entry, LookScope.Animal, _context, LookEditorModule.SaveName) : null; // "This animal" is off
-            SetText(_status.transform, _message.Length > 0 ? _message : editing ? "Saves to " + TargetName() + "." + (why == null ? "" : " " + why) : "");
+            SetText(_status.transform, _message.Length > 0 ? _message : editing ? "Saves to " + TargetName() + "." + (why == null ? "" : " " + why) + FurNote() : "");
             SetText(_save.Label.transform, dirty ? "Save *" : "Save");
             SetInteractable(_save.Button.GetComponent(Button!), dirty && _target != null);
             SetInteractable(_reset.Button.GetComponent(Button!), dirty);
