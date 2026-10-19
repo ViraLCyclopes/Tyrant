@@ -471,6 +471,29 @@ namespace Tyrant.Framework
             }
         }
 
+        /// <summary>
+        /// A VirtualAnimal (incubating, held, being placed) as <see cref="Describe"/> keys a placed one: its BaseAnimalData's
+        /// speciesID, the skin key of its skinsData[skinIdx] (a mod skin's, else the vanilla skin's), its sex, its UniqueID and
+        /// OwnName; null when the species cannot be read.
+        /// </summary>
+        public static (string Species, string? SkinKey, string? Sex, ulong Id, string? Name)? DescribeVirtual(object virtualAnimal)
+        {
+            if (virtualAnimal == null) return null;
+            var data = FieldOf(virtualAnimal, "OwnAD")?.GetValue(virtualAnimal);
+            if (data == null || !(FieldOf(data, "speciesID")?.GetValue(data) is string species)) return null;
+            var skins = FieldOf(data, "skinsData")?.GetValue(data) as IList;
+            var index = FieldOf(virtualAnimal, "skinIdx")?.GetValue(virtualAnimal) is int i ? i : -1;
+            var skinData = skins != null && index >= 0 && index < skins.Count ? skins[index] : null;
+            var skinKey = SkinsModule.TryGet(skinData, out var modId, out var entry, out _) ? modId + "/" + entry.Id : VanillaKeyOf(skinData, species);
+            var sex = FieldOf(virtualAnimal, "Sex")?.GetValue(virtualAnimal) is Enum s ? (s.ToString() == "Male" ? "male" : "female") : null;
+            var type = virtualAnimal.GetType();
+            if (!VirtualIdOf.TryGetValue(type, out var idProperty)) VirtualIdOf[type] = idProperty = AccessTools.Property(type, "UniqueID");
+            var id = idProperty?.GetValue(virtualAnimal, null) is ulong unique ? unique : 0UL;
+            return (species, skinKey, sex, id, FieldOf(virtualAnimal, "OwnName")?.GetValue(virtualAnimal) as string);
+        }
+
+        private static readonly Dictionary<Type, PropertyInfo?> VirtualIdOf = new Dictionary<Type, PropertyInfo?>();
+
         /// <summary>The animal's species, skin, variant, id, material and the skin's source; null when it has no species or material.</summary>
         public static AnimalContext? Describe(object animal)
         {

@@ -95,6 +95,7 @@ namespace Tyrant.Framework
             HeadRigModule.Start(plan.Mods, HarmonyInstance);
             MaterialsModule.Start(plan.Mods);
             MaterialsModule.Patch(HarmonyInstance); // always: the in-game editor works on animals no mod covers
+            LookEditorModule.Patch(HarmonyInstance); // the placement hook for looks bound to an incubating animal
             LookEditorModule.Start();
             SoundsModule.Start(plan.Mods, HarmonyInstance);
             if (Replacements.Count > 0 || CodeMods.Count > 0 || SkinsModule.HasSkins || ModelModule.HasModels) AnimalTexturePatch.Apply(HarmonyInstance);

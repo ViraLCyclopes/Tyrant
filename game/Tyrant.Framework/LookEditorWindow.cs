@@ -340,13 +340,26 @@ namespace Tyrant.Framework
         /// <summary>"This animal" in the Nursery: the look for the next animal created from the preview (<see cref="LookEditorModule.Pending"/>).</summary>
         private static bool NextCreated => _entry == EditorEntry.Nursery && _scope == LookScope.Animal;
 
-        /// <summary>The look kept for the next animal (Next created) went to an animal just created: a clean draft of it starts again.</summary>
-        public static void PendingTaken(AnimalContext taken)
+        /// <summary>
+        /// The look armed for the next animal (Next created) was bound to an incubation just started. A clean draft of the same
+        /// species, skin and sex starts again (nothing is armed now); a draft with unsaved changes stays, and the status line says
+        /// its starting point is no longer waiting.
+        /// </summary>
+        public static void PendingTaken(string species, string? skinKey, string? sex, string? name)
         {
-            if (!IsOpen || !NextCreated || _draft == null || _context == null || _draft.IsDirty) return;
-            if (_context.Species != taken.Species || !string.Equals(_context.SkinKey, taken.SkinKey, StringComparison.OrdinalIgnoreCase)) return;
+            if (!IsOpen || !NextCreated || _draft == null || _context == null) return;
+            if (_context.Species != species || !string.Equals(_context.SkinKey, skinKey, StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(_context.Sex, sex, StringComparison.Ordinal))
+                return;
+            var bound = EditorScopes.BoundTo(name, species);
+            if (_draft.IsDirty)
+            {
+                _message = bound + " Your changes here are not armed for the next one until you Save them.";
+                Footer();
+                return;
+            }
             NewDraft();
-            _message = $"The new {taken.Species} has the look; Save again to give the next one a look too.";
+            _message = bound;
             Rebuild();
         }
 
@@ -591,7 +604,7 @@ namespace Tyrant.Framework
             if (folder == null)
             {
                 _message = NextCreated
-                    ? "Export mask PNG needs a placed animal: Save, create the animal, then export from its own panel."
+                    ? "Export mask PNG needs a placed animal: Save, incubate and place the animal, then export from its own panel."
                     : "There is nowhere to export this look's mask.";
                 Footer();
                 return;
@@ -662,7 +675,7 @@ namespace Tyrant.Framework
         private static string TargetName()
         {
             if (_target == null) return "nowhere";
-            if (NextCreated && _context != null) return $"the next {_context.Species} you create";
+            if (NextCreated && _context != null) return $"the next {_context.Species} you incubate";
             switch (_target.Kind)
             {
                 case SaveTargetKind.AnimalLooks:
