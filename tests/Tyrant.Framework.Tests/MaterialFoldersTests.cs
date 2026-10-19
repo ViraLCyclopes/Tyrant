@@ -195,6 +195,76 @@ public class MaterialFoldersTests
         Assert.Contains("\"infantMask\": \"baby.png\"", File.ReadAllText(Path.Combine(dir, "materials", "skins", "sk-b", "materials.json")));
     }
 
+    [Fact]
+    public void Save_leaves_files_that_Load_did_not_read()
+    {
+        var dir = TempDir();
+        WriteFile(dir, "materials/skins/bad/materials.json", """{"format":1,"materials":{"Titanoboa":{"settings":{"_Nope":1}}}}""");
+        WriteFile(dir, "materials/skins/gone/materials.json", """{"format":1,"materials":{"Titanoboa":{"settings":{"_Smoothness":0.5}}}}""");
+        WriteFile(dir, "materials/skins/good/materials.json", """{"format":1,"materials":{"Titanoboa":{"settings":{"_Smoothness":0.5}}}}""");
+        WriteFile(dir, "materials/species/a/materials.json", """{"format":1,"species":"Titanoboa","materials":{"M":{"settings":{"_Smoothness":0.5}}}}""");
+        WriteFile(dir, "materials/species/b/materials.json", """{"format":1,"species":"titanoboa","materials":{"M":{"settings":{"_Smoothness":0.9}}}}""");
+        var manifest = ModManifest.Parse(SkinsJson("bad", "good"));
+        var problems = new List<string>();
+        MaterialFolders.Load(manifest, dir, problems);
+
+        Assert.Contains("materials/species/b/materials.json", Assert.Single(problems, p => p.Contains("species/b")));
+        Assert.Equal(0.5f, manifest.SpeciesMaterials["Titanoboa"]["M"].Settings["_Smoothness"].Number);
+        manifest.Skins[1].Materials = null; // emptied after Load read it: this one goes
+
+        MaterialFolders.Save(manifest, dir);
+
+        Assert.True(File.Exists(Path.Combine(dir, "materials", "skins", "bad", "materials.json")));
+        Assert.True(File.Exists(Path.Combine(dir, "materials", "skins", "gone", "materials.json"))); // no such skin: not Load's
+        Assert.True(File.Exists(Path.Combine(dir, "materials", "species", "b", "materials.json")));
+        Assert.False(Directory.Exists(Path.Combine(dir, "materials", "skins", "good")));
+    }
+
+    [Theory]
+    [InlineData("Titanoboa")]
+    [InlineData("Titanoboa/")]
+    [InlineData("/Skin")]
+    public void A_malformed_vanilla_skin_key_is_refused(string key)
+    {
+        var manifest = ModManifest.Parse(SkinsJson("rainbow"));
+        manifest.VanillaSkinMaterials[key] = new Dictionary<string, MaterialOverride> { ["M"] = Block() };
+
+        var ex = Assert.Throws<ManifestException>(() => MaterialFolders.Save(manifest, TempDir()));
+        Assert.Contains(key, ex.Message);
+    }
+
+    [Fact]
+    public void Vanilla_skins_that_sanitize_alike_get_their_own_folders()
+    {
+        var dir = TempDir();
+        var saved = ModManifest.Parse(SkinsJson("rainbow"));
+        saved.VanillaSkinMaterials["T/Alt 1/2"] = new Dictionary<string, MaterialOverride> { ["M"] = Block() };
+        saved.VanillaSkinMaterials["T/Alt 1_2"] = new Dictionary<string, MaterialOverride> { ["M"] = SpeciesBlock() };
+
+        MaterialFolders.Save(saved, dir);
+        var loaded = ModManifest.Parse(SkinsJson("rainbow"));
+        var problems = new List<string>();
+        MaterialFolders.Load(loaded, dir, problems);
+
+        Assert.Empty(problems);
+        Assert.Equal(2, loaded.VanillaSkinMaterials.Count);
+        AssertBlock(loaded.VanillaSkinMaterials["T/Alt 1/2"]["M"]);
+        Assert.NotNull(loaded.VanillaSkinMaterials["T/Alt 1_2"]["M"].Iridescence!.Mask!.File);
+        Assert.Equal(2, MaterialFolders.Files(loaded).Count(f => f.EndsWith("materials.json")));
+    }
+
+    [Fact]
+    public void Atomic_writes_replace_and_leave_no_temp_file()
+    {
+        var path = Path.Combine(TempDir(), "x.json");
+
+        AtomicFile.Write(path, "one");
+        AtomicFile.Write(path, "two");
+
+        Assert.Equal("two", File.ReadAllText(path));
+        Assert.False(File.Exists(path + ".tmp"));
+    }
+
     [Theory]
     [InlineData("0.5", true)]
     [InlineData("3", false)]

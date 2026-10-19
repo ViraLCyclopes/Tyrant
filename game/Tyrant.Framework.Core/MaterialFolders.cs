@@ -51,6 +51,8 @@ namespace Tyrant.Framework.Core
         /// <summary>Reads every materials.json into the manifest; a bad file adds one problem and is skipped, the rest still load.</summary>
         public static void Load(ModManifest manifest, string modDir, List<string> problems)
         {
+            var loaded = Loaded.GetOrCreateValue(manifest);
+            loaded.Clear();
             manifest.SpeciesMaterials.Clear();
             manifest.VanillaSkinMaterials.Clear();
             foreach (var skin in manifest.Skins) skin.Materials = null;
@@ -59,19 +61,22 @@ namespace Tyrant.Framework.Core
             {
                 var skin = manifest.Skins.FirstOrDefault(s => s.Id == folder.Name);
                 if (skin == null) continue; // a folder for a skin this mod does not have
-                Read(folder, problems, map => skin.Materials = Materials(map, $"Skin \"{skin.Id}\"", true));
+                Read(folder, problems, loaded, map => skin.Materials = Materials(map, $"Skin \"{skin.Id}\"", true));
             }
             foreach (var folder in Folders(modDir, SpeciesFolder))
-                Read(folder, problems, map =>
+                Read(folder, problems, loaded, map =>
                 {
                     var species = Identity(map, "species", "a \"species\"");
+                    if (manifest.SpeciesMaterials.ContainsKey(species)) throw new ManifestException($"Species \"{species}\" is already defined by another folder.");
                     if (Materials(map, $"Species \"{species}\"", false) is { } materials) manifest.SpeciesMaterials[species] = materials;
                 });
             foreach (var folder in Folders(modDir, VanillaFolder))
-                Read(folder, problems, map =>
+                Read(folder, problems, loaded, map =>
                 {
                     var species = Identity(map, "species", "a \"species\"");
                     var skin = Identity(map, "skin", "a \"skin\" (the name of the vanilla skin)");
+                    if (manifest.VanillaSkinMaterials.ContainsKey(species + "/" + skin))
+                        throw new ManifestException($"Vanilla skin \"{species}/{skin}\" is already defined by another folder.");
                     if (Materials(map, $"Vanilla skin \"{species}/{skin}\"", true) is { } materials) manifest.VanillaSkinMaterials[species + "/" + skin] = materials;
                 });
         }
@@ -83,10 +88,11 @@ namespace Tyrant.Framework.Core
         public static void Save(ModManifest manifest, string modDir)
         {
             var kept = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var (owner, materials) in Owners(manifest))
+            var loaded = Loaded.GetOrCreateValue(manifest);
+            foreach (var (owner, materials, folder) in Owners(manifest))
             {
-                var folder = FolderOf(owner);
                 kept.Add(folder);
+                loaded.Add(folder);
                 var map = new Dictionary<string, object?> { ["format"] = Format };
                 if (owner.Kind != MaterialOwnerKind.Skin) map["species"] = owner.Species;
                 if (owner.Kind == MaterialOwnerKind.VanillaSkin) map["skin"] = owner.SkinName;
@@ -99,7 +105,7 @@ namespace Tyrant.Framework.Core
             {
                 foreach (var folder in Folders(modDir, root))
                 {
-                    if (kept.Contains(folder.Relative)) continue;
+                    if (kept.Contains(folder.Relative) || !loaded.Contains(folder.Relative)) continue; // only what Load read or Save wrote
                     var file = Path.Combine(folder.Directory, FileName);
                     if (File.Exists(file)) File.Delete(file);
                     DeleteIfEmpty(folder.Directory);
@@ -113,9 +119,9 @@ namespace Tyrant.Framework.Core
         public static IEnumerable<string> Files(ModManifest manifest)
         {
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var (owner, materials) in Owners(manifest))
+            foreach (var (_, materials, folder) in Owners(manifest))
             {
-                var file = FolderOf(owner) + "/" + FileName;
+                var file = folder + "/" + FileName;
                 if (seen.Add(file)) yield return file;
                 foreach (var image in materials.Values.SelectMany(Images))
                 {
@@ -133,18 +139,41 @@ namespace Tyrant.Framework.Core
             if (material.Fur?.InfantMask?.File is string infant) yield return infant;
         }
 
-        private static IEnumerable<(MaterialOwner Owner, Dictionary<string, MaterialOverride> Materials)> Owners(ModManifest manifest)
+        // The folders each manifest's Load read (or Save wrote): Save deletes only those, never a file it did not understand.
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<ModManifest, HashSet<string>> Loaded =
+            new System.Runtime.CompilerServices.ConditionalWeakTable<ModManifest, HashSet<string>>();
+
+        /// <summary>Every owner with materials and its folder; names that sanitize alike get "-2", "-3" (the identity is in the file).</summary>
+        private static IEnumerable<(MaterialOwner Owner, Dictionary<string, MaterialOverride> Materials, string Folder)> Owners(ModManifest manifest)
         {
+            var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            string Unique(MaterialOwner owner)
+            {
+                var folder = FolderOf(owner);
+                var candidate = folder;
+                for (var n = 2; !used.Add(candidate); n++) candidate = folder + "-" + n;
+                return candidate;
+            }
             foreach (var skin in manifest.Skins)
                 if (skin.Materials is { Count: > 0 } skinMaterials)
-                    yield return (new MaterialOwner(MaterialOwnerKind.Skin, skin.Id, null, null), skinMaterials);
+                {
+                    var owner = new MaterialOwner(MaterialOwnerKind.Skin, skin.Id, null, null);
+                    yield return (owner, skinMaterials, Unique(owner));
+                }
             foreach (var pair in manifest.SpeciesMaterials.OrderBy(p => p.Key, StringComparer.Ordinal))
-                if (pair.Value.Count > 0) yield return (new MaterialOwner(MaterialOwnerKind.Species, null, pair.Key, null), pair.Value);
+                if (pair.Value.Count > 0)
+                {
+                    var owner = new MaterialOwner(MaterialOwnerKind.Species, null, pair.Key, null);
+                    yield return (owner, pair.Value, Unique(owner));
+                }
             foreach (var pair in manifest.VanillaSkinMaterials.OrderBy(p => p.Key, StringComparer.Ordinal))
             {
+                if (pair.Value.Count == 0) continue;
                 var slash = pair.Key.IndexOf('/');
-                if (pair.Value.Count == 0 || slash <= 0) continue; // empty, or not "<species>/<skin>"
-                yield return (new MaterialOwner(MaterialOwnerKind.VanillaSkin, null, pair.Key.Substring(0, slash), pair.Key.Substring(slash + 1)), pair.Value);
+                if (slash <= 0 || slash == pair.Key.Length - 1)
+                    throw new ManifestException($"Vanilla skin materials \"{pair.Key}\": the key must be \"<species>/<skin>\".");
+                var owner = new MaterialOwner(MaterialOwnerKind.VanillaSkin, null, pair.Key.Substring(0, slash), pair.Key.Substring(slash + 1));
+                yield return (owner, pair.Value, Unique(owner));
             }
         }
 
@@ -171,7 +200,7 @@ namespace Tyrant.Framework.Core
             if (Directory.Exists(directory) && !Directory.EnumerateFileSystemEntries(directory).Any()) Directory.Delete(directory);
         }
 
-        private static void Read(OwnerFolder folder, List<string> problems, Action<Dictionary<string, object?>> apply)
+        private static void Read(OwnerFolder folder, List<string> problems, HashSet<string> loaded, Action<Dictionary<string, object?>> apply)
         {
             var file = Path.Combine(folder.Directory, FileName);
             if (!File.Exists(file)) return;
@@ -190,6 +219,7 @@ namespace Tyrant.Framework.Core
                 if (!(root is Dictionary<string, object?> map)) throw new ManifestException("It must be a JSON object.");
                 if (!(map.TryGetValue("format", out var format) && format is double f && f == Format)) throw new ManifestException($"\"format\" must be {Format}.");
                 apply(map);
+                loaded.Add(folder.Relative);
             }
             catch (ManifestException ex)
             {
