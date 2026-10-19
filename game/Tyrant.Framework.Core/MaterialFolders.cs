@@ -40,6 +40,10 @@ namespace Tyrant.Framework.Core
             _ => VanillaFolder + "/" + Sanitize(owner.Species + "-" + owner.SkinName),
         };
 
+        /// <summary>True for a file in the mod's own materials/ folder (an image saved in game may be newer than the mod's cooked copy).</summary>
+        public static bool IsMaterialImage(string path, string modDir) =>
+            ModPaths.IsInside(path, Path.Combine(modDir, Root));
+
         /// <summary>A name as one path segment: characters a file name cannot hold (and '/') become '_', then trailing '.' and spaces go.</summary>
         public static string Sanitize(string segment)
         {

@@ -276,6 +276,17 @@ public class MaterialFoldersTests
     [InlineData("[0, 0]", false)]
     public void Droop_direction_is_known(string value, bool accepted) => AssertSetting("_DroopDirection", value, accepted);
 
+    [Fact]
+    public void Material_images_are_the_files_under_the_mods_materials_folder()
+    {
+        var mod = Path.Combine(Path.GetTempPath(), "tyrant-tests", "mod-a");
+        Assert.True(MaterialFolders.IsMaterialImage(Path.Combine(mod, "materials", "skins", "a", "fur-mask.png"), mod));
+        Assert.True(MaterialFolders.IsMaterialImage(Path.Combine(mod, "Materials", "species", "T", "m.png"), mod));
+        Assert.False(MaterialFolders.IsMaterialImage(Path.Combine(mod, "textures", "materials", "m.png"), mod));
+        Assert.False(MaterialFolders.IsMaterialImage(Path.Combine(mod, "materials.png"), mod));
+        Assert.False(MaterialFolders.IsMaterialImage(Path.Combine(Path.GetTempPath(), "tyrant-tests", "mod-b", "materials", "m.png"), mod));
+    }
+
     private static void AssertSetting(string key, string value, bool accepted)
     {
         var dir = TempDir();

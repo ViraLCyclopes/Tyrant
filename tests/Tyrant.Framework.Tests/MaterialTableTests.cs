@@ -221,6 +221,80 @@ public class MaterialTableTests
         Assert.Equal(0, allocated);
     }
 
+    private static MaterialOverride Smooth(float value) => new() { Settings = { ["_Smoothness"] = MaterialValue.OfNumber(value) } };
+
+    [Fact]
+    public void Merge_order_puts_the_animal_layer_first()
+    {
+        // live animal > saved animal > live skin > table skin > base skin > live species > table species
+        var layers = Enumerable.Range(0, 7).Select(i => Smooth(i)).ToArray<MaterialOverride?>();
+        layers[6]!.Settings["_Length"] = MaterialValue.OfNumber(2);
+        for (var top = 0; top < 7; top++)
+        {
+            var merged = MaterialTable.MergeLayers(layers[0], layers[1], layers[2], layers[3], layers[4], layers[5], layers[6])!;
+            Assert.Equal(top, merged.Settings["_Smoothness"].Number);
+            Assert.Equal(2f, merged.Settings["_Length"].Number); // the lower layers still fill what the top one leaves out
+            layers[top] = null;
+        }
+        Assert.Null(MaterialTable.MergeLayers(null, null, null, null, null, null, null));
+    }
+
+    [Fact]
+    public void Merging_no_layers_allocates_nothing()
+    {
+        MaterialTable.MergeLayers(null, null, null, null, null, null, null);
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        var merged = MaterialTable.MergeLayers(null, null, null, null, null, null, null);
+        Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
+        Assert.Null(merged);
+    }
+
+    [Fact]
+    public void Block_is_one_owners_own_entry_and_blocks_lists_them_all()
+    {
+        var a = Mod("mod-a", "{\"format\":1,\"id\":\"mod-a\",\"skins\":[" + Skin("mine") + "]}",
+            SpeciesFile("Titanoboa", """{"Titanoboa":{"settings":{"_Smoothness":0.2}}}"""),
+            SkinFile("mine", """{"Titanoboa":{"settings":{"_Smoothness":0.4}}}"""),
+            VanillaFile("Titanoboa", "Skin A", """{"Titanoboa":{"settings":{"_Smoothness":0.6}}}"""));
+        var table = MaterialTable.Build([a], out _);
+
+        Assert.Equal(0.2f, table.Block(MaterialOwnerKind.Species, "Titanoboa", "Titanoboa")!.Settings["_Smoothness"].Number);
+        Assert.Equal(0.4f, table.Block(MaterialOwnerKind.Skin, "mod-a/mine", "Titanoboa")!.Settings["_Smoothness"].Number);
+        Assert.Equal(0.6f, table.Block(MaterialOwnerKind.VanillaSkin, "titanoboa/skin a", "Titanoboa")!.Settings["_Smoothness"].Number);
+        Assert.Null(table.Block(MaterialOwnerKind.Skin, null, "Titanoboa"));
+        Assert.Null(table.Block(MaterialOwnerKind.Species, "Titanoboa", "Other"));
+        Assert.Equal(3, table.Blocks.Count());
+        Assert.True(table.CoversVanillaSkinsOf("Titanoboa"));
+        Assert.True(table.CoversVanillaSkinsOf("TITANOBOA"));
+        Assert.False(table.CoversVanillaSkinsOf("Other"));
+        Assert.False(table.CoversVanillaSkinsOf(null));
+    }
+
+    [Fact]
+    public void With_full_paths_resolves_relative_files_against_a_folder_and_keeps_the_input()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "tyrant-tests", "looks");
+        var absolute = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "elsewhere", "m.png"));
+        var block = new MaterialOverride
+        {
+            Iridescence = new IridescenceSettings { Ramp = new RampSource { File = "Masks/r.png" }, Mask = new MaskSource { File = absolute }, Scale = 1 },
+            Fur = new FurMasks { InfantMask = new MaskSource { File = "f.png" } },
+            Settings = { ["_Length"] = MaterialValue.OfNumber(1) },
+        };
+
+        var copy = MaterialTable.WithFullPaths(block, folder);
+
+        Assert.Equal(Path.GetFullPath(Path.Combine(folder, "Masks/r.png")), copy.Iridescence!.Ramp!.File);
+        Assert.Equal(absolute, copy.Iridescence.Mask!.File);
+        Assert.Equal(Path.GetFullPath(Path.Combine(folder, "f.png")), copy.Fur!.InfantMask!.File);
+        Assert.Equal(1f, copy.Iridescence.Scale);
+        Assert.Equal(1f, copy.Settings["_Length"].Number);
+        Assert.Equal("Masks/r.png", block.Iridescence.Ramp.File);
+        Assert.NotSame(block.Iridescence, copy.Iridescence);
+        var bad = new MaterialOverride { Fur = new FurMasks { Mask = new MaskSource { File = "a\0b.png" } }, Settings = { ["_Length"] = MaterialValue.OfNumber(1) } };
+        Assert.Null(MaterialTable.WithFullPaths(bad, folder).Fur); // not a path: that mask is dropped, the rest stays
+    }
+
     [Fact]
     public void The_table_says_which_species_and_skins_it_covers_before_any_material_is_read()
     {

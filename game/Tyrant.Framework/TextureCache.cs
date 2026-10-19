@@ -15,20 +15,29 @@ namespace Tyrant.Framework
         {
             var key = replacement.FilePath + "|" + kind;
             if (Cache.TryGetValue(key, out var cached)) return cached;
-            Texture2D? texture = null;
-            try
-            {
-                texture = Build(replacement, kind);
-            }
-            catch (Exception ex)
-            {
-                FrameworkMod.Log.Error($"{replacement.ModId}: {Path.GetFileName(replacement.FilePath)} could not be loaded ({ex.Message}); {replacement.Texture} stays vanilla.");
-            }
+            var texture = Load(replacement, kind, looseFirst: false);
             Cache[key] = texture; // a failure is remembered too, so it is reported once
             return texture;
         }
 
-        private static Texture2D? Build(Replacement replacement, SlotKind kind)
+        /// <summary>
+        /// Builds the texture without caching it: the caller owns (and destroys) it. With <paramref name="looseFirst"/> a PNG on
+        /// disk wins over the cooked pack entry: an image saved in game is newer than the mod's cooked copy.
+        /// </summary>
+        public static Texture2D? Load(Replacement replacement, SlotKind kind, bool looseFirst)
+        {
+            try
+            {
+                return Build(replacement, kind, looseFirst);
+            }
+            catch (Exception ex)
+            {
+                FrameworkMod.Log.Error($"{replacement.ModId}: {Path.GetFileName(replacement.FilePath)} could not be loaded ({ex.Message}); {replacement.Texture} stays vanilla.");
+                return null;
+            }
+        }
+
+        private static Texture2D? Build(Replacement replacement, SlotKind kind, bool looseFirst)
         {
             var file = Path.GetFileName(replacement.FilePath);
             if (!File.Exists(replacement.FilePath))
@@ -40,7 +49,7 @@ namespace Tyrant.Framework
                 return null;
             }
 
-            var cooked = TexturePacks.Load(replacement, kind);
+            var cooked = looseFirst ? null : TexturePacks.Load(replacement, kind);
             if (cooked != null) return cooked;
 
             // Not cooked: decode the PNG straight into a texture and work on Unity's own buffer (no managed pixel copies).

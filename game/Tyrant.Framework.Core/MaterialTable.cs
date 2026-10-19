@@ -38,11 +38,23 @@ namespace Tyrant.Framework.Core
         private readonly Dictionary<string, Dictionary<string, MaterialOverride>> _vanilla = new Dictionary<string, Dictionary<string, MaterialOverride>>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, MaterialBlockOwner> _owners = new Dictionary<string, MaterialBlockOwner>(StringComparer.Ordinal);
         private readonly HashSet<(string ModId, string SkinId)> _skinIds = new HashSet<(string, string)>();
+        private readonly HashSet<string> _vanillaSpecies = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         public bool HasAny => _species.Count > 0 || _skins.Count > 0 || _vanilla.Count > 0;
 
         /// <summary>True when a mod sets materials for this vanilla skin ("&lt;species&gt;/&lt;skin name&gt;").</summary>
         public bool CoversVanillaSkin(string key) => _vanilla.ContainsKey(key);
+
+        /// <summary>True when a mod sets materials for any vanilla skin of this species; cheap, before a vanilla key is built.</summary>
+        public bool CoversVanillaSkinsOf(string? speciesId) => speciesId != null && _vanillaSpecies.Contains(speciesId);
+
+        /// <summary>One owner's own entry for a material (no merging); null when it has none.</summary>
+        public MaterialOverride? Block(MaterialOwnerKind kind, string? key, string materialName) =>
+            Find(kind == MaterialOwnerKind.Skin ? _skins : kind == MaterialOwnerKind.Species ? _species : _vanilla, key, materialName);
+
+        /// <summary>Every entry the table holds (the table's own copies), e.g. to tell which ramps and masks are still in use.</summary>
+        public IEnumerable<MaterialOverride> Blocks =>
+            _species.Values.Concat(_skins.Values).Concat(_vanilla.Values).SelectMany(materials => materials.Values);
 
         /// <summary>The mod whose block for this material currently wins (key: a skin's key, a species id or "&lt;species&gt;/&lt;skin name&gt;"); null when none.</summary>
         public MaterialBlockOwner? OwnerOf(MaterialOwnerKind kind, string key, string materialName) =>
@@ -77,6 +89,11 @@ namespace Tyrant.Framework.Core
                     table._skinIds.Add((id, skin.Id));
                     foreach (var material in copies.Keys) table._owners[OwnerKey(MaterialOwnerKind.Skin, key, material)] = new MaterialBlockOwner(id, mod.Directory);
                 }
+            }
+            foreach (var key in table._vanilla.Keys)
+            {
+                var slash = key.IndexOf('/');
+                if (slash > 0) table._vanillaSpecies.Add(key.Substring(0, slash));
             }
             return table;
         }
@@ -180,6 +197,36 @@ namespace Tyrant.Framework.Core
             return result.IsEmpty ? null : result;
         }
 
+        /// <summary>
+        /// The changes an animal wears, highest first: its live edit, its saved look, the live edit of its skin (a mod or vanilla
+        /// skin), the table's skin, base skin, the live edit of its species, the table's species. The game's own values lie below
+        /// all of them. Null when none is set; nothing is allocated then.
+        /// </summary>
+        public static MaterialOverride? MergeLayers(MaterialOverride? liveAnimal, MaterialOverride? savedAnimal, MaterialOverride? liveSkin,
+            MaterialOverride? tableSkin, MaterialOverride? baseSkin, MaterialOverride? liveSpecies, MaterialOverride? tableSpecies)
+        {
+            if (liveAnimal == null && savedAnimal == null && liveSkin == null && tableSkin == null && baseSkin == null && liveSpecies == null && tableSpecies == null)
+                return null;
+            return Merge(liveAnimal, savedAnimal, liveSkin, tableSkin, baseSkin, liveSpecies, tableSpecies);
+        }
+
+        /// <summary>
+        /// A copy whose relative file paths are made full against <paramref name="folder"/> (full paths stay); a path that is not
+        /// a path drops that ramp or mask. The input is not changed.
+        /// </summary>
+        public static MaterialOverride WithFullPaths(MaterialOverride block, string folder) =>
+            CopyOne(block, file =>
+            {
+                try
+                {
+                    return Path.GetFullPath(Path.Combine(folder, file));
+                }
+                catch (Exception ex) when (ex is ArgumentException || ex is NotSupportedException || ex is PathTooLongException)
+                {
+                    return null;
+                }
+            });
+
         /// <summary>The variation of the strength between animals: as set, else a little when a strength is set, else none.</summary>
         public static float EffectiveVariation(IridescenceSettings i) =>
             i.Variation ?? (i.Strength != null ? IridescenceSettings.DefaultVariation : 0);
@@ -193,35 +240,42 @@ namespace Tyrant.Framework.Core
             var copies = new Dictionary<string, MaterialOverride>(StringComparer.Ordinal);
             foreach (var pair in source)
             {
-                var copy = new MaterialOverride();
-                foreach (var setting in pair.Value.Settings) copy.Settings[setting.Key] = setting.Value;
-                if (pair.Value.Iridescence is IridescenceSettings i)
-                {
-                    var iridescence = new IridescenceSettings
-                    {
-                        Strength = i.Strength == null ? null : new VariantNumbers { Normal = i.Strength.Normal, Albino = i.Strength.Albino, Melanistic = i.Strength.Melanistic, Leucistic = i.Strength.Leucistic },
-                        Variation = i.Variation,
-                        Ramp = CopyRamp(i.Ramp, mod, messages),
-                        Mask = CopyMask(i.Mask, mod, messages),
-                        Tiling = (float[]?)i.Tiling?.Clone(),
-                        Offset = (float[]?)i.Offset?.Clone(),
-                        Scale = i.Scale,
-                        Power = i.Power,
-                        Bias = i.Bias,
-                    };
-                    if (!iridescence.IsEmpty) copy.Iridescence = iridescence;
-                }
-                if (pair.Value.Fur is FurMasks fur)
-                {
-                    var masks = new FurMasks { Mask = CopyMask(fur.Mask, mod, messages), InfantMask = CopyMask(fur.InfantMask, mod, messages) };
-                    if (!masks.IsEmpty) copy.Fur = masks;
-                }
+                var copy = CopyOne(pair.Value, file => Resolve(file, mod, messages));
                 if (!copy.IsEmpty) copies[pair.Key] = copy;
             }
             return copies;
         }
 
-        private static RampSource? CopyRamp(RampSource? ramp, LoadedMod mod, List<string> messages)
+        /// <summary>A deep copy with each file path passed through <paramref name="resolve"/>; a null path drops that ramp or mask.</summary>
+        private static MaterialOverride CopyOne(MaterialOverride source, Func<string, string?> resolve)
+        {
+            var copy = new MaterialOverride();
+            foreach (var setting in source.Settings) copy.Settings[setting.Key] = setting.Value;
+            if (source.Iridescence is IridescenceSettings i)
+            {
+                var iridescence = new IridescenceSettings
+                {
+                    Strength = i.Strength == null ? null : new VariantNumbers { Normal = i.Strength.Normal, Albino = i.Strength.Albino, Melanistic = i.Strength.Melanistic, Leucistic = i.Strength.Leucistic },
+                    Variation = i.Variation,
+                    Ramp = CopyRamp(i.Ramp, resolve),
+                    Mask = CopyMask(i.Mask, resolve),
+                    Tiling = (float[]?)i.Tiling?.Clone(),
+                    Offset = (float[]?)i.Offset?.Clone(),
+                    Scale = i.Scale,
+                    Power = i.Power,
+                    Bias = i.Bias,
+                };
+                if (!iridescence.IsEmpty) copy.Iridescence = iridescence;
+            }
+            if (source.Fur is FurMasks fur)
+            {
+                var masks = new FurMasks { Mask = CopyMask(fur.Mask, resolve), InfantMask = CopyMask(fur.InfantMask, resolve) };
+                if (!masks.IsEmpty) copy.Fur = masks;
+            }
+            return copy;
+        }
+
+        private static RampSource? CopyRamp(RampSource? ramp, Func<string, string?> resolve)
         {
             if (ramp == null) return null;
             if (ramp.File == null)
@@ -230,14 +284,14 @@ namespace Tyrant.Framework.Core
                     Stops = ramp.Stops == null ? null : new List<Rgb>(ramp.Stops),
                     ThinFilm = ramp.ThinFilm == null ? null : new ThinFilmSettings { Thickness = ramp.ThinFilm.Thickness, Index = ramp.ThinFilm.Index },
                 };
-            var path = Resolve(ramp.File, mod, messages);
+            var path = resolve(ramp.File);
             return path == null ? null : new RampSource { File = path };
         }
 
-        private static MaskSource? CopyMask(MaskSource? mask, LoadedMod mod, List<string> messages)
+        private static MaskSource? CopyMask(MaskSource? mask, Func<string, string?> resolve)
         {
             if (mask == null) return null;
-            var path = mask.File == null ? null : Resolve(mask.File, mod, messages);
+            var path = mask.File == null ? null : resolve(mask.File);
             if (mask.File != null && path == null) return null;
             return new MaskSource { Everywhere = mask.Everywhere, File = path, From = mask.From, Channel = mask.Channel, Invert = mask.Invert };
         }
