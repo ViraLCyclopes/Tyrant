@@ -169,6 +169,31 @@ public class GameLooksTests
     }
 
     [Fact]
+    public void Bring_in_refuses_a_game_folder_with_an_invalid_materials_json_and_changes_nothing()
+    {
+        var (game, install, ws) = Setup();
+        using var _ = game;
+        var mod = ModWithMaterials(ws, Species, Vanilla);
+        new GameMods().Install(install, mod);
+        WriteMaterials(Installed(install), Vanilla, "0.7"); // fine on its own
+        var bad = Path.Combine(Installed(install), Species.Replace('/', Path.DirectorySeparatorChar), MaterialFolders.FileName);
+        File.WriteAllText(bad, """{"format":1,"species":"Carcharodontosaurus","materials":{"Carch":{"settings":{"_DroopDirection":[0,0,-30]}}}}""");
+        var project = File.ReadAllText(Path.Combine(mod.Dir, Species, MaterialFolders.FileName));
+        var vanilla = File.ReadAllText(Path.Combine(mod.Dir, Vanilla, MaterialFolders.FileName));
+        var stamps = File.ReadAllText(GameLooks.StampPath(install));
+
+        var ex = Assert.Throws<Tyrant.Core.Errors.TyrantException>(() => GameLooks.BringIn(install, mod, [Vanilla, Species]));
+
+        Assert.Equal(Tyrant.Core.Errors.TyrantErrorCode.ModInvalid, ex.Code);
+        Assert.Contains(Species, ex.Message);
+        Assert.Contains("_DroopDirection", ex.Message);
+        Assert.Equal(project, File.ReadAllText(Path.Combine(mod.Dir, Species, MaterialFolders.FileName)));
+        Assert.Equal(vanilla, File.ReadAllText(Path.Combine(mod.Dir, Vanilla, MaterialFolders.FileName))); // the good one was not brought in either
+        Assert.Equal(stamps, File.ReadAllText(GameLooks.StampPath(install)));
+        Assert.Equal(0.5, mod.Manifest.SpeciesMaterials["Carcharodontosaurus"]["Carch"].Iridescence!.Strength!.Normal, 3);
+    }
+
+    [Fact]
     public void Bring_in_refuses_a_folder_that_is_not_a_material_folder()
     {
         var (game, install, ws) = Setup();

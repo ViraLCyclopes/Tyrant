@@ -80,7 +80,8 @@ public static class GameLooks
     /// <summary>
     /// Replaces these material folders in the workspace with the game's copy (a folder gone from the game goes from the
     /// workspace too), stamps them as brought in, and reads the project's materials again. A mask a slim install left out
-    /// (it is in the installed pack) keeps the workspace's PNG. Returns how many folders were brought in.
+    /// (it is in the installed pack) keeps the workspace's PNG. The game's copies are read first, as the project would read
+    /// them: a problem in any of them stops everything, nothing changed. Returns how many folders were brought in.
     /// </summary>
     public static int BringIn(GameInstall install, ModProject mod, IReadOnlyCollection<string> folders)
     {
@@ -91,6 +92,7 @@ public static class GameLooks
                     $"'{folder}' is not a material folder (materials/<skins, species or vanilla-skins>/<folder>).");
         var installed = Path.Combine(ModLoaderInstaller.ModsDir(install), mod.Id);
         if (!Directory.Exists(installed)) throw new TyrantException(TyrantErrorCode.ModNotFound, $"'{mod.Id}' is not installed in the game.");
+        Validate(mod, installed, chosen);
         var skip = LeftOut(installed);
         var stamps = ReadStamps(install);
         var stamped = stamps.TryGetValue(mod.Id, out var s) ? s : stamps[mod.Id] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -113,6 +115,51 @@ public static class GameLooks
         WriteStamps(install, stamps);
         mod.ReloadMaterials();
         return chosen.Count;
+    }
+
+    /// <summary>
+    /// Reads the project's material folders as they would be with the chosen ones taken from the game (their materials.json,
+    /// in a scratch folder, into a scratch manifest with the project's skins); throws, naming the folder and the problem, when
+    /// the project could not open them.
+    /// </summary>
+    private static void Validate(ModProject mod, string installed, IReadOnlyCollection<string> chosen)
+    {
+        var scratch = Path.Combine(Path.GetTempPath(), "tyrant-looks-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            void Take(string fromDir, string folder)
+            {
+                var file = Path.Combine(fromDir, folder.Replace('/', Path.DirectorySeparatorChar), MaterialFolders.FileName);
+                if (!File.Exists(file)) return;
+                var to = Path.Combine(scratch, folder.Replace('/', Path.DirectorySeparatorChar), MaterialFolders.FileName);
+                Directory.CreateDirectory(Path.GetDirectoryName(to)!);
+                File.Copy(file, to);
+            }
+            foreach (var folder in Folders(mod.Dir).Where(f => !chosen.Contains(f, StringComparer.OrdinalIgnoreCase))) Take(mod.Dir, folder);
+            foreach (var folder in chosen) Take(installed, folder);
+            var manifest = new ModManifest { Id = mod.Id };
+            manifest.Skins.AddRange(mod.Manifest.Skins.Select(skin => new SkinEntry { Id = skin.Id, Species = skin.Species }));
+            var problems = new List<string>();
+            MaterialFolders.Load(manifest, scratch, problems);
+            if (problems.Count > 0)
+                throw new TyrantException(TyrantErrorCode.ModInvalid,
+                    $"The game's looks were not brought into '{mod.Id}' (nothing changed): {string.Join(" ", problems)}");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            throw new TyrantException(TyrantErrorCode.ModInvalid, $"The game's looks of '{mod.Id}' could not be read: {ex.Message}", FixAction.None, ex);
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(scratch)) Directory.Delete(scratch, recursive: true);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // a scratch copy left in the temp folder is harmless
+            }
+        }
     }
 
     /// <summary>Whether an installed mod has material folders at all (a game-only mod such as Vanilla Looks: looks made in game).</summary>
