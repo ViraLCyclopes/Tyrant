@@ -64,6 +64,29 @@ public class SlimCopyTests
     }
 
     [Fact]
+    public void A_slim_install_leaves_out_cooked_fur_masks_and_keeps_the_material_files()
+    {
+        var (game, mod) = Setup();
+        using var _ = game;
+        var png = ModEditTests.Png(Path.Combine(Path.GetTempPath(), "tyrant-tests", Guid.NewGuid().ToString("N")));
+        var fur = mod.SetMaterialFile("blue", null, "Carch", "furMask", png);
+        var plan = SlimCopy.Plan(mod.Manifest, mod.Dir, PackOf(mod));
+        var copy = Path.Combine(Path.GetTempPath(), "tyrant-tests", Guid.NewGuid().ToString("N"));
+        foreach (var file in Directory.GetFiles(mod.Dir, "*", SearchOption.AllDirectories))
+        {
+            var target = Path.Combine(copy, Path.GetRelativePath(mod.Dir, file));
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            File.Copy(file, target);
+        }
+
+        SlimCopy.Apply(plan, copy);
+
+        Assert.Contains(fur, plan.Dropped);
+        Assert.False(File.Exists(Path.Combine(copy, fur)));
+        Assert.True(File.Exists(Path.Combine(copy, "materials", "skins", "blue", MaterialFolders.FileName)));
+    }
+
+    [Fact]
     public void A_replacement_texture_is_never_dropped()
     {
         // The game asks for a replacement by the kind of the material property it fills, which the cooker may only guess

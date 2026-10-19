@@ -39,7 +39,8 @@ public sealed class GameMods(Func<GameInstall, bool>? isGameRunning = null)
     public static string ListPath(GameInstall install) => Path.Combine(ModLoaderInstaller.RecordDir(install), ModList.FileName);
 
     /// <param name="prepare">Runs on the staging copy before it replaces the installed one (Tyrant cooks the textures there); if it throws, nothing is installed.</param>
-    public void Install(GameInstall install, ModProject mod, Action<string>? prepare = null)
+    /// <returns>Warnings about an install that went in (the stamps that tell looks made in the game apart could not be written).</returns>
+    public IReadOnlyList<string> Install(GameInstall install, ModProject mod, Action<string>? prepare = null)
     {
         RefuseWhileRunning(install, "installing a mod");
         if (!ModLoaderInstaller.HasFramework(install))
@@ -88,6 +89,16 @@ public sealed class GameMods(Func<GameInstall, bool>? isGameRunning = null)
         if (at >= 0) entries[at] = new ModListEntry(mod.Id, true);
         else entries.Add(new ModListEntry(mod.Id, true));
         WriteList(install, entries);
+        try
+        {
+            GameLooks.Stamp(install, mod.Id, target); // what went in, so looks the in-game editor saves later can be told apart
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The mod is in: only telling looks made in the game apart suffers (they then show as changed on both sides).
+            return [$"'{mod.Id}' is installed, but Tyrant could not record what went in ({GameLooks.StampFile}: {ex.Message}); looks made in the game later may show as changed in the workspace too."];
+        }
+        return [];
     }
 
     public void Remove(GameInstall install, string id)
@@ -100,6 +111,7 @@ public sealed class GameMods(Func<GameInstall, bool>? isGameRunning = null)
             throw new TyrantException(TyrantErrorCode.ModNotFound, $"'{id}' is not installed in the game.");
         if (Directory.Exists(target)) Directory.Delete(target, recursive: true);
         WriteList(install, entries);
+        GameLooks.Forget(install, id);
     }
 
     public void SetEnabled(GameInstall install, string id, bool enabled)
@@ -130,6 +142,8 @@ public sealed class GameMods(Func<GameInstall, bool>? isGameRunning = null)
                 if (!File.Exists(path)) throw new ManifestException("mod.json is missing.");
                 var manifest = ModManifest.Parse(File.ReadAllText(path));
                 manifest.Species.AddRange(AnimalDatabaseFile.Read(Path.Combine(dir, AnimalDatabaseFile.FileName)));
+                // As the framework does: a bad materials.json is skipped (its log says why) and the rest load.
+                MaterialFolders.Load(manifest, dir, []);
                 if (enabled) manifests[folder] = manifest;
                 result.Add(new InstalledMod(folder, manifest.Name, manifest.Version, manifest.Replace.Count, manifest.Skins.Count, enabled, dir, null) { Cooked = CookedPacks.StateOf(dir, manifest) });
             }
@@ -138,9 +152,10 @@ public sealed class GameMods(Func<GameInstall, bool>? isGameRunning = null)
                 result.Add(new InstalledMod(folder, folder, "", 0, 0, enabled, dir, ex.Message));
             }
         }
-        // The framework's load order: mods.json's order, then mods it does not list by name.
+        // The framework's load order: mods.json's order, then mods it does not list by name; Vanilla Looks always last.
         var order = entries.Select(e => e.Id).Where(manifests.ContainsKey)
             .Concat(manifests.Keys.Where(id => entries.All(e => e.Id != id)).Order(StringComparer.Ordinal))
+            .OrderBy(id => id == ModCatalog.VanillaLooksId)
             .Select(id => (id, manifests[id])).ToList();
         var clashes = ModelTable.Clashes(order);
         var prefabClashes = PrefabTable.Clashes(order.Select(o => (o.id, Path.Combine(root, o.id))).ToList());
@@ -148,7 +163,8 @@ public sealed class GameMods(Func<GameInstall, bool>? isGameRunning = null)
         IEnumerable<string> ClashesOf(string id) =>
             clashes.Where(c => c.Loser == id).Select(c => c.Message).Concat(prefabClashes.Where(c => c.Loser == id).Select(c => c.Message))
                 .Concat(materialClashes.Where(c => c.Loser == id).Select(c => c.Message));
-        return result.Select(m => ClashesOf(m.Id).Any() ? m with { Clashes = ClashesOf(m.Id).ToList() } : m).ToList();
+        return result.OrderBy(m => m.Id == ModCatalog.VanillaLooksId) // listed where it loads
+            .Select(m => ClashesOf(m.Id).Any() ? m with { Clashes = ClashesOf(m.Id).ToList() } : m).ToList();
     }
 
     public ModInstallState StateOf(GameInstall install, ModProject mod)
@@ -236,7 +252,7 @@ public sealed class GameMods(Func<GameInstall, bool>? isGameRunning = null)
         catch (ManifestException) { return FileHash(path); }
     }
 
-    private static byte[] FileHash(string path)
+    internal static byte[] FileHash(string path)
     {
         var info = new FileInfo(path);
         if (FileHashCache.TryGetValue(path, out var cached) && cached.Length == info.Length && cached.Written == info.LastWriteTimeUtc) return cached.Hash;

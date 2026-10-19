@@ -179,4 +179,32 @@ describe('MaterialEditor', () => {
     await setup({ materialsJson: '{"Titanoboa":{"settings":{"_Smoothness":0.55}}}', onDraft });
     await waitFor(() => expect(onDraft).toHaveBeenLastCalledWith('{"Titanoboa":{"settings":{"_Smoothness":0.55}}}'));
   });
+
+  it('droop direction shows x, y and z', async () => {
+    const { rpc } = await setup({
+      materialsJson: '{"Titanoboa":{"settings":{"_DroopDirection":[0,-1,0.5]}}}',
+      infoOver: { properties: [{ key: '_DroopDirection', group: 'Fur', label: 'Droop direction', kind: 'vector', min: -1, max: 1, inherited: '[0,-1,0]', source: 'game', components: 3 }] },
+    });
+    expect(screen.getByRole('spinbutton', { name: 'Droop direction x' })).toBeInTheDocument();
+    expect(screen.getByRole('spinbutton', { name: 'Droop direction y' })).toBeInTheDocument();
+    expect(screen.queryByRole('spinbutton', { name: 'Droop direction w' })).toBeNull();
+    const z = screen.getByRole('spinbutton', { name: 'Droop direction z' });
+    expect(z).toHaveValue(0.5);
+    await fireEvent.change(z, { target: { value: '0.25' } });
+    await waitFor(() => expect(rpc.callsTo('mods.setMaterials')).toHaveLength(1));
+    expect(sent(rpc)).toEqual({ Titanoboa: { settings: { _DroopDirection: [0, -1, 0.25] } } });
+  });
+
+  it('importing a fur mask calls setMaterialFile with part furMask', async () => {
+    const { rpc, platform } = await setup({
+      infoOver: { properties: [{ key: '_Length', group: 'Fur', label: 'Fur length', kind: 'number', min: 0, max: 4, inherited: '1', source: 'game' }] },
+    });
+    rpc.on('mods.setMaterialFile', () => modDetail({ revision: 'r2', skins: skinsWith('{"Titanoboa":{"fur":{"mask":"materials/skins/blue/fur-mask.png"}}}') }));
+    platform.files = ['C:\paint\fur.png'];
+    await fireEvent.click(screen.getByRole('button', { name: 'Import fur mask' }));
+    await waitFor(() => expect(rpc.callsTo('mods.setMaterialFile')[0]?.params).toMatchObject({ skin: 'blue', material: 'Titanoboa', part: 'furMask', png: 'C:\paint\fur.png' }));
+    expect(await screen.findByText('materials/skins/blue/fur-mask.png')).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Remove fur mask' }));
+    await waitFor(() => expect(rpc.callsTo('mods.setMaterialFile')[1]?.params).toMatchObject({ part: 'furMask', png: null }));
+  });
 });

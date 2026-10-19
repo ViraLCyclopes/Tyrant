@@ -285,12 +285,9 @@ public class GameModsTests
     private static ModProject MaterialsMod(Workspace ws, string id)
     {
         var mod = Mod(ws, id, "T_A_D.png");
-        mod.Manifest.Models.Add(new ModelReplacement
-        {
-            Target = "Titanoboa",
-            Materials = new() { ["Titanoboa"] = new MaterialOverride { Iridescence = new IridescenceSettings { Scale = 1 } } },
-        });
+        mod.Manifest.SpeciesMaterials["Titanoboa"] = new() { ["Titanoboa"] = new MaterialOverride { Iridescence = new IridescenceSettings { Scale = 1 } } };
         mod.Save();
+        Assert.NotEmpty(ModProject.Open(ws, id).Manifest.SpeciesMaterials); // in its folder, not mod.json
         return mod;
     }
 
@@ -307,5 +304,21 @@ public class GameModsTests
         var clash = new MaterialClash("Titanoboa", "Titanoboa", "aaa-long", "bbb-short");
         Assert.Contains(clash.Message, list["aaa-long"].Clashes);
         Assert.Empty(list["bbb-short"].Clashes);
+    }
+
+    [Fact]
+    public void Vanilla_looks_is_listed_last()
+    {
+        var (game, install, ws) = Setup();
+        using var _ = game;
+        new GameMods().Install(install, MaterialsMod(ws, ModCatalog.VanillaLooksId)); // first in mods.json
+        new GameMods().Install(install, MaterialsMod(ws, "zzz-last"));
+
+        var list = new GameMods().List(install);
+
+        Assert.Equal(["zzz-last", ModCatalog.VanillaLooksId], list.Select(m => m.Id).ToArray());
+        var clash = new MaterialClash("Titanoboa", "Titanoboa", "zzz-last", ModCatalog.VanillaLooksId); // it loads last, so it wins
+        Assert.Contains(clash.Message, list[0].Clashes);
+        Assert.Empty(list[1].Clashes);
     }
 }

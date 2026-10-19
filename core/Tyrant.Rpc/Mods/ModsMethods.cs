@@ -90,9 +90,10 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
             }
             progress.Report(new JobProgress(0.8, $"Installing {p.Id}"));
             var cooker = Cooker(ws, install, mod);
-            Game.Install(install, mod, staging => cooker.CookForInstall(mod, staging, Cooking(progress, 0.8, 0.98), ct));
+            var warnings = Game.Install(install, mod, staging => cooker.CookForInstall(mod, staging, Cooking(progress, 0.8, 0.98), ct));
             session.Log($"Installed '{p.Id}' into the game.");
-            return new ModInstallResult($"Installed '{p.Id}' into the game. Start the game to see it.", check.Warnings);
+            foreach (var warning in warnings) session.Log(warning);
+            return new ModInstallResult($"Installed '{p.Id}' into the game. Start the game to see it.", check.Warnings.Concat(warnings).ToList());
         });
     }
 
@@ -129,7 +130,8 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
                 var uses = SpeciesUse.Of(mod.Manifest);
                 if (uses.Count > 0) everyone ??= OtherModSpecies.Load(ws, snapshot, null);
                 rows.Add(new ModRow(id, mod.Manifest.Name, mod.Manifest.Version, mod.Manifest.Author, mod.Manifest.Replace.Count, mod.Manifest.Skins.Count,
-                    Wire(game.StateOf(install, mod)), inGame?.Enabled, mod.Dir, null, inGame?.Clashes, UsesOf(uses, everyone), inGame?.Cooked));
+                    Wire(game.StateOf(install, mod)), inGame?.Enabled, mod.Dir, null, inGame?.Clashes, UsesOf(uses, everyone), inGame?.Cooked,
+                    inGame is not null && HasGameLooks(install, mod)));
             }
             catch (TyrantException ex)
             {
@@ -137,9 +139,23 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
             }
             installed.Remove(id);
         }
-        rows.AddRange(installed.Values.Select(m => new ModRow(m.Id, m.Name, m.Version, null, m.Replacements, m.Skins, "gameOnly", m.Enabled, m.Dir, m.Error, m.Clashes, Cooked: m.Cooked)));
+        rows.AddRange(installed.Values.Select(m => new ModRow(m.Id, m.Name, m.Version, null, m.Replacements, m.Skins, "gameOnly", m.Enabled, m.Dir, m.Error, m.Clashes, Cooked: m.Cooked,
+            GameLooks: GameLooks.HasMaterials(m.Dir))));
         return new ModsListResult(rows, ModLoaderInstaller.HasFramework(install),
             ModLoaderInstaller.FrameworkStatus(install, Options.DumperDir) == FrameworkState.Outdated);
+    }
+
+    /// <summary>Whether the in-game editor changed the installed copy's looks; a file that cannot be read counts as yes, so the app asks first.</summary>
+    private static bool HasGameLooks(GameInstall install, ModProject mod)
+    {
+        try
+        {
+            return GameLooks.Changes(install, mod).Any(c => c.GameChanged);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return true; // unknown: the app asks (mods.looksChanges then says what could not be read) rather than overwrite
+        }
     }
 
     private static string Wire(ModInstallState state) => state switch
@@ -397,7 +413,9 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
             PrefabFiles: mod.PrefabFiles(),
             PrefabTargets: mod.PrefabTargets().Select(t => new ModPrefabTargetDto(t.Overrides.Target, t.File, t.Overrides.Fields.Count)).ToList(),
             UsesSpeciesFrom: UsesOf(uses, others),
-            SpeciesMaterials: SpeciesMaterialsOf(m));
+            SpeciesMaterials: SpeciesMaterialsOf(m),
+            VanillaSkinMaterials: VanillaSkinMaterialsOf(m),
+            MaterialFiles: mod.MaterialFileTexts());
     }
 
     /// <summary>The other mods whose species the skins use, with whether each is here, installed and on; null for none.</summary>

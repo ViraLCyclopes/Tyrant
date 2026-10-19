@@ -19,6 +19,11 @@ namespace Tyrant.Framework
         internal static ReplacementTable Replacements = ReplacementTable.Empty;
         internal static readonly List<TyrantMod> CodeMods = new List<TyrantMod>();
 
+        /// <summary>UserData/Tyrant: mods.json, the Mods folder, the per-park looks.</summary>
+        internal static string TyrantDirectory => Path.Combine(MelonEnvironment.UserDataDirectory, "Tyrant");
+
+        internal static string ModsDirectory => Path.Combine(TyrantDirectory, "Mods");
+
         public override void OnInitializeMelon()
         {
             Log = LoggerInstance;
@@ -43,6 +48,8 @@ namespace Tyrant.Framework
             SkinsModule.Tick(); // adds skins once the animal database exists, before a park loads
             MaterialTextureModule.Tick();
             SoundsModule.Tick();
+            LookEditorModule.Tick(); // the in-game look editor: its button, window and the park's per-animal looks
+            MaterialsModule.Tick(); // frees the textures of edits that were replaced
         }
 
         public override void OnSceneWasLoaded(int buildIndex, string sceneName) => MaterialTextureModule.OnSceneLoaded();
@@ -63,8 +70,8 @@ namespace Tyrant.Framework
 
         private void Load()
         {
-            var root = Path.Combine(MelonEnvironment.UserDataDirectory, "Tyrant");
-            var sources = ModCatalog.Discover(Path.Combine(root, "Mods")); // an unreadable mod is skipped, not fatal
+            var root = TyrantDirectory;
+            var sources = ModCatalog.Discover(ModsDirectory); // an unreadable mod is skipped, not fatal
             var plan = ModCatalog.Plan(sources, ReadList(Path.Combine(root, ModList.FileName)), FrameworkInfo.Version);
 
             foreach (var warning in plan.Warnings) Log.Warning(warning);
@@ -87,7 +94,8 @@ namespace Tyrant.Framework
             if (ModelModule.HasModels) RigModule.Start(HarmonyInstance);
             HeadRigModule.Start(plan.Mods, HarmonyInstance);
             MaterialsModule.Start(plan.Mods);
-            if (MaterialsModule.HasMaterials) MaterialsModule.Patch(HarmonyInstance);
+            MaterialsModule.Patch(HarmonyInstance); // always: the in-game editor works on animals no mod covers
+            LookEditorModule.Start();
             SoundsModule.Start(plan.Mods, HarmonyInstance);
             if (Replacements.Count > 0 || CodeMods.Count > 0 || SkinsModule.HasSkins || ModelModule.HasModels) AnimalTexturePatch.Apply(HarmonyInstance);
             if (SkinsModule.HasSkins) SkinPatches.Apply(HarmonyInstance);

@@ -10,13 +10,13 @@
    * The Material card of a skin or a species: iridescence and the shader settings, over what applies below (species, starting
    * skin, the game). Saves like the colour editor (undo for free); `onDraft` gets what it would save, for a live preview.
    */
-  let { doc, skin, species, onDraft }: { doc: ModDoc; skin?: ModSkinDto; species?: string; onDraft?: (materialsJson: string | null) => void } = $props();
+  let { doc, skin, species, vanillaSkin, onDraft }: { doc: ModDoc; skin?: ModSkinDto; species?: string; vanillaSkin?: { species: string; skin: string }; onDraft?: (materialsJson: string | null) => void } = $props();
   const session = getSession();
   let info = $state.raw<ModMaterialInfo | null>(null);
   let reason = $state<string | null>(null);
   let generation = 0;
 
-  const target = $derived(skin ? { skin: skin.id } : { species: species ?? '' });
+  const target = $derived(skin ? { skin: skin.id } : vanillaSkin ? { vanillaSkin: `${vanillaSkin.species}/${vanillaSkin.skin}` } : { species: species ?? '' });
   const name = $derived(info?.name ?? null);
   const saved = $derived(doc.detail ? savedIn(doc.detail) : null);
   const model = $derived(name ? parseMaterial(saved, name) : null);
@@ -32,6 +32,10 @@
 
   function savedIn(detail: ModDetail): string | null {
     if (skin) return detail.skins.find((s) => s.id === skin.id)?.materialsJson ?? null;
+    if (vanillaSkin) {
+      const [sp, sk] = [vanillaSkin.species.toLowerCase(), vanillaSkin.skin.toLowerCase()];
+      return detail.vanillaSkinMaterials?.find((m) => m.species.toLowerCase() === sp && m.skin.toLowerCase() === sk)?.materialsJson ?? null;
+    }
     const wanted = (species ?? '').toLowerCase();
     return detail.speciesMaterials?.find((m) => m.species.toLowerCase() === wanted)?.materialsJson ?? null;
   }
@@ -96,6 +100,9 @@
     }, true);
   }
 
+  /** A species' fur masks need its material settings saved first. */
+  const canImportFur = $derived(!!skin || saved !== null);
+
   const inheritedOf = (p: ModMaterialProperty): unknown => (p.inherited === null ? null : JSON.parse(p.inherited));
   const shownValue = (v: unknown) => (v === null ? 'not set' : Array.isArray(v) ? v.join(', ') : String(v));
   const clamp = (p: ModMaterialProperty, v: number) => Math.min(p.max, Math.max(p.min, v));
@@ -104,10 +111,26 @@
     setSetting(p.key, text === '' ? null : clamp(p, Number(text)));
   }
 
+  /** Image imports (iridescence, fur masks) need a species' material settings saved first; skins and vanilla skins do not. */
+  const canImportFile = $derived(!!skin || !!vanillaSkin || saved !== null);
+  /** How many numbers a vector setting has (x, y, z, w); an older server says nothing: two. */
+  const AXES = ['x', 'y', 'z', 'w'];
+  const countOf = (p: ModMaterialProperty) => Math.min(4, Math.max(2, p.components || 2));
+
+  async function importFur(part: 'furMask' | 'furInfantMask') {
+    const png = await session.platform.openFile(`Choose the ${part === 'furMask' ? 'fur' : 'baby fur'} mask PNG`, ['png']);
+    if (png) await doc.edit('mods.setMaterialFile', { ...target, material: name, part, png });
+  }
+
+  function removeFur(part: 'furMask' | 'furInfantMask') {
+    return doc.edit('mods.setMaterialFile', { ...target, material: name, part, png: null });
+  }
+
   function setComponent(p: ModMaterialProperty, n: number, text: string) {
+    const count = countOf(p);
     const own = shown?.settings[p.key];
-    const base = Array.isArray(own) ? own : ((inheritedOf(p) as number[] | null) ?? [1, 1]);
-    const next = [base[0] ?? 0, base[1] ?? 0];
+    const base = Array.isArray(own) ? own : ((inheritedOf(p) as number[] | null) ?? Array.from({ length: count }, () => 1));
+    const next = Array.from({ length: count }, (_, i) => base[i] ?? 0);
     next[n] = text === '' ? 0 : clamp(p, Number(text));
     setSetting(p.key, next);
   }
@@ -119,8 +142,8 @@
   {#if !info}
     {#if !reason}<p class="hint">Loading the material…</p>{/if}
   {:else if shown && name}
-    <IridescencePanel {doc} material={name} model={shown.iridescence} {inherited} gameStrength={info.gameIridescence} gameHasRamp={info.gameHasRamp} {skin} {species}
-      canImport={!!skin || saved !== null} onEdit={(change, save) => void edit(change, save)} />
+    <IridescencePanel {doc} material={name} model={shown.iridescence} {inherited} gameStrength={info.gameIridescence} gameHasRamp={info.gameHasRamp} {skin} {species} {vanillaSkin}
+      canImport={canImportFile} onEdit={(change, save) => void edit(change, save)} />
 
     {#each groups as [group, rows] (group)}
       <fieldset class="group">
@@ -136,7 +159,7 @@
                 <input type="color" aria-label={p.label} value={typeof own === 'string' ? own : typeof below === 'string' ? below : '#808080'}
                   onchange={(e) => setSetting(p.key, e.currentTarget.value.toLowerCase())} />
               {:else if p.kind === 'vector'}
-                {#each ['x', 'y'] as axis, n (axis)}
+                {#each AXES.slice(0, countOf(p)) as axis, n (axis)}
                   <input type="number" aria-label="{p.label} {axis}" min={p.min} max={p.max} step="0.1" value={Array.isArray(own) ? own[n] : ''}
                     placeholder={Array.isArray(below) ? String(below[n]) : ''} onchange={(e) => setComponent(p, n, e.currentTarget.value)} />
                 {/each}
@@ -148,6 +171,18 @@
             <button class="ghost x" aria-label="Reset {p.label}" title="Use the value below" disabled={own === undefined} onclick={() => setSetting(p.key, null)}>✕</button>
           </div>
         {/each}
+        {#if group === 'Fur'}
+          {#each [{ part: 'furMask' as const, label: 'Fur mask', file: shown.fur?.mask }, { part: 'furInfantMask' as const, label: 'Baby fur mask', file: shown.fur?.infantMask }] as row (row.part)}
+            <div class="setting" role="group" aria-label={row.label}>
+              <span class="label">{row.label}</span>
+              <span class="inherited">{row.file ?? "the skin's own"}</span>
+              <span class="field">
+                <button aria-label="Import {row.label.toLowerCase()}" disabled={!canImportFile} onclick={() => void importFur(row.part)}>Import…</button>
+              </span>
+              <button class="ghost x" aria-label="Remove {row.label.toLowerCase()}" title="Use the skin's own" disabled={!row.file} onclick={() => void removeFur(row.part)}>✕</button>
+            </div>
+          {/each}
+        {/if}
       </fieldset>
     {/each}
   {/if}

@@ -511,6 +511,11 @@ export interface ModArrangeSkinsParams {
   order: ModSkinPlace[];
 }
 
+export interface ModBringInLooksParams {
+  id: string;
+  folders: string[];
+}
+
 export interface ModCheckReport {
   errors: string[];
   warnings: string[];
@@ -590,6 +595,8 @@ export interface ModDetail {
   prefabTargets?: ModPrefabTargetDto[] | null;
   usesSpeciesFrom?: ModSpeciesUseDto[] | null;
   speciesMaterials?: ModSpeciesMaterialsDto[] | null;
+  vanillaSkinMaterials?: ModVanillaSkinMaterialsDto[] | null;
+  materialFiles?: Record<string, string> | null;
 }
 
 export interface ModEnableParams {
@@ -633,6 +640,16 @@ export interface ModInstallResult {
   warnings: string[];
 }
 
+export interface ModLooksChangeDto {
+  folder: string;
+  gameChanged: boolean;
+  projectChanged: boolean;
+}
+
+export interface ModLooksChanges {
+  changes: ModLooksChangeDto[];
+}
+
 export interface ModMakeStartingSkinParams {
   id: string;
   revision: string;
@@ -653,6 +670,7 @@ export interface ModMaterialInfoParams {
   id: string;
   skin?: string | null;
   species?: string | null;
+  vanillaSkin?: string | null;
 }
 
 export interface ModMaterialPreview {
@@ -673,6 +691,7 @@ export interface ModMaterialPreviewParams {
   species?: string | null;
   materials?: string | null;
   sex?: string;
+  vanillaSkin?: string | null;
 }
 
 export interface ModMaterialProperty {
@@ -684,6 +703,7 @@ export interface ModMaterialProperty {
   max: number;
   inherited: string | null;
   source: string;
+  components?: number;
 }
 
 export interface ModModelDto {
@@ -896,6 +916,7 @@ export interface ModRestoreSnapshotParams {
   revision: string;
   manifest: string;
   prefabs: Record<string, string>;
+  materials?: Record<string, string> | null;
 }
 
 export interface ModRigBone {
@@ -932,6 +953,7 @@ export interface ModRow {
   clashes?: string[] | null;
   usesSpeciesFrom?: ModSpeciesUseDto[] | null;
   cooked?: string | null;
+  gameLooks?: boolean;
 }
 
 export interface ModSampleColorsParams {
@@ -986,6 +1008,7 @@ export interface ModSetMaterialFileParams {
   skin?: string | null;
   species?: string | null;
   png?: string | null;
+  vanillaSkin?: string | null;
 }
 
 export interface ModSetMaterialsParams {
@@ -994,6 +1017,7 @@ export interface ModSetMaterialsParams {
   skin?: string | null;
   species?: string | null;
   materials?: string | null;
+  vanillaSkin?: string | null;
 }
 
 export interface ModSetPortraitsParams {
@@ -1255,6 +1279,21 @@ export interface ModThumbnailResult {
 export interface ModUnityProjectDto {
   directory: string;
   readme: string;
+}
+
+export interface ModVanillaSkinList {
+  names: string[];
+}
+
+export interface ModVanillaSkinMaterialsDto {
+  species: string;
+  skin: string;
+  materialsJson: string;
+}
+
+export interface ModVanillaSkinsParams {
+  id: string;
+  species: string;
 }
 
 export interface ModsListResult {
@@ -1562,6 +1601,7 @@ export interface RpcMethods {
   "mods.addStartingSkin": { params: ModAddStartingSkinParams; result: ModDetail };
   "mods.animalDatabase": { params: ModIdParams; result: ModAnimalDatabase };
   "mods.arrangeSkins": { params: ModArrangeSkinsParams; result: ModDetail };
+  "mods.bringInLooks": { params: ModBringInLooksParams; result: ModDetail };
   "mods.check": { params: ModIdParams; result: ModCheckReport };
   "mods.clearRig": { params: ModClearRigParams; result: ModDetail };
   "mods.colorPreview": { params: ModColorPreviewParams; result: ModPreviewFiles };
@@ -1579,6 +1619,7 @@ export interface RpcMethods {
   "mods.import": { params: ModImportParams; result: ModImportResult };
   "mods.install": { params: ModIdParams; result: JobStarted };
   "mods.list": { params: void; result: ModsListResult };
+  "mods.looksChanges": { params: ModIdParams; result: ModLooksChanges };
   "mods.makeStartingSkin": { params: ModMakeStartingSkinParams; result: ModDetail };
   "mods.materialInfo": { params: ModMaterialInfoParams; result: ModMaterialInfo };
   "mods.materialPreview": { params: ModMaterialPreviewParams; result: ModMaterialPreview };
@@ -1629,6 +1670,7 @@ export interface RpcMethods {
   "mods.textures": { params: ModIdParams; result: ModTexturesResult };
   "mods.thinFilm": { params: ModThinFilmParams; result: ModThinFilm };
   "mods.thumbnail": { params: ModThumbnailParams; result: ModThumbnailResult };
+  "mods.vanillaSkins": { params: ModVanillaSkinsParams; result: ModVanillaSkinList };
   "sounds.forSpecies": { params: SoundsForSpeciesParams; result: SoundsForSpeciesResult };
   "sounds.matchFolder": { params: SoundsMatchFolderParams; result: SoundsMatchFolderResult };
   "sounds.search": { params: SoundsSearchParams; result: SoundsSearchResult };

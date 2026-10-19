@@ -46,18 +46,19 @@ export interface EditOptions {
   undoable?: boolean;
 }
 
-/** What undo puts back: mod.json and the prefab settings files (file name to content). */
+/** What undo puts back: mod.json, the prefab settings files (file name to content) and the material files (mod-relative path to content). */
 interface Snapshot {
   manifest: string;
   prefabs: Record<string, string>;
+  materials: Record<string, string>;
 }
 
-const snapshotOf = (d: ModDetail): Snapshot => ({ manifest: d.manifestJson, prefabs: d.prefabFiles ?? {} });
+const snapshotOf = (d: ModDetail): Snapshot => ({ manifest: d.manifestJson, prefabs: d.prefabFiles ?? {}, materials: d.materialFiles ?? {} });
 
 const CHECK_DELAY = 1000;
 const MAX_UNDO = 100;
 
-/** One mod open in an editor tab: its content, Check results, and undo/redo by snapshots of mod.json plus the prefab settings files. */
+/** One mod open in an editor tab: its content, Check results, and undo/redo by snapshots of mod.json plus the prefab settings and material files. */
 export class ModDoc {
   detail = $state.raw<ModDetail | null>(null);
   check = $state.raw<ModCheckReport | null>(null);
@@ -176,7 +177,7 @@ export class ModDoc {
     const target = from.at(-1);
     if (!current || target === undefined) return;
     try {
-      const next = await this.rpc.call('mods.restoreSnapshot', { id: this.id, revision: current.revision, manifest: target.manifest, prefabs: target.prefabs });
+      const next = await this.rpc.call('mods.restoreSnapshot', { id: this.id, revision: current.revision, manifest: target.manifest, prefabs: target.prefabs, materials: target.materials });
       from.pop();
       this.push(to, snapshotOf(current));
       this.detail = next;
@@ -201,7 +202,7 @@ export class ModDoc {
     this.undoStack = [];
     this.redoStack = [];
     this.sync();
-    this.tab.info('mod.json, animals.db or prefab settings files changed outside this tab; reloaded.');
+    this.tab.info('mod.json, animals.db, prefab or material settings files changed outside this tab; reloaded.');
     this.scheduleCheck(0);
   }
 

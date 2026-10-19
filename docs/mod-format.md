@@ -127,36 +127,52 @@ A skin can set its own colours in a `colors` section. Every part is optional; an
 
 ## Skin materials
 
-A skin, or a whole species, can change how the animal's material looks: a rainbow sheen (**iridescence**, like a boa's
-scales) and some of the animal shader's settings. Nothing vanilla changes. In the app: open the mod, pick a skin,
-**Material**; for a whole species, **Species materials** in the side list. `tyrant mod materials` does the same from the
-command line (`--show`, `--set file.json`, `--clear`, `--ramp png`, `--mask png`).
+A skin, a vanilla skin or a whole species can change how the animal's material looks: a rainbow sheen (**iridescence**,
+like a boa's scales), fur masks and some of the animal shader's settings. Nothing vanilla changes. In the app: open the
+mod, pick a skin, **Material**; for a whole species, **Species materials** in the side list; for a game skin,
+**Vanilla skin materials**. `tyrant mod materials` does the same from the command line (`--show`, `--set file.json`,
+`--clear`, `--ramp png`, `--mask png`, `--fur-mask png`, `--fur-infant-mask png`; `--species <id>` for a species,
+`--species <id> --vanilla-skin <name>` for a vanilla skin). The [in-game editor](#the-in-game-editor) writes the same files.
 
-On a skin, `materials` sits beside `colors`. For a species it sits in its `models` entry (which may have no `file`):
+**Where they live.** A mod's materials are not in `mod.json`; each owner has a folder with a `materials.json` and its images:
+
+| Folder | Owner |
+|---|---|
+| `materials/skins/<skinId>/` | One of the mod's skins |
+| `materials/species/<species>/` | A whole species (a custom species too) |
+| `materials/vanilla-skins/<species>-<skinName>/` | A skin of the game, restyled in place |
+
+Folder names are made safe for files (characters a file name cannot hold become `_`); two owners that end up with the same
+name get `-2`, `-3`. The owner comes from the file, not the folder name:
 
 ```json
-"skins": [
-  { "id": "rainbow", "species": "Titanoboa", "name": "Rainbow", "base": "0",
-    "materials": {
-      "Titanoboa": {
-        "iridescence": {
-          "strength": { "normal": 0.35, "albino": 0.2 },
-          "variation": 0.15,
-          "ramp": { "thinFilm": { "thickness": 420 } },
-          "mask": { "from": "extra", "channel": "g", "invert": false },
-          "scale": -0.25, "power": -0.3, "bias": 1.3
-        },
-        "settings": { "_Smoothness": 0.55, "_RimIntensity": 0.2, "_FresnelColor": "#40c0ff" }
-      }
-    } }
-],
-"models": [
-  { "target": "Titanoboa", "materials": { "Titanoboa": { "iridescence": { "strength": 0.4, "mask": "everywhere" } } } }
-]
+{
+  "format": 1,
+  "species": "Titanoboa",
+  "skin": "Alt 1",
+  "materials": {
+    "Titanoboa": {
+      "iridescence": {
+        "strength": { "normal": 0.35, "albino": 0.2 },
+        "variation": 0.15,
+        "ramp": { "thinFilm": { "thickness": 420 } },
+        "mask": { "from": "extra", "channel": "g", "invert": false },
+        "scale": -0.25, "power": -0.3, "bias": 1.3
+      },
+      "settings": { "_Smoothness": 0.55, "_RimIntensity": 0.2, "_FresnelColor": "#40c0ff", "_Droopage": 0.6, "_DroopDirection": [0, -1, 0] },
+      "fur": { "mask": "materials/vanilla-skins/Titanoboa-Alt 1/fur-mask.png" }
+    }
+  }
+}
 ```
 
-The key under `materials` is the material's name. For now only the animal's own material works, and its name is the
-species' material name (for example `Titanoboa`); any other name is an error. Extra materials (eyes, props) come later.
+- `format` is `1`. A skin's file has only `materials`; a species' file also has `species`; a vanilla skin's file has
+  `species` and `skin` (the skin's name in the game, for example `Alt 1`).
+- A `mod.json` that still has an inline `materials` (on a skin or in a `models` entry) is refused, and the message names
+  the folder it moved to. Move the block into that folder's `materials.json` (the app's mod editor and `tyrant mod materials`
+  write the folders for you).
+- The key under `materials` is the material's name. For now only the animal's own material works, and its name is the
+  species' material name (for example `Titanoboa`); any other name is an error. Extra materials (eyes, props) come later.
 
 | Key | Meaning |
 |---|---|
@@ -166,14 +182,22 @@ species' material name (for example `Titanoboa`); any other name is an error. Ex
 | `iridescence.mask` | Where it shows: `"everywhere"`, a PNG in the mod, or `{ "from": "extra", "channel": "g", "invert": false }` (`from` is `extra`, `pattern` or `fur`; `channel` is `r`, `g`, `b` or `a`). Left out: the game's mask. |
 | `iridescence.tiling`, `iridescence.offset` | `[x, y]`, beside `mask`: repeat and shift the mask. |
 | `iridescence.scale`, `power`, `bias` | −10 to 10. Shape the strength across the viewing angle (edge falloff, falloff curve, brightness offset). |
+| `fur.mask`, `fur.infantMask` | The fur mask of adults and of babies: a PNG in the mod (`"materials/skins/rainbow/fur-mask.png"`). Left out: the game's (a baby mask left out uses the adult one). One file serves both sexes. PNG files only: no `everywhere`, no `from`. |
 | `settings` | Animal shader values, below. |
 
+**Vanilla skins.** A file in `materials/vanilla-skins/` restyles one of the game's own skins in place: every animal wearing it
+changes, in every park, while the mod is on. The key is `"<species>/<skinName>"` (for example `Titanoboa/Alt 1`). A mod skin
+that is based on that vanilla skin is **not** affected; it keeps its own settings. The app lists these under **Vanilla skin
+materials**; the CLI takes `--species` with `--vanilla-skin`.
+
 **Masks and ramps:**
-- **`from` masks** work on skins only (a species has no map of its own), and only when the skin has that map in the mod:
-  its own, or its starting skin's. Otherwise Check reports an error (and in the game the whole body shimmers).
-- **Ramp PNGs** are never compressed, and slim installs keep them. **Mask PNGs** are cooked like other data maps.
-- Images imported in the app (**Import image**) or with `--ramp` / `--mask` are copied to
-  `materials/skins/<skin>/iridescence-ramp.png` and `iridescence-mask.png`, or `materials/species/<species>/…` for a species.
+- **`from` masks** (a channel of a skin's map) work on mod skins and on vanilla skins, not on species (a species has no map
+  of its own). On a mod skin they use the mod's map for that slot (its own, or its starting skin's); for a slot the mod has
+  no PNG for, the game's map (its base skin's) at runtime, the same as on a vanilla skin, which always points at the game's
+  own texture. No image from the game is written anywhere, and the app's preview does the same.
+- **Ramp PNGs** are never compressed, and slim installs keep them. **Mask PNGs** (iridescence and fur) are cooked like other data maps.
+- Images imported in the app (**Import image**) or with `--ramp` / `--mask` / `--fur-mask` / `--fur-infant-mask` are copied into
+  the owner's folder with fixed names: `iridescence-ramp.png`, `iridescence-mask.png`, `fur-mask.png` and `fur-infant-mask.png`.
 - **Sharing** carries them: ramp PNGs always go in the zip; mask PNGs too, or inside `textures.tpack` when the export
   leaves the PNGs out, and **Add mod from zip** brings them back. Removing a skin with its files sends its images to the
   Recycle Bin.
@@ -197,13 +221,17 @@ species' material name (for example `Titanoboa`); any other name is an error. Ex
 | `_EyeSmoothness` | Eyes · Eye smoothness | 0–1 |
 | `_EyeSpecularity` | Eyes · Eye specularity | 0–1 |
 | `_Length` | Fur · Fur length | 0–4 |
+| `_Droopage` | Fur · Fur droop | 0–2 |
+| `_DroopDirection` | Fur · Droop direction | 3 numbers (x, y, z), each −20–20 (not a unit vector: vanilla skins go from about −10 to 8) |
 | `_FurWindStrength` | Fur · Fur wind strength | 0–10 |
 | `_FurWindSpeed` | Fur · Fur wind speed | 0–10 |
 | `_FurWindScale` | Fur · Fur wind scale | 0–10 |
 | `_Cutoff` | Cutout · Cutout threshold | 0–1 |
 
-**Which setting wins**, per field: the skin's, else its base (starting) skin's, else its species', else the game's. Between
-mods, the later mod in the load order wins a species' material block, and the Mods tab lists the clash (the framework logs it in the game too). Mod Check does not report it.
+**Which setting wins**, per field: this animal (a look made in game, below) > the skin's (a mod skin or a vanilla skin) >
+its base (starting) skin's > its species' > the game's. Between mods, the later mod in the load order wins a block, and the
+Mods tab lists the clash (the framework logs it in the game too). Mod Check does not report it. The mod `vanilla-looks`
+(shown as **Vanilla Looks**), which the game creates for edits of vanilla skins, always loads last.
 
 **What it can and cannot do:**
 - The shimmer's hue follows the **viewing angle** only, not the light, and runs across the body's curve rather than
@@ -213,6 +241,36 @@ mods, the later mod in the load order wins a species' material block, and the Mo
 - Nothing is written into parks or saves. Remove the mod and every animal is vanilla again.
 
 Materials need Tyrant Framework 0.2.0 or newer.
+
+## The in-game editor
+
+Tyrant Framework adds a **Tyrant** button to the game's top bar (at the top right if a game update changes the bar). It opens
+a floating window: drag it by its title, resize it from the corner (at least 300 × 360; its place is remembered), and switch
+between **This animal**, **Whole skin** and **Whole species**. The tabs **Iridescence** and **Fur** hold the settings above
+as value boxes you can type into.
+
+- **Live preview:** every change shows at once on every animal it affects. It is a preview until **Save**; **Reset** goes
+  back. Closing the window, or picking another animal, asks what to do with unsaved changes (keep or discard).
+- **Export mask PNG** writes the mask as a PNG to edit in an image editor. It is staged until **Save**, then written under the
+  fixed file name (`iridescence-mask.png`, `fur-mask.png`, …) and becomes the mask. **Reload images** picks up your edits
+  without restarting. The PNG pickers list the target's folder and `UserData/Tyrant/Masks`.
+
+| What you edit | Save goes to |
+|---|---|
+| A mod skin | That mod's folder in the game (whoever made it) |
+| A vanilla skin | The mod whose block for it currently applies; otherwise the `vanilla-looks` mod, created for it |
+| A custom species | Its own mod |
+| **This animal** | `UserData/Tyrant/Looks/<save>.json`, named after the save file and keyed by the animal's persistent ID (its images in `Looks/<save>/<id>/`); never the park save |
+
+- Looks of single animals follow the **save file**, not the park's name: loading a save reads its own file, and every save
+  (Save As and autosaves too) writes its own copy, with the animal's images copied into that save's folder. Deleting a save
+  in the game deletes its looks. A new park needs its first save before **This animal** can be saved.
+- A look on **This animal** stays with the animal when you move it. Looks of animals that have left the park are dropped
+  (with their images) the next time the park is saved; only the file of the save being loaded or written is ever changed.
+- Saves into a mod change the **game's copy**; a manual mod update replaces those edits. Before you install, remove, delete or
+  uninstall, the app offers to bring them into the project (**Bring in looks**, see the app guide), or use
+  `tyrant mod looks <mod> --bring-in`. Uninstalling Tyrant keeps `UserData/Tyrant/Looks` and `UserData/Tyrant/Masks` (looks point at images there); without Tyrant the park loads vanilla.
+- Install records what it copied in `UserData/Tyrant/install-stamps.json`, which is how Tyrant tells what was changed in the game.
 
 ## Texture compression (`textures`)
 

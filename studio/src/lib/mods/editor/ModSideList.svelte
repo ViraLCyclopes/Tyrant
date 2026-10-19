@@ -19,6 +19,7 @@
     onAddReplacement = () => {},
     onAddPrefab = () => {},
     onAddMaterial = () => {},
+    onAddVanillaMaterial = () => {},
   }: {
     detail: ModDetail;
     check: ModCheckReport | null;
@@ -33,6 +34,7 @@
     onAddReplacement?: () => void;
     onAddPrefab?: () => void;
     onAddMaterial?: () => void;
+    onAddVanillaMaterial?: () => void;
   } = $props();
 
   const problems = $derived((check?.errors.length ?? 0) + (check?.warnings.length ?? 0));
@@ -49,6 +51,16 @@
     ...(detail.speciesMaterials ?? []).map((m) => m.species),
     ...(selection.kind === 'material' && !(detail.speciesMaterials ?? []).some((m) => m.species.toLowerCase() === selection.species.toLowerCase()) ? [selection.species] : []),
   ]);
+  const sameVanilla = (a: { species: string; skin: string }, b: { species: string; skin: string }) =>
+    a.species.toLowerCase() === b.species.toLowerCase() && a.skin.toLowerCase() === b.skin.toLowerCase();
+  /** Vanilla skins with material settings, and the selected one while it has none yet. */
+  const vanillaMaterials = $derived.by(() => {
+    const rows = (detail.vanillaSkinMaterials ?? []).map((m) => ({ species: m.species, skin: m.skin }));
+    const sel = selection;
+    if (sel.kind === 'vanillaMaterial' && !rows.some((r) => sameVanilla(r, sel))) rows.push({ species: sel.species, skin: sel.skin });
+    return rows;
+  });
+  const isVanilla = (row: { species: string; skin: string }) => selection.kind === 'vanillaMaterial' && sameVanilla(row, selection);
   const isMaterial = (species: string) => selection.kind === 'material' && selection.species.toLowerCase() === species.toLowerCase();
   const isSound = (s: ModSoundDto) =>
     selection.kind === 'sound' && selection.event === s.event && selection.species === s.species && selection.skin === s.skin;
@@ -309,6 +321,16 @@
   </div>
   {#each materialSpecies as species (species)}
     <button class:on={isMaterial(species)} onclick={() => onSelect({ kind: 'material', species })}>{species}</button>
+  {:else}
+    <p class="empty">None.</p>
+  {/each}
+
+  <div class="heading">
+    <span>Vanilla skin materials ({detail.vanillaSkinMaterials?.length ?? 0})</span>
+    <button class="add" aria-label="Add vanilla skin materials" onclick={onAddVanillaMaterial}>+ Add</button>
+  </div>
+  {#each vanillaMaterials as row (row.species.toLowerCase() + '/' + row.skin.toLowerCase())}
+    <button class:on={isVanilla(row)} onclick={() => onSelect({ kind: 'vanillaMaterial', species: row.species, skin: row.skin })}>{row.species} / {row.skin}</button>
   {:else}
     <p class="empty">None.</p>
   {/each}

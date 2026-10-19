@@ -1,7 +1,7 @@
 import { asRpcError } from '$lib/rpc/client';
-import type { ModImportResult, ModsListResult } from '$lib/rpc/types.gen';
+import type { ModImportResult, ModRow, ModsListResult } from '$lib/rpc/types.gen';
 import type { Tab } from '$lib/shell/tab.svelte';
-import type { Session } from '$lib/stores/session.svelte';
+import type { LooksPromptMod, Session } from '$lib/stores/session.svelte';
 
 // Mod actions shared by the Mods list and a mod's editor tab (its Mod menu), so both ask and report the same way.
 
@@ -15,9 +15,62 @@ export function installAria(state: string | null | undefined, name: string): str
   return state === 'changed' ? `Update ${name} in the game` : state === 'installed' ? `Refresh ${name} in the game` : `Install ${name} to the game`;
 }
 
+/**
+ * Before install, remove, delete-with-remove and uninstall: the in-game editor may have saved looks into these mods'
+ * installed copies (ModRow.gameLooks), which the action would throw away. Asks which to keep (BringInLooksDialog), brings
+ * those material folders into the workspace and copies the chosen mods that are only in the game there. False when the
+ * user cancelled or a step failed: the action must not go on.
+ */
+export async function keepGameLooks(session: Session, tab: Tab, rows: ModRow[], action: string): Promise<boolean> {
+  const asked: LooksPromptMod[] = [];
+  for (const row of rows.filter((r) => r.gameLooks)) {
+    if (row.state === 'gameOnly') {
+      asked.push({ id: row.id, name: row.name, changes: [], gameOnly: true });
+      continue;
+    }
+    if (row.state === 'notInstalled') continue;
+    const r = await tab.safely(() => session.rpc.call('mods.looksChanges', { id: row.id }));
+    if (!r) return false;
+    const changes = r.changes.filter((c) => c.gameChanged);
+    if (changes.length) asked.push({ id: row.id, name: row.name, changes, gameOnly: false });
+  }
+  if (!asked.length) return true;
+  const answer = await session.askLooks(action, asked);
+  if (!answer) return false;
+  for (const mod of asked) {
+    const folders = answer.bringIn[mod.id] ?? [];
+    if (!folders.length) continue;
+    if ((await tab.safely(() => session.rpc.call('mods.bringInLooks', { id: mod.id, folders }))) === null) return false;
+    tab.info(`Brought ${folders.length} ${folders.length === 1 ? 'look' : 'looks'} made in the game into '${mod.name}' in the workspace.`);
+  }
+  for (const id of answer.copy) if (!(await copyFromGame(session, tab, id))) return false;
+  return true;
+}
+
+/** Bring in looks… (Mods list): the looks made in the game, into the workspace, without installing or removing anything. */
+export async function bringInLooks(session: Session, tab: Tab, row: ModRow): Promise<boolean> {
+  return keepGameLooks(session, tab, [row], '');
+}
+
+/** The mod's row in the Mods list; when the list cannot be read, one that may have looks made in the game (so keepGameLooks asks). */
+async function rowOf(session: Session, id: string, name: string): Promise<ModRow | null> {
+  try {
+    return (await session.rpc.call('mods.list')).mods.find((m) => m.id === id) ?? null;
+  } catch {
+    return unknownRow(id, name);
+  }
+}
+
+/** A mod whose state could not be read: never assume the game changed nothing, ask mods.looksChanges. */
+function unknownRow(id: string, name: string): ModRow {
+  return { id, name, version: '', author: null, replacements: 0, skins: 0, state: 'changed', enabled: null, dir: null, error: null, gameLooks: true };
+}
+
 export async function installMod(session: Session, tab: Tab, id: string, name: string): Promise<boolean> {
   const list = await tab.quietly(() => session.rpc.call('mods.list'));
-  const state = list?.mods.find((m) => m.id === id)?.state;
+  const row = list ? list.mods.find((m) => m.id === id) : unknownRow(id, name);
+  const state = row?.state;
+  if (row && !(await keepGameLooks(session, tab, [row], `Installing '${name}' again`))) return false;
   const where = `UserData\\Tyrant\\Mods\\${id}`;
   const message = !list?.frameworkInstalled
     ? `Install '${name}' into the game? This also installs MelonLoader (if needed) and Tyrant's framework. No game file is replaced; Uninstall from game on the Workspace tab undoes everything.`
@@ -35,6 +88,8 @@ export async function installMod(session: Session, tab: Tab, id: string, name: s
 }
 
 export async function removeFromGame(session: Session, tab: Tab, id: string, name: string): Promise<boolean> {
+  const row = await rowOf(session, id, name);
+  if (row && !(await keepGameLooks(session, tab, [row], `Removing '${name}' from the game`))) return false;
   if (!(await session.platform.confirm(`Remove '${name}' from the game?`, 'Remove from game'))) return false;
   return (await tab.safely(() => session.rpc.call('mods.remove', { id }))) !== null;
 }
@@ -134,6 +189,9 @@ export async function deleteMod(
   name: string,
   removeFromGame: boolean,
 ): Promise<{ list: ModsListResult } | { error: string }> {
+  const row = removeFromGame ? await rowOf(session, id, name) : null;
+  if (row && !(await keepGameLooks(session, tab, [row], `Deleting '${name}' with its copy in the game`)))
+    return { error: 'Nothing was deleted: the looks made in the game were not brought in.' };
   try {
     const list = await session.rpc.call('mods.delete', { id, removeFromGame });
     // Close first: a closed tab's log goes with it, and the closed tab then logs to every tab, so the message stays.

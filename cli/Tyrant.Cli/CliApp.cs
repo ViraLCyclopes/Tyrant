@@ -137,6 +137,7 @@ public static class CliApp
                 mod.AddCommand<ModCopyFromGameCommand>("copy-from-game").WithDescription("Copy a mod that is only in the game folder into the workspace (its PNGs extracted from its pack).");
                 mod.AddCommand<ModCookCommand>("cook").WithDescription("Cook a mod's textures into textures.tpack in its workspace folder, without installing.");
                 mod.AddCommand<ModRemoveCommand>("remove").WithDescription("Remove a mod from the game.");
+                mod.AddCommand<ModLooksCommand>("looks").WithDescription("List the looks made in the game (material folders the in-game editor changed), or bring them into the workspace.");
                 mod.AddCommand<ModDeleteCommand>("delete").WithDescription("Delete a mod from the workspace (to the Recycle Bin), and from the game unless --keep-in-game.");
                 mod.AddCommand<ModEnableCommand>("enable").WithDescription("Turn an installed mod on.");
                 mod.AddCommand<ModDisableCommand>("disable").WithDescription("Turn an installed mod off.");

@@ -17,8 +17,13 @@ public sealed partial class ModsMethods
     [RpcMethod("mods.setMaterials")]
     public ModDetail SetMaterials(ModSetMaterialsParams p)
     {
-        Target(p.Skin, p.Species);
+        OneOf(p.Skin, p.Species, p.VanillaSkin);
         if (p.Skin is { } skin) return Edit(p.Id, p.Revision, mod => mod.SetSkinMaterials(skin, p.Materials), $"set the materials of '{skin}'");
+        if (p.VanillaSkin is { } vanilla)
+        {
+            var (vanillaSpecies, skinName) = VanillaParts(vanilla);
+            return Edit(p.Id, p.Revision, mod => mod.SetVanillaSkinMaterials(vanillaSpecies, skinName, p.Materials), $"set the materials of vanilla skin '{vanilla}'");
+        }
         var (ws, install) = session.Current();
         var dump = TrySpecies(ws) ?? throw new TyrantException(TyrantErrorCode.DataMissing, NeedsDump, FixAction.RefreshWorkspace);
         var index = TryIndex(ws) ?? throw new TyrantException(TyrantErrorCode.AssetIndexMissing, NeedsIndex, FixAction.ReindexAssets);
@@ -29,9 +34,17 @@ public sealed partial class ModsMethods
     [RpcMethod("mods.setMaterialFile")]
     public ModDetail SetMaterialFile(ModSetMaterialFileParams p)
     {
-        Target(p.Skin, p.Species);
-        return Edit(p.Id, p.Revision, mod => mod.SetMaterialFile(p.Skin, p.Species, p.Material, p.Part, p.Png),
-            $"{(p.Png is null ? "removed" : "set")} the {p.Part} of '{p.Material}' on '{p.Skin ?? p.Species}'");
+        OneOf(p.Skin, p.Species, p.VanillaSkin);
+        MaterialOwner owner;
+        if (p.Skin is not null) owner = new MaterialOwner(MaterialOwnerKind.Skin, p.Skin, null, null);
+        else if (p.VanillaSkin is not null)
+        {
+            var (vanillaSpecies, skinName) = VanillaParts(p.VanillaSkin);
+            owner = new MaterialOwner(MaterialOwnerKind.VanillaSkin, null, vanillaSpecies, skinName);
+        }
+        else owner = new MaterialOwner(MaterialOwnerKind.Species, null, p.Species, null);
+        return Edit(p.Id, p.Revision, mod => mod.SetMaterialFile(owner, p.Material, p.Part, p.Png),
+            $"{(p.Png is null ? "removed" : "set")} the {p.Part} of '{p.Material}' on '{p.Skin ?? p.VanillaSkin ?? p.Species}'");
     }
 
     [RpcMethod("mods.materialInfo")]
@@ -39,7 +52,7 @@ public sealed partial class ModsMethods
     {
         var (ws, install) = session.Current();
         var mod = ModProject.Open(ws, p.Id);
-        var speciesId = Target(p.Skin, p.Species) is { } skinId ? mod.Skin(skinId).Species : p.Species!;
+        var speciesId = SpeciesOf(mod, p.Skin, p.Species, p.VanillaSkin);
         var empty = MaterialProperties.All.Select(x => Property(x, null, "default")).ToList();
         if (TrySpecies(ws) is not { } dump) return new ModMaterialInfo(speciesId, speciesId, empty, null, null, false, NeedsDump);
         if (TryIndex(ws) is not { } index) return new ModMaterialInfo(speciesId, speciesId, empty, null, null, false, NeedsIndex);
@@ -47,12 +60,12 @@ public sealed partial class ModsMethods
         var game = GameMaterial(install, species, index, speciesId);
         if (game is null) return new ModMaterialInfo(speciesId, speciesId, empty, null, null, false, $"'{speciesId}' has no animal material to change.");
 
-        var (below, sources) = MaterialPreview.Inherited(mod, p.Skin, p.Species, game.Name);
+        var (below, sources) = MaterialPreview.Inherited(mod, p.Skin, p.Species, game.Name, p.VanillaSkin);
         var rows = MaterialProperties.All.Select(x =>
         {
             if (below is not null && below.Settings.TryGetValue(x.Key, out var set))
-                return Property(x, Json.Write(set.ToJson()), sources.GetValueOrDefault(x.Key, "species"));
-            if (GameValue(game, x) is { } value) return Property(x, Json.Write(value.ToJson()), "game");
+                return Property(x, Json.Write(set.ToJson(Count(x))), sources.GetValueOrDefault(x.Key, "species"));
+            if (GameValue(game, x) is { } value) return Property(x, Json.Write(value.ToJson(Count(x))), "game");
             return Property(x, null, "default");
         }).ToList();
         string? iridescence = null;
@@ -61,7 +74,7 @@ public sealed partial class ModsMethods
             var json = MaterialOverrides.ToJson(new Dictionary<string, MaterialOverride> { [game.Name] = new MaterialOverride { Iridescence = i } });
             if (json[game.Name] is Dictionary<string, object?> entry && entry.TryGetValue("iridescence", out var block)) iridescence = Json.Write(block);
         }
-        return new ModMaterialInfo(game.Name, speciesId, rows, iridescence, VanillaIridescence(mod, species, p.Skin, null), game.Ramp is not null, null);
+        return new ModMaterialInfo(game.Name, speciesId, rows, iridescence, VanillaIridescence(mod, species, p.Skin, p.VanillaSkin, null), game.Ramp is not null, null);
     }
 
     [RpcMethod("mods.materialPreview")]
@@ -69,7 +82,7 @@ public sealed partial class ModsMethods
     {
         var (ws, install) = session.Current();
         var mod = ModProject.Open(ws, p.Id);
-        var speciesId = Target(p.Skin, p.Species) is { } skinId ? mod.Skin(skinId).Species : p.Species!;
+        var speciesId = SpeciesOf(mod, p.Skin, p.Species, p.VanillaSkin);
         var dump = TrySpecies(ws);
         var index = TryIndex(ws);
         var species = dump is null ? null : mod.SpeciesFor(ws, install, dump);
@@ -77,7 +90,7 @@ public sealed partial class ModsMethods
         Dictionary<string, MaterialOverride>? blocks;
         try
         {
-            blocks = string.IsNullOrWhiteSpace(p.Materials) ? null : MaterialOverrides.Parse(Json.Parse(p.Materials), p.Skin ?? speciesId, p.Skin is not null);
+            blocks = string.IsNullOrWhiteSpace(p.Materials) ? null : MaterialOverrides.Parse(Json.Parse(p.Materials), p.Skin ?? p.VanillaSkin ?? speciesId, p.Species is null);
         }
         catch (Exception ex) when (ex is ManifestException or FormatException)
         {
@@ -86,10 +99,16 @@ public sealed partial class ModsMethods
         var material = game?.Name ?? blocks?.Keys.FirstOrDefault() ?? "";
         var draft = blocks is not null && blocks.TryGetValue(material, out var found) ? found : null;
         var dir = PreviewsDir(ws, "materials");
+        // The game's maps for masks taken from a slot: the vanilla skin's, or a mod skin's base skin's (for a slot it has no PNG for).
+        var vanilla = species is null ? null : p.VanillaSkin is not null ? VanillaOf(species, p.VanillaSkin)
+            : p.Skin is not null ? SkinMaps.BaseOf(species, mod.Skin(p.Skin)) : null;
         var result = MaterialPreview.Build(mod, p.Skin, p.Species, material, draft, p.Sex, game, dir,
             record => record.Guid is null || index is null ? null
                 : SkinMaps.Write("guid:" + record.Guid, install, index, Options.AssetReader, Path.Combine(dir, $"{record.Guid}.png")),
-            species is null ? null : VanillaIridescence(mod, species, p.Skin, p.Sex));
+            species is null ? null : VanillaIridescence(mod, species, p.Skin, p.VanillaSkin, p.Sex),
+            p.VanillaSkin,
+            slot => SkinMaps.Source(null, null, vanilla, slot, p.Sex) is { } source && index is not null
+                ? SkinMaps.Write(source, install, index, Options.AssetReader, Path.Combine(dir, source[5..] + ".png")) : null);
         return new ModMaterialPreview(result.On, result.Strength, result.Scale, result.Power, result.Bias, InCache(ws, mod, dir, result.RampFile),
             InCache(ws, mod, dir, result.MaskFile), result.MaskSt, result.Numbers.TryGetValue("_Smoothness", out var smoothness) ? smoothness : null);
     }
@@ -98,16 +117,47 @@ public sealed partial class ModsMethods
     public ModThinFilm ThinFilmStops(ModThinFilmParams p) =>
         new(ThinFilm.Ramp(p.Thickness, p.Index, Math.Clamp(p.Count, 1, IridescenceSettings.MaxRampStops)).Select(c => c.ToString()).ToList());
 
-    /// <summary>Requires exactly one of skin and species; returns the skin (null for a species).</summary>
-    private static string? Target(string? skin, string? species)
+    [RpcMethod("mods.vanillaSkins")]
+    public ModVanillaSkinList VanillaSkinsOf(ModVanillaSkinsParams p)
     {
-        if ((skin is null) == (species is null)) throw new TyrantException(TyrantErrorCode.ModInvalid, "Give a skin or a species, not both.");
-        return skin;
+        var (ws, install) = session.Current();
+        var mod = ModProject.Open(ws, p.Id);
+        var species = mod.SpeciesFor(ws, install, RequireSpecies(ws));
+        var target = species.FirstOrDefault(s => string.Equals(s.SpeciesId, p.Species, StringComparison.OrdinalIgnoreCase));
+        return new ModVanillaSkinList(target?.Skins.Select(v => v.Name).ToList() ?? []);
     }
 
-    /// <summary>A skin's base (vanilla) skin's own iridescence for a sex (null: the stronger); null for a species or when the dump cannot tell.</summary>
-    private static float? VanillaIridescence(ModProject mod, IReadOnlyList<SpeciesSkins> species, string? skinId, string? sex) =>
-        skinId is null ? null : SkinMaps.BaseOf(species, mod.Skin(skinId))?.Iridescence(sex);
+    /// <summary>Requires exactly one of skin, species and vanilla skin.</summary>
+    private static void OneOf(string? skin, string? species, string? vanillaSkin)
+    {
+        if ((skin is null ? 0 : 1) + (species is null ? 0 : 1) + (vanillaSkin is null ? 0 : 1) != 1)
+            throw new TyrantException(TyrantErrorCode.ModInvalid, "Give a skin, a species or a vanilla skin, only one.");
+    }
+
+    /// <summary>A vanilla skin's key "&lt;species&gt;/&lt;skin name&gt;" as its species and name (the name may hold '/').</summary>
+    private static (string Species, string SkinName) VanillaParts(string key) =>
+        key.IndexOf('/') is > 0 and var slash && slash < key.Length - 1 ? (key[..slash], key[(slash + 1)..])
+            : throw new TyrantException(TyrantErrorCode.ModInvalid, $"Name a vanilla skin as \"<species>/<skin name>\", not \"{key}\".");
+
+    /// <summary>The species of the one target given (a skin's, a vanilla skin's or the species itself).</summary>
+    private static string SpeciesOf(ModProject mod, string? skin, string? species, string? vanillaSkin)
+    {
+        OneOf(skin, species, vanillaSkin);
+        return skin is not null ? mod.Skin(skin).Species : vanillaSkin is not null ? VanillaParts(vanillaSkin).Species : species!;
+    }
+
+    /// <summary>The vanilla skin of the key "&lt;species&gt;/&lt;skin name&gt;" (any case); null when the dump has none.</summary>
+    private static VanillaSkin? VanillaOf(IReadOnlyList<SpeciesSkins> species, string key)
+    {
+        var (speciesId, name) = VanillaParts(key);
+        return species.FirstOrDefault(s => string.Equals(s.SpeciesId, speciesId, StringComparison.OrdinalIgnoreCase))
+            ?.Skins.FirstOrDefault(v => string.Equals(v.Name, name, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>The own iridescence of a skin's base (vanilla) skin, or of a vanilla skin itself, for a sex (null: the stronger); null for a species or when the dump cannot tell.</summary>
+    private static float? VanillaIridescence(ModProject mod, IReadOnlyList<SpeciesSkins> species, string? skinId, string? vanillaSkin, string? sex) =>
+        skinId is not null ? SkinMaps.BaseOf(species, mod.Skin(skinId))?.Iridescence(sex)
+            : vanillaSkin is not null ? VanillaOf(species, vanillaSkin)?.Iridescence(sex) : null;
 
     private AnimalMaterial? GameMaterial(GameInstall install, IReadOnlyList<SpeciesSkins> species, AssetIndex index, string speciesId)
     {
@@ -120,11 +170,24 @@ public sealed partial class ModsMethods
     {
         MaterialValueKind.Number => game.Floats.TryGetValue(x.Key, out var n) ? MaterialValue.OfNumber(n) : null,
         MaterialValueKind.Color => game.Colors.TryGetValue(x.Key, out var c) && c.Length >= 3 ? MaterialValue.OfColor(new Rgb(c[0], c[1], c[2])) : null,
-        _ => game.Colors.TryGetValue(x.Key, out var v) ? MaterialValue.OfVector(v) : null,
+        _ => game.Colors.TryGetValue(x.Key, out var v) ? MaterialValue.OfVector(x.Components == 3 && v.Length > 3 ? v[..3] : v) : null,
     };
 
+    /// <summary>How many numbers a vector setting is written with (exactly 3, or all four).</summary>
+    private static int Count(MaterialProperty x) => x.Components == 3 ? 3 : 4;
+
     private static ModMaterialProperty Property(MaterialProperty x, string? inherited, string source) =>
-        new(x.Key, x.Group, x.Label, x.Kind.ToString().ToLowerInvariant(), x.Min, x.Max, inherited, source);
+        new(x.Key, x.Group, x.Label, x.Kind.ToString().ToLowerInvariant(), x.Min, x.Max, inherited, source, x.Components);
+
+    private static IReadOnlyList<ModVanillaSkinMaterialsDto>? VanillaSkinMaterialsOf(ModManifest m)
+    {
+        var list = m.VanillaSkinMaterials.Where(x => x.Value.Count > 0).OrderBy(x => x.Key, StringComparer.Ordinal).Select(x =>
+        {
+            var (species, skin) = VanillaParts(x.Key);
+            return new ModVanillaSkinMaterialsDto(species, skin, Json.Write(MaterialOverrides.ToJson(x.Value)));
+        }).ToList();
+        return list.Count == 0 ? null : list;
+    }
 
     /// <summary>The preview file as a path in the preview cache (the app may only load files there); a mod's own file is copied.</summary>
     private static string? InCache(Workspace ws, ModProject mod, string dir, string? file) =>
@@ -134,8 +197,8 @@ public sealed partial class ModsMethods
 
     private static IReadOnlyList<ModSpeciesMaterialsDto>? SpeciesMaterialsOf(ModManifest m)
     {
-        var list = m.Models.Where(x => x.Materials is not null)
-            .Select(x => new ModSpeciesMaterialsDto(x.Target, Json.Write(MaterialOverrides.ToJson(x.Materials!)))).ToList();
+        var list = m.SpeciesMaterials.Where(x => x.Value.Count > 0)
+            .Select(x => new ModSpeciesMaterialsDto(x.Key, Json.Write(MaterialOverrides.ToJson(x.Value)))).ToList();
         return list.Count == 0 ? null : list;
     }
 }

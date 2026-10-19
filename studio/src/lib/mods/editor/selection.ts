@@ -8,4 +8,5 @@ export type Selection =
   | { kind: 'sound'; event: string; species: string | null; skin: string | null }
   | { kind: 'prefab'; target: string }
   | { kind: 'material'; species: string }
+  | { kind: 'vanillaMaterial'; species: string; skin: string }
   | { kind: 'check' };

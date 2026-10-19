@@ -9,6 +9,7 @@
   import AddModel from './AddModel.svelte';
   import AddPrefabTarget from './AddPrefabTarget.svelte';
   import AddSpeciesMaterial from './AddSpeciesMaterial.svelte';
+  import AddVanillaSkinMaterial from './AddVanillaSkinMaterial.svelte';
   import PrefabPage from './PrefabPage.svelte';
   import AddReplacement from './AddReplacement.svelte';
   import AddSound from './AddSound.svelte';
@@ -24,6 +25,7 @@
   import SkinPage from './SkinPage.svelte';
   import SoundPage from './SoundPage.svelte';
   import SpeciesMaterialPage from './SpeciesMaterialPage.svelte';
+  import VanillaSkinMaterialPage from './VanillaSkinMaterialPage.svelte';
   import SpeciesDatabase from './SpeciesDatabase.svelte';
 
   const session = getSession();
@@ -35,7 +37,7 @@
   let addingSpecies = $state<string | null>(null);
   let removingSkin = $state<string | null>(null);
   /** The form shown instead of a page: + Add on Skins, Models or Sounds. */
-  let adding = $state<'skin' | 'model' | 'sound' | 'texture' | 'prefab' | 'material' | null>(null);
+  let adding = $state<'skin' | 'model' | 'sound' | 'texture' | 'prefab' | 'material' | 'vanillaMaterial' | null>(null);
 
   onMount(() => {
     void load();
@@ -81,7 +83,7 @@
         },
         { label: 'Restore cutouts', run: () => void restore(), enabled: () => !!doc.check?.missingCutouts?.length },
         { label: 'Open folder', run: () => void (doc.detail && session.platform.reveal(doc.detail.dir)), enabled: () => !!doc.detail },
-        { label: 'Remove from game', run: () => void (doc.detail && removeFromGame(session, tab, doc.id, doc.detail.name)), enabled: () => !!doc.detail && !session.busy },
+        { label: 'Remove from game', run: () => void removeFromTheGame(), enabled: () => !!doc.detail && !session.busy },
         { label: 'Delete mod…', run: () => void askDelete(), enabled: () => !!doc.detail && !session.busy },
       ],
     },
@@ -127,8 +129,18 @@
     if (doc.detail?.revision) void refreshInstallState();
   });
 
+  // Both may first bring looks made in the game into this mod's material files: take them (undo stays only if mod.json did not change).
   async function install() {
-    if (doc.detail && (await installMod(session, tab, doc.id, doc.detail.name))) await refreshInstallState();
+    if (!doc.detail) return;
+    const installed = await installMod(session, tab, doc.id, doc.detail.name);
+    await doc.refreshIfChanged();
+    if (installed) await refreshInstallState();
+  }
+
+  async function removeFromTheGame() {
+    if (!doc.detail) return;
+    await removeFromGame(session, tab, doc.id, doc.detail.name);
+    await doc.refreshIfChanged();
   }
 
   async function restore() {
@@ -204,7 +216,7 @@
     <ModSideList detail={doc.detail} check={doc.check} {selection} onSelect={(s) => { adding = null; selection = s; }}
       onAddSkin={(group) => { addingGroup = group; addingSpecies = null; adding = 'skin'; }}
       onArrange={(build) => doc.edit('mods.arrangeSkins', (d) => { const order = build(d.skins); return order ? { order } : null; })} onRemoveSkin={(id) => (removingSkin = id)} onAddModel={() => (adding = 'model')} onAddSound={() => (adding = 'sound')}
-      onAddReplacement={() => (adding = 'texture')} onAddPrefab={() => (adding = 'prefab')} onAddMaterial={() => (adding = 'material')} />
+      onAddReplacement={() => (adding = 'texture')} onAddPrefab={() => (adding = 'prefab')} onAddMaterial={() => (adding = 'material')} onAddVanillaMaterial={() => (adding = 'vanillaMaterial')} />
     <section class="page">
       {#if adding === 'skin'}
         <AddSkin modId={doc.id} group={addingGroup} speciesId={addingSpecies ?? undefined} onDone={skinAdded} />
@@ -216,6 +228,8 @@
         <AddReplacement modId={doc.id} onDone={replacementAdded} />
       {:else if adding === 'prefab'}
         <AddPrefabTarget {doc} onDone={(t) => { adding = null; if (t) selection = { kind: 'prefab', target: t }; }} />
+      {:else if adding === 'vanillaMaterial'}
+        <AddVanillaSkinMaterial {doc} onDone={(p) => { adding = null; if (p) selection = { kind: 'vanillaMaterial', ...p }; }} />
       {:else if adding === 'material'}
         <AddSpeciesMaterial {doc} onDone={(s) => { adding = null; if (s) selection = { kind: 'material', species: s }; }} />
       {:else if selection.kind === 'details'}
@@ -238,6 +252,8 @@
         <ReplacementPage {doc} replacement={selectedReplacement} onRemoved={() => (selection = { kind: 'details' })} />
       {:else if selection.kind === 'prefab'}
         <PrefabPage {doc} target={selection.target} onRemoved={() => (selection = { kind: 'details' })} />
+      {:else if selection.kind === 'vanillaMaterial'}
+        {#key `${selection.species}/${selection.skin}`}<VanillaSkinMaterialPage {doc} species={selection.species} skin={selection.skin} onRemoved={() => (selection = { kind: 'details' })} />{/key}
       {:else if selection.kind === 'material'}
         {#key selection.species}<SpeciesMaterialPage {doc} species={selection.species} onRemoved={() => (selection = { kind: 'details' })} />{/key}
       {:else if selection.kind === 'check'}

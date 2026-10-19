@@ -20,17 +20,23 @@ public static class MaterialPreview
     private const string StartingSkin = "starting skin";
 
     /// <summary>
-    /// The layers under the one being edited (a skin: its starting skin, then its species; a species: none), merged, and which
-    /// layer each set field comes from (setting key, or "iridescence.&lt;field&gt;"). Base game values are not part of it.
+    /// The layers under the one being edited (a skin: its starting skin, then its species; a vanilla skin
+    /// (<paramref name="vanillaSkin"/>, "&lt;species&gt;/&lt;skin&gt;"): its species; a species: none), merged, and which layer
+    /// each set field comes from (setting key, or "iridescence.&lt;field&gt;"). Base game values are not part of it.
     /// </summary>
-    public static (MaterialOverride? Below, IReadOnlyDictionary<string, string> Sources) Inherited(ModProject mod, string? skinId, string? speciesId, string material)
+    public static (MaterialOverride? Below, IReadOnlyDictionary<string, string> Sources) Inherited(ModProject mod, string? skinId, string? speciesId, string material,
+        string? vanillaSkin = null)
     {
         var sources = new Dictionary<string, string>(StringComparer.Ordinal);
-        if (skinId is null) return (null, sources);
-        var skin = mod.Skin(skinId);
-        MaterialOverride? starting = null;
-        if (StartingSkins.InheritsFrom(mod.Manifest, skin, out var layer) && layer.Materials is { } blocks && blocks.TryGetValue(material, out var found)) starting = found;
-        var species = mod.SpeciesMaterial(speciesId ?? skin.Species, material);
+        MaterialOverride? starting = null, species;
+        if (skinId is not null)
+        {
+            var skin = mod.Skin(skinId);
+            if (StartingSkins.InheritsFrom(mod.Manifest, skin, out var layer) && layer.Materials is { } blocks && blocks.TryGetValue(material, out var found)) starting = found;
+            species = mod.SpeciesMaterial(speciesId ?? skin.Species, material);
+        }
+        else if (vanillaSkin is not null && vanillaSkin.IndexOf('/') is > 0 and var slash) species = mod.SpeciesMaterial(vanillaSkin[..slash], material);
+        else return (null, sources);
         foreach (var (name, layerOverride) in new[] { (StartingSkin, starting), (Species, species) })
         {
             if (layerOverride is null) continue;
@@ -45,12 +51,15 @@ public static class MaterialPreview
     /// The preview of <paramref name="draft"/> (the settings being edited) over this mod's lower layers and the game's material.
     /// Files are written under <paramref name="outDir"/> named by their content; <paramref name="exportTexture"/> gives a game texture as a PNG.
     /// <paramref name="gameStrength"/> is the vanilla skin's own iridescence for this sex (<see cref="VanillaSkin.Iridescence"/>),
-    /// used when no layer sets a strength; null when unknown (none).
+    /// used when no layer sets a strength; null when unknown (none). <paramref name="vanillaMap"/> gives the game's map in a slot,
+    /// for this sex, as a PNG file (null: none), for masks taken from one: a vanilla skin's (<paramref name="vanillaSkin"/>) own, or a
+    /// mod skin's base skin's for a slot the mod has no PNG for (the framework does the same in the game).
     /// </summary>
     public static MaterialPreviewResult Build(ModProject mod, string? skinId, string? speciesId, string material, MaterialOverride? draft, string sex,
-        AnimalMaterial? game, string outDir, Func<AssetRecord, string?> exportTexture, float? gameStrength = null)
+        AnimalMaterial? game, string outDir, Func<AssetRecord, string?> exportTexture, float? gameStrength = null,
+        string? vanillaSkin = null, Func<string, string?>? vanillaMap = null)
     {
-        var merged = MaterialTable.Merge(draft, Inherited(mod, skinId, speciesId, material).Below);
+        var merged = MaterialTable.Merge(draft, Inherited(mod, skinId, speciesId, material, vanillaSkin).Below);
         var i = merged?.Iridescence;
         var strength = i?.Strength?.Normal ?? gameStrength ?? 0f;
         var numbers = new Dictionary<string, float>(StringComparer.Ordinal);
@@ -70,7 +79,9 @@ public static class MaterialPreview
         if (i?.Mask is { } mask)
         {
             if (mask.File is not null) maskFile = ModFile(mod, mask.File);
-            else if (mask.From is not null && skinId is not null && SlotImage(mod, skinId, sex, mask.From) is { } slot)
+            else if (mask.From is not null
+                     && (skinId is not null ? SlotImage(mod, skinId, sex, mask.From) ?? Decode(vanillaMap?.Invoke(mask.From))
+                         : vanillaSkin is not null ? Decode(vanillaMap?.Invoke(mask.From)) : null) is { } slot)
                 maskFile = WritePng(outDir, MaskChannel.Extract(slot.Data, mask.Channel, mask.Invert), slot.Width, slot.Height);
         }
         else if (game?.Mask is { } gameMask) maskFile = exportTexture(gameMask);
@@ -112,17 +123,23 @@ public static class MaterialPreview
         {
             var own = sex == "female" ? entry.Female : entry.Male;
             if (own is null || !own.TryGetValue(slot, out var file) || ModFile(mod, file) is not { } path) continue;
-            try
-            {
-                using var stream = File.OpenRead(path);
-                return ImageResult.FromStream(stream, StbImageSharp.ColorComponents.RedGreenBlueAlpha);
-            }
-            catch (Exception ex) when (ex is InvalidOperationException or IOException or ArgumentException)
-            {
-                return null;
-            }
+            return Decode(path);
         }
         return null;
+    }
+
+    private static ImageResult? Decode(string? path)
+    {
+        if (path is null || !File.Exists(path)) return null;
+        try
+        {
+            using var stream = File.OpenRead(path);
+            return ImageResult.FromStream(stream, StbImageSharp.ColorComponents.RedGreenBlueAlpha);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or IOException or ArgumentException)
+        {
+            return null;
+        }
     }
 
     private static string WritePng(string outDir, byte[] rgba, int width, int height)

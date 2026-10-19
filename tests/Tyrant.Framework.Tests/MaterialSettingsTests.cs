@@ -4,11 +4,30 @@ namespace Tyrant.Framework.Tests;
 
 public class MaterialSettingsTests
 {
-    private static ModManifest WithMaterials(string materials) => ModManifest.Parse($$"""
-        { "format": 1, "id": "mod-id", "skins": [ { "id": "rainbow", "species": "S", "male": { "diffuse": "a.png" }, "materials": {{materials}} } ] }
-        """);
+    private const string SkinJson = """
+        { "format": 1, "id": "mod-id", "skins": [ { "id": "rainbow", "species": "S", "male": { "diffuse": "a.png" } } ] }
+        """;
 
-    private static MaterialOverride Titanoboa(string materials) => WithMaterials(materials).Skins[0].Materials!["Titanoboa"];
+    private static string TempDir() => Path.Combine(Path.GetTempPath(), "tyrant-tests", Guid.NewGuid().ToString("N"));
+
+    private static void WriteFile(string dir, string relative, string text)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.Combine(dir, relative))!);
+        File.WriteAllText(Path.Combine(dir, relative), text);
+    }
+
+    /// <summary>The "rainbow" skin with this materials.json map, loaded from its folder; the problems are what Load reported.</summary>
+    private static (ModManifest Manifest, List<string> Problems) WithMaterials(string materials)
+    {
+        var dir = TempDir();
+        WriteFile(dir, "materials/skins/rainbow/materials.json", "{ \"format\": 1, \"materials\": " + materials + " }");
+        var manifest = ModManifest.Parse(SkinJson);
+        var problems = new List<string>();
+        MaterialFolders.Load(manifest, dir, problems);
+        return (manifest, problems);
+    }
+
+    private static MaterialOverride Titanoboa(string materials) => WithMaterials(materials).Manifest.Skins[0].Materials!["Titanoboa"];
 
     [Fact]
     public void Reads_iridescence_and_settings()
@@ -33,6 +52,19 @@ public class MaterialSettingsTests
         Assert.Equal(0.55f, m.Settings["_Smoothness"].Number);
         Assert.Equal("#40c0ff", m.Settings["_FresnelColor"].Color.ToString());
         Assert.Equal(new[] { 4f, 4f, 0f, 0f }, m.Settings["_DetailScale"].Vector);
+    }
+
+    [Fact]
+    public void A_droop_direction_is_written_with_exactly_three_numbers_and_reads_back()
+    {
+        var m = new MaterialOverride();
+        m.Settings["_DroopDirection"] = MaterialValue.OfVector(0, -10.3f, 8.11f);
+        m.Settings["_DetailScale"] = MaterialValue.OfVector(4, 4);
+        var json = Json.Write(MaterialOverrides.ToJson(new Dictionary<string, MaterialOverride> { ["Titanoboa"] = m }));
+
+        Assert.Contains("[0,-10.3,8.11]", string.Concat(json.Where(c => !char.IsWhiteSpace(c))));
+        var read = MaterialOverrides.Parse(Json.Parse(json), "Skin", true)!["Titanoboa"];
+        Assert.Equal(new[] { 0f, -10.3f, 8.11f, 0f }, read.Settings["_DroopDirection"].Vector);
     }
 
     [Fact]
@@ -73,44 +105,58 @@ public class MaterialSettingsTests
     [InlineData("""{ "Titanoboa": { "iridescence": { "mask": { "from": "extra", "channel": "x" } } } }""", "r, g, b or a")]
     public void Material_problems_are_explained(string materials, string expected)
     {
-        var ex = Assert.Throws<ManifestException>(() => WithMaterials(materials));
+        var (manifest, problems) = WithMaterials(materials);
 
-        Assert.Contains(expected, ex.Message);
-        Assert.Contains("rainbow", ex.Message);
+        var problem = Assert.Single(problems);
+        Assert.Contains(expected, problem);
+        Assert.Contains("rainbow", problem);
+        Assert.StartsWith("materials/skins/rainbow/materials.json: ", problem);
+        Assert.Null(manifest.Skins[0].Materials);
     }
 
     [Fact]
-    public void A_species_entry_has_no_mask_from_a_slot()
+    public void A_species_file_has_no_mask_from_a_slot()
     {
-        var ex = Assert.Throws<ManifestException>(() => ModManifest.Parse("""
-            { "format": 1, "id": "mod-id", "models": [ { "target": "Titanoboa", "materials": { "Titanoboa": { "iridescence": { "mask": { "from": "extra" } } } } } ] }
-            """));
-        Assert.Contains("works only on a skin", ex.Message);
+        var dir = TempDir();
+        WriteFile(dir, "materials/species/Titanoboa/materials.json",
+            """{ "format": 1, "species": "Titanoboa", "materials": { "Titanoboa": { "iridescence": { "mask": { "from": "extra" } } } } }""");
+        var manifest = ModManifest.Parse("""{ "format": 1, "id": "mod-id" }""");
+        var problems = new List<string>();
+        MaterialFolders.Load(manifest, dir, problems);
+        Assert.Contains("works only on a skin", Assert.Single(problems));
 
-        var entry = ModManifest.Parse("""
-            { "format": 1, "id": "mod-id", "models": [ { "target": "Titanoboa", "materials": { "Titanoboa": { "settings": { "_Smoothness": 0.5 } } } } ] }
-            """).Models[0];
-        Assert.Equal("", entry.File);
-        Assert.Null(entry.Rig);
-        Assert.False(entry.HasModelOrRig);
-        Assert.NotNull(entry.Materials);
+        WriteFile(dir, "materials/species/Titanoboa/materials.json",
+            """{ "format": 1, "species": "Titanoboa", "materials": { "Titanoboa": { "settings": { "_Smoothness": 0.5 } } } }""");
+        problems.Clear();
+        MaterialFolders.Load(manifest, dir, problems);
+        Assert.Empty(problems);
+        Assert.Empty(manifest.Models);
+        Assert.Equal(0.5f, manifest.SpeciesMaterials["Titanoboa"]["Titanoboa"].Settings["_Smoothness"].Number);
     }
 
     [Fact]
     public void Written_materials_read_back_the_same_and_empty_blocks_write_nothing()
     {
-        var m = WithMaterials("""
+        var (manifest, problems) = WithMaterials("""
             { "Titanoboa": { "iridescence": { "strength": { "normal": 0.35, "leucistic": 0.1 }, "ramp": { "thinFilm": { "thickness": 420, "index": 1.8 } },
                 "mask": { "from": "pattern", "channel": "b", "invert": true }, "offset": [0.1, 0.2], "bias": 1.3 },
               "settings": { "_Smoothness": 0.55, "_FresnelColor": "#40c0ff", "_DetailScale": [4, 4, 1] } },
               "Empty": { "settings": {} } }
             """);
+        Assert.Empty(problems);
 
-        var json = m.ToJson();
+        var dir = TempDir();
+        MaterialFolders.Save(manifest, dir);
+        var file = Path.Combine(dir, "materials", "skins", "rainbow", "materials.json");
+        var json = File.ReadAllText(file);
+        var again = ModManifest.Parse(SkinJson);
+        MaterialFolders.Load(again, dir, problems);
+        MaterialFolders.Save(again, dir);
 
-        Assert.Equal(json, ModManifest.Parse(json).ToJson());
+        Assert.Empty(problems);
+        Assert.Equal(json, File.ReadAllText(file));
         Assert.DoesNotContain("Empty", json);
-        Assert.DoesNotContain("materials", ModManifest.Parse("""{ "format": 1, "id": "mod-id", "skins": [ { "id": "plain", "species": "S", "male": { "diffuse": "a.png" } } ] }""").ToJson());
-        Assert.Null(WithMaterials("""{ "Empty": {} }""").Skins[0].Materials);
+        Assert.DoesNotContain("materials", manifest.ToJson());
+        Assert.Null(WithMaterials("""{ "Empty": {} }""").Manifest.Skins[0].Materials);
     }
 }

@@ -7,9 +7,11 @@ namespace Tyrant.Rpc.Mods;
 /// <summary>
 /// Clashes: species whose model or rig edit a later enabled mod in the load order overrides (the game uses the later one).
 /// UsesSpeciesFrom: the other mods whose custom species its skins are for (as <see cref="ModDetail.UsesSpeciesFrom"/>); null for none.
+/// GameLooks: the in-game editor changed material folders of the installed copy that install or remove would throw away
+/// (mods.looksChanges lists them); for a mod only in the game, that it has material folders at all.
 /// </summary>
 public sealed record ModRow(string Id, string Name, string Version, string? Author, int Replacements, int Skins, string State, bool? Enabled, string? Dir, string? Error,
-    IReadOnlyList<string>? Clashes = null, IReadOnlyList<ModSpeciesUseDto>? UsesSpeciesFrom = null, string? Cooked = null);
+    IReadOnlyList<string>? Clashes = null, IReadOnlyList<ModSpeciesUseDto>? UsesSpeciesFrom = null, string? Cooked = null, bool GameLooks = false);
 
 public sealed record ModsListResult(IReadOnlyList<ModRow> Mods, bool FrameworkInstalled, bool FrameworkOutdated = false);
 
@@ -27,6 +29,17 @@ public sealed record ModImportResult(string Id, IReadOnlyList<string> Problems, 
 
 /// <summary>A mod only in the game folder (UserData/Tyrant/Mods/&lt;id&gt;), copied into the workspace.</summary>
 public sealed record ModCopyFromGameParams(string Id, bool Replace = false);
+
+/// <summary>
+/// A material folder (materials/&lt;skins, species or vanilla-skins&gt;/&lt;folder&gt;) not as installed: GameChanged when the
+/// in-game editor changed it in the installed copy, ProjectChanged when the workspace did (both: the user picks a side).
+/// </summary>
+public sealed record ModLooksChangeDto(string Folder, bool GameChanged, bool ProjectChanged);
+
+public sealed record ModLooksChanges(IReadOnlyList<ModLooksChangeDto> Changes);
+
+/// <summary>Folders: the material folders (as mods.looksChanges names them) whose game copy replaces the workspace's.</summary>
+public sealed record ModBringInLooksParams(string Id, IReadOnlyList<string> Folders);
 
 /// <summary>Pack: a textures.tpack; Out: the folder its PNGs go to (at their paths in the mod).</summary>
 public sealed record TexturesExtractParams(string Pack, string Out);
@@ -132,7 +145,8 @@ public sealed record ModReplacementDto(string Texture, string? Key, string? Guid
 public sealed record ModDetail(string Id, string Name, string Version, string? Author, string? Description, string Dir, string Revision,
     string ManifestJson, IReadOnlyList<ModReplacementDto> Replace, IReadOnlyList<ModSkinDto> Skins, IReadOnlyList<ModModelDto> Models,
     IReadOnlyList<ModSoundDto> Sounds, string FilesStamp = "", IReadOnlyDictionary<string, string>? PrefabFiles = null,
-    IReadOnlyList<ModPrefabTargetDto>? PrefabTargets = null, IReadOnlyList<ModSpeciesUseDto>? UsesSpeciesFrom = null, IReadOnlyList<ModSpeciesMaterialsDto>? SpeciesMaterials = null);
+    IReadOnlyList<ModPrefabTargetDto>? PrefabTargets = null, IReadOnlyList<ModSpeciesUseDto>? UsesSpeciesFrom = null, IReadOnlyList<ModSpeciesMaterialsDto>? SpeciesMaterials = null,
+    IReadOnlyList<ModVanillaSkinMaterialsDto>? VanillaSkinMaterials = null, IReadOnlyDictionary<string, string>? MaterialFiles = null);
 
 public sealed record ModSpeciesUseDto(string ModId, string? ModName, int Skins, bool InWorkspace, bool Installed, bool Enabled);
 
@@ -223,16 +237,17 @@ public sealed record ModTexturesResult(string Compression, IReadOnlyList<ModText
 /// <summary>Path: the workspace's textures.tpack; null when the mod has nothing to cook.</summary>
 public sealed record ModCookResult(string Message, string? Path);
 
-/// <summary>Exactly one of Skin and Species; Materials is the "materials" JSON (null or {} removes it).</summary>
-public sealed record ModSetMaterialsParams(string Id, string Revision, string? Skin = null, string? Species = null, string? Materials = null);
+/// <summary>Exactly one of Skin, Species and VanillaSkin ("&lt;species&gt;/&lt;skin name&gt;"); Materials is the "materials" JSON (null or {} removes it).</summary>
+public sealed record ModSetMaterialsParams(string Id, string Revision, string? Skin = null, string? Species = null, string? Materials = null, string? VanillaSkin = null);
 
-/// <summary>Part is "ramp" or "mask"; Png null removes the file from the material's settings.</summary>
-public sealed record ModSetMaterialFileParams(string Id, string Revision, string Material, string Part, string? Skin = null, string? Species = null, string? Png = null);
+/// <summary>Part is "ramp", "mask", "furMask" or "furInfantMask"; Png null removes the file from the material's settings.</summary>
+public sealed record ModSetMaterialFileParams(string Id, string Revision, string Material, string Part, string? Skin = null, string? Species = null, string? Png = null,
+    string? VanillaSkin = null);
 
-public sealed record ModMaterialInfoParams(string Id, string? Skin = null, string? Species = null);
+public sealed record ModMaterialInfoParams(string Id, string? Skin = null, string? Species = null, string? VanillaSkin = null);
 
-/// <summary>Kind is number|color|vector; Inherited is the JSON text of the value below the edited layer; Source is game|species|starting skin|default.</summary>
-public sealed record ModMaterialProperty(string Key, string Group, string Label, string Kind, float Min, float Max, string? Inherited, string Source);
+/// <summary>Kind is number|color|vector; Components is how many numbers a vector holds (2 lets 2 to 4 through, 3 means exactly 3; 0 for the other kinds); Inherited is the JSON text of the value below the edited layer; Source is game|species|starting skin|default.</summary>
+public sealed record ModMaterialProperty(string Key, string Group, string Label, string Kind, float Min, float Max, string? Inherited, string Source, int Components = 0);
 
 /// <summary>
 /// GameIridescence: a skin's vanilla base skin's own iridescence strength in the game (0 when it has none; the stronger sex), the
@@ -242,7 +257,7 @@ public sealed record ModMaterialProperty(string Key, string Group, string Label,
 public sealed record ModMaterialInfo(string Name, string Animal, IReadOnlyList<ModMaterialProperty> Properties, string? InheritedIridescenceJson,
     float? GameIridescence, bool GameHasRamp, string? Problem);
 
-public sealed record ModMaterialPreviewParams(string Id, string? Skin = null, string? Species = null, string? Materials = null, string Sex = "male");
+public sealed record ModMaterialPreviewParams(string Id, string? Skin = null, string? Species = null, string? Materials = null, string Sex = "male", string? VanillaSkin = null);
 
 /// <summary>
 /// Ramp and Mask are files in the preview cache the app may load (null: none). Smoothness multiplies the extra map's smoothness:
@@ -258,3 +273,11 @@ public sealed record ModThinFilm(IReadOnlyList<string> Stops);
 
 /// <summary>A species' "materials" JSON (set in its models entry).</summary>
 public sealed record ModSpeciesMaterialsDto(string Species, string MaterialsJson);
+
+/// <summary>A vanilla skin's "materials" JSON (Skin is its name in the game).</summary>
+public sealed record ModVanillaSkinMaterialsDto(string Species, string Skin, string MaterialsJson);
+
+public sealed record ModVanillaSkinsParams(string Id, string Species);
+
+/// <summary>The names of a species' vanilla skins in the game data, for the "Add" picker.</summary>
+public sealed record ModVanillaSkinList(IReadOnlyList<string> Names);

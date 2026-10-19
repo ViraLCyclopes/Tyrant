@@ -169,6 +169,33 @@ public class ModsMethodsTests
     }
 
     [Fact]
+    public async Task Looks_changes_and_bring_in_round_trip()
+    {
+        using var game = new FakeGame();
+        var (h, ws) = await Opened(game, withLoaderZip: true);
+        await h.Call("mods.create", new { id = "red-spot" });
+        await h.Call("mods.replace", new { id = "red-spot", texture = Texture.Name, png = Png(ws) });
+        await h.RunJob("mods.install", new { id = "red-spot" });
+        const string folder = "materials/species/Carcharodontosaurus";
+        Assert.False(Row(await h.Call("mods.list"), "red-spot").GetProperty("gameLooks").GetBoolean());
+        var saved = Path.Combine(game.Root, "UserData", "Tyrant", "Mods", "red-spot", "materials", "species", "Carcharodontosaurus");
+        Directory.CreateDirectory(saved); // what the in-game editor saves
+        File.WriteAllText(Path.Combine(saved, "materials.json"), """{"format":1,"species":"Carcharodontosaurus","materials":{"Carch":{"iridescence":{"strength":0.9}}}}""");
+
+        var listed = await h.Call("mods.list");
+        var changes = await h.Call("mods.looksChanges", new { id = "red-spot" });
+        var detail = await h.Call("mods.bringInLooks", new { id = "red-spot", folders = new[] { folder } });
+        var after = await h.Call("mods.looksChanges", new { id = "red-spot" });
+
+        Assert.True(Row(listed, "red-spot").GetProperty("gameLooks").GetBoolean());
+        var change = Assert.Single(changes.GetProperty("changes").EnumerateArray());
+        Assert.Equal((folder, true, false), (change.GetProperty("folder").GetString(), change.GetProperty("gameChanged").GetBoolean(), change.GetProperty("projectChanged").GetBoolean()));
+        Assert.Contains("0.9", detail.GetProperty("materialFiles").GetProperty(folder + "/materials.json").GetString());
+        Assert.Empty(after.GetProperty("changes").EnumerateArray());
+        Assert.False(Row(await h.Call("mods.list"), "red-spot").GetProperty("gameLooks").GetBoolean());
+    }
+
+    [Fact]
     public async Task Installing_a_mod_updates_an_outdated_framework()
     {
         using var game = new FakeGame();

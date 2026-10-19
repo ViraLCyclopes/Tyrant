@@ -23,7 +23,7 @@ public static class ModSharing
     /// <summary>Where a mod sits inside an exported zip (and in the game folder).</summary>
     public const string ZipRoot = "UserData/Tyrant/Mods/";
 
-    /// <summary>mod.json and every file it references that exists inside the mod, as sorted forward-slash paths.</summary>
+    /// <summary>mod.json and every file it or the material folders reference that exists inside the mod, as sorted forward-slash paths.</summary>
     public static IReadOnlyList<string> SharedFiles(ModProject mod)
     {
         var m = mod.Manifest;
@@ -148,7 +148,20 @@ public static class ModSharing
             throw new TyrantException(TyrantErrorCode.TargetNotFound, $"'{id}' is not in the game's mods folder.");
         var files = Directory.GetFiles(dir, "*", SearchOption.AllDirectories)
             .Select(f => new SourceFile(Path.GetRelativePath(dir, f).Replace('\\', '/'), () => File.OpenRead(f))).ToList();
-        return Unpack(ws, files, id, replace);
+        var imported = Unpack(ws, files, id, replace);
+        // The workspace now matches the game's copy: stamped as if installed, so a later in-game save shows on the game's side only.
+        if (imported.Mod.Id == id)
+        {
+            try
+            {
+                GameLooks.Stamp(install, id, dir);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                return imported with { Warnings = [.. imported.Warnings, $"The game's looks of '{id}' could not be recorded ({ex.Message}); later changes in the game may show as changed on both sides."] };
+            }
+        }
+        return imported;
     }
 
     private static ImportedMod Unpack(Workspace ws, List<SourceFile> files, string zipName, bool replace)
@@ -195,6 +208,11 @@ public static class ModSharing
                 using var output = File.Create(destination);
                 input.CopyTo(output);
             }
+            // The material folders before Restore: the masks they name come back from the pack too.
+            var problems = new List<string>();
+            MaterialFolders.Load(manifest, staging, problems);
+            if (problems.Count > 0)
+                throw new TyrantException(TyrantErrorCode.ModInvalid, $"The mod in '{zipName}' cannot be read: {string.Join(" ", problems)}");
             (extracted, warnings) = Restore(staging, manifest, ModTextureCooker.CacheDirOf(ws));
             // Validate the database before replacing an existing workspace mod.
             try { AnimalDatabaseFile.Read(Path.Combine(staging, AnimalDatabaseFile.FileName)); }

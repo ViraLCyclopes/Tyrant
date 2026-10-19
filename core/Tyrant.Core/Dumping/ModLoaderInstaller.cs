@@ -33,7 +33,11 @@ public enum InstallState
 /// <summary>What we added to the game folder; stored in UserData/Tyrant/install.json.</summary>
 public sealed record InstallRecord(bool InstalledLoader, List<string> Files, List<string> CreatedDirs);
 
-public sealed record UninstallResult(bool RemovedLoader, string? Note);
+/// <summary>
+/// KeptLooks: animals' looks saved in parks (UserData/Tyrant/Looks) stayed; KeptMasks: the player's mask images
+/// (UserData/Tyrant/Masks, which looks point at) stayed. Both are the player's, not Tyrant's install.
+/// </summary>
+public sealed record UninstallResult(bool RemovedLoader, string? Note, bool KeptLooks = false, bool KeptMasks = false);
 
 /// <summary>
 /// Installs MelonLoader (pinned, checksum-verified official release) and Tyrant's game mods (the dumper and the modding framework), reversibly. Installs roll back on
@@ -54,6 +58,12 @@ public sealed class ModLoaderInstaller(string expectedSha256 = ModLoaderInstalle
     private static readonly HashSet<string> MelonModFiles = new(StringComparer.OrdinalIgnoreCase) { ModFile, FrameworkFile };
     private const string RecordFile = "install.json";
     private const string RequestFile = "tyrant.dumper.request.json";
+
+    /// <summary>Per-animal looks the in-game editor saves (UserData/Tyrant/Looks): uninstall keeps them.</summary>
+    public const string LooksFolder = "Looks";
+
+    /// <summary>The player's own mask images for the in-game editor (UserData/Tyrant/Masks), which looks point at: uninstall keeps them.</summary>
+    public const string MasksFolder = "Masks";
 
     /// <summary>Folders MelonLoader uses at runtime; pre-created on a fresh install so uninstall can remove them.</summary>
     private static readonly string[] RuntimeDirs = ["Mods", "Plugins", "UserData", "UserLibs"];
@@ -123,8 +133,12 @@ public sealed class ModLoaderInstaller(string expectedSha256 = ModLoaderInstalle
     /// <summary>One-line result of an uninstall, shared by the CLI and the app.</summary>
     public static string UninstallSummary(UninstallResult result) =>
         (result.RemovedLoader
-            ? "Removed MelonLoader, Tyrant's dumper and framework, and the installed mods; the game folder is back to vanilla."
+            ? result.KeptLooks || result.KeptMasks
+                ? $"Removed MelonLoader, Tyrant's dumper and framework, and the installed mods; the game folder is back to vanilla but for your {(result.KeptLooks ? "animals' looks" : "mask images")}."
+                : "Removed MelonLoader, Tyrant's dumper and framework, and the installed mods; the game folder is back to vanilla."
             : "Removed Tyrant's dumper, framework and installed mods.")
+        + (result.KeptLooks ? " Animals' looks saved in parks stay in UserData\\Tyrant\\Looks, for when Tyrant is installed again." : "")
+        + (result.KeptMasks ? " Your mask images (which looks may use) stay in UserData\\Tyrant\\Masks." : "")
         + (result.Note is null ? "" : " " + result.Note);
 
     public static InstallState GetState(GameInstall install)
@@ -280,11 +294,17 @@ public sealed class ModLoaderInstaller(string expectedSha256 = ModLoaderInstalle
             }
 
             // The record goes last, so a failure above leaves the install recorded and the uninstall can be retried.
-            Directory.Delete(RecordDir(install), recursive: true);
+            var (keptLooks, keptMasks) = DeleteRecordDir(install);
+            result = result with { KeptLooks = keptLooks, KeptMasks = keptMasks };
             var userData = Path.Combine(root, "UserData");
-            if (record.CreatedDirs.Contains("UserData", StringComparer.OrdinalIgnoreCase) && Directory.Exists(userData)
-                && (result.RemovedLoader || !Directory.EnumerateFileSystemEntries(userData).Any()))
-                Directory.Delete(userData, recursive: true);
+            if (record.CreatedDirs.Contains("UserData", StringComparer.OrdinalIgnoreCase) && Directory.Exists(userData))
+            {
+                if ((keptLooks || keptMasks) && result.RemovedLoader)
+                    foreach (var entry in Directory.GetFileSystemEntries(userData).Where(e => !string.Equals(Path.GetFileName(e), "Tyrant", StringComparison.OrdinalIgnoreCase)))
+                        DeleteEntry(entry); // MelonLoader's own; UserData/Tyrant now holds only the looks and masks
+                else if (result.RemovedLoader || !Directory.EnumerateFileSystemEntries(userData).Any())
+                    Directory.Delete(userData, recursive: true);
+            }
             if (!result.RemovedLoader)
                 foreach (var dir in record.CreatedDirs)
                 {
@@ -298,6 +318,35 @@ public sealed class ModLoaderInstaller(string expectedSha256 = ModLoaderInstalle
             throw new TyrantException(TyrantErrorCode.DumperInstallFailed,
                 $"Uninstalling failed (is the game running?); uninstall again once it is closed (Workspace → Uninstall from game, or 'tyrant dump uninstall'): {ex.Message}", FixAction.None, ex);
         }
+    }
+
+    /// <summary>
+    /// Deletes UserData/Tyrant, the install record last, but for the animals' looks (Looks/) and the mask images they may point
+    /// at (Masks/), each when it holds any file. Returns which were kept.
+    /// </summary>
+    private static (bool Looks, bool Masks) DeleteRecordDir(GameInstall install)
+    {
+        var dir = RecordDir(install);
+        bool HasFiles(string folder) => Directory.Exists(Path.Combine(dir, folder)) && Directory.EnumerateFiles(Path.Combine(dir, folder), "*", SearchOption.AllDirectories).Any();
+        var (looks, masks) = (HasFiles(LooksFolder), HasFiles(MasksFolder));
+        if (!looks && !masks)
+        {
+            Directory.Delete(dir, recursive: true);
+            return (false, false);
+        }
+        foreach (var entry in Directory.GetFileSystemEntries(dir).Where(e => Path.GetFileName(e) is var name
+                     && !(looks && string.Equals(name, LooksFolder, StringComparison.OrdinalIgnoreCase))
+                     && !(masks && string.Equals(name, MasksFolder, StringComparison.OrdinalIgnoreCase))
+                     && !string.Equals(name, RecordFile, StringComparison.OrdinalIgnoreCase)))
+            DeleteEntry(entry);
+        DeleteFile(Path.Combine(dir, RecordFile));
+        return (looks, masks);
+    }
+
+    private static void DeleteEntry(string path)
+    {
+        if (Directory.Exists(path)) Directory.Delete(path, recursive: true);
+        else DeleteFile(path);
     }
 
     /// <summary>Downloads the pinned MelonLoader release into cacheDir (reused when its checksum matches).</summary>

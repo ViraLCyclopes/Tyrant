@@ -83,18 +83,13 @@ public class MaterialCheckTests
     }
 
     [Fact]
-    public void A_mask_taken_from_a_map_the_skin_lacks_is_an_error_until_it_has_one()
+    public void A_mask_taken_from_a_map_the_skin_lacks_uses_the_game_s_map_and_is_fine()
     {
+        // The framework takes the game's (base skin's) map for a slot the mod has no PNG for, as for vanilla skins.
         using var s = Make();
-        var skin = Skin(s, new IridescenceSettings { Mask = new MaskSource { From = "extra" } });
-        const string text = "red-spot-carcharo/blue iridescence mask: the skin has no extra map in the mod; import one or use Edit a copy first.";
+        Skin(s, new IridescenceSettings { Mask = new MaskSource { From = "extra" } });
 
-        Assert.Contains(text, s.Check().Errors);
-
-        Png(s.Mod, "skins/blue/f_extra.png", 4);
-        skin.Female = new() { ["extra"] = "skins/blue/f_extra.png" };
-        s.Mod.Save();
-        Assert.DoesNotContain(text, s.Check().Errors);
+        Assert.DoesNotContain(s.Check().Errors, e => e.Contains("iridescence mask"));
     }
 
     [Fact]
@@ -169,14 +164,10 @@ public class MaterialCheckTests
     }
 
     [Fact]
-    public void A_species_entry_with_only_materials_is_not_a_broken_model_or_rig()
+    public void Species_materials_alone_are_not_a_broken_model_or_rig()
     {
         using var s = Make();
-        s.Mod.Manifest.Models.Add(new ModelReplacement
-        {
-            Target = "Carcharodontosaurus", File = "",
-            Materials = new() { [Animal] = Iridescent(new IridescenceSettings { Scale = 1 }) },
-        });
+        s.Mod.Manifest.SpeciesMaterials["Carcharodontosaurus"] = new() { [Animal] = Iridescent(new IridescenceSettings { Scale = 1 }) };
         s.Mod.Save();
 
         var result = s.Check();
@@ -186,7 +177,7 @@ public class MaterialCheckTests
     }
 
     [Fact]
-    public void A_species_entry_with_only_materials_does_not_count_as_the_model_a_copied_starting_skin_needs()
+    public void Species_materials_alone_do_not_count_as_the_model_a_copied_starting_skin_needs()
     {
         using var s = Make();
         s.Mod.Manifest.Species.Add(new SpeciesEntry { Id = "anax", Base = "Carcharodontosaurus" });
@@ -195,9 +186,38 @@ public class MaterialCheckTests
             Id = "start", Species = Custom, Name = "Start", Base = "0", Starting = true, Male = new() { ["diffuse"] = "skins/blue/m.png" },
             CopiedFrom = new SkinSource { Species = "Spinosaurus", Skin = 0 },
         });
-        s.Mod.Manifest.Models.Add(new ModelReplacement { Target = Custom, File = "", Materials = new() { [Animal] = Iridescent(new IridescenceSettings { Scale = 1 }) } });
+        s.Mod.Manifest.SpeciesMaterials[Custom] = new() { [Animal] = Iridescent(new IridescenceSettings { Scale = 1 }) };
         s.Mod.Save();
 
         Assert.Contains(s.Check().Warnings, w => w.Contains("give this skin that model"));
+    }
+
+    [Fact]
+    public void A_vanilla_skin_missing_from_the_dump_warns()
+    {
+        using var s = Make();
+        var fromExtra = Iridescent(new IridescenceSettings { Mask = new MaskSource { From = "extra" } });
+        s.Mod.Manifest.VanillaSkinMaterials["Carcharodontosaurus/alt 1"] = new() { [Animal] = fromExtra }; // any case, as the game matches it
+        s.Mod.Manifest.VanillaSkinMaterials["Carcharodontosaurus/Alt 9"] = new() { [Animal] = fromExtra };
+        s.Mod.Save();
+
+        var result = s.Check();
+
+        Assert.Contains("Vanilla skin \"Carcharodontosaurus/Alt 9\" is not in the game data; it applies to no animal.", result.Warnings);
+        Assert.DoesNotContain(result.Warnings, w => w.Contains("alt 1", StringComparison.OrdinalIgnoreCase));
+        Assert.Empty(result.Errors); // "from" is fine on a vanilla skin: the game has its maps
+    }
+
+    [Fact]
+    public void A_missing_fur_mask_file_is_an_error()
+    {
+        using var s = Make();
+        s.Mod.Manifest.VanillaSkinMaterials["Carcharodontosaurus/Alt 1"] = new()
+        {
+            [Animal] = new MaterialOverride { Fur = new FurMasks { Mask = new MaskSource { File = "materials/vanilla-skins/x/fur-mask.png" } } },
+        };
+        s.Mod.Save();
+
+        Assert.Contains("Carcharodontosaurus/Alt 1 fur mask: materials/vanilla-skins/x/fur-mask.png is missing.", s.Check().Errors);
     }
 }

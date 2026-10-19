@@ -1,6 +1,7 @@
 <script lang="ts">
   import { setContext, untrack } from 'svelte';
   import ErrorBanner from '$lib/components/ErrorBanner.svelte';
+  import BringInLooksDialog from '$lib/mods/BringInLooksDialog.svelte';
   import { getSession } from '$lib/stores/session.svelte';
   import AboutDialog from './AboutDialog.svelte';
   import LogPanel from './LogPanel.svelte';
@@ -175,6 +176,12 @@
   <PreferencesDialog {shell} introHidden={shell.introHidden} onIntro={(hidden) => shell.setIntroHidden(hidden)} onClose={() => (showPrefs = false)} />
 {/if}
 {#if showAbout}<AboutDialog onClose={() => (showAbout = false)} />{/if}
+{#if session.looksPrompt}
+  {@const prompt = session.looksPrompt}
+  {#key prompt}
+    <BringInLooksDialog action={prompt.action} mods={prompt.mods} onContinue={(answer) => prompt.answer(answer)} onCancel={() => prompt.answer(null)} />
+  {/key}
+{/if}
 
 <style>
   /* A column, not a grid with fixed rows: the error banner comes and goes, and must not shift the rows below it. */

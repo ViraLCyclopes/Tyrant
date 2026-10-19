@@ -72,12 +72,12 @@ public class ModPrefabsTests
         mod.SetPrefabField("Spinosaurus", "", "AnimalPhysics", "inputParams.waterlineHeight", V("3.5"), Tree);
         Assert.NotEqual(before, mod.Revision());
 
-        ModProject.RestoreSnapshot(ws, "red-spot", manifest, new Dictionary<string, string>(), mod.Revision());
+        ModProject.RestoreSnapshot(ws, "red-spot", manifest, new Dictionary<string, string>(), mod.Revision(), null);
         Assert.Empty(ModProject.Open(ws, "red-spot").PrefabTargets());
         Assert.Equal(before, ModProject.Open(ws, "red-spot").Revision());
 
         var file = """{"format":1,"target":"Allosaurus","fields":[]}""";
-        ModProject.RestoreSnapshot(ws, "red-spot", manifest, new Dictionary<string, string> { ["allosaurus.json"] = file }, before);
+        ModProject.RestoreSnapshot(ws, "red-spot", manifest, new Dictionary<string, string> { ["allosaurus.json"] = file }, before, null);
         Assert.Equal("Allosaurus", Assert.Single(ModProject.Open(ws, "red-spot").PrefabTargets()).Overrides.Target);
     }
 
@@ -90,7 +90,7 @@ public class ModPrefabsTests
         using var _ = game;
         var manifest = File.ReadAllText(Path.Combine(mod.Dir, "mod.json"));
 
-        var ex = Assert.Throws<TyrantException>(() => ModProject.RestoreSnapshot(ws, "red-spot", manifest, new Dictionary<string, string> { [name] = "{}" }, mod.Revision()));
+        var ex = Assert.Throws<TyrantException>(() => ModProject.RestoreSnapshot(ws, "red-spot", manifest, new Dictionary<string, string> { [name] = "{}" }, mod.Revision(), null));
 
         Assert.Equal(TyrantErrorCode.ModInvalid, ex.Code);
     }
@@ -120,7 +120,7 @@ public class ModPrefabsTests
         var manifest = File.ReadAllText(Path.Combine(mod.Dir, "mod.json"));
         const string broken = "{ not json\r\n";
 
-        ModProject.RestoreSnapshot(ws, "red-spot", manifest, new Dictionary<string, string> { ["spinosaurus.json"] = broken }, mod.Revision());
+        ModProject.RestoreSnapshot(ws, "red-spot", manifest, new Dictionary<string, string> { ["spinosaurus.json"] = broken }, mod.Revision(), null);
 
         Assert.Equal(broken, File.ReadAllText(Path.Combine(mod.Dir, "prefabs", "spinosaurus.json")));
     }
@@ -135,7 +135,7 @@ public class ModPrefabsTests
         var manifest = File.ReadAllText(Path.Combine(mod.Dir, "mod.json"));
 
         Assert.Equal(TyrantErrorCode.ModInvalid, Assert.Throws<TyrantException>(() =>
-            ModProject.RestoreSnapshot(ws, "red-spot", manifest, new Dictionary<string, string> { [name] = "{}" }, mod.Revision())).Code);
+            ModProject.RestoreSnapshot(ws, "red-spot", manifest, new Dictionary<string, string> { [name] = "{}" }, mod.Revision(), null)).Code);
     }
 
     [Fact]
@@ -146,7 +146,7 @@ public class ModPrefabsTests
         var manifest = File.ReadAllText(Path.Combine(mod.Dir, "mod.json"));
 
         Assert.Equal(TyrantErrorCode.ModInvalid, Assert.Throws<TyrantException>(() =>
-            ModProject.RestoreSnapshot(ws, "red-spot", manifest, new Dictionary<string, string> { ["a.json"] = "{}", ["A.json"] = "{}" }, mod.Revision())).Code);
+            ModProject.RestoreSnapshot(ws, "red-spot", manifest, new Dictionary<string, string> { ["a.json"] = "{}", ["A.json"] = "{}" }, mod.Revision(), null)).Code);
     }
 
     [Fact]

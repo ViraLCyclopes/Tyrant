@@ -14,6 +14,7 @@ public class TyrantErrorTests
     [InlineData(TyrantErrorCode.AssetIndexMissing, "ASSET_INDEX_MISSING")]
     [InlineData(TyrantErrorCode.OutputInGameFolder, "OUTPUT_IN_GAME_FOLDER")]
     [InlineData(TyrantErrorCode.DeleteFailed, "DELETE_FAILED")]
+    [InlineData(TyrantErrorCode.GameLooksPending, "GAME_LOOKS_PENDING")]
     public void Wire_code_is_screaming_snake_case(TyrantErrorCode code, string expected)
     {
         Assert.Equal(expected, code.ToWire());

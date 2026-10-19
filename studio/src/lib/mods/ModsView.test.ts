@@ -23,6 +23,20 @@ function setup(mods: ModRow[], frameworkInstalled = false) {
 }
 
 describe('ModsView', () => {
+  it('says when the game changed a mod\'s looks and brings them in', async () => {
+    const { rpc, session } = setup([row({ state: 'changed', enabled: true, gameLooks: true })], true);
+    rpc.on('mods.looksChanges', () => ({ changes: [{ folder: 'materials/skins/blue', gameChanged: true, projectChanged: false }] }));
+    rpc.on('mods.bringInLooks', () => ({}));
+    renderWith(ModsView, session);
+
+    expect(await screen.findByText(/looks changed in the game/)).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Bring in looks made in the game into Red spot' }));
+    await waitFor(() => expect(session.looksPrompt).toBeTruthy());
+    session.looksPrompt!.answer({ bringIn: { 'red-spot': ['materials/skins/blue'] }, copy: [] });
+
+    await waitFor(() => expect(rpc.callsTo('mods.bringInLooks')[0]?.params).toEqual({ id: 'red-spot', folders: ['materials/skins/blue'] }));
+  });
+
   it('adds a mod from a zip', async () => {
     const { rpc, platform, session } = setup([]);
     rpc.on('mods.import', () => ({ id: 'shared-mod', problems: [], mods: { mods: [row({ id: 'shared-mod', name: 'Shared' })], frameworkInstalled: false, frameworkOutdated: false } }));

@@ -255,4 +255,180 @@ public class ModSharingCliTests
         Assert.True(code == ExitCodes.Ok, err + output);
         Assert.True(File.Exists(Path.Combine(other, "mods", "red-spot", "skins", "blue", "male_D.png")));
     }
+    /// <summary>A workspace with red-spot, and a game with a stand-in framework that matches the one Tyrant ships (no download).</summary>
+    private static (string Ws, string Installed, string Shipped) InstalledModSetup(FakeGame game)
+    {
+        var ws = Workspace(game);
+        ModWithOneTexture(ws);
+        var shipped = Path.Combine(Path.GetTempPath(), "tyrant-tests", Guid.NewGuid().ToString("N"), "dumper");
+        Directory.CreateDirectory(shipped);
+        File.WriteAllText(Path.Combine(shipped, "Tyrant.Framework.dll"), "framework");
+        Directory.CreateDirectory(Path.Combine(game.Root, "Mods"));
+        File.WriteAllText(Path.Combine(game.Root, "Mods", "Tyrant.Framework.dll"), "framework");
+        Directory.CreateDirectory(Path.Combine(game.Root, "UserData", "Tyrant"));
+        File.WriteAllText(Path.Combine(game.Root, "UserData", "Tyrant", "install.json"), """{"installedLoader":true,"files":[],"createdDirs":[]}""");
+        return (ws, Path.Combine(game.Root, "UserData", "Tyrant", "Mods", "red-spot"), shipped);
+    }
+
+    /// <summary>What the in-game editor saves: a species' materials.json in the installed copy.</summary>
+    private static void SaveLookInGame(string installed, string strength)
+    {
+        var folder = Path.Combine(installed, "materials", "species", "Carcharodontosaurus");
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(Path.Combine(folder, "materials.json"), """{"format":1,"species":"Carcharodontosaurus","materials":{"Carch":{"iridescence":{"strength":""" + strength + "}}}}");
+    }
+
+    [Fact]
+    public void Install_refuses_while_game_looks_are_pending()
+    {
+        using var game = new FakeGame();
+        var (ws, installed, shipped) = InstalledModSetup(game);
+        var componentDir = CliServices.GameModsDir;
+        CliServices.GameModsDir = shipped;
+        try
+        {
+            var first = Run("mod", "install", "red-spot", "-w", ws);
+            Assert.True(first.Code == ExitCodes.Ok, first.Err + first.Out);
+            SaveLookInGame(installed, "0.9");
+
+            var install = Run("mod", "install", "red-spot", "-w", ws);
+            var remove = Run("mod", "remove", "red-spot", "-w", ws);
+            var looks = Run("mod", "looks", "red-spot", "-w", ws);
+
+            Assert.Equal(ExitCodes.Error, install.Code);
+            Assert.Contains("GAME_LOOKS_PENDING", install.Err);
+            Assert.Contains("materials/species/Carcharodontosaurus", install.Err);
+            Assert.Equal(ExitCodes.Error, remove.Code);
+            Assert.Contains("GAME_LOOKS_PENDING", remove.Err);
+            Assert.True(Directory.Exists(installed));
+            Assert.Equal(ExitCodes.Ok, looks.Code);
+            Assert.Contains("materials/species/Carcharodontosaurus", looks.Out);
+            Assert.Contains("changed in the game", looks.Out);
+
+            var brought = Run("mod", "install", "red-spot", "--bring-in-looks", "-w", ws);
+            Assert.True(brought.Code == ExitCodes.Ok, brought.Err + brought.Out);
+            Assert.Contains("0.9", File.ReadAllText(Path.Combine(ws, "mods", "red-spot", "materials", "species", "Carcharodontosaurus", "materials.json")));
+
+            SaveLookInGame(installed, "0.3");
+            var discarded = Run("mod", "remove", "red-spot", "--discard-game-looks", "-w", ws);
+            Assert.True(discarded.Code == ExitCodes.Ok, discarded.Err + discarded.Out);
+            Assert.False(Directory.Exists(installed));
+            Assert.Contains("0.9", File.ReadAllText(Path.Combine(ws, "mods", "red-spot", "materials", "species", "Carcharodontosaurus", "materials.json")));
+        }
+        finally
+        {
+            CliServices.GameModsDir = componentDir;
+        }
+    }
+
+    [Fact]
+    public void Mod_looks_brings_in_the_chosen_folders()
+    {
+        using var game = new FakeGame();
+        var (ws, installed, shipped) = InstalledModSetup(game);
+        var componentDir = CliServices.GameModsDir;
+        CliServices.GameModsDir = shipped;
+        try
+        {
+            Assert.Equal(ExitCodes.Ok, Run("mod", "install", "red-spot", "-w", ws).Code);
+            SaveLookInGame(installed, "0.9");
+            var vanilla = Path.Combine(installed, "materials", "vanilla-skins", "Carcharodontosaurus-Alt 1");
+            Directory.CreateDirectory(vanilla);
+            File.WriteAllText(Path.Combine(vanilla, "materials.json"), """{"format":1,"species":"Carcharodontosaurus","skin":"Alt 1","materials":{"Carch":{"iridescence":{"strength":0.4}}}}""");
+
+            var (code, output, err) = Run("mod", "looks", "red-spot", "--bring-in", "--folder", "materials/species/Carcharodontosaurus", "-w", ws);
+            var left = Run("mod", "looks", "red-spot", "-w", ws);
+
+            Assert.True(code == ExitCodes.Ok, err + output);
+            Assert.True(File.Exists(Path.Combine(ws, "mods", "red-spot", "materials", "species", "Carcharodontosaurus", "materials.json")));
+            Assert.False(Directory.Exists(Path.Combine(ws, "mods", "red-spot", "materials", "vanilla-skins")));
+            Assert.Contains("Carcharodontosaurus-Alt 1", left.Out);
+            Assert.DoesNotContain("materials/species/", left.Out);
+        }
+        finally
+        {
+            CliServices.GameModsDir = componentDir;
+        }
+    }
+
+    [Fact]
+    public void Uninstall_and_delete_refuse_while_game_looks_are_pending()
+    {
+        using var game = new FakeGame();
+        var (ws, installed, shipped) = InstalledModSetup(game);
+        var componentDir = CliServices.GameModsDir;
+        CliServices.GameModsDir = shipped;
+        try
+        {
+            Assert.Equal(ExitCodes.Ok, Run("mod", "install", "red-spot", "-w", ws).Code);
+            SaveLookInGame(installed, "0.9");
+            var vanilla = Path.Combine(game.Root, "UserData", "Tyrant", "Mods", "vanilla-looks"); // made by the in-game editor
+            var skin = Path.Combine(vanilla, "materials", "vanilla-skins", "Carcharodontosaurus-Alt 1");
+            Directory.CreateDirectory(skin);
+            File.WriteAllText(Path.Combine(vanilla, "mod.json"), """{"format":1,"id":"vanilla-looks","name":"Vanilla Looks","version":"1.0.0"}""");
+            File.WriteAllText(Path.Combine(skin, "materials.json"), """{"format":1,"species":"Carcharodontosaurus","skin":"Alt 1","materials":{"Carch":{"iridescence":{"strength":0.4}}}}""");
+            var record = Path.Combine(game.Root, "UserData", "Tyrant", "install.json");
+
+            var delete = Run("mod", "delete", "red-spot", "--yes", "-w", ws);
+            var refused = Run("game", "uninstall", "-w", ws);
+
+            Assert.Equal(ExitCodes.Error, delete.Code);
+            Assert.Contains("GAME_LOOKS_PENDING", delete.Err);
+            Assert.True(Directory.Exists(Path.Combine(ws, "mods", "red-spot")));
+            Assert.Equal(ExitCodes.Error, refused.Code);
+            Assert.Contains("GAME_LOOKS_PENDING", refused.Err);
+            Assert.Contains("'red-spot'", refused.Err);
+            Assert.Contains("'vanilla-looks'", refused.Err); // one run names everything at stake
+            Assert.True(File.Exists(record));
+
+            var brought = Run("game", "uninstall", "--bring-in-looks", "-w", ws);
+
+            Assert.True(brought.Code == ExitCodes.Ok, brought.Err + brought.Out);
+            Assert.Contains("0.9", File.ReadAllText(Path.Combine(ws, "mods", "red-spot", "materials", "species", "Carcharodontosaurus", "materials.json")));
+            Assert.True(File.Exists(Path.Combine(ws, "mods", "vanilla-looks", "materials", "vanilla-skins", "Carcharodontosaurus-Alt 1", "materials.json")));
+            Assert.False(File.Exists(record));
+        }
+        finally
+        {
+            CliServices.GameModsDir = componentDir;
+        }
+    }
+
+    [Fact]
+    public void Remove_works_for_a_broken_workspace_mod_unless_game_looks_are_at_stake()
+    {
+        using var game = new FakeGame();
+        var (ws, installed, shipped) = InstalledModSetup(game);
+        var manifest = Path.Combine(ws, "mods", "red-spot", "mod.json");
+        var good = File.ReadAllText(manifest);
+        var componentDir = CliServices.GameModsDir;
+        CliServices.GameModsDir = shipped;
+        try
+        {
+            Assert.Equal(ExitCodes.Ok, Run("mod", "install", "red-spot", "-w", ws).Code);
+            File.WriteAllText(manifest, "{ broken");
+            Assert.Equal(ExitCodes.Usage, Run("mod", "delete", "red-spot", "-w", ws).Code); // the dry run still says what would go
+            var plain = Run("mod", "remove", "red-spot", "-w", ws); // no looks in the game: nothing to lose
+            Assert.True(plain.Code == ExitCodes.Ok, plain.Err + plain.Out);
+
+            File.WriteAllText(manifest, good);
+            Assert.Equal(ExitCodes.Ok, Run("mod", "install", "red-spot", "-w", ws).Code);
+            SaveLookInGame(installed, "0.9");
+            File.WriteAllText(manifest, "{ broken");
+
+            var refused = Run("mod", "remove", "red-spot", "-w", ws);
+            var discarded = Run("mod", "remove", "red-spot", "--discard-game-looks", "-w", ws);
+
+            Assert.Equal(ExitCodes.Error, refused.Code);
+            Assert.Contains("GAME_LOOKS_PENDING", refused.Err);
+            Assert.Contains("cannot be read", refused.Err);
+            Assert.Contains("--discard-game-looks", refused.Err);
+            Assert.True(discarded.Code == ExitCodes.Ok, discarded.Err + discarded.Out);
+            Assert.False(Directory.Exists(installed));
+        }
+        finally
+        {
+            CliServices.GameModsDir = componentDir;
+        }
+    }
 }

@@ -230,9 +230,24 @@ public sealed class ModRestoreCutoutsCommand : Command<ModSettings>
     }
 }
 
+/// <summary>--bring-in-looks and --discard-game-looks: what install and remove do with looks the in-game editor saved into the installed copy.</summary>
+public class GameLooksSettings : ModSettings, IGameLooksChoice
+{
+    [CommandOption("--bring-in-looks")]
+    [Description("First bring the looks made in the game into the workspace (the game's copy wins where both changed).")]
+    public bool BringInLooks { get; set; }
+
+    [CommandOption("--discard-game-looks")]
+    [Description("Let the looks made in the game go.")]
+    public bool DiscardGameLooks { get; set; }
+
+    public override Spectre.Console.ValidationResult Validate() =>
+        BringInLooks && DiscardGameLooks ? Spectre.Console.ValidationResult.Error("Use --bring-in-looks or --discard-game-looks, not both.") : base.Validate();
+}
+
 public sealed class ModInstallCommand : Command<ModInstallCommand.Settings>
 {
-    public sealed class Settings : ModSettings
+    public sealed class Settings : GameLooksSettings
     {
         [CommandOption("--loader-zip <PATH>")]
         [Description("Use an already-downloaded MelonLoader.x64.zip (0.7.3) if MelonLoader has to be installed.")]
@@ -243,6 +258,7 @@ public sealed class ModInstallCommand : Command<ModInstallCommand.Settings>
     {
         var (ws, install) = CliServices.OpenWorkspace(settings);
         var mod = ModProject.Open(ws, settings.Id);
+        GameLooksCli.Settle(install, mod, settings, "installing it again");
         ModCli.RebuildStaleModels(ws, install, mod, measureHeadRigs: true);
         if (!ModCli.Print(ModCli.Check(ws, install, mod)))
         {
@@ -264,8 +280,9 @@ public sealed class ModInstallCommand : Command<ModInstallCommand.Settings>
             Console.WriteLine("Installed or updated Tyrant's framework in the game.");
         }
         var cooker = ModCli.Cooker(ws, install, mod);
-        new GameMods(launcher.IsRunning).Install(install, mod, staging => cooker.CookForInstall(mod, staging,
+        var warnings = new GameMods(launcher.IsRunning).Install(install, mod, staging => cooker.CookForInstall(mod, staging,
             new SyncProgress(p => Console.WriteLine(p.Message))));
+        foreach (var warning in warnings) Console.WriteLine($"  WARN   {warning}");
         Console.WriteLine($"Installed '{mod.Id}' into {Path.Combine(ModLoaderInstaller.ModsDir(install), mod.Id)}. Start the game to see it; undo with 'tyrant mod remove {mod.Id}'.");
         return ExitCodes.Ok;
     }
@@ -284,11 +301,12 @@ public sealed class ModCookCommand : Command<ModSettings>
     }
 }
 
-public sealed class ModRemoveCommand : Command<ModSettings>
+public sealed class ModRemoveCommand : Command<GameLooksSettings>
 {
-    public override int Execute(CommandContext context, ModSettings settings)
+    public override int Execute(CommandContext context, GameLooksSettings settings)
     {
-        var (_, install) = CliServices.OpenWorkspace(settings);
+        var (ws, install) = CliServices.OpenWorkspace(settings);
+        GameLooksCli.SettleInstalled(ws, install, settings.Id, settings, "removing it");
         new GameMods(CliServices.Launcher.IsRunning).Remove(install, settings.Id);
         Console.WriteLine($"Removed '{settings.Id}' from the game.");
         return ExitCodes.Ok;

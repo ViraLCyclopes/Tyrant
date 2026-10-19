@@ -60,6 +60,9 @@ namespace Tyrant.Framework.Core
     /// <summary>Decides which mods load and in what order; a broken or unmet mod is skipped with a reason, never fatal.</summary>
     public static class ModCatalog
     {
+        /// <summary>The mod the game itself writes (a player's per-animal looks); it always loads last, so those looks win.</summary>
+        public const string VanillaLooksId = "vanilla-looks";
+
         /// <summary>Every mod folder under modsDir with its mod.json; a file that cannot be read becomes a ReadError, never an exception.</summary>
         public static List<ModSource> Discover(string modsDir)
         {
@@ -116,6 +119,9 @@ namespace Tyrant.Framework.Core
                     var manifest = ModManifest.Parse(source.ManifestJson, skippedSkins); // one bad skin does not cost the whole mod
                     manifest.Species.AddRange(AnimalDatabaseFile.Read(Path.Combine(source.Directory, AnimalDatabaseFile.FileName)));
                     AnimalLocalization.Load(source.Directory, manifest.Species);
+                    var materialProblems = new List<string>();
+                    MaterialFolders.Load(manifest, source.Directory, materialProblems);
+                    foreach (var problem in materialProblems) plan.Warnings.Add($"{source.Folder}: {problem}");
                     foreach (var skipped in skippedSkins) plan.Warnings.Add($"{source.Folder}: {skipped}");
                     foreach (var (skin, problem) in StartingSkins.Problems(manifest))
                     {
@@ -136,6 +142,7 @@ namespace Tyrant.Framework.Core
             var order = listed.Where(e => parsed.ContainsKey(e.Id)).Select(e => e.Id)
                 .Concat(parsed.Keys.Where(id => listed.All(e => e.Id != id)).OrderBy(id => id, StringComparer.Ordinal))
                 .ToList();
+            if (order.Remove(VanillaLooksId)) order.Add(VanillaLooksId); // whatever mods.json says
             var candidates = new List<LoadedMod>();
             foreach (var id in order)
             {

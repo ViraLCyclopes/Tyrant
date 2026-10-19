@@ -38,8 +38,19 @@ describe('ModDoc', () => {
     await doc.redo();
 
     const calls = rpc.callsTo('mods.restoreSnapshot');
-    expect(calls[0]?.params).toEqual({ id: 'red-spot', revision: 'r2', manifest: before.manifestJson, prefabs: beforeFiles });
+    expect(calls[0]?.params).toEqual({ id: 'red-spot', revision: 'r2', manifest: before.manifestJson, prefabs: beforeFiles, materials: {} });
     expect(calls[1]?.params).toMatchObject({ prefabs: afterFiles });
+  });
+
+  it('undo restores material files', async () => {
+    const beforeFiles = { 'materials/skins/blue/fur-mask.png': 'a' };
+    const before = modDetail({ revision: 'r1', materialFiles: beforeFiles });
+    const after = modDetail({ revision: 'r2', materialFiles: {} });
+    const { rpc, doc } = await setupWith(before);
+    rpc.on('mods.setMaterialFile', () => after).on('mods.restoreSnapshot', () => before);
+    await doc.edit('mods.setMaterialFile', { skin: 'blue', material: 'M', part: 'furMask', png: null });
+    await doc.undo();
+    expect(rpc.callsTo('mods.restoreSnapshot')[0]?.params).toMatchObject({ materials: beforeFiles });
   });
 
   it('a mod without prefabFiles undoes with no prefab files', async () => {
@@ -85,12 +96,12 @@ describe('ModDoc', () => {
     await doc.edit('mods.setDetails', { name: 'Red spots', version: '1.0.0' });
 
     await doc.undo();
-    expect(rpc.callsTo('mods.restoreSnapshot')[0].params).toEqual({ id: 'red-spot', revision: 'r2', manifest: '{"name":"Carch pack"}', prefabs: {} });
+    expect(rpc.callsTo('mods.restoreSnapshot')[0].params).toEqual({ id: 'red-spot', revision: 'r2', manifest: '{"name":"Carch pack"}', prefabs: {}, materials: {} });
     expect(doc.detail?.name).toBe('Carch pack');
     expect(doc.canRedo).toBe(true);
 
     await doc.redo();
-    expect(rpc.callsTo('mods.restoreSnapshot')[1].params).toEqual({ id: 'red-spot', revision: 'r3', manifest: '{"name":"Red spots"}', prefabs: {} });
+    expect(rpc.callsTo('mods.restoreSnapshot')[1].params).toEqual({ id: 'red-spot', revision: 'r3', manifest: '{"name":"Red spots"}', prefabs: {}, materials: {} });
     expect(doc.detail?.name).toBe('Red spots');
     expect(doc.canUndo).toBe(true);
   });
