@@ -224,3 +224,18 @@ describe('ModSideList species materials', () => {
     expect(screen.getByRole('button', { name: 'Allosaurus' })).toHaveClass('on');
   });
 });
+
+describe('ModSideList vanilla skin materials', () => {
+  it('lists vanilla skin materials under Species materials; + Add asks for the form', async () => {
+    const onAddVanillaMaterial = vi.fn();
+    const session = new Session(new FakeRpc(), new FakePlatform(), memoryStore());
+    const onSelect = vi.fn();
+    const detail = modDetail({ vanillaSkinMaterials: [{ species: 'Titanoboa', skin: 'Green', materialsJson: '{"Titanoboa":{"settings":{"_Smoothness":0.5}}}' }] });
+    renderWith(ModSideList, session, { detail, check: null, selection: { kind: 'details' as const }, onSelect, onAddSkin: vi.fn(), onAddVanillaMaterial });
+    expect(screen.getByText('Vanilla skin materials (1)')).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Titanoboa / Green' }));
+    expect(onSelect).toHaveBeenCalledWith({ kind: 'vanillaMaterial', species: 'Titanoboa', skin: 'Green' });
+    await fireEvent.click(screen.getByRole('button', { name: 'Add vanilla skin materials' }));
+    expect(onAddVanillaMaterial).toHaveBeenCalled();
+  });
+});

@@ -34,6 +34,7 @@
     gameHasRamp,
     skin,
     species,
+    vanillaSkin,
     canImport,
     onEdit,
   }: {
@@ -45,6 +46,7 @@
     gameHasRamp: boolean;
     skin?: ModSkinDto;
     species?: string;
+    vanillaSkin?: { species: string; skin: string };
     canImport: boolean;
     onEdit: (change: (m: MaterialModel) => void, save: boolean) => void;
   } = $props();
@@ -72,7 +74,7 @@
     power: model?.power ?? inherited?.power ?? null,
     bias: model?.bias ?? inherited?.bias ?? null,
   });
-  const target = $derived(skin ? { skin: skin.id } : { species: species! });
+  const target = $derived(skin ? { skin: skin.id } : vanillaSkin ? { vanillaSkin: `${vanillaSkin.species}/${vanillaSkin.skin}` } : { species: species! });
 
   /** Changes this level's own block (made from nothing when there is none yet). */
   function edit(change: (i: IridescenceModel) => void, save = true) {

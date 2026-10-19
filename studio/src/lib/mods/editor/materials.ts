@@ -36,6 +36,8 @@ export interface IridescenceModel {
 export interface MaterialModel {
   iridescence: IridescenceModel | null;
   settings: Record<string, number | string | number[]>;
+  /** Fur masks taken from files (mod-relative paths): the adult one and the baby one. */
+  fur?: { mask?: string; infantMask?: string };
 }
 
 export const MAX_RAMP_STOPS = 32;
@@ -56,7 +58,8 @@ export function emptyIridescence(): IridescenceModel {
 export function parseMaterial(json: string | null, name: string): MaterialModel {
   const root = asObject(json ? JSON.parse(json) : null);
   const block = asObject(root?.[name]);
-  return { iridescence: readIridescence(block?.iridescence), settings: readSettings(block?.settings) };
+  const fur = readFur(block?.fur);
+  return { iridescence: readIridescence(block?.iridescence), settings: readSettings(block?.settings), ...(fur ? { fur } : {}) };
 }
 
 /** An "iridescence" block on its own (mods.materialInfo's inherited one). */
@@ -144,6 +147,13 @@ function readMask(value: unknown): MaskModel {
   return { kind: 'from', slot: m.from as MaskSlot, channel: CHANNELS.includes(channel) ? channel : 'r', invert: m.invert === true };
 }
 
+function readFur(value: unknown): MaterialModel['fur'] | null {
+  const f = asObject(value);
+  const mask = typeof f?.mask === 'string' && f.mask ? f.mask : undefined;
+  const infantMask = typeof f?.infantMask === 'string' && f.infantMask ? f.infantMask : undefined;
+  return mask || infantMask ? { ...(mask ? { mask } : {}), ...(infantMask ? { infantMask } : {}) } : null;
+}
+
 function readSettings(value: unknown): MaterialModel['settings'] {
   const out: MaterialModel['settings'] = {};
   for (const [key, v] of Object.entries(asObject(value) ?? {})) {
@@ -158,6 +168,7 @@ function writeBlock(model: MaterialModel): Json | null {
   const block: Json = {};
   const iridescence = model.iridescence ? writeIridescence(model.iridescence) : null;
   if (iridescence) block.iridescence = iridescence;
+  if (model.fur && (model.fur.mask || model.fur.infantMask)) block.fur = { ...model.fur };
   if (Object.keys(model.settings).length) block.settings = { ...model.settings };
   return Object.keys(block).length ? block : null;
 }

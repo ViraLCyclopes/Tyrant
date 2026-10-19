@@ -60,6 +60,23 @@ describe('ModEditor', () => {
     await waitFor(() => expect(rpc.callsTo('mods.setMaterials')[0]?.params).toMatchObject({ species: 'Titanoboa', materials: null }));
   });
 
+  it('Vanilla skin materials + Add picks a species, then one of its vanilla skins, and opens its Material card', async () => {
+    const { rpc } = setup(modDetail());
+    rpc.on('mods.species', () => ({ hasDump: true, species: [{ speciesId: 'Spinosaurus', vivarium: false, skins: [] }] }))
+      .on('mods.animalDatabase', () => ({ animals: [], fields: [] }))
+      .on('mods.vanillaSkins', () => ({ names: ['Green', 'Sand'] }))
+      .on('mods.materialInfo', (p) => ({ name: 'Spinosaurus', animal: 'Spinosaurus', properties: [], inheritedIridescenceJson: null, gameIridescence: null, gameHasRamp: false, problem: p.vanillaSkin ? null : 'wrong' }));
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Add vanilla skin materials' }));
+    await screen.findByRole('option', { name: 'Spinosaurus' });
+    await fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+    await screen.findByRole('option', { name: 'Sand' });
+    await fireEvent.change(screen.getByRole('combobox', { name: 'Vanilla skin' }), { target: { value: 'Sand' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+    expect(await screen.findByRole('heading', { name: 'Vanilla skin materials: Spinosaurus / Sand' })).toBeInTheDocument();
+    await waitFor(() => expect(rpc.callsTo('mods.materialInfo')[0]?.params).toMatchObject({ vanillaSkin: 'Spinosaurus/Sand' }));
+  });
+
   it('lists species models under Models and opens their page', async () => {
     setup(modDetail({ models: [{ target: 'Carcharodontosaurus', skin: null, file: 'models/carch-1a2b.glb', lods: [], errors: [], warnings: [], stale: false, origin: null, originChanged: false }] }));
 
