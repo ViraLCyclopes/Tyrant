@@ -381,3 +381,20 @@ Needs the game and a Tyrant Framework installed from this build. Steps marked **
        log says so), and the next animal incubated and placed has the vanilla look, whatever its species.
      - Arm a look again and leave the park without incubating: back in the park, an incubation gets nothing (an armed look
        is never saved). Bind one, then cancel or sell that animal from the holder and save: the `"incubating"` entry goes.
+153. **(game)** Presets: open the Nursery on an Ouranosaurus, click **T**, **Whole species**, tab **Iridescence**. The **Preset** row
+     lists the shimmering species by name (Microraptor, Velociraptor, Oviraptor, Edmontosaurus, … from the game's data). Pick
+     **Microraptor** and **Apply**: the preview shimmers with Microraptor's blue sheen (on a first use the status line may say
+     *Loading Microraptor's look…* for a moment, then it applies), **Rainbow** and **Mask** show **Species** ‹ Microraptor ›,
+     and the shaping shows Microraptor's numbers. Move **Strength**: it follows. **Save**, close the Nursery, place an
+     Ouranosaurus: it shimmers. The species' `materials.json` has `"ramp": { "species": "Microraptor" }` and
+     `"mask": { "species": "Microraptor" }`, and no image of Microraptor's is in the mod folder. Wait in the park with no
+     Microraptor for a minute: the sheen stays (Tyrant's copy). `Latest.log` has one line saying Microraptor's look is ready.
+     - Tab **Fur**, on an Allosaurus (tessellated fur on): pick a furred species in **Preset**, **Apply**: **Grow fur** is on,
+       **Length**, **Droop**, wind and droop direction show that species' values; the fur mask is unchanged. Tweak **Length**,
+       **Save**: a placed Allosaurus has the fur.
+     - **Reset** after an **Apply** goes back to the saved look. **Export mask PNG** with a species mask says it stays a reference.
+154. **(app)** Material card of a skin: **Start from a species…** → Microraptor fills **Colours** and **Where** with **Species**
+     (Microraptor), the shaping and strength; the 3D view shimmers with Microraptor's ramp. **Check** is clean; edit the
+     species' id in `materials.json` to `Microraptorr`: **Check** reports it is not in the game data. In the **Fur** group,
+     **Start from a species…** ticks **Grow fur** and fills the fur settings. CLI:
+     `tyrant mod materials <mod> <skin> --preset Microraptor --kind iridescence`, then `--show`: the same block.
