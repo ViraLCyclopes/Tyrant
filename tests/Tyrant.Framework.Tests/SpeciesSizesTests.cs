@@ -11,22 +11,31 @@ public class SpeciesSizesTests
         return dir;
     }
 
-    private static LoadedMod Mod(string id, string? sizes, string extra = "")
+    private static LoadedMod Mod(string id, string? sizes)
     {
         var dir = Dir();
         if (sizes != null) File.WriteAllText(Path.Combine(dir, "sizes", "x.json"), sizes);
-        return new LoadedMod(ModManifest.Parse($$"""{"format":1,"id":"{{id}}"{{extra}}}"""), dir);
+        return new LoadedMod(ModManifest.Parse($$"""{"format":1,"id":"{{id}}"}"""), dir);
     }
 
     [Fact]
     public void Parses_all_keys_and_round_trips()
     {
-        var s = SizeSettings.Parse("""{ "format": 1, "target": "Tyrannosaurus", "adult": 0.85, "baby": 0.1, "male": 1.0, "female": 1.1 }""");
+        var s = SizeSettings.Parse("""
+            { "format": 1, "target": "Tyrannosaurus", "adult": 0.85, "baby": 0.1, "male": 1.0, "female": 1.1,
+              "nursery": [0.5, 3], "breeding": [0.85, 1.15], "limit": [0.05, 5] }
+            """);
 
         Assert.Equal("Tyrannosaurus", s.Target);
         Assert.Equal((0.85, 0.1, 1.0, 1.1), (s.Adult, s.Baby, s.Male, s.Female));
+        Assert.Equal([0.5, 3], s.Nursery!);
+        Assert.Equal([0.85, 1.15], s.Breeding!);
+        Assert.Equal([0.05, 5], s.Limit!);
         var again = SizeSettings.Parse(s.ToJson());
         Assert.Equal((s.Target, s.Adult, s.Baby, s.Male, s.Female), (again.Target, again.Adult, again.Baby, again.Male, again.Female));
+        Assert.Equal(s.Nursery, again.Nursery!);
+        Assert.Equal(s.Breeding, again.Breeding!);
+        Assert.Equal(s.Limit, again.Limit!);
         Assert.Equal("tyrannosaurus.json", SizeSettings.FileName("Tyrannosaurus"));
     }
 
@@ -38,8 +47,18 @@ public class SpeciesSizesTests
         Assert.Null(s.Adult);
         Assert.Null(s.Male);
         Assert.Null(s.Female);
+        Assert.Null(s.Nursery);
+        Assert.Null(s.Breeding);
+        Assert.Null(s.Limit);
         Assert.Equal(0.5, s.Baby);
         Assert.DoesNotContain("adult", s.ToJson());
+        Assert.DoesNotContain("nursery", s.ToJson());
+        Assert.DoesNotContain("limit", s.ToJson());
+
+        // A file with only a range or a limit is not empty: it changes that species.
+        Assert.False(SizeSettings.Parse("""{ "format": 1, "target": "A", "limit": [0.05, 5] }""").IsEmpty);
+        Assert.False(SizeSettings.Parse("""{ "format": 1, "target": "A", "nursery": [0.5, 3] }""").IsEmpty);
+        Assert.True(SizeSettings.Parse("""{ "format": 1, "target": "A" }""").IsEmpty);
     }
 
     [Theory]
@@ -58,37 +77,38 @@ public class SpeciesSizesTests
     }
 
     [Theory]
-    [InlineData("[1.2, 1.1]")]
-    [InlineData("[0, 1]")]
-    [InlineData("[1, 20.1]")]
-    [InlineData("[1]")]
-    public void Range_needs_min_le_max_and_bounds(string range)
+    [InlineData("nursery", "[1.2, 1.1]")]
+    [InlineData("nursery", "[0, 1]")]
+    [InlineData("nursery", "[1, 20.1]")]
+    [InlineData("nursery", "[1]")]
+    [InlineData("breeding", "[1.2, 1.1]")]
+    [InlineData("breeding", "[0, 1]")]
+    [InlineData("breeding", "1")]
+    public void Range_needs_min_le_max_and_bounds(string key, string range)
     {
-        var ex = Assert.Throws<ManifestException>(() => ModManifest.Parse("{\"format\":1,\"id\":\"mod-a\",\"sizeRanges\":{\"nursery\":" + range + "}}"));
+        var ex = Assert.Throws<ManifestException>(() => SizeSettings.Parse($$"""{ "format": 1, "target": "A", "{{key}}": {{range}} }"""));
 
-        Assert.Contains("sizeRanges.nursery", ex.Message);
+        Assert.Contains($"\"{key}\" must be [min, max]", ex.Message);
     }
 
     [Fact]
     public void Raised_maximums_reach_the_highest_limit()
     {
-        var s = SizeSettings.Parse("""{ "format": 1, "target": "A", "adult": 20, "male": 20, "female": 20 }""");
-        Assert.Equal((20.0, 20.0, 20.0), (s.Adult!.Value, s.Male!.Value, s.Female!.Value));
+        var s = SizeSettings.Parse("""{ "format": 1, "target": "A", "adult": 20, "male": 20, "female": 20, "nursery": [0.25, 20], "breeding": [1, 20] }""");
 
-        var m = ModManifest.Parse("""{"format":1,"id":"mod-a","sizeRanges":{"nursery":[0.25,20],"breeding":[1,20]}}""");
-        Assert.Equal([0.25, 20], m.SizeRanges!.Nursery!);
-        Assert.Equal([1, 20], m.SizeRanges.Breeding!);
+        Assert.Equal((20.0, 20.0, 20.0), (s.Adult!.Value, s.Male!.Value, s.Female!.Value));
+        Assert.Equal([0.25, 20], s.Nursery!);
+        Assert.Equal([1, 20], s.Breeding!);
     }
 
     [Fact]
     public void Limit_parses_and_round_trips()
     {
-        var m = ModManifest.Parse("""{"format":1,"id":"mod-a","sizeRanges":{"limit":[0.05,20]}}""");
+        var s = SizeSettings.Parse("""{ "format": 1, "target": "A", "limit": [0.01, 20] }""");
 
-        Assert.Equal([0.05, 20], m.SizeRanges!.Limit!);
-        Assert.False(m.SizeRanges.IsEmpty);
-        Assert.Equal([0.05, 20], ModManifest.Parse(m.ToJson()).SizeRanges!.Limit!);
-        Assert.Null(ModManifest.Parse("""{"format":1,"id":"mod-a","sizeRanges":{"nursery":[1,2]}}""").SizeRanges!.Limit);
+        Assert.Equal([0.01, 20], s.Limit!);
+        Assert.Equal([0.01, 20], SizeSettings.Parse(s.ToJson()).Limit!);
+        Assert.Equal((0.01f, 20f), (SizeLimit.Of(s.Limit).Min, SizeLimit.Of(s.Limit).Max));
     }
 
     [Theory]
@@ -99,28 +119,48 @@ public class SpeciesSizesTests
     [InlineData("[0.05]")]
     public void Limit_has_absolute_bounds(string limit)
     {
-        var ex = Assert.Throws<ManifestException>(() => ModManifest.Parse("{\"format\":1,\"id\":\"mod-a\",\"sizeRanges\":{\"limit\":" + limit + "}}"));
+        var ex = Assert.Throws<ManifestException>(() => SizeSettings.Parse("{ \"format\": 1, \"target\": \"A\", \"limit\": " + limit + " }"));
 
-        Assert.Contains("sizeRanges.limit", ex.Message);
+        Assert.Contains("\"limit\" must be [min, max] with 0.01 <= min <= 0.05 and 2 <= max <= 20", ex.Message);
     }
 
     [Fact]
-    public void The_widest_limit_wins()
+    public void SizeRanges_in_mod_json_moved_to_the_size_card()
     {
-        var a = Mod("mod-a", null, ""","sizeRanges":{"limit":[0.02,5]}""");
-        var b = Mod("mod-b", null, ""","sizeRanges":{"limit":[0.05,20],"nursery":[0.5,1.5]}""");
-        var c = Mod("mod-c", null, ""","sizeRanges":{"limit":[0.04,3]}""");
+        const string json = """{"format":1,"id":"mod-a","sizeRanges":{"limit":[0.05,20]}}""";
 
-        var table = SizeTable.Build([a, b, c], out _);
+        // Check and the app: an error that says where it went.
+        var ex = Assert.Throws<ManifestException>(() => ModManifest.Parse(json));
+        Assert.Equal("\"sizeRanges\" moved to each species' Size card (sizes/<species>.json); remove it from mod.json.", ex.Message);
 
-        Assert.Equal([0.02, 20], table.Ranges.Limit!);
-        Assert.Equal((0.02f, 20f), (table.Limit.Min, table.Limit.Max));
+        // The game: ignored, with one message; the rest of the mod loads.
+        var messages = new List<string>();
+        var manifest = ModManifest.Parse(json, messages);
+        Assert.Equal("mod-a", manifest.Id);
+        Assert.Equal("\"sizeRanges\" was ignored: it moved to each species' Size card (sizes/<species>.json); remove it from mod.json.", Assert.Single(messages));
+        Assert.DoesNotContain("sizeRanges", manifest.ToJson());
+    }
+
+    [Fact]
+    public void The_widest_limit_wins_per_species()
+    {
+        var a = Mod("mod-a", """{"format":1,"target":"Tyrannosaurus","limit":[0.02,5]}""");
+        var b = Mod("mod-b", """{"format":1,"target":"tyrannosaurus","limit":[0.05,20],"nursery":[0.5,1.5]}""");
+        var c = Mod("mod-c", """{"format":1,"target":"Tyrannosaurus","limit":[0.04,3]}""");
+        var d = Mod("mod-d", """{"format":1,"target":"Allosaurus","limit":[0.05,3]}""");
+
+        var table = SizeTable.Build([a, b, c, d], out _);
+
+        Assert.Equal([0.02, 20], table.For("Tyrannosaurus")!.Limit!);
+        Assert.Equal((0.02f, 20f), (table.LimitOf("Tyrannosaurus").Min, table.LimitOf("Tyrannosaurus").Max));
+        Assert.Equal((0.05f, 3f), (table.LimitOf("Allosaurus").Min, table.LimitOf("Allosaurus").Max)); // a species' limit is its own
+        Assert.True(table.LimitOf("Spinosaurus").IsGame);
+        Assert.True(table.LimitOf(null).IsGame);
         Assert.True(table.HasAny);
-        var none = SizeTable.Build([Mod("mod-d", null)], out _);
-        Assert.Null(none.Ranges.Limit);
-        Assert.True(none.Limit.IsGame);
-        Assert.Equal((0.05f, 2f), (none.Limit.Min, none.Limit.Max));
-        Assert.True(SizeTable.Build([Mod("mod-e", null, ""","sizeRanges":{"limit":[0.05,2]}""")], out _).Limit.IsGame);
+        var none = SizeTable.Build([Mod("mod-e", null)], out _);
+        Assert.False(none.HasAny);
+        Assert.True(none.LimitOf("Tyrannosaurus").IsGame);
+        Assert.Equal((0.05f, 2f), (none.LimitOf("Tyrannosaurus").Min, none.LimitOf("Tyrannosaurus").Max));
     }
 
     [Fact]
@@ -128,38 +168,27 @@ public class SpeciesSizesTests
     {
         var ex = Assert.Throws<ManifestException>(() => SizeSettings.Parse("""{ "format": 1, "target": "A", "adlut": 1 }"""));
         Assert.Contains("adlut", ex.Message);
-        Assert.Throws<ManifestException>(() => ModManifest.Parse("""{"format":1,"id":"mod-a","sizeRanges":{"nurseyr":[1,2]}}"""));
+        Assert.Contains("nursery, breeding, limit", ex.Message);
+        Assert.Throws<ManifestException>(() => SizeSettings.Parse("""{ "format": 1, "target": "A", "nurseyr": [1, 2] }"""));
     }
 
     [Fact]
     public void Later_mod_wins_per_key()
     {
-        var a = Mod("mod-a", """{"format":1,"target":"Tyrannosaurus","adult":0.8,"baby":0.2}""");
-        var b = Mod("mod-b", """{"format":1,"target":"tyrannosaurus","adult":1.2}""");
+        var a = Mod("mod-a", """{"format":1,"target":"Tyrannosaurus","adult":0.8,"baby":0.2,"nursery":[0.5,1.5],"breeding":[0.7,1.3]}""");
+        var b = Mod("mod-b", """{"format":1,"target":"tyrannosaurus","adult":1.2,"breeding":[0.9,1.1]}""");
 
         var table = SizeTable.Build([a, b], out var messages);
 
         var merged = table.For("Tyrannosaurus")!;
         Assert.Equal((1.2, 0.2), (merged.Adult, merged.Baby));
         Assert.Null(merged.Male);
+        Assert.Equal([0.5, 1.5], merged.Nursery!);
+        Assert.Equal([0.9, 1.1], merged.Breeding!);
+        Assert.Null(merged.Limit);
         Assert.Null(table.For("Allosaurus"));
         Assert.True(table.HasAny);
         Assert.Empty(messages);
-    }
-
-    [Fact]
-    public void Ranges_merge_per_range()
-    {
-        var a = Mod("mod-a", null, ""","sizeRanges":{"nursery":[0.5,1.5],"breeding":[0.7,1.3]}""");
-        var b = Mod("mod-b", null, ""","sizeRanges":{"breeding":[0.9,1.1]}""");
-
-        var table = SizeTable.Build([a, b], out _);
-
-        Assert.Equal([0.5, 1.5], table.Ranges.Nursery!);
-        Assert.Equal([0.9, 1.1], table.Ranges.Breeding!);
-        var again = ModManifest.Parse(a.Manifest.ToJson());
-        Assert.Equal([0.5, 1.5], again.SizeRanges!.Nursery!);
-        Assert.DoesNotContain("sizeRanges", ModManifest.Parse("""{"format":1,"id":"mod-c"}""").ToJson());
     }
 
     [Fact]

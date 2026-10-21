@@ -5,7 +5,10 @@ using System.Linq;
 
 namespace Tyrant.Framework.Core
 {
-    /// <summary>A mod's size changes for one species (sizes/&lt;file&gt;.json); mod.json does not list them. A null key is unchanged.</summary>
+    /// <summary>
+    /// A mod's size changes for one species (sizes/&lt;file&gt;.json); mod.json does not list them. A null key is the game's. Besides
+    /// the sizes, the file holds the species' genetic size ranges (the Nursery slider's and breeding's) and its size limit.
+    /// </summary>
     public sealed class SizeSettings
     {
         public const string Folder = "sizes";
@@ -15,6 +18,11 @@ namespace Tyrant.Framework.Core
         public const double AdultMin = 0.05, AdultMax = 20;
         public const double SexMin = 0.1, SexMax = 20;
         public const double BabyMax = 1;
+
+        /// <summary>A genetic size range is [min, max] with 0 &lt; min &lt;= max &lt;= RangeMax.</summary>
+        public const double RangeMax = 20;
+
+        private static readonly string[] Keys = { "adult", "baby", "male", "female", "nursery", "breeding", "limit" };
 
         public string Target { get; set; } = "";
 
@@ -27,7 +35,19 @@ namespace Tyrant.Framework.Core
         public double? Male { get; set; }
         public double? Female { get; set; }
 
-        public bool IsEmpty => Adult == null && Baby == null && Male == null && Female == null;
+        /// <summary>The genetic size range [min, max] the Nursery's Customize size slider covers for this species; random eggs keep the game's.</summary>
+        public double[]? Nursery { get; set; }
+
+        /// <summary>The genetic size range [min, max] of this species' bred young.</summary>
+        public double[]? Breeding { get; set; }
+
+        /// <summary>The size limit [min, max] on this species' final scale; the game's is 0.05 to 2 (see <see cref="SizeLimit"/>).</summary>
+        public double[]? Limit { get; set; }
+
+        /// <summary>Whether it changes the species' size itself (adult, baby, male or female), not only its ranges or limit.</summary>
+        public bool SetsSize => Adult != null || Baby != null || Male != null || Female != null;
+
+        public bool IsEmpty => !SetsSize && Nursery == null && Breeding == null && Limit == null;
 
         public static SizeSettings Parse(string json)
         {
@@ -46,8 +66,8 @@ namespace Tyrant.Framework.Core
             if (!(map.TryGetValue("target", out var target) && target is string t && t.Trim().Length > 0))
                 throw new ManifestException("\"target\" must name a species.");
             foreach (var key in map.Keys)
-                if (key != "format" && key != "target" && key != "adult" && key != "baby" && key != "male" && key != "female")
-                    throw new ManifestException($"Unknown key \"{key}\" (use adult, baby, male, female).");
+                if (key != "format" && key != "target" && !Keys.Contains(key))
+                    throw new ManifestException($"Unknown key \"{key}\" (use {string.Join(", ", Keys)}).");
             return new SizeSettings
             {
                 Target = t.Trim(),
@@ -55,7 +75,20 @@ namespace Tyrant.Framework.Core
                 Baby = Number(map, "baby", 0, BabyMax, minExclusive: true),
                 Male = Number(map, "male", SexMin, SexMax),
                 Female = Number(map, "female", SexMin, SexMax),
+                Nursery = Range(map, "nursery"),
+                Breeding = Range(map, "breeding"),
+                Limit = Range(map, "limit"),
             };
+        }
+
+        /// <summary>What is wrong with a range ("must be …"), or null when it is valid; key is nursery, breeding or limit.</summary>
+        public static string? RangeProblem(string key, double[] range)
+        {
+            if (key == "limit")
+                return range.Length == 2 && range[0] >= SizeLimit.LowestMin && range[0] <= SizeLimit.HighestMin && range[1] >= SizeLimit.LowestMax && range[1] <= SizeLimit.HighestMax
+                    ? null
+                    : FormattableString.Invariant($"must be [min, max] with {SizeLimit.LowestMin} <= min <= {SizeLimit.HighestMin} and {SizeLimit.LowestMax} <= max <= {SizeLimit.HighestMax}");
+            return range.Length == 2 && range[0] > 0 && range[0] <= range[1] && range[1] <= RangeMax ? null : $"must be [min, max] with 0 < min <= max <= {RangeMax}";
         }
 
         private static double? Number(Dictionary<string, object?> map, string key, double min, double max, bool minExclusive = false)
@@ -66,6 +99,15 @@ namespace Tyrant.Framework.Core
             return d;
         }
 
+        private static double[]? Range(Dictionary<string, object?> map, string key)
+        {
+            if (!map.TryGetValue(key, out var value) || value == null) return null;
+            var range = value is List<object?> list && list.All(v => v is double) ? list.Cast<double>().ToArray() : null;
+            if (range == null || RangeProblem(key, range) is string)
+                throw new ManifestException($"\"{key}\" {RangeProblem(key, range ?? new double[0])} (got {Json.Write(value)}).");
+            return range;
+        }
+
         public string ToJson()
         {
             var map = new Dictionary<string, object?> { ["format"] = Format, ["target"] = Target };
@@ -73,6 +115,9 @@ namespace Tyrant.Framework.Core
             if (Baby is double baby) map["baby"] = baby;
             if (Male is double male) map["male"] = male;
             if (Female is double female) map["female"] = female;
+            if (Nursery != null) map["nursery"] = Nursery.Cast<object?>().ToList();
+            if (Breeding != null) map["breeding"] = Breeding.Cast<object?>().ToList();
+            if (Limit != null) map["limit"] = Limit.Cast<object?>().ToList();
             return Json.Write(map) + "\n";
         }
 
@@ -109,77 +154,62 @@ namespace Tyrant.Framework.Core
     }
 
     /// <summary>
-    /// mod.json "sizeRanges", each [min, max]; null is unchanged. Nursery and Breeding are the genetic size ranges the Nursery slider
-    /// and breeding use; Limit widens the game's 0.05 to 2 cap on an animal's final scale.
-    /// </summary>
-    public sealed class SizeRanges
-    {
-        public const double Min = 0, Max = 20;
-
-        public double[]? Nursery { get; set; }
-        public double[]? Breeding { get; set; }
-        public double[]? Limit { get; set; }
-
-        public bool IsEmpty => Nursery == null && Breeding == null && Limit == null;
-
-        internal static SizeRanges Parse(object value)
-        {
-            if (!(value is Dictionary<string, object?> block)) throw new ManifestException("\"sizeRanges\" must be an object with \"nursery\", \"breeding\" or \"limit\".");
-            foreach (var key in block.Keys)
-                if (key != "nursery" && key != "breeding" && key != "limit") throw new ManifestException($"\"sizeRanges\" has unknown key \"{key}\" (use nursery, breeding, limit).");
-            return new SizeRanges { Nursery = Range(block, "nursery"), Breeding = Range(block, "breeding"), Limit = Range(block, "limit") };
-        }
-
-        /// <summary>What is wrong with a range ("must be …"), or null when it is valid; key is nursery, breeding or limit.</summary>
-        public static string? Problem(string key, double[] range)
-        {
-            if (key == "limit")
-                return range.Length == 2 && range[0] >= SizeLimit.LowestMin && range[0] <= SizeLimit.HighestMin && range[1] >= SizeLimit.LowestMax && range[1] <= SizeLimit.HighestMax
-                    ? null
-                    : FormattableString.Invariant($"must be [min, max] with {SizeLimit.LowestMin} <= min <= {SizeLimit.HighestMin} and {SizeLimit.LowestMax} <= max <= {SizeLimit.HighestMax}");
-            return range.Length == 2 && range[0] > Min && range[0] <= range[1] && range[1] <= Max ? null : $"must be [min, max] with 0 < min <= max <= {Max}";
-        }
-
-        private static double[]? Range(Dictionary<string, object?> block, string key)
-        {
-            if (!block.TryGetValue(key, out var value) || value == null) return null;
-            if (!(value is List<object?> list && list.Count == 2 && list[0] is double min && list[1] is double max))
-                throw new ManifestException($"\"sizeRanges.{key}\" must be [min, max].");
-            var range = new[] { min, max };
-            if (Problem(key, range) is string problem) throw new ManifestException($"\"sizeRanges.{key}\" {problem} (got {Json.Write(value)}).");
-            return range;
-        }
-
-        internal Dictionary<string, object?> ToJson()
-        {
-            var block = new Dictionary<string, object?>();
-            if (Nursery != null) block["nursery"] = Nursery.Cast<object?>().ToList();
-            if (Breeding != null) block["breeding"] = Breeding.Cast<object?>().ToList();
-            if (Limit != null) block["limit"] = Limit.Cast<object?>().ToList();
-            return block;
-        }
-    }
-
-    /// <summary>
-    /// Every enabled mod's sizes by target and its size ranges: the later mod in load order wins, per key and per range, except the
-    /// size limit, where the widest wins (so one mod cannot cap another's sizes again).
+    /// Every enabled mod's sizes by target: the later mod in load order wins, per key, except the size limit, where the widest wins
+    /// (so one mod cannot cap another's sizes again).
     /// </summary>
     public sealed class SizeTable
     {
         private readonly Dictionary<string, SizeSettings> _targets = new Dictionary<string, SizeSettings>(StringComparer.OrdinalIgnoreCase);
 
-        public bool HasAny => _targets.Count > 0 || !Ranges.IsEmpty;
+        /// <summary>Whether any species has a size, a range or a limit set; without one nothing is patched.</summary>
+        public bool HasAny => _targets.Values.Any(s => !s.IsEmpty);
 
-        /// <summary>The merged ranges; a range no mod sets is null.</summary>
-        public SizeRanges Ranges { get; } = new SizeRanges();
+        /// <summary>Whether any species sets a Nursery slider range (the slider is patched only then).</summary>
+        public bool SetsSlider => _targets.Values.Any(s => s.Nursery != null);
 
-        /// <summary>The size limit in effect: the widest a mod sets, or the game's.</summary>
-        public SizeLimit Limit => SizeLimit.Of(Ranges.Limit);
+        /// <summary>Whether any species sets a breeding range (breeding is patched only then).</summary>
+        public bool SetsBreeding => _targets.Values.Any(s => s.Breeding != null);
+
+        /// <summary>Whether any species has a size limit other than the game's (the cap is patched only then).</summary>
+        public bool SetsLimit => _targets.Values.Any(s => !SizeLimit.Of(s.Limit).IsGame);
+
+        /// <summary>The Nursery slider range of each species that sets one.</summary>
+        public IReadOnlyDictionary<string, (double Min, double Max)> SliderRanges => RangesOf(s => s.Nursery);
+
+        /// <summary>The breeding range of each species that sets one.</summary>
+        public IReadOnlyDictionary<string, (double Min, double Max)> BreedingRanges => RangesOf(s => s.Breeding);
 
         public SizeSettings? For(string? target) =>
             target != null && _targets.TryGetValue(target, out var sizes) ? sizes : null;
 
+        /// <summary>A species' size limit in effect: the widest a mod sets for it, or the game's.</summary>
+        public SizeLimit LimitOf(string? target) => SizeLimit.Of(For(target)?.Limit);
+
         public IEnumerable<SizeSettings> All => _targets.Values;
+
+        /// <summary>
+        /// The size limits by native species index, as the patched AnimalNative.CurrentScale reads them: [min0, max0, min1, max1, …]
+        /// for the species ids in the game's native order (a null id, or one without a limit, has the game's).
+        /// </summary>
+        public float[] Limits(IReadOnlyList<string?> speciesIds)
+        {
+            var limits = new float[speciesIds.Count * 2];
+            for (var i = 0; i < speciesIds.Count; i++)
+            {
+                var limit = LimitOf(speciesIds[i]);
+                limits[2 * i] = limit.Min;
+                limits[2 * i + 1] = limit.Max;
+            }
+            return limits;
+        }
+
+        private Dictionary<string, (double, double)> RangesOf(Func<SizeSettings, double[]?> range)
+        {
+            var result = new Dictionary<string, (double, double)>(StringComparer.OrdinalIgnoreCase);
+            foreach (var sizes in _targets.Values)
+                if (range(sizes) is { } r) result[sizes.Target] = (r[0], r[1]);
+            return result;
+        }
 
         public static SizeTable Build(IReadOnlyList<LoadedMod> mods, out List<string> messages)
         {
@@ -196,13 +226,11 @@ namespace Tyrant.Framework.Core
                     merged.Baby = sizes.Baby ?? merged.Baby;
                     merged.Male = sizes.Male ?? merged.Male;
                     merged.Female = sizes.Female ?? merged.Female;
+                    merged.Nursery = sizes.Nursery ?? merged.Nursery;
+                    merged.Breeding = sizes.Breeding ?? merged.Breeding;
+                    merged.Limit = SizeLimit.Widest(merged.Limit, sizes.Limit);
                 }
                 messages.AddRange(problems.Select(p => $"{mod.Manifest.Id}: {p}"));
-                var ranges = mod.Manifest.SizeRanges;
-                if (ranges == null) continue;
-                table.Ranges.Nursery = ranges.Nursery ?? table.Ranges.Nursery;
-                table.Ranges.Breeding = ranges.Breeding ?? table.Ranges.Breeding;
-                table.Ranges.Limit = SizeLimit.Widest(table.Ranges.Limit, ranges.Limit);
             }
             return table;
         }
