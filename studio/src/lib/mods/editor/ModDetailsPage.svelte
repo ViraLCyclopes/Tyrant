@@ -43,7 +43,7 @@
     facts.reload();
   }
 
-  // The genetic size ranges (the Nursery's size slider, and the offspring of breeding); the server replaces both together.
+  // The genetic size ranges (the Nursery's size slider, and the offspring of breeding) and the size limit; the server replaces all three together.
   let sizeRanges = $state.raw<ModSizeRangesDto | null>(null);
   $effect(() => {
     void doc.detail?.revision;
@@ -54,10 +54,15 @@
   const asRange = (v: number[] | null): Range | null => (v ? { min: v[0], max: v[1] } : null);
   const gameRange = (v: number[]): Range => ({ min: v[0], max: v[1] });
   const pair = (r: Range | null) => (r ? [r.min, r.max] : null);
-  async function saveRange(which: 'nursery' | 'breeding', r: Range | null) {
+  // The limit's absolute bounds (as mod.json takes them): its minimum within 0.01–0.05, its maximum within 2–20.
+  const LIMIT = { lowestMin: 0.01, highestMin: 0.05, lowestMax: 2, highestMax: 20 };
+  const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
+  const inLimit = (r: Range): Range => ({ min: clamp(r.min, LIMIT.lowestMin, LIMIT.highestMin), max: clamp(r.max, LIMIT.lowestMax, LIMIT.highestMax) });
+  async function saveRange(which: 'nursery' | 'breeding' | 'limit', r: Range | null) {
     const now = sizeRanges;
     if (!now || (r && r.min > r.max)) return;
-    const next = { nursery: now.nursery, breeding: now.breeding, [which]: pair(r) };
+    if (r && which === 'limit') r = inLimit(r);
+    const next = { nursery: now.nursery, breeding: now.breeding, limit: now.limit, [which]: pair(r) };
     const shown = { ...now, ...next };
     sizeRanges = shown;
     // Not saved: back to the saved ranges, unless a reload came first.
@@ -102,10 +107,13 @@
 {#if sizeRanges}
   <section class="card details">
     <h2>Size ranges</h2>
-    <RangeField label="Nursery size slider range" baseLabel="Game's range" value={asRange(sizeRanges.nursery)} min={0.05} max={10} fallback={gameRange(sizeRanges.gameNursery)} onChange={(r) => saveRange('nursery', r)} />
+    <RangeField label="Nursery size slider range" baseLabel="Game's range" value={asRange(sizeRanges.nursery)} min={0.05} max={20} fallback={gameRange(sizeRanges.gameNursery)} onChange={(r) => saveRange('nursery', r)} />
     <p class="hint">The game's own Customize size slider in the Nursery covers this range. Random eggs keep the game's range. Game: {text(sizeRanges.gameNursery)}</p>
-    <RangeField label="Breeding size range" baseLabel="Game's range" value={asRange(sizeRanges.breeding)} min={0.05} max={10} fallback={gameRange(sizeRanges.gameBreeding)} onChange={(r) => saveRange('breeding', r)} />
+    <RangeField label="Breeding size range" baseLabel="Game's range" value={asRange(sizeRanges.breeding)} min={0.05} max={20} fallback={gameRange(sizeRanges.gameBreeding)} onChange={(r) => saveRange('breeding', r)} />
     <p class="hint">Game: {text(sizeRanges.gameBreeding)}</p>
+    <RangeField label="Size limit" baseLabel="Game's limit" value={asRange(sizeRanges.limit)} min={LIMIT.lowestMin} max={LIMIT.highestMax} fixable={false} fallback={gameRange(sizeRanges.gameLimit)} onChange={(r) => saveRange('limit', r)} />
+    <p class="hint">The game caps animals at 0.05×–2×. A wider limit lets sizes past 2× show in game; the game was tuned for normal sizes, so very big animals may clip, get stuck or frame badly.</p>
+    <p class="hint">Minimum 0.01–0.05, maximum 2–20. With several mods on, the widest limit wins.</p>
   </section>
 {/if}
 

@@ -69,12 +69,12 @@ describe('Mod details page', () => {
   });
 
   describe('size ranges', () => {
-    const ranges = { nursery: null, breeding: [0.9, 1.1], gameNursery: [0.8, 1.2], gameBreeding: [0.85, 1.15] };
-    async function sizeSetup(refuse = false) {
+    const ranges = { nursery: null, breeding: [0.9, 1.1], gameNursery: [0.8, 1.2], gameBreeding: [0.85, 1.15], limit: null, gameLimit: [0.05, 2] };
+    async function sizeSetup(refuse = false, limit: number[] | null = null) {
       const rpc = new FakeRpc()
         .on('mods.get', () => modDetail())
         .on('mods.check', () => ({ errors: [], warnings: [], missingCutouts: [] }))
-        .on('mods.sizeRanges', () => ranges)
+        .on('mods.sizeRanges', () => ({ ...ranges, limit }))
         .on('mods.setSizeRanges', () => {
           if (refuse) throw new RpcError('The mod folder is read-only.', 'IO_ERROR');
           return modDetail({ revision: 'r2' });
@@ -95,7 +95,39 @@ describe('Mod details page', () => {
       expect(screen.getByText(/Game: 0.80 – 1.20/)).toBeInTheDocument();
       await fireEvent.click(within(screen.getByRole('group', { name: 'Nursery size slider range' })).getByRole('checkbox', { name: /Game's range/ }));
       await waitFor(() => expect(rpc.callsTo('mods.setSizeRanges')).toHaveLength(1));
-      expect(rpc.callsTo('mods.setSizeRanges')[0].params).toMatchObject({ nursery: [0.8, 1.2], breeding: [0.9, 1.1] });
+      expect(rpc.callsTo('mods.setSizeRanges')[0].params).toMatchObject({ nursery: [0.8, 1.2], breeding: [0.9, 1.1], limit: null });
+    });
+
+    it('the ranges reach 20', async () => {
+      await sizeSetup();
+      await fireEvent.click(within(screen.getByRole('group', { name: 'Nursery size slider range' })).getByRole('checkbox', { name: /Game's range/ }));
+      expect(screen.getByRole('slider', { name: 'Breeding size range to' })).toHaveAttribute('max', '20');
+    });
+
+    it('shows the size limit and its note, and sets it with the ranges kept', async () => {
+      const rpc = await sizeSetup(false, [0.05, 5]);
+      expect(screen.getByText('The game caps animals at 0.05×–2×. A wider limit lets sizes past 2× show in game; the game was tuned for normal sizes, so very big animals may clip, get stuck or frame badly.')).toBeInTheDocument();
+      const group = screen.getByRole('group', { name: 'Size limit' });
+      expect(within(group).queryByRole('checkbox', { name: /Fixed/ })).toBeNull();
+      const to = within(group).getByRole('slider', { name: 'Size limit to' });
+      expect(to).toHaveAttribute('max', '20');
+      await fireEvent.input(to, { target: { value: '20' } });
+      await fireEvent.change(to);
+      await waitFor(() => expect(rpc.callsTo('mods.setSizeRanges')).toHaveLength(1));
+      expect(rpc.callsTo('mods.setSizeRanges')[0].params).toMatchObject({ limit: [0.05, 20], nursery: null, breeding: [0.9, 1.1] });
+    });
+
+    it('keeps the size limit within its bounds', async () => {
+      const rpc = await sizeSetup(false, [0.05, 5]);
+      const group = screen.getByRole('group', { name: 'Size limit' });
+      const from = within(group).getByRole('slider', { name: 'Size limit from' });
+      await fireEvent.input(from, { target: { value: '1' } });
+      await fireEvent.change(from);
+      await waitFor(() => expect(rpc.callsTo('mods.setSizeRanges')).toHaveLength(1));
+      expect((rpc.callsTo('mods.setSizeRanges')[0].params as { limit: number[] }).limit).toEqual([0.05, 5]);
+      await fireEvent.click(within(group).getByRole('checkbox', { name: /Game's limit/ }));
+      await waitFor(() => expect(rpc.callsTo('mods.setSizeRanges')).toHaveLength(2));
+      expect(rpc.callsTo('mods.setSizeRanges')[1].params).toMatchObject({ limit: null });
     });
 
     it('a save that fails puts the saved range back', async () => {
