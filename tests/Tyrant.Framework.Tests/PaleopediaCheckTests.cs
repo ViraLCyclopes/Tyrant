@@ -17,6 +17,20 @@ public class PaleopediaCheckTests
         Assert.Equal(expected, PaleopediaCheck.ShowsSpecies(genus, species, "Ultimasaurus", "anax"));
 
     [Fact]
+    public void A_page_is_the_species_own_only_when_it_holds_that_animal_and_shows_its_name()
+    {
+        object species = new(), template = new();
+        Assert.Equal(PaleopediaCheck.Verdict.OwnPage, PaleopediaCheck.Judge(true, species, species, "Ultimasaurus", "anax", "Ultimasaurus", "anax"));
+        // Same name on the header, but the page holds another animal (e.g. another species named alike).
+        Assert.Equal(PaleopediaCheck.Verdict.OtherPage, PaleopediaCheck.Judge(true, template, species, "Ultimasaurus", "anax", "Ultimasaurus", "anax"));
+        Assert.Equal(PaleopediaCheck.Verdict.OtherPage, PaleopediaCheck.Judge(true, null, species, "Ultimasaurus", "anax", "Ultimasaurus", "anax"));
+        // The right animal, but the header shows another name: the page was not redrawn.
+        Assert.Equal(PaleopediaCheck.Verdict.OtherPage, PaleopediaCheck.Judge(true, species, species, "Allosaurus", "anax", "Ultimasaurus", "anax"));
+        // The Paleopedia was closed again before the check: nothing to judge.
+        Assert.Equal(PaleopediaCheck.Verdict.NotOpen, PaleopediaCheck.Judge(false, template, species, "Allosaurus", "anax", "Ultimasaurus", "anax"));
+    }
+
+    [Fact]
     public void The_shown_name_reads_like_the_header()
     {
         Assert.Equal("Allosaurus anax", PaleopediaCheck.Shown("<b>Allosaurus</b> ", " anax"));

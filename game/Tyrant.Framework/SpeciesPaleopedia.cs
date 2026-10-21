@@ -29,7 +29,7 @@ namespace Tyrant.Framework
     internal static class SpeciesPaleopedia
     {
         private static GameObject? _holder;
-        private static readonly Dictionary<object, GameObject> Copies = new Dictionary<object, GameObject>(ReferenceComparer.Instance);
+        private static readonly Dictionary<object, (GameObject Copy, Sprite Picture)> Copies = new Dictionary<object, (GameObject, Sprite)>(ReferenceComparer.Instance);
         private static readonly PaleopediaCheck.OncePerCase Logged = new PaleopediaCheck.OncePerCase();
 
         // The last SetAnimalScreen call.
@@ -65,7 +65,7 @@ namespace Tyrant.Framework
                 var ownImage = copy.transform.GetChild(0).GetComponent(GameUi.Image!);
                 if (!Members.Set(ownImage, "sprite", picture)) throw new MissingMemberException("Image.sprite");
                 if (!Members.Set(data, "infoSign", own)) throw new MissingFieldException("infoSign");
-                Copies[data] = copy;
+                Copies[data] = (copy, picture);
             }
             catch
             {
@@ -74,12 +74,17 @@ namespace Tyrant.Framework
             }
         }
 
-        /// <summary>A species that was skipped after getting its info sign copy: the copy goes too.</summary>
+        /// <summary>A species that was skipped after getting its info sign copy: the copy and its picture go too.</summary>
         public static void Discard(object data)
         {
-            if (!Copies.TryGetValue(data, out var copy)) return;
+            if (!Copies.TryGetValue(data, out var own)) return;
             Copies.Remove(data);
-            if (copy != null) UnityEngine.Object.Destroy(copy);
+            if (own.Copy != null) UnityEngine.Object.Destroy(own.Copy);
+            if (own.Picture != null)
+            {
+                if (own.Picture.texture != null) UnityEngine.Object.Destroy(own.Picture.texture);
+                UnityEngine.Object.Destroy(own.Picture);
+            }
         }
 
         private static GameObject Holder()
@@ -171,12 +176,15 @@ namespace Tyrant.Framework
             var manager = gui == null ? null : Members.Get(gui, "PaleopediaGUI");
             var screen = manager == null ? null : Members.Get(manager, "AnimalScreen");
             if (manager == null || screen == null) return;
+            var open = Members.Get(gui!, "isPaleopediaOpen") is true; // closed again before this frame: nothing to judge
             var genus = Members.Get(pending.Data, "genusName") as string ?? "";
             var species = Members.Get(pending.Data, "speciesName") as string ?? "";
             var name = $"{genus} {species} ({pending.Id})";
             var opened = pending.Error == null ? "" : $" Open Paleopedia threw {pending.Error}.";
             var (shownGenus, shownSpecies) = Header(screen);
-            if (PaleopediaCheck.ShowsSpecies(shownGenus, shownSpecies, genus, species))
+            var verdict = PaleopediaCheck.Judge(open, Members.Get(screen, "currentSelectedAnimal"), pending.Data, shownGenus, shownSpecies, genus, species);
+            if (verdict == PaleopediaCheck.Verdict.NotOpen) return;
+            if (verdict == PaleopediaCheck.Verdict.OwnPage)
             {
                 if (Logged.First("own page", pending.Id))
                     FrameworkMod.Log.Msg($"Open Paleopedia shows {name}'s own page (set with {LastCall()}).{opened}");
@@ -189,7 +197,8 @@ namespace Tyrant.Framework
             {
                 AccessTools.Method(manager.GetType(), "SetSelectedAnimalScreen")?.Invoke(manager, new[] { pending.Data });
                 var (g, s) = Header(screen);
-                outcome = PaleopediaCheck.ShowsSpecies(g, s, genus, species) ? "switched it." : $"switching it left {PaleopediaCheck.Shown(g, s)} on the page.";
+                outcome = PaleopediaCheck.Judge(true, Members.Get(screen, "currentSelectedAnimal"), pending.Data, g, s, genus, species) == PaleopediaCheck.Verdict.OwnPage
+                    ? "switched it." : $"switching it left {PaleopediaCheck.Shown(g, s)} on the page.";
             }
             catch (Exception ex)
             {

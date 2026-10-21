@@ -24,6 +24,20 @@ namespace Tyrant.Framework.Core
                 && string.Equals(s, species.Trim(), StringComparison.OrdinalIgnoreCase);
         }
 
+        public enum Verdict { NotOpen, OwnPage, OtherPage }
+
+        /// <summary>
+        /// The page after a new species' Open Paleopedia: nothing to judge when the Paleopedia is closed; its own page only when
+        /// the page holds that very animal and its header shows the species' genus and species.
+        /// </summary>
+        public static Verdict Judge(bool paleopediaOpen, object? shownAnimal, object species, string? shownGenus, string? shownSpecies,
+            string genus, string speciesName)
+        {
+            if (!paleopediaOpen) return Verdict.NotOpen;
+            return ReferenceEquals(shownAnimal, species) && ShowsSpecies(shownGenus, shownSpecies, genus, speciesName)
+                ? Verdict.OwnPage : Verdict.OtherPage;
+        }
+
         /// <summary>The header as a name for the log, e.g. "Allosaurus anax".</summary>
         public static string Shown(string? genus, string? species)
         {

@@ -216,8 +216,9 @@ namespace Tyrant.Framework
         {
             var path = Path.GetFullPath(Path.Combine(modDirectory, file));
             if (!ModPaths.IsInside(path, modDirectory)) throw new InvalidOperationException("PNG path escapes the mod folder: " + file);
+            var bytes = File.ReadAllBytes(path); // before the texture exists: a missing PNG leaves nothing behind
             var texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
-            if (!texture.LoadImage(File.ReadAllBytes(path), false)) { UnityEngine.Object.Destroy(texture); throw new InvalidOperationException("Cannot decode PNG: " + file); }
+            if (!texture.LoadImage(bytes, false)) { UnityEngine.Object.Destroy(texture); throw new InvalidOperationException("Cannot decode PNG: " + file); }
             texture.name = name;
             var sprite = Sprite.Create(texture, new Rect(0, 0, texture.width, texture.height), new Vector2(0.5f, 0.5f));
             sprite.name = name;
