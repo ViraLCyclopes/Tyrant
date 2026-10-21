@@ -99,12 +99,12 @@ public sealed partial class ModProject
     }
 
     /// <summary>
-    /// The editor's undo and redo: mod.json (checked like SaveManifest), and the prefabs/ files and the materials.json files
-    /// (<see cref="MaterialFileTexts"/>) exactly as they were, by name. Null <paramref name="materials"/> leaves the material
-    /// files as they are.
+    /// The editor's undo and redo: mod.json (checked like SaveManifest), and the prefabs/ files, the materials.json files
+    /// (<see cref="MaterialFileTexts"/>) and the sizes/ files exactly as they were, by name. Null <paramref name="materials"/> or
+    /// <paramref name="sizes"/> leaves those files as they are.
     /// </summary>
     public static ModProject RestoreSnapshot(Workspace ws, string id, string manifestJson, IReadOnlyDictionary<string, string> prefabs, string expectedRevision,
-        IReadOnlyDictionary<string, string>? materials)
+        IReadOnlyDictionary<string, string>? materials, IReadOnlyDictionary<string, string>? sizes = null)
     {
         // Only the names are checked: undo puts back exactly what was there, even a file that cannot be parsed.
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -118,6 +118,11 @@ public sealed partial class ModProject
         foreach (var name in materials?.Keys ?? Enumerable.Empty<string>())
             if (!IsMaterialFileName(name) || !seen.Add(name))
                 throw new TyrantException(TyrantErrorCode.ModInvalid, $"'{name}' is not a material settings file (materials/<skins, species or vanilla-skins>/<folder>/materials.json).");
+        seen.Clear();
+        foreach (var name in sizes?.Keys ?? Enumerable.Empty<string>())
+            if (name.Length == 0 || Path.GetFileName(name) != name || !name.EndsWith(".json", StringComparison.OrdinalIgnoreCase)
+                || name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 || !seen.Add(name))
+                throw new TyrantException(TyrantErrorCode.ModInvalid, $"'{name}' is not a size settings file name.");
         var saved = SaveManifest(ws, id, manifestJson, expectedRevision);
         var folder = Path.Combine(saved.Dir, PrefabOverrides.Folder);
         if (Directory.Exists(folder))
@@ -127,6 +132,7 @@ public sealed partial class ModProject
         foreach (var (name, text) in prefabs) WriteSafely(Path.Combine(folder, name), text);
         saved.RemoveEmptyPrefabFolder();
         if (materials is not null) saved.RestoreMaterialFiles(materials);
+        if (sizes is not null) saved.RestoreSizeFiles(sizes);
         return saved;
     }
 

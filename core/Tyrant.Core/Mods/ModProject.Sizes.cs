@@ -65,6 +65,17 @@ public sealed partial class ModProject
         catch { Manifest.SizeRanges = old; throw; }
     }
 
+    /// <summary>Puts back exactly these sizes/ files (by name) and removes the others, even a file that cannot be read.</summary>
+    internal void RestoreSizeFiles(IReadOnlyDictionary<string, string> sizes)
+    {
+        if (Directory.Exists(SizeFolder))
+            foreach (var file in Directory.GetFiles(SizeFolder, "*.json"))
+                if (!sizes.ContainsKey(Path.GetFileName(file))) File.Delete(file);
+        if (sizes.Count > 0) Directory.CreateDirectory(SizeFolder);
+        foreach (var (name, text) in sizes) WriteSafely(Path.Combine(SizeFolder, name), text);
+        RemoveEmptySizeFolder();
+    }
+
     private void RemoveEmptySizeFolder()
     {
         if (Directory.Exists(SizeFolder) && !Directory.EnumerateFileSystemEntries(SizeFolder).Any()) Directory.Delete(SizeFolder);
