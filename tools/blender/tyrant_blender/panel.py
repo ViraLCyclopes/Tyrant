@@ -80,6 +80,14 @@ def _start_send(context, armature, destination=None, new_mod_name=None):
     with open(rig_file, "w", encoding="utf-8") as f:
         json.dump(rig.unity_rig(armature), f)
     rig_only = bool(rig.offsets(armature)) and armature.tyrant_rig_only
+    # The Size panel's sizes go when they changed (and only to a species: a skin's sizes are the species', set in the app).
+    sizes = growth.changed_sizes(armature, data)
+    sizes_file = None
+    if sizes is not None:
+        sizes_file = os.path.join(folder, "send-sizes.json")
+        species = (destination or data["destination"])["species"]
+        with open(sizes_file, "w", encoding="utf-8") as f:
+            json.dump(dict({"format": 1, "target": species}, **{k: v for k, v in sizes.items() if v is not None}), f)
     sex = armature.tyrant_sex.lower()
     # Every changed image goes; Tyrant skips the ones the mod already holds (the mod, not Blender, knows what is there).
     changed, notes = images.collect(send.sendable(armature)[1:], folder)
@@ -94,10 +102,13 @@ def _start_send(context, armature, destination=None, new_mod_name=None):
         if target_object is not None:
             result["warnings"] = notes + list(result.get("warnings") or [])
             target_object[REPORT] = json.dumps(result)
+            if sizes_file and result.get("ok") and growth.EDITS in target_object:
+                del target_object[growth.EDITS]  # Tyrant wrote them: the project holds them now
+                growth.set_growth(target_object, target_object.tyrant_growth)
         _redraw()
         return None
 
-    send.run_async(send.command(data, path, glb, destination, new_mod_name, changed, sex, rig_file, rig_only), done)
+    send.run_async(send.command(data, path, glb, destination, new_mod_name, changed, sex, rig_file, rig_only, sizes_file), done)
 
 
 class TYRANT_OT_send(bpy.types.Operator):
@@ -234,6 +245,67 @@ class TYRANT_OT_use_game_material(bpy.types.Operator):
         return {"FINISHED"}
 
 
+SKIN_SIZES = "Sizes apply to the whole species; set them in the app."
+
+# The Size panel's fields: key, label, limits (as sizes/<file>.json), tooltip.
+SIZE_FIELDS = (
+    ("adult", "Adult size ×", 0.05, 5.0, "Multiplies the real adult size (both sexes)"),
+    ("baby", "Baby size (share of adult)", 0.001, 1.0, "The newborn's size as a share of the adult's"),
+    ("male", "Male size ×", 0.1, 5.0, "Multiplies the males' size"),
+    ("female", "Female size ×", 0.1, 5.0, "Multiplies the females' size"),
+)
+
+
+def size_getter(key):
+    """The field's value: the size shown, or the game's when it is unchanged (1, or the game's baby share)."""
+    def get(obj):
+        try:
+            data = growth._project(obj)
+        except (project.ProjectError, KeyError, TypeError, ValueError):
+            data = None
+        value = (growth.sizes_of(obj, data) or {}).get(key)
+        if value is not None:
+            return value
+        return growth.baby_share(data) if key == "baby" else 1.0
+    return get
+
+
+def size_setter(key):
+    """Records the change for Send to Tyrant and shows it at once; refused when the sizes are the species' (a skin)."""
+    def set_(obj, value):
+        try:
+            data = growth._project(obj)
+        except (project.ProjectError, KeyError, TypeError, ValueError):
+            return
+        if not (data or {}).get("sizesEditable"):
+            return
+        edits = growth.size_edits(obj)
+        edits[key] = round(value, 6)  # Blender's fields are single precision: 1.2 arrives as 1.2000000477
+        obj[growth.EDITS] = json.dumps(edits)
+        growth.set_growth(obj, obj.tyrant_growth)
+    return set_
+
+
+def draw_sizes(layout, context, armature, data, say):
+    """The Size box: the species' sizes, which the Growth slider shows; editable when the model goes to a species."""
+    if not data.get("sizes"):
+        return
+    box = layout.box()
+    box.label(text="Size", icon="FULLSCREEN_ENTER")
+    fields = box.column(align=True)
+    fields.enabled = bool(data.get("sizesEditable"))
+    for key, *_ in SIZE_FIELDS:
+        fields.prop(armature, f"tyrant_size_{key}")
+    male, female = growth.sex_sizes(armature, data)
+    shown = "" if (data.get("growth") or {}).get("scale") else " (not shown: no scale curve)"
+    say(box, context, f"In game: male {male:.3g}x, female {female:.3g}x size{shown}")
+    if not data.get("sizesEditable"):
+        skin = (data.get("destination") or {}).get("skin")
+        say(box, context, SKIN_SIZES if skin else "Send it to a species model to edit sizes here.", "INFO")
+    elif growth.changed_sizes(armature, data) is not None:
+        say(box, context, "Send to Tyrant writes these sizes to the mod.", "INFO")
+
+
 def chars_per_line(width, ui_scale):
     """How many characters of Blender's UI font fit a sidebar this wide (its labels never wrap by themselves)."""
     return max(12, int((width - 40 * ui_scale) / (6.5 * ui_scale)))
@@ -282,8 +354,9 @@ class VIEW3D_PT_tyrant(bpy.types.Panel):
         layout.prop(armature, "tyrant_sex", expand=True)
         layout.prop(armature, "tyrant_growth", slider=True)
         sexes = data.get("sexes")
-        if sexes:
+        if sexes and not data.get("sizes"):
             say(layout, context, f"In game: male {sexes['male']['size']:g}x, female {sexes['female']['size']:g}x size (not shown)")
+        draw_sizes(layout, context, armature, data, say)
         if armature.tyrant_growth < 1.0:
             say(layout, context, "Set Growth to 1 before sculpting or editing.", "ERROR")
         if not data.get("growth"):

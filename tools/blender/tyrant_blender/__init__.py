@@ -56,6 +56,10 @@ def register():
         name="Sex", description="Show the animal as the game's male or female: their maps and how far their shape grows",
         items=(("MALE", "Male", "The male's maps and growth"), ("FEMALE", "Female", "The female's maps and growth")),
         default="MALE", update=_sex_changed)
+    for key, label, low, high, about in panel.SIZE_FIELDS:  # the Size panel: the species' sizes, shown by the Growth slider
+        setattr(bpy.types.Object, f"tyrant_size_{key}", bpy.props.FloatProperty(
+            name=label, description=about + "; Send to Tyrant writes it to the mod", min=low, max=high, precision=3, step=1,
+            get=panel.size_getter(key), set=panel.size_setter(key)))
     if not bpy.app.timers.is_registered(send.drain_finished):
         bpy.app.timers.register(send.drain_finished, first_interval=0.25, persistent=True)
     if panel.clear_stale_busy not in bpy.app.handlers.load_post:
@@ -94,6 +98,8 @@ def unregister():
     del bpy.types.Object.tyrant_growth
     del bpy.types.Object.tyrant_rig_only
     del bpy.types.Object.tyrant_sex
+    for key, *_ in panel.SIZE_FIELDS:
+        delattr(bpy.types.Object, f"tyrant_size_{key}")
     animpanel.unregister_properties()
     for cls in reversed(ui.CLASSES + panel.CLASSES + ikpanel.CLASSES + rigpanel.CLASSES + animpanel.CLASSES):
         bpy.utils.unregister_class(cls)

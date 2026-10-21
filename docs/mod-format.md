@@ -465,6 +465,15 @@ The game keeps every animal's size between 0.05 and 2 (it logs an error each tim
 Check reports a size that would pass it as an error, counting the youngest baby, the sex multipliers and the widest
 genetic range. In the game, the framework scales the adult size back until the sizes fit and logs one warning.
 
+**In Blender.** The Tyrant panel's **Growth** slider scales the armature object as the game scales the animal:
+curve(m) × (1 + (s − 1) × f(m)), with the species' growth curve (rebuilt for the mod's `adult` and `baby`), s the shown
+sex's multiplier with the mod's `adult` and `male` or `female` applied, and the game's maturity fade f(m). This is a view
+only: the mesh and bones keep their size, and **Send to Tyrant** exports at the object's own scale. The **Size** box edits
+the four keys when the model goes to a species (a base-game species model or a mod's own species); Send to Tyrant then
+writes them to that species' `sizes/` file (`tyrant blender send --sizes <file>`). For a skin it shows the species' sizes
+read-only, since sizes apply to the whole species. The view keeps the size within 0.05 to 2 as the game does, but does
+not scale the adult back to fit as the framework does.
+
 ## Rig edits (changing an animal's skeleton)
 
 ```json

@@ -123,6 +123,7 @@ files that changed; again after a game update).
   3. The size bar shows the original and new sizes, as lengths when the game's model length is known (for example 12.1 m → 10.3 m). Problems Check finds show under the fields, for instance a species scaled outside the game's 0.05 to 2 limit.
   4. **Mod details** has **Nursery size slider range** (the game's own Customize size slider in the Nursery covers this range; random eggs keep the game's range) and **Breeding size range**. Leave **Game's range** ticked to keep the game's, or untick it to set your own (the smallest value cannot pass the largest).
   5. Changes can be undone. CLI: the `tyrant mod` size commands.
+  6. In Blender (Tyrant panel, N → Tyrant): the **Growth** slider shows the animal's real size from baby to adult, for the sex shown, by scaling the armature object. That scale is only for viewing: **Send to Tyrant** exports the model at the object's own scale. The **Size** box has the same four fields; when the model goes to a species (the game's species model or a mod's own species) a change shows at once, and **Send to Tyrant** writes it to the mod (undo in Tyrant takes it back like any change). For a skin the fields are read-only: sizes apply to the whole species, so set them in the app.
 - **Replace a sound:**
   1. Species tab → **Sounds…** on the animal (or **All sounds…**) → **Replace…** on the sound.
   2. Pick a mod (or **New mod…**) and **Choose files…**: WAV, OGG, MP3 or FLAC; pick several and one plays at random each time.

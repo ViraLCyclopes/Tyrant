@@ -151,6 +151,11 @@ Release build: `npm run build:app`, install `studio/src-tauri/target/release/bun
     Nursery. Growth back to 1.
 77. Sculpt a change; **Send to Tyrant** → choose a mod and the species model (or a skin) → the panel shows the LODs built.
     Switch to Tyrant: the mod editor's model page shows the sculpt (no restart, no manual refresh).
+76b. **Real size.** Mod with the species model as destination → Open in Blender: the armature object's scale is the
+    adult's size in game (its sex multiplier); **Growth** 0 shrinks it to the hatchling's. Size box → **Adult size ×**
+    1.2: the model grows at once. **Send to Tyrant**: the mod's Size card shows 1.2, Undo puts it back, and the sent model
+    is not scaled. On a skin destination the Size fields are greyed out with "Sizes apply to the whole species; set them
+    in the app."
 77b. Tyrant panel -> **Sex** Female: her maps show and (Allosaurus Anax) her adult keeps part of the Adolescent shape,
     like a female in the Nursery; Male puts it back. Open in Blender -> Options -> Sex starts as the female.
 78. Save the file (Ctrl+S), close Blender. From the mod's model page → **Open in Blender**: Blender starts with that file and

@@ -163,6 +163,28 @@ public class BlenderCliTests
     }
 
     [Theory]
+    [InlineData("""{"format":1,"target":"Carcharodontosaurus","adult":9}""", "\"adult\" must be from 0.05 to 5")]
+    [InlineData("not json", "The sizes could not be read")]
+    public void Send_reports_bad_sizes_as_its_json_line(string sizes, string message)
+    {
+        using var game = new FakeGame();
+        var ws = Workspace(game);
+        var dir = Path.Combine(ws, "blender", "game", "x");
+        Directory.CreateDirectory(dir);
+        var project = Path.Combine(dir, BlenderProjectFile.FileName);
+        BlenderProjectFile.Write(project, new BlenderProject(1, ws, "t.exe", "b", new BlenderSource("game", "Carcharodontosaurus", null, null),
+            null, new Dictionary<string, BlenderMaterial>(), null, [], null, false));
+        var sizesFile = Path.Combine(dir, "sizes.json");
+        File.WriteAllText(sizesFile, sizes);
+
+        var (code, output, _) = Run("blender", "send", "-w", ws, project, Path.Combine(dir, "send.glb"), "--sizes", sizesFile);
+
+        Assert.Equal(ExitCodes.Error, code);
+        using var doc = System.Text.Json.JsonDocument.Parse(Assert.Single(output.Split('\n', StringSplitOptions.RemoveEmptyEntries)));
+        Assert.Contains(message, doc.RootElement.GetProperty("errors")[0].GetString());
+    }
+
+    [Theory]
     [InlineData("animations")]
     [InlineData("animation-list")]
     public void Animation_commands_without_the_game_data_answer_one_json_line(string command)

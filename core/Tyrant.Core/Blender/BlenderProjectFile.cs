@@ -24,6 +24,12 @@ public sealed record BlenderSex(float GrowthClamp, float Size);
 
 public sealed record BlenderSexes(BlenderSex Male, BlenderSex Female);
 
+/// <summary>
+/// The species' sizes for the Size panel: the destination mod's values (null = unchanged, as in sizes/&lt;file&gt;.json) and the
+/// skin's own sex sizes they multiply (Sexes holds the results).
+/// </summary>
+public sealed record BlenderSizes(double? Adult, double? Baby, double? Male, double? Female, double MaleOriginal, double FemaleOriginal);
+
 /// <summary>A skeleton node's rest transform in glTF space (rotation x, y, z, w), for the growth slider's bone proportions.</summary>
 public sealed record BlenderBoneRest(string Name, float[] Position, float[] Rotation, float[] Scale);
 
@@ -55,8 +61,14 @@ public sealed record BlenderProject(int Version, string Workspace, string Tyrant
     /// <summary>The sex Blender shows first ("male" or "female"; the Tyrant panel switches it).</summary>
     public string Sex { get; init; } = "male";
 
-    /// <summary>The skin's growth limits and sizes; null without a data dump (both grow fully).</summary>
+    /// <summary>The skin's growth limits and sizes (with the destination's sizes applied); null without a data dump (both grow fully).</summary>
     public BlenderSexes? Sexes { get; init; }
+
+    /// <summary>The species' sizes (null without a data dump).</summary>
+    public BlenderSizes? Sizes { get; init; }
+
+    /// <summary>Whether Blender may change the sizes: only when the destination is a species (a skin's sizes are its species').</summary>
+    public bool SizesEditable { get; init; }
 
     /// <summary>The game's growth shape keys (the first two of LOD 0: baby, juvenile), so the add-on can check them before Send.</summary>
     public IReadOnlyList<string> GrowthKeys { get; init; } = [];

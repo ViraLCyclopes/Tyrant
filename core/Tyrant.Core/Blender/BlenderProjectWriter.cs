@@ -95,15 +95,25 @@ public static class BlenderProjectWriter
         (IReadOnlyList<string> Files, IReadOnlyList<string> Errors)? asked = request.Animations.Count == 0 ? null
             : BlenderService.WriteAnimations(ws, install, index, species, reader, speciesId, dir, request.Animations);
         var materials = Materials(renderers, index, prefabRecord.Bundle, install, reader, mod, ownSkin, vanilla, dir, request.Fresh);
+        // A custom species grows like its template, from its starting skin.
+        var ownSpecies = mod?.Manifest.Species.FirstOrDefault(s => s.Key(mod.Id) == speciesId);
+        var dataId = ownSpecies?.Base ?? speciesId;
+        var skinIndex = ownSpecies?.StartingSkin ?? vanilla?.Index ?? 0;
+        var store = BlenderGrowthReader.TryStore(ws);
+        var size = OriginalSizeOf(store, speciesId, mod);
+        var growth = BlenderGrowthReader.Read(store, dataId, prefab.Root.DepthFirst().Select(n => n.Name));
+        var skinSize = size is { Skins.Count: > 0 } ? size.Skins[Math.Clamp(skinIndex, 0, size.Skins.Count - 1)] : (Male: 1.0, Female: 1.0);
         var project = new BlenderProject(BlenderProjectFile.CurrentVersion, ws.Dir, tyrantExe, modelBuild,
             new BlenderSource(kind, speciesId, ownSkin?.Id ?? vanilla?.Name, mod?.Id),
             old?.Destination ?? (mod is null ? null : new BlenderDestination(mod.Id, speciesId, ownSkin?.Id)),
-            materials, BlenderGrowthReader.Read(BlenderGrowthReader.TryStore(ws), speciesId, prefab.Root.DepthFirst().Select(n => n.Name)), Rest(prefab.Root), existing, request.Lods)
+            materials, growth is not null && size is { Curve.Length: > 0 } ? growth with { OriginalScale = Keys(size.Curve) } : growth,
+            Rest(prefab.Root), existing, request.Lods)
         {
             GameChanged = gameChanged,
             Fresh = request.Fresh,
             Sex = request.Sex == "female" ? "female" : "male",
-            Sexes = BlenderGrowthReader.ReadSexes(BlenderGrowthReader.TryStore(ws), speciesId, vanilla?.Index ?? 0),
+            Sexes = BlenderGrowthReader.ReadSexes(store, dataId, skinIndex),
+            Sizes = size is null ? null : new BlenderSizes(null, null, null, null, skinSize.Male, skinSize.Female),
             GrowthKeys = renderers.Count > 0
                 ? renderers[0].Mesh.BlendShapes.Take(ModelFitter.GrowthKeys).Select(s => s.Name).ToList()
                 : [],
@@ -116,8 +126,51 @@ public static class BlenderProjectWriter
             AnimationFiles = asked?.Files.Select(f => Path.GetRelativePath(dir, f).Replace(Path.DirectorySeparatorChar, '/')).ToList(),
             AnimationErrors = asked is { Errors.Count: > 0 } ? asked.Value.Errors : null,
         };
-        BlenderProjectFile.Write(projectFile, project);
+        BlenderProjectFile.Write(projectFile, WithSizes(project, ws));
         return new BlenderProjectResult(projectFile, dir, gameChanged);
+    }
+
+    /// <summary>
+    /// The destination mod's sizes on the project: the values for the Size panel, the sex sizes and the scale curve with them
+    /// applied, and whether Blender may change them (only for a species destination: a skin's sizes are its species').
+    /// </summary>
+    internal static BlenderProject WithSizes(BlenderProject project, Workspace ws)
+    {
+        if (project.Sizes is not { } sizes) return project;
+        var d = project.Destination;
+        var set = d is not null && ModProject.Ids(ws).Contains(d.Mod, StringComparer.Ordinal) ? ModProject.Open(ws, d.Mod).Sizes(d.Species) : null;
+        var settings = set ?? new SizeSettings();
+        var (male, female) = SizeMath.Sex(sizes.MaleOriginal, sizes.FemaleOriginal, settings);
+        var growth = project.Growth;
+        if (growth?.OriginalScale is { } original)
+        {
+            // As in game: the curve stays the game's own unless the adult or the baby changes.
+            var changed = (settings.Adult ?? 1) != 1 || settings.Baby is not null;
+            growth = growth with { Scale = changed ? Keys(SizeMath.Rebuild([.. original.Select(k => (k[0], k[1]))], settings.Adult ?? 1, settings.Baby)) : original };
+        }
+        return project with
+        {
+            Growth = growth,
+            Sexes = project.Sexes is { } s ? new BlenderSexes(s.Male with { Size = (float)male }, s.Female with { Size = (float)female }) : null,
+            Sizes = sizes with { Adult = set?.Adult, Baby = set?.Baby, Male = set?.Male, Female = set?.Female },
+            SizesEditable = d is { Skin: null },
+        };
+    }
+
+    private static float[][] Keys((float Time, float Value)[] keys) => [.. keys.Select(k => new[] { k.Time, k.Value })];
+
+    /// <summary>The species' size in the data dump (a custom species' from its template); null without a dump or the species.</summary>
+    private static OriginalSize? OriginalSizeOf(Tyrant.Core.Data.DataStore? store, string speciesId, ModProject? mod)
+    {
+        if (store is null) return null;
+        try
+        {
+            return SpeciesSizes.Original(store, speciesId, mod);
+        }
+        catch (TyrantException)
+        {
+            return null;
+        }
     }
 
     /// <summary>

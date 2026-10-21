@@ -40,6 +40,11 @@ def _valid(data):
     if sexes is not None and not (isinstance(sexes, dict) and all(
             isinstance(sexes.get(k), dict) and isinstance(sexes[k].get("growthClamp"), (int, float)) for k in ("male", "female"))):
         return False
+    sizes = data.get("sizes")
+    if sizes is not None and not (isinstance(sizes, dict)
+                                  and all(sizes.get(k) is None or isinstance(sizes[k], (int, float)) for k in ("adult", "baby", "male", "female"))
+                                  and all(isinstance(sizes.get(k), (int, float)) for k in ("maleOriginal", "femaleOriginal"))):
+        return False
     keys = data.get("growthKeys")
     if keys is not None and not (isinstance(keys, list) and all(isinstance(k, str) for k in keys)):
         return False
@@ -63,6 +68,9 @@ def _valid(data):
         return True
     if not isinstance(growth, dict) or not isinstance(growth.get("blend"), list) or not isinstance(growth.get("skin"), list):
         return False
+    for curve in ("scale", "originalScale"):
+        if growth.get(curve) is not None and not (isinstance(growth[curve], list) and all(_numbers(k, 2) for k in growth[curve])):
+            return False
     return all(isinstance(b, dict) and isinstance(b.get("name"), str) and all(_numbers(b.get(k), 6) for k in ("baby", "adolescent", "adult"))
                for b in growth.get("bones") or [])
 
