@@ -24,6 +24,35 @@ public class ModSizesRpcTests
         return (h, ws);
     }
 
+    /// <summary>The dumped Allosaurus Anax (its curve, tangents and all, and its one skin's sex sizes) and the game's genetic ranges.</summary>
+    private const string AnaxData = """
+        {"speciesID":"Allosaurus Anax",
+         "scaleGrowthCurve":{"keys":[{"time":0,"value":0.16434139,"inTangent":0.588403165,"outTangent":0.588403165},
+                                     {"time":1,"value":1,"inTangent":-0.05258916,"outTangent":-0.05258916}]},
+         "skinsData":[{"skinName":"Pyroclastic","maleSizeMultiplier":1.3,"femaleSizeMultiplier":1.35}]}
+        """;
+    private const string GameRanges = """{"incubationGeneticSizeMinMax":{"x":0.925,"y":1.075},"breedingGeneticSizeMinMax":{"x":0.85,"y":1.15}}""";
+
+    [Fact]
+    public async Task Check_warns_when_a_mod_that_only_sets_ranges_pushes_a_species_past_the_limit()
+    {
+        using var game = new FakeGame();
+        var (h, ws, _) = await AssetFixtures.Opened(game);
+        var objects = new DumpResult();
+        objects.Objects.Add(new DumpObject(typeof(object), new EngineObjectInfo("PrehistoricKingdom.AnimalData", "Allosaurus Anax", 1), AnaxData));
+        objects.Objects.Add(new DumpObject(typeof(object), new EngineObjectInfo("PrehistoricKingdom.AnimalsV2.Data.GlobalAnimalParameters", "GlobalAnimalParameters", 2), GameRanges));
+        DumpWriter.Write(Path.Combine(ws, "data"), objects, [], new DumpManifest { RequestId = "r1", BuildGuid = "b" });
+        await h.Call("mods.create", new { id = "wide-nursery" });
+        var detail = await h.Call("mods.get", new { id = "wide-nursery" });
+        Assert.Empty((await h.Call("mods.check", new { id = "wide-nursery" })).GetProperty("warnings").EnumerateArray()
+            .Where(w => w.GetString()!.Contains("genetic size ranges")));
+
+        await h.Call("mods.setSizeRanges", new { id = "wide-nursery", revision = Rev(detail), nursery = new[] { 0.5, 1.5 } }); // females: 1.35 x 1.5 = 2.03
+        var warnings = (await h.Call("mods.check", new { id = "wide-nursery" })).GetProperty("warnings").EnumerateArray().Select(w => w.GetString()!).ToList();
+
+        Assert.Contains(warnings, w => w.Contains("genetic size ranges") && w.Contains("Allosaurus Anax"));
+    }
+
     private static bool IsNull(JsonElement e, string name) => !e.TryGetProperty(name, out var v) || v.ValueKind == JsonValueKind.Null;
 
     [Fact]

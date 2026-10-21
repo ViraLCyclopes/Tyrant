@@ -95,7 +95,8 @@ internal static class ModCli
                 return null;
             }
         };
-        return ModChecker.ForGame(install).Check(mod, index, m.Species.Count > 0 || m.Skins.Count > 0 || m.Sounds.Count > 0 || hasPrefabs || mod.SizeTargets.Count > 0 ? species : null,
+        return ModChecker.ForGame(install).Check(mod, index, m.Species.Count > 0 || m.Skins.Count > 0 || m.Sounds.Count > 0 || hasPrefabs || mod.SizeTargets.Count > 0
+            || m.SizeRanges is { IsEmpty: false } ? species : null, // size ranges are judged against every game species
             m.Sounds.Count > 0 ? TrySounds(ws) : null,
             RigInfoProvider(ws, install, species is null ? null : ModProject.WithSpecies(species, m, others?.Species)), // a skin's rig edit may be on a custom species
             id => SpeciesDatabase.Template(ws, id), prefabFields, others: others,

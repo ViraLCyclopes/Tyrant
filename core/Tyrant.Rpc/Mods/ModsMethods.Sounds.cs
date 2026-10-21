@@ -76,7 +76,9 @@ public sealed partial class ModsMethods
             }
         };
         var hasPrefabs = mod.PrefabTargets().Count > 0;
-        var checkSpecies = m.Species.Count > 0 || m.Skins.Count > 0 || m.Sounds.Count > 0 || hasPrefabs || mod.SizeTargets.Count > 0 ? species : null;
+        // Size ranges are judged against every game species, so a mod that only sets them needs the list too.
+        var checkSpecies = m.Species.Count > 0 || m.Skins.Count > 0 || m.Sounds.Count > 0 || hasPrefabs || mod.SizeTargets.Count > 0
+            || m.SizeRanges is { IsEmpty: false } ? species : null;
         Func<string, IReadOnlyList<PrefabFieldInfo>?>? prefabFields = !hasPrefabs || index is null || species is null ? null : target =>
         {
             try

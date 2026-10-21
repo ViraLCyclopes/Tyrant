@@ -56,6 +56,31 @@ public class ModSizeCommandTests
     }
 
     [Fact]
+    public void Check_warns_when_a_mod_that_only_sets_ranges_pushes_a_species_past_the_limit()
+    {
+        using var game = new FakeGame();
+        var ws = Path.Combine(Path.GetTempPath(), "tyrant-tests", Guid.NewGuid().ToString("N"), "ws");
+        Assert.Equal(ExitCodes.Ok, Run("workspace", "init", ws, "--game", game.Root).Code);
+        Assert.Equal(ExitCodes.Ok, Run("mod", "new", "wide-nursery", "--name", "Wide nursery", "-w", ws).Code);
+        var objects = new DumpResult();
+        // The dumped Allosaurus Anax (curve and its one skin's sex sizes) and the game's genetic ranges.
+        objects.Objects.Add(new DumpObject(typeof(object), new EngineObjectInfo("PrehistoricKingdom.AnimalData", "Allosaurus Anax", 1), """
+            {"speciesID":"Allosaurus Anax",
+             "scaleGrowthCurve":{"keys":[{"time":0,"value":0.16434139,"inTangent":0.588403165,"outTangent":0.588403165},
+                                         {"time":1,"value":1,"inTangent":-0.05258916,"outTangent":-0.05258916}]},
+             "skinsData":[{"skinName":"Pyroclastic","maleSizeMultiplier":1.3,"femaleSizeMultiplier":1.35}]}
+            """));
+        objects.Objects.Add(new DumpObject(typeof(object), new EngineObjectInfo("PrehistoricKingdom.AnimalsV2.Data.GlobalAnimalParameters", "GlobalAnimalParameters", 2),
+            """{"incubationGeneticSizeMinMax":{"x":0.925,"y":1.075},"breedingGeneticSizeMinMax":{"x":0.85,"y":1.15}}"""));
+        DumpWriter.Write(Path.Combine(ws, "data"), objects, [], new DumpManifest { RequestId = "r1", BuildGuid = "b" });
+
+        Assert.Equal(ExitCodes.Ok, Run("mod", "size-ranges", "wide-nursery", "--nursery", "0.5,1.5", "-w", ws).Code); // females: 1.35 x 1.5 = 2.03
+        var check = Run("mod", "check", "wide-nursery", "-w", ws);
+
+        Assert.Contains(check.Out.Split(Environment.NewLine), l => l.Contains("genetic size ranges") && l.Contains("Allosaurus Anax"));
+    }
+
+    [Fact]
     public void A_bad_value_prints_the_message_and_fails()
     {
         using var game = new FakeGame();
