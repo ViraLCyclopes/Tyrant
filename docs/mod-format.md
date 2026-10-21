@@ -293,12 +293,19 @@ Tyrant Framework adds a small **Tyrant** button (a **T**) in two places:
 
 The window edits the animal it was opened on until you close it or open it from another animal. Drag it by its title,
 resize it from the corner (at least 300 × 360; it opens in the middle of the screen and keeps its size), and switch between **This animal**, **Whole skin**
-and **Whole species**. The tabs **Iridescence** and **Fur** hold the settings above as value boxes you can type into; **Game's** (rainbow, mask, fur mask) saves `"game"`, so the game's own shows even over a whole skin's or species' choice. Each tab starts with a **Preset** row, `‹ None · Microraptor · … ›` and **Apply**: it starts the draft from that species (see **Starting from a species**), with no question asked over unsaved changes (**Reset** still goes back to the saved look); while the species' material still loads, the status line says *Loading …* and the preset applies once it is ready. **Rainbow** and **Mask** also offer **Species**, with `‹ name ›` to pick the species; **Export mask PNG** does not export a species' mask (it stays a reference). If a
+and **Whole species**. The tabs **Iridescence** and **Fur** hold the settings above as value boxes you can type into; **Game's** (shimmer colours, mask, fur mask) saves `"game"`, so the game's own shows even over a whole skin's or species' choice. Each tab starts with a **Preset** row, `‹ None · Microraptor · … ›` and **Apply**: it starts the draft from that species (see **Starting from a species**), with no question asked over unsaved changes (**Reset** still goes back to the saved look); while the species' material still loads, the status line says *Loading …* and the preset applies once it is ready. **Shimmer colours** and **Mask** also offer **Species**, with `‹ name ›` to pick the species; **Export mask PNG** does not export a species' mask (it stays a reference). If a
 game update moves the panels and a button cannot be placed, the MelonLoader log says so once, with what it found there.
 
 - **Live preview:** every change shows at once on every animal it affects. It is a preview until **Save**; **Reset** goes
   back. Closing the window, opening it on another animal, or a new skin or species in the Nursery asks what to do with
   unsaved changes (keep or discard). Kept in the Nursery, the window stays on its look until you save or reset it.
+- **Shimmer colours** (the ramp): **Thin film**, **Colours**, **Game's**, **PNG** or **Species**. **Colours** is a ramp of
+  your own, saved as `{ "stops": [...] }` (the same file the app writes): one colour for a single tone like Microraptor's,
+  two for blue to green, up to 8 in the window. It starts from the colours in effect (a lower layer's are copied into this look, all of them; a thin film's, at most 8),
+  else Microraptor's `#39149c` → `#2e6be1`. A strip shows the gradient; click a swatch to pick a colour, **+** adds a copy
+  after it, **-** removes it. The colour square sets its saturation (across) and brightness (up), the strip beside it its
+  hue; drag either and the animals follow. Or type `#rrggbb` in the box. A look from the app with more than 8 colours
+  keeps them all: the window edits the first 8.
 - **Export mask PNG** writes the mask as a PNG to edit in an image editor. It is staged until **Save**, then written under the
   fixed file name (`iridescence-mask.png`, `fur-mask.png`, …) and becomes the mask. **Reload images** picks up your edits
   without restarting. The PNG pickers list the target's folder and `UserData/Tyrant/Masks`.

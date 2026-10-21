@@ -31,6 +31,7 @@ namespace Tyrant.Framework
                 UnityEngine.Object.Destroy(row);
             }
             _onOff = null;
+            _picker = null;
             Header();
             if (_draft == null || _animal == null || _context == null)
             {
@@ -80,13 +81,14 @@ namespace Tyrant.Framework
             SliderRow(_scope == LookScope.Animal ? "Variation (skin, species)" : "Variation", variation, 0f, 1f, 0f, 1f, _scope != LookScope.Animal,
                 v => draft.SetVariation(v));
 
-            // Rainbow: the draft's own choice, else the one the animal wears (marked "from below").
+            // Shimmer colours: the draft's own choice, else the one the animal wears (marked "from below").
             var ramp = own?.Ramp ?? below?.Ramp;
             var rampKind = LookEditing.RampKindOf(ramp);
-            Heading("Rainbow" + (own?.Ramp == null && below?.Ramp != null ? "  <size=10>(from a lower layer)</size>" : ""));
+            Heading("Shimmer colours" + (own?.Ramp == null && below?.Ramp != null ? "  <size=10>(from a lower layer)</size>" : ""));
             var ramps = new List<(string, bool, bool, Action)>
             {
                 Option("Thin film", rampKind == RampKind.ThinFilm, true, () => SetFilm((float)(ramp?.ThinFilm?.Thickness ?? LookEditing.DefaultThickness), ramp?.ThinFilm?.Index, rebuild: true)),
+                Option("Colours", rampKind == RampKind.Stops, true, () => PickColours(own?.Ramp, below?.Ramp)),
                 Option("Game's", rampKind == RampKind.Game, true, () =>
                 {
                     draft.SetRamp(new RampSource { Game = true }); // "game" beats a lower layer's ramp (null would show it again)
@@ -95,7 +97,6 @@ namespace Tyrant.Framework
                 Option("PNG", rampKind == RampKind.File, true, () => PickFirst(ramp?.File, file => draft.SetRamp(new RampSource { File = file }))),
                 Option("Species", rampKind == RampKind.Species, true, () => PickSpecies(ramp?.Species, species => draft.SetRamp(new RampSource { Species = species }))),
             };
-            if (rampKind == RampKind.Stops) ramps.Insert(0, Option("Colours", true, false, () => { })); // stops come from the app
             Choices(null, ramps);
             if (rampKind == RampKind.ThinFilm)
             {
@@ -103,10 +104,12 @@ namespace Tyrant.Framework
                 SliderRow("Film thickness (nm)", (float)ramp.ThinFilm.Thickness, 0f, LookEditing.MaxThickness, 0f, LookEditing.MaxThickness, true,
                     v => SetFilm(v, index, rebuild: false));
             }
+            else if (rampKind == RampKind.Stops)
+                ColourRows(ramp!.Stops!);
             else if (rampKind == RampKind.File)
                 Cycler("Ramp", Pngs(ramp!.File), ramp.File!, file => draft.SetRamp(new RampSource { File = file }));
             else if (rampKind == RampKind.Species)
-                SpeciesStepper("Rainbow of", SpeciesLooks.List(PresetKind.Iridescence), ramp!.Species, none: false,
+                SpeciesStepper("Colours of", SpeciesLooks.List(PresetKind.Iridescence), ramp!.Species, none: false,
                     species => PickSpecies(species, s => draft.SetRamp(new RampSource { Species = s })), null); // loads it and redraws
 
             // Mask.
