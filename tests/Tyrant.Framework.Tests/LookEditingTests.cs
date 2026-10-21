@@ -444,4 +444,119 @@ public class LookEditingTests
         Assert.Null(MaterialOverrides.Problem(new Dictionary<string, MaterialOverride> { ["Body"] = mask }, "Skin", true));
         Assert.Contains("works only on a skin", MaterialOverrides.Problem(new Dictionary<string, MaterialOverride> { ["Body"] = mask }, "Species", false));
     }
+
+    private static MaterialOverride Baby(float baby, float? adult = null) => new()
+    {
+        Iridescence = new IridescenceSettings { BabyStrength = baby, Strength = adult is float a ? new VariantNumbers { Normal = a } : null },
+    };
+
+    [Fact]
+    public void A_baby_strength_on_an_animal_that_does_not_shimmer_starts_a_visible_thin_film()
+    {
+        var draft = new LookDraft(LookScope.Species, null);
+        LookEditing.SetBabyStrength(draft, null, gameHasRamp: false, 0.3f);
+
+        var i = draft.Current.Iridescence!;
+        Assert.Equal(0.3f, i.BabyStrength);
+        Assert.Null(i.Strength); // the adult strength stays the game's (or a lower layer's)
+        Assert.Equal(LookEditing.DefaultThickness, i.Ramp!.ThinFilm!.Thickness);
+        Assert.Equal(LookEditing.StartBias, i.Bias);
+        AssertSaveable(draft, skinLevel: false);
+
+        LookEditing.SetBabyStrength(draft, null, gameHasRamp: false, 0.5f); // its own ramp is there now: nothing more is seeded
+        Assert.Equal(0.5f, draft.Current.Iridescence!.BabyStrength);
+
+        var ramped = new LookDraft(LookScope.Skin, null);
+        LookEditing.SetBabyStrength(ramped, null, gameHasRamp: true, 0.3f);
+        Assert.Null(ramped.Current.Iridescence!.Ramp);
+
+        var shimmering = new LookDraft(LookScope.Skin, null);
+        LookEditing.SetBabyStrength(shimmering, Baby(0f, 0.5f), gameHasRamp: false, 0.3f); // a layer below shimmers already
+        Assert.Null(shimmering.Current.Iridescence!.Ramp);
+
+        var zero = new LookDraft(LookScope.Skin, null);
+        LookEditing.SetBabyStrength(zero, null, gameHasRamp: false, 0f); // 0 shows nothing: nothing to seed
+        Assert.Null(zero.Current.Iridescence!.Ramp);
+    }
+
+    [Fact]
+    public void Off_and_on_take_a_baby_strength_with_them()
+    {
+        var draft = new LookDraft(LookScope.Skin, Baby(0.3f, 0.6f));
+        var toggle = new IridescenceSwitch();
+
+        toggle.Off(draft, null);
+        Assert.Equal(0f, draft.Current.Iridescence!.BabyStrength);
+        Assert.Equal(0f, draft.Current.Iridescence.Strength!.Normal);
+        toggle.On(draft, null, gameHasRamp: true);
+        Assert.Equal(0.3f, draft.Current.Iridescence!.BabyStrength);
+        Assert.Equal(0.6f, draft.Current.Iridescence.Strength!.Normal);
+        Assert.False(draft.IsDirty);
+
+        // Over a baby shimmer from below, off writes 0 here (leaving it out would show the lower layer's).
+        var over = new LookDraft(LookScope.Animal, null);
+        toggle.Forget();
+        toggle.Off(over, Baby(0.4f));
+        Assert.Equal(0f, over.Current.Iridescence!.BabyStrength);
+        toggle.On(over, Baby(0.4f), gameHasRamp: true);
+        Assert.Null(over.Current.Iridescence); // handed back to that layer
+    }
+
+    [Fact]
+    public void Shimmering_counts_a_baby_strength()
+    {
+        Assert.True(LookEditing.Shimmers(Baby(0.3f, 0f).Iridescence, null, "normal", gameStrength: 0));
+        Assert.True(LookEditing.Shimmers(null, null, "normal", gameStrength: 0.2f));
+        Assert.False(LookEditing.Shimmers(Baby(0f, 0f).Iridescence, null, "normal", gameStrength: 0.5f)); // a layer's 0 beats the game's
+        Assert.True(LookEditing.Shimmers(Baby(0f).Iridescence, null, "normal", gameStrength: 0.5f)); // no adult strength set: the game's
+        Assert.True(LookEditing.Shimmers(null, Baby(0.4f).Iridescence, "normal", gameStrength: 0)); // from below
+        Assert.False(LookEditing.Shimmers(Baby(0f).Iridescence, Baby(0.4f).Iridescence, "normal", gameStrength: 0)); // the draft's 0 beats it
+        Assert.Equal(0.3f, LookEditing.BabyStrengthOf(Baby(0.3f).Iridescence, null));
+        Assert.Equal(0.4f, LookEditing.BabyStrengthOf(null, Baby(0.4f).Iridescence));
+        Assert.Equal(0f, LookEditing.BabyStrengthOf(null, null)); // the game's: babies start at 0
+    }
+
+    [Fact]
+    public void A_fur_age_seeds_a_visible_length_and_game_s_takes_it_back()
+    {
+        var draft = new LookDraft(LookScope.Species, null);
+        Grow.SetAge(draft, null, gameLength: 0, FurAge.Adults);
+        Assert.Equal(FurAge.Adults, draft.Current.Fur!.Age);
+        Assert.Equal(LookEditing.StartFurLength, draft.Current.Settings["_Length"].Number);
+        Assert.Equal(FurAge.Adults, LookEditing.FurAgeOf(draft, null));
+        AssertSaveable(draft, skinLevel: false);
+
+        Grow.SetAge(draft, null, gameLength: 0, FurAge.Both); // a length is there now
+        Grow.SetAge(draft, null, gameLength: 0, null);
+        Assert.True(draft.Current.IsEmpty); // the seeded length went with the age
+        Assert.False(draft.IsDirty);
+
+        var game = new LookDraft(LookScope.Animal, null);
+        Grow.SetAge(game, null, gameLength: 1.2f, FurAge.Babies);
+        Assert.False(game.Current.Settings.ContainsKey("_Length"));
+
+        var below = new MaterialOverride { Fur = new FurMasks { Age = FurAge.Both } };
+        Assert.Equal(FurAge.Both, LookEditing.FurAgeOf(new LookDraft(LookScope.Animal, null), below));
+        Assert.Equal(FurAge.Babies, LookEditing.FurAgeOf(game, below)); // the draft's own wins
+    }
+
+    [Fact]
+    public void Grow_off_keeps_the_seeded_length_while_an_age_still_grows_fur()
+    {
+        var draft = new LookDraft(LookScope.Skin, null);
+        Grow.Set(draft, null, gameLength: 0, on: true);
+        Grow.SetAge(draft, null, gameLength: 0, FurAge.Adults);
+        Grow.Set(draft, null, gameLength: 0, on: false);
+        Assert.Equal(LookEditing.StartFurLength, draft.Current.Settings["_Length"].Number); // the adults still have fur
+        Assert.Null(draft.Current.Fur!.Grow);
+
+        Grow.SetAge(draft, null, gameLength: 0, null);
+        Assert.True(draft.Current.IsEmpty); // now nothing grows: the length goes
+
+        var growing = new LookDraft(LookScope.Skin, null);
+        Grow.Set(growing, null, gameLength: 0, on: true);
+        Grow.SetAge(growing, null, gameLength: 0, FurAge.Babies);
+        Grow.SetAge(growing, null, gameLength: 0, null);
+        Assert.Equal(LookEditing.StartFurLength, growing.Current.Settings["_Length"].Number); // grow still on: kept
+    }
 }

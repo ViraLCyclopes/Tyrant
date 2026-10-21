@@ -39,6 +39,13 @@ namespace Tyrant.Framework.Core
             else strength.Leucistic = value;
         }
 
+        /// <summary>A hatchling's strength (one number for every variant); null leaves it to the layers below.</summary>
+        public void SetBabyStrength(float? value)
+        {
+            Iridescence().BabyStrength = value;
+            Tidy();
+        }
+
         /// <summary>Variation between animals; only skins and species have it.</summary>
         public void SetVariation(float value)
         {
@@ -76,16 +83,21 @@ namespace Tyrant.Framework.Core
             else Current.Settings.Remove(key);
         }
 
-        /// <summary>Off writes strength 0 (dropping the block would show a lower layer's iridescence); on sets 1 (every variant it holds) when all were 0 or unset.</summary>
+        /// <summary>
+        /// Off writes strength 0 (dropping the block would show a lower layer's iridescence), and a baby strength this draft holds
+        /// 0 too; on sets 1 (every variant it holds) when all were 0 or unset.
+        /// </summary>
         public void SetIridescenceOn(bool on)
         {
-            var strength = Iridescence().Strength ??= new VariantNumbers();
+            var iridescence = Iridescence();
+            var strength = iridescence.Strength ??= new VariantNumbers();
             if (on)
             {
                 if (strength.Normal == 0 && !(strength.Albino > 0) && !(strength.Melanistic > 0) && !(strength.Leucistic > 0)) Fill(strength, 1);
                 return;
             }
             Fill(strength, 0);
+            if (iridescence.BabyStrength != null) iridescence.BabyStrength = 0;
         }
 
         private static void Fill(VariantNumbers strength, float value)
@@ -109,6 +121,14 @@ namespace Tyrant.Framework.Core
         {
             var fur = Current.Fur ??= new FurMasks();
             fur.Grow = grow;
+            if (fur.IsEmpty) Current.Fur = null;
+        }
+
+        /// <summary>Which ages wear fur at this scope; null leaves it to the layers below (or the game).</summary>
+        public void SetFurAge(FurAge? age)
+        {
+            var fur = Current.Fur ??= new FurMasks();
+            fur.Age = age;
             if (fur.IsEmpty) Current.Fur = null;
         }
 

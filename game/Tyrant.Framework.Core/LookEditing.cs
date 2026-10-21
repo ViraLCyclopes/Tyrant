@@ -87,6 +87,40 @@ namespace Tyrant.Framework.Core
             draft.SetStrength(variant, value);
         }
 
+        /// <summary>The baby strength shown: the draft's own, else a lower layer's, else 0 (the game's: a hatchling never shimmers).</summary>
+        public static float BabyStrengthOf(IridescenceSettings? own, IridescenceSettings? below) => own?.BabyStrength ?? below?.BabyStrength ?? 0;
+
+        /// <summary>
+        /// True when the animal shimmers at some age: the adult strength of its variant (the draft's, else a lower layer's, else
+        /// <paramref name="gameStrength"/>) or the baby strength is above 0.
+        /// </summary>
+        public static bool Shimmers(IridescenceSettings? own, IridescenceSettings? below, string variant, float gameStrength)
+        {
+            var strength = own?.Strength ?? below?.Strength;
+            return (strength != null ? StrengthFor(strength, variant) : gameStrength) > 0 || BabyStrengthOf(own, below) > 0;
+        }
+
+        /// <summary>
+        /// Sets the baby strength. When nothing shimmered before (no strength above 0 in the draft or below it) and nothing gives a
+        /// ramp or shaping, it also starts the thin film and shaping a fresh On starts (<see cref="IridescenceSwitch"/>), so a
+        /// baby's sheen shows at once.
+        /// </summary>
+        /// <param name="below">What the layers under the draft's scope set (<see cref="MaterialTable.MergeBelow"/>), or null.</param>
+        public static void SetBabyStrength(LookDraft draft, MaterialOverride? below, bool gameHasRamp, float value)
+        {
+            var own = draft.Current.Iridescence;
+            var under = below?.Iridescence;
+            var before = AnyAbove0(own?.Strength ?? under?.Strength) || BabyStrengthOf(own, under) > 0;
+            var seed = value > 0 && !before && IridescenceSwitch.Unseeded(own, under, gameHasRamp);
+            draft.SetBabyStrength(value);
+            if (seed) IridescenceSwitch.Seed(draft);
+        }
+
+        private static bool AnyAbove0(VariantNumbers? s) => s != null && (s.Normal > 0 || s.Albino > 0 || s.Melanistic > 0 || s.Leucistic > 0);
+
+        /// <summary>The fur age at this scope: the draft's own, else a lower layer's; null: the game's own.</summary>
+        public static FurAge? FurAgeOf(LookDraft draft, MaterialOverride? below) => draft.Current.Fur?.Age ?? below?.Fur?.Age;
+
         /// <summary>
         /// Sets one component of a vector setting; the others come from <paramref name="shown"/> (what the animal wears now, often
         /// the game's own value). Every component is kept within the setting's range, so a game value beyond it never makes the
@@ -120,27 +154,33 @@ namespace Tyrant.Framework.Core
     }
 
     /// <summary>
-    /// The editor's iridescence on/off. Off remembers the strengths it zeroed and on puts them back, so per-variant values
-    /// survive a toggle (<see cref="LookDraft.SetIridescenceOn"/> alone would fill 1). A fresh on, where neither the game nor
-    /// any layer has a ramp or shaping, also starts a thin film and part A's starting shaping, so the sheen shows at once.
+    /// The editor's iridescence on/off. Off remembers the strengths it zeroed (the baby strength too) and on puts them back, so
+    /// per-variant values survive a toggle (<see cref="LookDraft.SetIridescenceOn"/> alone would fill 1). A fresh on, where
+    /// neither the game nor any layer has a ramp or shaping, also starts a thin film and part A's starting shaping, so the sheen
+    /// shows at once.
     /// </summary>
     public sealed class IridescenceSwitch
     {
         private bool _remembered;
         private VariantNumbers? _strength;
+        private float? _baby;
 
         /// <summary>A new draft (another animal, scope, a reset or a save): the next on starts fresh.</summary>
         public void Forget()
         {
             _remembered = false;
             _strength = null;
+            _baby = null;
         }
 
-        public void Off(LookDraft draft)
+        /// <param name="below">What the layers under the draft's scope set: a baby strength there is written 0 here too.</param>
+        public void Off(LookDraft draft, MaterialOverride? below = null)
         {
             _strength = LookEditing.Copy(draft.Current.Iridescence?.Strength);
+            _baby = draft.Current.Iridescence?.BabyStrength;
             _remembered = true;
             draft.SetIridescenceOn(false);
+            if (below?.Iridescence?.BabyStrength > 0) draft.SetBabyStrength(0); // leaving it out would show the lower layer's
         }
 
         /// <param name="effective">What the layers under the draft's scope set (<see cref="MaterialTable.MergeBelow"/>), or null.</param>
@@ -153,16 +193,25 @@ namespace Tyrant.Framework.Core
                 _remembered = false;
                 var iridescence = draft.Current.Iridescence ??= new IridescenceSettings();
                 iridescence.Strength = LookEditing.Copy(_strength);
+                iridescence.BabyStrength = _baby;
                 if (iridescence.IsEmpty) draft.Current.Iridescence = null;
                 _strength = null;
+                _baby = null;
                 return;
             }
-            var below = effective?.Iridescence;
-            var own = draft.Current.Iridescence;
-            // A "game" ramp on a material without one is no ramp at all: it seeds like none.
-            var seed = !gameHasRamp && Unramped(below?.Ramp) && Unramped(own?.Ramp) && !Shaped(below) && !Shaped(own);
+            var seed = Unseeded(draft.Current.Iridescence, effective?.Iridescence, gameHasRamp);
             draft.SetIridescenceOn(true);
-            if (!seed) return;
+            if (seed) Seed(draft);
+        }
+
+        /// <summary>True when neither the game, the layers below nor the draft gives a ramp or shaping: a new sheen would not show.</summary>
+        internal static bool Unseeded(IridescenceSettings? own, IridescenceSettings? below, bool gameHasRamp) =>
+            // A "game" ramp on a material without one is no ramp at all: it seeds like none.
+            !gameHasRamp && Unramped(below?.Ramp) && Unramped(own?.Ramp) && !Shaped(below) && !Shaped(own);
+
+        /// <summary>The thin film and part A's starting shaping that make a new sheen visible at once.</summary>
+        internal static void Seed(LookDraft draft)
+        {
             draft.SetThinFilm(LookEditing.DefaultThickness);
             draft.SetShaping(LookEditing.StartScale, LookEditing.StartPower, LookEditing.StartBias);
         }
@@ -176,7 +225,8 @@ namespace Tyrant.Framework.Core
     /// The editor's Grow fur on/off. On where nothing gives the fur any length (the draft, the layers below and the game all 0
     /// or unset) also sets <see cref="LookEditing.StartFurLength"/>, so the fur shows at once; off takes that length back while
     /// it is still the one this switch set. Off writes false only over a lower layer that grows fur; otherwise the key goes
-    /// (false never takes away fur the game has).
+    /// (false never takes away fur the game has). The "Fur on" choice (<see cref="SetAge"/>) seeds and takes back the length
+    /// the same way; a seeded length stays while either still grows fur.
     /// </summary>
     public sealed class FurGrowSwitch
     {
@@ -192,14 +242,37 @@ namespace Tyrant.Framework.Core
             if (!on)
             {
                 draft.SetFurGrow(below?.Fur?.Grow == true ? false : (bool?)null);
-                if (_seeded && LookEditing.LengthOf(draft.Current) == LookEditing.StartFurLength) draft.SetSetting("_Length", null);
-                _seeded = false;
+                Unseed(draft, below);
                 return;
             }
             draft.SetFurGrow(true);
+            Seed(draft, below, gameLength);
+        }
+
+        /// <summary>
+        /// "Fur on": which ages wear fur at this scope (null: Game's, the key goes). An age seeds a length like Grow fur on; Game's
+        /// takes back the seeded one unless Grow fur still grows.
+        /// </summary>
+        public void SetAge(LookDraft draft, MaterialOverride? below, float gameLength, FurAge? age)
+        {
+            draft.SetFurAge(age);
+            if (age != null) Seed(draft, below, gameLength);
+            else Unseed(draft, below);
+        }
+
+        private void Seed(LookDraft draft, MaterialOverride? below, float gameLength)
+        {
             if ((LookEditing.LengthOf(draft.Current) ?? LookEditing.LengthOf(below) ?? gameLength) > 0) return;
             draft.SetSetting("_Length", MaterialValue.OfNumber(LookEditing.StartFurLength));
             _seeded = true;
+        }
+
+        /// <summary>The seeded length goes once nothing grows fur any more (neither grow nor an age, here or below).</summary>
+        private void Unseed(LookDraft draft, MaterialOverride? below)
+        {
+            if (LookEditing.GrowsFur(draft, below) || LookEditing.FurAgeOf(draft, below) != null) return;
+            if (_seeded && LookEditing.LengthOf(draft.Current) == LookEditing.StartFurLength) draft.SetSetting("_Length", null);
+            _seeded = false;
         }
     }
 

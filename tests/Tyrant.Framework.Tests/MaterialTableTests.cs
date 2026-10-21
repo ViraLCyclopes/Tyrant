@@ -402,4 +402,30 @@ public class MaterialTableTests
         Assert.False(table.CoversSkin("mod-a", "bare"));
         Assert.False(table.CoversSkin("mod-b", "mine"));
     }
+
+    [Fact]
+    public void Baby_strength_and_fur_age_merge_per_field_and_are_copied()
+    {
+        var a = Mod("mod-a", "{\"format\":1,\"id\":\"mod-a\",\"skins\":[" + Skin("young") + "]}",
+            SpeciesFile("Titanoboa", """{"Titanoboa":{"iridescence":{"strength":0.6,"babyStrength":0.2},"fur":{"age":"babies"}}}"""),
+            SkinFile("young", """{"Titanoboa":{"iridescence":{"babyStrength":0.4},"fur":{"grow":true}}}"""));
+        var table = MaterialTable.Build([a], out var messages);
+
+        Assert.Empty(messages);
+        var species = table.For("Titanoboa", null, null, null, "Titanoboa")!;
+        Assert.Equal(0.2f, species.Iridescence!.BabyStrength);
+        Assert.Equal(FurAge.Babies, species.Fur!.Age);
+        var skin = table.For("Titanoboa", "mod-a/young", null, null, "Titanoboa")!;
+        Assert.Equal(0.4f, skin.Iridescence!.BabyStrength); // the skin's own
+        Assert.Equal(0.6f, skin.Iridescence.Strength!.Normal); // the species' adult strength beside it
+        Assert.Equal(FurAge.Babies, skin.Fur!.Age); // from the species, beside the skin's grow
+        Assert.True(skin.Fur.Grow);
+
+        var live = new MaterialOverride { Iridescence = new IridescenceSettings { BabyStrength = 0.1f }, Fur = new FurMasks { Age = FurAge.Both } };
+        var copy = MaterialTable.WithFullPaths(live, Path.GetTempPath());
+        Assert.Equal(0.1f, copy.Iridescence!.BabyStrength);
+        Assert.Equal(FurAge.Both, copy.Fur!.Age);
+        Assert.Equal(0.1f, MaterialTable.MergeBelow(LookScope.Animal, null, null, live, null, null, null, null)!.Iridescence!.BabyStrength);
+        Assert.Equal(IridescenceSettings.DefaultVariation, MaterialTable.EffectiveVariation(live.Iridescence)); // a baby strength varies like a strength
+    }
 }
