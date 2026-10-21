@@ -44,8 +44,8 @@ public class ModSizesRpcTests
         DumpWriter.Write(Path.Combine(ws, "data"), objects, [], new DumpManifest { RequestId = "r1", BuildGuid = "b" });
         await h.Call("mods.create", new { id = "wide-nursery" });
         var detail = await h.Call("mods.get", new { id = "wide-nursery" });
-        Assert.Empty((await h.Call("mods.check", new { id = "wide-nursery" })).GetProperty("warnings").EnumerateArray()
-            .Where(w => w.GetString()!.Contains("genetic size ranges")));
+        Assert.DoesNotContain((await h.Call("mods.check", new { id = "wide-nursery" })).GetProperty("warnings").EnumerateArray(),
+            w => w.GetString()!.Contains("genetic size ranges"));
 
         await h.Call("mods.setSizeRanges", new { id = "wide-nursery", revision = Rev(detail), nursery = new[] { 0.5, 1.5 } }); // females: 1.35 x 1.5 = 2.03
         var warnings = (await h.Call("mods.check", new { id = "wide-nursery" })).GetProperty("warnings").EnumerateArray().Select(w => w.GetString()!).ToList();
