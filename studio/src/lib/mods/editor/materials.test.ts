@@ -118,6 +118,17 @@ describe('materials', () => {
     expect(none.iridescence?.strength).toEqual({ normal: 1 });
   });
 
+  it('round-trips a baby strength and a fur age', () => {
+    same({ iridescence: { strength: 0, babyStrength: 0.3 }, fur: { age: 'adults' } });
+    same({ iridescence: { babyStrength: 0 } }); // 0 is kept: it overrides a lower layer's baby shimmer
+    same({ fur: { mask: 'materials/skins/blue/fur-mask.png', grow: true, age: 'both' } });
+    expect(parseMaterial('{"T":{"iridescence":{"babyStrength":0.4}}}', 'T').iridescence).toMatchObject({ babyStrength: 0.4, strength: null });
+    expect(parseMaterial('{"T":{"iridescence":{"strength":0.4}}}', 'T').iridescence?.babyStrength).toBeNull();
+    expect(parseFurJson('{"age":"babies"}')).toEqual({ age: 'babies' });
+    expect(parseMaterial('{"T":{"fur":{"age":"teens"}}}', 'T').fur).toBeUndefined(); // not an age: dropped
+    expect(parseIridescenceJson('{"babyStrength":0.2}')?.babyStrength).toBe(0.2);
+  });
+
   it('reads an inherited iridescence block', () => {
     expect(parseIridescenceJson('{"strength":0.2,"scale":-1}')).toMatchObject({ strength: { normal: 0.2 }, scale: -1, power: null });
     expect(parseIridescenceJson(null)).toBeNull();

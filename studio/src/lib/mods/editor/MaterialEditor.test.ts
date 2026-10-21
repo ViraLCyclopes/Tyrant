@@ -409,6 +409,56 @@ describe('MaterialEditor', () => {
     expect(sent(rpc)).toEqual({ Titanoboa: { iridescence: { strength: 0.3 } } });
   });
 
+  it('the Baby strength slider saves a baby strength beside the adult one', async () => {
+    const { rpc } = await setup({ materialsJson: '{"Titanoboa":{"iridescence":{"strength":0.6}}}' });
+    const baby = screen.getByRole('slider', { name: 'Baby strength' });
+    expect(baby).toHaveValue('0'); // the game's: a hatchling never shimmers
+    await fireEvent.change(baby, { target: { value: '0.3' } });
+    await waitFor(() => expect(rpc.callsTo('mods.setMaterials')).toHaveLength(1));
+    expect(sent(rpc)).toEqual({ Titanoboa: { iridescence: { strength: 0.6, babyStrength: 0.3 } } });
+  });
+
+  it('a look that shimmers only as a baby is ticked, and off removes it with nothing below', async () => {
+    const { rpc } = await setup({ materialsJson: '{"Titanoboa":{"iridescence":{"strength":0,"babyStrength":0.3,"ramp":{"thinFilm":{"thickness":420}}}}}' });
+    expect(screen.getByRole('checkbox', { name: 'Iridescence' })).toBeChecked();
+    expect(screen.getByRole('slider', { name: 'Baby strength' })).toHaveValue('0.3');
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Iridescence' }));
+    await waitFor(() => expect(rpc.callsTo('mods.setMaterials')).toHaveLength(1));
+    expect((rpc.callsTo('mods.setMaterials')[0].params as { materials: string | null }).materials).toBeNull();
+  });
+
+  it("turning it off over a lower level's baby shimmer saves both strengths 0", async () => {
+    const { rpc } = await setup({ infoOver: { inheritedIridescenceJson: '{"strength":0,"babyStrength":0.4}' } });
+    expect(screen.getByRole('checkbox', { name: 'Iridescence' })).toBeChecked();
+    expect(screen.getByRole('slider', { name: 'Baby strength' })).toHaveValue('0.4');
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Iridescence' }));
+    await waitFor(() => expect(rpc.callsTo('mods.setMaterials')).toHaveLength(1));
+    expect(sent(rpc)).toEqual({ Titanoboa: { iridescence: { strength: 0, babyStrength: 0 } } });
+  });
+
+  it('Fur on: Adults saves the age and a starting length, and Game’s takes both back', async () => {
+    const { rpc } = await setup({ infoOver: furLength('0') });
+    const ages = screen.getByRole('radiogroup', { name: 'Fur on' });
+    expect(within(ages).getByRole('radio', { name: 'Game’s' })).toBeChecked();
+    await fireEvent.click(within(ages).getByRole('radio', { name: 'Adults' }));
+    await waitFor(() => expect(rpc.callsTo('mods.setMaterials')).toHaveLength(1));
+    expect(sent(rpc)).toEqual({ Titanoboa: { fur: { age: 'adults' }, settings: { _Length: 0.5 } } });
+    await waitFor(() => expect(within(screen.getByRole('radiogroup', { name: 'Fur on' })).getByRole('radio', { name: 'Adults' })).toBeChecked());
+    await fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Fur on' })).getByRole('radio', { name: 'Game’s' }));
+    await waitFor(() => expect(rpc.callsTo('mods.setMaterials')).toHaveLength(2));
+    expect((rpc.callsTo('mods.setMaterials')[1].params as { materials: string | null }).materials).toBeNull();
+  });
+
+  it("a lower level's fur age shows chosen, and unticking Grow fur keeps the length while an age grows fur", async () => {
+    const { rpc } = await setup({ materialsJson: '{"Titanoboa":{"fur":{"grow":true},"settings":{"_Length":0.5}}}', infoOver: { ...furLength('0'), inheritedFurJson: '{"age":"babies"}' } });
+    const ages = screen.getByRole('radiogroup', { name: 'Fur on' });
+    expect(within(ages).getByRole('radio', { name: 'Babies' })).toBeChecked();
+    expect(within(ages).getByRole('radio', { name: 'Game’s' })).toBeDisabled(); // there is no "game" to write over a lower level's age
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Grow fur on skins without fur' }));
+    await waitFor(() => expect(rpc.callsTo('mods.setMaterials')).toHaveLength(1));
+    expect(sent(rpc)).toEqual({ Titanoboa: { settings: { _Length: 0.5 } } });
+  });
+
   it('importing a fur mask calls setMaterialFile with part furMask', async () => {
     const { rpc, platform } = await setup({
       infoOver: { properties: [{ key: '_Length', group: 'Fur', label: 'Fur length', kind: 'number', min: 0, max: 4, inherited: '1', source: 'game' }] },
