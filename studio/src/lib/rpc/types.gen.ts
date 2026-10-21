@@ -1477,6 +1477,7 @@ export interface SoundsForSpeciesResult {
   speciesId: string | null;
   sounds: SoundDto[];
   hasEventList: boolean;
+  template?: string | null;
 }
 
 export interface SoundsMatchFolderParams {

@@ -13,7 +13,7 @@ import SpeciesDatabase from './SpeciesDatabase.svelte';
 const animal = { id: 'new-animal', key: 'tyrant.red-spot.new-animal', base: 'Allosaurus Anax', name: 'New animal', genus: 'Example', epithet: 'animal', cost: null, stats: { adultMassKg: 4500 }, inheritedCost: 20000, inheritedStats: { adultMassKg: 4010, maxAgeYears: 40 }, dataFields: [{ path: '/brain/needs/adult/native/hitPoints', kind: 'number', value: '660', templateValue: '660', editable: true }], localization: { description: 'pack.description' }, icon: null };
 const fields = [{ id: 'adultMassKg', label: 'Adult mass', unit: 'kg', min: 0.001, max: 1000000 }, { id: 'maxAgeYears', label: 'Lifespan', unit: 'years', min: 0.001, max: 10000 }];
 
-async function setup(animals: (typeof animal)[] = [animal], props: { onPrefab?: (t: string) => void; onAddSkin?: (k: string) => void; onOpenSkin?: (id: string) => void } = {}, templateFound = true, detail = modDetail()) {
+async function setup(animals: (typeof animal)[] = [animal], props: { onPrefab?: (t: string) => void; onAddSkin?: (k: string) => void; onOpenSkin?: (id: string) => void; onAddSound?: (k: string) => void; onOpenSound?: (s: unknown) => void } = {}, templateFound = true, detail = modDetail()) {
   const rpc = new FakeRpc()
     .on('mods.get', () => detail)
     .on('mods.check', () => ({ errors: [], warnings: [], missingCutouts: [] }))
@@ -254,5 +254,17 @@ describe('Species database', () => {
     expect(onOpenSkin).toHaveBeenCalledWith('blue');
     await fireEvent.click(within(skins).getByRole('button', { name: 'Add skin' }));
     expect(onAddSkin).toHaveBeenCalledWith('tyrant.red-spot.new-animal');
+  });
+  it("the Sounds section lists the species' replacements, opens one and adds one for this species", async () => {
+    const onAddSound = vi.fn();
+    const onOpenSound = vi.fn();
+    const call = { event: 'event:/X/Vox/Call', name: 'Social call', group: 'Calls', species: 'tyrant.red-spot.new-animal', skin: null, files: ['sounds/call.ogg'], volume: 1, agePitch: 1, chance: null };
+    await setup([animal], { onAddSound, onOpenSound }, true, modDetail({ sounds: [call] }));
+    const sounds = screen.getByRole('region', { name: 'Sounds' });
+
+    await fireEvent.click(within(sounds).getByRole('button', { name: 'Edit Social call' }));
+    expect(onOpenSound).toHaveBeenCalledWith({ event: call.event, species: call.species, skin: null });
+    await fireEvent.click(within(sounds).getByRole('button', { name: 'Add a sound for this species' }));
+    expect(onAddSound).toHaveBeenCalledWith('tyrant.red-spot.new-animal');
   });
 });
