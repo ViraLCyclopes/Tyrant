@@ -6,7 +6,8 @@
 
   /**
    * One species' size changes: the adult size, the newborn's share of it, and each sex's multiplier. A key the mod leaves
-   * unset shows the game's value and Reset puts it back. The server replaces the whole set, so every save carries all four.
+   * unset shows the game's value and Reset puts it back. The sex sizes multiply each skin's own, so theirs is 1× (the skin's
+   * own shows as information only). The server replaces the whole set, so every save carries all four.
    */
   let { doc, target }: { doc: ModDoc; target: string } = $props();
   const session = getSession();
@@ -42,12 +43,11 @@
   });
   const ready = $derived(loaded?.target.toLowerCase() === target.toLowerCase() ? loaded : null);
 
-  const original = $derived<Record<Key, number>>({
-    adult: 1,
-    baby: ready?.original.babyShare ?? 1,
-    male: ready?.original.skins[0]?.male ?? 1,
-    female: ready?.original.skins[0]?.female ?? 1,
-  });
+  // Unchanged values: adult, male and female are multipliers (1×); baby is the game's own share.
+  const original = $derived<Record<Key, number>>({ adult: 1, baby: ready?.original.babyShare ?? 1, male: 1, female: 1 });
+  const round = (n: number) => Number(n.toFixed(3));
+  const skin = $derived(ready?.original.skins[0]);
+  const sexHint = $derived(skin ? `game: ${round(skin.male)} male / ${round(skin.female)} female` : '');
   const shown = (key: Key) => own[key] ?? original[key];
 
   async function save(next: Record<Key, number | null>) {
@@ -93,12 +93,13 @@
         <span class="name">{f.label}</span>
         <input type="number" aria-label={f.label} min={f.min} max={f.max} step={f.step} value={shown(f.key)} onchange={(e) => change(f, e.currentTarget.value)} />
         <input type="range" aria-label="{f.label} slider" min={f.min} max={f.max} step={f.step} value={shown(f.key)} onchange={(e) => change(f, e.currentTarget.value)} />
-        <span class="hint">game: {Number(original[f.key].toFixed(3))}</span>
+        <span class="hint">{f.key === 'male' || f.key === 'female' ? '' : `game: ${round(original[f.key])}`}</span>
         {#if own[f.key] !== null}
-          <button class="ghost" aria-label="Reset {f.label}" title="Back to the game's value" onclick={() => save({ ...own, [f.key]: null })}>↺</button>
+          <button class="ghost" aria-label="Reset {f.label}" title={f.key === 'male' || f.key === 'female' ? "Back to 1× (the skin's own size)" : "Back to the game's value"} onclick={() => save({ ...own, [f.key]: null })}>↺</button>
         {/if}
       </div>
     {/each}
+    {#if sexHint}<p class="hint" title="Each skin's own sex sizes; Male and Female multiply them">{sexHint}</p>{/if}
     <div class="bars" aria-label="Size bar">
       <div class="bar"><span class="fill game" style:width="{barFor(length ?? original.adult, original.baby).adult}%"><span class="baby" style:width="{original.baby * 100}%"></span></span></div>
       <div class="bar"><span class="fill mod" style:width="{barFor(finalLength ?? shown('adult'), shown('baby')).adult}%"><span class="baby" style:width="{shown('baby') * 100}%"></span></span></div>

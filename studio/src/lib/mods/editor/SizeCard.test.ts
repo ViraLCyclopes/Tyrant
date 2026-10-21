@@ -38,8 +38,10 @@ describe('SizeCard', () => {
     await setup();
     expect(screen.getByRole('spinbutton', { name: 'Adult size ×' })).toHaveValue(1);
     expect(screen.getByRole('spinbutton', { name: 'Baby size (share of adult)' })).toHaveValue(0.25);
+    // The sex sizes multiply each skin's own: unset is 1×, and the skin's own value is only information.
     expect(screen.getByRole('spinbutton', { name: 'Male size ×' })).toHaveValue(1);
-    expect(screen.getByRole('spinbutton', { name: 'Female size ×' })).toHaveValue(1.1);
+    expect(screen.getByRole('spinbutton', { name: 'Female size ×' })).toHaveValue(1);
+    expect(screen.getByText('game: 1 male / 1.1 female')).toBeInTheDocument();
     expect(screen.getByRole('slider', { name: 'Adult size × slider' })).toHaveAttribute('max', '5');
     expect(screen.getByRole('slider', { name: 'Male size × slider' })).toHaveAttribute('min', '0.1');
     expect(screen.getByRole('slider', { name: 'Baby size (share of adult) slider' })).toHaveAttribute('max', '1');
@@ -59,6 +61,21 @@ describe('SizeCard', () => {
     await fireEvent.change(adult);
     await waitFor(() => expect(rpc.callsTo('mods.setSizes')).toHaveLength(1));
     expect(rpc.callsTo('mods.setSizes')[0].params).toMatchObject({ target: 'Spinosaurus', adult: 1.2, baby: 0.4, male: null, female: null });
+  });
+
+  it('nudging Female sends a multiplier of the skin size, not the skin size', async () => {
+    const { rpc } = await setup(); // the skin's own female size is 1.1
+    const female = screen.getByRole('spinbutton', { name: 'Female size ×' }) as HTMLInputElement;
+    female.stepUp();
+    await fireEvent.change(female);
+    await waitFor(() => expect(rpc.callsTo('mods.setSizes')).toHaveLength(1));
+    expect(rpc.callsTo('mods.setSizes')[0].params).toMatchObject({ female: 1.01, male: null, adult: null, baby: null });
+  });
+
+  it('an explicit 1× and an unset sex size show the same', async () => {
+    await setup(sizes({ male: 1 }));
+    expect(screen.getByRole('spinbutton', { name: 'Male size ×' })).toHaveValue(1);
+    expect(screen.getByRole('spinbutton', { name: 'Female size ×' })).toHaveValue(1);
   });
 
   it('a value past the limits is not sent', async () => {

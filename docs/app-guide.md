@@ -119,7 +119,7 @@ files that changed; again after a game update).
   4. CLI: `tyrant mod replace-model <mod> <species> <file.glb> [--skin <id>]`, `tyrant mod remove-model`, `tyrant mod rebuild-models`.
 - **Change an animal's size:**
   1. Mod editor → **Sizes +** → pick the species (the game's or your mod's) → **Open**. A mod's own species also has the card under **Size** on its species page.
-  2. Four fields, each a number and a slider: **Adult size ×** (0.05 to 5), **Baby size (share of adult)** (above 0, at most 1), **Male size ×** and **Female size ×** (0.1 to 5). An unset field shows the game's value; **↺** puts it back.
+  2. Four fields, each a number and a slider: **Adult size ×** (0.05 to 5), **Baby size (share of adult)** (above 0, at most 1), **Male size ×** and **Female size ×** (0.1 to 5). An unset Adult or Baby field shows the game's value; **↺** puts it back. Male and Female multiply each skin's own sex size, so unset (and **↺**) is 1×; the skin's own sizes show below them, for example `game: 1.08 male / 1.12 female`.
   3. The size bar shows the original and new sizes, as lengths when the game's model length is known (for example 12.1 m → 10.3 m). Problems Check finds show under the fields, for instance a species scaled outside the game's 0.05 to 2 limit.
   4. **Mod details** has **Nursery size slider range** (the game's own Customize size slider in the Nursery covers this range; random eggs keep the game's range) and **Breeding size range**. Leave **Game's range** ticked to keep the game's, or untick it to set your own (the smallest value cannot pass the largest).
   5. Changes can be undone. CLI: the `tyrant mod` size commands.
