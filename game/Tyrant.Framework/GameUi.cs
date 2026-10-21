@@ -382,6 +382,18 @@ namespace Tyrant.Framework
         }
 
         private static readonly Dictionary<Type, PropertyInfo?> Positions = new Dictionary<Type, PropertyInfo?>();
+        private static readonly Dictionary<Type, PropertyInfo?> Thresholds = new Dictionary<Type, PropertyInfo?>();
+
+        /// <summary>
+        /// On a press: PointerEventData.useDragThreshold off, so Drag starts with the first pixel moved (not after the
+        /// EventSystem's threshold); the EventSystem turns it on again for the next press.
+        /// </summary>
+        public static void NoDragThreshold(object data)
+        {
+            var type = data.GetType();
+            if (!Thresholds.TryGetValue(type, out var threshold)) Thresholds[type] = threshold = AccessTools.Property(type, "useDragThreshold");
+            if (threshold != null && threshold.CanWrite) threshold.SetValue(data, false, null);
+        }
 
         /// <summary>PointerEventData.position (the pointer in screen pixels); null for other event data.</summary>
         public static Vector2? PointerPosition(object data)

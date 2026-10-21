@@ -25,6 +25,7 @@ namespace Tyrant.Framework
         private static Sprite? _ring;
         private static Color32[]? _squarePixels;
         private static Picker? _picker;
+        private static System.Reflection.MethodInfo? _onScroll; // ScrollRect.OnScroll, looked up once
 
         /// <summary>The pieces a drag updates in place (null while no colour rows are shown).</summary>
         private sealed class Picker
@@ -36,13 +37,19 @@ namespace Tyrant.Framework
         /// <summary>The stops the tab shows: the draft's own ramp, else the one the animal wears; null when it is not stops.</summary>
         private static List<Rgb>? ShownStops() => (_draft?.Current.Iridescence?.Ramp ?? _below?.Iridescence?.Ramp)?.Stops;
 
-        /// <summary>The Colours choice: the stops in effect stay; a thin film gives its colours; anything else Microraptor's blues.</summary>
-        private static void PickColours(RampSource? ramp)
+        /// <summary>
+        /// The Colours choice: the stops in effect stay (a lower layer's are pinned in the draft, all of them); a thin film gives
+        /// its colours; anything else Microraptor's blues.
+        /// </summary>
+        private static void PickColours(RampSource? own, RampSource? below)
         {
-            if (LookEditing.RampKindOf(ramp) == RampKind.Stops) return;
-            _stop = 0;
-            _hsv = null;
-            _draft!.SetRamp(new RampSource { Stops = ShimmerColours.Starting(ramp) });
+            if (!(ShimmerColours.Picked(own, below) is List<Rgb> stops)) return;
+            if (LookEditing.RampKindOf(own ?? below) != RampKind.Stops) // the same colours keep their selection
+            {
+                _stop = 0;
+                _hsv = null;
+            }
+            _draft!.SetRamp(new RampSource { Stops = stops });
             Changed(rebuild: true);
         }
 
@@ -56,7 +63,7 @@ namespace Tyrant.Framework
 
             // The gradient as the animal gets it.
             var gradient = Child(Row(14f), "Gradient", Vector2.zero, Vector2.one, new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
-            Picture(gradient, Texture(ref _gradientTexture, 32, 32, FilterMode.Bilinear), false);
+            Picture(gradient, PickerTexture(ref _gradientTexture, 32, 32, FilterMode.Bilinear), false);
 
             // A swatch per colour (the selected one outlined), then + and −.
             var swatches = Row(24f);
@@ -66,8 +73,10 @@ namespace Tyrant.Framework
                 var index = i;
                 var frame = Child(swatches, "Swatch", Vector2.zero, Vector2.one, new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
                 Place(frame, slot * i, slot * (i + 1), 1f, -1f);
-                SetColor(frame.gameObject.AddComponent(Image!), i == _stop ? Color.white : Idle);
-                frame.gameObject.AddComponent(Button!);
+                var outline = frame.gameObject.AddComponent(Image!);
+                SetColor(outline, i == _stop ? Color.white : Idle);
+                var button = frame.gameObject.AddComponent(Button!);
+                Traverse.Create(button).Property("targetGraphic").SetValue(outline); // tints on hover and press like the other buttons
                 OnClick(frame.gameObject, Safe(() =>
                 {
                     _stop = index;
@@ -76,7 +85,7 @@ namespace Tyrant.Framework
                 var colour = Child(frame, "Colour", Vector2.zero, Vector2.one, new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
                 colour.offsetMin = new Vector2(2f, 2f);
                 colour.offsetMax = new Vector2(-2f, -2f);
-                if (Picture(colour, Texture(ref _swatchTexture, ShimmerColours.MaxShown, 1, FilterMode.Point), false) is Component picture)
+                if (Picture(colour, PickerTexture(ref _swatchTexture, ShimmerColours.MaxShown, 1, FilterMode.Point), false) is Component picture)
                     Traverse.Create(picture).Property("uvRect").SetValue(new Rect(i / (float)ShimmerColours.MaxShown, 0f, 1f / ShimmerColours.MaxShown, 1f));
             }
             var add = FlatButton(swatches, _font!, "+", Idle, Safe(() =>
@@ -100,15 +109,23 @@ namespace Tyrant.Framework
             var picker = new Picker();
             var row = Row(SquareSize);
             var square = Fixed(row, "Square", 0f, SquareSize);
-            Picture(square, Texture(ref _squareTexture, SquareTexels, SquareTexels, FilterMode.Bilinear), true);
-            OnPointer(square.gameObject, "PointerDown", Safe<object>(data => DragSquare(square, data)));
+            Picture(square, PickerTexture(ref _squareTexture, SquareTexels, SquareTexels, FilterMode.Bilinear), true);
+            OnPointer(square.gameObject, "PointerDown", Safe<object>(data =>
+            {
+                NoDragThreshold(data); // the marker follows from the first pixel
+                DragSquare(square, data);
+            }));
             OnPointer(square.gameObject, "Drag", Safe<object>(data => DragSquare(square, data)));
             OnPointer(square.gameObject, "Scroll", Safe<object>(ForwardScroll)); // an EventTrigger takes the wheel from the scroll view
             picker.SquareMark = Mark(square, new Vector2(16f, 16f), new Vector2(3f, 3f), _ring != null ? _ring : _ring = Ring());
 
             var hue = Fixed(row, "Hue", SquareSize + PickerGap, HueWidth);
             Picture(hue, HueTexture(), true);
-            OnPointer(hue.gameObject, "PointerDown", Safe<object>(data => DragHue(hue, data)));
+            OnPointer(hue.gameObject, "PointerDown", Safe<object>(data =>
+            {
+                NoDragThreshold(data);
+                DragHue(hue, data);
+            }));
             OnPointer(hue.gameObject, "Drag", Safe<object>(data => DragHue(hue, data)));
             OnPointer(hue.gameObject, "Scroll", Safe<object>(ForwardScroll));
             picker.HueMark = Mark(hue, new Vector2(6f, 5f), new Vector2(2f, 2f), null);
@@ -223,7 +240,7 @@ namespace Tyrant.Framework
         {
             if (_content == null || ScrollRect == null || _content.parent == null) return;
             var scroll = _content.parent.GetComponent(ScrollRect);
-            if (scroll != null) AccessTools.Method(ScrollRect, "OnScroll")?.Invoke(scroll, new[] { data });
+            if (scroll != null) (_onScroll ??= AccessTools.Method(ScrollRect, "OnScroll"))?.Invoke(scroll, new[] { data });
         }
 
         // ---- drawing (textures are kept and redrawn in place; a redraw of the tab makes none) ----
@@ -231,11 +248,11 @@ namespace Tyrant.Framework
         private static void Refresh(List<Rgb> stops)
         {
             if (_picker == null || !(_hsv is Hsv hsv)) return;
-            var gradient = Texture(ref _gradientTexture, 32, 32, FilterMode.Bilinear);
+            var gradient = PickerTexture(ref _gradientTexture, 32, 32, FilterMode.Bilinear);
             gradient.LoadRawTextureData(IridescenceRamp.Pixels(stops, 32));
             gradient.Apply(false, false);
 
-            var swatches = Texture(ref _swatchTexture, ShimmerColours.MaxShown, 1, FilterMode.Point);
+            var swatches = PickerTexture(ref _swatchTexture, ShimmerColours.MaxShown, 1, FilterMode.Point);
             var pixels = new Color32[ShimmerColours.MaxShown];
             for (var i = 0; i < pixels.Length && i < stops.Count; i++) pixels[i] = Bytes(stops[i]);
             swatches.SetPixels32(pixels);
@@ -254,7 +271,7 @@ namespace Tyrant.Framework
         /// <summary>The square at one hue: saturation across, brightness up.</summary>
         private static void DrawSquare(float hue)
         {
-            var texture = Texture(ref _squareTexture, SquareTexels, SquareTexels, FilterMode.Bilinear);
+            var texture = PickerTexture(ref _squareTexture, SquareTexels, SquareTexels, FilterMode.Bilinear);
             _squarePixels ??= new Color32[SquareTexels * SquareTexels];
             for (var y = 0; y < SquareTexels; y++)
             for (var x = 0; x < SquareTexels; x++)
@@ -267,7 +284,7 @@ namespace Tyrant.Framework
         private static Texture2D HueTexture()
         {
             if (_hueTexture != null) return _hueTexture;
-            var texture = Texture(ref _hueTexture, 1, SquareTexels, FilterMode.Bilinear);
+            var texture = PickerTexture(ref _hueTexture, 1, SquareTexels, FilterMode.Bilinear);
             var pixels = new Color32[SquareTexels];
             for (var y = 0; y < SquareTexels; y++) pixels[y] = Bytes(ShimmerColours.ToRgb(new Hsv(y / (SquareTexels - 1f) * 0.999f, 1f, 1f)));
             texture.SetPixels32(pixels);
@@ -279,7 +296,7 @@ namespace Tyrant.Framework
         /// One of the picker's textures, made once (sRGB like the game's ramp, so a swatch shows what the animal gets); a texture
         /// Unity destroyed is made again (the square is then redrawn).
         /// </summary>
-        private static Texture2D Texture(ref Texture2D? field, int width, int height, FilterMode filter)
+        private static Texture2D PickerTexture(ref Texture2D? field, int width, int height, FilterMode filter)
         {
             if (field != null) return field;
             _squareHue = -1f; // the square is drawn again on the next refresh (it may be the one made here)

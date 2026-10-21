@@ -301,7 +301,7 @@ game update moves the panels and a button cannot be placed, the MelonLoader log 
   unsaved changes (keep or discard). Kept in the Nursery, the window stays on its look until you save or reset it.
 - **Shimmer colours** (the ramp): **Thin film**, **Colours**, **Game's**, **PNG** or **Species**. **Colours** is a ramp of
   your own, saved as `{ "stops": [...] }` (the same file the app writes): one colour for a single tone like Microraptor's,
-  two for blue to green, up to 8 in the window. It starts from the colours in effect (a thin film's, at most 8 of them),
+  two for blue to green, up to 8 in the window. It starts from the colours in effect (a lower layer's are copied into this look, all of them; a thin film's, at most 8),
   else Microraptor's `#39149c` → `#2e6be1`. A strip shows the gradient; click a swatch to pick a colour, **+** adds a copy
   after it, **-** removes it. The colour square sets its saturation (across) and brightness (up), the strip beside it its
   hue; drag either and the animals follow. Or type `#rrggbb` in the box. A look from the app with more than 8 colours

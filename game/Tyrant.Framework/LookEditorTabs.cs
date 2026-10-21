@@ -88,7 +88,7 @@ namespace Tyrant.Framework
             var ramps = new List<(string, bool, bool, Action)>
             {
                 Option("Thin film", rampKind == RampKind.ThinFilm, true, () => SetFilm((float)(ramp?.ThinFilm?.Thickness ?? LookEditing.DefaultThickness), ramp?.ThinFilm?.Index, rebuild: true)),
-                Option("Colours", rampKind == RampKind.Stops, true, () => PickColours(ramp)),
+                Option("Colours", rampKind == RampKind.Stops, true, () => PickColours(own?.Ramp, below?.Ramp)),
                 Option("Game's", rampKind == RampKind.Game, true, () =>
                 {
                     draft.SetRamp(new RampSource { Game = true }); // "game" beats a lower layer's ramp (null would show it again)
@@ -109,7 +109,7 @@ namespace Tyrant.Framework
             else if (rampKind == RampKind.File)
                 Cycler("Ramp", Pngs(ramp!.File), ramp.File!, file => draft.SetRamp(new RampSource { File = file }));
             else if (rampKind == RampKind.Species)
-                SpeciesStepper("Rainbow of", SpeciesLooks.List(PresetKind.Iridescence), ramp!.Species, none: false,
+                SpeciesStepper("Colours of", SpeciesLooks.List(PresetKind.Iridescence), ramp!.Species, none: false,
                     species => PickSpecies(species, s => draft.SetRamp(new RampSource { Species = s })), null); // loads it and redraws
 
             // Mask.

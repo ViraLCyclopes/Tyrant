@@ -223,6 +223,22 @@ public class ShimmerColoursTests
     }
 
     [Fact]
+    public void Picking_Colours_pins_a_lower_layers_stops_in_the_draft_all_of_them()
+    {
+        var ten = Enumerable.Range(1, 10).Select(i => new Rgb(0, 0, i / 255f)).ToList();
+        var below = new RampSource { Stops = ten };
+        var pinned = ShimmerColours.Picked(null, below);
+        Assert.NotNull(pinned);
+        Assert.Equal(Text(ten), Text(pinned!)); // stops 9 and up included
+        Assert.NotSame(ten, pinned);
+
+        Assert.Null(ShimmerColours.Picked(new RampSource { Stops = Hexes("#112233") }, below)); // already the draft's own: nothing to do
+        Assert.Equal(new[] { "#39149c", "#2e6be1" }, Text(ShimmerColours.Picked(new RampSource { Game = true }, below)!)); // the draft's own choice wins
+        Assert.Equal(8, ShimmerColours.Picked(null, new RampSource { ThinFilm = new ThinFilmSettings { Thickness = 420 } })!.Count);
+        Assert.Equal(new[] { "#39149c", "#2e6be1" }, Text(ShimmerColours.Picked(null, null)!));
+    }
+
+    [Fact]
     public void Edited_stops_save_as_the_same_stops_json()
     {
         var stops = ShimmerColours.SetAt(ShimmerColours.Starting(null), 1, ShimmerColours.Quantize(ShimmerColours.ToRgb(new Hsv(0.4f, 0.8f, 0.9f))));

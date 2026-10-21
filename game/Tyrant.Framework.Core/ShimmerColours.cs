@@ -149,6 +149,14 @@ namespace Tyrant.Framework.Core
             return new List<Rgb>(StartStops);
         }
 
+        /// <summary>
+        /// What clicking Colours puts in the draft: <see cref="Starting"/> from the ramp in effect (the draft's own, else the lower
+        /// layer's), so a lower layer's stops are pinned at this scope, every one of them, as Thin film and Game's pin theirs. Null
+        /// when the draft's own ramp is stops already (nothing to do).
+        /// </summary>
+        public static List<Rgb>? Picked(RampSource? own, RampSource? below) =>
+            own != null && LookEditing.RampKindOf(own) == RampKind.Stops ? null : Starting(own ?? below);
+
         private static float Clamp01(float c) => c < 0 ? 0 : c > 1 ? 1 : c;
 
         private static float Byte(float c) => (float)Math.Round(Clamp01(c) * 255) / 255f;
