@@ -64,7 +64,7 @@ namespace Tyrant.Framework.Core
     /// <summary>
     /// Decides how the mods' sizes land on the game's species, pass after pass: a species' curve is replaced once, each skin's
     /// sex sizes are multiplied once (a skin copied from a multiplied one counts as multiplied), and each warning is given once.
-    /// The adult multiplier is backed off when the extremes over the genetic ranges in effect would pass the game's limit.
+    /// The adult multiplier is backed off when the extremes over the genetic ranges in effect would pass the size limit in effect.
     /// </summary>
     public sealed class SizePlan
     {
@@ -76,16 +76,19 @@ namespace Tyrant.Framework.Core
 
         private readonly SizeTable _table;
         private readonly List<(double Min, double Max)> _ranges;
+        private readonly SizeLimit _limit;
         private readonly Dictionary<object, SizeSettings> _species = new Dictionary<object, SizeSettings>(ReferenceComparer.Instance);
         private readonly HashSet<object> _skins = new HashSet<object>(ReferenceComparer.Instance);
         private readonly HashSet<string> _warned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         /// <param name="geneticRanges">Every genetic range in effect (<see cref="InEffect"/>); at least one.</param>
-        public SizePlan(SizeTable table, IReadOnlyList<(double Min, double Max)> geneticRanges)
+        /// <param name="limit">The size limit in game: the table's, unless the game's cap could not be lifted (then the game's).</param>
+        public SizePlan(SizeTable table, IReadOnlyList<(double Min, double Max)> geneticRanges, SizeLimit? limit = null)
         {
             if (geneticRanges.Count == 0) throw new ArgumentException("At least one genetic range is in effect.", nameof(geneticRanges));
             _table = table;
             _ranges = geneticRanges.ToList();
+            _limit = limit ?? table.Limit;
         }
 
         /// <summary>The range the game uses at a site: Tyrant's where a mod sets one, except for random eggs, which keep the game's.</summary>
@@ -162,17 +165,18 @@ namespace Tyrant.Framework.Core
         {
             var requested = sizes.Adult ?? 1;
             var skins = s.Skins.Select(k => (k.Male, k.Female)).ToList();
-            var adult = SizeMath.BackOff(s.Curve, requested, sizes.Baby, skins, sizes.Male, sizes.Female, _ranges);
+            var adult = SizeMath.BackOff(s.Curve, requested, sizes.Baby, skins, sizes.Male, sizes.Female, _ranges, _limit);
             var used = new SizeSettings { Target = sizes.Target, Adult = adult, Baby = sizes.Baby, Male = sizes.Male ?? 1, Female = sizes.Female ?? 1 };
             var curve = SizeMath.Rebuild(s.Curve, adult, sizes.Baby);
             var sexes = skins.SelectMany(k => { var (m, f) = SizeMath.Sex(k.Male, k.Female, used); return new[] { m, f }; });
             var (min, max) = SizeMath.Extremes(curve, sexes, _ranges);
-            var fits = min >= SizeMath.FinalMin && max <= SizeMath.FinalMax;
+            var fits = _limit.Contains(min, max);
             var still = fits ? "" : " Some animals still pass it with the size ranges in effect; the game clamps them.";
+            var which = _limit.IsGame ? "the game's limit" : $"the size limit ({_limit})";
             if (adult != requested)
-                pass.Warnings.Add($"{s.Id}: size {requested.ToString("0.0##", CultureInfo.InvariantCulture)} would pass the game's limit; using {adult.ToString("0.00", CultureInfo.InvariantCulture)}.{still}");
+                pass.Warnings.Add($"{s.Id}: size {requested.ToString("0.0##", CultureInfo.InvariantCulture)} would pass {which}; using {adult.ToString("0.00", CultureInfo.InvariantCulture)}.{still}");
             else if (!fits)
-                pass.Warnings.Add($"{s.Id}: its sizes pass the game's limit (0.05 to 2) with the size ranges in effect; the game clamps those animals.");
+                pass.Warnings.Add($"{s.Id}: its sizes pass {(_limit.IsGame ? "the game's limit (0.05 to 2)" : which)} with the size ranges in effect; the game clamps those animals.");
             // The curve stays the game's own when neither the adult nor the baby changes: resampling it would only lose shape.
             if (adult != 1 || sizes.Baby != null) pass.Curves.Add((s.Data, s.Id, curve));
             pass.Notes.Add($"{s.Id}: sizes applied (adult {Number(adult)}, baby {(sizes.Baby is double baby ? Number(baby) : "unchanged")}, male {Number(used.Male!.Value)}, female {Number(used.Female!.Value)}).");

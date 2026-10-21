@@ -11,11 +11,11 @@ namespace Tyrant.Framework.Core
     /// </summary>
     public static class SizeMath
     {
+        /// <summary>The game's own limits on the final scale (AnimalNative.CurrentScale); <see cref="SizeLimit"/> is the one in effect.</summary>
         public const float FinalMin = 0.05f, FinalMax = 2f;
 
-        /// <summary>The margin BackOff keeps inside the game's limits, so float rounding in the game never pushes the scale over them. The plain limits stay the error threshold.</summary>
+        /// <summary>The margin BackOff keeps inside the limit in effect, so float rounding in the game never pushes the scale over it. The plain limit stays the error threshold.</summary>
         public const float SafeMargin = 0.001f;
-        public const float SafeMin = FinalMin * (1 + SafeMargin), SafeMax = FinalMax * (1 - SafeMargin);
         private const int Steps = 16, Samples = 101;
 
         /// <summary>How many times over 0–1 <see cref="Sample"/> reads the game's curve; with straight lines between them, the shape stays within 1%.</summary>
@@ -117,12 +117,14 @@ namespace Tyrant.Framework.Core
         }
 
         /// <summary>
-        /// The adult multiplier closest to the requested one, by bisection towards 1, that keeps every extreme within 0.05–2.
-        /// When even 1 is outside, it returns 1 and the caller warns.
+        /// The adult multiplier closest to the requested one, by bisection towards 1, that keeps every extreme within the limit
+        /// (the game's 0.05–2 by default) with <see cref="SafeMargin"/> to spare. When even 1 is outside, it returns 1 and the caller warns.
         /// </summary>
         public static double BackOff((float Time, float Value)[] original, double requested, double? baby,
-            IEnumerable<(double Male0, double Female0)> skins, double? male, double? female, IEnumerable<(double Min, double Max)> geneticRanges)
+            IEnumerable<(double Male0, double Female0)> skins, double? male, double? female, IEnumerable<(double Min, double Max)> geneticRanges,
+            SizeLimit? limit = null)
         {
+            var within = limit ?? SizeLimit.Game;
             var skinList = skins.ToList();
             var ranges = geneticRanges.ToList();
             bool Fits(double adult)
@@ -131,7 +133,7 @@ namespace Tyrant.Framework.Core
                 var settings = new SizeSettings { Adult = adult, Male = male, Female = female };
                 var sexes = skinList.SelectMany(s => { var (m, f) = Sex(s.Male0, s.Female0, settings); return new[] { m, f }; });
                 var (min, max) = Extremes(curve, sexes, ranges);
-                return min >= SafeMin && max <= SafeMax;
+                return min >= within.SafeMin && max <= within.SafeMax;
             }
 
             if (Fits(requested)) return requested;

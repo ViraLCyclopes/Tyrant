@@ -108,10 +108,10 @@ public class ModSizeCommandTests
         using var game = new FakeGame();
         var ws = Workspace(game);
 
-        var bad = Run("mod", "size", "size-pack", "Alpha", "--adult", "9", "-w", ws);
+        var bad = Run("mod", "size", "size-pack", "Alpha", "--adult", "21", "-w", ws);
 
         Assert.NotEqual(ExitCodes.Ok, bad.Code);
-        Assert.Contains("\"adult\" must be from 0.05 to 5", bad.Err);
+        Assert.Contains("\"adult\" must be from 0.05 to 20", bad.Err);
         Assert.False(File.Exists(Path.Combine(ws, "mods", "size-pack", "sizes", "alpha.json")));
     }
 

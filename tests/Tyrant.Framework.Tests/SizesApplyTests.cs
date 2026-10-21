@@ -119,6 +119,34 @@ public class SizesApplyTests
     }
 
     [Fact]
+    public void A_raised_limit_lets_sizes_past_two()
+    {
+        var table = Table("""{ "format": 1, "target": "Allosaurus", "adult": 4.0 }""", ""","sizeRanges":{"limit":[0.05,20]}""");
+        object data = new object(), skin = new object();
+        var species = new[] { Species(data, "Allosaurus", (skin, 1.08, 1.12)) };
+
+        var pass = Plan(table).Next(species);
+
+        Assert.Empty(pass.Warnings);
+        var sized = Assert.Single(pass.Skins);
+        Assert.Equal((1.08 * 4, 1.12 * 4), (sized.Male, sized.Female));
+
+        // When the game's cap could not be lifted, the plan keeps to the game's limit.
+        var capped = new SizePlan(table, SizePlan.InEffect(table.Ranges, Incubation, Breeding), SizeLimit.Game).Next(species);
+        Assert.Matches(@"^Allosaurus: size 4\.0 would pass the game's limit; using 1\.\d\d\.$", Assert.Single(capped.Warnings));
+    }
+
+    [Fact]
+    public void Past_a_raised_limit_the_warning_names_it()
+    {
+        var table = Table("""{ "format": 1, "target": "Allosaurus", "adult": 20 }""", ""","sizeRanges":{"limit":[0.05,10]}""");
+
+        var pass = Plan(table).Next(new[] { Species(new object(), "Allosaurus", (new object(), 1.08, 1.12)) });
+
+        Assert.Matches(@"^Allosaurus: size 20\.0 would pass the size limit \(0\.05 to 10\); using \d\.\d\d\.$", Assert.Single(pass.Warnings));
+    }
+
+    [Fact]
     public void Slopes_are_finite_differences()
     {
         var slopes = SizePlan.Slopes(new[] { (0f, 0f), (0.5f, 1f), (1f, 1.5f) });

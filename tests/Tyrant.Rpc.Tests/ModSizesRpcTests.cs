@@ -119,7 +119,7 @@ public class ModSizesRpcTests
         var (h, _) = await WithAlpha(game);
         var detail = await h.Call("mods.get", new { id = "size-pack" });
 
-        var ex = await Assert.ThrowsAsync<RpcCallException>(() => h.Call("mods.setSizes", new { id = "size-pack", revision = Rev(detail), target = "Alpha", adult = 9 }));
+        var ex = await Assert.ThrowsAsync<RpcCallException>(() => h.Call("mods.setSizes", new { id = "size-pack", revision = Rev(detail), target = "Alpha", adult = 21 }));
         var range = await Assert.ThrowsAsync<RpcCallException>(() => h.Call("mods.setSizeRanges", new { id = "size-pack", revision = Rev(detail), nursery = new[] { 0.0, 1.0 } }));
 
         Assert.Equal("MOD_INVALID", ex.DataCode);

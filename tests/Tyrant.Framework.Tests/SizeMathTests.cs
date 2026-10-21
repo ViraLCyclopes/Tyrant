@@ -96,6 +96,35 @@ public class SizeMathTests
         Assert.Equal(1.0, adult);
     }
 
+    [Fact]
+    public void BackOff_keeps_inside_a_wider_limit()
+    {
+        var skins = new[] { (1.0, 1.0) };
+        var ranges = new[] { (0.85, 1.15) };
+        var limit = new SizeLimit(0.05f, 20f);
+
+        Assert.Equal(4.0, SizeMath.BackOff(Allosaurus, 4, null, skins, null, null, ranges, limit));
+        Assert.True(SizeMath.BackOff(Allosaurus, 4, null, skins, null, null, ranges) < 2, "the game's limit is the default");
+
+        var adult = SizeMath.BackOff(Allosaurus, 20, null, skins, null, null, ranges, limit); // 20 x 1.15 would pass 20
+        Assert.True(adult < 20 && adult > 15, "adult was " + adult);
+        var (min, max) = SizeMath.Extremes(SizeMath.Rebuild(Allosaurus, adult, null), new[] { adult }, ranges);
+        Assert.True(max <= limit.SafeMax && max > 19.9f && min >= limit.SafeMin, $"extremes {min}..{max}");
+    }
+
+    [Fact]
+    public void Safe_limits_keep_their_margin_inside_the_limit()
+    {
+        Assert.Equal((0.05f, 2f), (SizeLimit.Game.Min, SizeLimit.Game.Max));
+        Assert.Equal(2f * (1 - SizeMath.SafeMargin), SizeLimit.Game.SafeMax, 6);
+        Assert.Equal(20f * (1 - SizeMath.SafeMargin), new SizeLimit(0.05f, 20f).SafeMax, 5);
+        Assert.Equal(0.01f * (1 + SizeMath.SafeMargin), new SizeLimit(0.01f, 2f).SafeMin, 7);
+        Assert.True(SizeLimit.Game.IsGame);
+        Assert.False(new SizeLimit(0.05f, 20f).IsGame);
+        Assert.True(new SizeLimit(0.05f, 20f).Contains(0.05f, 20f));
+        Assert.False(SizeLimit.Game.Contains(0.05f, 2.01f));
+    }
+
     // The dumped growth curves (time, value, in and out tangent): Hermite curves whose shape a straight line between keys loses.
     private static readonly (float Time, float Value, float In, float Out)[] VelociraptorGame =
         { (0f, 0.393908322f, 1.73721325f, 1.73721325f), (1f, 1f, 0.0356990322f, 0.0356990322f) };

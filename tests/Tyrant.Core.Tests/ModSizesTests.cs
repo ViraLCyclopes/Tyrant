@@ -74,7 +74,7 @@ public class ModSizesTests
         Assert.Empty(mod.SizeTargets);
         Assert.False(Directory.Exists(Path.Combine(mod.Dir, "sizes")));
 
-        var bad = Assert.Throws<TyrantException>(() => mod.SetSizes("Alpha", new SizeSettings { Adult = 9 }));
+        var bad = Assert.Throws<TyrantException>(() => mod.SetSizes("Alpha", new SizeSettings { Adult = 21 }));
         Assert.Equal(TyrantErrorCode.ModInvalid, bad.Code);
         Assert.Empty(mod.SizeTargets);
 
@@ -193,7 +193,7 @@ public class ModSizesTests
         var (game, ws, mod) = Setup();
         using var _ = game;
         Directory.CreateDirectory(Path.Combine(mod.Dir, "sizes"));
-        File.WriteAllText(Path.Combine(mod.Dir, "sizes", "alpha.json"), """{"format":1,"target":"Alpha","adult":9}""");
+        File.WriteAllText(Path.Combine(mod.Dir, "sizes", "alpha.json"), """{"format":1,"target":"Alpha","adult":21}""");
 
         Assert.Contains(Check(ws, mod).Errors, e => e.Contains("sizes/alpha.json") && e.Contains("adult"));
     }
