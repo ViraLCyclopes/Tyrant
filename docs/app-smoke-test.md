@@ -153,8 +153,9 @@ Release build: `npm run build:app`, install `studio/src-tauri/target/release/bun
     Switch to Tyrant: the mod editor's model page shows the sculpt (no restart, no manual refresh).
 76b. **Real size.** Mod with the species model as destination → Open in Blender: the armature object's scale is the
     adult's size in game (its sex multiplier); **Growth** 0 shrinks it to the hatchling's. Size box → **Adult size ×**
-    1.2: the model grows at once. **Send to Tyrant**: the mod's Size card shows 1.2, Undo puts it back, and the sent model
-    is not scaled. On a skin destination the Size fields are greyed out with "Sizes apply to the whole species; set them
+    1.2: the model grows at once. **Send to Tyrant**: the mod's Size card shows 1.2, and the sent model is not scaled.
+    The send is a change from outside the app: the mod reloads and Undo is greyed out. **↺** on Adult size × puts 1
+    back (or Adult size × 1 in Blender and Send again). On a skin destination the Size fields are greyed out with "Sizes apply to the whole species; set them
     in the app."
 77b. Tyrant panel -> **Sex** Female: her maps show and (Allosaurus Anax) her adult keeps part of the Adolescent shape,
     like a female in the Nursery; Male puts it back. Open in Blender -> Options -> Sex starts as the female.
@@ -435,4 +436,6 @@ Needs the game. Steps marked **(game)** start the game.
      - Place them: the hatchlings are about a fifth of their adult size; grown, the 1.50 one is about three times the
        0.50 one, and a T. rex is about 0.8 of a vanilla one. The animals neither float nor sink.
      - Save the park, quit to the menu and load it: every T. rex has the same size as before, and the log has no new
-       warning. Remove the mod and load the park again: the T. rexes are back to their vanilla sizes.
+       warning. Remove the mod and load the park again: the uncustomised T. rex is back to a vanilla size. The 0.50 and
+     1.50 ones keep the genetic size the slider gave them (it is saved with each animal), so grown they are about 0.5
+     and 1.5 of a vanilla T. rex.

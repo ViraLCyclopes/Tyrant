@@ -460,12 +460,16 @@ takes them out of the record, so only the sizes change it.
   the base game.
 - `breeding`: the range of the random size of bred animals.
 - Each is `[min, max]` with 0 < min <= max <= 10. The later mod in load order wins, per range.
+- The genetic size an animal gets is saved with it in the park. An animal made with a wider range (the Nursery slider or
+  breeding) keeps that size after the mod is removed: a T. rex made at 1.5 stays 1.5 times a vanilla one.
 
 **What follows the real size.** An adult's size relative to its species stays as in the base game, so these follow the
 size you set: guest appeal and cost, sale value (a bigger species sells for more), mass and combat damage, height,
-width and radius, and incubation time.
+width and radius.
 
-**What stays as in the base game for adults:** turning and banking, awareness, aggression range, and enclosure needs.
+**What stays as in the base game for adults:** turning and banking, awareness, aggression range, enclosure needs, and
+incubation time. The game times incubation by the growth curve, not by the real size, and Tyrant keeps the curve's adult
+value, so only a hatchling's time changes, and by less than its size does.
 
 The game keeps every animal's size between 0.05 and 2 (it logs an error each time a size passes that), so Tyrant's
 Check reports a size that would pass it as an error, counting the youngest baby, the sex multipliers and the widest
