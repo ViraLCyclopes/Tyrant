@@ -91,9 +91,9 @@ public class AgeLooksTests
     [Fact]
     public void A_fur_variant_on_a_furless_template_switches_to_texture_masking()
     {
-        Assert.True(FurMasking.NeedsTextureMasking(tessellationFur: true, textureMasking: false)); // _FURMASKING_NONE: no mask read at all
-        Assert.False(FurMasking.NeedsTextureMasking(tessellationFur: true, textureMasking: true)); // a furry species: already
-        Assert.False(FurMasking.NeedsTextureMasking(tessellationFur: false, textureMasking: false)); // no fur variant: nothing drawn
+        Assert.True(FurMasking.NeedsTextureMasking(tessellationFur: true, maskingNone: true)); // _FURMASKING_NONE: no mask read at all
+        Assert.False(FurMasking.NeedsTextureMasking(tessellationFur: true, maskingNone: false)); // texture (furry) or vertex colour on purpose: left alone
+        Assert.False(FurMasking.NeedsTextureMasking(tessellationFur: false, maskingNone: true)); // no fur variant: nothing drawn
         Assert.Equal((4f, 4f), FurMasking.DispScale(1, 1)); // the furless template's (1,1): a furry default
         Assert.Null(FurMasking.DispScale(3, 3)); // a scale of its own stays
     }

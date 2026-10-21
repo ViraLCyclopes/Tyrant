@@ -598,7 +598,7 @@ namespace Tyrant.Framework
 
         /// <summary>
         /// Writes the mask the animal shows now as a grey PNG (all white for Everywhere, for no mask at all, and while grown fur
-        /// covers the whole body) into UserData/Tyrant/Masks under a new name, and points the draft at it.
+        /// covers the whole body; all black, at the same size, for a fur slot the fur age leaves bare) into UserData/Tyrant/Masks under a new name, and points the draft at it.
         /// </summary>
         private static void ExportMask()
         {
@@ -609,7 +609,7 @@ namespace Tyrant.Framework
                 Footer();
                 return;
             }
-            var texture = MaterialsModule.EffectiveMask(_animal, fur: _onFurTab, infant: false, out var white, out var taken);
+            var texture = MaterialsModule.EffectiveMask(_animal, fur: _onFurTab, infant: false, out var white, out var black, out var taken);
             // The game's images never go into files: a species' mask stays a reference (the draft's, or the one the animal wears).
             if (!_onFurTab && (taken ?? (_draft.Current.Iridescence?.Mask ?? _below?.Iridescence?.Mask)?.Species) is string species)
             {
@@ -630,7 +630,7 @@ namespace Tyrant.Framework
                 return;
             }
             var kind = _onFurTab ? ExportKind.FurMask : ExportKind.IridescenceMask;
-            if (!(TryExport(kind, () => white is Vector2Int size ? WhitePng(size) : GreyPng(texture!)) is string file)) return;
+            if (!(TryExport(kind, () => white is Vector2Int size ? SolidPng(size, white: !black) : GreyPng(texture!)) is string file)) return;
             if (_onFurTab) _draft.SetFurMask(new MaskSource { File = file }, infant: false);
             else _draft.SetMask(new MaskSource { File = file });
             Changed(rebuild: true);
@@ -682,13 +682,9 @@ namespace Tyrant.Framework
             }
         }
 
-        /// <summary>An all-white PNG of this size (fur or shimmer everywhere), to paint the limits on.</summary>
-        private static byte[] WhitePng(Vector2Int size)
-        {
-            var pixels = new byte[size.x * size.y * 4];
-            for (var i = 0; i < pixels.Length; i++) pixels[i] = 255;
-            return Png(size.x, size.y, pixels, linear: true);
-        }
+        /// <summary>An all-white (fur or shimmer everywhere) or all-black (no fur at that age) PNG of this size, to paint on.</summary>
+        private static byte[] SolidPng(Vector2Int size, bool white) =>
+            Png(size.x, size.y, MaskExports.SolidPixels(size.x, size.y, white), linear: true);
 
         /// <summary>The texture's red channel as a grey PNG (read like a mask made from a skin map, so compressed maps read too).</summary>
         private static byte[] GreyPng(Texture source)

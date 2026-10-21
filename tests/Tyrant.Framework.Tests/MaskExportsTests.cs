@@ -168,6 +168,18 @@ public class MaskExportsTests
         Assert.True(File.Exists(fur)); // the export stays in Masks
     }
 
+    [Fact]
+    public void A_solid_export_is_opaque_white_or_black_at_the_size_given()
+    {
+        var white = MaskExports.SolidPixels(64, 32, white: true);
+        var black = MaskExports.SolidPixels(64, 32, white: false);
+        Assert.Equal(64 * 32 * 4, white.Length);
+        Assert.Equal(64 * 32 * 4, black.Length); // full size, not the 4 x 4 texture the animal wears
+        Assert.All(white, b => Assert.Equal(255, b));
+        for (var p = 0; p < black.Length; p += 4)
+            Assert.Equal(new byte[] { 0, 0, 0, 255 }, black.Skip(p).Take(4).ToArray()); // red 0: no fur; opaque, so it shows as black
+    }
+
     /// <summary>A fur mask export of <paramref name="bytes"/>, its exports and a block using it.</summary>
     private static (ExportedFiles Exports, MaterialOverride Block) FurExport(byte[] bytes)
     {

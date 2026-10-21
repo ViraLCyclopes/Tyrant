@@ -331,7 +331,7 @@ game update moves the panels and a button cannot be placed, the MelonLoader log 
   it, marked *(below)*, and **Game's** is greyed out: there is no `"game"` value to write over it, so pick the age you want.
 - **Export mask PNG** writes the mask the animal shows as a PNG to edit in an image editor, into `UserData/Tyrant/Masks`.
   With the mask on **Everywhere**, or no mask at all, it is all white, the size of the skin's mask or diffuse map (else
-  1024 × 1024); on the Fur tab, grown fur over the whole body is all white too. A **Channel** mask exports what the animal
+  1024 × 1024); on the Fur tab, grown fur over the whole body is all white too, and an age the **Fur on** choice leaves bare is all black at the same size. A **Channel** mask exports what the animal
   shows (from a vanilla skin's map, that is an image made from the game's). A **Species** mask is not exported (it stays a
   reference).
 - **Export colours PNG** (Iridescence tab, beside it) writes the shimmer colours of **Colours** or **Thin film** as a

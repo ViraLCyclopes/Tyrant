@@ -34,6 +34,22 @@ namespace Tyrant.Framework.Core
     /// </summary>
     public static class MaskExports
     {
+        /// <summary>
+        /// The RGBA pixels of an opaque one-colour mask: white (fur or shimmer everywhere) or black (no fur: an age the fur
+        /// age leaves bare), to export at the skin's size and paint on.
+        /// </summary>
+        public static byte[] SolidPixels(int width, int height, bool white)
+        {
+            var pixels = new byte[width * height * 4];
+            var value = white ? (byte)255 : (byte)0;
+            for (var i = 0; i < pixels.Length; i += 4)
+            {
+                pixels[i] = pixels[i + 1] = pixels[i + 2] = value;
+                pixels[i + 3] = 255;
+            }
+            return pixels;
+        }
+
         /// <summary>The size of a colours strip: x runs N·V 0 to 1, every row the same.</summary>
         public const int RampWidth = 256, RampHeight = 8;
 

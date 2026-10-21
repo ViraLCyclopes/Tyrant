@@ -95,10 +95,11 @@ namespace Tyrant.Framework.Core
         public const float DefaultDispScale = 4;
 
         /// <summary>
-        /// True when a material with the fur variant must switch to texture masking: it is made from a furless template, so
-        /// without it Grow fur and the fur age would ignore every mask.
+        /// True when a material with the fur variant must switch to texture masking: it is made from a furless template
+        /// (_FURMASKING_NONE), so without it Grow fur and the fur age would ignore every mask. Texture masking, and vertex
+        /// colour masking a species uses on purpose, are left alone.
         /// </summary>
-        public static bool NeedsTextureMasking(bool tessellationFur, bool textureMasking) => tessellationFur && !textureMasking;
+        public static bool NeedsTextureMasking(bool tessellationFur, bool maskingNone) => tessellationFur && maskingNone;
 
         /// <summary>The strand noise tiling to write over a furless template's 1, 1; null keeps the material's own.</summary>
         public static (float X, float Y)? DispScale(float x, float y) =>

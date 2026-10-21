@@ -33,7 +33,7 @@ namespace Tyrant.Framework
         private const string DroopProperty = "_DroopDirection"; // AnimalShaderData.FuzzDroopinessDirectionID
         private const string AdultFurProperty = "_AdultFurMask";
         private const string InfantFurProperty = "_InfantFurMask";
-        private const string FuzzProperty = "_FresnelIntensity"; // AnimalShaderData.FresnelIntensityID: the game's fur amount, 0 without fur maps
+        private const string FuzzProperty = "_FresnelIntensity"; // AnimalShaderData.FresnelIntensityID: only a rim sheen (fur length and coverage come from the masks); the game writes 0 without fur maps
         private const string FurMaskEmpty = "FurMaskEmpty"; // AnimalShaderData.FurMaskEmptyName: the game's blank fur mask
         private static readonly string[] Variants = { "normal", "albino", "melanistic", "leucistic" };
 
@@ -208,15 +208,15 @@ namespace Tyrant.Framework
         /// <summary>
         /// After the game set a new shared material's keywords: a fur variant made from a furless template (_FURMASKING_NONE,
         /// which reads no mask) switches to texture masking, so Grow fur and fur ages obey the fur masks, and its strand noise
-        /// tiling of 1, 1 becomes a furry skin's (<see cref="FurMasking"/>). Furry species' materials have texture masking
-        /// already and are left alone; the material is the game's per-variant copy, never its asset.
+        /// tiling of 1, 1 becomes a furry skin's (<see cref="FurMasking"/>). Any other masking mode (furry species' texture
+        /// masking, a vertex colour one) is left alone; the material is the game's per-variant copy, never its asset.
         /// </summary>
         private static void AfterMaterialKeywords(object[] __args)
         {
             if (!_active || __args.Length < 1 || !(__args[0] is Material material) || material == null) return;
             try
             {
-                if (!FurMasking.NeedsTextureMasking(material.IsKeywordEnabled("_FEATURETESSELLATION_FUR"), material.IsKeywordEnabled(FurMasking.Texture))) return;
+                if (!FurMasking.NeedsTextureMasking(material.IsKeywordEnabled("_FEATURETESSELLATION_FUR"), material.IsKeywordEnabled(FurMasking.None))) return;
                 material.DisableKeyword(FurMasking.None);
                 material.DisableKeyword(FurMasking.VertexColor);
                 material.EnableKeyword(FurMasking.Texture);
@@ -605,12 +605,14 @@ namespace Tyrant.Framework
         /// and also when the mask is not a texture to read: <paramref name="white"/> is the size of an all-white mask to write
         /// instead while Grow fur paints Unity's white texture over the whole body (the game's own under it is its blank
         /// FurMaskEmpty), and for an iridescence mask that is everywhere or none at all (<see cref="MaskExports.IridescenceMode"/>);
+        /// with <paramref name="black"/> that mask is all black instead, the same size (a fur slot the fur age leaves bare);
         /// <paramref name="species"/> names the species whose iridescence mask the animal shows by reference
         /// (the game's images are never exported).
         /// </summary>
-        public static Texture? EffectiveMask(object animal, bool fur, bool infant, out Vector2Int? white, out string? species)
+        public static Texture? EffectiveMask(object animal, bool fur, bool infant, out Vector2Int? white, out bool black, out string? species)
         {
             white = null;
+            black = false;
             species = null;
             if (animal == null) return null;
             try
@@ -626,7 +628,12 @@ namespace Tyrant.Framework
                 {
                     var property = infant ? InfantFurProperty : AdultFurProperty;
                     // An age the fur age leaves bare shows Tyrant's black, over any mask PNG.
-                    if (record != null && record.Ours.TryGetValue(property, out var bare) && bare == _noFur && Block.GetTexture(property) == bare) return bare;
+                    if (record != null && record.Ours.TryGetValue(property, out var bare) && bare == _noFur && Block.GetTexture(property) == bare)
+                    {
+                        white = PaintSize(record, material, infant); // a full-size black image to paint fur back on, not the 4 × 4 texture
+                        black = true;
+                        return null;
+                    }
                     var source = found?.Override.Fur is FurMasks masks ? infant ? masks.InfantMask ?? masks.Mask : masks.Mask : null;
                     if (source != null && FileMask(source) is Texture own && own != null) return own;
                     if (record != null && record.Ours.TryGetValue(property, out var ours) && ours == Texture2D.whiteTexture && Block.GetTexture(property) == ours)
