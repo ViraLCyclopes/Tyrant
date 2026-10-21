@@ -7,6 +7,7 @@ or Tyrant's Species database page. It travels with the mod when installed or exp
 > **The Unity path is parked.** Tyrant no longer downloads tools to copy the template into Unity. Tune a species'
 > prefab with **Prefab settings** (any field of its components) and give it its own look with **Open in Blender**.
 > A species that already has a Unity bundle keeps loading it.
+> Change how big a species is with **Sizes** (see [mod-format.md](mod-format.md#sizes-making-an-animal-bigger-or-smaller)).
 
 The app no longer shows **Create / show Unity project** or **Attach Unity prefab bundle** while the Unity path is parked,
 so those steps are not available. A species with an existing Unity bundle keeps loading it. The

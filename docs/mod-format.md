@@ -44,6 +44,7 @@ red-spot-carcharo/
 | `dependencies` | Ids of mods that must be installed and on. |
 | `assembly` | (code mods) a DLL in the mod folder with a `Tyrant.Framework.TyrantMod` subclass. |
 | `replace` | Game textures to swap at runtime. `texture` is the game texture's name (copy it from the Assets tab); `file` is your PNG, inside the mod folder. `key` and `guid` are filled in by Tyrant (built-in textures have neither; the name is enough). |
+| `sizeRanges` | (optional) The Nursery and breeding size ranges, see [Sizes](#sizes-making-an-animal-bigger-or-smaller). |
 
 ## Textures
 
@@ -422,6 +423,47 @@ target, and warns on a field the template prefab does not have or a value of the
 - `Animator`: `applyRootMotion` and `cullingMode`.
 - Not editable: `Transform` (use rig edits), renderers, meshes, materials, the Animator's controller and avatar, and
   Unity's internal `m_*` fields on other built-in components.
+
+## Sizes (making an animal bigger or smaller)
+
+A mod can change how big a species is, without replacing its model. Each target gets one file in the mod's `sizes/`
+folder. `mod.json` does not list these files; Tyrant finds them by folder.
+
+```json
+{ "format": 1, "target": "Tyrannosaurus", "adult": 0.85, "baby": 0.10, "male": 1.0, "female": 1.1 }
+```
+
+- `target`: a base-game species id or a custom species identity (`tyrant.<mod-id>.<species-id>`), as for prefab settings.
+  The file name is only a filesystem-safe form of the target; readers use `target` from the content.
+- Every key except `target` is optional, and a left-out key means unchanged.
+- `adult`: multiplies the real adult size (0.05 to 5).
+- `baby`: the newborn's size as a share of the adult's (above 0, at most 1).
+- `male`, `female`: multiply the size of each sex (0.1 to 5).
+- A key outside its limits, or one Tyrant does not know, is an error.
+
+If several mods set the same key on the same target, the later mod in load order wins, per key. Keys the other mods set
+are kept.
+
+**Size ranges** are set in `mod.json`:
+
+```json
+"sizeRanges": { "nursery": [0.5, 1.5], "breeding": [0.7, 1.3] }
+```
+
+- `nursery`: the range of the Customize size slider in the Nursery. The random size of uncustomised eggs stays as in
+  the base game.
+- `breeding`: the range of the random size of bred animals.
+- Each is `[min, max]` with 0 < min <= max <= 10. The later mod in load order wins, per range.
+
+**What follows the real size.** An adult's size relative to its species stays as in the base game, so these follow the
+size you set: guest appeal and cost, sale value (a bigger species sells for more), mass and combat damage, height,
+width and radius, and incubation time.
+
+**What stays as in the base game for adults:** turning and banking, awareness, aggression range, and enclosure needs.
+
+The game keeps every animal's size between 0.05 and 2 (it logs an error each time a size passes that), so Tyrant's
+Check reports a size that would pass it as an error, counting the youngest baby, the sex multipliers and the widest
+genetic range. In the game, the framework scales the adult size back until the sizes fit and logs one warning.
 
 ## Rig edits (changing an animal's skeleton)
 
