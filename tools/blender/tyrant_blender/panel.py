@@ -80,7 +80,8 @@ def _start_send(context, armature, destination=None, new_mod_name=None):
     with open(rig_file, "w", encoding="utf-8") as f:
         json.dump(rig.unity_rig(armature), f)
     rig_only = bool(rig.offsets(armature)) and armature.tyrant_rig_only
-    # The Size panel's sizes go when they changed (and only to a species: a skin's sizes are the species', set in the app).
+    # The Size panel's edited keys go when they changed (and only to a species: a skin's sizes are the species', set in the
+    # app); Tyrant merges them onto the mod's current sizes.
     sizes = growth.changed_sizes(armature, data)
     sizes_file = None
     if sizes is not None:

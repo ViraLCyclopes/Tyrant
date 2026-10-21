@@ -271,7 +271,7 @@ public sealed class BlenderSendCommand : Command<BlenderSendCommand.Settings>
         public bool RigOnly { get; set; }
 
         [CommandOption("--sizes <FILE>")]
-        [Description("The Size panel's sizes for the destination species (a sizes/<file>.json); a skin destination refuses them. Without it the mod keeps its sizes.")]
+        [Description("The sizes edited in Blender for the destination species (a sizes/<file>.json); its keys replace the mod's, the others stay. A skin destination refuses them.")]
         public string? Sizes { get; set; }
     }
 

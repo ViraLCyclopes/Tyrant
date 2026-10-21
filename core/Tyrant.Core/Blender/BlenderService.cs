@@ -196,7 +196,8 @@ public sealed class BlenderService(BlenderEnvironment env)
     /// when newModName is given. Never throws for Tyrant's own errors: they come back in the result for Blender's panel.
     /// <paramref name="rig"/>: the armature's rig edit (an empty one clears the destination's; null keeps it). With
     /// <paramref name="rigOnly"/> only the rig edit goes in and the destination wears the game's mesh.
-    /// <paramref name="sizes"/>: the Size panel's sizes for the destination species (null keeps the mod's); a skin destination refuses them.
+    /// <paramref name="sizes"/>: the keys edited in Blender's Size panel for the destination species, merged onto the mod's
+    /// current sizes (a key left unset keeps the mod's, which the app may have changed meanwhile); a skin destination refuses them.
     /// </summary>
     public static BlenderSendResult Send(Workspace ws, GameInstall install, AssetIndex index, IReadOnlyList<SpeciesSkins> species, IAssetReader reader,
         string projectFile, string glb, BlenderDestination? choose, string? newModName, IReadOnlyList<BlenderImage>? images = null, string sex = "male",
@@ -244,7 +245,18 @@ public sealed class BlenderService(BlenderEnvironment env)
             }
             else report = mod.ReplaceModel(install, index, species, reader, glb, destination.Skin is null ? destination.Species : null, null, destination.Skin, rig: rig);
             mod.RefreshHeadRigs(ws, install, index, species, reader); // a species-wide rig edit re-aims the species' head look
-            if (sizes is not null) mod.SetSizes(destination.Species, sizes);
+            if (sizes is not null)
+            {
+                var current = mod.Sizes(destination.Species); // the app may have changed other keys since Blender opened it
+                mod.SetSizes(destination.Species, new SizeSettings
+                {
+                    Target = destination.Species,
+                    Adult = sizes.Adult ?? current?.Adult,
+                    Baby = sizes.Baby ?? current?.Baby,
+                    Male = sizes.Male ?? current?.Male,
+                    Female = sizes.Female ?? current?.Female,
+                });
+            }
             BlenderProjectFile.Write(projectFile, BlenderProjectWriter.WithSizes(project with { Destination = destination }, ws));
             // Only after the model went in: a refused model leaves the mod as it was.
             var pictures = BlenderImages.Apply(mod, ws, index, species, destination, images ?? [], sex, project.Source.Kind == "game" ? project.Source.Skin : null);

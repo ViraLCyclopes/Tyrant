@@ -65,6 +65,17 @@ class SizeTests(unittest.TestCase):
         curve = 0.164 + (1 - 0.164) * 0.5
         self.assertScale(arm, curve * (1 + 0.08 * (0.2 + 0.8 * 0.75)))
 
+    def test_size_follows_maturity_not_the_skin_curve(self):
+        # The game sizes by maturity itself (AnimalNative.CurrentScale): the skin curve (textures only) must not bend it.
+        path = allosaurus()
+        data = project.load(path)
+        data["growth"]["skin"] = [(i / 100) ** 3 for i in range(101)]  # far from a straight line: 0.25 → 0.0156
+        project.save(path, data)
+        arm = importer.import_project(path)
+        arm.tyrant_growth = 0.25
+        curve = 0.164 + (1 - 0.164) * 0.25
+        self.assertScale(arm, curve * (1 + 0.08 * (0.2 + 0.8 * (1 - 0.75 ** 2))))
+
     def test_without_a_scale_curve_the_model_keeps_its_scale(self):
         arm = importer.import_project(fresh_project())  # the fixture's species has no scale curve
         arm.tyrant_growth = 0.0
@@ -105,7 +116,7 @@ class SizeTests(unittest.TestCase):
         self.assertScale(arm, 2 * baby_male())
 
     def test_size_panel_sends_sizes(self):
-        path = allosaurus()
+        path = allosaurus(sizes={"male": 1.1, "baby": 0.2})  # set in the app before
         arm = importer.import_project(path)
         bpy.context.view_layer.objects.active = arm
         started = []
@@ -115,10 +126,11 @@ class SizeTests(unittest.TestCase):
             panel._start_send(bpy.context, arm)  # nothing changed: no sizes go
             self.assertNotIn("--sizes", started[-1][0])
 
-            self.assertAlmostEqual(arm.tyrant_size_baby, 0.164, places=5)  # unset: the game's own share
+            self.assertAlmostEqual(arm.tyrant_size_baby, 0.2, places=5)
             arm.tyrant_size_adult = 1.2
             arm.tyrant_size_female = 0.9
-            self.assertScale(arm, 1.08 * 1.2)  # the display follows at once: adult male = 1.08 × 1.2
+            arm.tyrant_size_male = 1.1  # the value it has: not an edit
+            self.assertScale(arm, 1.08 * 1.2 * 1.1)  # the display follows at once: adult male = 1.08 × 1.2 × 1.1
             panel._start_send(bpy.context, arm)
         finally:
             send.run_async = real
@@ -126,6 +138,7 @@ class SizeTests(unittest.TestCase):
         args, done = started[-1]
         with open(args[args.index("--sizes") + 1], encoding="utf-8") as f:
             sent = json.load(f)
+        # Only the keys edited in Blender: Tyrant merges them onto the mod's current sizes (the app may have changed others).
         self.assertEqual(sent, {"format": 1, "target": "Carcharodontosaurus", "adult": 1.2, "female": 0.9})
 
         done({"ok": True, "errors": [], "warnings": [], "lodVertices": []})
@@ -136,6 +149,7 @@ class SizeTests(unittest.TestCase):
         arm = importer.import_project(path)
         data = project.load(path)
         self.assertAlmostEqual(arm.tyrant_size_adult, 1.5, places=5)
+        self.assertAlmostEqual(arm.tyrant_size_baby, 0.164, places=5)  # unset: the game's own share
         arm.tyrant_size_adult = 2.0  # refused: the species' sizes are set in the app
         self.assertAlmostEqual(arm.tyrant_size_adult, 1.5, places=5)
         drawn = []

@@ -180,13 +180,14 @@ def sizes_of(armature, data):
 
 
 def changed_sizes(armature, data):
-    """The sizes Send writes to the species (as sizes_of), or None when this project may not change them or nothing changed."""
-    sizes = (data or {}).get("sizes") or {}
+    """What Send writes to the species: only the keys edited here since the last Open or Send ({key: value}), which Tyrant
+    merges onto the mod's current sizes (the app may have changed the others meanwhile). None when this project may not
+    change them or nothing changed."""
     if not data or not data.get("sizesEditable"):
         return None
-    if all(sizes.get(k) is not None and abs(sizes[k] - v) < 1e-9 for k, v in size_edits(armature).items()):
-        return None
-    return sizes_of(armature, data)
+    sizes = data.get("sizes") or {}
+    changed = {k: v for k, v in size_edits(armature).items() if sizes.get(k) is None or abs(sizes[k] - v) >= 1e-9}
+    return changed or None
 
 
 def baby_share(data):
@@ -207,7 +208,8 @@ def sex_sizes(armature, data):
 
 
 def size_factor(armature, data, maturity):
-    """The animal's size at this maturity as the game scales it, S(m, s, 1) for the sex shown; None without a scale curve."""
+    """The animal's size at this maturity (the Growth slider's value) as the game scales it, S(m, s, 1) for the sex shown;
+    None without a scale curve."""
     growth = (data or {}).get("growth") or {}
     curve = growth.get("scale")
     if not curve:
@@ -259,7 +261,8 @@ def set_growth(armature, value, scene_objects=None):
     m = blend_maturity(growth.get("blend"), value, clamp)
     key0, key1 = shape_values(m, growth.get("relative", True))
     maturity = sample(growth.get("skin"), value)
-    _show_size(armature, size_factor(armature, data, maturity))
+    # The size follows the maturity itself (AnimalNative.CurrentScale), not the skin curve, which only blends the textures.
+    _show_size(armature, size_factor(armature, data, min(max(value, 0.0), 1.0)))
     meshes = deformed_meshes(armature, scene_objects if scene_objects is not None else bpy.context.scene.objects)
     for mesh in meshes:
         keys = mesh.data.shape_keys.key_blocks if mesh.data.shape_keys else []

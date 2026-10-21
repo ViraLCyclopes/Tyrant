@@ -470,7 +470,8 @@ curve(m) × (1 + (s − 1) × f(m)), with the species' growth curve (rebuilt for
 sex's multiplier with the mod's `adult` and `male` or `female` applied, and the game's maturity fade f(m). This is a view
 only: the mesh and bones keep their size, and **Send to Tyrant** exports at the object's own scale. The **Size** box edits
 the four keys when the model goes to a species (a base-game species model or a mod's own species); Send to Tyrant then
-writes them to that species' `sizes/` file (`tyrant blender send --sizes <file>`). For a skin it shows the species' sizes
+writes the keys edited in Blender into that species' `sizes/` file (`tyrant blender send --sizes <file>`), keeping the
+others as the mod has them, so a change made in the app meanwhile stays. For a skin it shows the species' sizes
 read-only, since sizes apply to the whole species. The view keeps the size within 0.05 to 2 as the game does, but does
 not scale the adult back to fit as the framework does.
 

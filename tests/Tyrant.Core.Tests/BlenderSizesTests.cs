@@ -126,6 +126,16 @@ public class BlenderSizesTests
         Assert.Equal(1.2, project.Sizes!.Adult);
         AssertKeys(Keys(SizeMath.Rebuild(Original, 1.2, null)), project.Growth!.Scale);
 
+        // The app changes the adult while Blender changes the baby: Blender sends only its key, and both survive.
+        ModProject.Open(c.Ws, "pack").SetSizes("Carcharodontosaurus", new SizeSettings { Adult = 1.3 });
+        var merged = BlenderService.Send(c.Ws, c.Install, c.Index, c.Species, c.Reader, opened.ProjectFile, glb, null, null,
+            sizes: new SizeSettings { Target = "Carcharodontosaurus", Baby = 0.4 });
+        Assert.True(merged.Ok, string.Join(" | ", merged.Errors));
+        var both = ModProject.Open(c.Ws, "pack").Sizes("Carcharodontosaurus")!;
+        Assert.Equal(1.3, both.Adult);
+        Assert.Equal(0.4, both.Baby);
+        Assert.Equal(new BlenderSizes(1.3, 0.4, null, null, 1.3, 1.35), BlenderProjectFile.Read(opened.ProjectFile).Sizes);
+
         // A skin's sizes are the species': a send to a skin with sizes is refused before anything is written.
         var mod = ModProject.Open(c.Ws, "pack");
         var skin = mod.AddSkin(c.Ws, c.Install, c.Index, c.Reader, c.Species, "Carcharodontosaurus", "Red", "1", new SkinTemplateOptions(true, false, false));
@@ -133,7 +143,7 @@ public class BlenderSizesTests
             new BlenderDestination("pack", "Carcharodontosaurus", skin.Id), null, sizes: new SizeSettings { Target = "Carcharodontosaurus", Adult = 2 });
         Assert.False(refused.Ok);
         Assert.Contains("Sizes apply to the whole species; set them in the app.", refused.Errors);
-        Assert.Equal(1.2, ModProject.Open(c.Ws, "pack").Sizes("Carcharodontosaurus")!.Adult);
+        Assert.Equal(1.3, ModProject.Open(c.Ws, "pack").Sizes("Carcharodontosaurus")!.Adult);
         Assert.Null(ModProject.Open(c.Ws, "pack").Skin(skin.Id).Model);
     }
 }
