@@ -112,6 +112,62 @@ public class SizeMathTests
         Assert.True(max <= limit.SafeMax && max > 19.9f && min >= limit.SafeMin, $"extremes {min}..{max}");
     }
 
+    [Theory]
+    [InlineData(0.3f, 1.5f, 0.05f, 2f)]      // within the game's: the game's
+    [InlineData(0.3f, 2.964f, 0.05f, 3f)]    // up to the next 0.5
+    [InlineData(0.3f, 2.9985f, 0.05f, 3.5f)] // past the 2.997 the game backs off to under 3: the next step
+    [InlineData(0.3f, 1.999f, 0.05f, 2.5f)]  // past the game's own 1.998
+    [InlineData(0.024f, 1f, 0.02f, 2f)]      // down to the next 0.01
+    [InlineData(0.030015f, 1f, 0.02f, 2f)]   // under the 0.03003 the game backs off to over 0.03
+    public void The_limit_follows_the_extremes(float min, float max, float lo, float hi)
+    {
+        var limit = SizeLimit.Fitting(min, max);
+
+        Assert.Equal((lo, hi), (limit.Min, limit.Max));
+        Assert.True(min >= limit.SafeMin && max <= limit.SafeMax, $"{limit} keeps {min}..{max} in its safe band");
+        Assert.False(SizeLimit.PastBounds(min, max));
+    }
+
+    [Theory]
+    [InlineData(0.3f, 19.99f)]   // inside 20, past the 19.98 a cap of exactly 20 would back off to
+    [InlineData(0.3f, 20f)]      // exactly Tyrant's 20
+    [InlineData(0.01001f, 1f)]   // inside 0.01, under the 0.01001 a cap of exactly 0.01 would back off to
+    [InlineData(0.01f, 20f)]     // both of Tyrant's bounds
+    public void Within_tyrants_bounds_the_game_never_backs_off(float min, float max)
+    {
+        var limit = SizeLimit.Fitting(min, max);
+
+        // The outermost step sits just outside 20 and 0.01 (20 / (1 - margin), 0.01 / (1 + margin)), so the band back-off
+        // keeps to still holds them; Check calls nothing within 0.01 to 20 an error.
+        Assert.True(min >= limit.SafeMin && max <= limit.SafeMax, $"{limit} keeps {min}..{max} in its safe band");
+        Assert.True(limit.Max <= 20.03f && limit.Min >= 0.0099f, $"{limit} stays at Tyrant's bounds");
+        Assert.False(SizeLimit.PastBounds(min, max));
+    }
+
+    [Fact]
+    public void Past_tyrants_bounds_the_limit_stops_at_them()
+    {
+        var limit = SizeLimit.Fitting(0.001f, 30f);
+
+        Assert.Equal(SizeLimit.Fitting(0.01f, 20f), limit);
+        Assert.True(SizeLimit.PastBounds(0.001f, 1f));
+        Assert.True(SizeLimit.PastBounds(0.3f, 20.01f));
+    }
+
+    [Fact]
+    public void Extremes_pinned_for_the_size_cards_copy()
+    {
+        // studio/src/lib/mods/editor/sizeMath.test.ts counts the same fixture with its copy of these maths: the numbers must match.
+        (float, float)[] curve = { (0f, 0.25f), (1f, 1f) };
+        var settings = new SizeSettings { Adult = 2, Baby = 0.1, Female = 1.2 };
+        var sexes = new[] { (1.1, 1.0) }.SelectMany(k => { var (m, f) = SizeMath.Sex(k.Item1, k.Item2, settings); return new[] { m, f }; });
+
+        var (min, max) = SizeMath.Extremes(SizeMath.Rebuild(curve, 2, 0.1), sexes, new[] { (0.925, 1.075), (0.5, 3.0), (0.85, 1.15) });
+
+        Assert.Equal(0.17, min, 5);
+        Assert.Equal(7.2, max, 4);
+    }
+
     [Fact]
     public void Safe_limits_keep_their_margin_inside_the_limit()
     {

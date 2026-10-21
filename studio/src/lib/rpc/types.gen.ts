@@ -749,6 +749,7 @@ export interface ModOriginalSizeDto {
   adultLength: number | null;
   babyShare: number;
   skins: ModSkinSizeDto[];
+  curve: number[][];
 }
 
 export interface ModPortraitDto {
@@ -1062,7 +1063,6 @@ export interface ModSetSizesParams {
   female?: number | null;
   nursery?: number[] | null;
   breeding?: number[] | null;
-  limit?: number[] | null;
 }
 
 export interface ModSetSkinFileParams {
@@ -1166,10 +1166,10 @@ export interface ModSizesDto {
   recordEdits: string[];
   nursery: number[] | null;
   breeding: number[] | null;
-  limit: number[] | null;
   gameNursery: number[];
   gameBreeding: number[];
-  gameLimit: number[];
+  name: string;
+  baseName: string;
 }
 
 export interface ModSizesParams {

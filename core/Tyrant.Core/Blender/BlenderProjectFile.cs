@@ -76,7 +76,7 @@ public sealed record BlenderProject(int Version, string Workspace, string Tyrant
     /// <summary>Whether Blender may change the sizes: only when the destination is a species (a skin's sizes are its species').</summary>
     public bool SizesEditable { get; init; }
 
-    /// <summary>The species' size limit [min, max] in the destination mod (its sizes/ file's "limit"), else the game's; the Size box notes when the game caps the animal there.</summary>
+    /// <summary>The destination species' size limit [min, max]: automatic, the one its sizes in the mod need (SpeciesSizes.LimitOf); else the game's.</summary>
     public float[] SizeLimit { get; init; } = [global::Tyrant.Framework.Core.SizeMath.FinalMin, global::Tyrant.Framework.Core.SizeMath.FinalMax];
 
     /// <summary>The species' genetic size ranges in the destination mod, for the Size box's note (null without a data dump).</summary>

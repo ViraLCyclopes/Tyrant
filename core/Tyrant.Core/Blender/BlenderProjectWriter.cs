@@ -134,14 +134,15 @@ public static class BlenderProjectWriter
     /// <summary>
     /// The destination mod's sizes on the project: the values for the Size panel, the sex sizes and the scale curve with them
     /// applied, whether Blender may change them (only for a species destination: a skin's sizes are its species'), and the
-    /// species' size limit and genetic ranges for the Size box's note.
+    /// species' size limit (automatic: the one its sizes need) and genetic ranges for the Size box's note.
     /// </summary>
     internal static BlenderProject WithSizes(BlenderProject project, Workspace ws)
     {
         var d = project.Destination;
         var destination = d is not null && ModProject.Ids(ws).Contains(d.Mod, StringComparer.Ordinal) ? ModProject.Open(ws, d.Mod) : null;
         var set = destination?.Sizes(d!.Species);
-        var limit = SizeLimit.Of(set?.Limit);
+        var facts = destination is null ? null : SpeciesSizes.Facts(ws, destination);
+        var limit = facts?.Original(d!.Species) is { } found && SpeciesSizes.LimitOf(found, set ?? new SizeSettings(), facts) is { } own ? own : SizeLimit.Game;
         project = project with { SizeLimit = [limit.Min, limit.Max] };
         if (project.Sizes is not { } sizes) return project;
         var (incubation, breeding) = SpeciesSizes.GameRanges(ws);

@@ -12,7 +12,7 @@ using UnityEngine;
 namespace Tyrant.Framework
 {
     /// <summary>
-    /// Species sizes (sizes/*.json: each species' sizes, genetic size ranges and size limit), in memory only.
+    /// Species sizes (sizes/*.json: each species' sizes and genetic size ranges; its size limit follows from them), in memory only.
     /// - Species: before the game copies species data into its native tables (prefix on AnimalsGlobal.InitializeNativeData, after
     ///   SpeciesModule registered new species there), each target's growth curve is replaced and its skins' sex sizes multiplied.
     ///   Order: the skins in the list at that moment (vanilla, a new species' own, mod skins already added) are multiplied
@@ -23,12 +23,13 @@ namespace Tyrant.Framework
     /// - Breeding: the same for EmbryoGroup.GetOffspring's read of breedingGeneticSizeMinMax (<see cref="BreedingRange"/>, the
     ///   group's species). The shared fields are never written, so uncustomised eggs (VirtualAnimal.GenerateGeneticSize) and
     ///   species without a range keep the game's.
-    /// - Size limit: when a species has a limit other than the game's 0.05 to 2, a transpiler swaps the cap constants of
+    /// - Size limit: automatic. Each species gets the limit its sizes need (<see cref="SizePlan"/>, <see cref="SizeLimit.Fitting"/>,
+    ///   up to Tyrant's 20). The first time a species needs more than the game's 0.05 to 2, a transpiler swaps the cap constants of
     ///   AnimalNative.CurrentScale's getter for a read of the animal's species' limit (<see cref="ScaleLimit"/>, by native species
     ///   index, filled at each InitializeNativeData), all or none (<see cref="ScaleCap"/>). The game's error log stays: with the
     ///   constants swapped it fires only outside the species' limit and names it, so a scale nothing should reach (a broken
     ///   curve, another mod) is still reported, while sizes Tyrant backed off never log.
-    /// With no sizes, ranges or limits nothing is patched.
+    /// With no sizes or ranges nothing is patched, and while every species' limit is the game's the cap is left alone.
     /// </summary>
     internal static class SizesModule
     {
@@ -43,13 +44,14 @@ namespace Tyrant.Framework
         private static MethodInfo? _nativeSpecies, _speciesIndex;
         private static bool _limitsLifted;
         private static bool _limitSwapped;
+        private static HarmonyLib.Harmony? _harmony;
 
         public static void Start(IReadOnlyList<LoadedMod> mods, HarmonyLib.Harmony harmony)
         {
             _table = SizeTable.Build(mods, out var messages);
             foreach (var message in messages) FrameworkMod.Log.Warning(message);
             if (!_table.HasAny) return;
-            if (_table.SetsLimit) PatchLimit(harmony);
+            _harmony = harmony; // the cap is lifted later, only when a species' sizes need it (LiftLimits)
             if (_table.SetsSlider) PatchSlider(harmony);
             if (_table.SetsBreeding) PatchBreeding(harmony);
             var native = AccessTools.Method(AccessTools.TypeByName("PrehistoricKingdom.AnimalsV2.AI.AnimalsGlobal"), "InitializeNativeData");
@@ -78,12 +80,12 @@ namespace Tyrant.Framework
                     _off = true;
                     return;
                 }
-                // InitializeNativeData numbers the species by their place in this list (AnimalData.NativeSpeciesID).
-                if (_limitsLifted) ScaleLimit.Table = _table.Limits(list.Cast<object>().Select(d => d == null ? null : Get(d, "speciesID") as string).ToList());
                 if (_off) return;
                 _plan ??= Begin();
                 if (_plan == null) return;
                 var pass = _plan.Next(Species(list));
+                // InitializeNativeData numbers the species by their place in this list (AnimalData.NativeSpeciesID).
+                if (_limitsLifted) ScaleLimit.Table = _plan.Limits(list.Cast<object>().Select(d => d == null ? null : Get(d, "speciesID") as string).ToList());
                 foreach (var (data, id, keys) in pass.Curves)
                     try
                     {
@@ -117,7 +119,7 @@ namespace Tyrant.Framework
                     ?? throw new InvalidOperationException("the game's animal parameters are not loaded");
                 var incubation = Range((Vector2)IncubationField(globals.GetType()).GetValue(globals));
                 var breeding = Range((Vector2)BreedingField(globals.GetType()).GetValue(globals));
-                return new SizePlan(_table, incubation, breeding, _limitsLifted);
+                return new SizePlan(_table, incubation, breeding, LiftLimits);
             }
             catch (Exception ex)
             {
@@ -263,6 +265,13 @@ namespace Tyrant.Framework
 
         // ---- Size limit: the game's cap on the final scale ----
 
+        /// <summary>The plan asks once, when the first species needs a limit wider than the game's: lifts the cap and says whether it worked.</summary>
+        private static bool LiftLimits()
+        {
+            if (_harmony != null) PatchLimit(_harmony);
+            return _limitsLifted;
+        }
+
         private static void PatchLimit(HarmonyLib.Harmony harmony)
         {
             try
@@ -285,8 +294,7 @@ namespace Tyrant.Framework
                     throw new InvalidOperationException("AnimalNative.CurrentScale was changed by another patch; its cap was left alone");
                 }
                 _limitsLifted = true;
-                var limits = _table.All.Where(s => !SizeLimit.Of(s.Limit).IsGame).OrderBy(s => s.Target, StringComparer.Ordinal).Select(s => $"{s.Target} {SizeLimit.Of(s.Limit)}");
-                FrameworkMod.Log.Msg($"Animal size limits: {string.Join(", ", limits)} (the game's, {SizeLimit.Game}, for the other species).");
+                FrameworkMod.Log.Msg($"Animal size limits follow their species' sizes (the game's, {SizeLimit.Game}, for the other species).");
             }
             catch (Exception ex)
             {
@@ -348,7 +356,7 @@ namespace Tyrant.Framework
 
     /// <summary>
     /// The species' size limits the patched AnimalNative.CurrentScale reads: [min0, max0, min1, max1, ...] by native species index
-    /// (<see cref="SizeTable.Limits"/>). Its own class with no static initialiser, so the reads stay plain static field loads on
+    /// (<see cref="SizePlan.Limits"/>). Its own class with no static initialiser, so the reads stay plain static field loads on
     /// that hot path (no type-initialisation check). The array is replaced whole, never changed in place; before the first one
     /// (and for an index past it) every species has the game's limit.
     /// </summary>
