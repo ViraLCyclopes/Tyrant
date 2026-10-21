@@ -85,6 +85,8 @@ public sealed partial class ModProject
             Icon = old.Icon, PaleopediaPicture = old.PaleopediaPicture,
             Prefab = old.Prefab,
             StartingSkin = old.StartingSkin, StartingSkinName = old.StartingSkinName, Swatch = old.Swatch,
+            Portraits = new Dictionary<string, string>(old.Portraits, StringComparer.Ordinal),
+            Texts = old.Texts.ToList(),
         };
         try { EnsureLocalizationFiles(Manifest.Species[index]); SaveSpecies(); }
         catch { Manifest.Species[index] = old; throw; }

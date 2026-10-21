@@ -164,6 +164,60 @@ public class ModSpeciesTests
     }
 
     [Fact]
+    public void Saving_the_species_form_keeps_its_species_portraits()
+    {
+        using var game = new FakeGame();
+        var ws = Workspace.Create(Path.Combine(game.LibraryRoot, "workspace"), new GameInstall(game.Root, null));
+        var mod = ModProject.Create(ws, "animal-pack", null, null);
+        var entry = mod.AddSpecies([Template()], "new-animal", "Allosaurus Anax", "Animal", "Example", "animal");
+        var png = Path.Combine(ws.Dir, "portrait.png");
+        File.WriteAllBytes(png, Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jWWQAAAAASUVORK5CYII="));
+        var portraits = mod.SetSpeciesPortraits(entry.Id, new Dictionary<string, PortraitSource?> { ["adultMale"] = new(Png: png) });
+
+        mod.SetSpecies(entry.Id, "New name", "Example", "animal", null, new Dictionary<string, double>());
+
+        Assert.Equal(portraits, Assert.Single(AnimalDatabaseFile.Read(mod.DatabasePath)).Portraits);
+        Assert.Equal(portraits, mod.Manifest.Species.Single().Portraits);
+    }
+
+    [Fact]
+    public void Saving_the_species_form_keeps_every_field_the_form_does_not_edit()
+    {
+        using var game = new FakeGame();
+        var ws = Workspace.Create(Path.Combine(game.LibraryRoot, "workspace"), new GameInstall(game.Root, null));
+        var mod = ModProject.Create(ws, "animal-pack", null, null);
+        var entry = mod.AddSpecies([Template()], "new-animal", "Allosaurus Anax", "Animal", "Example", "animal");
+        // Every field the form does not edit, set as an SQL editor or the other species commands would.
+        entry.Icon = "icons/new-animal.png";
+        entry.PaleopediaPicture = "icons/new-animal-paleopedia.png";
+        entry.Prefab = new SpeciesPrefab { Bundle = "prefabs/animal.bundle", Asset = "assets/animals/animal.prefab" };
+        entry.StartingSkin = 1;
+        entry.StartingSkinName = "Ghost";
+        entry.Swatch = "icons/new-animal.swatch.png";
+        entry.Portraits["adultMale"] = "portraits/new-animal/adultMale.png";
+        AnimalDatabaseFile.Save(mod.DatabasePath, mod.Manifest.Species);
+        mod = ModProject.Open(ws, mod.Id);
+        entry = mod.Manifest.Species.Single();
+        entry.Texts.Add(new AnimalText { Language = "English", Key = "name", Text = "Animal" }); // read from the language files
+        var formFields = new HashSet<string> { "Name", "Genus", "Epithet", "Cost", "Stats", "Fields", "Localization" };
+        var kept = typeof(SpeciesEntry).GetProperties().Where(p => !formFields.Contains(p.Name)).ToList();
+        string Json(SpeciesEntry e, System.Reflection.PropertyInfo p) => System.Text.Json.JsonSerializer.Serialize(p.GetValue(e));
+        var before = kept.ToDictionary(p => p.Name, p => Json(entry, p));
+
+        mod.SetSpecies(entry.Id, "New name", "Example", "animal", 2000, new Dictionary<string, double>());
+
+        var inMemory = mod.Manifest.Species.Single();
+        var saved = Assert.Single(AnimalDatabaseFile.Read(mod.DatabasePath));
+        Assert.Equal("New name", inMemory.Name);
+        foreach (var property in kept)
+        {
+            Assert.True(before[property.Name] == Json(inMemory, property), property.Name + " was lost in memory");
+            if (property.Name != "Texts") // texts are read from the language files, not animals.db
+                Assert.True(before[property.Name] == Json(saved, property), property.Name + " was lost in animals.db");
+        }
+    }
+
+    [Fact]
     public void Paleopedia_picture_must_be_a_png_and_the_species_must_exist()
     {
         using var game = new FakeGame();
