@@ -6,7 +6,7 @@ name = "Tyrant"
 tagline = "Open Prehistoric Kingdom models from Tyrant and send them back"
 maintainer = "ViraLCyclopes"
 type = "add-on"
-blender_version_min = "5.0.0"
+blender_version_min = "5.2.0"
 license = ["SPDX:GPL-3.0-or-later"]
 website = "https://github.com/ViraLCyclopes/Tyrant"
 

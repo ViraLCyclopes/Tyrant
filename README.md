@@ -7,6 +7,10 @@ make texture and skin mods (new skins appear in the Nursery); replace an animal'
 replace game sounds, for everyone or for one species; give skins, vanilla skins or whole species an iridescent sheen, fur masks and other material settings, and edit them live in the game with Tyrant's in-game editor; and share mods as zips. Mods never replace or patch game files: Tyrant adds them at runtime and **Uninstall from
 game** puts the game back to vanilla. Nothing from the game is redistributed; everything is read from your own install.
 
+## Community
+
+Questions, mods to share or bugs to report? Join the **[Viral's Discord](https://discord.gg/nB9JZm7uPE)**.
+
 ## Download
 
 Get the latest **Setup** from [GitHub Releases](https://github.com/ViraLCyclopes/Tyrant/releases) and run it (no admin
@@ -30,7 +34,7 @@ Step by step, for players: [Installing mods made with Tyrant](docs/installing-mo
 
 ## Blender
 
-Tyrant works with **Blender 5.0 or newer** through its own Blender add-on.
+Tyrant works with **Blender 5.2 or newer** through its own Blender add-on.
 
 1. **Install the add-on:** Workspace tab → **Blender** card → **Install add-on** (Tyrant finds Blender from Steam or
    Program Files; **Choose blender.exe…** if it doesn't). By hand: drag `Tyrant-Blender-Addon-<version>.zip` (from the

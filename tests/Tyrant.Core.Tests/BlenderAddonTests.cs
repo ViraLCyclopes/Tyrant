@@ -55,7 +55,7 @@ public class BlenderAddonTests
         var version = System.Text.RegularExpressions.Regex.Match(props, "<Version>([^<]+)</Version>").Groups[1].Value;
         var manifest = File.ReadAllText(Path.Combine(root, "tools", "blender", "tyrant_blender", "blender_manifest.toml"));
         Assert.Equal(version, BlenderAddon.VersionOf(manifest));
-        Assert.Contains("blender_version_min = \"5.0.0\"", manifest);
+        Assert.Contains("blender_version_min = \"5.2.0\"", manifest);
     }
 
     [Fact]
@@ -96,8 +96,17 @@ public class BlenderAddonTests
     {
         var ex = Assert.Throws<Tyrant.Core.Errors.TyrantException>(() =>
             BlenderAddon.Install(new FakeBlenderProcess(), new BlenderInstall("b.exe", new Version(4, 5)), "x.zip"));
-        Assert.Contains("Blender 5.0 or newer (found 4.5)", ex.Message);
+        Assert.Contains("Blender 5.2 or newer (found 4.5)", ex.Message);
     }
+
+    [Theory]
+    [InlineData(5, 0, false)]
+    [InlineData(5, 1, false)]
+    [InlineData(5, 2, true)]
+    [InlineData(5, 3, true)]
+    [InlineData(6, 0, true)]
+    public void Blender_52_or_newer_is_required(int major, int minor, bool supported) =>
+        Assert.Equal(supported, new BlenderInstall("b.exe", new Version(major, minor)).Supported);
 
     [Fact]
     public void Same_files_compares_the_installed_copy_with_the_zip_ignoring_pycache()
