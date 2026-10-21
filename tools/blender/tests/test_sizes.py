@@ -24,6 +24,8 @@ def allosaurus(editable=True, skin=None, sizes=None):
     data["sizes"] = dict({"adult": None, "baby": None, "male": None, "female": None, "maleOriginal": 1.08, "femaleOriginal": 1.0},
                          **(sizes or {}))
     data["sizesEditable"] = editable
+    data["sizeSkins"] = [[1.08, 1.0]]  # the species' every skin, as the Size box's note counts them
+    data["geneticRanges"] = {"incubation": [0.925, 1.075], "nursery": None, "breeding": [0.85, 1.15]}  # the game's
     data["destination"] = {"mod": "m", "species": "Carcharodontosaurus", "skin": skin}
     data["tyrant"] = os.path.join(tempfile.gettempdir(), "tyrant.exe")  # an absolute path: Send only runs a tyrant.exe on this PC
     project.save(path, data)
@@ -113,7 +115,7 @@ class SizeTests(unittest.TestCase):
         self.assertScale(arm, curve * (1 + 0.08 * (0.2 + 0.8 * (1 - 0.75 ** 2))))
 
     def test_size_display_not_capped_by_project_limit(self):
-        # The view shows the size you set; the note says where the game would cap it (Send raises the mod's limit to fit).
+        # The view shows the size you set; the note says where the game would cap it (Send raises the species' limit to fit).
         path = allosaurus(sizes={"adult": 4.0})  # an adult male of 1.08 x 4
         data = project.load(path)
         data["sizeLimit"] = [0.05, 2.0]
@@ -133,20 +135,45 @@ class SizeTests(unittest.TestCase):
         data["sizeLimit"] = [0.05, 2.0]
         project.save(path, data)
         arm = importer.import_project(path)
-        note = "In game this is capped at 2×. Send to Tyrant will raise the mod's Size limit to fit."
+        # Counted as Check and Send count it, the game's genetic ranges included: 1.08 x 4 x 1.15 = 4.97, so Send raises the
+        # limit to 5 (BlenderSizesTests.Blender_note_and_send_agree_on_the_add_ons_fixture pins Tyrant's side of this number).
+        note = "In game this is capped at 2×. Send to Tyrant will raise this species' Size limit to 5×."
         self.assertEqual(growth.limit_note(arm, data), note)
         self.assertIn(("say", (note,), {}), drawn_sizes(arm, data))
 
         data["sizeLimit"] = [0.05, 3.5]
-        self.assertEqual(growth.limit_note(arm, data), "In game this is capped at 3.5×. Send to Tyrant will raise the mod's Size limit to fit.")
+        self.assertEqual(growth.limit_note(arm, data), "In game this is capped at 3.5×. Send to Tyrant will raise this species' Size limit to 5×.")
 
         data["sizeLimit"] = [0.05, 20.0]  # within the limit: no note
         self.assertIsNone(growth.limit_note(arm, data))
         self.assertFalse([d for d in drawn_sizes(arm, data) if d[0] == "say" and "capped" in d[1][0]])
 
         data["sizeLimit"] = [0.05, 2.0]
-        arm.tyrant_size_adult = 1.0  # 1.08 at most: within the game's 2
+        arm.tyrant_size_adult = 1.0  # 1.08 x 1.15 = 1.24 at most: within the game's 2
         self.assertIsNone(growth.limit_note(arm, data))
+
+    def test_note_counts_the_species_ranges_and_every_skin(self):
+        path = allosaurus(sizes={"adult": 4.0})
+        data = project.load(path)
+        data["sizeLimit"] = [0.05, 2.0]
+        data["geneticRanges"] = {"incubation": [0.925, 1.075], "nursery": [0.5, 3.0], "breeding": [0.85, 1.15]}
+        project.save(path, data)
+        arm = importer.import_project(path)
+        # The species' own Nursery range: 1.08 x 4 x 3 = 12.96, raised to 13.
+        self.assertEqual(growth.limit_note(arm, data), "In game this is capped at 2×. Send to Tyrant will raise this species' Size limit to 13×.")
+
+        data["geneticRanges"] = {"incubation": [0.925, 1.075], "nursery": None, "breeding": [0.85, 1.15]}
+        data["sizeSkins"] = [[1.08, 1.0], [1.5, 1.2]]  # another skin is bigger: 1.5 x 4 x 1.15 = 6.9
+        self.assertEqual(growth.limit_note(arm, data), "In game this is capped at 2×. Send to Tyrant will raise this species' Size limit to 7×.")
+
+    def test_note_at_the_highest_limit_promises_no_raise(self):
+        path = allosaurus(sizes={"adult": 20.0})
+        data = project.load(path)
+        data["sizeLimit"] = [0.05, 20.0]
+        project.save(path, data)
+        arm = importer.import_project(path)
+        # 1.08 x 20 x 1.15 is past 20, the highest limit: Send cannot raise it, so the note does not say it will.
+        self.assertEqual(growth.limit_note(arm, data), "In game this is capped at 20×.")
 
     def test_sizes_go_to_a_species_chosen_on_send(self):
         # Sizes edited for a destination that is gone (Send cleared it) still go to the species model chosen next.

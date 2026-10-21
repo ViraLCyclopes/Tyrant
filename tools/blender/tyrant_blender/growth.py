@@ -7,6 +7,7 @@ growth data owns, never rotations, so poses and IK survive it. It also shows the
 object as the game does, S(m, s, 1) = curve(m) · (1 + (s − 1) · fade(m)); that scale is display only and never sent.
 """
 import json
+import math
 import os
 
 from mathutils import Matrix, Quaternion, Vector
@@ -19,8 +20,10 @@ SCALE_BASE = "tyrant_scale_base"  # armature: the object's own scale, without th
 SCALE_SHOWN = "tyrant_scale_shown"  # the size last shown on top of it
 EDITS = "tyrant_size_edits"  # the Size panel's changes not sent yet (JSON: adult, baby, male, female)
 SIZE_KEYS = ("adult", "baby", "male", "female")
-FINAL_MIN, FINAL_MAX = 0.05, 2.0  # the game clamps the final scale to this; a mod's size limit widens it (sizeLimit)
-SHOWN_MIN, SHOWN_MAX = 0.01, 20.0  # the widest a size limit can be: the view shows any size within these, never the mod's cap
+FINAL_MIN, FINAL_MAX = 0.05, 2.0  # the game clamps the final scale to this; a species' size limit widens it (sizeLimit)
+SHOWN_MIN, SHOWN_MAX = 0.01, 20.0  # the widest a size limit can be: the view shows any size within these, never the species' cap
+# The game's genetic size ranges when the project has none (SpeciesSizes.DefaultIncubation and DefaultBreeding).
+GAME_INCUBATION, GAME_BREEDING = (0.925, 1.075), (0.85, 1.15)
 
 
 def sample(table, t):
@@ -210,8 +213,8 @@ def sex_sizes(armature, data):
 
 
 def size_limit(data):
-    """(min, max) the game clamps the final scale to: the project's size limit (the destination mod's), else the game's own.
-    The view does not keep to it; the Size box notes when the game would cap the animal there."""
+    """(min, max) the game clamps the final scale to: the project's size limit (the species' in the destination mod), else the
+    game's own. The view does not keep to it; the Size box notes when the game would cap the animal there."""
     limit = (data or {}).get("sizeLimit")
     if isinstance(limit, (list, tuple)) and len(limit) == 2:
         return float(limit[0]), float(limit[1])
@@ -239,7 +242,7 @@ def _scale(curve, s, maturity):
 
 def size_factor(armature, data, maturity):
     """The animal's size at this maturity (the Growth slider's value) as the game scales it, S(m, s, 1) for the sex shown;
-    None without a scale curve. It shows the size set, within Tyrant's own bounds only: the mod's size limit would cap it in
+    None without a scale curve. It shows the size set, within Tyrant's own bounds only: the species' size limit would cap it in
     game, which the Size box's note says (limit_note)."""
     curve = _shown_curve(armature, data)
     if curve is None:
@@ -249,25 +252,60 @@ def size_factor(armature, data, maturity):
     return min(max(_scale(curve, s, maturity), SHOWN_MIN), SHOWN_MAX)
 
 
+def genetic_sizes(data):
+    """The genetic sizes the extremes count: the ends of the species' ranges in effect (SizePlan.InEffect), random eggs',
+    its Nursery slider's (its own, else the random eggs') and its breeding range (its own, else the game's)."""
+    ranges = (data or {}).get("geneticRanges") or {}
+    incubation = tuple(ranges.get("incubation") or GAME_INCUBATION)
+    nursery = tuple(ranges.get("nursery") or incubation)
+    breeding = tuple(ranges.get("breeding") or GAME_BREEDING)
+    return [g for r in (incubation, nursery, breeding) for g in r]
+
+
 def extremes(armature, data):
-    """(min, max): the smallest and largest scale the animal shown reaches over maturity 0–1 (101 samples) for both sexes,
-    as Check counts them (SizeMath.Extremes) with the genetic size at 1; None without a scale curve."""
-    curve = _shown_curve(armature, data)
+    """(min, max): the smallest and largest scale the species reaches with the sizes shown, as Check and Send to Tyrant count
+    it (SpeciesSizes.Extremes): its curve rebuilt for them, every skin's sexes and the genetic ranges in effect, over maturity
+    0-1 (101 samples); None without a scale curve."""
+    growth = (data or {}).get("growth") or {}
+    sizes = sizes_of(armature, data)
+    original = growth.get("originalScale")
+    if original and sizes is not None:
+        curve = rebuild(original, sizes["adult"] or 1.0, sizes["baby"])
+    else:
+        curve = _shown_curve(armature, data)
     if curve is None:
         return None
-    scales = [_scale(curve, s, i / 100) for i in range(101) for s in sex_sizes(armature, data)]
+    if sizes is None:
+        sexes = sex_sizes(armature, data)
+    else:
+        own = data["sizes"]
+        skins = data.get("sizeSkins") or [[own["maleOriginal"], own["femaleOriginal"]]]
+        adult = sizes["adult"] or 1.0
+        sexes = [size * adult * (sizes[sex] or 1.0) for male, female in skins for sex, size in (("male", male), ("female", female))]
+    genetics = genetic_sizes(data)
+    scales = [evaluate(curve, m) * (1 + (s * g - 1) * fade(m)) for m in (i / 100 for i in range(101)) for s in sexes for g in genetics]
     return min(scales), max(scales)
 
 
+def raised_limit(found_max, current_max):
+    """The maximum Send to Tyrant raises the species' size limit to (BlenderService.FitSizeLimit): the extremes' max rounded up
+    to the next 0.5, at most 20, never below the limit now."""
+    return max(current_max, min(SHOWN_MAX, math.ceil(found_max * 2.0) / 2))
+
+
 def limit_note(armature, data):
-    """The Size box's note when the game would cap the animal shown at the project's size limit; None within it."""
+    """The Size box's note when the game would cap the species at its size limit, naming the limit Send to Tyrant will set
+    (none when it is already the highest); None within it."""
     found = extremes(armature, data)
     if found is None:
         return None
     high = size_limit(data)[1]
     if found[1] <= high:
         return None
-    return f"In game this is capped at {high:g}×. Send to Tyrant will raise the mod's Size limit to fit."
+    raised = raised_limit(found[1], high)
+    if raised <= high:
+        return f"In game this is capped at {high:g}×."
+    return f"In game this is capped at {high:g}×. Send to Tyrant will raise this species' Size limit to {raised:g}×."
 
 
 def own_scale(armature):
