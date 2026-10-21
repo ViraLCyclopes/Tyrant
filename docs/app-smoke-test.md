@@ -355,9 +355,22 @@ Needs the game and a Tyrant Framework installed from this build. Steps marked **
      it as **Vanilla Looks**, and it loads last; its look shows on a second animal and after a restart. With that folder's
      `mod.json` broken, a save into it says Vanilla Looks is turned off or broken instead of "Saved".
 144. **(game)** Save into a mod skin made by someone else: the change lands in that mod's folder in the game, not the workspace.
-145. **(game)** **Export mask PNG**, edit the PNG in an image editor, press **Reload images**: the animals update. Then click
-     another animal's **T** (or close the window) without **Save**: the **Discard changes?** prompt appears, and its **Discard**
-     deletes the staged file.
+145. **(game)** On a T. rex with a vanilla skin, **Whole skin**, tab **Iridescence**, **Mask** **Everywhere**: **Export mask PNG**
+     says *Exported Tyrannosaurus <skin> iridescence mask.png to UserData/Tyrant/Masks. Edit it, then Reload images.*; the
+     file is all white, the size of the skin's map, and **Mask** shows **PNG** on it. **Open folder** opens Masks in File Explorer.
+     Paint part of the PNG black, press **Reload images**: the animals update. Export again: the new file ends in ` 2`, the
+     first is unchanged. **Save**: the look's folder in `vanilla-looks` has `iridescence-mask.png` with your edit, and the
+     files in Masks stay.
+     - **Shimmer colours** **Colours**: **Export colours PNG** writes `… colours.png` (a 256 × 8 strip) and shimmer colours
+       switch to **PNG** on it. On **Game's** it says the game's colours stay the game's. On the Fur tab the button is gone.
+     - Export, then click another animal's **T** (or close the window) without **Save**: **Discard changes?** appears; after
+       **Discard** the saved look and its `iridescence-mask.png` are unchanged, and the export is still in Masks.
+     - On **This animal**, an animal named *Rexy*: the export is named `Tyrannosaurus <skin> Rexy … .png`, and after **Save**
+       `Looks/<save>.json` names it as `Masks/…`.
+     - With no PNG anywhere, **PNG** says *No PNG yet: put one in Masks (Open folder), then Reload images.* in full.
+     - The round **i** beside **Variation between animals**, **Mask** and the others opens its explanation under the row; a
+       second **i** closes the first; it stays open across a redraw. In the Nursery, **Variation between animals** can be
+       changed on **Whole skin**.
 146. **(game)** Change a value, then click the **T** in another animal's panel: it asks about the unsaved change (keep or
      discard). Selecting another animal without its **T** changes nothing. Same prompt on closing the window.
 147. **(game)** The vivarium species check: a pooled vivarium animal with a vanilla skin looks vanilla (no sheen from another
@@ -410,7 +423,7 @@ Needs the game and a Tyrant Framework installed from this build. Steps marked **
        **Save**: a placed Allosaurus has the fur.
      - **Reset** after an **Apply** goes back to the saved look. **Export mask PNG** with a species mask says it stays a reference.
      - Fur tab on a furless species with **Grow fur** on and no fur mask: **Export mask PNG** writes an all-white
-       `fur-mask.png` the size of the animal's diffuse map; the fur stays (paint black where it should not grow).
+       `… fur mask.png` into Masks, the size of the animal's diffuse map; the fur stays (paint black where it should not grow).
 154. **(app)** Material card of a skin: **Start from a species…** → Microraptor fills **Colours** and **Where** with **Species**
      (Microraptor), the shaping and strength; the 3D view shimmers with Microraptor's ramp. **Check** is clean; edit the
      species' id in `materials.json` to `Microraptorr`: **Check** reports it is not in the game data. In the **Fur** group,

@@ -78,13 +78,15 @@ namespace Tyrant.Framework
             SliderRow(perVariant && variant != "normal" ? $"Strength ({variant})" : "Strength", strength, 0f, 1f, 0f, 1f, true,
                 v => LookEditing.SetStrength(draft, shown, variant, v));
             var variation = own?.Variation ?? below?.Variation ?? (shown != null ? IridescenceSettings.DefaultVariation : 0f);
-            SliderRow(_scope == LookScope.Animal ? "Variation (skin, species)" : "Variation", variation, 0f, 1f, 0f, 1f, _scope != LookScope.Animal,
+            SliderRow("Variation between animals", variation, 0f, 1f, 0f, 1f, _scope != LookScope.Animal,
                 v => draft.SetVariation(v));
+            Info("variation");
 
             // Shimmer colours: the draft's own choice, else the one the animal wears (marked "from below").
             var ramp = own?.Ramp ?? below?.Ramp;
             var rampKind = LookEditing.RampKindOf(ramp);
             Heading("Shimmer colours" + (own?.Ramp == null && below?.Ramp != null ? "  <size=10>(from a lower layer)</size>" : ""));
+            Info("colours");
             var ramps = new List<(string, bool, bool, Action)>
             {
                 Option("Thin film", rampKind == RampKind.ThinFilm, true, () => SetFilm((float)(ramp?.ThinFilm?.Thickness ?? LookEditing.DefaultThickness), ramp?.ThinFilm?.Index, rebuild: true)),
@@ -116,6 +118,7 @@ namespace Tyrant.Framework
             var mask = own?.Mask ?? below?.Mask;
             var maskKind = LookEditing.MaskKindOf(mask);
             Heading("Mask" + (own?.Mask == null && below?.Mask != null ? "  <size=10>(from a lower layer)</size>" : ""));
+            Info("mask");
             Choices(null, LookEditing.MaskKinds(_scope).Select(kind => kind switch
             {
                 MaskKind.Everywhere => Option("Everywhere", maskKind == kind, true, () => SetMask(new MaskSource { Everywhere = true })),
@@ -146,6 +149,7 @@ namespace Tyrant.Framework
                 _shapingOpen = !_shapingOpen;
                 Rebuild();
             }) });
+            Info("shaping");
             if (!_shapingOpen) return;
             var scale = own?.Scale ?? below?.Scale ?? MaterialFloat("_IridescenceScale");
             var power = own?.Power ?? below?.Power ?? MaterialFloat("_IridescencePower");
@@ -176,7 +180,7 @@ namespace Tyrant.Framework
             var files = Pngs(current);
             if (files.Count == 0)
             {
-                _message = "No PNG yet: put one in UserData/Tyrant/Masks" + (TargetFolder(create: false) is string folder ? " or " + folder : "") + ", then Reload images.";
+                _message = "No PNG yet: put one in Masks (Open folder), then Reload images.";
                 Footer();
                 return;
             }
@@ -324,7 +328,8 @@ namespace Tyrant.Framework
                 Option("On", growing, true, () => SetGrow(true)),
                 Option("Off", !growing, true, () => SetGrow(false)),
             });
-            NumberRow("_Droopage", "Droop");
+            Info("grow");
+            if (NumberRow("_Droopage", "Droop")) Info("droop");
             var droop = Vector("_DroopDirection");
             var range = MaterialProperties.Find("_DroopDirection");
             var names = new[] { "Droop X", "Droop Y", "Droop Z" };
@@ -337,8 +342,8 @@ namespace Tyrant.Framework
                     LookEditing.SetComponent(draft, "_DroopDirection", new[] { now.x, now.y, now.z }, component, v);
                 });
             }
-            NumberRow("_Length", "Length");
-            NumberRow("_FurWindStrength", "Wind strength");
+            if (NumberRow("_Length", "Length")) Info("length");
+            if (NumberRow("_FurWindStrength", "Wind strength")) Info("wind");
             NumberRow("_FurWindSpeed", "Wind speed");
             NumberRow("_FurWindScale", "Wind scale");
 
@@ -355,7 +360,7 @@ namespace Tyrant.Framework
                 Option("PNG", mask?.File != null, true, () => PickFirst(mask?.File, file => draft.SetFurMask(new MaskSource { File = file }, infant: false))),
             });
             if (mask?.File != null) Cycler("Mask", Pngs(mask.File), mask.File, file => draft.SetFurMask(new MaskSource { File = file }, infant: false));
-            Note("Export mask PNG writes the fur mask the animal shows now as fur-mask.png.");
+            Note("Export mask PNG writes the fur mask the animal shows now into UserData/Tyrant/Masks.");
         }
 
         private static void SetGrow(bool on)
@@ -372,13 +377,15 @@ namespace Tyrant.Framework
                 ? " Grown fur needs tessellated fur in the game's graphics settings."
                 : "";
 
-        private static void NumberRow(string key, string label)
+        /// <summary>A slider row for a number setting; false when the setting is unknown (no row).</summary>
+        private static bool NumberRow(string key, string label)
         {
             var property = MaterialProperties.Find(key);
-            if (property == null) return;
+            if (property == null) return false;
             var draft = _draft!;
             var value = Setting(key) is MaterialValue v && v.Kind == MaterialValueKind.Number ? v.Number : MaterialFloat(key);
             SliderRow(label, value, property.Min, property.Max, property.Min, property.Max, true, n => draft.SetSetting(key, MaterialValue.OfNumber(n)));
+            return true;
         }
 
         /// <summary>The draft's value for a setting, else the one the animal wears now.</summary>
@@ -548,15 +555,6 @@ namespace Tyrant.Framework
 
         /// <summary>A file as the cycler shows it: "Masks/x.png" for the player's own images, else its name.</summary>
         private static string Shown(string file) =>
-            Staged.IsStaged(file) ? StagedName(file) + " (not saved)"
-            : ModPaths.IsInside(file, MasksDirectory) ? "Masks/" + Path.GetFileName(file) : Path.GetFileName(file);
-
-        /// <summary>A staged file's fixed name ("&lt;id&gt;-iridescence-mask.png" is iridescence-mask.png).</summary>
-        private static string StagedName(string file)
-        {
-            var name = Path.GetFileName(file);
-            var dash = name.IndexOf('-');
-            return dash >= 0 ? name.Substring(dash + 1) : name;
-        }
+            ModPaths.IsInside(file, MasksDirectory) ? "Masks/" + Path.GetFileName(file) : Path.GetFileName(file);
     }
 }

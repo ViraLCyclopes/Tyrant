@@ -25,7 +25,7 @@ namespace Tyrant.Framework.Core
         public const float MaxThickness = 2000;
         public const float MinShaping = -10, MaxShaping = 10;
 
-        /// <summary>The file names Export mask PNG writes into the save target's folder.</summary>
+        /// <summary>The file names a save into a mod gives exported masks in the owner's folder (<see cref="MaskExports.FixedName"/>).</summary>
         public const string IridescenceMaskFile = "iridescence-mask.png";
         public const string FurMaskFile = "fur-mask.png";
 
@@ -280,85 +280,6 @@ namespace Tyrant.Framework.Core
         {
             var root = Path.GetFullPath(baseDir).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
             return Path.GetFullPath(file).Substring(root.Length).Replace('\\', '/');
-        }
-    }
-
-    /// <summary>
-    /// Exported masks waiting for Save: each is written under a pending folder (outside every mod, so no picker lists it and no
-    /// share carries it) and the draft points there for the preview. Save moves the ones the saved block uses over their fixed
-    /// names (iridescence-mask.png, fur-mask.png); Discard and Reset delete them, so a saved look never changes without Save.
-    /// </summary>
-    public sealed class StagedFiles
-    {
-        private readonly Dictionary<string, string> _final = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase); // staged -> fixed name
-
-        public StagedFiles(string folder) => Folder = folder;
-
-        public string Folder { get; }
-
-        public bool IsEmpty => _final.Count == 0;
-
-        public bool IsStaged(string path) => _final.ContainsKey(LookFiles.Full(path));
-
-        /// <summary>A new pending path for a file that becomes <paramref name="finalPath"/> on commit; one staged earlier for it is deleted.</summary>
-        public string Stage(string finalPath)
-        {
-            var target = LookFiles.Full(finalPath);
-            foreach (var old in _final.Where(p => string.Equals(p.Value, target, StringComparison.OrdinalIgnoreCase)).Select(p => p.Key).ToList())
-            {
-                Delete(old);
-                _final.Remove(old);
-            }
-            Directory.CreateDirectory(Folder);
-            var path = LookFiles.Full(Path.Combine(Folder, Guid.NewGuid().ToString("N") + "-" + Path.GetFileName(finalPath)));
-            _final[path] = target;
-            return path;
-        }
-
-        /// <summary>A copy of the block naming the fixed files instead of the staged ones (nothing is moved). The input is not changed.</summary>
-        public MaterialOverride Final(MaterialOverride block) =>
-            MaterialTable.WithPaths(block, file => _final.TryGetValue(LookFiles.Full(file), out var target) ? target : file);
-
-        /// <summary>Moves each staged file the block uses over its fixed name (replacing it), then deletes the rest.</summary>
-        public void Commit(MaterialOverride block)
-        {
-            var used = new HashSet<string>(LookFiles.Files(block).Select(LookFiles.Full), StringComparer.OrdinalIgnoreCase);
-            foreach (var pair in _final.Where(p => used.Contains(p.Key) && File.Exists(p.Key)))
-            {
-                var directory = Path.GetDirectoryName(pair.Value);
-                if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
-                var temp = pair.Value + ".tmp";
-                File.Copy(pair.Key, temp, true);
-                if (File.Exists(pair.Value)) File.Replace(temp, pair.Value, null);
-                else File.Move(temp, pair.Value);
-            }
-            Discard();
-        }
-
-        /// <summary>Deletes every staged file.</summary>
-        public void Discard()
-        {
-            foreach (var path in _final.Keys) Delete(path);
-            _final.Clear();
-        }
-
-        /// <summary>Deletes what an earlier run left in the pending folder.</summary>
-        public void Clean()
-        {
-            if (!Directory.Exists(Folder)) return;
-            foreach (var file in Directory.GetFiles(Folder)) Delete(file);
-        }
-
-        private static void Delete(string path)
-        {
-            try
-            {
-                if (File.Exists(path)) File.Delete(path);
-            }
-            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
-            {
-                // left for Clean on the next start
-            }
         }
     }
 }
