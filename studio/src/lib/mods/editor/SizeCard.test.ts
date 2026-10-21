@@ -1,6 +1,7 @@
 import { fireEvent, screen, waitFor } from '@testing-library/svelte';
 import { describe, expect, it } from 'vitest';
 import type { ModSizesDto } from '$lib/rpc/types.gen';
+import { RpcError } from '$lib/rpc/client';
 import { Tab } from '$lib/shell/tab.svelte';
 import { memoryStore } from '$lib/storage';
 import { Session } from '$lib/stores/session.svelte';
@@ -12,16 +13,19 @@ import { ModDoc } from './modDoc.svelte';
 import SizeCard from './SizeCard.svelte';
 
 const sizes = (over: Partial<ModSizesDto> = {}): ModSizesDto => ({
-  target: 'Spinosaurus', adult: null, baby: null, male: null, female: null,
+  target: 'Spinosaurus', file: 'spinosaurus.json', adult: null, baby: null, male: null, female: null,
   original: { adultLength: 12.1, babyShare: 0.25, skins: [{ male: 1, female: 1.1 }] }, finalAdultLength: 12.1, ...over,
 });
 
-async function setup(dto: ModSizesDto = sizes(), errors: string[] = []) {
+async function setup(dto: ModSizesDto = sizes(), errors: string[] = [], refuse = false) {
   const rpc = new FakeRpc()
     .on('mods.get', () => modDetail())
     .on('mods.check', () => ({ errors, warnings: [], missingCutouts: [] }))
     .on('mods.sizes', () => dto)
-    .on('mods.setSizes', () => modDetail({ revision: 'r2' }));
+    .on('mods.setSizes', () => {
+      if (refuse) throw new RpcError('The mod folder is read-only.', 'IO_ERROR');
+      return modDetail({ revision: 'r2' });
+    });
   const session = new Session(rpc, new FakePlatform(), memoryStore());
   const tab = new Tab('tab-mod', session.log, { retitle: () => {}, openTool: () => null });
   tab.key = 'red-spot';
@@ -87,6 +91,15 @@ describe('SizeCard', () => {
     expect(screen.getByText(/from 0.05 to 5/)).toBeInTheDocument();
   });
 
+  it('a save that fails puts the saved value back', async () => {
+    const { rpc } = await setup(sizes({ adult: 1.5 }), [], true);
+    const adult = screen.getByRole('spinbutton', { name: 'Adult size ×' });
+    await fireEvent.input(adult, { target: { value: '1.2' } });
+    await fireEvent.change(adult);
+    await waitFor(() => expect(rpc.callsTo('mods.setSizes')).toHaveLength(1));
+    await waitFor(() => expect(screen.getByRole('spinbutton', { name: 'Adult size ×' })).toHaveValue(1.5));
+  });
+
   it('Reset sends null for that key only', async () => {
     const { rpc } = await setup(sizes({ adult: 1.5, male: 1.2 }));
     await fireEvent.click(screen.getByRole('button', { name: 'Reset Adult size ×' }));
@@ -98,8 +111,12 @@ describe('SizeCard', () => {
     await setup(sizes({ adult: 4 }), [
       'sizes/spinosaurus.json: Spinosaurus would be scaled from 0.04 to 3 (the game allows 0.05 to 2, and clamps it); lower the adult or sex sizes.',
       'sizes/other.json: Other would be scaled badly.',
+      'sizes/spinosaurus2.json: Spinosaurus2 would be scaled badly.', // a name that contains this one is another species
+      'sizes/x.json: X is not Spinosaurus.',
     ]);
     expect(await screen.findByText(/Spinosaurus would be scaled from 0.04/)).toBeInTheDocument();
     expect(screen.queryByText(/Other would be/)).toBeNull();
+    expect(screen.queryByText(/Spinosaurus2 would be/)).toBeNull();
+    expect(screen.queryByText(/X is not/)).toBeNull();
   });
 });

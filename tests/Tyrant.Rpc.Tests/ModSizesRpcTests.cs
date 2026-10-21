@@ -65,6 +65,7 @@ public class ModSizesRpcTests
         var set = await h.Call("mods.setSizes", new { id = "size-pack", revision = Rev(detail), target = "Alpha", adult = 1.5, baby = 0.4, male = 1.1 });
         var sizes = await h.Call("mods.sizes", new { id = "size-pack", target = "Alpha" });
 
+        Assert.Equal("alpha.json", sizes.GetProperty("file").GetString()); // Check's messages about it start with sizes/alpha.json
         Assert.Equal(1.5, sizes.GetProperty("adult").GetDouble());
         Assert.Equal(0.4, sizes.GetProperty("baby").GetDouble());
         Assert.Equal(1.1, sizes.GetProperty("male").GetDouble());
@@ -79,6 +80,7 @@ public class ModSizesRpcTests
         Assert.True(set.GetProperty("sizeFiles").TryGetProperty("alpha.json", out _));
 
         var none = await h.Call("mods.sizes", new { id = "size-pack", target = "Missing" });
+        Assert.Equal("missing.json", none.GetProperty("file").GetString()); // the file its sizes would go in
         Assert.True(IsNull(none, "adult"));
         Assert.True(IsNull(none, "finalAdultLength"));
         Assert.True(IsNull(none.GetProperty("original"), "adultLength"));

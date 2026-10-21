@@ -1165,6 +1165,7 @@ export interface ModSizeTargetsParams {
 
 export interface ModSizesDto {
   target: string;
+  file: string;
   adult: number | null;
   baby: number | null;
   male: number | null;

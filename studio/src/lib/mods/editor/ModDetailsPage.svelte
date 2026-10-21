@@ -54,12 +54,14 @@
   const asRange = (v: number[] | null): Range | null => (v ? { min: v[0], max: v[1] } : null);
   const gameRange = (v: number[]): Range => ({ min: v[0], max: v[1] });
   const pair = (r: Range | null) => (r ? [r.min, r.max] : null);
-  function saveRange(which: 'nursery' | 'breeding', r: Range | null) {
+  async function saveRange(which: 'nursery' | 'breeding', r: Range | null) {
     const now = sizeRanges;
     if (!now || (r && r.min > r.max)) return;
     const next = { nursery: now.nursery, breeding: now.breeding, [which]: pair(r) };
-    sizeRanges = { ...now, ...next };
-    void doc.edit('mods.setSizeRanges', next);
+    const shown = { ...now, ...next };
+    sizeRanges = shown;
+    // Not saved: back to the saved ranges, unless a reload came first.
+    if (!(await doc.edit('mods.setSizeRanges', next)) && sizeRanges === shown) sizeRanges = now;
   }
   const text = (v: number[]) => `${v[0].toFixed(2)} – ${v[1].toFixed(2)}`;
 

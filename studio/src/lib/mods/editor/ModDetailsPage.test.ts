@@ -1,6 +1,7 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/svelte';
 import type { ModTexturesResult } from '$lib/rpc/types.gen';
 import { describe, expect, it } from 'vitest';
+import { RpcError } from '$lib/rpc/client';
 import { Tab } from '$lib/shell/tab.svelte';
 import { memoryStore } from '$lib/storage';
 import { Session } from '$lib/stores/session.svelte';
@@ -69,12 +70,15 @@ describe('Mod details page', () => {
 
   describe('size ranges', () => {
     const ranges = { nursery: null, breeding: [0.9, 1.1], gameNursery: [0.8, 1.2], gameBreeding: [0.85, 1.15] };
-    async function sizeSetup() {
+    async function sizeSetup(refuse = false) {
       const rpc = new FakeRpc()
         .on('mods.get', () => modDetail())
         .on('mods.check', () => ({ errors: [], warnings: [], missingCutouts: [] }))
         .on('mods.sizeRanges', () => ranges)
-        .on('mods.setSizeRanges', () => modDetail({ revision: 'r2' }));
+        .on('mods.setSizeRanges', () => {
+          if (refuse) throw new RpcError('The mod folder is read-only.', 'IO_ERROR');
+          return modDetail({ revision: 'r2' });
+        });
       const session = new Session(rpc, new FakePlatform(), memoryStore());
       const tab = new Tab('tab-mod', session.log, { retitle: () => {}, openTool: () => null });
       const doc = new ModDoc('red-spot', rpc, tab, () => {});
@@ -92,6 +96,15 @@ describe('Mod details page', () => {
       await fireEvent.click(within(screen.getByRole('group', { name: 'Nursery size slider range' })).getByRole('checkbox', { name: /Game's range/ }));
       await waitFor(() => expect(rpc.callsTo('mods.setSizeRanges')).toHaveLength(1));
       expect(rpc.callsTo('mods.setSizeRanges')[0].params).toMatchObject({ nursery: [0.8, 1.2], breeding: [0.9, 1.1] });
+    });
+
+    it('a save that fails puts the saved range back', async () => {
+      const rpc = await sizeSetup(true);
+      const game = () => within(screen.getByRole('group', { name: 'Nursery size slider range' })).getByRole('checkbox', { name: /Game's range/ });
+      expect(game()).toBeChecked();
+      await fireEvent.click(game());
+      await waitFor(() => expect(rpc.callsTo('mods.setSizeRanges')).toHaveLength(1));
+      await waitFor(() => expect(game()).toBeChecked());
     });
 
     it('never sends a minimum above the maximum', async () => {

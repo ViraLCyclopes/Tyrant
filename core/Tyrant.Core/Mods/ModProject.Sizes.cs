@@ -17,6 +17,11 @@ public sealed partial class ModProject
             ? Directory.GetFiles(SizeFolder, "*.json").OrderBy(p => p, StringComparer.Ordinal).ToDictionary(p => Path.GetFileName(p), File.ReadAllText)
             : new Dictionary<string, string>();
 
+    /// <summary>The sizes/ file a target's sizes are in, or the one they would go in (Check names it in its messages about them).</summary>
+    public string SizeFileOf(string target) =>
+        SizeSettings.ReadFolder(Dir, null).FirstOrDefault(t => string.Equals(t.Sizes.Target, target, StringComparison.OrdinalIgnoreCase)).File
+        ?? SizeSettings.FileName(target);
+
     public SizeSettings? Sizes(string target) =>
         SizeSettings.ReadFolder(Dir, null).FirstOrDefault(t => string.Equals(t.Sizes.Target, target, StringComparison.OrdinalIgnoreCase)).Sizes;
 

@@ -11,8 +11,11 @@ public sealed record ModSkinSizeDto(double Male, double Female);
 /// <summary>A species' size in the game data: the model's length, the newborn's share of the adult size and each skin's sex multipliers.</summary>
 public sealed record ModOriginalSizeDto(double? AdultLength, double BabyShare, IReadOnlyList<ModSkinSizeDto> Skins);
 
-/// <summary>A mod's size changes for one species (null: unchanged), the game's original, and the model length they give.</summary>
-public sealed record ModSizesDto(string Target, double? Adult, double? Baby, double? Male, double? Female, ModOriginalSizeDto Original, double? FinalAdultLength);
+/// <summary>
+/// A mod's size changes for one species (null: unchanged), the game's original, and the model length they give. File: the
+/// sizes/ file they are in (or would go in); Check's messages about it start with "sizes/&lt;file&gt;:".
+/// </summary>
+public sealed record ModSizesDto(string Target, string File, double? Adult, double? Baby, double? Male, double? Female, ModOriginalSizeDto Original, double? FinalAdultLength);
 
 public sealed record ModSizesParams(string Id, string Target);
 public sealed record ModSetSizesParams(string Id, string Revision, string Target, double? Adult = null, double? Baby = null, double? Male = null, double? Female = null);
@@ -45,7 +48,7 @@ public sealed partial class ModsMethods
         var c0 = found is null ? 0f : SizeMath.Evaluate(found.Curve, 0f);
         var c1 = found is null ? 0f : SizeMath.Evaluate(found.Curve, 1f);
         var original = new ModOriginalSizeDto(length, c1 == 0f ? 1 : c0 / (double)c1, (found?.Skins ?? []).Select(s => new ModSkinSizeDto(s.Male, s.Female)).ToList());
-        return new ModSizesDto(set?.Target ?? p.Target, set?.Adult, set?.Baby, set?.Male, set?.Female, original, length is { } l ? l * (set?.Adult ?? 1) : null);
+        return new ModSizesDto(set?.Target ?? p.Target, mod.SizeFileOf(p.Target), set?.Adult, set?.Baby, set?.Male, set?.Female, original, length is { } l ? l * (set?.Adult ?? 1) : null);
     }
 
     [RpcMethod("mods.setSizes")]

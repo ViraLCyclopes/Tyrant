@@ -50,10 +50,14 @@
   const sexHint = $derived(skin ? `game: ${round(skin.male)} male / ${round(skin.female)} female` : '');
   const shown = (key: Key) => own[key] ?? original[key];
 
+  let saves = 0;
   async function save(next: Record<Key, number | null>) {
     own = next;
     problem = '';
-    await doc.edit('mods.setSizes', { target, ...next });
+    const [mine, reads, saved] = [++saves, loads, ready];
+    // Not saved (the edit failed, nothing changed on disk): back to what the mod has, unless a later save or a reload came first.
+    if (!(await doc.edit('mods.setSizes', { target, ...next })) && mine === saves && reads === loads && saved)
+      own = { adult: saved.adult, baby: saved.baby, male: saved.male, female: saved.female };
   }
 
   function change(f: (typeof FIELDS)[number], text: string) {
@@ -78,8 +82,9 @@
   const widest = $derived(Math.max(length ?? 1, finalLength ?? length ?? 1, 1e-9));
   const barFor = (adult: number, baby: number) => ({ adult: Math.min(100, (adult / (length === null ? Math.max(1, shown('adult')) : widest)) * 100), baby: baby * 100 });
 
+  // Check's messages about this species' file (sizes/<file>: …), matched exactly: one species' name can contain another's.
   const issues = $derived(
-    [...(doc.check?.errors ?? []), ...(doc.check?.warnings ?? [])].filter((m) => m.startsWith('sizes/') && m.toLowerCase().includes(target.toLowerCase())),
+    ready ? [...(doc.check?.errors ?? []), ...(doc.check?.warnings ?? [])].filter((m) => m.startsWith(`sizes/${ready.file}:`)) : [],
   );
 </script>
 
