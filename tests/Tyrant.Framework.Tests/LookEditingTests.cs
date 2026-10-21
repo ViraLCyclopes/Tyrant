@@ -261,53 +261,6 @@ public class LookEditingTests
     }
 
     [Fact]
-    public void A_staged_export_reaches_its_fixed_name_only_on_commit()
-    {
-        var target = TempDir();
-        var final = Path.Combine(target, "skin", LookEditing.IridescenceMaskFile);
-        Directory.CreateDirectory(Path.GetDirectoryName(final)!);
-        File.WriteAllBytes(final, new byte[] { 1 }); // the saved look's mask
-        var staged = new StagedFiles(Path.Combine(TempDir(), ".pending"));
-
-        var first = staged.Stage(final);
-        File.WriteAllBytes(first, new byte[] { 2 });
-        var second = staged.Stage(final); // exported again: the first staged file goes
-        File.WriteAllBytes(second, new byte[] { 3 });
-        Assert.False(File.Exists(first));
-        Assert.True(staged.IsStaged(second));
-        Assert.Equal(new byte[] { 1 }, File.ReadAllBytes(final));
-
-        var block = new MaterialOverride { Iridescence = new IridescenceSettings { Mask = new MaskSource { File = second } } };
-        var saved = staged.Final(block);
-        Assert.Equal(final, saved.Iridescence!.Mask!.File);
-        Assert.Equal(second, block.Iridescence!.Mask!.File); // the input is not changed
-        Assert.Equal(new byte[] { 1 }, File.ReadAllBytes(final)); // naming the final file moves nothing
-
-        staged.Commit(block);
-        Assert.Equal(new byte[] { 3 }, File.ReadAllBytes(final));
-        Assert.False(File.Exists(second));
-        Assert.False(staged.IsStaged(second));
-    }
-
-    [Fact]
-    public void Discarding_deletes_every_staged_file_and_commit_drops_the_unused_ones()
-    {
-        var target = TempDir();
-        var staged = new StagedFiles(Path.Combine(TempDir(), ".pending"));
-        var fur = staged.Stage(Path.Combine(target, LookEditing.FurMaskFile));
-        File.WriteAllBytes(fur, new byte[] { 1 });
-        staged.Discard();
-        Assert.False(File.Exists(fur));
-        Assert.False(File.Exists(Path.Combine(target, LookEditing.FurMaskFile)));
-
-        var unused = staged.Stage(Path.Combine(target, LookEditing.IridescenceMaskFile));
-        File.WriteAllBytes(unused, new byte[] { 1 });
-        staged.Commit(new MaterialOverride()); // the draft no longer uses it (picked another mask)
-        Assert.False(File.Exists(unused));
-        Assert.False(File.Exists(Path.Combine(target, LookEditing.IridescenceMaskFile)));
-    }
-
-    [Fact]
     public void Pngs_are_listed_from_every_folder_once_and_sorted()
     {
         var a = TempDir();

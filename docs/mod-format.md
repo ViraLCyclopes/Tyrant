@@ -306,9 +306,31 @@ game update moves the panels and a button cannot be placed, the MelonLoader log 
   after it, **-** removes it. The colour square sets its saturation (across) and brightness (up), the strip beside it its
   hue; drag either and the animals follow. Or type `#rrggbb` in the box. A look from the app with more than 8 colours
   keeps them all: the window edits the first 8.
-- **Export mask PNG** writes the mask as a PNG to edit in an image editor. It is staged until **Save**, then written under the
-  fixed file name (`iridescence-mask.png`, `fur-mask.png`, …) and becomes the mask. **Reload images** picks up your edits
-  without restarting. The PNG pickers list the target's folder and `UserData/Tyrant/Masks`.
+- **Export mask PNG** writes the mask the animal shows as a PNG to edit in an image editor, into `UserData/Tyrant/Masks`.
+  With the mask on **Everywhere**, or no mask at all, it is all white, the size of the skin's mask or diffuse map (else
+  1024 × 1024); on the Fur tab, grown fur over the whole body is all white too. A **Channel** mask exports what the animal
+  shows (from a vanilla skin's map, that is an image made from the game's). A **Species** mask is not exported (it stays a
+  reference).
+- **Export colours PNG** (Iridescence tab, beside it) writes the shimmer colours of **Colours** or **Thin film** as a
+  256 × 8 strip into the same folder; the colours of **Game's** and **Species** stay the game's and are not exported.
+- **Names:** `{species} {skin} {kind}.png`, for example `Tyrannosaurus Leatherhide fur mask.png`; the kind is
+  `iridescence mask`, `fur mask`, `baby fur mask` or `colours`. On **This animal** the animal's name follows the skin
+  when it has one; on **Whole species** only the species is named. Characters a file name cannot hold become `_`. An
+  export never overwrites: when the name is taken, it gets ` 2`, ` 3`, ….
+- After an export, that slot of the draft is **PNG**, on the new file, and the status line names it (*Exported
+  Tyrannosaurus Leatherhide fur mask.png to UserData/Tyrant/Masks. Edit it, then Reload images.*). It is an unsaved change:
+  **Reset** goes back (the file stays in Masks). **Reload images** picks up your edits without restarting; **Open folder**
+  opens `UserData/Tyrant/Masks` in File Explorer (made when it is missing). The PNG pickers list the target's folder and
+  `UserData/Tyrant/Masks`.
+- **Save** into a mod (**Whole skin**, **Whole species**) copies an export the look uses into the owner's folder under the
+  fixed name (`iridescence-mask.png`, `fur-mask.png`, `fur-infant-mask.png`, `iridescence-ramp.png`), over the one saved
+  before, so the mod carries its images; a PNG picked from Masks keeps its own name there. A look of **This animal** names
+  the file in Masks (`"Masks/…"`). Nothing is written into a mod before **Save**, so **Reset** and **Discard** never touch a
+  saved look's images.
+- **Info buttons:** the round **i** beside **Variation between animals**, **Shimmer colours**, **Mask**, **Shaping**, **Grow
+  fur**, **Length**, **Droop** and **Wind strength** opens a short explanation under the row (one at a time on each tab); press
+  it again to close it. **Variation between animals** is set for a whole skin or species: the Nursery preview always shows
+  the exact strength, and the variation shows on the animals you create.
 
 | What you edit | Save goes to |
 |---|---|

@@ -35,7 +35,7 @@ namespace Tyrant.Framework
         private static RectTransform? _content;
         private static Component? _font, _inputTemplate, _name, _info, _status;
         private static readonly Dictionary<LookScope, (GameObject Button, Component Label)> ScopeButtons = new Dictionary<LookScope, (GameObject, Component)>();
-        private static (GameObject Button, Component Label) _irisTab, _furTab, _export, _reload, _reset, _save;
+        private static (GameObject Button, Component Label) _irisTab, _furTab, _export, _exportColours, _reload, _openFolder, _reset, _save;
         private static Sprite? _icon;
         private static bool _minimised, _shapingOpen, _onFurTab;
         private static bool _centre; // the window was just shown: Place puts it in the middle of the screen
@@ -59,10 +59,10 @@ namespace Tyrant.Framework
         private static readonly Dictionary<PresetKind, string?> PresetPick = new Dictionary<PresetKind, string?>(); // the Preset row's species per tab
         private static (PresetKind Kind, string Species)? _presetWaiting; // Apply pressed while that species' material still loads
 
-        /// <summary>Exported masks waiting for Save, outside every mod (UserData/Tyrant/Looks/.pending).</summary>
-        private static StagedFiles? _stagedFiles;
+        /// <summary>The draft's exports in UserData/Tyrant/Masks; a save into a mod copies them under their fixed names.</summary>
+        private static readonly ExportedFiles Exports = new ExportedFiles();
 
-        private static StagedFiles Staged => _stagedFiles ??= new StagedFiles(Path.Combine(FrameworkMod.TyrantDirectory, "Looks", ".pending"));
+        private static (string? Species, string? Skin, string? Animal) _names; // the display names exports are named after (ReadHeader)
 
         private static bool IsOpen => _window != null && _window.activeSelf;
 
@@ -73,7 +73,7 @@ namespace Tyrant.Framework
             _y = _prefs.CreateEntry("EditorY", 96f);
             _w = _prefs.CreateEntry("EditorW", 360f);
             _h = _prefs.CreateEntry("EditorH", 600f);
-            Staged.Clean(); // exports an earlier run left unsaved
+            RemoveOldPending();
             SpeciesLooks.Loaded += species => Safe(() => SpeciesLoaded(species))();
         }
 
@@ -214,7 +214,7 @@ namespace Tyrant.Framework
         {
             ClearLive(reapply: true);
             _draft?.Reset();
-            Staged.Discard();
+            Exports.Forget();
             _awaitPreview = false;
             if (_window != null) _window.SetActive(false);
         }
@@ -236,7 +236,7 @@ namespace Tyrant.Framework
                 _draft?.Reset();
                 Switch.Forget();
                 FurSwitch.Forget();
-                Staged.Discard();
+                Exports.Forget();
                 then();
             }, keep);
         }
@@ -277,6 +277,7 @@ namespace Tyrant.Framework
             _target = null;
             _below = null;
             _title = _details = null;
+            _names = default;
             _detached = false;
             _closedKept = false;
             _declined = null;
@@ -285,7 +286,7 @@ namespace Tyrant.Framework
             _presetWaiting = null;
             Switch.Forget();
             FurSwitch.Forget();
-            Staged.Discard();
+            Exports.Forget();
         }
 
         /// <summary>False for a game object that was destroyed (a Nursery preview, a sold animal); a VivariumAnimal is a plain object.</summary>
@@ -311,7 +312,7 @@ namespace Tyrant.Framework
             _presetWaiting = null; // a preset waits for the draft it was asked for
             Switch.Forget();
             FurSwitch.Forget();
-            Staged.Discard(); // an export belongs to the draft it was made for
+            Exports.Forget(); // an export belongs to the draft it was made for (its file stays in Masks)
             if (_animal == null || _context == null)
             {
                 _draft = null;
@@ -449,7 +450,10 @@ namespace Tyrant.Framework
             if (_draft == null || _context == null || _target == null) return;
             var c = _context;
             var target = _target; // NewDraft below picks the target again
-            var current = Staged.Final(_draft.Current); // exports under their fixed names (iridescence-mask.png, fur-mask.png)
+            // Into a mod, this draft's exports take their fixed names (iridescence-mask.png, …) in the owner's folder; a look of one
+            // animal (or the next one) names them in Masks.
+            var exportFolder = NextCreated || _target.Kind == SaveTargetKind.AnimalLooks ? null : TargetFolder(create: false);
+            var current = exportFolder == null ? _draft.Current : Exports.Final(_draft.Current, exportFolder);
             // Never write what a load rejects: the block is read back as the loader reads it first (a species has no mask "from").
             var skinLevel = _target.Kind == SaveTargetKind.AnimalLooks || _target.Owner?.Kind != MaterialOwnerKind.Species;
             if (MaterialOverrides.Problem(new Dictionary<string, MaterialOverride>(StringComparer.Ordinal) { [c.MaterialName] = current }, "This look", skinLevel) is string problem)
@@ -459,7 +463,6 @@ namespace Tyrant.Framework
                 return;
             }
             var missing = new List<string>();
-            var committed = false;
             string where;
             try
             {
@@ -485,8 +488,6 @@ namespace Tyrant.Framework
                         Footer();
                         return;
                     }
-                    Staged.Commit(_draft.Current); // before the store is prepared again, so the new image is the one read
-                    committed = true;
                     var looks = LookEditorModule.Looks;
                     var map = looks.Get(id) is { } existing ? new Dictionary<string, MaterialOverride>(existing, StringComparer.Ordinal) : new Dictionary<string, MaterialOverride>(StringComparer.Ordinal);
                     var block = LookFiles.Relative(current, FrameworkMod.TyrantDirectory); // UserData/Tyrant-relative, like "Masks/x.png"
@@ -517,8 +518,7 @@ namespace Tyrant.Framework
                 {
                     var owner = _target.Owner!;
                     var modDir = ModDirectory(create: true)!;
-                    Staged.Commit(_draft.Current); // before the reload, so the new image is the one read
-                    committed = true;
+                    if (exportFolder != null) Exports.Commit(_draft.Current, exportFolder); // before the reload, so the new image is the one read
                     var block = LookFiles.Adopt(current, modDir, MaterialFolders.FolderOf(owner), missing); // the mod keeps its own copy of outside images
                     MaterialFolders.SaveOwner(modDir, owner, new Dictionary<string, MaterialOverride>(StringComparer.Ordinal) { [c.MaterialName] = block });
                     where = TargetName();
@@ -527,7 +527,6 @@ namespace Tyrant.Framework
             catch (Exception ex) when (ex is ManifestException || ex is IOException || ex is UnauthorizedAccessException)
             {
                 FrameworkMod.Log.Warning($"The look could not be saved: {ex.Message}");
-                if (committed) PointAtFinal(current); // the exports are at their fixed names now
                 _message = "Not saved: " + ex.Message;
                 Footer();
                 return;
@@ -549,15 +548,6 @@ namespace Tyrant.Framework
             Rebuild();
         }
 
-        /// <summary>After the exports moved to their fixed names: the draft names them there too.</summary>
-        private static void PointAtFinal(MaterialOverride final)
-        {
-            if (_draft == null) return;
-            if (final.Iridescence?.Mask is MaskSource mask && mask.File != _draft.Current.Iridescence?.Mask?.File) _draft.SetMask(mask);
-            if (final.Fur?.Mask is MaskSource fur && fur.File != _draft.Current.Fur?.Mask?.File) _draft.SetFurMask(fur, infant: false);
-            PushLive(keywords: false);
-        }
-
         private static void Reset()
         {
             if (_draft == null) return;
@@ -565,7 +555,7 @@ namespace Tyrant.Framework
             _draft.Reset();
             Switch.Forget();
             FurSwitch.Forget();
-            Staged.Discard();
+            Exports.Forget();
             _message = "";
             Changed(rebuild: true);
         }
@@ -589,10 +579,13 @@ namespace Tyrant.Framework
             Rebuild();
         }
 
-        /// <summary>Writes the mask the animal shows now as a grey PNG into the save target's folder, and points the draft at it.</summary>
+        /// <summary>
+        /// Writes the mask the animal shows now as a grey PNG (all white for Everywhere, for no mask at all, and while grown fur
+        /// covers the whole body) into UserData/Tyrant/Masks under a new name, and points the draft at it.
+        /// </summary>
         private static void ExportMask()
         {
-            if (_animal == null || _draft == null || _target == null) return;
+            if (_animal == null || _draft == null || _target == null || _context == null) return;
             if (_detached || !Alive(_animal))
             {
                 _message = "The Nursery shows another look now: Save or Reset first, then export from the animal it shows.";
@@ -613,63 +606,133 @@ namespace Tyrant.Framework
                 Footer();
                 return;
             }
-            var folder = TargetFolder(create: false); // Vanilla Looks is made by Save, not by an export
-            if (folder == null)
+            if (NextCreated)
             {
-                _message = NextCreated
-                    ? "Export mask PNG needs a placed animal: Save, incubate and place the animal, then export from its own panel."
-                    : "There is nowhere to export this look's mask.";
+                _message = "Export mask PNG needs a placed animal: Save, incubate and place the animal, then export from its own panel.";
                 Footer();
                 return;
             }
-            // Staged until Save: the fixed name may be the saved look's own mask, which Reset or Discard must keep.
-            var file = Staged.Stage(Path.Combine(folder, _onFurTab ? LookEditing.FurMaskFile : LookEditing.IridescenceMaskFile));
+            var kind = _onFurTab ? ExportKind.FurMask : ExportKind.IridescenceMask;
+            if (!(TryExport(kind, () => white is Vector2Int size ? WhitePng(size) : GreyPng(texture!)) is string file)) return;
+            if (_onFurTab) _draft.SetFurMask(new MaskSource { File = file }, infant: false);
+            else _draft.SetMask(new MaskSource { File = file });
+            Changed(rebuild: true);
+        }
+
+        /// <summary>Writes the shimmer colours shown (Colours or a thin film) as a ramp strip PNG into Masks, and points the draft at it.</summary>
+        private static void ExportColours()
+        {
+            if (_draft == null || _context == null || _target == null) return;
+            var ramp = _draft.Current.Iridescence?.Ramp ?? _below?.Iridescence?.Ramp;
+            var problem = MaskExports.ColoursFrom(ramp, out var stops);
+            if (problem != ColoursExport.Ok)
+            {
+                _message = problem == ColoursExport.Species
+                    ? SpeciesLooks.NameOf(ramp!.Species!) + "'s colours stay a reference and are not exported; pick Colours or Thin film to export your own."
+                    : problem == ColoursExport.File
+                        ? "These colours are a PNG already: edit it, then Reload images."
+                        : "The game's colours stay the game's; pick Colours or Thin film to export your own.";
+                Footer();
+                return;
+            }
+            if (!(TryExport(ExportKind.Colours, () => RampPng(stops!)) is string file)) return;
+            _draft.SetRamp(new RampSource { File = file });
+            Changed(rebuild: true);
+        }
+
+        /// <summary>
+        /// Writes an export into UserData/Tyrant/Masks under its readable name (a new number when it is taken: nothing there is
+        /// ever overwritten) and says so on the status line; null, with the reason there, when it could not be written.
+        /// </summary>
+        private static string? TryExport(ExportKind kind, Func<byte[]> png)
+        {
             try
             {
-                if (white is Vector2Int size) WriteWhitePng(size, file); // grown fur over the whole body: a white mask to paint on
-                else WriteGreyPng(texture!, file);
+                Directory.CreateDirectory(MasksDirectory);
+                var name = MaskExports.FileName(_scope, _names.Species ?? _context!.Species, _names.Skin, _names.Animal, kind);
+                var file = Path.Combine(MasksDirectory, MaskExports.Unique(name, Directory.GetFiles(MasksDirectory)));
+                var bytes = png();
+                using (var stream = new FileStream(file, FileMode.CreateNew, FileAccess.Write)) stream.Write(bytes, 0, bytes.Length);
+                Exports.Add(file, kind);
+                _message = "Exported " + Path.GetFileName(file) + " to UserData/Tyrant/Masks. Edit it, then Reload images.";
+                return file;
             }
             catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
             {
                 _message = "Not exported: " + ex.Message;
                 Footer();
-                return;
+                return null;
             }
-            if (_onFurTab) _draft.SetFurMask(new MaskSource { File = file }, infant: false);
-            else _draft.SetMask(new MaskSource { File = file });
-            _message = "Exported " + (_onFurTab ? LookEditing.FurMaskFile : LookEditing.IridescenceMaskFile) + "; Save makes it the default, Reset drops it.";
-            Changed(rebuild: true);
         }
 
-        /// <summary>An all-white PNG of this size (fur everywhere), to paint the fur's limits on.</summary>
-        private static void WriteWhitePng(Vector2Int size, string file)
+        /// <summary>An all-white PNG of this size (fur or shimmer everywhere), to paint the limits on.</summary>
+        private static byte[] WhitePng(Vector2Int size)
         {
-            var white = new Texture2D(size.x, size.y, TextureFormat.RGBA32, false, true);
-            try
-            {
-                var pixels = new byte[size.x * size.y * 4];
-                for (var i = 0; i < pixels.Length; i++) pixels[i] = 255;
-                white.SetPixelData(pixels, 0);
-                white.Apply(false, false);
-                File.WriteAllBytes(file, white.EncodeToPNG());
-            }
-            finally
-            {
-                UnityEngine.Object.Destroy(white);
-            }
+            var pixels = new byte[size.x * size.y * 4];
+            for (var i = 0; i < pixels.Length; i++) pixels[i] = 255;
+            return Png(size.x, size.y, pixels, linear: true);
         }
 
         /// <summary>The texture's red channel as a grey PNG (read like a mask made from a skin map, so compressed maps read too).</summary>
-        private static void WriteGreyPng(Texture source, string file)
+        private static byte[] GreyPng(Texture source)
         {
             var grey = MaterialsModule.ReadGrey(source, 'r', invert: false, mipmaps: false);
             try
             {
-                File.WriteAllBytes(file, grey.EncodeToPNG()); // a new staged name each export: nothing is overwritten
+                return grey.EncodeToPNG();
             }
             finally
             {
                 UnityEngine.Object.Destroy(grey);
+            }
+        }
+
+        /// <summary>The colours as a ramp strip, the same pixels the shader samples from them.</summary>
+        private static byte[] RampPng(IReadOnlyList<Rgb> stops) =>
+            Png(MaskExports.RampWidth, MaskExports.RampHeight, IridescenceRamp.Pixels(stops, MaskExports.RampWidth, MaskExports.RampHeight), linear: false);
+
+        private static byte[] Png(int width, int height, byte[] rgba, bool linear)
+        {
+            var texture = new Texture2D(width, height, TextureFormat.RGBA32, false, linear);
+            try
+            {
+                texture.SetPixelData(rgba, 0);
+                texture.Apply(false, false);
+                return texture.EncodeToPNG();
+            }
+            finally
+            {
+                UnityEngine.Object.Destroy(texture);
+            }
+        }
+
+        /// <summary>Opens UserData/Tyrant/Masks in File Explorer (made first when it is missing).</summary>
+        private static void OpenMasksFolder()
+        {
+            try
+            {
+                var folder = Path.GetFullPath(MasksDirectory);
+                Directory.CreateDirectory(folder);
+                System.Diagnostics.Process.Start("explorer.exe", "\"" + folder + "\"");
+            }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is System.ComponentModel.Win32Exception || ex is InvalidOperationException)
+            {
+                _message = "The Masks folder could not be opened: " + ex.Message;
+                Footer();
+            }
+        }
+
+        /// <summary>Older versions staged exports in UserData/Tyrant/Looks/.pending until Save; what they left there goes.</summary>
+        private static void RemoveOldPending()
+        {
+            var folder = Path.Combine(FrameworkMod.TyrantDirectory, "Looks", ".pending");
+            try
+            {
+                if (Directory.Exists(folder)) Directory.Delete(folder, recursive: true);
+            }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+            {
+                // tried again on the next start
             }
         }
 
