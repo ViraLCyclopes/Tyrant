@@ -81,6 +81,28 @@ public class ModSizeCommandTests
     }
 
     [Fact]
+    public void Shows_and_removes_old_size_record_edits()
+    {
+        using var game = new FakeGame();
+        var ws = Workspace(game);
+        var workspace = Tyrant.Core.Workspaces.Workspace.Open(ws);
+        var mod = Tyrant.Core.Mods.ModProject.Open(workspace, "size-pack");
+        var entry = mod.AddSpecies(Tyrant.Core.Mods.SpeciesSkinsReader.Load(workspace), "mini", "Alpha", "Mini", "Tyrantus", "mini");
+        entry.Fields.Add(new Tyrant.Framework.Core.AnimalField { Path = "/scaleGrowthCurve/keys/0/value", Kind = "number", Value = "0.25", TemplateValue = "0.5", Editable = true });
+        Tyrant.Framework.Core.AnimalDatabaseFile.Save(mod.DatabasePath, mod.Manifest.Species);
+        var key = entry.Key("size-pack");
+
+        var shown = Run("mod", "size", "size-pack", key, "-w", ws);
+        Assert.Contains("old record edits: /scaleGrowthCurve/keys/0/value", shown.Out);
+        Assert.Contains("--remove-record-edits", shown.Out);
+
+        var removed = Run("mod", "size", "size-pack", key, "--remove-record-edits", "-w", ws);
+        Assert.True(removed.Code == ExitCodes.Ok, removed.Err);
+        Assert.Contains("removed the old record edits: /scaleGrowthCurve/keys/0/value", removed.Out);
+        Assert.DoesNotContain("old record edits:", Run("mod", "size", "size-pack", key, "-w", ws).Out);
+    }
+
+    [Fact]
     public void A_bad_value_prints_the_message_and_fails()
     {
         using var game = new FakeGame();

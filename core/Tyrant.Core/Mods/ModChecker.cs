@@ -367,9 +367,10 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
         }
         foreach (var entry in mod.Manifest.Species)
         {
-            var edited = entry.Fields.Where(f => SpeciesSizes.IsSizePath(f.Path) && f.Value != f.TemplateValue).Select(f => f.Path).ToList();
+            var edited = SpeciesSizes.RecordEdits(entry);
             if (edited.Count > 0)
-                warnings.Add($"Species {entry.Id}: its record edits {string.Join(", ", edited)} change its size outside Size. Set sizes in Size instead.");
+                warnings.Add($"Species {entry.Id}: its record edits {string.Join(", ", edited)} change its size outside Size. Set sizes in Size instead, and clear "
+                    + $"these in the app with Remove old size edits on its Size card ('tyrant mod size {mod.Id} {entry.Key(mod.Id)} --remove-record-edits').");
         }
         if (facts is null || species is null || mod.Manifest.SizeRanges is not { IsEmpty: false } ranges) return;
         var sizedTargets = new HashSet<string>(sized.Select(s => s.Sizes.Target), StringComparer.OrdinalIgnoreCase);

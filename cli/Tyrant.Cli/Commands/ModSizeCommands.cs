@@ -35,6 +35,10 @@ public sealed class ModSizeCommand : Command<ModSizeCommand.Settings>
         [CommandOption("--clear")]
         [Description("Remove all of this species' size settings (before applying any value given with it).")]
         public bool Clear { get; set; }
+
+        [CommandOption("--remove-record-edits")]
+        [Description("A mod's own species: remove the old record edits of its growth curve and sex sizes, so only these sizes change it.")]
+        public bool RemoveRecordEdits { get; set; }
     }
 
     private static string Text(double value) => value.ToString("0.###", CultureInfo.InvariantCulture);
@@ -43,6 +47,11 @@ public sealed class ModSizeCommand : Command<ModSizeCommand.Settings>
     {
         var (ws, _) = CliServices.OpenWorkspace(settings);
         var mod = ModProject.Open(ws, settings.Id);
+        if (settings.RemoveRecordEdits)
+        {
+            var removed = mod.RemoveSizeRecordEdits(settings.Target);
+            Console.WriteLine(removed.Count == 0 ? $"{settings.Target} has no old record edits of its size." : "removed the old record edits: " + string.Join(", ", removed));
+        }
         var current = settings.Clear ? null : mod.Sizes(settings.Target);
         if (settings.Clear || settings.Adult is not null || settings.Baby is not null || settings.Male is not null || settings.Female is not null)
         {
@@ -57,6 +66,8 @@ public sealed class ModSizeCommand : Command<ModSizeCommand.Settings>
         var shown = new[] { ("adult", current?.Adult), ("baby", current?.Baby), ("male", current?.Male), ("female", current?.Female) }
             .Where(v => v.Item2 is not null).Select(v => $"{v.Item1} {Text(v.Item2!.Value)}").ToList();
         Console.WriteLine($"{settings.Target} in '{settings.Id}': {(shown.Count == 0 ? "no size settings" : string.Join(", ", shown))}");
+        if (mod.SizeRecordEdits(settings.Target) is { Count: > 0 } edits)
+            Console.WriteLine($"old record edits: {string.Join(", ", edits)} (they change its size outside these settings; remove them with --remove-record-edits)");
         OriginalSize? original = null;
         try { original = SpeciesSizes.Original(DataStore.Open(ws), settings.Target, mod); }
         catch (TyrantException ex) when (ex.Code is TyrantErrorCode.DataMissing or TyrantErrorCode.AssetNotFound) { }

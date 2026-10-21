@@ -13,11 +13,14 @@ public sealed record ModOriginalSizeDto(double? AdultLength, double BabyShare, I
 
 /// <summary>
 /// A mod's size changes for one species (null: unchanged), the game's original, and the model length they give. File: the
-/// sizes/ file they are in (or would go in); Check's messages about it start with "sizes/&lt;file&gt;:".
+/// sizes/ file they are in (or would go in); Check's messages about it start with "sizes/&lt;file&gt;:". RecordEdits: a mod
+/// species' old record edits that change its size outside Size (mods.removeSizeEdits removes them).
 /// </summary>
-public sealed record ModSizesDto(string Target, string File, double? Adult, double? Baby, double? Male, double? Female, ModOriginalSizeDto Original, double? FinalAdultLength);
+public sealed record ModSizesDto(string Target, string File, double? Adult, double? Baby, double? Male, double? Female, ModOriginalSizeDto Original,
+    double? FinalAdultLength, IReadOnlyList<string> RecordEdits);
 
 public sealed record ModSizesParams(string Id, string Target);
+public sealed record ModRemoveSizeEditsParams(string Id, string Revision, string Target);
 public sealed record ModSetSizesParams(string Id, string Revision, string Target, double? Adult = null, double? Baby = null, double? Male = null, double? Female = null);
 public sealed record ModSizeTargetsParams(string Id);
 public sealed record ModSizeTargetsDto(IReadOnlyList<string> Targets);
@@ -48,13 +51,19 @@ public sealed partial class ModsMethods
         var c0 = found is null ? 0f : SizeMath.Evaluate(found.Curve, 0f);
         var c1 = found is null ? 0f : SizeMath.Evaluate(found.Curve, 1f);
         var original = new ModOriginalSizeDto(length, c1 == 0f ? 1 : c0 / (double)c1, (found?.Skins ?? []).Select(s => new ModSkinSizeDto(s.Male, s.Female)).ToList());
-        return new ModSizesDto(set?.Target ?? p.Target, mod.SizeFileOf(p.Target), set?.Adult, set?.Baby, set?.Male, set?.Female, original, length is { } l ? l * (set?.Adult ?? 1) : null);
+        return new ModSizesDto(set?.Target ?? p.Target, mod.SizeFileOf(p.Target), set?.Adult, set?.Baby, set?.Male, set?.Female, original, length is { } l ? l * (set?.Adult ?? 1) : null,
+            mod.SizeRecordEdits(p.Target));
     }
 
     [RpcMethod("mods.setSizes")]
     public ModDetail SetSizes(ModSetSizesParams p) =>
         Edit(p.Id, p.Revision, mod => mod.SetSizes(p.Target, new SizeSettings { Target = p.Target, Adult = p.Adult, Baby = p.Baby, Male = p.Male, Female = p.Female }),
             $"set the sizes of {p.Target}");
+
+    /// <summary>Removes a mod species' old record edits of its size (Check's "Set sizes in Size instead").</summary>
+    [RpcMethod("mods.removeSizeEdits")]
+    public ModDetail RemoveSizeEdits(ModRemoveSizeEditsParams p) =>
+        Edit(p.Id, p.Revision, mod => mod.RemoveSizeRecordEdits(p.Target), $"removed the old size edits of {p.Target}");
 
     [RpcMethod("mods.sizeTargets")]
     public ModSizeTargetsDto SizeTargets(ModSizeTargetsParams p)

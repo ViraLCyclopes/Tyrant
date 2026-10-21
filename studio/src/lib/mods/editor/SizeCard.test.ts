@@ -13,7 +13,7 @@ import { ModDoc } from './modDoc.svelte';
 import SizeCard from './SizeCard.svelte';
 
 const sizes = (over: Partial<ModSizesDto> = {}): ModSizesDto => ({
-  target: 'Spinosaurus', file: 'spinosaurus.json', adult: null, baby: null, male: null, female: null,
+  target: 'Spinosaurus', file: 'spinosaurus.json', adult: null, baby: null, male: null, female: null, recordEdits: [],
   original: { adultLength: 12.1, babyShare: 0.25, skins: [{ male: 1, female: 1.1 }] }, finalAdultLength: 12.1, ...over,
 });
 
@@ -22,6 +22,7 @@ async function setup(dto: ModSizesDto = sizes(), errors: string[] = [], refuse =
     .on('mods.get', () => modDetail())
     .on('mods.check', () => ({ errors, warnings: [], missingCutouts: [] }))
     .on('mods.sizes', () => dto)
+    .on('mods.removeSizeEdits', () => modDetail({ revision: 'r3' }))
     .on('mods.setSizes', () => {
       if (refuse) throw new RpcError('The mod folder is read-only.', 'IO_ERROR');
       return modDetail({ revision: 'r2' });
@@ -89,6 +90,19 @@ describe('SizeCard', () => {
     await fireEvent.change(adult);
     expect(rpc.callsTo('mods.setSizes')).toHaveLength(0);
     expect(screen.getByText(/from 0.05 to 5/)).toBeInTheDocument();
+  });
+
+  it('names old record edits of the size and removes them', async () => {
+    const { rpc } = await setup(sizes({ recordEdits: ['/scaleGrowthCurve/keys/0/value', '/skinsData/1/femaleSizeMultiplier'] }));
+    expect(screen.getByText(/\/scaleGrowthCurve\/keys\/0\/value, \/skinsData\/1\/femaleSizeMultiplier/)).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Remove old size edits' }));
+    await waitFor(() => expect(rpc.callsTo('mods.removeSizeEdits')).toHaveLength(1));
+    expect(rpc.callsTo('mods.removeSizeEdits')[0].params).toMatchObject({ target: 'Spinosaurus' });
+  });
+
+  it('a species without old record edits has no Remove button', async () => {
+    await setup();
+    expect(screen.queryByRole('button', { name: 'Remove old size edits' })).toBeNull();
   });
 
   it('a save that fails puts the saved value back', async () => {

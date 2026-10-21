@@ -91,6 +91,28 @@ public class ModSizesRpcTests
     }
 
     [Fact]
+    public async Task Old_size_record_edits_show_and_can_be_removed()
+    {
+        using var game = new FakeGame();
+        var (h, ws) = await WithAlpha(game);
+        var workspace = Tyrant.Core.Workspaces.Workspace.Open(ws);
+        var mod = Tyrant.Core.Mods.ModProject.Open(workspace, "size-pack");
+        var entry = mod.AddSpecies(Tyrant.Core.Mods.SpeciesSkinsReader.Load(workspace), "mini", "Alpha", "Mini", "Tyrantus", "mini");
+        entry.Fields.Add(new Tyrant.Framework.Core.AnimalField { Path = "/skinsData/1/femaleSizeMultiplier", Kind = "number", Value = "0.9", TemplateValue = "1.1", Editable = true });
+        Tyrant.Framework.Core.AnimalDatabaseFile.Save(mod.DatabasePath, mod.Manifest.Species);
+        var key = entry.Key("size-pack");
+
+        var sizes = await h.Call("mods.sizes", new { id = "size-pack", target = key });
+        Assert.Equal(["/skinsData/1/femaleSizeMultiplier"], sizes.GetProperty("recordEdits").EnumerateArray().Select(e => e.GetString()));
+        var detail = await h.Call("mods.get", new { id = "size-pack" });
+
+        await h.Call("mods.removeSizeEdits", new { id = "size-pack", revision = Rev(detail), target = key });
+
+        Assert.Empty((await h.Call("mods.sizes", new { id = "size-pack", target = key })).GetProperty("recordEdits").EnumerateArray());
+        Assert.Empty((await h.Call("mods.sizes", new { id = "size-pack", target = "Alpha" })).GetProperty("recordEdits").EnumerateArray());
+    }
+
+    [Fact]
     public async Task A_bad_size_is_refused()
     {
         using var game = new FakeGame();

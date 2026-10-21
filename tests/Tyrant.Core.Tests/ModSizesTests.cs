@@ -247,6 +247,35 @@ public class ModSizesTests
     }
 
     [Fact]
+    public void Old_size_record_edits_can_be_removed()
+    {
+        var (game, ws, mod) = Setup();
+        using var _ = game;
+        var entry = mod.AddSpecies(Species, "mini", "Alpha", "Mini", "Tyrantus", "mini");
+        var key = entry.Key(mod.Id);
+        entry.Fields.Add(new AnimalField { Path = "/scaleGrowthCurve/keys/0/value", Kind = "number", Value = "0.25", TemplateValue = "0.5", Editable = true });
+        entry.Fields.Add(new AnimalField { Path = "/skinsData/0/maleSizeMultiplier", Kind = "number", Value = "1", TemplateValue = "1", Editable = true }); // unchanged
+        entry.Fields.Add(new AnimalField { Path = "/animalLengthHeightWidthRaw/x", Kind = "number", Value = "5", TemplateValue = "4", Editable = true }); // not Size's
+        AnimalDatabaseFile.Save(mod.DatabasePath, mod.Manifest.Species);
+        mod = ModProject.Open(ws, "size-pack");
+        Assert.Equal(["/scaleGrowthCurve/keys/0/value"], mod.SizeRecordEdits(key));
+        Assert.Contains(Check(ws, mod).Warnings, w => w.Contains("Set sizes in Size instead") && w.Contains("Remove old size edits"));
+
+        var removed = mod.RemoveSizeRecordEdits(key);
+
+        Assert.Equal(["/scaleGrowthCurve/keys/0/value"], removed);
+        var again = ModProject.Open(ws, "size-pack");
+        var fields = again.Manifest.Species.Single().Fields;
+        Assert.DoesNotContain(fields, f => SpeciesSizes.IsSizePath(f.Path));
+        Assert.Contains(fields, f => f.Path == "/animalLengthHeightWidthRaw/x" && f.Value == "5");
+        Assert.Empty(again.SizeRecordEdits(key));
+        Assert.DoesNotContain(Check(ws, again).Warnings, w => w.Contains("Set sizes in Size instead"));
+        Assert.Equal((0f, 0.5f), SpeciesSizes.Original(DataStore.Open(ws), key, again)!.Curve[0]); // the template's curve again
+        Assert.Empty(again.SizeRecordEdits("Alpha")); // a game species has none
+        Assert.Equal(TyrantErrorCode.TargetNotFound, Assert.Throws<TyrantException>(() => again.RemoveSizeRecordEdits("Alpha")).Code);
+    }
+
+    [Fact]
     public void Size_paths_hidden_from_field_editor()
     {
         var (game, ws, _) = Setup();

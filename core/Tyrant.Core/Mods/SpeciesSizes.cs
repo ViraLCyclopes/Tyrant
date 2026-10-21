@@ -35,6 +35,10 @@ public static partial class SpeciesSizes
     public static bool IsSizePath(string path) =>
         path == "/scaleGrowthCurve" || path.StartsWith("/scaleGrowthCurve/", StringComparison.Ordinal) || SkinSizePath().IsMatch(path);
 
+    /// <summary>A mod species' record edits that change its size outside Size (made before Size existed; the field editor hides them).</summary>
+    public static IReadOnlyList<string> RecordEdits(SpeciesEntry entry) =>
+        entry.Fields.Where(f => IsSizePath(f.Path) && f.Value != f.TemplateValue).Select(f => f.Path).ToList();
+
     /// <summary>
     /// A species' original size: a game species straight from the dump; one of the mod's own species (named by its key) from its
     /// template plus the mod's edits of the record's size fields. Null when the dump has no such species.

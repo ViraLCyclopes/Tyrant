@@ -444,6 +444,12 @@ folder. `mod.json` does not list these files; Tyrant finds them by folder.
 If several mods set the same key on the same target, the later mod in load order wins, per key. Keys the other mods set
 are kept.
 
+**A custom species' old record edits.** Before sizes existed, a mod's own species could change its growth curve
+(`/scaleGrowthCurve/...`) and its skins' `maleSizeMultiplier` and `femaleSizeMultiplier` as record edits in `animals.db`.
+Those edits still apply first, and the sizes multiply on top. The field editor no longer shows them, and Check warns
+about them. **Remove old size edits** on the species' Size card, or `tyrant mod size <mod> <species> --remove-record-edits`,
+takes them out of the record, so only the sizes change it.
+
 **Size ranges** are set in `mod.json`:
 
 ```json

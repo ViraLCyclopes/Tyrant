@@ -111,6 +111,13 @@
       <p class="hint">Adult <span>{adultText}</span></p>
       <p class="hint">Baby <span>{babyText}</span></p>
     </div>
+    {#if ready.recordEdits.length > 0}
+      <!-- Edits made in the species' record before Size existed: the field editor hides them, so they are cleared here. -->
+      <p class="warn">
+        Old record edits change this species' size outside Size: {ready.recordEdits.join(', ')}.
+        <button type="button" onclick={() => doc.edit('mods.removeSizeEdits', { target }, { undoable: false })}>Remove old size edits</button>
+      </p>
+    {/if}
     {#if problem}<p class="warn" role="alert">{problem}</p>{/if}
     {#each issues as m (m)}<p class="warn">{m}</p>{/each}
   {/if}

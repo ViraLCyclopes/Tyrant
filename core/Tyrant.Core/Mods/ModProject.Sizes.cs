@@ -58,6 +58,27 @@ public sealed partial class ModProject
         WriteSafely(path, json);
     }
 
+    /// <summary>The old record edits of the growth curve and sex sizes on this mod's species (by its key); none for a game species.</summary>
+    public IReadOnlyList<string> SizeRecordEdits(string target) =>
+        Manifest.Species.FirstOrDefault(s => s.Key(Id) == target) is { } entry ? SpeciesSizes.RecordEdits(entry) : [];
+
+    /// <summary>
+    /// Removes the size fields (growth curve, sex multipliers) from this mod's species' record (by its key), so its size is the
+    /// template's and Size's alone. Returns the edits that changed its size.
+    /// </summary>
+    public IReadOnlyList<string> RemoveSizeRecordEdits(string target)
+    {
+        var entry = Manifest.Species.FirstOrDefault(s => s.Key(Id) == target)
+            ?? throw new TyrantException(TyrantErrorCode.TargetNotFound, $"{target} is not a species of '{Id}': only a mod's own species has record edits.");
+        var edits = SpeciesSizes.RecordEdits(entry);
+        var old = entry.Fields;
+        if (!old.Any(f => SpeciesSizes.IsSizePath(f.Path))) return edits;
+        entry.Fields = old.Where(f => !SpeciesSizes.IsSizePath(f.Path)).ToList();
+        try { SaveSpecies(); }
+        catch { entry.Fields = old; throw; }
+        return edits;
+    }
+
     /// <summary>Sets the genetic size ranges in mod.json; null (or both unset) removes them.</summary>
     public void SetSizeRanges(SizeRanges? ranges)
     {

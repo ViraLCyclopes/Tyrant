@@ -833,6 +833,12 @@ export interface ModRemoveReplacementParams {
   texture: string;
 }
 
+export interface ModRemoveSizeEditsParams {
+  id: string;
+  revision: string;
+  target: string;
+}
+
 export interface ModRemoveSkinParams {
   id: string;
   revision: string;
@@ -1172,6 +1178,7 @@ export interface ModSizesDto {
   female: number | null;
   original: ModOriginalSizeDto;
   finalAdultLength: number | null;
+  recordEdits: string[];
 }
 
 export interface ModSizesParams {
@@ -1720,6 +1727,7 @@ export interface RpcMethods {
   "mods.removeModel": { params: ModRemoveModelParams; result: ModDetail };
   "mods.removePrefabTarget": { params: ModRemovePrefabTargetParams; result: ModDetail };
   "mods.removeReplacement": { params: ModRemoveReplacementParams; result: ModDetail };
+  "mods.removeSizeEdits": { params: ModRemoveSizeEditsParams; result: ModDetail };
   "mods.removeSkin": { params: ModRemoveSkinParams; result: ModDetail };
   "mods.removeSound": { params: ModRemoveSoundParams; result: ModDetail };
   "mods.removeSpecies": { params: ModRemoveSpeciesParams; result: ModDetail };
