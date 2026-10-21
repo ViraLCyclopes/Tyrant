@@ -525,9 +525,19 @@ namespace Tyrant.Framework
                 {
                     var owner = _target.Owner!;
                     var modDir = ModDirectory(create: true)!;
-                    if (exportFolder != null) Exports.Commit(_draft.Current, exportFolder); // before the reload, so the new image is the one read
-                    var block = LookFiles.Adopt(current, modDir, MaterialFolders.FolderOf(owner), missing); // the mod keeps its own copy of outside images
-                    MaterialFolders.SaveOwner(modDir, owner, new Dictionary<string, MaterialOverride>(StringComparer.Ordinal) { [c.MaterialName] = block });
+                    // Before the reload, so the new image is the one read; the images it replaces come back if the rest fails.
+                    var committed = exportFolder != null ? Exports.Commit(_draft.Current, exportFolder) : null;
+                    try
+                    {
+                        var block = LookFiles.Adopt(current, modDir, MaterialFolders.FolderOf(owner), missing); // the mod keeps its own copy of outside images
+                        MaterialFolders.SaveOwner(modDir, owner, new Dictionary<string, MaterialOverride>(StringComparer.Ordinal) { [c.MaterialName] = block });
+                    }
+                    catch
+                    {
+                        committed?.Undo();
+                        throw;
+                    }
+                    committed?.Keep();
                     where = TargetName();
                 }
             }

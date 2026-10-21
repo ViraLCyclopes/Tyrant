@@ -361,13 +361,14 @@ game update moves the panels and a button cannot be placed, the MelonLoader log 
 | A mod skin | That mod's folder in the game (whoever made it) |
 | A vanilla skin | The mod whose block for it currently applies; otherwise the `vanilla-looks` mod, created for it |
 | A custom species | Its own mod |
-| **This animal** | `UserData/Tyrant/Looks/<save>.json`, named after the save file and keyed by the animal's persistent ID (its images in `Looks/<save>/<id>/`); never the park save |
+| **This animal** | `UserData/Tyrant/Looks/<save>.json`, named after the save file and keyed by the animal's persistent ID; its images stay in `UserData/Tyrant/Masks`, named in the file as `"Masks/…"` (a look saved before Tyrant exported to Masks keeps its images in `Looks/<save>/<id>/`); never the park save |
 
 - Looks of single animals follow the **save file**, not the park's name: loading a save reads its own file, and every save
-  (Save As and autosaves too) writes its own copy, with the animal's images copied into that save's folder. Deleting a save
-  in the game deletes its looks. A new park needs its first save before **This animal** can be saved.
+  (Save As and autosaves too) writes its own copy. Images in `Masks` are shared, not copied; an older look's images in
+  another save's `Looks/<save>/<id>/` folder are copied into the new save's. Deleting a save in the game deletes its looks
+  (and its `Looks/<save>/` folder; `Masks` is never touched). A new park needs its first save before **This animal** can be saved.
 - A look on **This animal** stays with the animal when you move it. Looks of animals that have left the park are dropped
-  (with their images) the next time the park is saved; only the file of the save being loaded or written is ever changed.
+  (with any images in their `Looks/<save>/<id>/` folder; `Masks` stays) the next time the park is saved; only the file of the save being loaded or written is ever changed.
 - Saves into a mod change the **game's copy**; a manual mod update replaces those edits. Before you install, remove, delete or
   uninstall, the app offers to bring them into the project (**Bring in looks**, see the app guide), or use
   `tyrant mod looks <mod> --bring-in`. Uninstalling Tyrant keeps `UserData/Tyrant/Looks` and `UserData/Tyrant/Masks` (looks point at images there); without Tyrant the park loads vanilla.

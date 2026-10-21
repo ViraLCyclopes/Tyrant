@@ -168,6 +168,61 @@ public class MaskExportsTests
         Assert.True(File.Exists(fur)); // the export stays in Masks
     }
 
+    /// <summary>A fur mask export of <paramref name="bytes"/>, its exports and a block using it.</summary>
+    private static (ExportedFiles Exports, MaterialOverride Block) FurExport(byte[] bytes)
+    {
+        var fur = Path.Combine(TempDir(), "Rex fur mask.png");
+        File.WriteAllBytes(fur, bytes);
+        var exports = new ExportedFiles();
+        exports.Add(fur, ExportKind.FurMask);
+        return (exports, new MaterialOverride { Fur = new FurMasks { Mask = new MaskSource { File = fur } } });
+    }
+
+    [Fact]
+    public void A_save_that_fails_after_the_commit_puts_the_saved_look_s_image_back()
+    {
+        var owner = TempDir();
+        var target = Path.Combine(owner, LookEditing.FurMaskFile);
+        File.WriteAllBytes(target, new byte[] { 1 }); // the saved look's own
+        var (exports, block) = FurExport(new byte[] { 2 });
+
+        var commit = exports.Commit(block, owner);
+        Assert.Equal(new byte[] { 2 }, File.ReadAllBytes(target));
+        commit.Undo(); // e.g. writing materials.json failed
+        Assert.Equal(new byte[] { 1 }, File.ReadAllBytes(target));
+        Assert.Equal(new[] { target }, Directory.GetFiles(owner)); // no backup left behind
+    }
+
+    [Fact]
+    public void A_save_that_goes_through_keeps_the_new_image_and_no_backup()
+    {
+        var owner = TempDir();
+        var target = Path.Combine(owner, LookEditing.FurMaskFile);
+        File.WriteAllBytes(target, new byte[] { 1 });
+        var (exports, block) = FurExport(new byte[] { 2 });
+
+        exports.Commit(block, owner).Keep();
+        Assert.Equal(new byte[] { 2 }, File.ReadAllBytes(target));
+        Assert.Equal(new[] { target }, Directory.GetFiles(owner));
+    }
+
+    [Fact]
+    public void A_first_save_writes_the_fixed_name_and_undoing_it_removes_it()
+    {
+        var owner = Path.Combine(TempDir(), "materials", "skins", "rex"); // not made yet: the mod has no image of its own
+        var target = Path.Combine(owner, LookEditing.FurMaskFile);
+        var (exports, block) = FurExport(new byte[] { 2 });
+
+        var commit = exports.Commit(block, owner);
+        Assert.Equal(new byte[] { 2 }, File.ReadAllBytes(target));
+        Assert.Equal(new[] { target }, Directory.GetFiles(owner)); // no temp file left behind
+        commit.Undo();
+        Assert.False(File.Exists(target));
+
+        exports.Commit(block, owner).Keep();
+        Assert.Equal(new byte[] { 2 }, File.ReadAllBytes(target));
+    }
+
     [Fact]
     public void Only_an_export_in_its_own_slot_takes_the_fixed_name()
     {
