@@ -131,7 +131,8 @@ namespace Tyrant.Framework
                     FrameworkMod.Log.Warning($"{id}: its growth curve or skins were not found (game updated?); its sizes are skipped.");
                     continue;
                 }
-                var keys = curve.keys.Select(k => (k.time, k.value)).ToArray();
+                // Read as the game reads it (Unity's Hermite with the keys' tangents and weights), not as lines between the keys.
+                var keys = SizeMath.Sample(curve.keys.Select(k => k.time), curve.Evaluate);
                 var sizeSkins = skins.Cast<object>().Where(s => s != null)
                     .Select(s => new SizeSkin(s, Convert.ToDouble(Get(s, "maleSizeMultiplier")), Convert.ToDouble(Get(s, "femaleSizeMultiplier")))).ToList();
                 result.Add(new SizeSpecies(data, id, keys, sizeSkins));

@@ -18,6 +18,9 @@ namespace Tyrant.Framework.Core
         public const float SafeMin = FinalMin * (1 + SafeMargin), SafeMax = FinalMax * (1 - SafeMargin);
         private const int Steps = 16, Samples = 101;
 
+        /// <summary>How many times over 0–1 <see cref="Sample"/> reads the game's curve; with straight lines between them, the shape stays within 1%.</summary>
+        public const int CurveSamples = 33;
+
         /// <summary>The game's maturity fade f(m) = 0.2 + 0.8·(1 − (1 − m)²), clamped to 0–1 in m.</summary>
         public static float Fade(float maturity)
         {
@@ -26,7 +29,20 @@ namespace Tyrant.Framework.Core
             return 0.2f + 0.8f * (1f - inv * inv);
         }
 
-        /// <summary>The curve at t, linear in between its keys. The game's curve is Hermite; the rebuilt tangents (Task 3) make the game match this.</summary>
+        /// <summary>
+        /// The game's curve as keys for the maths here: <paramref name="evaluate"/> (the game's own reading, Hermite with the keys'
+        /// tangents) at 33 times over 0–1 and at each key's time. Its keys alone would lose the shape: read as straight lines, a
+        /// juvenile can be 25% off. No keys, no curve.
+        /// </summary>
+        public static (float Time, float Value)[] Sample(IEnumerable<float> keyTimes, Func<float, float> evaluate)
+        {
+            var times = new SortedSet<float>(keyTimes);
+            if (times.Count == 0) return new (float, float)[0];
+            for (var i = 0; i < CurveSamples; i++) times.Add(i / (float)(CurveSamples - 1));
+            return times.Select(t => (t, evaluate(t))).ToArray();
+        }
+
+        /// <summary>The curve at t, linear in between its keys (a game curve goes through <see cref="Sample"/> first; the rebuilt tangents make the game follow these lines).</summary>
         public static float Evaluate((float Time, float Value)[] keys, float t)
         {
             if (keys.Length == 0) return 0f;

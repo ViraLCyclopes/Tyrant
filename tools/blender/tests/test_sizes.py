@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 import struct
 import tempfile
 import unittest
@@ -27,6 +28,23 @@ def allosaurus(editable=True, skin=None, sizes=None):
     data["tyrant"] = os.path.join(tempfile.gettempdir(), "tyrant.exe")  # an absolute path: Send only runs a tyrant.exe on this PC
     project.save(path, data)
     return path
+
+
+# The Velociraptor's growth curve as the game has it (the dump of TYRANT_TEST_HERMITE_PROJECT): (time, value, in, out tangent).
+VELOCIRAPTOR = [(0.0, 0.393908322, 1.73721325, 1.73721325), (1.0, 1.0, 0.0356990322, 0.0356990322)]
+
+
+def hermite(keys, t):
+    """Unity's AnimationCurve.Evaluate for unweighted keys: Hermite between keys, clamped outside them."""
+    if t <= keys[0][0]:
+        return keys[0][1]
+    if t >= keys[-1][0]:
+        return keys[-1][1]
+    (t0, v0, _, out), (t1, v1, into, _) = next((a, b) for a, b in zip(keys, keys[1:]) if t <= b[0])
+    dt = t1 - t0
+    s = (t - t0) / dt
+    return ((2 * s ** 3 - 3 * s ** 2 + 1) * v0 + (s ** 3 - 2 * s ** 2 + s) * dt * out
+            + (-2 * s ** 3 + 3 * s ** 2) * v1 + (s ** 3 - s ** 2) * dt * into)
 
 
 def baby_male():
@@ -177,3 +195,38 @@ class SizeTests(unittest.TestCase):
         finally:
             send.run_async = real
         self.assertNotIn("--sizes", started[-1])
+
+
+@unittest.skipUnless(os.environ.get("TYRANT_TEST_HERMITE_PROJECT"), "needs the Hermite fixture project")
+class HermiteGrowthTests(unittest.TestCase):
+    """Growth on a project Tyrant wrote from a dump whose growth curve has the game's tangents: the size shown follows the
+    game's Hermite curve between its keys, not a straight line (which is 23% small at half growth for this curve)."""
+
+    def setUp(self):
+        bpy.ops.wm.read_factory_settings(use_empty=True)
+        src = os.environ["TYRANT_TEST_HERMITE_PROJECT"]
+        dst = tempfile.mkdtemp(prefix="tyrant-hermite-")
+        shutil.copytree(os.path.dirname(src), dst, dirs_exist_ok=True)
+        self.path = os.path.join(dst, os.path.basename(src))
+
+    def assertNear(self, actual, expected):
+        self.assertAlmostEqual(actual / expected, 1.0, delta=0.01)
+
+    def test_growth_follows_the_games_curve_between_its_keys(self):
+        arm = importer.import_project(self.path)
+        male, _ = growth.sex_sizes(arm, project.load(self.path))
+        for value in (0.25, 0.5, 0.75):
+            arm.tyrant_growth = value
+            self.assertNear(arm.scale.x, hermite(VELOCIRAPTOR, value) * (1 + (male - 1) * growth.fade(value)))
+
+    def test_a_new_adult_size_keeps_the_games_shape(self):
+        data = project.load(self.path)
+        data["sizesEditable"] = True
+        data["sizes"].update({"maleOriginal": 1.0, "femaleOriginal": 1.0})
+        data["destination"] = {"mod": "m", "species": "Carcharodontosaurus", "skin": None}
+        project.save(self.path, data)
+        arm = importer.import_project(self.path)
+        arm.tyrant_size_adult = 1.2
+        for value in (0.25, 0.5, 0.75):
+            arm.tyrant_growth = value
+            self.assertNear(arm.scale.x, 1.2 * hermite(VELOCIRAPTOR, value))  # S = adult × shape(m) for a sex size of 1

@@ -1,3 +1,5 @@
+using System.Text.Json;
+using Tyrant.Core.Blender;
 using Tyrant.Core.Data;
 using Tyrant.Core.Errors;
 using Tyrant.Core.Install;
@@ -91,7 +93,9 @@ public class ModSizesTests
         var store = DataStore.Open(ws);
 
         var vanilla = SpeciesSizes.Original(store, "Alpha", null)!;
-        Assert.Equal([(0f, 0.5f), (1f, 1f)], vanilla.Curve);
+        Assert.Equal(SizeMath.CurveSamples, vanilla.Curve.Length); // the curve sampled as the game reads it (see Original_curve_is_read_as_the_game_reads_it)
+        Assert.Equal((0f, 0.5f), vanilla.Curve[0]);
+        Assert.Equal((1f, 1f), vanilla.Curve[^1]);
         Assert.Equal([(1.0, 1.0), (1.2, 1.1)], vanilla.Skins);
         Assert.Equal([4f, 2f, 1f], vanilla.LengthHeightWidth!);
         Assert.Null(SpeciesSizes.Original(store, "Missing", null));
@@ -103,9 +107,69 @@ public class ModSizesTests
         entry.Fields.Add(new AnimalField { Path = "/skinsData/1/femaleSizeMultiplier", Kind = "number", Value = "0.9", TemplateValue = "1.1", Editable = true });
 
         var custom = SpeciesSizes.Original(store, key, mod)!;
-        Assert.Equal([(0f, 0.25f), (1f, 1f)], custom.Curve);
+        Assert.Equal((0f, 0.25f), custom.Curve[0]);
+        Assert.Equal((1f, 1f), custom.Curve[^1]);
         Assert.Equal([(1.0, 1.0), (1.2, 0.9)], custom.Skins);
         Assert.Equal(0.5f, SpeciesSizes.Original(store, "Alpha", mod)!.Curve[0].Value); // the template itself is untouched
+    }
+
+    // The dumped growth curves of two species, tangents and all: Hermite curves that lines between their keys misread by up to 25%.
+    private const string VelociraptorCurve = """
+        {"keys":[{"time":0,"value":0.393908322,"inTangent":1.73721325,"outTangent":1.73721325,"weightedMode":"None"},
+                 {"time":1,"value":1,"inTangent":0.0356990322,"outTangent":0.0356990322,"weightedMode":"None"}]}
+        """;
+    private const string BrachiosaurusCurve = """
+        {"keys":[{"time":0,"value":0.07884467,"inTangent":0.6078889,"outTangent":0.6078889,"weightedMode":"None"},
+                 {"time":0.491450667,"value":0.6044929,"inTangent":1.6740396,"outTangent":1.6740396,"weightedMode":"None"},
+                 {"time":1,"value":1,"inTangent":0.03651018,"outTangent":0.03651018,"weightedMode":"None"}]}
+        """;
+
+    /// <summary>A workspace whose dump has Velociraptor and Brachiosaurus with their game curves, and a mod "curves".</summary>
+    private static (FakeGame Game, Workspace Ws, ModProject Mod) GameCurves()
+    {
+        var game = new FakeGame();
+        var ws = Workspace.Create(Path.Combine(TestTemp.Root, Guid.NewGuid().ToString("N"), "ws"), new GameInstall(game.Root, null));
+        var result = new DumpResult();
+        var id = 1;
+        foreach (var (name, curve) in new[] { ("Velociraptor", VelociraptorCurve), ("Brachiosaurus", BrachiosaurusCurve) })
+            result.Objects.Add(new DumpObject(typeof(object), new EngineObjectInfo("PrehistoricKingdom.AnimalData", name, id), $$"""
+                {"$type":"PrehistoricKingdom.AnimalData","$name":"{{name}}","$id":{{id++}},"speciesID":"{{name}}","scaleGrowthCurve":{{curve}},
+                 "skinsData":[{"skinName":"Default","maleSizeMultiplier":1,"femaleSizeMultiplier":1}]}
+                """));
+        DumpWriter.Write(ws.DataDir, result, [], new DumpManifest { RequestId = "r" });
+        return (game, ws, ModProject.Create(ws, "curves", null, null));
+    }
+
+    [Theory]
+    [InlineData("Velociraptor", 0.5f)]
+    [InlineData("Brachiosaurus", 0.25f)]
+    public void Original_curve_is_read_as_the_game_reads_it(string species, float m)
+    {
+        var (game, ws, _) = GameCurves();
+        using var _ = game;
+        var expected = UnityCurve.Evaluate(JsonDocument.Parse(species == "Velociraptor" ? VelociraptorCurve : BrachiosaurusCurve).RootElement, m);
+
+        var curve = SpeciesSizes.Original(DataStore.Open(ws), species, null)!.Curve;
+
+        Assert.InRange(SizeMath.Evaluate(curve, m) / expected, 0.99, 1.01);
+        Assert.InRange(SizeMath.Evaluate(SizeMath.Rebuild(curve, 1, null), m) / expected, 0.99, 1.01); // identity sizes
+        Assert.InRange(SizeMath.Evaluate(SizeMath.Rebuild(curve, 1.2, null), m) * (1 + 0.2 * SizeMath.Fade(m)) / (1.2 * expected), 0.99, 1.01);
+    }
+
+    [Fact]
+    public void A_custom_species_curve_follows_its_tangent_edits()
+    {
+        var (game, ws, mod) = GameCurves();
+        using var _ = game;
+        var entry = mod.AddSpecies([new("Velociraptor", false, [new VanillaSkin(0, "Default", new Dictionary<string, string>(), new Dictionary<string, string>())])],
+            "flat", "Velociraptor", "Flat", "Tyrantus", "flat");
+        entry.Fields.Add(new AnimalField { Path = "/scaleGrowthCurve/keys/0/outTangent", Kind = "number", Value = "0", TemplateValue = "1.73721325", Editable = true });
+        entry.Fields.Add(new AnimalField { Path = "/scaleGrowthCurve/keys/1/inTangent", Kind = "number", Value = "0", TemplateValue = "0.0356990322", Editable = true });
+
+        var curve = SpeciesSizes.Original(DataStore.Open(ws), entry.Key(mod.Id), mod)!.Curve;
+
+        // Flat tangents: smoothstep from 0.394 to 1 (a quarter of the way in, 0.15625 of the rise; lines would give 0.25 of it).
+        Assert.Equal(0.393908322f + (1f - 0.393908322f) * 0.15625f, SizeMath.Evaluate(curve, 0.25f), 4);
     }
 
     [Fact]

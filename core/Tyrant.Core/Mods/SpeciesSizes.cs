@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Tyrant.Core.Blender;
 using Tyrant.Core.Data;
 using Tyrant.Core.Errors;
 using Tyrant.Core.Workspaces;
@@ -8,7 +9,10 @@ using Tyrant.Framework.Core;
 
 namespace Tyrant.Core.Mods;
 
-/// <summary>A species' size as the game data has it: the growth curve keys, each skin's sex size multipliers and the model's raw length, height and width.</summary>
+/// <summary>
+/// A species' size as the game data has it: the growth curve as the game reads it (sampled, <see cref="SizeMath.Sample"/>), each
+/// skin's sex size multipliers and the model's raw length, height and width.
+/// </summary>
 public sealed record OriginalSize((float Time, float Value)[] Curve, IReadOnlyList<(double Male, double Female)> Skins, float[]? LengthHeightWidth);
 
 /// <summary>What Check needs to judge sizes: every species' original size and the vanilla genetic size ranges.</summary>
@@ -87,19 +91,22 @@ public static partial class SpeciesSizes
                 && double.TryParse(field.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var number)) edits[field.Path] = number;
         double Value(string path, JsonElement element) => edits.TryGetValue(path, out var edited) ? edited : element.TryGetDouble(out var n) ? n : 0;
 
-        var curve = new List<(float, float)>();
+        // The keys with their tangents, read with Unity's Hermite as the game does (lines between the keys would lose the shape).
+        var curve = new List<UnityCurve.Key>();
         if (root.TryGetProperty("scaleGrowthCurve", out var growth) && growth.ValueKind == JsonValueKind.Object
             && growth.TryGetProperty("keys", out var keys) && keys.ValueKind == JsonValueKind.Array)
         {
             var i = 0;
             foreach (var key in keys.EnumerateArray())
             {
-                var time = key.TryGetProperty("time", out var t) ? Value($"/scaleGrowthCurve/keys/{i}/time", t) : 0;
-                var value = key.TryGetProperty("value", out var v) ? Value($"/scaleGrowthCurve/keys/{i}/value", v) : 0;
-                curve.Add(((float)time, (float)value));
+                var at = i;
+                float Part(string name) => edits.TryGetValue($"/scaleGrowthCurve/keys/{at}/{name}", out var edited) ? (float)edited
+                    : key.ValueKind == JsonValueKind.Object && key.TryGetProperty(name, out var part) ? UnityCurve.Number(part) : 0;
+                curve.Add(new UnityCurve.Key(Part("time"), Part("value"), Part("inTangent"), Part("outTangent")));
                 i++;
             }
         }
+        curve.Sort((x, y) => x.Time.CompareTo(y.Time));
         var skins = new List<(double, double)>();
         if (root.TryGetProperty("skinsData", out var skinsData) && skinsData.ValueKind == JsonValueKind.Array)
         {
@@ -115,6 +122,6 @@ public static partial class SpeciesSizes
         float[]? size = null;
         if (root.TryGetProperty("animalLengthHeightWidthRaw", out var raw) && raw.ValueKind == JsonValueKind.Object)
             size = new[] { "x", "y", "z" }.Select(axis => raw.TryGetProperty(axis, out var a) ? (float)Value($"/animalLengthHeightWidthRaw/{axis}", a) : 0f).ToArray();
-        return new OriginalSize(curve.ToArray(), skins, size);
+        return new OriginalSize(SizeMath.Sample(curve.Select(k => k.Time), t => UnityCurve.Evaluate(curve, t)), skins, size);
     }
 }

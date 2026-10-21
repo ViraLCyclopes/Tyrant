@@ -9,11 +9,14 @@ namespace Tyrant.Core.Blender;
 /// </summary>
 public static class UnityCurve
 {
-    private readonly record struct Key(float Time, float Value, float In, float Out);
+    /// <summary>One key: its time, value and in/out tangents.</summary>
+    public readonly record struct Key(float Time, float Value, float In, float Out);
 
-    public static float Evaluate(JsonElement curve, float t)
+    public static float Evaluate(JsonElement curve, float t) => Evaluate(Keys(curve), t);
+
+    /// <summary>The curve through these keys (sorted by time) at t; without keys, t itself.</summary>
+    public static float Evaluate(IReadOnlyList<Key> keys, float t)
     {
-        var keys = Keys(curve);
         if (keys.Count == 0) return t;
         if (t <= keys[0].Time) return keys[0].Value;
         if (t >= keys[^1].Time) return keys[^1].Value;
@@ -50,10 +53,11 @@ public static class UnityCurve
         return keys;
     }
 
-    /// <summary>A number, or the dump's "Infinity"/"-Infinity"/"NaN" strings.</summary>
-    private static float Num(JsonElement key, string name)
+    private static float Num(JsonElement key, string name) => key.TryGetProperty(name, out var v) ? Number(v) : 0;
+
+    /// <summary>A number, or the dump's "Infinity"/"-Infinity"/"NaN" strings (anything else is 0).</summary>
+    public static float Number(JsonElement v)
     {
-        if (!key.TryGetProperty(name, out var v)) return 0;
         if (v.ValueKind == JsonValueKind.Number) return v.GetSingle();
         return v.ValueKind == JsonValueKind.String ? v.GetString() switch
         {

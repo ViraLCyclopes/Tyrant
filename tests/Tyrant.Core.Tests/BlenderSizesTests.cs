@@ -11,8 +11,16 @@ namespace Tyrant.Core.Tests;
 /// <summary>The project file's sizes for Blender's Growth slider and Size panel, and sizes sent back from Blender.</summary>
 public class BlenderSizesTests
 {
-    private const string Curve = """[{"time":0,"value":0.25},{"time":1,"value":1},{"time":2,"value":1.1}]""";
-    private static readonly (float Time, float Value)[] Original = [(0f, 0.25f), (1f, 1f), (2f, 1.1f)];
+    // Tangents as the game's curves have them: a straight line between the keys would be far off (0.625 instead of 0.806 at 0.5).
+    private const string Curve = """
+        [{"time":0,"value":0.25,"inTangent":1.5,"outTangent":1.5},{"time":1,"value":1,"inTangent":0.05,"outTangent":0.05},
+         {"time":2,"value":1.1,"inTangent":0,"outTangent":0}]
+        """;
+
+    private static float Game(float t) => UnityCurve.Evaluate(System.Text.Json.JsonDocument.Parse("""{"keys":""" + Curve + "}").RootElement, t);
+
+    /// <summary>The curve as Tyrant reads it from the dump: Unity's Hermite, sampled.</summary>
+    private static readonly (float Time, float Value)[] Original = SizeMath.Sample([0f, 1f, 2f], Game);
 
     private sealed record Ctx(FakeGame Game, Workspace Ws, GameInstall Install, AssetIndex Index, IReadOnlyList<SpeciesSkins> Species,
         FakeAssetReader Reader, PrefabModel Prefab) : IDisposable
@@ -84,6 +92,25 @@ public class BlenderSizesTests
         Assert.Equal(new BlenderSizes(null, null, null, null, 1.3, 1.35), vanilla.Sizes);
         AssertKeys(Keys(Original), vanilla.Growth!.Scale);
         Assert.Equal(new BlenderSex(1f, 1.3f), vanilla.Sexes!.Male);
+    }
+
+    [Fact]
+    public void Growth_slider_curves_follow_the_games_hermite_curve()
+    {
+        using var c = Setup();
+        SpeciesModelMod(c, "plain");
+        var unsized = c.Open(new BlenderOpenRequest("Carcharodontosaurus", null, "plain", false, false));
+        ModProject.Open(c.Ws, "plain").SetSizes("Carcharodontosaurus", new SizeSettings { Adult = 1.2 });
+        var sized = c.Open(new BlenderOpenRequest("Carcharodontosaurus", null, "plain", false, false));
+
+        static float At(float[][] keys, float t) => SizeMath.Evaluate([.. keys.Select(k => (k[0], k[1]))], t);
+        foreach (var m in new[] { 0.25f, 0.5f, 0.75f })
+        {
+            var game = Game(m);
+            Assert.InRange(At(unsized.Growth!.OriginalScale!, m) / game, 0.99, 1.01);
+            Assert.InRange(At(unsized.Growth.Scale!, m) / game, 0.99, 1.01); // a species without sizes shows the game's shape too
+            Assert.InRange(At(sized.Growth!.Scale!, m) * (1 + 0.2 * SizeMath.Fade(m)) / (1.2 * game), 0.99, 1.01);
+        }
     }
 
     [Fact]

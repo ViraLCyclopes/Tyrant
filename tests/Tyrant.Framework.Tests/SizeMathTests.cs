@@ -95,4 +95,78 @@ public class SizeMathTests
         var adult = SizeMath.BackOff(Allosaurus, 2, null, new[] { (1.0, 1.0) }, 1, null, new[] { (0.1, 5.0) });
         Assert.Equal(1.0, adult);
     }
+
+    // The dumped growth curves (time, value, in and out tangent): Hermite curves whose shape a straight line between keys loses.
+    private static readonly (float Time, float Value, float In, float Out)[] VelociraptorGame =
+        { (0f, 0.393908322f, 1.73721325f, 1.73721325f), (1f, 1f, 0.0356990322f, 0.0356990322f) };
+    private static readonly (float Time, float Value, float In, float Out)[] BrachiosaurusGame =
+        { (0f, 0.07884467f, 0.6078889f, 0.6078889f), (0.491450667f, 0.6044929f, 1.6740396f, 1.6740396f), (1f, 1f, 0.03651018f, 0.03651018f) };
+
+    /// <summary>Unity's AnimationCurve.Evaluate for unweighted keys (as the growth curves are): Hermite between keys, clamped outside them.</summary>
+    private static float Hermite((float Time, float Value, float In, float Out)[] keys, float t)
+    {
+        if (t <= keys[0].Time) return keys[0].Value;
+        if (t >= keys[^1].Time) return keys[^1].Value;
+        var i = 0;
+        while (t > keys[i + 1].Time) i++;
+        var (a, b) = (keys[i], keys[i + 1]);
+        var dt = b.Time - a.Time;
+        var s = (t - a.Time) / dt;
+        return (2 * s * s * s - 3 * s * s + 1) * a.Value + (s * s * s - 2 * s * s + s) * dt * a.Out
+            + (-2 * s * s * s + 3 * s * s) * b.Value + (s * s * s - s * s) * dt * b.In;
+    }
+
+    /// <summary>The curve the game builds from rebuilt keys (SizesModule.SetCurve): SizePlan's slopes as both tangents.</summary>
+    private static (float Time, float Value, float In, float Out)[] AsGameCurve((float Time, float Value)[] keys)
+    {
+        var slopes = SizePlan.Slopes(keys);
+        return keys.Select((k, i) => (k.Time, k.Value, slopes[i], slopes[i])).ToArray();
+    }
+
+    private static (float Time, float Value)[] Read((float Time, float Value, float In, float Out)[] game) =>
+        SizeMath.Sample(game.Select(k => k.Time), t => Hermite(game, t));
+
+    [Theory]
+    [InlineData("Velociraptor", 0.5f)]
+    [InlineData("Brachiosaurus", 0.25f)]
+    public void Identity_sizes_keep_the_games_hermite_shape(string species, float m)
+    {
+        var game = species == "Velociraptor" ? VelociraptorGame : BrachiosaurusGame;
+        var expected = Hermite(game, m);
+
+        var rebuilt = SizeMath.Rebuild(Read(game), 1, null);
+
+        Assert.InRange(SizeMath.Evaluate(rebuilt, m) / expected, 0.99, 1.01);
+        Assert.InRange(Hermite(AsGameCurve(rebuilt), m) / expected, 0.99, 1.01);
+    }
+
+    [Theory]
+    [InlineData("Velociraptor", 1.2)]
+    [InlineData("Velociraptor", 0.6)]
+    [InlineData("Brachiosaurus", 1.2)]
+    [InlineData("Brachiosaurus", 0.6)]
+    public void A_sized_species_grows_along_the_games_shape(string species, double adult)
+    {
+        var game = species == "Velociraptor" ? VelociraptorGame : BrachiosaurusGame;
+        var curve = AsGameCurve(SizeMath.Rebuild(Read(game), adult, null));
+
+        for (var i = 0; i <= 100; i++)
+        {
+            var m = i / 100f;
+            var final = Hermite(curve, m) * (1 + (adult - 1) * SizeMath.Fade(m)); // S(m, adult, 1) as the game computes it
+            Assert.InRange(final / (adult * Hermite(game, m)), 0.99, 1.01);
+        }
+    }
+
+    [Fact]
+    public void Sample_reads_the_curve_at_33_times_over_0_to_1_and_at_each_key()
+    {
+        var sampled = SizeMath.Sample(new[] { 0f, 0.4f, 1f, 2f }, t => t * t);
+
+        Assert.Equal(35, sampled.Length); // 0, 1/32 … 1, plus the keys at 0.4 and 2
+        Assert.Equal(sampled.OrderBy(k => k.Time).Select(k => k.Time), sampled.Select(k => k.Time));
+        Assert.Contains((0.4f, 0.4f * 0.4f), sampled);
+        Assert.Contains((2f, 4f), sampled);
+        Assert.Empty(SizeMath.Sample(Array.Empty<float>(), t => t));
+    }
 }

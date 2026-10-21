@@ -134,7 +134,8 @@ def fade(m):
 
 
 def evaluate(keys, t):
-    """The curve at t, linear between its [time, value] keys (SizeMath.Evaluate)."""
+    """The curve at t, linear between its [time, value] keys (SizeMath.Evaluate). Tyrant sends the game's curve sampled as the
+    game reads it (Hermite, 33 times over 0–1), so the lines keep its shape."""
     if not keys:
         return 0.0
     if t <= keys[0][0]:
