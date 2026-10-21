@@ -241,6 +241,9 @@ namespace Tyrant.Framework.Core
         /// <summary>mod.json "textures"; never null (absent = auto everywhere).</summary>
         public TextureSettings Textures { get; } = new TextureSettings();
 
+        /// <summary>mod.json "sizeRanges"; null when absent.</summary>
+        public SizeRanges? SizeRanges { get; set; }
+
         public static ModManifest Parse(string json) => Parse(json, null);
 
         /// <summary>
@@ -347,6 +350,14 @@ namespace Tyrant.Framework.Core
                 manifest.Textures.Compression = TextureCompression.Auto;
                 manifest.Textures.Overrides.Clear();
                 skippedSkins.Add("\"textures\" was ignored: " + ex.Message);
+            }
+            try
+            {
+                if (map.TryGetValue("sizeRanges", out var ranges) && ranges != null) manifest.SizeRanges = SizeRanges.Parse(ranges);
+            }
+            catch (ManifestException ex) when (skippedSkins != null)
+            {
+                skippedSkins.Add("\"sizeRanges\" was ignored: " + ex.Message);
             }
             if (map.ContainsKey("species")) throw new ManifestException("Species definitions belong in animals.db, not mod.json.");
             return manifest;
@@ -460,6 +471,7 @@ namespace Tyrant.Framework.Core
                         .ToDictionary(o => o.Key, o => (object?)TextureCompressions.Name(o.Value));
                 map["textures"] = block;
             }
+            if (SizeRanges is { IsEmpty: false }) map["sizeRanges"] = SizeRanges.ToJson();
             return Json.Write(map) + "\n";
         }
 

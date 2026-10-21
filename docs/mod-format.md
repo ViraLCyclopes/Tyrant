@@ -44,6 +44,7 @@ red-spot-carcharo/
 | `dependencies` | Ids of mods that must be installed and on. |
 | `assembly` | (code mods) a DLL in the mod folder with a `Tyrant.Framework.TyrantMod` subclass. |
 | `replace` | Game textures to swap at runtime. `texture` is the game texture's name (copy it from the Assets tab); `file` is your PNG, inside the mod folder. `key` and `guid` are filled in by Tyrant (built-in textures have neither; the name is enough). |
+| `sizeRanges` | (optional) The Nursery and breeding size ranges, see [Sizes](#sizes-making-an-animal-bigger-or-smaller). |
 
 ## Textures
 
@@ -422,6 +423,67 @@ target, and warns on a field the template prefab does not have or a value of the
 - `Animator`: `applyRootMotion` and `cullingMode`.
 - Not editable: `Transform` (use rig edits), renderers, meshes, materials, the Animator's controller and avatar, and
   Unity's internal `m_*` fields on other built-in components.
+
+## Sizes (making an animal bigger or smaller)
+
+A mod can change how big a species is, without replacing its model. Each target gets one file in the mod's `sizes/`
+folder. `mod.json` does not list these files; Tyrant finds them by folder.
+
+```json
+{ "format": 1, "target": "Tyrannosaurus", "adult": 0.85, "baby": 0.10, "male": 1.0, "female": 1.1 }
+```
+
+- `target`: a base-game species id or a custom species identity (`tyrant.<mod-id>.<species-id>`), as for prefab settings.
+  The file name is only a filesystem-safe form of the target; readers use `target` from the content.
+- Every key except `target` is optional, and a left-out key means unchanged.
+- `adult`: multiplies the real adult size (0.05 to 5).
+- `baby`: the newborn's size as a share of the adult's (above 0, at most 1).
+- `male`, `female`: multiply the size of each sex (0.1 to 5).
+- A key outside its limits, or one Tyrant does not know, is an error.
+
+If several mods set the same key on the same target, the later mod in load order wins, per key. Keys the other mods set
+are kept.
+
+**A custom species' old record edits.** Before sizes existed, a mod's own species could change its growth curve
+(`/scaleGrowthCurve/...`) and its skins' `maleSizeMultiplier` and `femaleSizeMultiplier` as record edits in `animals.db`.
+Those edits still apply first, and the sizes multiply on top. The field editor no longer shows them, and Check warns
+about them. **Remove old size edits** on the species' Size card, or `tyrant mod size <mod> <species> --remove-record-edits`,
+takes them out of the record, so only the sizes change it.
+
+**Size ranges** are set in `mod.json`:
+
+```json
+"sizeRanges": { "nursery": [0.5, 1.5], "breeding": [0.7, 1.3] }
+```
+
+- `nursery`: the range of the Customize size slider in the Nursery. The random size of uncustomised eggs stays as in
+  the base game.
+- `breeding`: the range of the random size of bred animals.
+- Each is `[min, max]` with 0 < min <= max <= 10. The later mod in load order wins, per range.
+- The genetic size an animal gets is saved with it in the park. An animal made with a wider range (the Nursery slider or
+  breeding) keeps that size after the mod is removed: a T. rex made at 1.5 stays 1.5 times a vanilla one.
+
+**What follows the real size.** An adult's size relative to its species stays as in the base game, so these follow the
+size you set: guest appeal and cost, sale value (a bigger species sells for more), mass and combat damage, height,
+width and radius.
+
+**What stays as in the base game for adults:** turning and banking, awareness, aggression range, enclosure needs, and
+incubation time. The game times incubation by the growth curve, not by the real size, and Tyrant keeps the curve's adult
+value, so only a hatchling's time changes, and by less than its size does.
+
+The game keeps every animal's size between 0.05 and 2 (it logs an error each time a size passes that), so Tyrant's
+Check reports a size that would pass it as an error, counting the youngest baby, the sex multipliers and the widest
+genetic range. In the game, the framework scales the adult size back until the sizes fit and logs one warning.
+
+**In Blender.** The Tyrant panel's **Growth** slider scales the armature object as the game scales the animal:
+curve(m) × (1 + (s − 1) × f(m)), with the species' growth curve (rebuilt for the mod's `adult` and `baby`), s the shown
+sex's multiplier with the mod's `adult` and `male` or `female` applied, and the game's maturity fade f(m). This is a view
+only: the mesh and bones keep their size, and **Send to Tyrant** exports at the object's own scale. The **Size** box edits
+the four keys when the model goes to a species (a base-game species model or a mod's own species); Send to Tyrant then
+writes the keys edited in Blender into that species' `sizes/` file (`tyrant blender send --sizes <file>`), keeping the
+others as the mod has them, so a change made in the app meanwhile stays. For a skin it shows the species' sizes
+read-only, since sizes apply to the whole species. The view keeps the size within 0.05 to 2 as the game does, but does
+not scale the adult back to fit as the framework does.
 
 ## Rig edits (changing an animal's skeleton)
 

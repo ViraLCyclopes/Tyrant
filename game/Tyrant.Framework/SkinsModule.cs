@@ -326,7 +326,13 @@ namespace Tyrant.Framework
             return skin;
         }
 
-        private static object Clone(object skin) => CloneMethod.Invoke(skin, null);
+        /// <summary>A copy of a skin; a copy of a skin whose sizes were already multiplied keeps them (<see cref="SizesModule.Cloned"/>).</summary>
+        private static object Clone(object skin)
+        {
+            var clone = CloneMethod.Invoke(skin, null);
+            SizesModule.Cloned(skin, clone);
+            return clone;
+        }
 
         /// <summary>The mod's thumbnail, or a 128 px centre crop of its first diffuse; null keeps the base skin's.</summary>
         private static Sprite? Thumbnail(LoadedMod mod, SkinEntry entry)

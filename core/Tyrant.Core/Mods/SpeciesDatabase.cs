@@ -77,7 +77,7 @@ public static class SpeciesDatabase
         aliases.Add("/cost");
         void Add(string path, string kind, string value, bool editable)
         {
-            if (!aliases.Contains(path)) result.Add(new AnimalField { Path = path, Kind = kind, Value = value, TemplateValue = value, Editable = editable });
+            if (!aliases.Contains(path) && !SpeciesSizes.IsSizePath(path)) result.Add(new AnimalField { Path = path, Kind = kind, Value = value, TemplateValue = value, Editable = editable });
         }
         void Walk(JsonElement value, string path, bool editable, int depth, int references = 0)
         {

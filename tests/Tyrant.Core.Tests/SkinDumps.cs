@@ -37,7 +37,8 @@ public static class SkinDumps
          "secondaryGradient":{"mode":"Blend","colorKeys":[{"time":0,"r":0.5,"g":0.5,"b":0.5,"a":1},{"time":1,"r":0.5,"g":0.5,"b":0.5,"a":1}],"alphaKeys":[]}}
         """;
 
-    public static void Write(string dataDir)
+    /// <summary>scaleGrowthCurve: the Carcharodontosaurus' scale curve keys as JSON ([{"time":0,"value":0.5},…]); null leaves it out.</summary>
+    public static void Write(string dataDir, string? scaleGrowthCurve = null)
     {
         var result = new DumpResult();
         void Add(string type, string name, long id, string json) => result.Objects.Add(new DumpObject(typeof(object), new EngineObjectInfo(type, name, id), json));
@@ -46,7 +47,7 @@ public static class SkinDumps
             {"$type":"PrehistoricKingdom.AnimalData","$name":"Carcharodontosaurus","$id":1,"speciesID":"Carcharodontosaurus","animalRef":{"m_AssetGUID":"{{{{PrefabGuid}}}}"},
              "blendGrowthCurve":{"keys":[{"time":0,"value":0,"inTangent":1,"outTangent":1},{"time":1,"value":1,"inTangent":1,"outTangent":1}]},
              "skinGrowthCurve":{"keys":[{"time":0,"value":0,"inTangent":1,"outTangent":1},{"time":1,"value":1,"inTangent":1,"outTangent":1}]},
-             "blendShapesRelative":true,
+             "blendShapesRelative":true,{{{{(scaleGrowthCurve is null ? "" : "\"scaleGrowthCurve\":{\"keys\":" + scaleGrowthCurve + "},")}}}}
              "GrowthData":{"bones":[
                {"transformName":"Arm.L","mode":"Scale",
                 "localBabyTransformation":{"position":{"x":0.1,"y":0.3,"z":0},"scale":{"x":1.14,"y":1.14,"z":1.14}},

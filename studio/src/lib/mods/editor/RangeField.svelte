@@ -10,8 +10,9 @@
     step = 0.01,
     disabled = false,
     fallback,
+    baseLabel = 'From base skin',
     onChange,
-  }: { label: string; value: Range | null; min: number; max: number; step?: number; disabled?: boolean; fallback: Range; onChange: (v: Range | null) => void } =
+  }: { baseLabel?: string; label: string; value: Range | null; min: number; max: number; step?: number; disabled?: boolean; fallback: Range; onChange: (v: Range | null) => void } =
     $props();
 
   const fixed = $derived(!!value && value.min === value.max);
@@ -33,7 +34,7 @@
 
 <div class="field" role="group" aria-label={label}>
   <span class="label">{label}</span>
-  <label class="base"><input type="checkbox" checked={value === null} {disabled} onchange={(e) => onChange(e.currentTarget.checked ? null : { ...fallback })} /> From base skin</label>
+  <label class="base"><input type="checkbox" checked={value === null} {disabled} onchange={(e) => onChange(e.currentTarget.checked ? null : { ...fallback })} /> {baseLabel}</label>
   {#if value}
     <div class="range">
       <input type="range" aria-label="{label} from" {min} {max} {step} value={value.min} {disabled} onchange={(e) => setLow(Number(e.currentTarget.value))} />

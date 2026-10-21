@@ -13,6 +13,9 @@ export type EditMethod =
   | 'mods.setSpeciesStartingSkin'
   | 'mods.setSpeciesSwatch'
   | 'mods.setSpeciesPrefab'
+  | 'mods.setSizes'
+  | 'mods.removeSizeEdits'
+  | 'mods.setSizeRanges'
   | 'mods.setPortraits'
   | 'mods.setSpeciesPortraits'
   | 'mods.renameSkin'
@@ -46,14 +49,15 @@ export interface EditOptions {
   undoable?: boolean;
 }
 
-/** What undo puts back: mod.json, the prefab settings files (file name to content) and the material files (mod-relative path to content). */
+/** What undo puts back: mod.json, the prefab settings files (file name to content), the material files (mod-relative path to content) and the size files (file name to content). */
 interface Snapshot {
   manifest: string;
   prefabs: Record<string, string>;
   materials: Record<string, string>;
+  sizes: Record<string, string>;
 }
 
-const snapshotOf = (d: ModDetail): Snapshot => ({ manifest: d.manifestJson, prefabs: d.prefabFiles ?? {}, materials: d.materialFiles ?? {} });
+const snapshotOf = (d: ModDetail): Snapshot => ({ manifest: d.manifestJson, prefabs: d.prefabFiles ?? {}, materials: d.materialFiles ?? {}, sizes: d.sizeFiles ?? {} });
 
 const CHECK_DELAY = 1000;
 const MAX_UNDO = 100;
@@ -177,7 +181,7 @@ export class ModDoc {
     const target = from.at(-1);
     if (!current || target === undefined) return;
     try {
-      const next = await this.rpc.call('mods.restoreSnapshot', { id: this.id, revision: current.revision, manifest: target.manifest, prefabs: target.prefabs, materials: target.materials });
+      const next = await this.rpc.call('mods.restoreSnapshot', { id: this.id, revision: current.revision, manifest: target.manifest, prefabs: target.prefabs, materials: target.materials, sizes: target.sizes });
       from.pop();
       this.push(to, snapshotOf(current));
       this.detail = next;

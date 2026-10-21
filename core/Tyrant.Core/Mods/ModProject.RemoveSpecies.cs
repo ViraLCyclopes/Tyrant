@@ -88,6 +88,7 @@ public sealed partial class ModProject
             File.Delete(Path.Combine(PrefabFolder, prefab));
             RemoveEmptyPrefabFolder();
         }
+        if (Sizes(key) is not null) SetSizes(key, null);
         if (!deleteFiles) return new RemovedFiles([], []);
 
         var languageFiles = AnimalLocalization.Codes.SelectMany(code => entry.Localization.Values.Select(term => AnimalLocalization.FileFor(Dir, code, term)))

@@ -146,7 +146,8 @@ public sealed record ModDetail(string Id, string Name, string Version, string? A
     string ManifestJson, IReadOnlyList<ModReplacementDto> Replace, IReadOnlyList<ModSkinDto> Skins, IReadOnlyList<ModModelDto> Models,
     IReadOnlyList<ModSoundDto> Sounds, string FilesStamp = "", IReadOnlyDictionary<string, string>? PrefabFiles = null,
     IReadOnlyList<ModPrefabTargetDto>? PrefabTargets = null, IReadOnlyList<ModSpeciesUseDto>? UsesSpeciesFrom = null, IReadOnlyList<ModSpeciesMaterialsDto>? SpeciesMaterials = null,
-    IReadOnlyList<ModVanillaSkinMaterialsDto>? VanillaSkinMaterials = null, IReadOnlyDictionary<string, string>? MaterialFiles = null);
+    IReadOnlyList<ModVanillaSkinMaterialsDto>? VanillaSkinMaterials = null, IReadOnlyDictionary<string, string>? MaterialFiles = null,
+    IReadOnlyDictionary<string, string>? SizeFiles = null);
 
 public sealed record ModSpeciesUseDto(string ModId, string? ModName, int Skins, bool InWorkspace, bool Installed, bool Enabled);
 

@@ -1,7 +1,10 @@
 <script lang="ts">
   import { getTab } from '$lib/shell/tab.svelte';
   import { getSession } from '$lib/stores/session.svelte';
+  import type { ModSizeRangesDto } from '$lib/rpc/types.gen';
+  import type { Range } from './colors';
   import type { ModDoc } from './modDoc.svelte';
+  import RangeField from './RangeField.svelte';
   import { textureFacts } from './textureFacts.svelte';
   import { formatBytes } from './textures';
 
@@ -40,6 +43,28 @@
     facts.reload();
   }
 
+  // The genetic size ranges (the Nursery's size slider, and the offspring of breeding); the server replaces both together.
+  let sizeRanges = $state.raw<ModSizeRangesDto | null>(null);
+  $effect(() => {
+    void doc.detail?.revision;
+    void tab.quietly(() => session.rpc.call('mods.sizeRanges', { id: doc.id })).then((r) => {
+      if (r) sizeRanges = r;
+    });
+  });
+  const asRange = (v: number[] | null): Range | null => (v ? { min: v[0], max: v[1] } : null);
+  const gameRange = (v: number[]): Range => ({ min: v[0], max: v[1] });
+  const pair = (r: Range | null) => (r ? [r.min, r.max] : null);
+  async function saveRange(which: 'nursery' | 'breeding', r: Range | null) {
+    const now = sizeRanges;
+    if (!now || (r && r.min > r.max)) return;
+    const next = { nursery: now.nursery, breeding: now.breeding, [which]: pair(r) };
+    const shown = { ...now, ...next };
+    sizeRanges = shown;
+    // Not saved: back to the saved ranges, unless a reload came first.
+    if (!(await doc.edit('mods.setSizeRanges', next)) && sizeRanges === shown) sizeRanges = now;
+  }
+  const text = (v: number[]) => `${v[0].toFixed(2)} – ${v[1].toFixed(2)}`;
+
   async function save() {
     const d = doc.detail;
     if (!d) return;
@@ -73,6 +98,16 @@
     <p class="hint">Uses species from: {use.modName ?? use.modId}{#if !use.installed || !use.enabled} <span class="warn">({use.installed ? 'off' : 'not installed'} — {use.skins} {use.skins === 1 ? 'skin' : 'skins'} skipped)</span>{/if}</p>
   {/each}
 </section>
+
+{#if sizeRanges}
+  <section class="card details">
+    <h2>Size ranges</h2>
+    <RangeField label="Nursery size slider range" baseLabel="Game's range" value={asRange(sizeRanges.nursery)} min={0.05} max={10} fallback={gameRange(sizeRanges.gameNursery)} onChange={(r) => saveRange('nursery', r)} />
+    <p class="hint">The game's own Customize size slider in the Nursery covers this range. Random eggs keep the game's range. Game: {text(sizeRanges.gameNursery)}</p>
+    <RangeField label="Breeding size range" baseLabel="Game's range" value={asRange(sizeRanges.breeding)} min={0.05} max={10} fallback={gameRange(sizeRanges.gameBreeding)} onChange={(r) => saveRange('breeding', r)} />
+    <p class="hint">Game: {text(sizeRanges.gameBreeding)}</p>
+  </section>
+{/if}
 
 <style>
   .details { display: grid; gap: 10px; max-width: 560px; }

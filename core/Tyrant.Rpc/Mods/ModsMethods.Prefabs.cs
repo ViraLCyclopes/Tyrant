@@ -13,7 +13,7 @@ public sealed record ModSetPrefabFieldParams(string Id, string Revision, string 
 public sealed record ModResetPrefabFieldParams(string Id, string Revision, string Target, string Object, string Component, string Field);
 public sealed record ModRemovePrefabTargetParams(string Id, string Revision, string Target);
 public sealed record ModRestoreSnapshotParams(string Id, string Revision, string Manifest, IReadOnlyDictionary<string, string> Prefabs,
-    IReadOnlyDictionary<string, string>? Materials = null);
+    IReadOnlyDictionary<string, string>? Materials = null, IReadOnlyDictionary<string, string>? Sizes = null);
 
 /// <summary>mods.prefabFields and the prefab settings edits; mods.restoreSnapshot for undo and redo.</summary>
 public sealed partial class ModsMethods
@@ -50,7 +50,7 @@ public sealed partial class ModsMethods
     public ModDetail RestoreSnapshot(ModRestoreSnapshotParams p)
     {
         var (ws, _) = session.Current();
-        var mod = ModProject.RestoreSnapshot(ws, p.Id, p.Manifest, p.Prefabs, p.Revision, p.Materials);
+        var mod = ModProject.RestoreSnapshot(ws, p.Id, p.Manifest, p.Prefabs, p.Revision, p.Materials, p.Sizes);
         session.Log($"'{p.Id}': put back to an earlier version (undo/redo).");
         return DetailOf(ws, mod);
     }

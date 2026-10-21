@@ -151,6 +151,12 @@ Release build: `npm run build:app`, install `studio/src-tauri/target/release/bun
     Nursery. Growth back to 1.
 77. Sculpt a change; **Send to Tyrant** → choose a mod and the species model (or a skin) → the panel shows the LODs built.
     Switch to Tyrant: the mod editor's model page shows the sculpt (no restart, no manual refresh).
+76b. **Real size.** Mod with the species model as destination → Open in Blender: the armature object's scale is the
+    adult's size in game (its sex multiplier); **Growth** 0 shrinks it to the hatchling's. Size box → **Adult size ×**
+    1.2: the model grows at once. **Send to Tyrant**: the mod's Size card shows 1.2, and the sent model is not scaled.
+    The send is a change from outside the app: the mod reloads and Undo is greyed out. **↺** on Adult size × puts 1
+    back (or Adult size × 1 in Blender and Send again). On a skin destination the Size fields are greyed out with "Sizes apply to the whole species; set them
+    in the app."
 77b. Tyrant panel -> **Sex** Female: her maps show and (Allosaurus Anax) her adult keeps part of the Adolescent shape,
     like a female in the Nursery; Male puts it back. Open in Blender -> Options -> Sex starts as the female.
 78. Save the file (Ctrl+S), close Blender. From the mod's model page → **Open in Blender**: Blender starts with that file and
@@ -413,3 +419,23 @@ Needs the game and a Tyrant Framework installed from this build. Steps marked **
      starts from the film's colours (8); **Reset** goes back. Do the same on **Whole skin** of a mod skin and **Save**: in
      the app, that skin's material card shows the four colours in **Colours**. Give it 10 colours in the app and save: the
      window shows *Colour 1 of 10*, **+** is off, and an edit there keeps all 10 in `materials.json`.
+
+## Animal sizes
+
+Needs the game. Steps marked **(game)** start the game.
+
+156. **(game)** In a mod, set the T. rex's sizes to adult 0.8 and baby 0.2: a file `sizes/tyrannosaurus.json` with
+     `{ "format": 1, "target": "Tyrannosaurus", "adult": 0.8, "baby": 0.2 }`. In its `mod.json`, set
+     `"sizeRanges": { "nursery": [0.5, 1.5] }`. Install it, turn on the game's size editing (the Nursery's
+     **Customize size**), and open a park.
+     - `MelonLoader\Latest.log` has `Nursery size slider range: 0.5 to 1.5` and `Tyrannosaurus: sizes applied (adult 0.8,
+       baby 0.2, …)`, and no warning about the slider or the game's limit.
+     - Incubate a T. rex with the size slider at its left end (the readout shows 0.50), one at its right end (1.50),
+       and one with **Customize size** off: the uncustomised one is a normal-sized T. rex (its random size stays in the
+       game's 0.925 to 1.075, not the slider's range).
+     - Place them: the hatchlings are about a fifth of their adult size; grown, the 1.50 one is about three times the
+       0.50 one, and a T. rex is about 0.8 of a vanilla one. The animals neither float nor sink.
+     - Save the park, quit to the menu and load it: every T. rex has the same size as before, and the log has no new
+       warning. Remove the mod and load the park again: the uncustomised T. rex is back to a vanilla size. The 0.50 and
+     1.50 ones keep the genetic size the slider gave them (it is saved with each animal), so grown they are about 0.5
+     and 1.5 of a vanilla T. rex.

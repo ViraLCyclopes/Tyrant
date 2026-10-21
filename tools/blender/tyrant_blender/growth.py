@@ -3,7 +3,8 @@ The Growth slider (0 baby – 1 adult), as AnimalGrowthManager grows an animal: 
 blend-shape curve, the infant → adult maps from the skin curve, and the bone proportions (GrowthData) — those relative to
 the adult, so Growth 1 is exactly the rest pose that is edited and sent. The curves come sampled from Tyrant; without a
 data dump they are straight lines and bones keep their proportions. Growth sets only the location and scale the game's
-growth data owns, never rotations, so poses and IK survive it.
+growth data owns, never rotations, so poses and IK survive it. It also shows the animal's real size by scaling the armature
+object as the game does, S(m, s, 1) = curve(m) · (1 + (s − 1) · fade(m)); that scale is display only and never sent.
 """
 import json
 import os
@@ -14,6 +15,11 @@ from . import project
 
 _cache = {}
 BASE = "tyrant_growth_base"  # armature: each growth bone's location and scale in the prefab stance it opened in
+SCALE_BASE = "tyrant_scale_base"  # armature: the object's own scale, without the size shown
+SCALE_SHOWN = "tyrant_scale_shown"  # the size last shown on top of it
+EDITS = "tyrant_size_edits"  # the Size panel's changes not sent yet (JSON: adult, baby, male, female)
+SIZE_KEYS = ("adult", "baby", "male", "female")
+FINAL_MIN, FINAL_MAX = 0.05, 2.0  # the game clamps the final scale to this
 
 
 def sample(table, t):
@@ -121,6 +127,130 @@ def _bases(armature):
         return {}
 
 
+def fade(m):
+    """The game's maturity fade (GlobalAnimalParameters): how much of the sex size shows, 0.2 at hatching to 1 when adult."""
+    m = min(max(m, 0.0), 1.0)
+    return 0.2 + 0.8 * (1.0 - (1.0 - m) ** 2)
+
+
+def evaluate(keys, t):
+    """The curve at t, linear between its [time, value] keys (SizeMath.Evaluate). Tyrant sends the game's curve sampled as the
+    game reads it (Hermite, 33 times over 0–1), so the lines keep its shape."""
+    if not keys:
+        return 0.0
+    if t <= keys[0][0]:
+        return keys[0][1]
+    for (t0, v0), (t1, v1) in zip(keys, keys[1:]):
+        if t <= t1:
+            return v1 if t1 <= t0 else v0 + (v1 - v0) * (t - t0) / (t1 - t0)
+    return keys[-1][1]
+
+
+def rebuild(original, adult, baby):
+    """SizeMath.Rebuild: the curve for these sizes, 17 keys over 0–1 of adult · shape(m) / (1 + (adult − 1) · fade(m)) and the
+    original keys past 1 mapped by shape, which rescales the original so that its start is baby × its end."""
+    c0, c1 = evaluate(original, 0.0), evaluate(original, 1.0)
+    share0 = 1.0 if c1 == 0 else c0 / c1
+    a, b = 0.0, 1.0
+    if 1 - share0 >= 1e-4:
+        b = c1 * (1 - (share0 if baby is None else baby)) / (c1 - c0)
+        a = c1 - b * c1
+    keys = [[i / 16, adult * (a + b * evaluate(original, i / 16)) / (1 + (adult - 1) * fade(i / 16))] for i in range(17)]
+    return keys + [[t, a + b * v] for t, v in sorted(original) if t > 1]
+
+
+def size_edits(armature):
+    """The Size panel's changes not sent yet ({key: value})."""
+    try:
+        edits = json.loads(armature.get(EDITS) or "{}")
+    except (ValueError, TypeError):
+        return {}
+    return {k: float(v) for k, v in edits.items() if k in SIZE_KEYS and isinstance(v, (int, float))} if isinstance(edits, dict) else {}
+
+
+def sizes_of(armature, data):
+    """The species' sizes shown ({key: value or None = unchanged}): the destination's, with the panel's changes on top when
+    this project may change them; None without size data."""
+    sizes = (data or {}).get("sizes")
+    if not sizes:
+        return None
+    shown = {k: sizes.get(k) for k in SIZE_KEYS}
+    if data.get("sizesEditable"):
+        shown.update(size_edits(armature))
+    return shown
+
+
+def changed_sizes(armature, data):
+    """What Send writes to the species: only the keys edited here since the last Open or Send ({key: value}), which Tyrant
+    merges onto the mod's current sizes (the app may have changed the others meanwhile). None when this project may not
+    change them or nothing changed."""
+    if not data or not data.get("sizesEditable"):
+        return None
+    sizes = data.get("sizes") or {}
+    changed = {k: v for k, v in size_edits(armature).items() if sizes.get(k) is None or abs(sizes[k] - v) >= 1e-9}
+    return changed or None
+
+
+def baby_share(data):
+    """The newborn's size as a share of the adult's in the game's own curve (1 without one)."""
+    original = ((data or {}).get("growth") or {}).get("originalScale")
+    end = evaluate(original, 1.0) if original else 0.0
+    return evaluate(original, 0.0) / end if end else 1.0
+
+
+def sex_sizes(armature, data):
+    """(male, female): each sex's size in game, the skin's own times the adult and sex sizes shown."""
+    sizes = sizes_of(armature, data)
+    if sizes is None:
+        sexes = (data or {}).get("sexes") or {}
+        return tuple(float((sexes.get(sex) or {}).get("size", 1.0)) for sex in ("male", "female"))
+    own = data["sizes"]
+    return tuple(own[f"{sex}Original"] * (sizes["adult"] or 1.0) * (sizes[sex] or 1.0) for sex in ("male", "female"))
+
+
+def size_factor(armature, data, maturity):
+    """The animal's size at this maturity (the Growth slider's value) as the game scales it, S(m, s, 1) for the sex shown;
+    None without a scale curve."""
+    growth = (data or {}).get("growth") or {}
+    curve = growth.get("scale")
+    if not curve:
+        return None
+    original = growth.get("originalScale")
+    sizes = sizes_of(armature, data)
+    if original and sizes and size_edits(armature) and data.get("sizesEditable"):
+        adult, baby = sizes["adult"] or 1.0, sizes["baby"]
+        curve = original if adult == 1.0 and baby is None else rebuild(original, adult, baby)  # as Tyrant does for the game
+    male, female = sex_sizes(armature, data)
+    s = female if sex_of(armature) == "female" else male
+    return min(max(evaluate(curve, maturity) * (1 + (s - 1) * fade(maturity)), FINAL_MIN), FINAL_MAX)
+
+
+def own_scale(armature):
+    """The armature object's scale without the size shown; a scale you gave the object since counts as your own."""
+    shown = float(armature.get(SCALE_SHOWN, 1.0)) or 1.0
+    current = Vector(armature.scale)
+    base = armature.get(SCALE_BASE)
+    if base is not None and len(base) == 3 and (Vector(base) * shown - current).length <= 1e-5 * max(current.length, 1.0):
+        return Vector(base)
+    return current / shown
+
+
+def _show_size(armature, factor):
+    """Scales the armature object by the size shown (None: none) on top of its own scale."""
+    if factor is None and SCALE_BASE not in armature:
+        return
+    base = own_scale(armature)
+    factor = 1.0 if factor is None else factor
+    armature[SCALE_BASE] = list(base)
+    armature[SCALE_SHOWN] = factor
+    armature.scale = base * factor
+
+
+def hide_size(armature):
+    """Puts the object's own scale back, for the export: the size shown is never sent (Growth shows it again after)."""
+    _show_size(armature, None)
+
+
 def set_growth(armature, value, scene_objects=None):
     """Shows the animal at this growth (0 baby – 1 adult)."""
     import bpy
@@ -132,6 +262,8 @@ def set_growth(armature, value, scene_objects=None):
     m = blend_maturity(growth.get("blend"), value, clamp)
     key0, key1 = shape_values(m, growth.get("relative", True))
     maturity = sample(growth.get("skin"), value)
+    # The size follows the maturity itself (AnimalNative.CurrentScale), not the skin curve, which only blends the textures.
+    _show_size(armature, size_factor(armature, data, min(max(value, 0.0), 1.0)))
     meshes = deformed_meshes(armature, scene_objects if scene_objects is not None else bpy.context.scene.objects)
     for mesh in meshes:
         keys = mesh.data.shape_keys.key_blocks if mesh.data.shape_keys else []

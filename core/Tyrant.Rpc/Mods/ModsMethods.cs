@@ -415,7 +415,8 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
             UsesSpeciesFrom: UsesOf(uses, others),
             SpeciesMaterials: SpeciesMaterialsOf(m),
             VanillaSkinMaterials: VanillaSkinMaterialsOf(m),
-            MaterialFiles: mod.MaterialFileTexts());
+            MaterialFiles: mod.MaterialFileTexts(),
+            SizeFiles: mod.SizeFiles());
     }
 
     /// <summary>The other mods whose species the skins use, with whether each is here, installed and on; null for none.</summary>

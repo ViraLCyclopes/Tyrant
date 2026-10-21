@@ -20,12 +20,19 @@ public class BlenderAddonRunTests
     /// <summary>The node's world matrix with the prefab root at the origin (as Tyrant's glTF writer places it).</summary>
     private static Matrix4x4 World(SkeletonNode n) => n.Parent is null ? Matrix4x4.Identity : Local(n) * World(n.Parent);
 
-    internal static (string ProjectFile, PrefabModel Prefab, Workspace Ws, GameInstall Install, FakeGame Game) Fixture()
+    /// <summary>The Velociraptor's growth curve keys as the game has them (Hermite, with these tangents), for the size tests.</summary>
+    internal const string VelociraptorCurve = """
+        [{"time":0,"value":0.393908322,"inTangent":1.73721325,"outTangent":1.73721325,"weightedMode":"None"},
+         {"time":1,"value":1,"inTangent":0.0356990322,"outTangent":0.0356990322,"weightedMode":"None"}]
+        """;
+
+    /// <summary>scaleGrowthCurve: the species' growth curve keys in the dump (SkinDumps.Write); null leaves it out.</summary>
+    internal static (string ProjectFile, PrefabModel Prefab, Workspace Ws, GameInstall Install, FakeGame Game) Fixture(string? scaleGrowthCurve = null)
     {
         var game = new FakeGame();
         var install = new GameInstall(game.Root, null);
         var ws = Workspace.Create(Path.Combine(Path.GetTempPath(), "tyrant-tests", Guid.NewGuid().ToString("N"), "ws"), install);
-        SkinDumps.Write(ws.DataDir);
+        SkinDumps.Write(ws.DataDir, scaleGrowthCurve);
         var root = new SkeletonNode("Animal", Vector3.Zero, Quaternion.Identity, Vector3.One);
         var hip = new SkeletonNode("Hip", new Vector3(0, 1, 0), Quaternion.Identity, Vector3.One, root);
         root.Children.Add(hip);
@@ -167,6 +174,8 @@ public class BlenderAddonRunTests
         Skip.If(BlenderIntegrationTests.Blender() is null, "Blender 5.x not found");
         var (projectFile, _, ws, install, game) = Fixture();
         using var _ = game;
+        var (hermiteProject, _, _, _, hermiteGame) = Fixture(VelociraptorCurve);
+        using var __ = hermiteGame;
 
         // TYRANT_PY_PATTERN=test_images.py runs one test file (run.py's second argument); unset runs them all.
         var pattern = Environment.GetEnvironmentVariable("TYRANT_PY_PATTERN");
@@ -174,6 +183,7 @@ public class BlenderAddonRunTests
         {
             ["TYRANT_TEST_OBJECT_PROJECT"] = ObjectProject(ws, install),
             ["TYRANT_TEST_IK_PROJECT"] = IkProject(ws, install),
+            ["TYRANT_TEST_HERMITE_PROJECT"] = hermiteProject,
         };
         var run = RunPythonWith("run.py", env, string.IsNullOrEmpty(pattern) ? [projectFile] : [projectFile, pattern]);
         File.WriteAllText(Path.Combine(Path.GetTempPath(), "tyrant-python-tests.log"), run.Output); // every test's line, pass or fail

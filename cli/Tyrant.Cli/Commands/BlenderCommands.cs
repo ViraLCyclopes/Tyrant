@@ -269,6 +269,10 @@ public sealed class BlenderSendCommand : Command<BlenderSendCommand.Settings>
         [CommandOption("--rig-only")]
         [Description("With --rig: send only the rig edit; the destination wears the game's mesh.")]
         public bool RigOnly { get; set; }
+
+        [CommandOption("--sizes <FILE>")]
+        [Description("The sizes edited in Blender for the destination species (a sizes/<file>.json); its keys replace the mod's, the others stay. A skin destination refuses them.")]
+        public string? Sizes { get; set; }
     }
 
     public override int Execute(CommandContext context, Settings settings)
@@ -300,8 +304,20 @@ public sealed class BlenderSendCommand : Command<BlenderSendCommand.Settings>
                     throw new TyrantException(TyrantErrorCode.ModInvalid, $"The rig edit could not be read ({ex.Message}).");
                 }
             }
+            Tyrant.Framework.Core.SizeSettings? sizes = null;
+            if (settings.Sizes is not null)
+            {
+                try
+                {
+                    sizes = Tyrant.Framework.Core.SizeSettings.Parse(File.ReadAllText(settings.Sizes));
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or Tyrant.Framework.Core.ManifestException)
+                {
+                    throw new TyrantException(TyrantErrorCode.ModInvalid, $"The sizes could not be read ({ex.Message}).");
+                }
+            }
             result = BlenderService.Send(ws, install, CliServices.LoadIndex(ws, install), ModCli.RequireSpecies(ws), CliServices.AssetReader,
-                settings.Project, Path.GetFullPath(settings.Glb), choose, settings.NewModName, images, settings.Sex, rig, settings.RigOnly);
+                settings.Project, Path.GetFullPath(settings.Glb), choose, settings.NewModName, images, settings.Sex, rig, settings.RigOnly, sizes);
         }
         catch (TyrantException ex)
         {
