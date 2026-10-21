@@ -18,7 +18,7 @@ const sizes = (over: Partial<ModSizesDto> = {}): ModSizesDto => ({
   original: { adultLength: 12.1, babyShare: 0.25, skins: [{ male: 1, female: 1.1 }] }, finalAdultLength: 12.1, ...over,
 });
 
-async function setup(dto: ModSizesDto = sizes(), errors: string[] = [], refuse = false) {
+async function setup(dto: ModSizesDto = sizes(), errors: string[] = [], refuse = false, notes: string[] | null = null) {
   const rpc = new FakeRpc()
     .on('mods.get', () => modDetail())
     .on('mods.check', () => ({ errors, warnings: [], missingCutouts: [] }))
@@ -26,7 +26,7 @@ async function setup(dto: ModSizesDto = sizes(), errors: string[] = [], refuse =
     .on('mods.removeSizeEdits', () => modDetail({ revision: 'r3' }))
     .on('mods.setSizes', () => {
       if (refuse) throw new RpcError('The mod folder is read-only.', 'IO_ERROR');
-      return modDetail({ revision: 'r2' });
+      return modDetail({ revision: 'r2', notes });
     });
   const session = new Session(rpc, new FakePlatform(), memoryStore());
   const tab = new Tab('tab-mod', session.log, { retitle: () => {}, openTool: () => null });
@@ -34,9 +34,9 @@ async function setup(dto: ModSizesDto = sizes(), errors: string[] = [], refuse =
   const doc = new ModDoc('red-spot', rpc, tab, () => {});
   await doc.load();
   await doc.runCheck();
-  renderWith(SizeCard, session, { doc, target: 'Spinosaurus' }, tab);
+  const { container } = renderWith(SizeCard, session, { doc, target: 'Spinosaurus' }, tab);
   await screen.findByRole('spinbutton', { name: 'Adult size ×' });
-  return { rpc, doc };
+  return { rpc, doc, container };
 }
 
 describe('SizeCard', () => {
@@ -243,5 +243,54 @@ describe('SizeCard', () => {
     expect(screen.queryByText(/Other would be/)).toBeNull();
     expect(screen.queryByText(/Spinosaurus2 would be/)).toBeNull();
     expect(screen.queryByText(/X is not/)).toBeNull();
+  });
+
+  it('dragging a slider moves its number field, the size bar and the lengths live, and saves once on release', async () => {
+    const { rpc, container } = await setup(); // 12.1 m long
+    const slider = screen.getByRole('slider', { name: 'Adult size × slider' });
+    await fireEvent.input(slider, { target: { value: '1.5' } });
+    await fireEvent.input(slider, { target: { value: '2' } });
+    expect(screen.getByRole('spinbutton', { name: 'Adult size ×' })).toHaveValue(2);
+    expect(screen.getByText('12.1 m → 24.2 m')).toBeInTheDocument();
+    expect((container.querySelector('.fill.game') as HTMLElement).style.width).toBe('50%'); // the game's half the new size
+    expect((container.querySelector('.fill.mod') as HTMLElement).style.width).toBe('100%');
+    expect(rpc.callsTo('mods.setSizes')).toHaveLength(0);
+
+    await fireEvent.change(slider);
+    await waitFor(() => expect(rpc.callsTo('mods.setSizes')).toHaveLength(1));
+    expect(rpc.callsTo('mods.setSizes')[0].params).toMatchObject({ adult: 2 });
+    expect(screen.getByRole('spinbutton', { name: 'Adult size ×' })).toHaveValue(2);
+  });
+
+  it('shows what a save did besides, as information', async () => {
+    await setup(sizes(), [], false, ["Raised this species' Size limit to 3×."]);
+    const adult = screen.getByRole('spinbutton', { name: 'Adult size ×' });
+    await fireEvent.input(adult, { target: { value: '2.63' } });
+    await fireEvent.change(adult);
+    const note = await screen.findByText("Raised this species' Size limit to 3×.");
+    expect(note).toHaveClass('note');
+    expect(note).not.toHaveClass('warn');
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('the number fields show 3 decimals and keep the full value when not edited', async () => {
+    const { rpc } = await setup(sizes({ original: { adultLength: 12.1, babyShare: 0.121014, skins: [{ male: 1, female: 1.1 }] }, breeding: [0.8512345, 1.15] }));
+    expect(screen.getByRole('spinbutton', { name: 'Baby size (share of adult)' })).toHaveValue(0.121);
+    expect(screen.getByRole('spinbutton', { name: 'Breeding size range minimum' })).toHaveValue(0.851);
+    const adult = screen.getByRole('spinbutton', { name: 'Adult size ×' });
+    await fireEvent.input(adult, { target: { value: '1.2' } });
+    await fireEvent.change(adult);
+    await waitFor(() => expect(rpc.callsTo('mods.setSizes')).toHaveLength(1));
+    expect(rpc.callsTo('mods.setSizes')[0].params).toMatchObject({ adult: 1.2, baby: null, breeding: [0.8512345, 1.15] });
+  });
+
+  it('a set baby share shows 3 decimals and is sent whole', async () => {
+    const { rpc } = await setup(sizes({ baby: 0.121014 }));
+    expect(screen.getByRole('spinbutton', { name: 'Baby size (share of adult)' })).toHaveValue(0.121);
+    const male = screen.getByRole('spinbutton', { name: 'Male size ×' });
+    await fireEvent.input(male, { target: { value: '1.1' } });
+    await fireEvent.change(male);
+    await waitFor(() => expect(rpc.callsTo('mods.setSizes')).toHaveLength(1));
+    expect(rpc.callsTo('mods.setSizes')[0].params).toMatchObject({ male: 1.1, baby: 0.121014 });
   });
 });
