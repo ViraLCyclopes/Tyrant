@@ -440,8 +440,8 @@ Needs the game. Steps marked **(game)** start the game.
      1.50 ones keep the genetic size the slider gave them (it is saved with each animal), so grown they are about 0.5
      and 1.5 of a vanilla T. rex.
 157. **(game)** Size limit: in the same mod, set the limit to 20 (Mod details → **Size limit**: untick **Game's limit**,
-     drag the right handle to 20.00; or `tyrant mod size-ranges <mod> --limit 0.05,20`) and the T. rex's **Adult size ×**
-     to 4 (the slider now goes up to 20). Check warns that Tyrannosaurus can grow past the game's normal 2× limit, and
+     set **Maximum** to 20; or `tyrant mod size-ranges <mod> --limit 0.05,20`) and the T. rex's **Adult size ×**
+     to 4 (its slider now goes up to 20). Check warns that Tyrannosaurus can grow past the game's normal 2× limit, and
      shows no error. Install it and open a park.
      - `MelonLoader\Latest.log` has `Animal size limit: 0.05 to 20 (the game's is 0.05 to 2).`, no warning that animals
        keep the game's size limit, and `Tyrannosaurus: sizes applied (adult 4, …)` with no "would pass" warning.

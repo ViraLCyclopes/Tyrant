@@ -56,12 +56,23 @@
   const pair = (r: Range | null) => (r ? [r.min, r.max] : null);
   // The limit's absolute bounds (as mod.json takes them): its minimum within 0.01–0.05, its maximum within 2–20.
   const LIMIT = { lowestMin: 0.01, highestMin: 0.05, lowestMax: 2, highestMax: 20 };
-  const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
-  const inLimit = (r: Range): Range => ({ min: clamp(r.min, LIMIT.lowestMin, LIMIT.highestMin), max: clamp(r.max, LIMIT.lowestMax, LIMIT.highestMax) });
+  let limitProblem = $state('');
+  /** One end of the size limit from its number field; a number outside that end's bounds is not saved. */
+  function setLimitEnd(end: 'min' | 'max', text: string) {
+    const now = sizeRanges?.limit;
+    if (!now) return;
+    const n = Number(text);
+    const [lo, hi] = end === 'min' ? [LIMIT.lowestMin, LIMIT.highestMin] : [LIMIT.lowestMax, LIMIT.highestMax];
+    if (text.trim() === '' || !Number.isFinite(n) || n < lo || n > hi) {
+      limitProblem = `Size limit: the ${end === 'min' ? 'minimum' : 'maximum'} must be from ${lo} to ${hi}.`;
+      return;
+    }
+    limitProblem = '';
+    void saveRange('limit', end === 'min' ? { min: n, max: now[1] } : { min: now[0], max: n });
+  }
   async function saveRange(which: 'nursery' | 'breeding' | 'limit', r: Range | null) {
     const now = sizeRanges;
     if (!now || (r && r.min > r.max)) return;
-    if (r && which === 'limit') r = inLimit(r);
     const next = { nursery: now.nursery, breeding: now.breeding, limit: now.limit, [which]: pair(r) };
     const shown = { ...now, ...next };
     sizeRanges = shown;
@@ -111,7 +122,18 @@
     <p class="hint">The game's own Customize size slider in the Nursery covers this range. Random eggs keep the game's range. Game: {text(sizeRanges.gameNursery)}</p>
     <RangeField label="Breeding size range" baseLabel="Game's range" value={asRange(sizeRanges.breeding)} min={0.05} max={20} fallback={gameRange(sizeRanges.gameBreeding)} onChange={(r) => saveRange('breeding', r)} />
     <p class="hint">Game: {text(sizeRanges.gameBreeding)}</p>
-    <RangeField label="Size limit" baseLabel="Game's limit" value={asRange(sizeRanges.limit)} min={LIMIT.lowestMin} max={LIMIT.highestMax} fixable={false} fallback={gameRange(sizeRanges.gameLimit)} onChange={(r) => saveRange('limit', r)} />
+    <div class="limit" role="group" aria-label="Size limit">
+      <span class="name">Size limit</span>
+      <label class="base"><input type="checkbox" checked={sizeRanges.limit === null}
+        onchange={(e) => { limitProblem = ''; void saveRange('limit', e.currentTarget.checked ? null : gameRange(sizeRanges!.gameLimit)); }} /> Game's limit</label>
+      {#if sizeRanges.limit}
+        <label class="end">Minimum <input type="number" aria-label="Size limit minimum" min={LIMIT.lowestMin} max={LIMIT.highestMin} step="0.01"
+          value={sizeRanges.limit[0]} onchange={(e) => setLimitEnd('min', e.currentTarget.value)} /></label>
+        <label class="end">Maximum <input type="number" aria-label="Size limit maximum" min={LIMIT.lowestMax} max={LIMIT.highestMax} step="0.5"
+          value={sizeRanges.limit[1]} onchange={(e) => setLimitEnd('max', e.currentTarget.value)} /></label>
+      {/if}
+    </div>
+    {#if limitProblem}<p class="warn" role="alert">{limitProblem}</p>{/if}
     <p class="hint">The game caps animals at 0.05×–2×. A wider limit lets sizes past 2× show in game; the game was tuned for normal sizes, so very big animals may clip, get stuck or frame badly.</p>
     <p class="hint">Minimum 0.01–0.05, maximum 2–20. With several mods on, the widest limit wins.</p>
   </section>
@@ -122,5 +144,10 @@
   label { display: grid; gap: 4px; color: var(--muted); }
   .cook { display: flex; gap: 12px; align-items: center; justify-content: space-between; }
   .cook p { margin: 0; }
+  .limit { display: grid; grid-template-columns: 90px auto auto auto; align-items: center; gap: 10px; }
+  .limit .name { color: var(--muted); }
+  .limit .base { display: flex; gap: 4px; font-size: 12px; }
+  .limit .end { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+  .limit .end input { width: 70px; }
   input, textarea { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; }
 </style>

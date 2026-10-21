@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Range } from './colors';
 
-  /** A random range (two handles) or a fixed number (Fixed, unless fixable is false); null = from the base skin. Saves on release. */
+  /** A random range (two handles) or a fixed number (Fixed); null = from the base skin. Saves on release. */
   let {
     label,
     value,
@@ -11,9 +11,8 @@
     disabled = false,
     fallback,
     baseLabel = 'From base skin',
-    fixable = true,
     onChange,
-  }: { baseLabel?: string; label: string; value: Range | null; min: number; max: number; step?: number; disabled?: boolean; fallback: Range; fixable?: boolean; onChange: (v: Range | null) => void } =
+  }: { baseLabel?: string; label: string; value: Range | null; min: number; max: number; step?: number; disabled?: boolean; fallback: Range; onChange: (v: Range | null) => void } =
     $props();
 
   const fixed = $derived(!!value && value.min === value.max);
@@ -41,7 +40,7 @@
       <input type="range" aria-label="{label} from" {min} {max} {step} value={value.min} {disabled} onchange={(e) => setLow(Number(e.currentTarget.value))} />
       {#if !fixed}<input type="range" aria-label="{label} to" {min} {max} {step} value={value.max} {disabled} onchange={(e) => setHigh(Number(e.currentTarget.value))} />{/if}
       <span class="numbers">{fixed ? value.min.toFixed(2) : `${value.min.toFixed(2)} – ${value.max.toFixed(2)}`}</span>
-      {#if fixable}<label class="fixed"><input type="checkbox" aria-label="{label} fixed" checked={fixed} {disabled} onchange={(e) => setFixed(e.currentTarget.checked)} /> Fixed</label>{/if}
+      <label class="fixed"><input type="checkbox" aria-label="{label} fixed" checked={fixed} {disabled} onchange={(e) => setFixed(e.currentTarget.checked)} /> Fixed</label>
     </div>
   {/if}
 </div>

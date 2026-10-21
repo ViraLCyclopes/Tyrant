@@ -14,14 +14,16 @@
   const tab = getTab();
 
   type Key = 'adult' | 'baby' | 'male' | 'female';
-  type Field = { key: Key; label: string; min: number; max: number; step: number };
-  // The multipliers reach 5×, or the mod's size limit when it is higher (the files take up to 20×).
-  const reach = (limit: number[] | undefined) => Math.max(5, limit?.[1] ?? 0);
+  type Field = { key: Key; label: string; min: number; max: number; slider: number; step: number };
+  // The number fields take what the files take (up to 20×; Check says whether it fits the size limit). The sliders reach 5×,
+  // or the mod's size limit when it is higher, so their usual range stays easy to drag.
+  const MAX = 20;
+  const reach = (limit: number[] | undefined) => Math.min(MAX, Math.max(5, limit?.[1] ?? 0));
   const fieldsFor = (top: number): Field[] => [
-    { key: 'adult', label: 'Adult size ×', min: 0.05, max: top, step: 0.01 },
-    { key: 'baby', label: 'Baby size (share of adult)', min: 0.01, max: 1, step: 0.01 },
-    { key: 'male', label: 'Male size ×', min: 0.1, max: top, step: 0.01 },
-    { key: 'female', label: 'Female size ×', min: 0.1, max: top, step: 0.01 },
+    { key: 'adult', label: 'Adult size ×', min: 0.05, max: MAX, slider: top, step: 0.01 },
+    { key: 'baby', label: 'Baby size (share of adult)', min: 0.01, max: 1, slider: 1, step: 0.01 },
+    { key: 'male', label: 'Male size ×', min: 0.1, max: MAX, slider: top, step: 0.01 },
+    { key: 'female', label: 'Female size ×', min: 0.1, max: MAX, slider: top, step: 0.01 },
   ];
 
   let loaded = $state.raw<ModSizesDto | null>(null);
@@ -101,7 +103,7 @@
       <div class="field" class:changed={own[f.key] !== null}>
         <span class="name">{f.label}</span>
         <input type="number" aria-label={f.label} min={f.min} max={f.max} step={f.step} value={shown(f.key)} onchange={(e) => change(f, e.currentTarget.value)} />
-        <input type="range" aria-label="{f.label} slider" min={f.min} max={f.max} step={f.step} value={shown(f.key)} onchange={(e) => change(f, e.currentTarget.value)} />
+        <input type="range" aria-label="{f.label} slider" min={f.min} max={f.slider} step={f.step} value={shown(f.key)} onchange={(e) => change(f, e.currentTarget.value)} />
         <span class="hint">{f.key === 'male' || f.key === 'female' ? '' : `game: ${round(original[f.key])}`}</span>
         {#if own[f.key] !== null}
           <button class="ghost" aria-label="Reset {f.label}" title={f.key === 'male' || f.key === 'female' ? "Back to 1× (the skin's own size)" : "Back to the game's value"} onclick={() => save({ ...own, [f.key]: null })}>↺</button>

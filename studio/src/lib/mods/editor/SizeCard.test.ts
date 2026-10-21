@@ -86,10 +86,22 @@ describe('SizeCard', () => {
   it('a value past the limits is not sent', async () => {
     const { rpc } = await setup();
     const adult = screen.getByRole('spinbutton', { name: 'Adult size ×' });
-    await fireEvent.input(adult, { target: { value: '9' } });
+    await fireEvent.input(adult, { target: { value: '21' } });
     await fireEvent.change(adult);
     expect(rpc.callsTo('mods.setSizes')).toHaveLength(0);
-    expect(screen.getByText(/from 0.05 to 5/)).toBeInTheDocument();
+    expect(screen.getByText(/from 0.05 to 20/)).toBeInTheDocument();
+  });
+
+  it('the number fields take up to 20 under the game’s limit; the sliders stay at 5', async () => {
+    const { rpc } = await setup(); // the game's limit, 0.05 to 2
+    expect(screen.getByRole('spinbutton', { name: 'Adult size ×' })).toHaveAttribute('max', '20');
+    expect(screen.getByRole('spinbutton', { name: 'Female size ×' })).toHaveAttribute('max', '20');
+    expect(screen.getByRole('slider', { name: 'Adult size × slider' })).toHaveAttribute('max', '5');
+    const male = screen.getByRole('spinbutton', { name: 'Male size ×' });
+    await fireEvent.input(male, { target: { value: '9' } });
+    await fireEvent.change(male);
+    await waitFor(() => expect(rpc.callsTo('mods.setSizes')).toHaveLength(1));
+    expect(rpc.callsTo('mods.setSizes')[0].params).toMatchObject({ male: 9 });
   });
 
   it('with a raised size limit the sliders reach it', async () => {
