@@ -141,17 +141,13 @@ public sealed record ModModelPreview(string PrefabRef, IReadOnlyList<ModModelPre
 
 public sealed record ModReplacementDto(string Texture, string? Key, string? Guid, string File);
 
-/// <summary>
-/// A whole mod for the editor. Revision: SHA-256 of mod.json, sent back with every change; ManifestJson: the file itself (undo).
-/// Notes: what an edit did besides the change asked for, to tell the user (mods.setSizes: the species' size limit it raised to
-/// fit); null for the others.
-/// </summary>
+/// <summary>A whole mod for the editor. Revision: SHA-256 of mod.json, sent back with every change; ManifestJson: the file itself (undo).</summary>
 public sealed record ModDetail(string Id, string Name, string Version, string? Author, string? Description, string Dir, string Revision,
     string ManifestJson, IReadOnlyList<ModReplacementDto> Replace, IReadOnlyList<ModSkinDto> Skins, IReadOnlyList<ModModelDto> Models,
     IReadOnlyList<ModSoundDto> Sounds, string FilesStamp = "", IReadOnlyDictionary<string, string>? PrefabFiles = null,
     IReadOnlyList<ModPrefabTargetDto>? PrefabTargets = null, IReadOnlyList<ModSpeciesUseDto>? UsesSpeciesFrom = null, IReadOnlyList<ModSpeciesMaterialsDto>? SpeciesMaterials = null,
     IReadOnlyList<ModVanillaSkinMaterialsDto>? VanillaSkinMaterials = null, IReadOnlyDictionary<string, string>? MaterialFiles = null,
-    IReadOnlyDictionary<string, string>? SizeFiles = null, IReadOnlyList<string>? Notes = null);
+    IReadOnlyDictionary<string, string>? SizeFiles = null);
 
 public sealed record ModSpeciesUseDto(string ModId, string? ModName, int Skins, bool InWorkspace, bool Installed, bool Enabled);
 

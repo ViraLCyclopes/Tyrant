@@ -341,13 +341,13 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
     /// <summary>The caution shown for an adult size this far from 1: the size class (agentSize) is never changed, because that needs navmesh data.</summary>
     private const string SizeClassWarning = "the species keeps its size class (paths, enclosure filters); a much bigger or smaller animal may not fit them";
 
-    /// <summary>The caution shown for a species that can grow past the game's own 2× within a raised size limit.</summary>
+    /// <summary>The caution shown for a species that can grow past the game's own 2× (its automatic size limit lets it).</summary>
     private const string Past2xWarning = "can grow past the game's normal 2× limit; the size class, camera framing, foot placement and enclosure needs were tuned for normal sizes.";
 
     /// <summary>
-    /// Sizes: each sizes/ file's target and values, whether the species stays within its size limit (its "limit", else the game's
-    /// 0.05 to 2; with the random hatching range and its own genetic ranges) and whether it passes 2× within it, and old record
-    /// edits of the growth curve.
+    /// Sizes: each sizes/ file's target and values, whether the species stays within Tyrant's own bounds of 0.01 to 20 (with the
+    /// random hatching range and its own genetic ranges; within them its size limit follows), whether it passes the game's 2×,
+    /// an old file's ignored "limit", and old record edits of the growth curve.
     /// </summary>
     private static void SizeProblems(ModProject mod, IReadOnlyList<SpeciesSkins>? species, SizeFacts? facts, List<string> errors, List<string> warnings)
     {
@@ -362,14 +362,14 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
                 errors.Add($"sizes/{file}: {sizes.Target} is not a species of the game or of this mod; fix the target or remove the file.");
                 continue;
             }
+            if (sizes.Limit is not null)
+                warnings.Add($"sizes/{file}: The size limit is automatic now; this file's limit is ignored and is removed the next time you save.");
             if (sizes.Adult is double adult && (adult >= 1.5 || adult <= 0.65))
                 warnings.Add($"sizes/{file}: {sizes.Target}'s adult size {text(adult)} is far from the original: {SizeClassWarning}.");
             if (facts?.Original(sizes.Target) is not { } original) continue;
             if (SpeciesSizes.Extremes(original, sizes, facts) is not { } extremes) continue;
-            var limit = SizeLimit.Of(sizes.Limit);
-            var allows = limit.IsGame ? $"the game allows {limit}, and clamps it" : $"its size limit allows {limit}; the game clamps it there";
-            if (!limit.Contains(extremes.Min, extremes.Max))
-                errors.Add($"sizes/{file}: {sizes.Target} would be scaled from {text(extremes.Min)} to {text(extremes.Max)} ({allows}); lower its sizes or size ranges, or raise its Size limit.");
+            if (SpeciesSizes.PastBoundsProblem(original, sizes, facts) is { } past)
+                errors.Add($"sizes/{file}: {past}");
             else if (extremes.Max > SizeMath.FinalMax)
                 warnings.Add($"sizes/{file}: {sizes.Target} {Past2xWarning}");
         }

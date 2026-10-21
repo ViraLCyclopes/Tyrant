@@ -112,6 +112,37 @@ public class SizeMathTests
         Assert.True(max <= limit.SafeMax && max > 19.9f && min >= limit.SafeMin, $"extremes {min}..{max}");
     }
 
+    [Theory]
+    [InlineData(0.3f, 1.5f, 0.05f, 2f)]      // within the game's: the game's
+    [InlineData(0.3f, 2.964f, 0.05f, 3f)]    // up to the next 0.5
+    [InlineData(0.3f, 2.9985f, 0.05f, 3.5f)] // past the 2.997 the game backs off to under 3: the next step
+    [InlineData(0.3f, 1.999f, 0.05f, 2.5f)]  // past the game's own 1.998
+    [InlineData(0.024f, 1f, 0.02f, 2f)]      // down to the next 0.01
+    [InlineData(0.030015f, 1f, 0.02f, 2f)]   // under the 0.03003 the game backs off to over 0.03
+    [InlineData(0.001f, 30f, 0.01f, 20f)]    // Tyrant's own bounds
+    public void The_limit_follows_the_extremes(float min, float max, float lo, float hi)
+    {
+        var limit = SizeLimit.Fitting(min, max);
+
+        Assert.Equal((lo, hi), (limit.Min, limit.Max));
+        if (max <= 19.9f && min >= 0.011f) Assert.True(min >= limit.SafeMin && max <= limit.SafeMax, $"{limit} keeps {min}..{max} in its safe band");
+        Assert.Equal(min < SizeLimit.LowestMin || max > SizeLimit.HighestMax, SizeLimit.PastBounds(min, max));
+    }
+
+    [Fact]
+    public void Extremes_pinned_for_the_size_cards_copy()
+    {
+        // studio/src/lib/mods/editor/sizeMath.test.ts counts the same fixture with its copy of these maths: the numbers must match.
+        (float, float)[] curve = { (0f, 0.25f), (1f, 1f) };
+        var settings = new SizeSettings { Adult = 2, Baby = 0.1, Female = 1.2 };
+        var sexes = new[] { (1.1, 1.0) }.SelectMany(k => { var (m, f) = SizeMath.Sex(k.Item1, k.Item2, settings); return new[] { m, f }; });
+
+        var (min, max) = SizeMath.Extremes(SizeMath.Rebuild(curve, 2, 0.1), sexes, new[] { (0.925, 1.075), (0.5, 3.0), (0.85, 1.15) });
+
+        Assert.Equal(0.17, min, 5);
+        Assert.Equal(7.2, max, 4);
+    }
+
     [Fact]
     public void Safe_limits_keep_their_margin_inside_the_limit()
     {

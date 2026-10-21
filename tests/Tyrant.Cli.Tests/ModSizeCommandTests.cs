@@ -56,35 +56,6 @@ public class ModSizeCommandTests
     }
 
     [Fact]
-    public void Check_judges_a_species_range_against_its_limit()
-    {
-        using var game = new FakeGame();
-        var ws = Path.Combine(Path.GetTempPath(), "tyrant-tests", Guid.NewGuid().ToString("N"), "ws");
-        Assert.Equal(ExitCodes.Ok, Run("workspace", "init", ws, "--game", game.Root).Code);
-        Assert.Equal(ExitCodes.Ok, Run("mod", "new", "wide-nursery", "--name", "Wide nursery", "-w", ws).Code);
-        var objects = new DumpResult();
-        // The dumped Allosaurus Anax (curve and its one skin's sex sizes) and the game's genetic ranges.
-        objects.Objects.Add(new DumpObject(typeof(object), new EngineObjectInfo("PrehistoricKingdom.AnimalData", "Allosaurus Anax", 1), """
-            {"speciesID":"Allosaurus Anax",
-             "scaleGrowthCurve":{"keys":[{"time":0,"value":0.16434139,"inTangent":0.588403165,"outTangent":0.588403165},
-                                         {"time":1,"value":1,"inTangent":-0.05258916,"outTangent":-0.05258916}]},
-             "skinsData":[{"skinName":"Pyroclastic","maleSizeMultiplier":1.3,"femaleSizeMultiplier":1.35}]}
-            """));
-        objects.Objects.Add(new DumpObject(typeof(object), new EngineObjectInfo("PrehistoricKingdom.AnimalsV2.Data.GlobalAnimalParameters", "GlobalAnimalParameters", 2),
-            """{"incubationGeneticSizeMinMax":{"x":0.925,"y":1.075},"breedingGeneticSizeMinMax":{"x":0.85,"y":1.15}}"""));
-        DumpWriter.Write(Path.Combine(ws, "data"), objects, [], new DumpManifest { RequestId = "r1", BuildGuid = "b" });
-
-        // Females: 1.35 x 1.5 = 2.03, past the game's 2 (given as its limit, so it is not raised).
-        var set = Run("mod", "size", "wide-nursery", "Allosaurus Anax", "--nursery", "0.5,1.5", "--limit", "0.05,2", "-w", ws);
-        Assert.True(set.Code == ExitCodes.Ok, set.Err);
-        var check = Run("mod", "check", "wide-nursery", "-w", ws);
-
-        var lines = (check.Out + check.Err).Split(Environment.NewLine);
-        Assert.Contains(lines, l => l.Contains("Allosaurus Anax would be scaled from") && l.Contains("the game allows 0.05 to 2"));
-        Assert.DoesNotContain(lines, l => l.Contains("genetic size ranges"));
-    }
-
-    [Fact]
     public void Shows_and_removes_old_size_record_edits()
     {
         using var game = new FakeGame();
@@ -120,7 +91,7 @@ public class ModSizeCommandTests
     }
 
     [Fact]
-    public void Sets_prints_and_clears_a_species_ranges_and_limit()
+    public void Sets_prints_and_clears_a_species_ranges_with_the_automatic_limit()
     {
         using var game = new FakeGame();
         var ws = Workspace(game);
@@ -130,30 +101,39 @@ public class ModSizeCommandTests
         Assert.True(set.Code == ExitCodes.Ok, set.Err);
         Assert.Contains("nursery 0.9 to 1.1", set.Out);
         Assert.Contains("breeding 0.8 to 1.2", set.Out);
-        Assert.Contains("limit the game's (0.05 to 2)", set.Out);
+        Assert.Contains("size limit 0.05 to 2 (automatic, from the sizes)", set.Out);
         Assert.Contains("\"nursery\"", File.ReadAllText(file));
-        Assert.DoesNotContain("sizeRanges", File.ReadAllText(Path.Combine(ws, "mods", "size-pack", "mod.json")));
 
         var bad = Run("mod", "size", "size-pack", "Alpha", "--nursery", "0,1", "-w", ws);
         Assert.NotEqual(ExitCodes.Ok, bad.Code);
         Assert.Contains("\"nursery\" must be [min, max]", bad.Err);
+        Assert.Contains("takes two numbers", Run("mod", "size", "size-pack", "Alpha", "--nursery", "0.9", "-w", ws).Err);
 
-        var shape = Run("mod", "size", "size-pack", "Alpha", "--nursery", "0.9", "-w", ws);
-        Assert.NotEqual(ExitCodes.Ok, shape.Code);
-        Assert.Contains("takes two numbers", shape.Err);
+        var big = Run("mod", "size", "size-pack", "Alpha", "--adult", "4", "-w", ws); // 4 x 1.2 = 4.8
+        Assert.True(big.Code == ExitCodes.Ok, big.Err);
+        Assert.Contains("size limit 0.05 to 5 (automatic, from the sizes)", big.Out);
+        Assert.Contains("nursery 0.9 to 1.1", big.Out); // the other values are kept
+        Assert.DoesNotContain("limit", File.ReadAllText(file));
 
-        var limit = Run("mod", "size", "size-pack", "Alpha", "--limit", "0.05,20", "--adult", "4", "-w", ws);
-        Assert.True(limit.Code == ExitCodes.Ok, limit.Err);
-        Assert.Contains("limit 0.05 to 20", limit.Out);
-        Assert.Contains("adult 4", limit.Out);
-        Assert.Contains("nursery 0.9 to 1.1", limit.Out); // the other values are kept
-        var tooBig = Run("mod", "size", "size-pack", "Alpha", "--limit", "0.05,25", "-w", ws);
-        Assert.NotEqual(ExitCodes.Ok, tooBig.Code);
-        Assert.Contains("\"limit\" must be [min, max] with 0.01 <= min <= 0.05 and 2 <= max <= 20", tooBig.Err);
-        Assert.Contains("takes two numbers", Run("mod", "size", "size-pack", "Alpha", "--limit", "20", "-w", ws).Err);
+        // There is no --limit: the limit is automatic.
+        var limit = Run("mod", "size", "size-pack", "Alpha", "--limit", "0.05,20", "-w", ws);
+        Assert.NotEqual(ExitCodes.Ok, limit.Code);
+        Assert.Contains("--limit is gone: the size limit is automatic now (it follows the sizes, up to 20×).", limit.Err);
 
         Assert.Equal(ExitCodes.Ok, Run("mod", "size", "size-pack", "Alpha", "--clear", "-w", ws).Code);
         Assert.False(File.Exists(file));
+    }
+
+    [Fact]
+    public void Check_names_a_species_past_20x()
+    {
+        using var game = new FakeGame();
+        var ws = Workspace(game);
+
+        Assert.Equal(ExitCodes.Ok, Run("mod", "size", "size-pack", "Alpha", "--adult", "2", "--nursery", "0.5,12", "-w", ws).Code); // 2 x 12 = 24
+        var check = Run("mod", "check", "size-pack", "-w", ws);
+
+        Assert.Contains("The biggest Alpha can reach 24× a normal Alpha (adult 2 × Nursery slider up to 12), more than Tyrant's 20× limit", check.Out + check.Err);
     }
 
     [Fact]
@@ -168,21 +148,4 @@ public class ModSizeCommandTests
         Assert.DoesNotContain("sizeRanges", File.ReadAllText(Path.Combine(ws, "mods", "size-pack", "mod.json")));
     }
 
-    [Fact]
-    public void Raises_the_limit_to_fit_and_prints_it()
-    {
-        using var game = new FakeGame();
-        var ws = Workspace(game);
-
-        var set = Run("mod", "size", "size-pack", "Alpha", "--adult", "2", "-w", ws); // 2 x 1.15 = 2.3, past the game's 2
-
-        Assert.True(set.Code == ExitCodes.Ok, set.Err);
-        Assert.Contains("Raised this species' Size limit to 2.5×.", set.Out);
-        Assert.Contains("limit 0.05 to 2.5", set.Out);
-
-        var own = Run("mod", "size", "size-pack", "Alpha", "--adult", "3", "--limit", "0.05,2", "-w", ws); // --limit stands
-        Assert.True(own.Code == ExitCodes.Ok, own.Err);
-        Assert.DoesNotContain("Size limit to", own.Out);
-        Assert.Contains("limit 0.05 to 2", own.Out);
-    }
 }

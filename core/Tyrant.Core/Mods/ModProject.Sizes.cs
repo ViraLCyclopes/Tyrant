@@ -3,7 +3,7 @@ using Tyrant.Framework.Core;
 
 namespace Tyrant.Core.Mods;
 
-/// <summary>Size settings: a mod's size changes per species (with its genetic size ranges and size limit), one sizes/&lt;file&gt;.json each.</summary>
+/// <summary>Size settings: a mod's size changes per species (with its genetic size ranges; its size limit follows them), one sizes/&lt;file&gt;.json each.</summary>
 public sealed partial class ModProject
 {
     private string SizeFolder => Path.Combine(Dir, SizeSettings.Folder);
@@ -26,42 +26,9 @@ public sealed partial class ModProject
         SizeSettings.ReadFolder(Dir, null).FirstOrDefault(t => string.Equals(t.Sizes.Target, target, StringComparison.OrdinalIgnoreCase)).Sizes;
 
     /// <summary>
-    /// Writes a target's sizes as <see cref="SetSizes(string, SizeSettings?)"/> does and, unless this save sets the limit itself
-    /// (<paramref name="setsLimit"/>: then the user's limit stands and Check reports any problem), raises the species' size
-    /// limit in the same write when the sizes would pass it (<see cref="SpeciesSizes.RaisedLimit"/>). Returns what it raised,
-    /// to tell the user; nothing without the game's data (<paramref name="facts"/> null).
+    /// Writes a target's sizes (its existing file name if it has one); null, or every value unset, deletes its file. An old
+    /// file's "limit" is not written again: the size limit is automatic (<see cref="SpeciesSizes.LimitOf"/>).
     /// </summary>
-    public IReadOnlyList<string> SetSizes(string target, SizeSettings? sizes, SizeFacts? facts, bool setsLimit)
-    {
-        if (setsLimit || sizes is null || facts is null || Raised(target, sizes, facts) is not { } raised)
-        {
-            SetSizes(target, sizes);
-            return [];
-        }
-        SetSizes(target, raised.Sizes);
-        return [raised.Note];
-    }
-
-    /// <summary>Raises the species' size limit to fit the sizes it has now (set in the app, say), as a save of them would; writes only when it raises.</summary>
-    public IReadOnlyList<string> FitSizeLimit(string target, SizeFacts facts)
-    {
-        if (Raised(target, Sizes(target) ?? new SizeSettings { Target = target }, facts) is not { } raised) return [];
-        SetSizes(target, raised.Sizes);
-        return [raised.Note];
-    }
-
-    /// <summary>The sizes with the species' limit raised to fit them, and the note; null when they fit (or the species is not in the data).</summary>
-    private static (SizeSettings Sizes, string Note)? Raised(string target, SizeSettings sizes, SizeFacts facts)
-    {
-        if (facts.Original(target) is not { } original || SpeciesSizes.RaisedLimit(original, sizes, facts) is not { } raised) return null;
-        return (new SizeSettings
-        {
-            Target = target, Adult = sizes.Adult, Baby = sizes.Baby, Male = sizes.Male, Female = sizes.Female,
-            Nursery = sizes.Nursery, Breeding = sizes.Breeding, Limit = raised.Limit,
-        }, raised.Note);
-    }
-
-    /// <summary>Writes a target's sizes (its existing file name if it has one); null, or every value unset, deletes its file.</summary>
     public void SetSizes(string target, SizeSettings? sizes)
     {
         var existing = SizeSettings.ReadFolder(Dir, null).FirstOrDefault(t => string.Equals(t.Sizes.Target, target, StringComparison.OrdinalIgnoreCase)).File;
@@ -83,7 +50,7 @@ public sealed partial class ModProject
         var written = new SizeSettings
         {
             Target = target, Adult = sizes.Adult, Baby = sizes.Baby, Male = sizes.Male, Female = sizes.Female,
-            Nursery = sizes.Nursery, Breeding = sizes.Breeding, Limit = sizes.Limit,
+            Nursery = sizes.Nursery, Breeding = sizes.Breeding,
         };
         var json = written.ToJson();
         try

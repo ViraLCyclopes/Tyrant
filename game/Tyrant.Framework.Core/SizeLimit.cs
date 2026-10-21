@@ -4,8 +4,9 @@ using System.Globalization;
 namespace Tyrant.Framework.Core
 {
     /// <summary>
-    /// The final scale an animal may have. The game caps it at 0.05 to 2 (AnimalNative.CurrentScale); a species' "limit"
-    /// (sizes/&lt;species&gt;.json) widens that for it, within 0.01 to 0.05 for the minimum and 2 to 20 for the maximum.
+    /// The final scale an animal may have. The game caps it at 0.05 to 2 (AnimalNative.CurrentScale). The limit is automatic: a
+    /// species whose sizes need more gets the limit they need (<see cref="Fitting"/>), within Tyrant's own bounds of 0.01 to 20.
+    /// The framework, Check and Blender all derive it the same way.
     /// </summary>
     public readonly struct SizeLimit : IEquatable<SizeLimit>
     {
@@ -21,8 +22,6 @@ namespace Tyrant.Framework.Core
         /// <summary>The game's own limit, 0.05 to 2.</summary>
         public static SizeLimit Game => new SizeLimit(SizeMath.FinalMin, SizeMath.FinalMax);
 
-        /// <summary>A species' [min, max] ("limit"); null is the game's.</summary>
-        public static SizeLimit Of(double[]? limit) => limit == null ? Game : new SizeLimit((float)limit[0], (float)limit[1]);
 
         public float Min { get; }
         public float Max { get; }
@@ -35,9 +34,31 @@ namespace Tyrant.Framework.Core
 
         public bool Contains(float min, float max) => min >= Min && max <= Max;
 
-        /// <summary>The widest of two [min, max] limits (the lowest minimum, the highest maximum); a null one does not count.</summary>
-        public static double[]? Widest(double[]? a, double[]? b) =>
-            a == null ? b : b == null ? a : new[] { Math.Min(a[0], b[0]), Math.Max(a[1], b[1]) };
+        /// <summary>Whether a species' smallest and largest pass Tyrant's own bounds (under 0.01 or over 20): Check's error; the game backs it off.</summary>
+        public static bool PastBounds(float min, float max) => min < LowestMin || max > HighestMax;
+
+        /// <summary>
+        /// The size limit a species gets for its smallest and largest final scale (<see cref="SizeMath.Extremes"/>): never narrower
+        /// than the game's 0.05 to 2; past it, the maximum is max / (1 − <see cref="SizeMath.SafeMargin"/>) rounded up to the next
+        /// 0.5 and the minimum min / (1 + margin) rounded down to the next 0.01, so the extremes stay inside the band back-off keeps
+        /// to (<see cref="SafeMin"/>, <see cref="SafeMax"/>); within Tyrant's bounds, 0.01 to 20.
+        /// </summary>
+        public static SizeLimit Fitting(float min, float max)
+        {
+            double hi = LowestMax, lo = HighestMin;
+            if (max > Game.SafeMax)
+            {
+                hi = Math.Max(LowestMax, Math.Min(HighestMax, Math.Ceiling(max / (1 - (double)SizeMath.SafeMargin) * 2) / 2));
+                // The game's float maths decides: a step whose safe band still misses the largest gets the next one.
+                while (hi < HighestMax && new SizeLimit((float)lo, (float)hi).SafeMax < max) hi += 0.5;
+            }
+            if (min < Game.SafeMin)
+            {
+                lo = Math.Min(HighestMin, Math.Max(LowestMin, Math.Floor(min / (1 + (double)SizeMath.SafeMargin) * 100) / 100));
+                while (lo > LowestMin && new SizeLimit((float)lo, (float)hi).SafeMin > min) lo = Math.Round(lo - 0.01, 2);
+            }
+            return new SizeLimit((float)lo, (float)hi);
+        }
 
         public bool Equals(SizeLimit other) => Min == other.Min && Max == other.Max;
         public override bool Equals(object? obj) => obj is SizeLimit other && Equals(other);

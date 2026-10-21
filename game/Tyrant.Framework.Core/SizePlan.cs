@@ -64,7 +64,8 @@ namespace Tyrant.Framework.Core
     /// <summary>
     /// Decides how the mods' sizes land on the game's species, pass after pass: a species' curve is replaced once, each skin's
     /// sex sizes are multiplied once (a skin copied from a multiplied one counts as multiplied), and each warning is given once.
-    /// The adult multiplier is backed off when the extremes over the species' genetic ranges in effect would pass its size limit.
+    /// Each species gets the size limit its extremes need (<see cref="SizeLimit.Fitting"/>, up to Tyrant's 20); the adult
+    /// multiplier is backed off only when the extremes over the species' genetic ranges in effect would pass that.
     /// </summary>
     public sealed class SizePlan
     {
@@ -76,20 +77,44 @@ namespace Tyrant.Framework.Core
 
         private readonly SizeTable _table;
         private readonly (double Min, double Max) _incubation, _breeding;
-        private readonly bool _limitsLifted;
+        private readonly Func<bool>? _liftLimits;
+        private bool? _limitsLifted;
+        private readonly Dictionary<string, SizeLimit> _limits = new Dictionary<string, SizeLimit>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<object, SizeSettings> _species = new Dictionary<object, SizeSettings>(ReferenceComparer.Instance);
         private readonly HashSet<object> _skins = new HashSet<object>(ReferenceComparer.Instance);
         private readonly HashSet<string> _warned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         /// <param name="incubation">The game's random egg range (GlobalAnimalParameters.incubationGeneticSizeMinMax), which the slider also uses unless a species sets its own.</param>
         /// <param name="breeding">The game's breeding range (breedingGeneticSizeMinMax).</param>
-        /// <param name="limitsLifted">Whether the species' size limits are in game; false when the game's cap could not be lifted (every species then has the game's).</param>
-        public SizePlan(SizeTable table, (double Min, double Max) incubation, (double Min, double Max) breeding, bool limitsLifted = true)
+        /// <param name="liftLimits">
+        /// Lifts the game's cap so species can have their own limits. Called once, when the first species needs a limit wider than
+        /// the game's; it says whether that worked (when not, or without it, every species keeps the game's 0.05 to 2).
+        /// </param>
+        public SizePlan(SizeTable table, (double Min, double Max) incubation, (double Min, double Max) breeding, Func<bool>? liftLimits = null)
         {
             _table = table;
             _incubation = incubation;
             _breeding = breeding;
-            _limitsLifted = limitsLifted;
+            _liftLimits = liftLimits;
+        }
+
+        /// <summary>The species' own size limits (wider than the game's) settled so far, by species id.</summary>
+        public IReadOnlyDictionary<string, SizeLimit> OwnLimits => _limits;
+
+        /// <summary>
+        /// The size limits by native species index, as the patched AnimalNative.CurrentScale reads them: [min0, max0, min1, max1, …]
+        /// for the species ids in the game's native order (a null id, or a species without a limit of its own, has the game's).
+        /// </summary>
+        public float[] Limits(IReadOnlyList<string?> speciesIds)
+        {
+            var limits = new float[speciesIds.Count * 2];
+            for (var i = 0; i < speciesIds.Count; i++)
+            {
+                var limit = speciesIds[i] is string id && _limits.TryGetValue(id, out var own) ? own : SizeLimit.Game;
+                limits[2 * i] = limit.Min;
+                limits[2 * i + 1] = limit.Max;
+            }
+            return limits;
         }
 
         /// <summary>The range the game uses at a site for a species: its own where it sets one, except for random eggs, which keep the game's.</summary>
@@ -165,9 +190,17 @@ namespace Tyrant.Framework.Core
         private SizeSettings Settle(SizeSpecies s, SizeSettings sizes, SizePass pass)
         {
             var ranges = InEffect(sizes, _incubation, _breeding);
-            var limit = _limitsLifted ? SizeLimit.Of(sizes.Limit) : SizeLimit.Game;
             var requested = sizes.Adult ?? 1;
             var skins = s.Skins.Select(k => (k.Male, k.Female)).ToList();
+            // The limit the requested sizes need; the game's cap is lifted the first time a species needs more than it allows.
+            var need = ExtremesOf(s.Curve, requested, sizes, skins, ranges);
+            var wanted = SizeLimit.Fitting(need.Min, need.Max);
+            var limit = wanted.IsGame || !(_limitsLifted ??= _liftLimits?.Invoke() ?? false) ? SizeLimit.Game : wanted;
+            if (!limit.IsGame)
+            {
+                _limits[s.Id] = limit;
+                pass.Notes.Add($"{s.Id}: size limit {limit} (from its sizes).");
+            }
             var adult = SizeMath.BackOff(s.Curve, requested, sizes.Baby, skins, sizes.Male, sizes.Female, ranges, limit);
             var used = new SizeSettings { Target = sizes.Target, Adult = adult, Baby = sizes.Baby, Male = sizes.Male ?? 1, Female = sizes.Female ?? 1 };
             var curve = SizeMath.Rebuild(s.Curve, adult, sizes.Baby);
@@ -188,6 +221,14 @@ namespace Tyrant.Framework.Core
         }
 
         private static string Number(double value) => value.ToString("0.###", CultureInfo.InvariantCulture);
+
+        private static (float Min, float Max) ExtremesOf((float Time, float Value)[] original, double adult, SizeSettings sizes,
+            List<(double Male, double Female)> skins, List<(double Min, double Max)> ranges)
+        {
+            var settings = new SizeSettings { Adult = adult, Male = sizes.Male, Female = sizes.Female };
+            var sexes = skins.SelectMany(k => { var (m, f) = SizeMath.Sex(k.Male, k.Female, settings); return new[] { m, f }; });
+            return SizeMath.Extremes(SizeMath.Rebuild(original, adult, sizes.Baby), sexes, ranges);
+        }
 
         private static string Unknown(string target)
         {

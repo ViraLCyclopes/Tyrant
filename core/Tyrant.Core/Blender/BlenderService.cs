@@ -245,28 +245,23 @@ public sealed class BlenderService(BlenderEnvironment env)
             }
             else report = mod.ReplaceModel(install, index, species, reader, glb, destination.Skin is null ? destination.Species : null, null, destination.Skin, rig: rig);
             mod.RefreshHeadRigs(ws, install, index, species, reader); // a species-wide rig edit re-aims the species' head look
-            // The species' sizes in effect (edited here or in the app) may pass its limit: the Size box's note said Send raises it,
-            // with the raise the app's and the CLI's saves share. A skin destination never changes the species' limit.
-            var facts = destination.Skin is null ? SpeciesSizes.Facts(ws, mod) : null;
-            IReadOnlyList<string> limitNotes = [];
             if (sizes is not null)
             {
                 var current = mod.Sizes(destination.Species); // the app may have changed other keys since Blender opened it
-                limitNotes = mod.SetSizes(destination.Species, new SizeSettings
+                mod.SetSizes(destination.Species, new SizeSettings
                 {
                     Target = destination.Species,
                     Adult = sizes.Adult ?? current?.Adult,
                     Baby = sizes.Baby ?? current?.Baby,
                     Male = sizes.Male ?? current?.Male,
                     Female = sizes.Female ?? current?.Female,
-                    Nursery = current?.Nursery, Breeding = current?.Breeding, Limit = current?.Limit, // set in the app only
-                }, facts, setsLimit: false);
+                    Nursery = current?.Nursery, Breeding = current?.Breeding, // set in the app only; the size limit is automatic
+                });
             }
-            else if (facts is not null) limitNotes = mod.FitSizeLimit(destination.Species, facts);
             BlenderProjectFile.Write(projectFile, BlenderProjectWriter.WithSizes(project with { Destination = destination }, ws));
             // Only after the model went in: a refused model leaves the mod as it was.
             var pictures = BlenderImages.Apply(mod, ws, index, species, destination, images ?? [], sex, project.Source.Kind == "game" ? project.Source.Skin : null);
-            return new BlenderSendResult(true, [], [.. report?.Warnings ?? [], .. rigWarnings, .. limitNotes, .. pictures.Warnings], report?.Lods.Select(l => l.Vertices).ToList() ?? [], destination)
+            return new BlenderSendResult(true, [], [.. report?.Warnings ?? [], .. rigWarnings, .. pictures.Warnings], report?.Lods.Select(l => l.Vertices).ToList() ?? [], destination)
             {
                 Images = pictures.Written,
                 ImagesTo = pictures.To,

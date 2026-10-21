@@ -7,14 +7,14 @@ namespace Tyrant.Framework.Core
 {
     /// <summary>
     /// A mod's size changes for one species (sizes/&lt;file&gt;.json); mod.json does not list them. A null key is the game's. Besides
-    /// the sizes, the file holds the species' genetic size ranges (the Nursery slider's and breeding's) and its size limit.
+    /// the sizes, the file holds the species' genetic size ranges (the Nursery slider's and breeding's); its size limit is automatic.
     /// </summary>
     public sealed class SizeSettings
     {
         public const string Folder = "sizes";
         public const int Format = 1;
 
-        // The maximums reach the highest size limit (SizeLimit.HighestMax), so a raised limit can be used.
+        // The maximums reach Tyrant's own bound (SizeLimit.HighestMax), the most an automatic size limit allows.
         public const double AdultMin = 0.05, AdultMax = 20;
         public const double SexMin = 0.1, SexMax = 20;
         public const double BabyMax = 1;
@@ -41,13 +41,17 @@ namespace Tyrant.Framework.Core
         /// <summary>The genetic size range [min, max] of this species' bred young.</summary>
         public double[]? Breeding { get; set; }
 
-        /// <summary>The size limit [min, max] on this species' final scale; the game's is 0.05 to 2 (see <see cref="SizeLimit"/>).</summary>
+        /// <summary>
+        /// An old file's size limit [min, max]. The limit is automatic now (<see cref="SizeLimit.Fitting"/>): this is read only so
+        /// Check can say it is ignored, and it is never written again (<see cref="ToJson"/>).
+        /// </summary>
         public double[]? Limit { get; set; }
 
         /// <summary>Whether it changes the species' size itself (adult, baby, male or female), not only its ranges or limit.</summary>
         public bool SetsSize => Adult != null || Baby != null || Male != null || Female != null;
 
-        public bool IsEmpty => !SetsSize && Nursery == null && Breeding == null && Limit == null;
+        /// <summary>Whether it changes nothing (an old limit alone changes nothing: it is ignored).</summary>
+        public bool IsEmpty => !SetsSize && Nursery == null && Breeding == null;
 
         public static SizeSettings Parse(string json)
         {
@@ -117,7 +121,7 @@ namespace Tyrant.Framework.Core
             if (Female is double female) map["female"] = female;
             if (Nursery != null) map["nursery"] = Nursery.Cast<object?>().ToList();
             if (Breeding != null) map["breeding"] = Breeding.Cast<object?>().ToList();
-            if (Limit != null) map["limit"] = Limit.Cast<object?>().ToList();
+
             return Json.Write(map) + "\n";
         }
 
@@ -153,15 +157,12 @@ namespace Tyrant.Framework.Core
         }
     }
 
-    /// <summary>
-    /// Every enabled mod's sizes by target: the later mod in load order wins, per key, except the size limit, where the widest wins
-    /// (so one mod cannot cap another's sizes again).
-    /// </summary>
+    /// <summary>Every enabled mod's sizes by target: the later mod in load order wins, per key. An old limit is ignored (the limit is automatic).</summary>
     public sealed class SizeTable
     {
         private readonly Dictionary<string, SizeSettings> _targets = new Dictionary<string, SizeSettings>(StringComparer.OrdinalIgnoreCase);
 
-        /// <summary>Whether any species has a size, a range or a limit set; without one nothing is patched.</summary>
+        /// <summary>Whether any species has a size or a range set; without one nothing is patched.</summary>
         public bool HasAny => _targets.Values.Any(s => !s.IsEmpty);
 
         /// <summary>Whether any species sets a Nursery slider range (the slider is patched only then).</summary>
@@ -170,8 +171,6 @@ namespace Tyrant.Framework.Core
         /// <summary>Whether any species sets a breeding range (breeding is patched only then).</summary>
         public bool SetsBreeding => _targets.Values.Any(s => s.Breeding != null);
 
-        /// <summary>Whether any species has a size limit other than the game's (the cap is patched only then).</summary>
-        public bool SetsLimit => _targets.Values.Any(s => !SizeLimit.Of(s.Limit).IsGame);
 
         /// <summary>The Nursery slider range of each species that sets one.</summary>
         public IReadOnlyDictionary<string, (double Min, double Max)> SliderRanges => RangesOf(s => s.Nursery);
@@ -182,26 +181,9 @@ namespace Tyrant.Framework.Core
         public SizeSettings? For(string? target) =>
             target != null && _targets.TryGetValue(target, out var sizes) ? sizes : null;
 
-        /// <summary>A species' size limit in effect: the widest a mod sets for it, or the game's.</summary>
-        public SizeLimit LimitOf(string? target) => SizeLimit.Of(For(target)?.Limit);
 
         public IEnumerable<SizeSettings> All => _targets.Values;
 
-        /// <summary>
-        /// The size limits by native species index, as the patched AnimalNative.CurrentScale reads them: [min0, max0, min1, max1, …]
-        /// for the species ids in the game's native order (a null id, or one without a limit, has the game's).
-        /// </summary>
-        public float[] Limits(IReadOnlyList<string?> speciesIds)
-        {
-            var limits = new float[speciesIds.Count * 2];
-            for (var i = 0; i < speciesIds.Count; i++)
-            {
-                var limit = LimitOf(speciesIds[i]);
-                limits[2 * i] = limit.Min;
-                limits[2 * i + 1] = limit.Max;
-            }
-            return limits;
-        }
 
         private Dictionary<string, (double, double)> RangesOf(Func<SizeSettings, double[]?> range)
         {
@@ -228,7 +210,7 @@ namespace Tyrant.Framework.Core
                     merged.Female = sizes.Female ?? merged.Female;
                     merged.Nursery = sizes.Nursery ?? merged.Nursery;
                     merged.Breeding = sizes.Breeding ?? merged.Breeding;
-                    merged.Limit = SizeLimit.Widest(merged.Limit, sizes.Limit);
+
                 }
                 messages.AddRange(problems.Select(p => $"{mod.Manifest.Id}: {p}"));
             }
