@@ -1,5 +1,6 @@
 using Tyrant.Core.Data;
 using Tyrant.Core.Errors;
+using Tyrant.Core.Mods;
 using Tyrant.Core.Sounds;
 using Tyrant.Core.Workspaces;
 using Tyrant.Rpc.Protocol;
@@ -13,8 +14,11 @@ public sealed record SoundDto(string Event, string Name, string Group, IReadOnly
 
 public sealed record SoundsForSpeciesParams(string Species);
 
-/// <summary>SpeciesId: the dump's id for the species asked for (by id or asset key); null and no sounds when the dump does not have it.</summary>
-public sealed record SoundsForSpeciesResult(string? SpeciesId, IReadOnlyList<SoundDto> Sounds, bool HasEventList);
+/// <summary>
+/// SpeciesId: the dump's id for the species asked for (by id or asset key), or the custom species' own id ("tyrant.&lt;mod&gt;.&lt;id&gt;");
+/// null and no sounds when neither is known. Template: the game species a custom species copies, whose sounds it plays.
+/// </summary>
+public sealed record SoundsForSpeciesResult(string? SpeciesId, IReadOnlyList<SoundDto> Sounds, bool HasEventList, string? Template = null);
 
 /// <summary>Species: match against that species' own sounds (the ones a species can have its own of); none = every sound.</summary>
 public sealed record SoundsMatchFolderParams(string Folder, string? Species = null);
@@ -48,8 +52,8 @@ public sealed class SoundsMethods
     public SoundsForSpeciesResult ForSpecies(SoundsForSpeciesParams p)
     {
         var catalog = Catalog();
-        var id = catalog.SpeciesIdFor(p.Species);
-        return new SoundsForSpeciesResult(id, id is null ? [] : catalog.ForSpecies(id).Select(Dto).ToList(), catalog.HasEventList);
+        var list = SoundsOf(catalog, p.Species);
+        return new SoundsForSpeciesResult(list?.SpeciesId, list?.Sounds.Select(Dto).ToList() ?? [], catalog.HasEventList, list?.Template);
     }
 
     [RpcMethod("sounds.search")]
@@ -70,15 +74,22 @@ public sealed class SoundsMethods
         if (string.IsNullOrWhiteSpace(p.Species)) sounds = catalog.Search(null, int.MaxValue);
         else
         {
-            var id = catalog.SpeciesIdFor(p.Species)
+            var list = SoundsOf(catalog, p.Species)
                 ?? throw new TyrantException(TyrantErrorCode.TargetNotFound, $"'{p.Species}' has no sounds in the game data.");
-            sounds = catalog.ForSpecies(id).Where(s => s.PerAnimal).ToList();
+            sounds = list.Sounds.Where(s => s.PerAnimal).ToList();
         }
         var byEvent = sounds.GroupBy(s => s.Event, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
         var match = SoundFolderMatcher.Match(Directory.GetFiles(p.Folder), sounds);
         return new SoundsMatchFolderResult(
             match.Groups.Select(g => new SoundFolderGroupDto(g.Name, g.Files, g.Events.Select(e => Dto(byEvent[e])).ToList())).ToList(),
             match.Unmatched);
+    }
+
+    /// <summary>A game species' sounds, or a custom species' (of any mod Tyrant can see) its template's.</summary>
+    private SpeciesSoundList? SoundsOf(SoundCatalog catalog, string species)
+    {
+        var (ws, install) = _session.Current();
+        return catalog.SoundsOf(species, id => CustomSpeciesTemplate.Of(ws, () => new GameMods().List(install), id));
     }
 
     internal static SoundDto Dto(SoundInfo s) => new(s.Event, s.Name, s.Group, s.Species, s.LengthMs, s.OneShot, s.PerAnimal);

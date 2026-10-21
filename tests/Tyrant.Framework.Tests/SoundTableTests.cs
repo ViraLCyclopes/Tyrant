@@ -42,6 +42,19 @@ public class SoundTableTests
     }
 
     [Fact]
+    public void A_custom_species_has_its_own_sound_and_its_template_keeps_the_games()
+    {
+        // In the game a custom species' animals carry speciesID "tyrant.<mod>.<id>"; the template's animals keep the game's id.
+        var table = SoundTable.Build([Mod("anax-voice", "[" + Entry("tyrant.anax-voice.anax", null, "sounds/anax.ogg") + "]")], []);
+
+        Assert.EndsWith("anax.ogg", table.Choose(Call, "tyrant.anax-voice.anax", "anax-voice/scarred")!.FilePaths[0]);
+        Assert.True(table.Choose(Call, "tyrant.anax-voice.anax", null)!.Unique);
+        Assert.Null(table.Choose(Call, "Carcharodontosaurus", null));
+        Assert.Null(table.Choose(Call, "tyrant.anax-voice.other", null));
+        Assert.True(table.NeedsAnimal(Call));
+    }
+
+    [Fact]
     public void The_animal_matters_for_unique_sounds_and_for_baby_pitch()
     {
         var unique = SoundTable.Build([Mod("carch-voice", "[" + Entry("Carcharodontosaurus", null, "sounds/carch.ogg") + "]")], []);
