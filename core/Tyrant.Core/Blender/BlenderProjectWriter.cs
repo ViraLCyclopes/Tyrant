@@ -114,6 +114,7 @@ public static class BlenderProjectWriter
             Sex = request.Sex == "female" ? "female" : "male",
             Sexes = BlenderGrowthReader.ReadSexes(store, dataId, skinIndex),
             Sizes = size is null ? null : new BlenderSizes(null, null, null, null, skinSize.Male, skinSize.Female),
+            SizeSkins = size?.Skins.Select(s => new[] { s.Male, s.Female }).ToList(),
             GrowthKeys = renderers.Count > 0
                 ? renderers[0].Mesh.BlendShapes.Take(ModelFitter.GrowthKeys).Select(s => s.Name).ToList()
                 : [],
@@ -132,16 +133,18 @@ public static class BlenderProjectWriter
 
     /// <summary>
     /// The destination mod's sizes on the project: the values for the Size panel, the sex sizes and the scale curve with them
-    /// applied, whether Blender may change them (only for a species destination: a skin's sizes are its species') and its size limit.
+    /// applied, whether Blender may change them (only for a species destination: a skin's sizes are its species'), and the
+    /// species' size limit and genetic ranges for the Size box's note.
     /// </summary>
     internal static BlenderProject WithSizes(BlenderProject project, Workspace ws)
     {
         var d = project.Destination;
         var destination = d is not null && ModProject.Ids(ws).Contains(d.Mod, StringComparer.Ordinal) ? ModProject.Open(ws, d.Mod) : null;
-        var limit = SizeLimit.Of(destination?.Manifest.SizeRanges?.Limit);
+        var set = destination?.Sizes(d!.Species);
+        var limit = SizeLimit.Of(set?.Limit);
         project = project with { SizeLimit = [limit.Min, limit.Max] };
         if (project.Sizes is not { } sizes) return project;
-        var set = destination?.Sizes(d!.Species);
+        var (incubation, breeding) = SpeciesSizes.GameRanges(ws);
         var settings = set ?? new SizeSettings();
         var (male, female) = SizeMath.Sex(sizes.MaleOriginal, sizes.FemaleOriginal, settings);
         var growth = project.Growth;
@@ -157,6 +160,7 @@ public static class BlenderProjectWriter
             Sexes = project.Sexes is { } s ? new BlenderSexes(s.Male with { Size = (float)male }, s.Female with { Size = (float)female }) : null,
             Sizes = sizes with { Adult = set?.Adult, Baby = set?.Baby, Male = set?.Male, Female = set?.Female },
             SizesEditable = d is { Skin: null },
+            GeneticRanges = new BlenderGeneticRanges([incubation.Min, incubation.Max], set?.Nursery, set?.Breeding ?? [breeding.Min, breeding.Max]),
         };
     }
 

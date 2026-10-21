@@ -83,7 +83,7 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
         if (species is not null) species = ModProject.WithSpecies(species, mod.Manifest, others?.Species);
         if (mod.Manifest.Replace.Count == 0 && mod.Manifest.Skins.Count == 0 && mod.Manifest.Models.Count == 0 && mod.Manifest.Sounds.Count == 0
             && mod.Manifest.Species.Count == 0 && mod.Manifest.Assembly is null && mod.PrefabTargets().Count == 0
-            && mod.SizeTargets.Count == 0 && mod.Manifest.SizeRanges is not { IsEmpty: false })
+            && mod.SizeTargets.Count == 0)
             warnings.Add("The mod does nothing yet: add a texture replacement, a skin, a model or a sound.");
         if (index is null && mod.Manifest.Replace.Count > 0)
             warnings.Add("There is no asset index, so the target textures were not checked. Click Index assets on the Workspace tab.");
@@ -345,9 +345,9 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
     private const string Past2xWarning = "can grow past the game's normal 2× limit; the size class, camera framing, foot placement and enclosure needs were tuned for normal sizes.";
 
     /// <summary>
-    /// Sizes: each sizes/ file's target and values, whether a sized species stays within the size limit (the mod's "sizeRanges.limit",
-    /// else the game's 0.05 to 2; with the random hatching range and the mod's ranges) and whether it passes 2× within it, old record
-    /// edits of the growth curve, and ranges that push unsized species past the limit or past 2×.
+    /// Sizes: each sizes/ file's target and values, whether the species stays within its size limit (its "limit", else the game's
+    /// 0.05 to 2; with the random hatching range and its own genetic ranges) and whether it passes 2× within it, and old record
+    /// edits of the growth curve.
     /// </summary>
     private static void SizeProblems(ModProject mod, IReadOnlyList<SpeciesSkins>? species, SizeFacts? facts, List<string> errors, List<string> warnings)
     {
@@ -355,9 +355,6 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
         var sized = SizeSettings.ReadFolder(mod.Dir, problems);
         errors.AddRange(problems);
         var text = (double value) => value.ToString("0.###", CultureInfo.InvariantCulture);
-        var limit = SizeLimit.Of(mod.Manifest.SizeRanges?.Limit);
-        var allows = limit.IsGame ? $"the game allows {limit}, and clamps it" : $"the mod's size limit allows {limit}; the game clamps it there";
-        bool PastNormal((float Min, float Max) e) => e.Max > SizeMath.FinalMax;
         foreach (var (file, sizes) in sized)
         {
             if (species is not null && !species.Any(s => string.Equals(s.SpeciesId, sizes.Target, StringComparison.OrdinalIgnoreCase)))
@@ -368,10 +365,12 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
             if (sizes.Adult is double adult && (adult >= 1.5 || adult <= 0.65))
                 warnings.Add($"sizes/{file}: {sizes.Target}'s adult size {text(adult)} is far from the original: {SizeClassWarning}.");
             if (facts?.Original(sizes.Target) is not { } original) continue;
-            if (SpeciesSizes.Extremes(original, sizes, facts, mod.Manifest.SizeRanges) is not { } extremes) continue;
+            if (SpeciesSizes.Extremes(original, sizes, facts) is not { } extremes) continue;
+            var limit = SizeLimit.Of(sizes.Limit);
+            var allows = limit.IsGame ? $"the game allows {limit}, and clamps it" : $"its size limit allows {limit}; the game clamps it there";
             if (!limit.Contains(extremes.Min, extremes.Max))
-                errors.Add($"sizes/{file}: {sizes.Target} would be scaled from {text(extremes.Min)} to {text(extremes.Max)} ({allows}); lower the adult or sex sizes.");
-            else if (PastNormal(extremes))
+                errors.Add($"sizes/{file}: {sizes.Target} would be scaled from {text(extremes.Min)} to {text(extremes.Max)} ({allows}); lower its sizes or size ranges, or raise its Size limit.");
+            else if (extremes.Max > SizeMath.FinalMax)
                 warnings.Add($"sizes/{file}: {sizes.Target} {Past2xWarning}");
         }
         foreach (var entry in mod.Manifest.Species)
@@ -381,24 +380,6 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
                 warnings.Add($"Species {entry.Id}: its record edits {string.Join(", ", edited)} change its size outside Size. Set sizes in Size instead, and clear "
                     + $"these in the app with Remove old size edits on its Size card ('tyrant mod size {mod.Id} {entry.Key(mod.Id)} --remove-record-edits').");
         }
-        if (facts is null || species is null || mod.Manifest.SizeRanges is not { IsEmpty: false } ranges) return;
-        var sizedTargets = new HashSet<string>(sized.Select(s => s.Sizes.Target), StringComparer.OrdinalIgnoreCase);
-        var past = new List<string>();
-        var pastNormal = new List<string>();
-        foreach (var vanilla in species.Where(s => !s.Vivarium && !s.SpeciesId.StartsWith("tyrant.", StringComparison.Ordinal) && !sizedTargets.Contains(s.SpeciesId)))
-        {
-            if (facts.Original(vanilla.SpeciesId) is not { } original) continue;
-            var none = new SizeSettings();
-            if (SpeciesSizes.Extremes(original, none, facts, null) is not { } before || !limit.Contains(before.Min, before.Max)) continue; // already clamped without this mod
-            if (SpeciesSizes.Extremes(original, none, facts, ranges) is not { } after) continue;
-            if (!limit.Contains(after.Min, after.Max)) past.Add(vanilla.SpeciesId);
-            else if (PastNormal(after) && !PastNormal(before)) pastNormal.Add(vanilla.SpeciesId);
-        }
-        static string Names(List<string> ids) => string.Join(", ", ids.Take(5)) + (ids.Count > 5 ? $" and {ids.Count - 5} more" : "");
-        if (past.Count > 0)
-            warnings.Add($"The mod's genetic size ranges push {Names(past)} past {(limit.IsGame ? "the game's" : "the mod's")} {limit} size limits; the game clamps them.");
-        if (pastNormal.Count > 0)
-            warnings.Add($"{Names(pastNormal)} {Past2xWarning}");
     }
 
     private List<string> MissingCutouts(ModProject mod, AssetIndex index, IReadOnlyList<SpeciesSkins>? species, List<string> warnings)

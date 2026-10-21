@@ -3,7 +3,7 @@ using Tyrant.Framework.Core;
 
 namespace Tyrant.Core.Mods;
 
-/// <summary>Size settings: a mod's size changes per species, one sizes/&lt;file&gt;.json each, and its genetic size ranges in mod.json.</summary>
+/// <summary>Size settings: a mod's size changes per species (with its genetic size ranges and size limit), one sizes/&lt;file&gt;.json each.</summary>
 public sealed partial class ModProject
 {
     private string SizeFolder => Path.Combine(Dir, SizeSettings.Folder);
@@ -44,7 +44,11 @@ public sealed partial class ModProject
             RemoveEmptySizeFolder();
             return;
         }
-        var written = new SizeSettings { Target = target, Adult = sizes.Adult, Baby = sizes.Baby, Male = sizes.Male, Female = sizes.Female };
+        var written = new SizeSettings
+        {
+            Target = target, Adult = sizes.Adult, Baby = sizes.Baby, Male = sizes.Male, Female = sizes.Female,
+            Nursery = sizes.Nursery, Breeding = sizes.Breeding, Limit = sizes.Limit,
+        };
         var json = written.ToJson();
         try
         {
@@ -77,18 +81,6 @@ public sealed partial class ModProject
         try { SaveSpecies(); }
         catch { entry.Fields = old; throw; }
         return edits;
-    }
-
-    /// <summary>Sets the genetic size ranges and the size limit in mod.json; null (or all unset) removes them.</summary>
-    public void SetSizeRanges(SizeRanges? ranges)
-    {
-        foreach (var (name, range) in new[] { ("nursery", ranges?.Nursery), ("breeding", ranges?.Breeding), ("limit", ranges?.Limit) })
-            if (range is not null && SizeRanges.Problem(name, range) is { } problem)
-                throw new TyrantException(TyrantErrorCode.ModInvalid, $"sizeRanges.{name} {problem}.");
-        var old = Manifest.SizeRanges;
-        Manifest.SizeRanges = ranges is null || ranges.IsEmpty ? null : new SizeRanges { Nursery = ranges.Nursery, Breeding = ranges.Breeding, Limit = ranges.Limit };
-        try { Save(); }
-        catch { Manifest.SizeRanges = old; throw; }
     }
 
     /// <summary>Puts back exactly these sizes/ files (by name) and removes the others, even a file that cannot be read.</summary>
