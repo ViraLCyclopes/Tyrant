@@ -20,6 +20,7 @@ namespace Tyrant.Framework
         public static readonly Color Green = new Color(0.345f, 0.678f, 0.184f, 1f);
 
         public static readonly Type? Image = AccessTools.TypeByName("UnityEngine.UI.Image");
+        public static readonly Type? RawImage = AccessTools.TypeByName("UnityEngine.UI.RawImage");
         public static readonly Type? Button = AccessTools.TypeByName("UnityEngine.UI.Button");
         public static readonly Type? ScrollRect = AccessTools.TypeByName("UnityEngine.UI.ScrollRect");
         public static readonly Type? RectMask = AccessTools.TypeByName("UnityEngine.UI.RectMask2D");
@@ -163,6 +164,17 @@ namespace Tyrant.Framework
             ((RectTransform)label.transform).offsetMin = new Vector2(3f, 0f);
             ((RectTransform)label.transform).offsetMax = new Vector2(-3f, 0f);
             return (rect.gameObject, label);
+        }
+
+        /// <summary>A picture of <paramref name="texture"/> filling <paramref name="rect"/> (a RawImage); null without uGUI's RawImage.</summary>
+        public static Component? Picture(RectTransform rect, Texture texture, bool catchesClicks)
+        {
+            if (RawImage == null) return null;
+            var picture = rect.gameObject.AddComponent(RawImage);
+            var t = Traverse.Create(picture);
+            t.Property("texture").SetValue(texture);
+            t.Property("raycastTarget").SetValue(catchesClicks);
+            return picture;
         }
 
         /// <summary>Turns a button, slider or input field on or off (its Selectable's interactable).</summary>
@@ -367,6 +379,16 @@ namespace Tyrant.Framework
             var type = data.GetType();
             if (!Deltas.TryGetValue(type, out var delta)) Deltas[type] = delta = AccessTools.Property(type, "delta");
             return delta?.GetValue(data, null) is Vector2 v ? v : Vector2.zero;
+        }
+
+        private static readonly Dictionary<Type, PropertyInfo?> Positions = new Dictionary<Type, PropertyInfo?>();
+
+        /// <summary>PointerEventData.position (the pointer in screen pixels); null for other event data.</summary>
+        public static Vector2? PointerPosition(object data)
+        {
+            var type = data.GetType();
+            if (!Positions.TryGetValue(type, out var position)) Positions[type] = position = AccessTools.Property(type, "position");
+            return position?.GetValue(data, null) is Vector2 v ? v : (Vector2?)null;
         }
     }
 }

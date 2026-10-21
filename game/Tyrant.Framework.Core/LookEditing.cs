@@ -6,7 +6,7 @@ using System.Linq;
 
 namespace Tyrant.Framework.Core
 {
-    /// <summary>Where the iridescence colour comes from, as the in-game editor offers it (colour stops come from the app).</summary>
+    /// <summary>Where the iridescence colour comes from, as the in-game editor offers it (Stops: its Shimmer colours, <see cref="ShimmerColours"/>).</summary>
     public enum RampKind { Game, ThinFilm, Stops, File, Species }
 
     /// <summary>Where the iridescence shows, as the in-game editor offers it.</summary>
