@@ -482,6 +482,21 @@ counting the youngest baby, the sex multipliers of every skin and its genetic ra
 its `breeding`, else the game's). In the game, the framework scales the adult size back until the sizes fit the species'
 limit and logs one warning.
 
+**The limit follows the sizes.** When a save of a species' sizes would put it past its size limit (its own `limit`,
+else the game's), Tyrant raises the limit to fit in the same save. The Size card, `tyrant mod size` and Blender's Send to
+Tyrant share this one rule. The max goes to the largest size rounded up to the next 0.5 (at most 20), and the min to the
+smallest rounded down to the next 0.01 (at least 0.01). Each keeps the 0.1% to spare that the framework's scale-back
+keeps inside the limit, so a size just under a step gets the next one: a largest of 2.999 gets 3.5, since the game
+scales back anything past 2.997 under a limit of 3. It never lowers a max or raises a min, and keeps the species' other
+values. The save says what it did: "Raised this species' Size limit to {max}×.", or "Lowered this species' Size limit's
+minimum to {min}×." when only the minimum moves. A save that sets the limit itself (the card's Size limit row, or
+`--limit`) keeps the value given, and Check reports a size that passes it. Without the game's data dump there is nothing
+to count, and the limit stays as it is.
+
+**The minimum.** The game's smallest size is 0.05×, and a `limit` can lower it to 0.01×. `adult` takes 0.05 at least,
+but babies count: the smallest size is the youngest baby (its `baby` share of the adult) of the smallest sex with the
+smallest genetic size, so a small adult with a small baby can go under 0.05 and needs a lower minimum.
+
 **Past 2×.** A size within a raised limit but past the game's 2 is allowed, and Check warns about it, for a species
 whose sizes or ranges can pass 2: "{species} can grow past the game's normal 2× limit; the size class, camera framing,
 foot placement and enclosure needs were tuned for normal sizes." The game was made for normal sizes, so a very big
@@ -509,9 +524,9 @@ you set, within Tyrant's own bounds (0.01 to 20) only, not capped by the species
 skin's sexes, baby to adult, its genetic ranges, counted as Check does) would pass its limit (else the game's 0.05 to 2),
 the Size box says: "In game this is capped at {current}×. Send to Tyrant will raise this species' Size limit to {new}×."
 Whenever the destination is a species and its sizes in effect pass its `limit`, edited in Blender or not, Send to Tyrant
-widens that limit in its `sizes/` file just enough: the max to the largest size rounded up to the next 0.5 (at most 20,
-the {new} the note names), the min to the smallest rounded down to the next 0.01 (at least 0.01). It keeps the species'
-other values, never narrows a limit, and says so in its report: "Raised this species' Size limit to {max}×." At the
+widens that limit in its `sizes/` file with the shared raise (see "The limit follows the sizes" above; the max is the
+{new} the note names). It keeps the species' other values, never narrows a limit, and says so in its report: "Raised
+this species' Size limit to {max}×." At the
 highest limit (20) the note only says where the game caps it. A new mod made by the send gets its sizes and limit the
 same way.
 
