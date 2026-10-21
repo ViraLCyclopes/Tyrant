@@ -17,7 +17,7 @@ public sealed class ModSizeCommand : Command<ModSizeCommand.Settings>
         public string Target { get; set; } = "";
 
         [CommandOption("--adult <X>")]
-        [Description("Multiplies the adult size (0.05 to 20; past the size limit it is lowered in game).")]
+        [Description("Multiplies the adult size (0.05 to 20). Past the species' size limit, the limit is raised to fit unless --limit is given.")]
         public double? Adult { get; set; }
 
         [CommandOption("--baby <X>")]
@@ -77,7 +77,9 @@ public sealed class ModSizeCommand : Command<ModSizeCommand.Settings>
                 Male = settings.Male ?? current?.Male, Female = settings.Female ?? current?.Female,
                 Nursery = nursery ?? current?.Nursery, Breeding = breeding ?? current?.Breeding, Limit = limit ?? current?.Limit,
             };
-            mod.SetSizes(settings.Target, next);
+            // Past the species' size limit, the limit is raised to fit, unless --limit sets it.
+            var notes = mod.SetSizes(settings.Target, next, limit is null ? SpeciesSizes.Facts(ws, mod) : null, setsLimit: limit is not null);
+            foreach (var note in notes) Console.WriteLine(note);
             current = mod.Sizes(settings.Target);
         }
         var shown = new[] { ("adult", current?.Adult), ("baby", current?.Baby), ("male", current?.Male), ("female", current?.Female) }

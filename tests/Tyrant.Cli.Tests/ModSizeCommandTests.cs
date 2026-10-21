@@ -74,7 +74,8 @@ public class ModSizeCommandTests
             """{"incubationGeneticSizeMinMax":{"x":0.925,"y":1.075},"breedingGeneticSizeMinMax":{"x":0.85,"y":1.15}}"""));
         DumpWriter.Write(Path.Combine(ws, "data"), objects, [], new DumpManifest { RequestId = "r1", BuildGuid = "b" });
 
-        var set = Run("mod", "size", "wide-nursery", "Allosaurus Anax", "--nursery", "0.5,1.5", "-w", ws); // females: 1.35 x 1.5 = 2.03
+        // Females: 1.35 x 1.5 = 2.03, past the game's 2 (given as its limit, so it is not raised).
+        var set = Run("mod", "size", "wide-nursery", "Allosaurus Anax", "--nursery", "0.5,1.5", "--limit", "0.05,2", "-w", ws);
         Assert.True(set.Code == ExitCodes.Ok, set.Err);
         var check = Run("mod", "check", "wide-nursery", "-w", ws);
 
@@ -165,5 +166,23 @@ public class ModSizeCommandTests
 
         Assert.NotEqual(ExitCodes.Ok, gone.Code);
         Assert.DoesNotContain("sizeRanges", File.ReadAllText(Path.Combine(ws, "mods", "size-pack", "mod.json")));
+    }
+
+    [Fact]
+    public void Raises_the_limit_to_fit_and_prints_it()
+    {
+        using var game = new FakeGame();
+        var ws = Workspace(game);
+
+        var set = Run("mod", "size", "size-pack", "Alpha", "--adult", "2", "-w", ws); // 2 x 1.15 = 2.3, past the game's 2
+
+        Assert.True(set.Code == ExitCodes.Ok, set.Err);
+        Assert.Contains("Raised this species' Size limit to 2.5×.", set.Out);
+        Assert.Contains("limit 0.05 to 2.5", set.Out);
+
+        var own = Run("mod", "size", "size-pack", "Alpha", "--adult", "3", "--limit", "0.05,2", "-w", ws); // --limit stands
+        Assert.True(own.Code == ExitCodes.Ok, own.Err);
+        Assert.DoesNotContain("Size limit to", own.Out);
+        Assert.Contains("limit 0.05 to 2", own.Out);
     }
 }

@@ -18,6 +18,7 @@ public class ModSizesTests
     [
         new("Alpha", false, [new VanillaSkin(0, "Default", new Dictionary<string, string>(), new Dictionary<string, string>())]),
         new("Big", false, [new VanillaSkin(0, "Default", new Dictionary<string, string>(), new Dictionary<string, string>())]),
+        new("Rex", false, [new VanillaSkin(0, "Default", new Dictionary<string, string>(), new Dictionary<string, string>())]),
     ];
 
     /// <summary>Alpha (two skins, one with larger sexes) and Big (grows to 1.5), shaped like the real dump, and the global parameters.</summary>
@@ -37,6 +38,12 @@ public class ModSizesTests
             {"$type":"PrehistoricKingdom.AnimalData","$name":"Big","$id":2,"speciesID":"Big",
              "scaleGrowthCurve":{"keys":[{"time":0,"value":0.6,"inTangent":1,"outTangent":1},{"time":1,"value":1.5,"inTangent":1,"outTangent":1}]},
              "skinsData":[{"skinName":"Default","maleSizeMultiplier":1,"femaleSizeMultiplier":1}]}
+            """);
+        // Shaped like a T. rex (its newborn an eighth of the adult, its sexes a little under 1): adult 2.63 reaches 2.96.
+        Add("PrehistoricKingdom.AnimalData", "Rex", 4, """
+            {"$type":"PrehistoricKingdom.AnimalData","$name":"Rex","$id":4,"speciesID":"Rex",
+             "scaleGrowthCurve":{"keys":[{"time":0,"value":0.12,"inTangent":0.88,"outTangent":0.88},{"time":1,"value":1,"inTangent":0.88,"outTangent":0.88}]},
+             "skinsData":[{"skinName":"Default","maleSizeMultiplier":0.95,"femaleSizeMultiplier":0.98}]}
             """);
         if (parameters)
             Add("PrehistoricKingdom.AnimalsV2.Data.GlobalAnimalParameters", "GlobalAnimalParameters", 3, """
@@ -401,5 +408,97 @@ public class ModSizesTests
 
         Assert.Equal((0.925, 1.075), facts.Incubation);
         Assert.Equal((0.85, 1.15), facts.Breeding);
+    }
+
+    // The size limit follows the sizes: a save that would pass it raises it in the same write, unless the save sets the limit itself.
+
+    private static (float Min, float Max) ExtremesOf(Workspace ws, ModProject mod, string species, SizeSettings sizes)
+    {
+        var facts = SpeciesSizes.Facts(ws, mod)!;
+        return SpeciesSizes.Extremes(facts.Original(species)!, sizes, facts)!.Value;
+    }
+
+    /// <summary>The value in lo..hi at which an increasing <paramref name="f"/> reaches <paramref name="target"/>.</summary>
+    private static double Solve(Func<double, double> f, double lo, double hi, double target)
+    {
+        for (var i = 0; i < 60; i++)
+        {
+            var mid = (lo + hi) / 2;
+            if (f(mid) < target) lo = mid; else hi = mid;
+        }
+        return (lo + hi) / 2;
+    }
+
+    [Fact]
+    public void SetSizes_raises_the_limit_to_fit()
+    {
+        var (game, ws, mod) = Setup();
+        using var _ = game;
+
+        var notes = mod.SetSizes("Rex", new SizeSettings { Adult = 2.63 }, SpeciesSizes.Facts(ws, mod), setsLimit: false);
+
+        var sizes = ModProject.Open(ws, "size-pack").Sizes("Rex")!;
+        Assert.Equal(2.63, sizes.Adult);
+        Assert.Equal([0.05, 3], sizes.Limit!); // 0.98 x 2.63 x 1.15 = 2.96, up to the next 0.5
+        Assert.Equal(["Raised this species' Size limit to 3×."], notes);
+        Assert.DoesNotContain(Check(ws, mod).Errors, e => e.Contains("Rex"));
+
+        // Within the limit nothing changes, and a limit is never lowered.
+        Assert.Empty(mod.SetSizes("Rex", new SizeSettings { Adult = 1, Limit = [0.05, 3] }, SpeciesSizes.Facts(ws, mod), setsLimit: false));
+        Assert.Equal([0.05, 3], ModProject.Open(ws, "size-pack").Sizes("Rex")!.Limit!);
+        // Without the game's data there is nothing to count: the sizes are written as they are.
+        Assert.Empty(mod.SetSizes("Rex", new SizeSettings { Adult = 4 }, null, setsLimit: false));
+        Assert.Null(ModProject.Open(ws, "size-pack").Sizes("Rex")!.Limit);
+    }
+
+    [Fact]
+    public void SetSizes_keeps_an_explicit_limit()
+    {
+        var (game, ws, mod) = Setup();
+        using var _ = game;
+
+        var notes = mod.SetSizes("Rex", new SizeSettings { Adult = 2.63, Limit = [0.05, 2] }, SpeciesSizes.Facts(ws, mod), setsLimit: true);
+
+        Assert.Empty(notes);
+        Assert.Equal([0.05, 2], ModProject.Open(ws, "size-pack").Sizes("Rex")!.Limit!);
+        Assert.Contains(Check(ws, mod).Errors, e => e.StartsWith("sizes/rex.json: Rex would be scaled from")); // Check reports it
+    }
+
+    [Fact]
+    public void SetSizes_lowers_the_min_to_fit()
+    {
+        var (game, ws, mod) = Setup();
+        using var _ = game;
+        var small = new SizeSettings { Adult = 0.05 }; // Alpha: 0.025 at birth, 0.85 of that for the smallest bred young
+
+        var notes = mod.SetSizes("Alpha", small, SpeciesSizes.Facts(ws, mod), setsLimit: false);
+
+        var min = ExtremesOf(ws, mod, "Alpha", small).Min;
+        Assert.InRange(min, 0.02f, 0.03f);
+        Assert.Equal([0.02, 2], ModProject.Open(ws, "size-pack").Sizes("Alpha")!.Limit!); // down to the next 0.01; the max stays
+        Assert.Equal(["Lowered this species' Size limit's minimum to 0.02×."], notes);
+    }
+
+    [Fact]
+    public void Raise_clears_the_safety_margin()
+    {
+        var (game, ws, mod) = Setup();
+        using var _ = game;
+
+        // Big's largest just under 3: inside the plain 3, past the 2.997 the game backs off to, so the limit goes to 3.5.
+        var adult = Solve(a => ExtremesOf(ws, mod, "Big", new SizeSettings { Adult = a }).Max, 1, 2, 2.9985);
+        var big = new SizeSettings { Adult = adult };
+        var max = ExtremesOf(ws, mod, "Big", big).Max;
+        Assert.InRange(max, new SizeLimit(0.05f, 3f).SafeMax + 1e-6f, 3f);
+        Assert.Equal(["Raised this species' Size limit to 3.5×."], mod.SetSizes("Big", big, SpeciesSizes.Facts(ws, mod), setsLimit: false));
+        Assert.Equal([0.05, 3.5], ModProject.Open(ws, "size-pack").Sizes("Big")!.Limit!);
+
+        // Alpha's smallest just over 0.03: inside the plain 0.03, under the 0.03003 the game backs off to, so the minimum goes to 0.02.
+        var baby = Solve(b => ExtremesOf(ws, mod, "Alpha", new SizeSettings { Adult = 0.05, Baby = b }).Min, 0.5, 1, 0.030015);
+        var alpha = new SizeSettings { Adult = 0.05, Baby = baby };
+        var min = ExtremesOf(ws, mod, "Alpha", alpha).Min;
+        Assert.InRange(min, 0.03f, new SizeLimit(0.03f, 2f).SafeMin - 1e-7f);
+        Assert.Equal(["Lowered this species' Size limit's minimum to 0.02×."], mod.SetSizes("Alpha", alpha, SpeciesSizes.Facts(ws, mod), setsLimit: false));
+        Assert.Equal([0.02, 2], ModProject.Open(ws, "size-pack").Sizes("Alpha")!.Limit!);
     }
 }

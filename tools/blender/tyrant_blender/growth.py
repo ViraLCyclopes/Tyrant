@@ -22,6 +22,7 @@ EDITS = "tyrant_size_edits"  # the Size panel's changes not sent yet (JSON: adul
 SIZE_KEYS = ("adult", "baby", "male", "female")
 FINAL_MIN, FINAL_MAX = 0.05, 2.0  # the game clamps the final scale to this; a species' size limit widens it (sizeLimit)
 SHOWN_MIN, SHOWN_MAX = 0.01, 20.0  # the widest a size limit can be: the view shows any size within these, never the species' cap
+SAFE_MARGIN = 0.001  # SizeMath.SafeMargin: the game backs a size off this far inside its limit, so a raise clears it too
 # The game's genetic size ranges when the project has none (SpeciesSizes.DefaultIncubation and DefaultBreeding).
 GAME_INCUBATION, GAME_BREEDING = (0.925, 1.075), (0.85, 1.15)
 
@@ -288,9 +289,9 @@ def extremes(armature, data):
 
 
 def raised_limit(found_max, current_max):
-    """The maximum Send to Tyrant raises the species' size limit to (BlenderService.FitSizeLimit): the extremes' max rounded up
-    to the next 0.5, at most 20, never below the limit now."""
-    return max(current_max, min(SHOWN_MAX, math.ceil(found_max * 2.0) / 2))
+    """The maximum Send to Tyrant raises the species' size limit to (Tyrant's shared raise, SpeciesSizes.RaisedLimit): the
+    extremes' max with the game's back-off margin to spare, rounded up to the next 0.5, at most 20, never below the limit now."""
+    return max(current_max, min(SHOWN_MAX, math.ceil(found_max / (1 - SAFE_MARGIN) * 2.0) / 2))
 
 
 def limit_note(armature, data):
@@ -300,7 +301,7 @@ def limit_note(armature, data):
     if found is None:
         return None
     high = size_limit(data)[1]
-    if found[1] <= high:
+    if found[1] <= high * (1 - SAFE_MARGIN):  # within the margin the game's back-off keeps to
         return None
     raised = raised_limit(found[1], high)
     if raised <= high:

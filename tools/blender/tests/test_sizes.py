@@ -152,6 +152,19 @@ class SizeTests(unittest.TestCase):
         arm.tyrant_size_adult = 1.0  # 1.08 x 1.15 = 1.24 at most: within the game's 2
         self.assertIsNone(growth.limit_note(arm, data))
 
+    def test_raise_clears_the_safety_margin(self):
+        # As Tyrant's raise (SpeciesSizes.RaisedLimit): the game backs a size off 0.1% inside its limit, so a largest just under
+        # a 0.5 step gets the next step (ModSizesTests.Raise_clears_the_safety_margin).
+        self.assertEqual(growth.raised_limit(2.9985, 2.0), 3.5)
+        self.assertEqual(growth.raised_limit(2.99, 2.0), 3.0)
+        self.assertEqual(growth.raised_limit(2.99, 10.0), 10.0)  # never lowered
+        path = allosaurus(sizes={"adult": 4.0})
+        data = project.load(path)
+        data["sizeLimit"] = [0.05, 4.97]  # 1.08 x 4 x 1.15 = 4.968: inside 4.97, past the 4.965 the game backs off to
+        project.save(path, data)
+        arm = importer.import_project(path)
+        self.assertEqual(growth.limit_note(arm, data), "In game this is capped at 4.97×. Send to Tyrant will raise this species' Size limit to 5×.")
+
     def test_note_counts_the_species_ranges_and_every_skin(self):
         path = allosaurus(sizes={"adult": 4.0})
         data = project.load(path)

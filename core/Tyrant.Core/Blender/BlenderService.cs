@@ -245,10 +245,14 @@ public sealed class BlenderService(BlenderEnvironment env)
             }
             else report = mod.ReplaceModel(install, index, species, reader, glb, destination.Skin is null ? destination.Species : null, null, destination.Skin, rig: rig);
             mod.RefreshHeadRigs(ws, install, index, species, reader); // a species-wide rig edit re-aims the species' head look
+            // The species' sizes in effect (edited here or in the app) may pass its limit: the Size box's note said Send raises it,
+            // with the raise the app's and the CLI's saves share. A skin destination never changes the species' limit.
+            var facts = destination.Skin is null ? SpeciesSizes.Facts(ws, mod) : null;
+            IReadOnlyList<string> limitNotes = [];
             if (sizes is not null)
             {
                 var current = mod.Sizes(destination.Species); // the app may have changed other keys since Blender opened it
-                mod.SetSizes(destination.Species, new SizeSettings
+                limitNotes = mod.SetSizes(destination.Species, new SizeSettings
                 {
                     Target = destination.Species,
                     Adult = sizes.Adult ?? current?.Adult,
@@ -256,10 +260,9 @@ public sealed class BlenderService(BlenderEnvironment env)
                     Male = sizes.Male ?? current?.Male,
                     Female = sizes.Female ?? current?.Female,
                     Nursery = current?.Nursery, Breeding = current?.Breeding, Limit = current?.Limit, // set in the app only
-                });
+                }, facts, setsLimit: false);
             }
-            // The species' sizes in effect (edited here or in the app) may pass its limit: the Size box's note said Send raises it.
-            string[] limitNotes = destination.Skin is null && FitSizeLimit(ws, mod, destination.Species) is { } note ? [note] : [];
+            else if (facts is not null) limitNotes = mod.FitSizeLimit(destination.Species, facts);
             BlenderProjectFile.Write(projectFile, BlenderProjectWriter.WithSizes(project with { Destination = destination }, ws));
             // Only after the model went in: a refused model leaves the mod as it was.
             var pictures = BlenderImages.Apply(mod, ws, index, species, destination, images ?? [], sex, project.Source.Kind == "game" ? project.Source.Skin : null);
@@ -273,32 +276,6 @@ public sealed class BlenderService(BlenderEnvironment env)
         {
             return new BlenderSendResult(false, [ex.Message], [], [], destination);
         }
-    }
-
-    /// <summary>
-    /// Widens the species' size limit in the mod (its sizes/ file), never narrowing it, when the species' sizes in effect would
-    /// pass it (as Check counts them, with its genetic ranges): the maximum to the extremes' max rounded up to the next 0.5 (at
-    /// most 20), the minimum to their min rounded down to the next 0.01 (at least 0.01); its other values stay. Blender's Size
-    /// box names the same maximum (growth.py, limit_note). Returns what changed for the result, or null when they fit or
-    /// without the game's data.
-    /// </summary>
-    private static string? FitSizeLimit(Workspace ws, ModProject mod, string species)
-    {
-        var sizes = mod.Sizes(species) ?? new SizeSettings { Target = species };
-        if (SpeciesSizes.Facts(ws, mod) is not { } facts || facts.Original(species) is not { } original
-            || SpeciesSizes.Extremes(original, sizes, facts) is not { } extremes) return null;
-        if (SizeLimit.Of(sizes.Limit).Contains(extremes.Min, extremes.Max)) return null;
-        var limit = sizes.Limit ?? [SizeLimit.HighestMin, SizeLimit.LowestMax]; // the game's own 0.05 to 2
-        var min = Math.Min(limit[0], Math.Max(SizeLimit.LowestMin, Math.Floor(extremes.Min * 100.0) / 100));
-        var max = Math.Max(limit[1], Math.Min(SizeLimit.HighestMax, Math.Ceiling(extremes.Max * 2.0) / 2));
-        if (min == limit[0] && max == limit[1]) return null; // already at the bounds: Check reports it
-        mod.SetSizes(species, new SizeSettings
-        {
-            Target = species, Adult = sizes.Adult, Baby = sizes.Baby, Male = sizes.Male, Female = sizes.Female,
-            Nursery = sizes.Nursery, Breeding = sizes.Breeding, Limit = [min, max],
-        });
-        static string Text(double value) => value.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
-        return max != limit[1] ? $"Raised this species' Size limit to {Text(max)}×." : $"Lowered this species' Size limit's minimum to {Text(min)}×.";
     }
 
     /// <summary>The user's Blender as Tyrant's FBX converter; without Blender, says FBX needs it (glb works without).</summary>

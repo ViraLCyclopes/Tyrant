@@ -114,6 +114,40 @@ public static partial class SpeciesSizes
         return SizeMath.Extremes(curve, sexes, SizePlan.InEffect(sizes, facts.Incubation, facts.Breeding));
     }
 
+    /// <summary>
+    /// The species' size limit widened so that these sizes fit it (<see cref="Extremes"/>, the species' genetic ranges counted),
+    /// with the <see cref="SizeMath.SafeMargin"/> the game's back-off keeps inside it to spare: the maximum to the extremes' max
+    /// / (1 − margin) rounded up to the next 0.5 (at most 20), the minimum to their min / (1 + margin) rounded down to the next
+    /// 0.01 (at least 0.01). It never lowers a maximum or raises a minimum, and its other end stays. The one place that rounds a
+    /// raised limit (the app's, the CLI's and Blender's saves use it; Blender's Size box note mirrors it, growth.py
+    /// raised_limit). Null when the sizes fit, when the limit is already at its bounds (Check reports it) or without a curve;
+    /// otherwise the new [min, max] and the note to tell the user.
+    /// </summary>
+    public static (double[] Limit, string Note)? RaisedLimit(OriginalSize original, SizeSettings sizes, SizeFacts facts)
+    {
+        if (Extremes(original, sizes, facts) is not { } extremes) return null;
+        var now = SizeLimit.Of(sizes.Limit);
+        if (extremes.Min >= now.SafeMin && extremes.Max <= now.SafeMax) return null;
+        var limit = sizes.Limit ?? [SizeLimit.HighestMin, SizeLimit.LowestMax]; // the game's own 0.05 to 2
+        double max = limit[1], min = limit[0];
+        if (extremes.Max > now.SafeMax)
+        {
+            max = Math.Min(SizeLimit.HighestMax, Math.Ceiling(extremes.Max / (1 - (double)SizeMath.SafeMargin) * 2) / 2);
+            // The game's float maths decides: a step whose safe band still misses the largest gets the next one.
+            while (max < SizeLimit.HighestMax && new SizeLimit((float)min, (float)max).SafeMax < extremes.Max) max += 0.5;
+            max = Math.Max(limit[1], max);
+        }
+        if (extremes.Min < now.SafeMin)
+        {
+            min = Math.Max(SizeLimit.LowestMin, Math.Floor(extremes.Min / (1 + (double)SizeMath.SafeMargin) * 100) / 100);
+            while (min > SizeLimit.LowestMin && new SizeLimit((float)min, (float)max).SafeMin > extremes.Min) min = Math.Round(min - 0.01, 2);
+            min = Math.Min(limit[0], min);
+        }
+        if (min == limit[0] && max == limit[1]) return null;
+        static string Text(double value) => value.ToString("0.###", CultureInfo.InvariantCulture);
+        return ([min, max], max != limit[1] ? $"Raised this species' Size limit to {Text(max)}×." : $"Lowered this species' Size limit's minimum to {Text(min)}×.");
+    }
+
     private static (double, double)? Range(JsonElement root, string name) =>
         root.TryGetProperty(name, out var range) && range.ValueKind == JsonValueKind.Object
             && range.TryGetProperty("x", out var x) && x.TryGetDouble(out var min) && range.TryGetProperty("y", out var y) && y.TryGetDouble(out var max)

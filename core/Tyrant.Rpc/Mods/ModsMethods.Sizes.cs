@@ -25,7 +25,10 @@ public sealed record ModSizesDto(string Target, string File, double? Adult, doub
 public sealed record ModSizesParams(string Id, string Target);
 public sealed record ModRemoveSizeEditsParams(string Id, string Revision, string Target);
 
-/// <summary>Replaces the species' whole set: a key left out (null) is the game's.</summary>
+/// <summary>
+/// Replaces the species' whole set: a key left out (null) is the game's. When the sizes would pass the species' size limit, the
+/// limit is raised to fit in the same save (the result's Notes say so), unless this save changes the limit itself: then it stands.
+/// </summary>
 public sealed record ModSetSizesParams(string Id, string Revision, string Target, double? Adult = null, double? Baby = null, double? Male = null, double? Female = null,
     IReadOnlyList<double>? Nursery = null, IReadOnlyList<double>? Breeding = null, IReadOnlyList<double>? Limit = null);
 public sealed record ModSizeTargetsParams(string Id);
@@ -60,12 +63,26 @@ public sealed partial class ModsMethods
     }
 
     [RpcMethod("mods.setSizes")]
-    public ModDetail SetSizes(ModSetSizesParams p) =>
-        Edit(p.Id, p.Revision, mod => mod.SetSizes(p.Target, new SizeSettings
+    public ModDetail SetSizes(ModSetSizesParams p)
+    {
+        var (ws, _) = session.Current();
+        IReadOnlyList<string> notes = [];
+        var detail = Edit(p.Id, p.Revision, mod =>
         {
-            Target = p.Target, Adult = p.Adult, Baby = p.Baby, Male = p.Male, Female = p.Female,
-            Nursery = p.Nursery?.ToArray(), Breeding = p.Breeding?.ToArray(), Limit = p.Limit?.ToArray(),
-        }), $"set the sizes of {p.Target}");
+            // The card sends the whole set, its limit as it has it: only a different limit is this save's own.
+            var limit = p.Limit?.ToArray();
+            var setsLimit = !SameLimit(limit, mod.Sizes(p.Target)?.Limit);
+            notes = mod.SetSizes(p.Target, new SizeSettings
+            {
+                Target = p.Target, Adult = p.Adult, Baby = p.Baby, Male = p.Male, Female = p.Female,
+                Nursery = p.Nursery?.ToArray(), Breeding = p.Breeding?.ToArray(), Limit = limit,
+            }, setsLimit ? null : SpeciesSizes.Facts(ws, mod), setsLimit);
+        }, $"set the sizes of {p.Target}");
+        foreach (var note in notes) session.Log($"'{p.Id}', {p.Target}: {note}");
+        return notes.Count == 0 ? detail : detail with { Notes = notes };
+    }
+
+    private static bool SameLimit(double[]? a, double[]? b) => a is null || b is null ? a is null && b is null : a.SequenceEqual(b);
 
     /// <summary>Removes a mod species' old record edits of its size (Check's "Set sizes in Size instead").</summary>
     [RpcMethod("mods.removeSizeEdits")]

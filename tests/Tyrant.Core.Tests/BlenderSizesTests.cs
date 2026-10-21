@@ -279,6 +279,32 @@ public class BlenderSizesTests
     }
 
     [Fact]
+    public void Blender_send_uses_the_shared_raise()
+    {
+        using var c = Setup();
+        var (opened, glb) = OpenToSend(c);
+        ModProject.Create(c.Ws, "pack", null, null);
+        // An adult whose largest is just under 3: past the 2.997 the game backs off to, so the shared raise gives 3.5, not 3.
+        double lo = 1, hi = 3;
+        for (var i = 0; i < 60; i++) { var mid = (lo + hi) / 2; if (Extremes(mid).Max < 2.9985) lo = mid; else hi = mid; }
+        var adult = (lo + hi) / 2;
+        Assert.InRange(Extremes(adult).Max, new SizeLimit(0.05f, 3f).SafeMax + 1e-6f, 3f);
+
+        var sent = BlenderService.Send(c.Ws, c.Install, c.Index, c.Species, c.Reader, opened.ProjectFile, glb,
+            new BlenderDestination("pack", "Carcharodontosaurus", null), null, sizes: new SizeSettings { Target = "Carcharodontosaurus", Adult = adult });
+
+        Assert.True(sent.Ok, string.Join(" | ", sent.Errors));
+        var mod = ModProject.Open(c.Ws, "pack");
+        Assert.Equal([0.05, 3.5], mod.Sizes("Carcharodontosaurus")!.Limit!);
+        Assert.Contains("Raised this species' Size limit to 3.5×.", sent.Warnings);
+        // The same as the app's and the CLI's save of these sizes.
+        var other = ModProject.Create(c.Ws, "other", null, null);
+        Assert.Equal(["Raised this species' Size limit to 3.5×."],
+            other.SetSizes("Carcharodontosaurus", new SizeSettings { Adult = adult }, SpeciesSizes.Facts(c.Ws, other), setsLimit: false));
+        Assert.Equal([0.05, 3.5], other.Sizes("Carcharodontosaurus")!.Limit!);
+    }
+
+    [Fact]
     public void Blender_note_and_send_agree_on_the_add_ons_fixture()
     {
         // tools/blender/tests/test_sizes.py: an Allosaurus-shaped project (curve 0.164 to 1, male 1.08, female 1) at adult 4 with

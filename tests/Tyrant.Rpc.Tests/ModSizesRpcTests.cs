@@ -45,8 +45,8 @@ public class ModSizesRpcTests
         await h.Call("mods.create", new { id = "wide-nursery" });
         var detail = await h.Call("mods.get", new { id = "wide-nursery" });
 
-        // The species' own Nursery range: females 1.35 x 1.5 = 2.03, past the game's 2.
-        var set = await h.Call("mods.setSizes", new { id = "wide-nursery", revision = Rev(detail), target = "Allosaurus Anax", nursery = new[] { 0.5, 1.5 } });
+        // The species' own Nursery range: females 1.35 x 1.5 = 2.03, past the game's 2 (set here as its limit, so it is not raised).
+        var set = await h.Call("mods.setSizes", new { id = "wide-nursery", revision = Rev(detail), target = "Allosaurus Anax", nursery = new[] { 0.5, 1.5 }, limit = new[] { 0.05, 2.0 } });
         var check = await h.Call("mods.check", new { id = "wide-nursery" });
         Assert.Contains(check.GetProperty("errors").EnumerateArray(), e => e.GetString()!.Contains("Allosaurus Anax would be scaled from") && e.GetString()!.Contains("the game allows 0.05 to 2"));
         Assert.DoesNotContain(check.GetProperty("warnings").EnumerateArray(), w => w.GetString()!.Contains("genetic size ranges"));
@@ -229,4 +229,31 @@ public class ModSizesRpcTests
         Assert.Equal("MOD_INVALID", bad.DataCode);
     }
 
+    private static string[] Notes(JsonElement detail) =>
+        detail.TryGetProperty("notes", out var notes) && notes.ValueKind == JsonValueKind.Array ? [.. notes.EnumerateArray().Select(n => n.GetString()!)] : [];
+
+    [Fact]
+    public async Task SetSizes_raises_the_limit_to_fit_and_says_so()
+    {
+        using var game = new FakeGame();
+        var (h, _) = await WithAlpha(game);
+        var detail = await h.Call("mods.get", new { id = "size-pack" });
+        Assert.Empty(Notes(detail));
+
+        // Alpha's bigger skin: 1.2 x 2 x 1.15 = 2.76, past the game's 2: the limit goes to 3 in the same save.
+        var set = await h.Call("mods.setSizes", new { id = "size-pack", revision = Rev(detail), target = "Alpha", adult = 2.0 });
+        Assert.Equal(["Raised this species' Size limit to 3×."], Notes(set));
+        var sizes = await h.Call("mods.sizes", new { id = "size-pack", target = "Alpha" });
+        Assert.Equal([0.05, 3.0], sizes.GetProperty("limit").EnumerateArray().Select(x => x.GetDouble()));
+
+        // A save that changes the limit itself keeps it, even when the sizes pass it (Check says so).
+        var own = await h.Call("mods.setSizes", new { id = "size-pack", revision = Rev(set), target = "Alpha", adult = 2.0, limit = new[] { 0.05, 2.0 } });
+        Assert.Empty(Notes(own));
+        sizes = await h.Call("mods.sizes", new { id = "size-pack", target = "Alpha" });
+        Assert.Equal([0.05, 2.0], sizes.GetProperty("limit").EnumerateArray().Select(x => x.GetDouble()));
+
+        // The card sends the limit it has with every save: kept as it is, it is not set by this save, so the raise applies.
+        var again = await h.Call("mods.setSizes", new { id = "size-pack", revision = Rev(own), target = "Alpha", adult = 2.1, limit = new[] { 0.05, 2.0 } });
+        Assert.Equal(["Raised this species' Size limit to 3×."], Notes(again));
+    }
 }

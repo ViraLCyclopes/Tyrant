@@ -598,6 +598,7 @@ export interface ModDetail {
   vanillaSkinMaterials?: ModVanillaSkinMaterialsDto[] | null;
   materialFiles?: Record<string, string> | null;
   sizeFiles?: Record<string, string> | null;
+  notes?: string[] | null;
 }
 
 export interface ModEnableParams {
