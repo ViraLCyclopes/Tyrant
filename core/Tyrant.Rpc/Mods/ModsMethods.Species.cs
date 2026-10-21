@@ -11,7 +11,8 @@ public sealed record ModAnimalDto(string Id, string Key, string Base, string Nam
     int? Cost, IReadOnlyDictionary<string, double> Stats, int? InheritedCost, IReadOnlyDictionary<string, double> InheritedStats,
     IReadOnlyList<ModAnimalFieldDto> DataFields, IReadOnlyDictionary<string, string> Localization, string? Icon, SpeciesPrefab? Prefab,
     int StartingSkin = 0, string? StartingSkinName = null, string? Swatch = null,
-    IReadOnlyDictionary<string, string>? Portraits = null, string? StartingSkinId = null, string? PaleopediaPicture = null);
+    IReadOnlyDictionary<string, string>? Portraits = null, string? StartingSkinId = null, string? PaleopediaPicture = null,
+    IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>? Texts = null);
 public sealed record ModAnimalFieldDto(string Path, string Kind, string Value, string TemplateValue, bool Editable);
 /// <summary>The Nursery picture (the game's heroRender); a null Png goes back to the template's.</summary>
 public sealed record ModSetSpeciesIconParams(string Id, string Revision, string SpeciesId, string? Png = null);
@@ -29,7 +30,8 @@ public sealed record ModAddStartingSkinParams(string Id, string Revision, string
     string? StartPng = null, string? StartPngFemale = null, string? StartName = null);
 public sealed record ModSetSpeciesParams(string Id, string Revision, string SpeciesId, string Name, string Genus, string Epithet,
     int? Cost, IReadOnlyDictionary<string, double> Stats, IReadOnlyDictionary<string, string>? DataFields = null,
-    IReadOnlyDictionary<string, string>? Localization = null);
+    IReadOnlyDictionary<string, string>? Localization = null,
+    IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>? Texts = null);
 
 public sealed record ModSpeciesParams(string Id, string SpeciesId);
 /// <summary>DeleteFiles: its files, language files, icon and Blender projects go to the Recycle Bin too.</summary>
@@ -92,7 +94,7 @@ public sealed partial class ModsMethods
                 inherited?.Cost, inherited?.Stats ?? new Dictionary<string, double>(),
                 (s.Fields.Count > 0 ? s.Fields : inherited?.Fields ?? []).Where(f => !SpeciesSizes.IsSizePath(f.Path)).Select(f => new ModAnimalFieldDto(f.Path, f.Kind, f.Value, f.TemplateValue, f.Editable)).ToList(),
                 s.Localization, s.Icon, s.Prefab, s.StartingSkin, s.StartingSkinName, s.Swatch, s.Portraits.Count == 0 ? null : s.Portraits,
-                mod.StartingSkinOf(s.Id)?.Id, s.PaleopediaPicture);
+                mod.StartingSkinOf(s.Id)?.Id, s.PaleopediaPicture, mod.SpeciesTexts(s.Id));
         }).ToList(), SpeciesStats.Fields.Select(f => new ModStatDto(f.Id, f.Label, f.Unit, f.Min, f.Max)).ToList());
     }
 
@@ -158,6 +160,7 @@ public sealed partial class ModsMethods
         ValidateStats(p.Stats, SpeciesDatabase.Template(ws, entry.Base));
         mod.SetSpecies(p.SpeciesId, p.Name, p.Genus, p.Epithet, p.Cost, p.Stats, p.DataFields, SpeciesDatabase.Template(ws, entry.Base),
             p.Localization);
+        if (p.Texts != null) mod.SetSpeciesTexts(p.SpeciesId, p.Texts);
     }, "updated species " + p.SpeciesId);
 
     private static void ValidateStats(IReadOnlyDictionary<string, double> stats, SpeciesTemplateStats? template)

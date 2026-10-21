@@ -36,6 +36,8 @@
   let dataValues = $state<Record<string, string>>({});
   let localization = $state<Record<string, string>>({});
   let textLanguage = $state('en-US');
+  /** Each language's Paleopedia texts as edited (language code → field → text); an empty translation uses the English text in game. */
+  let texts = $state<Record<string, Record<string, string>>>({});
   let busy = $state(false);
   let failed = $state(false);
   let initialized = false;
@@ -76,6 +78,7 @@
     values = { ...(source?.stats ?? {}) };
     dataValues = Object.fromEntries((source?.dataFields ?? []).filter(f => f.editable).map(f => [f.path, f.value]));
     localization = { ...(source?.localization ?? {}) };
+    texts = Object.fromEntries(Object.entries(source?.texts ?? {}).map(([code, slots]) => [code, { ...slots }]));
     if (source) template = source.base;
   });
 
@@ -109,6 +112,21 @@
   /** This mod's starting skin of the shown species, when it has one. */
   const startingSkin = $derived(animal?.startingSkinId ? doc.detail?.skins.find((s) => s.id === animal.startingSkinId) : undefined);
 
+  const languages: [string, string][] = [['en-US', 'English'], ['fr', 'French'], ['es', 'Spanish'], ['pt', 'Portuguese'], ['de', 'German'], ['ru', 'Russian'], ['zh-CN', 'Chinese']];
+  const textFields: [string, string][] = [['description', 'Description'], ['characterNotes', 'Character notes'], ['socialInfo', 'Social info']];
+  const translated = (code: string) => Object.values(texts[code] ?? {}).some((text) => text.trim() !== '');
+  /** The texts that differ from the files, without the English name (that is the Display name). */
+  function changedTexts(): Record<string, Record<string, string>> | null {
+    const changed: Record<string, Record<string, string>> = {};
+    for (const [code, slots] of Object.entries(texts))
+      for (const [slot, text] of Object.entries(slots))
+        if (!(code === 'en-US' && slot === 'name') && text !== (animal?.texts?.[code]?.[slot] ?? '')) (changed[code] ??= {})[slot] = text;
+    return Object.keys(changed).length ? changed : null;
+  }
+  function setText(code: string, slot: string, text: string) {
+    texts[code] = { ...(texts[code] ?? {}), [slot]: text };
+  }
+
   async function save() {
     busy = true;
     try {
@@ -116,7 +134,7 @@
       const fields = { speciesId, name, genus, epithet, cost: cost ?? null, stats, dataFields: dataValues, localization };
       const added = creating;
       const start = { startingSkin: startingSkinOf(choice, template), ...startParams(choice) };
-      if (await doc.edit(added ? 'mods.addSpecies' : 'mods.setSpecies', added ? { ...fields, template, ...start } : fields, { undoable: false })) {
+      if (await doc.edit(added ? 'mods.addSpecies' : 'mods.setSpecies', added ? { ...fields, template, ...start } : { ...fields, texts: changedTexts() }, { undoable: false })) {
         selected = speciesId;
         await reload();
         tab.info(added ? `Added species '${name}'.` : `Saved '${name}' and its stats.`);
@@ -218,15 +236,47 @@
           {/each}
         </div>
         {#if !creating}
-          <h3>Localization keys</h3>
-          <p class="hint">Each key points to its own plain text file. For example, mirabilis/description reads localization/en-US/mirabilis/description.txt. Name, description, character notes and social info are separate files. Missing translations fall back to English.</p>
-          <label>Text language <select bind:value={textLanguage}>{#each ['en-US', 'fr', 'es', 'pt', 'de', 'ru', 'zh-CN'] as code}<option value={code}>{code}</option>{/each}</select></label>
-          <div class="grid">
-            {#each ['name', 'description', 'characterNotes', 'socialInfo'] as slot}
-              <label>{slot} key <input bind:value={localization[slot]} placeholder={`mirabilis/${slot}`} /></label>
-              <button type="button" disabled={!localization[slot]} onclick={() => doc.detail && session.platform.reveal(`${doc.detail.dir}/localization/${textLanguage}/${localization[slot].replaceAll('\\', '/')}.txt`)}>Show {slot} text file</button>
+          <section class="texts" aria-label="Paleopedia text">
+            <h3>Paleopedia text</h3>
+            <p class="hint">What the species' Paleopedia page says. Every language without its own text uses the English, so write English first and translate later.</p>
+            <label class="language">Language
+              <select bind:value={textLanguage}>
+                {#each languages as [code, label] (code)}<option value={code}>{code === 'en-US' ? label : `${label} (${translated(code) ? 'translated' : 'uses English'})`}</option>{/each}
+              </select>
+            </label>
+            {#if textLanguage === 'en-US'}
+              <p class="hint">The English name is the Display name above. Empty character notes or social info show the template's.</p>
+            {:else}
+              <div class="text-field">
+                <label>Name <input value={texts[textLanguage]?.name ?? ''} placeholder={name} oninput={(e) => setText(textLanguage, 'name', e.currentTarget.value)} /></label>
+                {@render fallback('name', 'Name')}
+              </div>
+            {/if}
+            {#each textFields as [slot, label] (slot)}
+              <div class="text-field">
+                <label>{label}
+                  <textarea rows={slot === 'description' ? 6 : 3} value={texts[textLanguage]?.[slot] ?? ''}
+                    placeholder={textLanguage === 'en-US' ? '' : (texts['en-US']?.[slot] ?? '')}
+                    oninput={(e) => setText(textLanguage, slot, e.currentTarget.value)}></textarea>
+                </label>
+                {#if textLanguage !== 'en-US'}{@render fallback(slot, label)}{/if}
+              </div>
             {/each}
-          </div>
+          </section>
+          {#snippet fallback(slot: string, label: string)}
+            {#if (texts[textLanguage]?.[slot] ?? '') === ''}<span class="hint">Uses English</span>
+            {:else}<span><button type="button" class="small" aria-label="{label}: Use English" onclick={() => setText(textLanguage, slot, '')}>Use English</button></span>{/if}
+          {/snippet}
+          <details class="advanced">
+            <summary><h3>Text files</h3> <span class="hint">Advanced: where each text is stored.</span></summary>
+            <p class="hint">Each key points to its own plain text file. For example, mirabilis/description reads localization/en-US/mirabilis/description.txt. The Show buttons open the file of the language picked above.</p>
+            <div class="grid">
+              {#each ['name', 'description', 'characterNotes', 'socialInfo'] as slot}
+                <label>{slot} key <input bind:value={localization[slot]} placeholder={`mirabilis/${slot}`} /></label>
+                <button type="button" disabled={!localization[slot]} onclick={() => doc.detail && session.platform.reveal(`${doc.detail.dir}/localization/${textLanguage}/${localization[slot].replaceAll('\\', '/')}.txt`)}>Show {slot} text file</button>
+              {/each}
+            </div>
+          </details>
           <details class="advanced">
             <summary><h3>Full animal record</h3> <span class="hint">Advanced: every field the game stores for this animal. Most species never need it.</span></summary>
             <p class="hint">Stored in animal_fields. Edit numbers, booleans, enum names and text here or with SQL. Paths follow the game's fields; reference and structural rows describe inherited assets and arrays. Purchase cost is in animal_species; the basic stats above are in animal_stats.</p>
@@ -331,7 +381,12 @@
   fieldset { border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
   legend { padding: 0 6px; }
   label { display: grid; gap: 4px; color: var(--muted); }
-  input, select { font: inherit; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 7px 9px; width: 100%; box-sizing: border-box; }
+  .texts { display: grid; gap: 10px; margin-top: 12px; }
+  .texts .language { max-width: 260px; }
+  .text-field { display: grid; gap: 4px; justify-items: start; }
+  .text-field label { width: 100%; }
+  textarea { resize: vertical; }
+  input, select, textarea { font: inherit; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 7px 9px; width: 100%; box-sizing: border-box; }
   .unit, .hint { font-size: 12px; }
   .actions { margin-top: 18px; }
   .skins { display: grid; gap: 12px; }

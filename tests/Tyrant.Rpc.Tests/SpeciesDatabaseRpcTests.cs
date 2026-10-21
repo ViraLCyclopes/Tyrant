@@ -61,6 +61,45 @@ public class SpeciesDatabaseRpcTests
     }
 
     [Fact]
+    public async Task Species_texts_are_listed_per_language_and_saved_with_the_species()
+    {
+        using var game = new FakeGame();
+        var (h, ws, _) = await AssetFixtures.Opened(game);
+        var objects = new DumpResult();
+        var skin = AssetFixtures.TexturedSkin(objects, "Default", 50);
+        objects.Objects.Add(new DumpObject(typeof(object), new EngineObjectInfo("PrehistoricKingdom.AnimalData", "Allosaurus", 1), $$"""
+            {"speciesID":"Allosaurus Anax", "cost":20000, "skinsData":[{{skin}}]}
+            """));
+        DumpWriter.Write(Path.Combine(ws, "data"), objects, [], new DumpManifest { RequestId = "r1", BuildGuid = "b" });
+        await h.Call("mods.create", new { id = "mod-a" });
+        string Rev(System.Text.Json.JsonElement d) => d.GetProperty("revision").GetString()!;
+        var a = await h.Call("mods.get", new { id = "mod-a" });
+        a = await h.Call("mods.addSpecies", new { id = "mod-a", revision = Rev(a), speciesId = "mirabilis", template = "Allosaurus Anax", name = "Mirabilis", genus = "Example", epithet = "mirabilis" });
+        var animal = Assert.Single((await h.Call("mods.animalDatabase", new { id = "mod-a" })).GetProperty("animals").EnumerateArray());
+        Assert.Equal("Mirabilis", animal.GetProperty("texts").GetProperty("en-US").GetProperty("name").GetString());
+        Assert.Equal("", animal.GetProperty("texts").GetProperty("fr").GetProperty("description").GetString());
+
+        await h.Call("mods.setSpecies", new
+        {
+            id = "mod-a", revision = Rev(a), speciesId = "mirabilis", name = "Mirabilis Rex", genus = "Example", epithet = "mirabilis",
+            cost = (int?)null, stats = new Dictionary<string, double>(),
+            texts = new Dictionary<string, Dictionary<string, string>>
+            {
+                ["en-US"] = new() { ["description"] = "Big.\n\nVery big.", ["characterNotes"] = "Grumpy." },
+                ["fr"] = new() { ["description"] = "Grand.", ["name"] = "Mirabilis roi" },
+            },
+        });
+
+        var texts = Assert.Single((await h.Call("mods.animalDatabase", new { id = "mod-a" })).GetProperty("animals").EnumerateArray()).GetProperty("texts");
+        Assert.Equal("Mirabilis Rex", texts.GetProperty("en-US").GetProperty("name").GetString());
+        Assert.Equal("Big.\n\nVery big.", texts.GetProperty("en-US").GetProperty("description").GetString());
+        Assert.Equal("Grumpy.", texts.GetProperty("en-US").GetProperty("characterNotes").GetString());
+        Assert.Equal("Grand.", texts.GetProperty("fr").GetProperty("description").GetString());
+        Assert.Equal("Mirabilis roi", texts.GetProperty("fr").GetProperty("name").GetString());
+        Assert.Equal("", texts.GetProperty("es").GetProperty("description").GetString());
+    }
+
+    [Fact]
     public async Task Editor_creates_sqlite_species_edits_stats_and_rejects_external_conflicts()
     {
         using var game = new FakeGame();

@@ -184,6 +184,35 @@ public class SpeciesCliTests : IDisposable
     }
 
     [Fact]
+    public void Set_species_text_writes_english_and_translations_and_a_cleared_translation_uses_english()
+    {
+        using var game = new FakeGame();
+        var ws = TexturedAllosaurus(game);
+        Assert.Equal(ExitCodes.Ok, AddMirabilis(ws).Code);
+        var file = Path.Combine(ws, "notes.txt");
+        File.WriteAllText(file, "Line one.\n\nLine two.");
+        string Text(string code, string slot) => File.ReadAllText(Path.Combine(ws, "mods", "mod-a", "localization", code, "mirabilis", slot + ".txt"));
+
+        var english = Run("mod", "set-species-text", "mod-a", "mirabilis", "description", "--text", "A big one.", "-w", ws);
+        Assert.True(english.Code == ExitCodes.Ok, english.Err);
+        Assert.Contains("mirabilis: en-US description set (every empty language uses it).", english.Out);
+        Assert.Equal("A big one.", Text("en-US", "description"));
+
+        var french = Run("mod", "set-species-text", "mod-a", "mirabilis", "characterNotes", "--lang", "fr", "--file", file, "-w", ws);
+        Assert.True(french.Code == ExitCodes.Ok, french.Err);
+        Assert.Equal("Line one.\n\nLine two.", Text("fr", "characterNotes"));
+
+        var cleared = Run("mod", "set-species-text", "mod-a", "mirabilis", "characterNotes", "--lang", "fr", "--english", "-w", ws);
+        Assert.Contains("mirabilis: fr characterNotes uses English.", cleared.Out);
+        Assert.Equal("", Text("fr", "characterNotes"));
+
+        Assert.Equal(ExitCodes.Error, Run("mod", "set-species-text", "mod-a", "mirabilis", "description", "-w", ws).Code);
+        Assert.Equal(ExitCodes.Error, Run("mod", "set-species-text", "mod-a", "mirabilis", "description", "--text", "a", "--file", file, "-w", ws).Code);
+        Assert.Equal(ExitCodes.Error, Run("mod", "set-species-text", "mod-a", "mirabilis", "description", "--english", "-w", ws).Code);
+        Assert.NotEqual(ExitCodes.Ok, Run("mod", "set-species-text", "mod-a", "mirabilis", "name", "--text", "X", "-w", ws).Code);
+    }
+
+    [Fact]
     public void Set_species_paleopedia_picture_sets_and_clears_the_paleopedia_page_picture()
     {
         using var game = new FakeGame();

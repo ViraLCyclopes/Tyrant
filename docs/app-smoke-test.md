@@ -514,3 +514,8 @@ Needs the game. Steps marked **(game)** start the game.
      volume (**Edit** opens it; its **+ Add** opens the list on this species). Check shows no problem for it. Install and
      open a park with both the custom species and a vanilla Carcharodontosaurus: the custom one calls with your file
      (the log has `Replaced … for tyrant.<mod-id>.<species-id>`), the Carcharodontosaurus keeps the game's call.
+159. **(game)** Paleopedia text: on a custom species page, **Paleopedia text** in English, type a description and character
+     notes, **Save species**. Pick **French**: the fields show the English greyed out with **Uses English**. Type a French
+     description only, save; the picker says *French (translated)*. Install: in English the species' Paleopedia page shows
+     both English texts; switch the game to French: the description is the French one and the character notes are still
+     the English ones. **Use English** on the French description and save: in French the page shows the English again.

@@ -217,6 +217,58 @@ public sealed class ModSpeciesPaleopediaPictureCommand : Command<ModSpeciesPaleo
     }
 }
 
+public sealed class ModSpeciesTextCommand : Command<ModSpeciesTextCommand.Settings>
+{
+    public sealed class Settings : ModSettings
+    {
+        [CommandArgument(1, "<SPECIES-ID>")]
+        [Description("The species' id in the mod (see 'tyrant mod show').")]
+        public string SpeciesId { get; set; } = "";
+
+        [CommandArgument(2, "<FIELD>")]
+        [Description("description, characterNotes, socialInfo or name (the English name is the species' display name).")]
+        public string Field { get; set; } = "";
+
+        [CommandOption("--lang <CODE>")]
+        [Description("en-US (default), fr, es, pt, de, ru or zh-CN. Empty languages use the English text.")]
+        public string Lang { get; set; } = "en-US";
+
+        [CommandOption("--text <TEXT>")]
+        [Description("The text.")]
+        public string? Text { get; set; }
+
+        [CommandOption("--file <FILE>")]
+        [Description("A UTF-8 text file holding the text (paragraphs and <b>markup</b> are kept).")]
+        public string? File { get; set; }
+
+        [CommandOption("--english")]
+        [Description("Empty this translation so the language uses the English text.")]
+        public bool English { get; set; }
+    }
+
+    public override int Execute(CommandContext context, Settings settings)
+    {
+        if (new[] { settings.Text is not null, settings.File is not null, settings.English }.Count(given => given) != 1)
+        {
+            Console.Error.WriteLine("Give one of --text, --file or --english.");
+            return ExitCodes.Error;
+        }
+        if (settings.English && settings.Lang == "en-US")
+        {
+            Console.Error.WriteLine("--english empties a translation; give --lang with another language.");
+            return ExitCodes.Error;
+        }
+        var text = settings.English ? "" : settings.Text ?? System.IO.File.ReadAllText(settings.File!);
+        var (ws, _) = CliServices.OpenWorkspace(settings);
+        var mod = ModProject.Open(ws, settings.Id);
+        mod.SetSpeciesTexts(settings.SpeciesId, new Dictionary<string, IReadOnlyDictionary<string, string>>
+        { [settings.Lang] = new Dictionary<string, string> { [settings.Field] = text } });
+        Console.WriteLine(settings.Lang == "en-US" ? $"{settings.SpeciesId}: en-US {settings.Field} set (every empty language uses it)."
+            : text.Length == 0 ? $"{settings.SpeciesId}: {settings.Lang} {settings.Field} uses English." : $"{settings.SpeciesId}: {settings.Lang} {settings.Field} set.");
+        return ExitCodes.Ok;
+    }
+}
+
 public sealed class ModSetStartingSkinCommand : Command<ModSetStartingSkinCommand.Settings>
 {
     public sealed class Settings : ModSettings

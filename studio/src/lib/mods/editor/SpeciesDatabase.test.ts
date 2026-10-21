@@ -10,7 +10,14 @@ import { modDetail } from '$lib/test/modFixtures';
 import { ModDoc } from './modDoc.svelte';
 import SpeciesDatabase from './SpeciesDatabase.svelte';
 
-const animal = { id: 'new-animal', key: 'tyrant.red-spot.new-animal', base: 'Allosaurus Anax', name: 'New animal', genus: 'Example', epithet: 'animal', cost: null, stats: { adultMassKg: 4500 }, inheritedCost: 20000, inheritedStats: { adultMassKg: 4010, maxAgeYears: 40 }, dataFields: [{ path: '/brain/needs/adult/native/hitPoints', kind: 'number', value: '660', templateValue: '660', editable: true }], localization: { description: 'pack.description' }, icon: null, paleopediaPicture: null as string | null };
+const animal = { id: 'new-animal', key: 'tyrant.red-spot.new-animal', base: 'Allosaurus Anax', name: 'New animal', genus: 'Example', epithet: 'animal', cost: null, stats: { adultMassKg: 4500 }, inheritedCost: 20000, inheritedStats: { adultMassKg: 4010, maxAgeYears: 40 }, dataFields: [{ path: '/brain/needs/adult/native/hitPoints', kind: 'number', value: '660', templateValue: '660', editable: true }], localization: { description: 'pack.description' }, icon: null, paleopediaPicture: null as string | null,
+  texts: languageTexts({ 'en-US': { name: 'New animal', description: 'English description.', characterNotes: '', socialInfo: '' } }) };
+
+/** Every language's texts (all empty unless given), as mods.animalDatabase lists them. */
+function languageTexts(given: Record<string, Record<string, string>>): Record<string, Record<string, string>> {
+  const empty = { name: '', description: '', characterNotes: '', socialInfo: '' };
+  return Object.fromEntries(['en-US', 'fr', 'es', 'pt', 'de', 'ru', 'zh-CN'].map((code) => [code, { ...empty, ...given[code] }]));
+}
 const fields = [{ id: 'adultMassKg', label: 'Adult mass', unit: 'kg', min: 0.001, max: 1000000 }, { id: 'maxAgeYears', label: 'Lifespan', unit: 'years', min: 0.001, max: 10000 }];
 
 async function setup(animals: (typeof animal)[] = [animal], props: { onPrefab?: (t: string) => void; onAddSkin?: (k: string) => void; onOpenSkin?: (id: string) => void; onAddSound?: (k: string) => void; onOpenSound?: (s: unknown) => void } = {}, templateFound = true, detail = modDetail()) {
@@ -81,6 +88,53 @@ describe('Species database', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Nursery picture: Choose PNG…' }));
     await waitFor(() => expect(rpc.callsTo('mods.setSpeciesIcon')[0]?.params).toMatchObject({ speciesId: 'new-animal', png: 'C:/icons/mirabilis.png' }));
   });
+  it('Paleopedia text shows the English texts and saves only the ones changed', async () => {
+    const { rpc } = await setup();
+    rpc.on('mods.setSpecies', () => modDetail({ revision: 'r2' }));
+    const section = screen.getByRole('region', { name: 'Paleopedia text' });
+    const description = within(section).getByRole('textbox', { name: 'Description' });
+    expect(description).toHaveValue('English description.');
+    expect(within(section).queryByRole('textbox', { name: 'Name' })).toBeNull();
+    expect(within(section).getByText(/English name is the Display name/)).toBeInTheDocument();
+    expect(within(section).getByText(/Every language without its own text uses the English/)).toBeInTheDocument();
+
+    await fireEvent.input(within(section).getByRole('textbox', { name: 'Character notes' }), { target: { value: 'Grumpy.' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Save species' }));
+
+    await waitFor(() => expect((rpc.callsTo('mods.setSpecies')[0]?.params as { texts?: unknown } | undefined)?.texts).toEqual({ 'en-US': { characterNotes: 'Grumpy.' } }));
+  });
+
+  it('another language uses English until it has its own text, and Use English empties it again', async () => {
+    const translated = { ...animal, texts: languageTexts({ 'en-US': { name: 'New animal', description: 'English description.' }, fr: { socialInfo: 'Vit seul.' } }) };
+    const { rpc } = await setup([translated]);
+    rpc.on('mods.setSpecies', () => modDetail({ revision: 'r2' }));
+    const section = screen.getByRole('region', { name: 'Paleopedia text' });
+    await fireEvent.change(within(section).getByRole('combobox', { name: 'Language' }), { target: { value: 'fr' } });
+
+    const description = within(section).getByRole('textbox', { name: 'Description' });
+    expect(description).toHaveValue('');
+    expect(description).toHaveAttribute('placeholder', 'English description.');
+    expect(within(section).getByRole('textbox', { name: 'Name' })).toHaveAttribute('placeholder', 'New animal');
+    expect(within(section).getAllByText('Uses English').length).toBe(3);
+    expect(within(section).getByRole('textbox', { name: 'Social info' })).toHaveValue('Vit seul.');
+
+    await fireEvent.input(description, { target: { value: 'Grand.' } });
+    await fireEvent.input(within(section).getByRole('textbox', { name: 'Name' }), { target: { value: 'Nouvel animal' } });
+    await fireEvent.click(within(section).getByRole('button', { name: 'Social info: Use English' }));
+    expect(within(section).getByRole('textbox', { name: 'Social info' })).toHaveValue('');
+    await fireEvent.click(screen.getByRole('button', { name: 'Save species' }));
+
+    await waitFor(() => expect((rpc.callsTo('mods.setSpecies')[0]?.params as { texts?: unknown } | undefined)?.texts).toEqual({ fr: { description: 'Grand.', name: 'Nouvel animal', socialInfo: '' } }));
+  });
+
+  it('the language picker marks the languages that have their own text', async () => {
+    await setup([{ ...animal, texts: languageTexts({ 'en-US': { description: 'English description.' }, de: { description: 'Groß.' } }) }]);
+    const picker = within(screen.getByRole('region', { name: 'Paleopedia text' })).getByRole('combobox', { name: 'Language' });
+    expect(within(picker).getByRole('option', { name: 'German (translated)' })).toBeInTheDocument();
+    expect(within(picker).getByRole('option', { name: 'French (uses English)' })).toBeInTheDocument();
+    expect(within(picker).getByRole('option', { name: 'English' })).toBeInTheDocument();
+  });
+
   it('sets the Paleopedia picture apart from the Nursery picture, and goes back to the template one', async () => {
     const { rpc, platform } = await setup([{ ...animal, paleopediaPicture: 'icons/new-animal-paleopedia.png' }]);
     rpc.on('mods.setSpeciesPaleopediaPicture', () => modDetail({ revision: 'r2' }));
