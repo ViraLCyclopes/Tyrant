@@ -11,7 +11,10 @@ namespace Tyrant.Framework.Core
     public static class AnimalDatabaseFile
     {
         public const string FileName = "animals.db";
-        public const int SchemaVersion = 5;
+        public const int SchemaVersion = 6;
+
+        /// <summary>animal_assets slots: the Nursery picture (heroRender) and the Paleopedia page picture.</summary>
+        public const string IconSlot = "icon", PaleopediaSlot = "paleopedia";
 
         public static List<SpeciesEntry> Read(string path)
         {
@@ -70,14 +73,15 @@ namespace Tyrant.Framework.Core
                         db.Execute("CREATE TABLE animal_stats (species_id TEXT NOT NULL REFERENCES animal_species(id) ON DELETE CASCADE, stat TEXT NOT NULL, value REAL NOT NULL, PRIMARY KEY(species_id, stat))");
                         db.Execute("PRAGMA user_version = 1");
                     }
-                    CheckVersion(db);
+                    var version = CheckVersion(db);
                     var current = ReadRows(db);
                     if (expectedSnapshot != null && Snapshot(current) != expectedSnapshot)
                         throw new ManifestException("animals.db changed outside Tyrant; reload the species database before saving.");
                     db.Execute("CREATE TABLE IF NOT EXISTS animal_fields (species_id TEXT NOT NULL REFERENCES animal_species(id) ON DELETE CASCADE, path TEXT NOT NULL, kind TEXT NOT NULL, value TEXT NOT NULL, template_value TEXT NOT NULL, editable INTEGER NOT NULL CHECK(editable IN (0,1)), PRIMARY KEY(species_id,path))");
                     db.Execute("PRAGMA user_version = " + SchemaVersion);
                     db.Execute("CREATE TABLE IF NOT EXISTS animal_localization (species_id TEXT NOT NULL REFERENCES animal_species(id) ON DELETE CASCADE, slot TEXT NOT NULL, term TEXT NOT NULL, PRIMARY KEY(species_id,slot))");
-                    db.Execute("CREATE TABLE IF NOT EXISTS animal_assets (species_id TEXT NOT NULL REFERENCES animal_species(id) ON DELETE CASCADE, slot TEXT NOT NULL CHECK(slot='icon'), file TEXT NOT NULL, PRIMARY KEY(species_id,slot))");
+                    if (version < 6) AllowPaleopediaSlot(db);
+                    db.Execute("CREATE TABLE IF NOT EXISTS animal_assets (" + AssetColumns + ")");
                     db.Execute("CREATE TABLE IF NOT EXISTS animal_prefabs (species_id TEXT PRIMARY KEY NOT NULL REFERENCES animal_species(id) ON DELETE CASCADE, bundle TEXT NOT NULL, asset TEXT NOT NULL)");
                     db.Execute("CREATE TABLE IF NOT EXISTS animal_starting_skin (species_id TEXT PRIMARY KEY NOT NULL REFERENCES animal_species(id) ON DELETE CASCADE, skin INTEGER NOT NULL CHECK(skin >= 0), name TEXT, swatch TEXT)");
                     db.Execute("CREATE TABLE IF NOT EXISTS animal_portraits (species_id TEXT NOT NULL REFERENCES animal_species(id) ON DELETE CASCADE, slot TEXT NOT NULL, file TEXT NOT NULL, PRIMARY KEY(species_id,slot))");
@@ -110,7 +114,8 @@ namespace Tyrant.Framework.Core
                         foreach (var term in entry.Localization)
                             db.Execute("INSERT INTO animal_localization(species_id,slot,term) VALUES(?,?,?)", entry.Id, term.Key, term.Value);
                         db.Execute("DELETE FROM animal_assets WHERE species_id = ?", entry.Id);
-                        if (entry.Icon != null) db.Execute("INSERT INTO animal_assets(species_id,slot,file) VALUES(?, 'icon', ?)", entry.Id, entry.Icon);
+                        if (entry.Icon != null) db.Execute("INSERT INTO animal_assets(species_id,slot,file) VALUES(?,?,?)", entry.Id, IconSlot, entry.Icon);
+                        if (entry.PaleopediaPicture != null) db.Execute("INSERT INTO animal_assets(species_id,slot,file) VALUES(?,?,?)", entry.Id, PaleopediaSlot, entry.PaleopediaPicture);
                         db.Execute("DELETE FROM animal_prefabs WHERE species_id = ?", entry.Id);
                         if (entry.Prefab != null) db.Execute("INSERT INTO animal_prefabs(species_id,bundle,asset) VALUES(?,?,?)", entry.Id, entry.Prefab.Bundle, entry.Prefab.Asset);
                         db.Execute("DELETE FROM animal_starting_skin WHERE species_id = ?", entry.Id);
@@ -126,11 +131,28 @@ namespace Tyrant.Framework.Core
             }
         }
 
-        private static void CheckVersion(Database db)
+        private const string AssetColumns = "species_id TEXT NOT NULL REFERENCES animal_species(id) ON DELETE CASCADE, slot TEXT NOT NULL CHECK(slot IN ('icon','paleopedia')), file TEXT NOT NULL, PRIMARY KEY(species_id,slot)";
+
+        /// <summary>Before version 6, animal_assets only allowed the icon slot; SQLite cannot change a CHECK, so the table is rebuilt.</summary>
+        private static void AllowPaleopediaSlot(Database db)
+        {
+            bool exists;
+            using (var query = db.Query("SELECT 1 FROM sqlite_master WHERE type='table' AND name='animal_assets'")) exists = query.Next();
+            if (!exists) return;
+            db.Execute("CREATE TABLE animal_assets_v6 (" + AssetColumns + ")");
+            db.Execute("INSERT INTO animal_assets_v6(species_id,slot,file) SELECT species_id,slot,file FROM animal_assets");
+            db.Execute("DROP TABLE animal_assets");
+            db.Execute("ALTER TABLE animal_assets_v6 RENAME TO animal_assets");
+        }
+
+        private static long CheckVersion(Database db)
         {
             using (var query = db.Query("PRAGMA user_version"))
+            {
                 if (!query.Next() || query.Integer(0) < 1 || query.Integer(0) > SchemaVersion)
-                    throw new ManifestException("animals.db has an unsupported schema version (expected 1 to 5).");
+                    throw new ManifestException($"animals.db has an unsupported schema version (expected 1 to {SchemaVersion}).");
+                return query.Integer(0);
+            }
         }
 
         private static List<SpeciesEntry> ReadRows(Database db)
@@ -187,8 +209,10 @@ namespace Tyrant.Framework.Core
                     while (query.Next())
                     {
                         var entry = entries.FirstOrDefault(s => s.Id == query.Text(0)) ?? throw new ManifestException("animal_assets references a missing species.");
-                        if (query.Text(1) != "icon") throw new ManifestException("Unknown species asset slot: " + query.Text(1));
-                        entry.Icon = query.Text(2);
+                        var slot = query.Text(1);
+                        if (slot == IconSlot) entry.Icon = query.Text(2);
+                        else if (slot == PaleopediaSlot) entry.PaleopediaPicture = query.Text(2);
+                        else throw new ManifestException($"animal_assets: unknown species asset slot '{slot}' (use {IconSlot} or {PaleopediaSlot}).");
                     }
             bool hasPrefabs;
             using (var query = db.Query("SELECT 1 FROM sqlite_master WHERE type='table' AND name='animal_prefabs'")) hasPrefabs = query.Next();
@@ -249,6 +273,7 @@ namespace Tyrant.Framework.Core
                     AnimalLocalization.ValidateTerm(term.Value);
                 }
                 if (entry.Icon != null && !IsModPng(entry.Icon)) throw new ManifestException("Species icon must be a relative PNG path inside the mod.");
+                if (entry.PaleopediaPicture != null && !IsModPng(entry.PaleopediaPicture)) throw new ManifestException("Species Paleopedia picture must be a relative PNG path inside the mod.");
                 if (entry.Swatch != null && !IsModPng(entry.Swatch)) throw new ManifestException("Species swatch must be a relative PNG path inside the mod.");
                 if (entry.StartingSkin < 0) throw new ManifestException("animals.db: species '" + entry.Id + "' starting skin must be 0 or more.");
                 if (entry.StartingSkinName != null && string.IsNullOrWhiteSpace(entry.StartingSkinName))

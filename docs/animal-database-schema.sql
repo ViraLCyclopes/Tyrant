@@ -32,7 +32,7 @@ CREATE TABLE animal_localization (
 );
 CREATE TABLE animal_assets (
     species_id TEXT NOT NULL REFERENCES animal_species(id) ON DELETE CASCADE,
-    slot TEXT NOT NULL CHECK(slot='icon'),
+    slot TEXT NOT NULL CHECK(slot IN ('icon','paleopedia')),
     file TEXT NOT NULL,
     PRIMARY KEY(species_id,slot)
 );
@@ -53,5 +53,5 @@ CREATE TABLE animal_portraits (
     file TEXT NOT NULL,
     PRIMARY KEY(species_id,slot)
 );
-PRAGMA user_version = 5;
+PRAGMA user_version = 6;
 COMMIT;

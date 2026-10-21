@@ -351,7 +351,7 @@ public sealed partial class ModProject
             .Concat(Manifest.Models.SelectMany(EntryFiles))
             .Concat(MaterialFolders.Files(Manifest))
             .Concat(Manifest.Sounds.SelectMany(s => s.Files))
-            .Concat(Manifest.Species.SelectMany(s => new[] { s.Icon, s.Swatch, s.Prefab?.Bundle }.OfType<string>().Concat(s.Portraits.Values)))
+            .Concat(Manifest.Species.SelectMany(s => new[] { s.Icon, s.PaleopediaPicture, s.Swatch, s.Prefab?.Bundle }.OfType<string>().Concat(s.Portraits.Values)))
             .Where(f => !string.IsNullOrWhiteSpace(f));
 
     /// <summary>A skin's own files: its PNGs, swatch, portraits and material images (not its model build).</summary>

@@ -280,8 +280,16 @@ Release build: `npm run build:app`, install `studio/src-tauri/target/release/bun
      **Delete species** the species and its skins leave the side list, and its files are in the Recycle Bin.
 121. With a second workspace mod that has a skin for that species, the dialog names that mod; after deleting, Check
      on the second mod reports its skin's species is missing, and in game only that skin is skipped.
-122. On a custom species page, **Paleopedia photo → Choose photo PNG…** with a 512×256 PNG: in game the
-     species' Paleopedia page and the Nursery species panel show it; **Use template photo** brings the template's back.
+122. On a custom species page, **Nursery picture → Choose PNG…** with a 512×256 PNG and **Paleopedia picture → Choose
+     PNG…** with a 16:9 PNG: in game the species' Nursery card and the Nursery species panel show the first. Open the
+     template's Paleopedia page first, then the species' **Open Paleopedia** in the Nursery: the page should show the
+     species' genus, name and description with the second picture, and the template's page still shows its own picture.
+     The MelonLoader log has either `Open Paleopedia shows …'s own page` or `Open Paleopedia showed … instead of …`; note
+     which, with its `set with … by …` part. Press it again: no second line for that species. **Use template picture** on
+     each brings the template's back. With more than 5 skins the Nursery skin row has ‹ › buttons at its ends; each press
+     goes to the next or previous page of 5 (pages start at skins 1, 6, 11…, the last page ends at the last skin, so after
+     a wheel scroll a press can move fewer than 5), and a button greys out at its end; the wheel still scrolls it.
+     Opening **All skins** writes no `onValueChanged` warning to the MelonLoader log.
 123. On a species with a starting skin and a second skin with only a diffuse PNG, **Make default** on the second skin:
      after confirming it is tagged *starting skin* and listed first and looks the same; in game a new animal of the species
      starts with it, and the old starting skin is still in the skin picker.

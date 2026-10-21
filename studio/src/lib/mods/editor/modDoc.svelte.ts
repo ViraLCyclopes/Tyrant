@@ -10,6 +10,7 @@ export type EditMethod =
   | 'mods.setSpecies'
   | 'mods.removeSpecies'
   | 'mods.setSpeciesIcon'
+  | 'mods.setSpeciesPaleopediaPicture'
   | 'mods.setSpeciesStartingSkin'
   | 'mods.setSpeciesSwatch'
   | 'mods.setSpeciesPrefab'

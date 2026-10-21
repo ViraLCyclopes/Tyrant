@@ -219,14 +219,11 @@ namespace Tyrant.Framework
                 _search = field.GetComponent(searchSource.GetType());
                 var input = Traverse.Create(_search);
                 foreach (var name in new[] { "onValueChanged", "onEndEdit", "onSubmit", "onSelect", "onDeselect" })
-                {
-                    var property = AccessTools.Property(searchSource.GetType(), name);
-                    if (property != null && property.CanWrite) property.SetValue(_search, Activator.CreateInstance(property.PropertyType), null);
-                }
+                    Members.Replace(_search, name); // drops the species list's own handlers
                 input.Property("text").SetValue("");
                 _query = "";
                 SetText((input.Property("placeholder").GetValue() as Component)?.transform, "Search skins or mods…");
-                if (input.Property("onValueChanged").GetValue() is UnityEvent<string> changed) changed.AddListener(q => { _query = q ?? ""; Filter(); });
+                if (Members.Get(_search, "onValueChanged") is UnityEvent<string> changed) changed.AddListener(q => { _query = q ?? ""; Filter(); });
                 field.gameObject.SetActive(true);
             }
 
@@ -315,8 +312,7 @@ namespace Tyrant.Framework
                 AccessTools.Field(ToggleUtil!, "toggleGroup").SetValue(util, group);
                 foreach (var eventName in new[] { "OnStateChange", "OnValueOn", "OnValueOff", "OnClickBlind" })
                     AccessTools.Field(ToggleUtil!, eventName)?.SetValue(util, new UnityEvent()); // the template's events would act on the row
-                if (toggleComponent != null && AccessTools.Property(toggleComponent.GetType(), "onValueChanged") is { CanWrite: true } changed)
-                    changed.SetValue(toggleComponent, Activator.CreateInstance(changed.PropertyType), null);
+                if (toggleComponent != null) Members.Replace(toggleComponent, "onValueChanged"); // a field on Toggle: the row swatch's listeners go
                 var click = new UnityEvent();
                 var chosen = index;
                 click.AddListener(() => Select(chosen));

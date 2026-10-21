@@ -73,6 +73,7 @@ namespace Tyrant.Framework
                 if (rebuildAll != null) harmony.Patch(rebuildAll, postfix: new HarmonyMethod(typeof(SpeciesModule), nameof(AllAnimalsRebuilt)));
                 else FrameworkMod.Log.Warning("AnimalDatabase.RebuildAllAnimalDataAssets not found; new species are listed last in the Nursery's Alphabet sort.");
                 harmony.Patch(displayName, postfix: new HarmonyMethod(typeof(SpeciesModule), nameof(LocalizedName)));
+                SpeciesPaleopedia.Patch(harmony);
             }
             catch (Exception ex)
             {
@@ -89,6 +90,7 @@ namespace Tyrant.Framework
         {
             EnsureReady();
             SpeciesMaterialDiagnostics.Tick();
+            SpeciesPaleopedia.Tick();
         }
 
         private static void EnsureReady()
@@ -151,6 +153,7 @@ namespace Tyrant.Framework
                     ApplyStats(data, entry.Stats);
                     ApplyText(data, id, entry.Texts);
                     if (entry.Icon != null) Set(data, "heroRender", LoadSprite(mod.Directory, entry.Icon, id + ".icon"));
+                    if (entry.PaleopediaPicture != null) UsePaleopediaPicture(data, mod.Directory, entry.PaleopediaPicture, id);
                     var sourceSkins = Field(data, "skinsData") as IList ?? throw new MissingFieldException("skinsData");
                     if (sourceSkins.Count == 0) throw new InvalidOperationException("template has no skins");
                     if (entry.StartingSkin >= sourceSkins.Count)
@@ -178,19 +181,44 @@ namespace Tyrant.Framework
                 }
                 catch (Exception ex)
                 {
-                    if (data != null && !Added.ContainsKey(data)) UnityEngine.Object.Destroy(data);
+                    if (data != null && !Added.ContainsKey(data))
+                    {
+                        SpeciesPaleopedia.Discard(data);
+                        UnityEngine.Object.Destroy(data);
+                    }
                     FrameworkMod.Log.Error($"{id}: species skipped: {ex.GetBaseException().Message}");
                 }
             }
         }
 
-        /// <summary>A sprite from a PNG inside the mod folder (species icon or swatch).</summary>
+        /// <summary>The species' own Paleopedia picture; on any failure the page keeps the template's, and nothing is left behind.</summary>
+        private static void UsePaleopediaPicture(object data, string modDirectory, string file, string id)
+        {
+            Sprite? picture = null;
+            try
+            {
+                picture = LoadSprite(modDirectory, file, id + ".paleopedia");
+                SpeciesPaleopedia.UsePicture(data, picture, id);
+            }
+            catch (Exception ex)
+            {
+                if (picture != null)
+                {
+                    UnityEngine.Object.Destroy(picture.texture);
+                    UnityEngine.Object.Destroy(picture);
+                }
+                FrameworkMod.Log.Warning($"{id}: its Paleopedia picture is not used ({ex.GetBaseException().Message}); its page shows the template's.");
+            }
+        }
+
+        /// <summary>A sprite from a PNG inside the mod folder (Nursery picture, Paleopedia picture or swatch).</summary>
         private static Sprite LoadSprite(string modDirectory, string file, string name)
         {
             var path = Path.GetFullPath(Path.Combine(modDirectory, file));
             if (!ModPaths.IsInside(path, modDirectory)) throw new InvalidOperationException("PNG path escapes the mod folder: " + file);
+            var bytes = File.ReadAllBytes(path); // before the texture exists: a missing PNG leaves nothing behind
             var texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
-            if (!texture.LoadImage(File.ReadAllBytes(path), false)) { UnityEngine.Object.Destroy(texture); throw new InvalidOperationException("Cannot decode PNG: " + file); }
+            if (!texture.LoadImage(bytes, false)) { UnityEngine.Object.Destroy(texture); throw new InvalidOperationException("Cannot decode PNG: " + file); }
             texture.name = name;
             var sprite = Sprite.Create(texture, new Rect(0, 0, texture.width, texture.height), new Vector2(0.5f, 0.5f));
             sprite.name = name;
@@ -230,8 +258,9 @@ namespace Tyrant.Framework
                 throw new InvalidOperationException("Authored prefab contains a missing script.");
             return prefab;
         }
-        private static object? StaticValue(Type type, string name) =>
-            AccessTools.Property(type, name)?.GetValue(null, null) ?? AccessTools.Field(type, name)?.GetValue(null);
+        // Field or property, whichever the game has (PKLocalizationManager.PKLanguages is a field): asking AccessTools for the
+        // wrong kind logs a warning.
+        private static object? StaticValue(Type type, string name) => Members.GetStatic(type, name);
         private static void Set(object data, string name, object? value) =>
             (AccessTools.Field(data.GetType(), name) ?? throw new MissingFieldException(data.GetType().FullName, name)).SetValue(data, value);
 

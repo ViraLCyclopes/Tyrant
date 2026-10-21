@@ -92,11 +92,77 @@ public class AnimalDatabaseTests
         var saved = Assert.Single(AnimalDatabaseFile.Read(path));
         Assert.Equal(source.Portraits, saved.Portraits);
         Assert.NotEqual(before, AnimalDatabaseFile.Snapshot([saved]));
-        Assert.Equal("5", Sqlite(path, "PRAGMA user_version;"));
+        Assert.Equal("6", Sqlite(path, "PRAGMA user_version;"));
 
         saved.Portraits.Clear();
         AnimalDatabaseFile.Save(path, [saved]);
         Assert.Empty(Assert.Single(AnimalDatabaseFile.Read(path)).Portraits);
+    }
+
+    [Fact]
+    public void Nursery_and_paleopedia_pictures_roundtrip_in_their_own_slots_and_change_the_revision()
+    {
+        var path = PathToDatabase();
+        var source = Animal();
+        AnimalDatabaseFile.Save(path, [source]);
+        var before = AnimalDatabaseFile.Snapshot([source]);
+        source.Icon = "icons/new-animal.png";
+        source.PaleopediaPicture = "icons/new-animal-paleopedia.png";
+        AnimalDatabaseFile.Save(path, [source], before);
+
+        var saved = Assert.Single(AnimalDatabaseFile.Read(path));
+        Assert.Equal(("icons/new-animal.png", "icons/new-animal-paleopedia.png"), (saved.Icon, saved.PaleopediaPicture));
+        Assert.NotEqual(before, AnimalDatabaseFile.Snapshot([saved]));
+        Assert.Equal("paleopedia", Sqlite(path, "SELECT slot FROM animal_assets WHERE file='icons/new-animal-paleopedia.png';"));
+        Assert.Equal("6", Sqlite(path, "PRAGMA user_version;"));
+
+        saved.PaleopediaPicture = null;
+        AnimalDatabaseFile.Save(path, [saved]);
+        var cleared = Assert.Single(AnimalDatabaseFile.Read(path));
+        Assert.Equal(("icons/new-animal.png", (string?)null), (cleared.Icon, cleared.PaleopediaPicture));
+    }
+
+    [Theory]
+    [InlineData("../paleopedia.png")]
+    [InlineData("icons/paleopedia.jpg")]
+    [InlineData("C:/paleopedia.png")]
+    public void An_unsafe_paleopedia_picture_is_rejected(string file)
+    {
+        var animal = Animal();
+        animal.PaleopediaPicture = file;
+        Assert.Throws<ManifestException>(() => AnimalDatabaseFile.Save(PathToDatabase(), [animal]));
+    }
+
+    [Fact]
+    public void A_version_5_file_keeps_its_icon_and_saves_as_version_6_with_a_paleopedia_picture()
+    {
+        var path = PathToDatabase();
+        var animal = Animal();
+        animal.Icon = "icons/new-animal.png";
+        AnimalDatabaseFile.Save(path, [animal]);
+        // Version 5's table only allowed the icon slot.
+        Sqlite(path, "DROP TABLE animal_assets; CREATE TABLE animal_assets (species_id TEXT NOT NULL REFERENCES animal_species(id) ON DELETE CASCADE, slot TEXT NOT NULL CHECK(slot='icon'), file TEXT NOT NULL, PRIMARY KEY(species_id,slot)); INSERT INTO animal_assets VALUES('new-animal','icon','icons/new-animal.png'); PRAGMA user_version = 5;");
+
+        var old = Assert.Single(AnimalDatabaseFile.Read(path));
+        Assert.Equal(("icons/new-animal.png", (string?)null), (old.Icon, old.PaleopediaPicture));
+        old.PaleopediaPicture = "icons/new-animal-paleopedia.png";
+        AnimalDatabaseFile.Save(path, [old]);
+
+        var upgraded = Assert.Single(AnimalDatabaseFile.Read(path));
+        Assert.Equal(("icons/new-animal.png", "icons/new-animal-paleopedia.png"), (upgraded.Icon, upgraded.PaleopediaPicture));
+        Assert.Equal("6", Sqlite(path, "PRAGMA user_version;"));
+    }
+
+    [Fact]
+    public void An_unknown_asset_slot_written_by_hand_is_an_error_naming_the_slots()
+    {
+        var path = PathToDatabase();
+        AnimalDatabaseFile.Save(path, [Animal()]);
+        Sqlite(path, "DROP TABLE animal_assets; CREATE TABLE animal_assets (species_id TEXT NOT NULL, slot TEXT NOT NULL, file TEXT NOT NULL); INSERT INTO animal_assets VALUES('new-animal','banner','icons/a.png');");
+
+        var ex = Assert.Throws<ManifestException>(() => AnimalDatabaseFile.Read(path));
+        Assert.Contains("banner", ex.Message);
+        Assert.Contains("paleopedia", ex.Message);
     }
 
     [Theory]
@@ -111,7 +177,7 @@ public class AnimalDatabaseTests
     }
 
     [Fact]
-    public void A_version_4_file_reads_without_portraits_and_saves_as_version_5()
+    public void A_version_4_file_reads_without_portraits_and_saves_as_the_current_version()
     {
         var path = PathToDatabase();
         var animal = Animal();
@@ -126,7 +192,7 @@ public class AnimalDatabaseTests
 
         var upgraded = Assert.Single(AnimalDatabaseFile.Read(path));
         Assert.Equal((1, "portraits/new-animal/adultFemale.png"), (upgraded.StartingSkin, upgraded.Portraits["adultFemale"]));
-        Assert.Equal("5", Sqlite(path, "PRAGMA user_version;"));
+        Assert.Equal("6", Sqlite(path, "PRAGMA user_version;"));
     }
 
     [Fact]
@@ -141,7 +207,7 @@ public class AnimalDatabaseTests
     }
 
     [Fact]
-    public void A_version_3_file_without_the_starting_skin_table_reads_as_skin_0_and_saves_as_version_5()
+    public void A_version_3_file_without_the_starting_skin_table_reads_as_skin_0_and_saves_as_the_current_version()
     {
         var path = PathToDatabase();
         AnimalDatabaseFile.Save(path, [Animal()]);
@@ -153,7 +219,7 @@ public class AnimalDatabaseTests
         AnimalDatabaseFile.Save(path, [old]);
 
         Assert.Equal(1, Assert.Single(AnimalDatabaseFile.Read(path)).StartingSkin);
-        Assert.Equal("5", Sqlite(path, "PRAGMA user_version;").Trim());
+        Assert.Equal("6", Sqlite(path, "PRAGMA user_version;").Trim());
     }
 
     private static string PathToDatabase() => Path.Combine(Path.GetTempPath(), "tyrant-tests", Guid.NewGuid().ToString("N"), AnimalDatabaseFile.FileName);

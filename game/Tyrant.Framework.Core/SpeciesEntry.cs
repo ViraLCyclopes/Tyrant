@@ -17,7 +17,10 @@ namespace Tyrant.Framework.Core
         public List<AnimalField> Fields { get; set; } = new List<AnimalField>();
         public List<AnimalText> Texts { get; set; } = new List<AnimalText>();
         public Dictionary<string, string> Localization { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+        /// <summary>The Nursery picture (the game's heroRender: the Nursery card and species panel), a PNG in the mod; null keeps the template's.</summary>
         public string? Icon { get; set; }
+        /// <summary>The species' Paleopedia page picture (its own copy of the template's info sign), a PNG in the mod; null keeps the template's.</summary>
+        public string? PaleopediaPicture { get; set; }
         public SpeciesPrefab? Prefab { get; set; }
         /// <summary>The template skin (its index in the template's skinsData) the species starts with: its only skin before mods add theirs.</summary>
         public int StartingSkin { get; set; }
@@ -42,6 +45,7 @@ namespace Tyrant.Framework.Core
             if (Fields.Count > 0) map["fields"] = Fields.OrderBy(p => p.Path, StringComparer.Ordinal).Select(f => (object?)f.ToMap()).ToList();
             if (Localization.Count > 0) map["localization"] = Localization.OrderBy(p => p.Key, StringComparer.Ordinal).ToDictionary(p => p.Key, p => (object?)p.Value);
             if (Icon != null) map["icon"] = Icon;
+            if (PaleopediaPicture != null) map["paleopediaPicture"] = PaleopediaPicture;
             if (Prefab != null) map["prefab"] = new Dictionary<string, object?> { ["bundle"] = Prefab.Bundle, ["asset"] = Prefab.Asset };
             if (StartingSkin != 0) map["startingSkin"] = StartingSkin;
             if (StartingSkinName != null) map["startingSkinName"] = StartingSkinName;

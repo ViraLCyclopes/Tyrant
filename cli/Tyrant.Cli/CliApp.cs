@@ -150,7 +150,10 @@ public static class CliApp
                 mod.AddCommand<ModSetStartingSkinCommand>("set-starting-skin").WithDescription("Make one of a custom species' skins its starting (default) skin; the old one stays as an ordinary skin.");
                 mod.AddCommand<ModSkinPortraitCommand>("set-skin-portrait").WithDescription("Set or clear one of a skin's in-game portraits.");
                 mod.AddCommand<ModSpeciesPortraitCommand>("set-species-portrait").WithDescription("Set or clear one of a custom species' starting skin portraits.");
-                mod.AddCommand<ModSpeciesPhotoCommand>("set-species-photo").WithDescription("Set or clear a custom species' Paleopedia photo (also the Nursery species panel picture).");
+                mod.AddCommand<ModSpeciesPhotoCommand>("set-species-photo").WithAlias("set-species-nursery-picture")
+                    .WithDescription("Set or clear a custom species' Nursery picture (its Nursery card and the Nursery species panel).");
+                mod.AddCommand<ModSpeciesPaleopediaPictureCommand>("set-species-paleopedia-picture")
+                    .WithDescription("Set or clear the picture on a custom species' own Paleopedia page.");
                 mod.AddCommand<ModCleanSkinsCommand>("clean-skins").WithDescription("List or forget skin numbers left by removed mods.");
                 mod.AddCommand<ModListCommand>("list").WithDescription("List your mods and what is installed in the game.");
                 mod.AddCommand<ModShowCommand>("show").WithDescription("Show a mod's details, replacements and skins.");
