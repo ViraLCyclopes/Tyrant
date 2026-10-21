@@ -500,7 +500,8 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
                 SpeciesReference($"{key} iridescence ramp", iridescence.Ramp?.Species, "ramp", m => m.Ramp, species, MaterialOf, errors, warnings);
                 SpeciesReference($"{key} iridescence mask", iridescence.Mask?.Species, "mask", m => m.Mask, species, MaterialOf, errors, warnings);
                 // A mask "from" a slot the mod skin has no PNG for is fine: the framework takes the game's map, as for vanilla skins.
-                if (isAnimals && animal is not null && animal.Ramp is null && iridescence.Strength is { } strength
+                // A baby strength above 0 shimmers on the young (fading as they grow): that is not off.
+                if (isAnimals && animal is not null && animal.Ramp is null && iridescence.Strength is { } strength && !(iridescence.BabyStrength > 0)
                     && strength.Normal == 0 && (strength.Albino ?? 0) == 0 && (strength.Melanistic ?? 0) == 0 && (strength.Leucistic ?? 0) == 0)
                     warnings.Add($"{key}: iridescence strength is 0 everywhere, so it is off.");
             }

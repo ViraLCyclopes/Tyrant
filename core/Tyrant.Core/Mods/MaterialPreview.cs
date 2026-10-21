@@ -104,6 +104,7 @@ public static class MaterialPreview
     private static IEnumerable<string> SetFields(IridescenceSettings i)
     {
         if (i.Strength != null) yield return "strength";
+        if (i.BabyStrength != null) yield return "babyStrength";
         if (i.Variation != null) yield return "variation";
         if (i.Ramp != null) yield return "ramp";
         if (i.Mask != null) yield return "mask";

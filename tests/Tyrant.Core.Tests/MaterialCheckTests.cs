@@ -181,6 +181,17 @@ public class MaterialCheckTests
             Skin(somewhere, new IridescenceSettings { Strength = new VariantNumbers { Normal = 0, Leucistic = 0.5f } });
             Assert.DoesNotContain(text, somewhere.Check().Warnings);
         }
+        using (var baby = Make())
+        {
+            // A shimmer only the babies wear, fading as they grow: not off.
+            Skin(baby, new IridescenceSettings { Strength = new VariantNumbers { Normal = 0 }, BabyStrength = 0.3f });
+            Assert.DoesNotContain(text, baby.Check().Warnings);
+        }
+        using (var babyZero = Make())
+        {
+            Skin(babyZero, new IridescenceSettings { Strength = new VariantNumbers { Normal = 0 }, BabyStrength = 0 });
+            Assert.Contains(text, babyZero.Check().Warnings);
+        }
     }
 
     [Fact]

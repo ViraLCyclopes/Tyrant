@@ -58,6 +58,33 @@ public class ModMaterialsTests
     }
 
     [Fact]
+    public void Baby_strength_and_fur_age_are_saved_and_survive_removing_a_fur_mask()
+    {
+        var (game, ws, mod) = ModEditTests.Setup();
+        using var _ = game;
+        mod = ModEditTests.WithSkins(ws, mod);
+        var png = ModEditTests.Png(Path.Combine(ws.Dir, "src"));
+
+        mod.SetSkinMaterials("blue", """{"Titanoboa":{"iridescence":{"strength":0,"babyStrength":0.3},"fur":{"age":"adults"}}}""");
+        var block = ModProject.Open(ws, mod.Id).SkinMaterial("blue", "Titanoboa")!;
+        Assert.Equal(0.3f, block.Iridescence!.BabyStrength);
+        Assert.Equal(FurAge.Adults, block.Fur!.Age);
+        var file = File.ReadAllText(Path.Combine(mod.Dir, "materials", "skins", "blue", MaterialFolders.FileName));
+        Assert.Contains("\"babyStrength\": 0.3", file);
+        Assert.Contains("\"age\": \"adults\"", file);
+
+        mod.SetMaterialFile("blue", null, "Titanoboa", "furMask", png);
+        mod.SetMaterialFile("blue", null, "Titanoboa", "furMask", null);
+        Assert.Equal(FurAge.Adults, ModProject.Open(ws, mod.Id).SkinMaterial("blue", "Titanoboa")!.Fur!.Age); // the block is not empty: the age stays
+
+        var range = Assert.Throws<TyrantException>(() => mod.SetSkinMaterials("blue", """{"Titanoboa":{"iridescence":{"babyStrength":2}}}"""));
+        Assert.Equal(TyrantErrorCode.ModInvalid, range.Code);
+        Assert.Contains("\"materials.Titanoboa.iridescence.babyStrength\" must be from 0 to 1", range.Message);
+        var age = Assert.Throws<TyrantException>(() => mod.SetSkinMaterials("blue", """{"Titanoboa":{"fur":{"age":"old"}}}"""));
+        Assert.Contains("must be \"babies\", \"adults\" or \"both\"", age.Message);
+    }
+
+    [Fact]
     public void Skin_materials_are_saved_to_their_folder_not_mod_json()
     {
         var (game, ws, mod) = ModEditTests.Setup();
@@ -285,6 +312,22 @@ public class ModMaterialsTests
         Assert.Contains("materials/skins/blue/exported.png", removed.Recycled);
         Assert.False(Directory.Exists(Path.Combine(mod.Dir, "materials", "skins", "blue")));
         Assert.False(Directory.Exists(Path.Combine(mod.Dir, "materials"))); // nothing else in it
+    }
+
+    [Fact]
+    public void A_baby_strength_below_is_named_with_its_layer()
+    {
+        var (game, ws, mod) = ModEditTests.Setup();
+        using var _ = game;
+        mod = ModEditTests.WithSkins(ws, mod);
+        mod.Manifest.SpeciesMaterials["Carcharodontosaurus"] = MaterialOverrides.Parse(
+            Json.Parse("""{"Carch":{"iridescence":{"babyStrength":0.3},"fur":{"age":"babies"}}}"""), "x", false)!;
+
+        var (below, sources) = MaterialPreview.Inherited(mod, "blue", null, "Carch");
+
+        Assert.Equal("species", sources["iridescence.babyStrength"]);
+        Assert.Equal(0.3f, below!.Iridescence!.BabyStrength);
+        Assert.Equal(FurAge.Babies, below.Fur!.Age);
     }
 
     [Fact]
