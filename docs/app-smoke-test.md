@@ -161,9 +161,9 @@ Release build: `npm run build:app`, install `studio/src-tauri/target/release/bun
       growing past 2× (an adult male T. rex is 4 times the game's), and the Size box has no note: the size limit is
       automatic. **Send to Tyrant**: the report has no size-limit line, the species' Size card shows Adult 4, its
       smallest/biggest line says about 5× for the biggest adult, and Check has no size error (only the past-2× warning).
-    - **Past 20×.** In Blender **Adult size ×** 20 and **Male size ×** 20: the Size box says only "In game this is
-      capped at 20×." **Send to Tyrant**: Check on the Size card has the error "The biggest … can reach …× a normal …
-      (adult 20 × male 20 × …), more than Tyrant's 20× limit; lower the adult size or the size ranges."
+    - **Past 100×.** In Blender **Adult size ×** 100 and **Male size ×** 100: the Size box says only "In game this is
+      capped at 100×." **Send to Tyrant**: Check on the Size card has the error "The biggest … can reach …× a normal …
+      (adult 100 × male 100 × …), more than Tyrant's 100× limit; lower the adult size or the size ranges."
 77b. Tyrant panel -> **Sex** Female: her maps show and (Allosaurus Anax) her adult keeps part of the Adolescent shape,
     like a female in the Nursery; Male puts it back. Open in Blender -> Options -> Sex starts as the female.
 78. Save the file (Ctrl+S), close Blender. From the mod's model page → **Open in Blender**: Blender starts with that file and
@@ -491,8 +491,8 @@ Needs the game. Steps marked **(game)** start the game.
      - Incubate a T. rex with the slider at its right end and place it: grown, it is about 13 times a vanilla one (not
        stopped at twice). Other species are their normal size.
      - Let it walk and eat for a few minutes: the log has no `has invalid scale` error spam.
-     - Set the Nursery maximum to 1000%: Check now reports "The biggest Tyrannosaurus can reach …× a normal Tyrannosaurus
-       (adult 2.63 × female … × Nursery slider up to 10), more than Tyrant's 20× limit; lower the adult size or the size
+     - Set the Nursery maximum to 4000%: Check now reports "The biggest Tyrannosaurus can reach …× a normal Tyrannosaurus
+       (adult 2.63 × female … × Nursery slider up to 40), more than Tyrant's 100× limit; lower the adult size or the size
        ranges." (the female's number is the T. rex skin's own female size; the factors multiply out to the first number),
        and Install refuses. Set **Adult size ×** back to 0.8 and **↺** the Nursery range, install, and load the park: the
        log has no `Animal size limits` line, the T. rex is back to 0.8 of a vanilla one, and there is still no error

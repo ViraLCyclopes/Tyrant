@@ -15,12 +15,12 @@ namespace Tyrant.Framework.Core
         public const int Format = 1;
 
         // The maximums reach Tyrant's own bound (SizeLimit.HighestMax), the most an automatic size limit allows.
-        public const double AdultMin = 0.05, AdultMax = 20;
-        public const double SexMin = 0.1, SexMax = 20;
+        public const double AdultMin = 0.05, AdultMax = 100;
+        public const double SexMin = 0.1, SexMax = 100;
         public const double BabyMax = 1;
 
         /// <summary>A genetic size range is [min, max] with 0 &lt; min &lt;= max &lt;= RangeMax.</summary>
-        public const double RangeMax = 20;
+        public const double RangeMax = 100;
 
         private static readonly string[] Keys = { "adult", "baby", "male", "female", "nursery", "breeding", "limit" };
 

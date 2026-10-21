@@ -345,7 +345,7 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
     private const string Past2xWarning = "can grow past the game's normal 2× limit; the size class, camera framing, foot placement and enclosure needs were tuned for normal sizes.";
 
     /// <summary>
-    /// Sizes: each sizes/ file's target and values, whether the species stays within Tyrant's own bounds of 0.01 to 20 (with the
+    /// Sizes: each sizes/ file's target and values, whether the species stays within Tyrant's own bounds of 0.01 to 100 (with the
     /// random hatching range and its own genetic ranges; within them its size limit follows), whether it passes the game's 2×,
     /// an old file's ignored "limit", and old record edits of the growth curve.
     /// </summary>

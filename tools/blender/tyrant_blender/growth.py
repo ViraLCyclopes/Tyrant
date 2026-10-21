@@ -19,7 +19,7 @@ SCALE_BASE = "tyrant_scale_base"  # armature: the object's own scale, without th
 SCALE_SHOWN = "tyrant_scale_shown"  # the size last shown on top of it
 EDITS = "tyrant_size_edits"  # the Size panel's changes not sent yet (JSON: adult, baby, male, female)
 SIZE_KEYS = ("adult", "baby", "male", "female")
-SHOWN_MIN, SHOWN_MAX = 0.01, 20.0  # Tyrant's own bounds (SizeLimit.PastBounds): the view shows any size within these; past them the game caps it
+SHOWN_MIN, SHOWN_MAX = 0.01, 100.0  # Tyrant's own bounds (SizeLimit.PastBounds): the view shows any size within these; past them the game caps it
 # The game's genetic size ranges when the project has none (SpeciesSizes.DefaultIncubation and DefaultBreeding).
 GAME_INCUBATION, GAME_BREEDING = (0.925, 1.075), (0.85, 1.15)
 
@@ -277,7 +277,7 @@ def extremes(armature, data):
 
 
 def limit_note(armature, data):
-    """The Size box's note when the species' sizes pass Tyrant's own bounds (over 20 or under 0.01), where the game caps them:
+    """The Size box's note when the species' sizes pass Tyrant's own bounds (over 100 or under 0.01), where the game caps them:
     within them its size limit follows the sizes (automatic, SizeLimit.Fitting), so there is nothing to say. None within them."""
     found = extremes(armature, data)
     if found is None:

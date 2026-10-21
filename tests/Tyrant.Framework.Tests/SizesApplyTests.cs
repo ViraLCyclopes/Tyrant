@@ -185,19 +185,19 @@ public class SizesApplyTests
     }
 
     [Fact]
-    public void Each_species_gets_the_limit_its_sizes_need_up_to_20()
+    public void Each_species_gets_the_limit_its_sizes_need_up_to_100()
     {
         var table = Table(
             """{ "format": 1, "target": "Allosaurus", "adult": 4.0 }""",
-            """{ "format": 1, "target": "Tyrannosaurus", "adult": 20.0 }""");
+            """{ "format": 1, "target": "Tyrannosaurus", "adult": 100.0 }""");
         object allo = new object(), rex = new object();
         var species = new[] { Species(new object(), "Allosaurus", (allo, 1.08, 1.12)), Species(new object(), "Tyrannosaurus", (rex, 1.08, 1.12)) };
 
         var pass = new SizePlan(table, Incubation, Breeding, () => true).Next(species);
 
-        // The Allosaurus fits a limit of its own (5.5) and keeps its size; the T. rex passes Tyrant's 20 and is backed off.
+        // The Allosaurus fits a limit of its own (5.5) and keeps its size; the T. rex passes Tyrant's 100 and is backed off.
         Assert.Equal((1.08 * 4, 1.12 * 4), (pass.Skins.Single(s => s.Skin == allo).Male, pass.Skins.Single(s => s.Skin == allo).Female));
-        Assert.Matches(@"^Tyrannosaurus: size 20\.0 would pass its size limit \(0\.05 to 20\.02\); using \d+\.\d\d\.$", Assert.Single(pass.Warnings));
+        Assert.Matches(@"^Tyrannosaurus: size 100\.0 would pass its size limit \(0\.05 to 100\.1\); using \d+\.\d\d\.$", Assert.Single(pass.Warnings));
 
         // When the game's cap could not be lifted, every species keeps to the game's limit.
         var capped = new SizePlan(table, Incubation, Breeding, () => false).Next(species);
@@ -209,26 +209,26 @@ public class SizesApplyTests
     public void Each_species_backs_off_against_its_own_ranges()
     {
         var table = Table(
-            """{ "format": 1, "target": "Allosaurus", "adult": 10, "breeding": [0.5, 2] }""", // 10 x 1.12 x 2 = 22.4
-            """{ "format": 1, "target": "Tyrannosaurus", "adult": 10 }""");                  // 10 x 1.12 x 1.15 = 12.9
+            """{ "format": 1, "target": "Allosaurus", "adult": 60, "breeding": [0.5, 2] }""", // 60 x 1.12 x 2 = 134
+            """{ "format": 1, "target": "Tyrannosaurus", "adult": 60 }""");                  // 60 x 1.12 x 1.15 = 77
         object allo = new object(), rex = new object();
 
         var pass = new SizePlan(table, Incubation, Breeding, () => true)
             .Next(new[] { Species(new object(), "Allosaurus", (allo, 1.08, 1.12)), Species(new object(), "Tyrannosaurus", (rex, 1.08, 1.12)) });
 
-        Assert.StartsWith("Allosaurus: size 10.0 would pass its size limit (0.05 to 20.02); using 8.", Assert.Single(pass.Warnings));
-        Assert.Equal(1.08 * 10, pass.Skins.Single(s => s.Skin == rex).Male, 9);
-        Assert.True(pass.Skins.Single(s => s.Skin == allo).Male < 1.08 * 10);
+        Assert.StartsWith("Allosaurus: size 60.0 would pass its size limit (0.05 to 100.1); using 4", Assert.Single(pass.Warnings));
+        Assert.Equal(1.08 * 60, pass.Skins.Single(s => s.Skin == rex).Male, 9);
+        Assert.True(pass.Skins.Single(s => s.Skin == allo).Male < 1.08 * 60);
     }
 
     [Fact]
     public void Ranges_alone_that_pass_the_limit_warn()
     {
-        var plan = new SizePlan(Table("""{ "format": 1, "target": "Allosaurus", "nursery": [0.5, 20] }"""), Incubation, Breeding, () => true); // 1.12 x 20: past 20
+        var plan = new SizePlan(Table("""{ "format": 1, "target": "Allosaurus", "nursery": [0.5, 100] }"""), Incubation, Breeding, () => true); // 1.12 x 100: past 100
 
         var pass = plan.Next(new[] { Species(new object(), "Allosaurus", (new object(), 1.08, 1.12)) });
 
-        Assert.Equal("Allosaurus: its sizes pass its size limit (0.05 to 20.02) with the size ranges in effect; the game clamps those animals.", Assert.Single(pass.Warnings));
+        Assert.Equal("Allosaurus: its sizes pass its size limit (0.05 to 100.1) with the size ranges in effect; the game clamps those animals.", Assert.Single(pass.Warnings));
         Assert.Empty(pass.Skins);
         Assert.Empty(pass.Curves);
     }
@@ -236,18 +236,18 @@ public class SizesApplyTests
     [Fact]
     public void Past_a_raised_limit_the_warning_names_it()
     {
-        var table = Table("""{ "format": 1, "target": "Allosaurus", "adult": 20, "limit": [0.05, 10] }"""); // the old 10 is ignored
+        var table = Table("""{ "format": 1, "target": "Allosaurus", "adult": 100, "limit": [0.05, 10] }"""); // the old 10 is ignored
 
         var pass = new SizePlan(table, Incubation, Breeding, () => true).Next(new[] { Species(new object(), "Allosaurus", (new object(), 1.08, 1.12)) });
 
-        Assert.Matches(@"^Allosaurus: size 20\.0 would pass its size limit \(0\.05 to 20\.02\); using \d+\.\d\d\.$", Assert.Single(pass.Warnings));
+        Assert.Matches(@"^Allosaurus: size 100\.0 would pass its size limit \(0\.05 to 100\.1\); using \d+\.\d\d\.$", Assert.Single(pass.Warnings));
     }
 
     [Fact]
-    public void Just_inside_20_and_001_is_never_backed_off()
+    public void Just_inside_100_and_001_is_never_backed_off()
     {
         // One skin of 1/1 and the game's ranges: the largest is adult x 1.15 at maturity 1, the smallest the hatchling.
-        var big = 19.99 / 1.15;
+        var big = 99.99 / 1.15;
         double lo = 0.05, hi = 1;
         for (var i = 0; i < 60; i++)
         {
@@ -266,7 +266,7 @@ public class SizesApplyTests
         var sizes = pass.Curves.ToDictionary(c => c.Id, c => c.Curve);
         var (_, max) = SizeMath.Extremes(sizes["Allosaurus"], new[] { big, big }, SizePlan.InEffect(null, Incubation, Breeding));
         var (min, _) = SizeMath.Extremes(sizes["Tyrannosaurus"], new[] { 0.05, 0.05 }, SizePlan.InEffect(null, Incubation, Breeding));
-        Assert.InRange(max, 19.981f, 20f); // past what a cap of exactly 20 would allow
+        Assert.InRange(max, 99.9f, 100f); // past what a cap of exactly 100 would allow
         Assert.InRange(min, 0.01f, 0.010009f);
         Assert.Empty(pass.Warnings); // no back-off
         Assert.Equal(big, pass.Skins.Single(s => s.Skin == allo).Male, 9);

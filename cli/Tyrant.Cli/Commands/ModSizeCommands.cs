@@ -17,7 +17,7 @@ public sealed class ModSizeCommand : Command<ModSizeCommand.Settings>
         public string Target { get; set; } = "";
 
         [CommandOption("--adult <X>")]
-        [Description("Multiplies the adult size (0.05 to 20). The species' size limit follows its sizes, up to 20.")]
+        [Description("Multiplies the adult size (0.05 to 100). The species' size limit follows its sizes, up to 100.")]
         public double? Adult { get; set; }
 
         [CommandOption("--baby <X>")]
@@ -25,19 +25,19 @@ public sealed class ModSizeCommand : Command<ModSizeCommand.Settings>
         public double? Baby { get; set; }
 
         [CommandOption("--male <X>")]
-        [Description("Multiplies males' size (0.1 to 20).")]
+        [Description("Multiplies males' size (0.1 to 100).")]
         public double? Male { get; set; }
 
         [CommandOption("--female <X>")]
-        [Description("Multiplies females' size (0.1 to 20).")]
+        [Description("Multiplies females' size (0.1 to 100).")]
         public double? Female { get; set; }
 
         [CommandOption("--nursery <RANGE>")]
-        [Description("The range the Nursery's Customize size slider covers for this species, e.g. 0.5,3 (0 < min <= max <= 20). Random eggs keep the game's range.")]
+        [Description("The range the Nursery's Customize size slider covers for this species, e.g. 0.5,3 (0 < min <= max <= 100). Random eggs keep the game's range.")]
         public string? Nursery { get; set; }
 
         [CommandOption("--breeding <RANGE>")]
-        [Description("The genetic size range of this species' bred young, e.g. 0.85,1.15 (0 < min <= max <= 20).")]
+        [Description("The genetic size range of this species' bred young, e.g. 0.85,1.15 (0 < min <= max <= 100).")]
         public string? Breeding { get; set; }
 
         [CommandOption("--clear")]
@@ -55,7 +55,7 @@ public sealed class ModSizeCommand : Command<ModSizeCommand.Settings>
     {
         // --limit is gone (Spectre would pass an unknown option over in silence): the size limit follows the sizes now.
         if (context.Remaining.Parsed.Contains("limit") || context.Remaining.Parsed.Contains("--limit"))
-            throw new TyrantException(TyrantErrorCode.ModInvalid, "--limit is gone: the size limit is automatic now (it follows the sizes, up to 20×).");
+            throw new TyrantException(TyrantErrorCode.ModInvalid, "--limit is gone: the size limit is automatic now (it follows the sizes, up to 100×).");
         var (ws, _) = CliServices.OpenWorkspace(settings);
         var mod = ModProject.Open(ws, settings.Id);
         if (settings.RemoveRecordEdits)

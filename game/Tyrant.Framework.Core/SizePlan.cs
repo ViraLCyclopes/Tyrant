@@ -64,7 +64,7 @@ namespace Tyrant.Framework.Core
     /// <summary>
     /// Decides how the mods' sizes land on the game's species, pass after pass: a species' curve is replaced once, each skin's
     /// sex sizes are multiplied once (a skin copied from a multiplied one counts as multiplied), and each warning is given once.
-    /// Each species gets the size limit its extremes need (<see cref="SizeLimit.Fitting"/>, up to Tyrant's 20); the adult
+    /// Each species gets the size limit its extremes need (<see cref="SizeLimit.Fitting"/>, up to Tyrant's 100); the adult
     /// multiplier is backed off only when the extremes over the species' genetic ranges in effect would pass that.
     /// </summary>
     public sealed class SizePlan
