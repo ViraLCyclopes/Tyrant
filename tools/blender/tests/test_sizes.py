@@ -24,6 +24,8 @@ def allosaurus(editable=True, skin=None, sizes=None):
     data["sizes"] = dict({"adult": None, "baby": None, "male": None, "female": None, "maleOriginal": 1.08, "femaleOriginal": 1.0},
                          **(sizes or {}))
     data["sizesEditable"] = editable
+    data["sizeSkins"] = [[1.08, 1.0]]  # the species' every skin, as the Size box's note counts them
+    data["geneticRanges"] = {"incubation": [0.925, 1.075], "nursery": None, "breeding": [0.85, 1.15]}  # the game's
     data["destination"] = {"mod": "m", "species": "Carcharodontosaurus", "skin": skin}
     data["tyrant"] = os.path.join(tempfile.gettempdir(), "tyrant.exe")  # an absolute path: Send only runs a tyrant.exe on this PC
     project.save(path, data)
@@ -55,6 +57,24 @@ def glb_nodes(path):
     with open(path, "rb") as f:
         data = f.read()
     return json.loads(data[20:20 + struct.unpack_from("<I", data, 12)[0]])["nodes"]
+
+
+def drawn_sizes(arm, data):
+    """What the Size box draws, as (call, args, kwargs)."""
+    drawn = []
+
+    class Layout:
+        def __getattr__(self, name):
+            def call(*args, **kwargs):
+                drawn.append((name, args, kwargs))
+                return self
+            return call
+
+    def say(layout, context, text, icon="NONE"):
+        drawn.append(("say", (text,), {}))
+
+    panel.draw_sizes(Layout(), bpy.context, arm, data, say)
+    return drawn
 
 
 class SizeTests(unittest.TestCase):
@@ -94,24 +114,89 @@ class SizeTests(unittest.TestCase):
         curve = 0.164 + (1 - 0.164) * 0.25
         self.assertScale(arm, curve * (1 + 0.08 * (0.2 + 0.8 * (1 - 0.75 ** 2))))
 
-    def test_the_size_shown_keeps_to_the_projects_size_limit(self):
+    def test_size_display_not_capped_by_project_limit(self):
+        # The view shows the size you set; the note says where the game would cap it (Send raises the species' limit to fit).
         path = allosaurus(sizes={"adult": 4.0})  # an adult male of 1.08 x 4
+        data = project.load(path)
+        data["sizeLimit"] = [0.05, 2.0]
+        project.save(path, data)
         arm = importer.import_project(path)
         arm.tyrant_growth = 1.0
-        self.assertScale(arm, 2.0)  # no limit in the project: the game's 0.05 to 2
+        self.assertGreater(arm.scale.x, 2.0)
+        self.assertScale(arm, 1.08 * 4)
 
+        arm.tyrant_size_adult = 20.0
+        arm.tyrant_size_male = 20.0  # 1.08 x 20 x 20: only Tyrant's own bound of 20 holds it
+        self.assertScale(arm, 20.0)
+
+    def test_note_when_past_the_limit(self):
+        path = allosaurus(sizes={"adult": 4.0})
+        data = project.load(path)
+        data["sizeLimit"] = [0.05, 2.0]
+        project.save(path, data)
+        arm = importer.import_project(path)
+        # Counted as Check and Send count it, the game's genetic ranges included: 1.08 x 4 x 1.15 = 4.97, so Send raises the
+        # limit to 5 (BlenderSizesTests.Blender_note_and_send_agree_on_the_add_ons_fixture pins Tyrant's side of this number).
+        note = "In game this is capped at 2×. Send to Tyrant will raise this species' Size limit to 5×."
+        self.assertEqual(growth.limit_note(arm, data), note)
+        self.assertIn(("say", (note,), {}), drawn_sizes(arm, data))
+
+        data["sizeLimit"] = [0.05, 3.5]
+        self.assertEqual(growth.limit_note(arm, data), "In game this is capped at 3.5×. Send to Tyrant will raise this species' Size limit to 5×.")
+
+        data["sizeLimit"] = [0.05, 20.0]  # within the limit: no note
+        self.assertIsNone(growth.limit_note(arm, data))
+        self.assertFalse([d for d in drawn_sizes(arm, data) if d[0] == "say" and "capped" in d[1][0]])
+
+        data["sizeLimit"] = [0.05, 2.0]
+        arm.tyrant_size_adult = 1.0  # 1.08 x 1.15 = 1.24 at most: within the game's 2
+        self.assertIsNone(growth.limit_note(arm, data))
+
+    def test_note_counts_the_species_ranges_and_every_skin(self):
+        path = allosaurus(sizes={"adult": 4.0})
+        data = project.load(path)
+        data["sizeLimit"] = [0.05, 2.0]
+        data["geneticRanges"] = {"incubation": [0.925, 1.075], "nursery": [0.5, 3.0], "breeding": [0.85, 1.15]}
+        project.save(path, data)
+        arm = importer.import_project(path)
+        # The species' own Nursery range: 1.08 x 4 x 3 = 12.96, raised to 13.
+        self.assertEqual(growth.limit_note(arm, data), "In game this is capped at 2×. Send to Tyrant will raise this species' Size limit to 13×.")
+
+        data["geneticRanges"] = {"incubation": [0.925, 1.075], "nursery": None, "breeding": [0.85, 1.15]}
+        data["sizeSkins"] = [[1.08, 1.0], [1.5, 1.2]]  # another skin is bigger: 1.5 x 4 x 1.15 = 6.9
+        self.assertEqual(growth.limit_note(arm, data), "In game this is capped at 2×. Send to Tyrant will raise this species' Size limit to 7×.")
+
+    def test_note_at_the_highest_limit_promises_no_raise(self):
+        path = allosaurus(sizes={"adult": 20.0})
         data = project.load(path)
         data["sizeLimit"] = [0.05, 20.0]
         project.save(path, data)
-        growth.forget(path)
-        arm.tyrant_growth = 1.0
-        self.assertScale(arm, 1.08 * 4)
+        arm = importer.import_project(path)
+        # 1.08 x 20 x 1.15 is past 20, the highest limit: Send cannot raise it, so the note does not say it will.
+        self.assertEqual(growth.limit_note(arm, data), "In game this is capped at 20×.")
 
-        data["sizeLimit"] = [0.05, 3.0]
+    def test_sizes_go_to_a_species_chosen_on_send(self):
+        # Sizes edited for a destination that is gone (Send cleared it) still go to the species model chosen next.
+        path = allosaurus(sizes={})
+        arm = importer.import_project(path)
+        arm.tyrant_size_adult = 4.0
+        data = project.load(path)
+        data["destination"] = None
+        data["sizesEditable"] = False
         project.save(path, data)
         growth.forget(path)
-        arm.tyrant_growth = 1.0
-        self.assertScale(arm, 3.0)
+        bpy.context.view_layer.objects.active = arm
+        started = []
+        real = send.run_async
+        send.run_async = lambda args, done: started.append(args)
+        try:
+            panel._start_send(bpy.context, arm, {"mod": "horny-rex", "species": "Carcharodontosaurus", "skin": None}, "Horny Rex")
+            panel._start_send(bpy.context, arm, {"mod": "horny-rex", "species": "Carcharodontosaurus", "skin": "red"})
+        finally:
+            send.run_async = real
+        with open(started[0][started[0].index("--sizes") + 1], encoding="utf-8") as f:
+            self.assertEqual(json.load(f), {"format": 1, "target": "Carcharodontosaurus", "adult": 4.0})
+        self.assertNotIn("--sizes", started[1])  # a skin's sizes are the species'
 
     def test_the_size_panel_reaches_20(self):
         arm = importer.import_project(allosaurus())

@@ -56,19 +56,13 @@ public static partial class SpeciesSizes
     public static SizeFacts? Facts(Workspace ws, ModProject mod)
     {
         var roots = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
-        var incubation = DefaultIncubation;
-        var breeding = DefaultBreeding;
+        (double Min, double Max) incubation, breeding;
         try
         {
             var store = DataStore.Open(ws);
             foreach (var (_, root) in store.LoadAll(store.FindType(AnimalType)))
                 if (root.TryGetProperty("speciesID", out var id) && id.GetString() is { } name) roots[name] = root;
-            if (store.Types().Any(t => t.FullName == ParametersType))
-                foreach (var (_, root) in store.LoadAll(store.FindType(ParametersType)))
-                {
-                    incubation = Range(root, "incubationGeneticSizeMinMax") ?? incubation;
-                    breeding = Range(root, "breedingGeneticSizeMinMax") ?? breeding;
-                }
+            (incubation, breeding) = GameRanges(store);
         }
         catch (TyrantException ex) when (ex.Code is TyrantErrorCode.DataMissing or TyrantErrorCode.AssetNotFound)
         {
@@ -79,6 +73,45 @@ public static partial class SpeciesSizes
             var own = mod.Manifest.Species.FirstOrDefault(s => s.Key(mod.Id) == species);
             return roots.TryGetValue(own?.Base ?? species, out var root) ? Read(root, own) : null;
         }, incubation, breeding);
+    }
+
+    /// <summary>The game's genetic size ranges (random eggs', which the Nursery slider also uses, and breeding's); the vanilla ones without a dump.</summary>
+    public static ((double Min, double Max) Incubation, (double Min, double Max) Breeding) GameRanges(Workspace ws)
+    {
+        try
+        {
+            return GameRanges(DataStore.Open(ws));
+        }
+        catch (TyrantException ex) when (ex.Code is TyrantErrorCode.DataMissing or TyrantErrorCode.AssetNotFound)
+        {
+            return (DefaultIncubation, DefaultBreeding);
+        }
+    }
+
+    private static ((double Min, double Max), (double Min, double Max)) GameRanges(DataStore store)
+    {
+        var (incubation, breeding) = (DefaultIncubation, DefaultBreeding);
+        if (store.Types().Any(t => t.FullName == ParametersType))
+            foreach (var (_, root) in store.LoadAll(store.FindType(ParametersType)))
+            {
+                incubation = Range(root, "incubationGeneticSizeMinMax") ?? incubation;
+                breeding = Range(root, "breedingGeneticSizeMinMax") ?? breeding;
+            }
+        return (incubation, breeding);
+    }
+
+    /// <summary>
+    /// The smallest and largest scale a species reaches with these sizes, as Check counts it: every skin's sexes and the genetic
+    /// ranges in effect for it, as the game has them (the random eggs', its Nursery slider's and its breeding range: its own,
+    /// else the game's); null when its data has no growth curve.
+    /// </summary>
+    public static (float Min, float Max)? Extremes(OriginalSize original, SizeSettings sizes, SizeFacts facts)
+    {
+        if (original.Curve.Length == 0) return null;
+        var curve = SizeMath.Rebuild(original.Curve, sizes.Adult ?? 1, sizes.Baby);
+        var skins = original.Skins.Count == 0 ? [(1.0, 1.0)] : original.Skins;
+        var sexes = skins.SelectMany(k => { var (male, female) = SizeMath.Sex(k.Male, k.Female, sizes); return new[] { male, female }; });
+        return SizeMath.Extremes(curve, sexes, SizePlan.InEffect(sizes, facts.Incubation, facts.Breeding));
     }
 
     private static (double, double)? Range(JsonElement root, string name) =>

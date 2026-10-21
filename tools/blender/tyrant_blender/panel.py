@@ -81,8 +81,8 @@ def _start_send(context, armature, destination=None, new_mod_name=None):
         json.dump(rig.unity_rig(armature), f)
     rig_only = bool(rig.offsets(armature)) and armature.tyrant_rig_only
     # The Size panel's edited keys go when they changed (and only to a species: a skin's sizes are the species', set in the
-    # app); Tyrant merges them onto the mod's current sizes.
-    sizes = growth.changed_sizes(armature, data)
+    # app); Tyrant merges them onto the mod's current sizes. A destination chosen now decides (the saved one may be gone).
+    sizes = growth.changed_sizes(armature, data, None if destination is None else destination.get("skin") is None)
     sizes_file = None
     if sizes is not None:
         sizes_file = os.path.join(folder, "send-sizes.json")
@@ -302,6 +302,9 @@ def draw_sizes(layout, context, armature, data, say):
     male, female = growth.sex_sizes(armature, data)
     shown = "" if (data.get("growth") or {}).get("scale") else " (not shown: no scale curve)"
     say(box, context, f"In game: male {male:.3g}x, female {female:.3g}x size{shown}")
+    note = growth.limit_note(armature, data) if data.get("sizesEditable") else None
+    if note:
+        say(box, context, note, "INFO")
     if not data.get("sizesEditable"):
         skin = (data.get("destination") or {}).get("skin")
         say(box, context, SKIN_SIZES if skin else "Send it to a species model to edit sizes here.", "INFO")

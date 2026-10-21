@@ -8,16 +8,17 @@ public class SizesApplyTests
     private static readonly (double, double) Incubation = (0.925, 1.075);
     private static readonly (double, double) Breeding = (0.85, 1.15);
 
-    private static SizeTable Table(string? sizes, string extra = "")
+    /// <summary>A table of one mod with these sizes/ files (each a whole JSON text).</summary>
+    private static SizeTable Table(params string[] files)
     {
         var dir = Path.Combine(Path.GetTempPath(), "tyrant-tests", Guid.NewGuid().ToString("N"), "mod");
         Directory.CreateDirectory(Path.Combine(dir, SizeSettings.Folder));
-        if (sizes != null) File.WriteAllText(Path.Combine(dir, "sizes", "x.json"), sizes);
-        var mod = new LoadedMod(ModManifest.Parse($$"""{"format":1,"id":"size-mod"{{extra}}}"""), dir);
+        for (var i = 0; i < files.Length; i++) File.WriteAllText(Path.Combine(dir, "sizes", $"s{i}.json"), files[i]);
+        var mod = new LoadedMod(ModManifest.Parse("""{"format":1,"id":"size-mod"}"""), dir);
         return SizeTable.Build(new[] { mod }, out _);
     }
 
-    private static SizePlan Plan(SizeTable table) => new SizePlan(table, SizePlan.InEffect(table.Ranges, Incubation, Breeding));
+    private static SizePlan Plan(SizeTable table) => new SizePlan(table, Incubation, Breeding);
 
     private static SizeSpecies Species(object data, string id, params (object Skin, double Male, double Female)[] skins) =>
         new SizeSpecies(data, id, Allosaurus, skins.Select(s => new SizeSkin(s.Skin, s.Male, s.Female)).ToList());
@@ -46,7 +47,7 @@ public class SizesApplyTests
     [Fact]
     public void No_sizes_changes_nothing()
     {
-        var empty = Table(null);
+        var empty = Table();
         Assert.False(empty.HasAny);
         var pass = Plan(empty).Next(new[] { Species(new object(), "Allosaurus", (new object(), 1.08, 1.12)) });
         Assert.True(pass.IsEmpty);
@@ -59,6 +60,34 @@ public class SizesApplyTests
         var sexOnly = Plan(Table("""{ "format": 1, "target": "Allosaurus", "female": 1.2 }""")).Next(new[] { Species(new object(), "Allosaurus", (new object(), 1.08, 1.12)) });
         Assert.Empty(sexOnly.Curves);
         Assert.Single(sexOnly.Skins);
+
+        // A range or a limit alone changes no curve, no skin and logs no sizes note.
+        var rangeOnly = Plan(Table("""{ "format": 1, "target": "Allosaurus", "nursery": [0.9, 1.1], "limit": [0.05, 5] }"""))
+            .Next(new[] { Species(new object(), "Allosaurus", (new object(), 1.08, 1.12)) });
+        Assert.True(rangeOnly.IsEmpty);
+        Assert.Empty(rangeOnly.Notes);
+    }
+
+    [Fact]
+    public void Nothing_set_patches_nothing()
+    {
+        var none = Table();
+        Assert.Equal((false, false, false, false), (none.HasAny, none.SetsSlider, none.SetsBreeding, none.SetsLimit));
+
+        var sizes = Table("""{ "format": 1, "target": "Allosaurus", "adult": 0.8 }""");
+        Assert.Equal((true, false, false, false), (sizes.HasAny, sizes.SetsSlider, sizes.SetsBreeding, sizes.SetsLimit));
+
+        var nursery = Table("""{ "format": 1, "target": "Allosaurus", "nursery": [0.5, 3] }""");
+        Assert.Equal((true, true, false, false), (nursery.HasAny, nursery.SetsSlider, nursery.SetsBreeding, nursery.SetsLimit));
+
+        var breeding = Table("""{ "format": 1, "target": "Allosaurus", "breeding": [0.7, 1.3] }""");
+        Assert.Equal((true, false, true, false), (breeding.HasAny, breeding.SetsSlider, breeding.SetsBreeding, breeding.SetsLimit));
+
+        var limit = Table("""{ "format": 1, "target": "Allosaurus", "limit": [0.05, 5] }""");
+        Assert.Equal((true, false, false, true), (limit.HasAny, limit.SetsSlider, limit.SetsBreeding, limit.SetsLimit));
+
+        // The game's own limit written out is no change to patch.
+        Assert.False(Table("""{ "format": 1, "target": "Allosaurus", "limit": [0.05, 2] }""").SetsLimit);
     }
 
     [Fact]
@@ -78,24 +107,54 @@ public class SizesApplyTests
     }
 
     [Fact]
-    public void Slider_range_does_not_change_random_eggs()
+    public void Slider_range_is_the_selected_species_and_random_eggs_keep_the_games()
     {
-        var ranges = Table(null, ""","sizeRanges":{"nursery":[0.5,1.5],"breeding":[0.7,1.3]}""").Ranges;
+        var table = Table(
+            """{ "format": 1, "target": "Allosaurus", "nursery": [0.5, 1.5], "breeding": [0.7, 1.3] }""",
+            """{ "format": 1, "target": "Tyrannosaurus", "nursery": [0.25, 3] }""");
 
-        Assert.Equal(Incubation, SizePlan.RangeFor(SizeSite.RandomEgg, ranges, Incubation, Breeding));
-        Assert.Equal((0.5, 1.5), SizePlan.RangeFor(SizeSite.NurserySlider, ranges, Incubation, Breeding));
-        Assert.Equal((0.7, 1.3), SizePlan.RangeFor(SizeSite.Breeding, ranges, Incubation, Breeding));
+        Assert.Equal(Incubation, SizePlan.RangeFor(SizeSite.RandomEgg, table.For("Allosaurus"), Incubation, Breeding));
+        Assert.Equal((0.5, 1.5), SizePlan.RangeFor(SizeSite.NurserySlider, table.For("Allosaurus"), Incubation, Breeding));
+        Assert.Equal((0.25, 3), SizePlan.RangeFor(SizeSite.NurserySlider, table.For("Tyrannosaurus"), Incubation, Breeding));
+        Assert.Equal(Incubation, SizePlan.RangeFor(SizeSite.NurserySlider, table.For("Spinosaurus"), Incubation, Breeding));
+        // What the slider transpiler looks the selected species up in: only species that set a Nursery range.
+        Assert.Equal(new Dictionary<string, (double, double)> { ["Allosaurus"] = (0.5, 1.5), ["Tyrannosaurus"] = (0.25, 3) }, table.SliderRanges);
+        Assert.True(table.SliderRanges.ContainsKey("allosaurus"));
         // Only the Nursery's slider reads are swapped; the random roll lives in VirtualAnimal, not in these methods.
         Assert.Equal(new[] { "GenerateNewAnimal", "UpdateCustomizationRect", "UpdateAnimalPreview" }, SizePlan.SliderMethods);
         Assert.DoesNotContain("GenerateGeneticSize", SizePlan.SliderMethods);
         Assert.DoesNotContain("CreateVirtualAnimal", SizePlan.SliderMethods);
-        // The back-off counts every range in effect, the vanilla random one included.
-        Assert.Equal(new[] { Incubation, (0.5, 1.5), (0.7, 1.3) }, SizePlan.InEffect(ranges, Incubation, Breeding));
+        // The back-off counts every range in effect for the species, the vanilla random one included.
+        Assert.Equal(new[] { Incubation, (0.5, 1.5), (0.7, 1.3) }, SizePlan.InEffect(table.For("Allosaurus"), Incubation, Breeding));
+        Assert.Equal(new[] { Incubation, (0.25, 3), Breeding }, SizePlan.InEffect(table.For("Tyrannosaurus"), Incubation, Breeding));
+        Assert.Equal(new[] { Incubation, Breeding }, SizePlan.InEffect(null, Incubation, Breeding));
+    }
 
-        var none = new SizeRanges();
-        Assert.Equal(Incubation, SizePlan.RangeFor(SizeSite.NurserySlider, none, Incubation, Breeding));
-        Assert.Equal(Breeding, SizePlan.RangeFor(SizeSite.Breeding, none, Incubation, Breeding));
-        Assert.Equal(new[] { Incubation, Breeding }, SizePlan.InEffect(none, Incubation, Breeding));
+    [Fact]
+    public void Breeding_range_is_the_embryos_species()
+    {
+        var table = Table(
+            """{ "format": 1, "target": "Allosaurus", "breeding": [0.7, 1.3] }""",
+            """{ "format": 1, "target": "Tyrannosaurus", "nursery": [0.25, 3] }""");
+
+        Assert.Equal((0.7, 1.3), SizePlan.RangeFor(SizeSite.Breeding, table.For("Allosaurus"), Incubation, Breeding));
+        Assert.Equal(Breeding, SizePlan.RangeFor(SizeSite.Breeding, table.For("Tyrannosaurus"), Incubation, Breeding));
+        Assert.Equal(Breeding, SizePlan.RangeFor(SizeSite.Breeding, null, Incubation, Breeding));
+        Assert.Equal(new Dictionary<string, (double, double)> { ["Allosaurus"] = (0.7, 1.3) }, table.BreedingRanges);
+    }
+
+    [Fact]
+    public void Limits_are_laid_out_by_native_species_index()
+    {
+        var table = Table(
+            """{ "format": 1, "target": "Allosaurus", "limit": [0.02, 5] }""",
+            """{ "format": 1, "target": "Tyrannosaurus", "limit": [0.05, 20], "adult": 4 }""");
+
+        // InitializeNativeData numbers the species by their place in its list; a null id (no data) keeps the game's.
+        var limits = table.Limits(new[] { "Tyrannosaurus", "Spinosaurus", null, "allosaurus" });
+
+        Assert.Equal(new[] { 0.05f, 20f, 0.05f, 2f, 0.05f, 2f, 0.02f, 5f }, limits);
+        Assert.Empty(table.Limits(Array.Empty<string?>()));
     }
 
     [Fact]
@@ -114,36 +173,66 @@ public class SizesApplyTests
         // The backed-off adult is what the skins get: their biggest final size stays inside the limit.
         var used = first.Skins.Single(s => s.Skin == a).Male / 1.08;
         Assert.True(used < 2.0 && used > 1);
-        var (_, max) = SizeMath.Extremes(first.Curves.Single().Curve, first.Skins.SelectMany(s => new[] { s.Male, s.Female }), SizePlan.InEffect(new SizeRanges(), Incubation, Breeding));
+        var (_, max) = SizeMath.Extremes(first.Curves.Single().Curve, first.Skins.SelectMany(s => new[] { s.Male, s.Female }), SizePlan.InEffect(null, Incubation, Breeding));
         Assert.True(max <= SizeMath.FinalMax);
     }
 
     [Fact]
-    public void A_raised_limit_lets_sizes_past_two()
+    public void Each_species_backs_off_against_its_own_limit()
     {
-        var table = Table("""{ "format": 1, "target": "Allosaurus", "adult": 4.0 }""", ""","sizeRanges":{"limit":[0.05,20]}""");
-        object data = new object(), skin = new object();
-        var species = new[] { Species(data, "Allosaurus", (skin, 1.08, 1.12)) };
+        var table = Table(
+            """{ "format": 1, "target": "Allosaurus", "adult": 4.0, "limit": [0.05, 20] }""",
+            """{ "format": 1, "target": "Tyrannosaurus", "adult": 4.0 }""");
+        object allo = new object(), rex = new object();
+        var species = new[] { Species(new object(), "Allosaurus", (allo, 1.08, 1.12)), Species(new object(), "Tyrannosaurus", (rex, 1.08, 1.12)) };
 
         var pass = Plan(table).Next(species);
 
-        Assert.Empty(pass.Warnings);
-        var sized = Assert.Single(pass.Skins);
-        Assert.Equal((1.08 * 4, 1.12 * 4), (sized.Male, sized.Female));
+        // The Allosaurus' raised limit lets it past 2; the T. rex keeps the game's and is backed off.
+        Assert.Equal((1.08 * 4, 1.12 * 4), (pass.Skins.Single(s => s.Skin == allo).Male, pass.Skins.Single(s => s.Skin == allo).Female));
+        Assert.Matches(@"^Tyrannosaurus: size 4\.0 would pass the game's limit; using 1\.\d\d\.$", Assert.Single(pass.Warnings));
 
-        // When the game's cap could not be lifted, the plan keeps to the game's limit.
-        var capped = new SizePlan(table, SizePlan.InEffect(table.Ranges, Incubation, Breeding), SizeLimit.Game).Next(species);
-        Assert.Matches(@"^Allosaurus: size 4\.0 would pass the game's limit; using 1\.\d\d\.$", Assert.Single(capped.Warnings));
+        // When the game's cap could not be lifted, every species keeps to the game's limit.
+        var capped = new SizePlan(table, Incubation, Breeding, limitsLifted: false).Next(species);
+        Assert.Equal(2, capped.Warnings.Count);
+        Assert.Contains(capped.Warnings, w => w.StartsWith("Allosaurus: size 4.0 would pass the game's limit; using 1.", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Each_species_backs_off_against_its_own_ranges()
+    {
+        var table = Table(
+            """{ "format": 1, "target": "Allosaurus", "adult": 1.5, "breeding": [0.5, 1.5] }""", // 1.5 x 1.12 x 1.5 = 2.52
+            """{ "format": 1, "target": "Tyrannosaurus", "adult": 1.5 }""");                     // 1.5 x 1.12 x 1.15 = 1.93
+        object allo = new object(), rex = new object();
+
+        var pass = Plan(table).Next(new[] { Species(new object(), "Allosaurus", (allo, 1.08, 1.12)), Species(new object(), "Tyrannosaurus", (rex, 1.08, 1.12)) });
+
+        Assert.StartsWith("Allosaurus: size 1.5 would pass the game's limit; using 1.", Assert.Single(pass.Warnings));
+        Assert.Equal(1.08 * 1.5, pass.Skins.Single(s => s.Skin == rex).Male, 9);
+        Assert.True(pass.Skins.Single(s => s.Skin == allo).Male < 1.08 * 1.5);
+    }
+
+    [Fact]
+    public void Ranges_alone_that_pass_the_limit_warn()
+    {
+        var plan = Plan(Table("""{ "format": 1, "target": "Allosaurus", "nursery": [0.5, 3] }""")); // 1.12 x 3: past 2
+
+        var pass = plan.Next(new[] { Species(new object(), "Allosaurus", (new object(), 1.08, 1.12)) });
+
+        Assert.Equal("Allosaurus: its sizes pass the game's limit (0.05 to 2) with the size ranges in effect; the game clamps those animals.", Assert.Single(pass.Warnings));
+        Assert.Empty(pass.Skins);
+        Assert.Empty(pass.Curves);
     }
 
     [Fact]
     public void Past_a_raised_limit_the_warning_names_it()
     {
-        var table = Table("""{ "format": 1, "target": "Allosaurus", "adult": 20 }""", ""","sizeRanges":{"limit":[0.05,10]}""");
+        var table = Table("""{ "format": 1, "target": "Allosaurus", "adult": 20, "limit": [0.05, 10] }""");
 
         var pass = Plan(table).Next(new[] { Species(new object(), "Allosaurus", (new object(), 1.08, 1.12)) });
 
-        Assert.Matches(@"^Allosaurus: size 20\.0 would pass the size limit \(0\.05 to 10\); using \d\.\d\d\.$", Assert.Single(pass.Warnings));
+        Assert.Matches(@"^Allosaurus: size 20\.0 would pass its size limit \(0\.05 to 10\); using \d\.\d\d\.$", Assert.Single(pass.Warnings));
     }
 
     [Fact]

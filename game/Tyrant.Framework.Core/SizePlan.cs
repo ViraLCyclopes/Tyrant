@@ -64,7 +64,7 @@ namespace Tyrant.Framework.Core
     /// <summary>
     /// Decides how the mods' sizes land on the game's species, pass after pass: a species' curve is replaced once, each skin's
     /// sex sizes are multiplied once (a skin copied from a multiplied one counts as multiplied), and each warning is given once.
-    /// The adult multiplier is backed off when the extremes over the genetic ranges in effect would pass the size limit in effect.
+    /// The adult multiplier is backed off when the extremes over the species' genetic ranges in effect would pass its size limit.
     /// </summary>
     public sealed class SizePlan
     {
@@ -75,40 +75,41 @@ namespace Tyrant.Framework.Core
         public static readonly IReadOnlyList<string> SliderMethods = new[] { "GenerateNewAnimal", "UpdateCustomizationRect", "UpdateAnimalPreview" };
 
         private readonly SizeTable _table;
-        private readonly List<(double Min, double Max)> _ranges;
-        private readonly SizeLimit _limit;
+        private readonly (double Min, double Max) _incubation, _breeding;
+        private readonly bool _limitsLifted;
         private readonly Dictionary<object, SizeSettings> _species = new Dictionary<object, SizeSettings>(ReferenceComparer.Instance);
         private readonly HashSet<object> _skins = new HashSet<object>(ReferenceComparer.Instance);
         private readonly HashSet<string> _warned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        /// <param name="geneticRanges">Every genetic range in effect (<see cref="InEffect"/>); at least one.</param>
-        /// <param name="limit">The size limit in game: the table's, unless the game's cap could not be lifted (then the game's).</param>
-        public SizePlan(SizeTable table, IReadOnlyList<(double Min, double Max)> geneticRanges, SizeLimit? limit = null)
+        /// <param name="incubation">The game's random egg range (GlobalAnimalParameters.incubationGeneticSizeMinMax), which the slider also uses unless a species sets its own.</param>
+        /// <param name="breeding">The game's breeding range (breedingGeneticSizeMinMax).</param>
+        /// <param name="limitsLifted">Whether the species' size limits are in game; false when the game's cap could not be lifted (every species then has the game's).</param>
+        public SizePlan(SizeTable table, (double Min, double Max) incubation, (double Min, double Max) breeding, bool limitsLifted = true)
         {
-            if (geneticRanges.Count == 0) throw new ArgumentException("At least one genetic range is in effect.", nameof(geneticRanges));
             _table = table;
-            _ranges = geneticRanges.ToList();
-            _limit = limit ?? table.Limit;
+            _incubation = incubation;
+            _breeding = breeding;
+            _limitsLifted = limitsLifted;
         }
 
-        /// <summary>The range the game uses at a site: Tyrant's where a mod sets one, except for random eggs, which keep the game's.</summary>
-        public static (double Min, double Max) RangeFor(SizeSite site, SizeRanges tyrant, (double Min, double Max) incubation, (double Min, double Max) breeding)
+        /// <summary>The range the game uses at a site for a species: its own where it sets one, except for random eggs, which keep the game's.</summary>
+        public static (double Min, double Max) RangeFor(SizeSite site, SizeSettings? species, (double Min, double Max) incubation, (double Min, double Max) breeding)
         {
             switch (site)
             {
-                case SizeSite.NurserySlider: return tyrant.Nursery is { } nursery ? (nursery[0], nursery[1]) : incubation;
-                case SizeSite.Breeding: return tyrant.Breeding is { } bred ? (bred[0], bred[1]) : breeding;
+                case SizeSite.NurserySlider: return species?.Nursery is { } nursery ? (nursery[0], nursery[1]) : incubation;
+                case SizeSite.Breeding: return species?.Breeding is { } bred ? (bred[0], bred[1]) : breeding;
                 default: return incubation;
             }
         }
 
-        /// <summary>The distinct genetic ranges in effect: random eggs', the slider's and breeding's, in that order.</summary>
-        public static List<(double Min, double Max)> InEffect(SizeRanges tyrant, (double Min, double Max) incubation, (double Min, double Max) breeding)
+        /// <summary>The distinct genetic ranges in effect for a species: random eggs', the slider's and breeding's, in that order.</summary>
+        public static List<(double Min, double Max)> InEffect(SizeSettings? species, (double Min, double Max) incubation, (double Min, double Max) breeding)
         {
             var result = new List<(double, double)>();
             foreach (var site in new[] { SizeSite.RandomEgg, SizeSite.NurserySlider, SizeSite.Breeding })
             {
-                var range = RangeFor(site, tyrant, incubation, breeding);
+                var range = RangeFor(site, species, incubation, breeding);
                 if (!result.Contains(range)) result.Add(range);
             }
             return result;
@@ -163,23 +164,26 @@ namespace Tyrant.Framework.Core
         /// <summary>The sizes a species gets (its adult backed off if needed), and its new curve into the pass.</summary>
         private SizeSettings Settle(SizeSpecies s, SizeSettings sizes, SizePass pass)
         {
+            var ranges = InEffect(sizes, _incubation, _breeding);
+            var limit = _limitsLifted ? SizeLimit.Of(sizes.Limit) : SizeLimit.Game;
             var requested = sizes.Adult ?? 1;
             var skins = s.Skins.Select(k => (k.Male, k.Female)).ToList();
-            var adult = SizeMath.BackOff(s.Curve, requested, sizes.Baby, skins, sizes.Male, sizes.Female, _ranges, _limit);
+            var adult = SizeMath.BackOff(s.Curve, requested, sizes.Baby, skins, sizes.Male, sizes.Female, ranges, limit);
             var used = new SizeSettings { Target = sizes.Target, Adult = adult, Baby = sizes.Baby, Male = sizes.Male ?? 1, Female = sizes.Female ?? 1 };
             var curve = SizeMath.Rebuild(s.Curve, adult, sizes.Baby);
             var sexes = skins.SelectMany(k => { var (m, f) = SizeMath.Sex(k.Male, k.Female, used); return new[] { m, f }; });
-            var (min, max) = SizeMath.Extremes(curve, sexes, _ranges);
-            var fits = _limit.Contains(min, max);
+            var (min, max) = SizeMath.Extremes(curve, sexes, ranges);
+            var fits = limit.Contains(min, max);
             var still = fits ? "" : " Some animals still pass it with the size ranges in effect; the game clamps them.";
-            var which = _limit.IsGame ? "the game's limit" : $"the size limit ({_limit})";
+            var which = limit.IsGame ? "the game's limit" : $"its size limit ({limit})";
             if (adult != requested)
                 pass.Warnings.Add($"{s.Id}: size {requested.ToString("0.0##", CultureInfo.InvariantCulture)} would pass {which}; using {adult.ToString("0.00", CultureInfo.InvariantCulture)}.{still}");
             else if (!fits)
-                pass.Warnings.Add($"{s.Id}: its sizes pass {(_limit.IsGame ? "the game's limit (0.05 to 2)" : which)} with the size ranges in effect; the game clamps those animals.");
+                pass.Warnings.Add($"{s.Id}: its sizes pass {(limit.IsGame ? "the game's limit (0.05 to 2)" : which)} with the size ranges in effect; the game clamps those animals.");
             // The curve stays the game's own when neither the adult nor the baby changes: resampling it would only lose shape.
             if (adult != 1 || sizes.Baby != null) pass.Curves.Add((s.Data, s.Id, curve));
-            pass.Notes.Add($"{s.Id}: sizes applied (adult {Number(adult)}, baby {(sizes.Baby is double baby ? Number(baby) : "unchanged")}, male {Number(used.Male!.Value)}, female {Number(used.Female!.Value)}).");
+            if (sizes.SetsSize)
+                pass.Notes.Add($"{s.Id}: sizes applied (adult {Number(adult)}, baby {(sizes.Baby is double baby ? Number(baby) : "unchanged")}, male {Number(used.Male!.Value)}, female {Number(used.Female!.Value)}).");
             return used;
         }
 

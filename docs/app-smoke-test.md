@@ -157,6 +157,20 @@ Release build: `npm run build:app`, install `studio/src-tauri/target/release/bun
     The send is a change from outside the app: the mod reloads and Undo is greyed out. **↺** on Adult size × puts 1
     back (or Adult size × 1 in Blender and Send again). On a skin destination the Size fields are greyed out with "Sizes apply to the whole species; set them
     in the app."
+    - **Past the limit.** Destination a species with no Size limit of its own (or **Send to Tyrant → New mod…**):
+      **Adult size ×** 4. The model keeps growing past 2× (an adult male T. rex is 4 times the game's), and the Size box
+      says "In game this is capped at 2×. Send to Tyrant will raise this species' Size limit to {new}×." ({new} a little
+      above 4, on a 0.5 step, counting the genetic ranges). **Send to Tyrant**: the report says "Raised this species' Size
+      limit to {new}×." with the same number, the species' Size card shows **Size limit** Maximum {new} (no longer marked
+      `game's`) with its other rows unchanged, the note in Blender is gone, and Check has no size error. Adult size × 1
+      and Send again: the limit stays (Send never lowers it).
+    - **Past the limit, nothing edited in Blender.** On another species' Size card in the app, set **Breeding size
+      range** Maximum to 3 and leave its Size limit as the game's. Open it in Blender with that mod's species model as
+      destination: without touching the Size box, it says "In game this is capped at 2×. Send to Tyrant will raise this
+      species' Size limit to {new}×." **Send to Tyrant**: the report says "Raised this species' Size limit to {new}×."
+      and the Size card shows that maximum.
+    - **At the highest limit.** Size card → **Size limit** Maximum 20, then in Blender **Adult size ×** 20 and **Male
+      size ×** 20: the Size box says only "In game this is capped at 20×." (no raise), and Send leaves the limit at 20.
 77b. Tyrant panel -> **Sex** Female: her maps show and (Allosaurus Anax) her adult keeps part of the Adolescent shape,
     like a female in the Nursery; Male puts it back. Open in Blender -> Options -> Sex starts as the female.
 78. Save the file (Ctrl+S), close Blender. From the mod's model page → **Open in Blender**: Blender starts with that file and
@@ -424,29 +438,38 @@ Needs the game and a Tyrant Framework installed from this build. Steps marked **
 
 Needs the game. Steps marked **(game)** start the game.
 
-156. **(game)** In a mod, set the T. rex's sizes to adult 0.8 and baby 0.2: a file `sizes/tyrannosaurus.json` with
-     `{ "format": 1, "target": "Tyrannosaurus", "adult": 0.8, "baby": 0.2 }`. In its `mod.json`, set
-     `"sizeRanges": { "nursery": [0.5, 1.5] }`. Install it, turn on the game's size editing (the Nursery's
-     **Customize size**), and open a park.
-     - `MelonLoader\Latest.log` has `Nursery size slider range: 0.5 to 1.5` and `Tyrannosaurus: sizes applied (adult 0.8,
-       baby 0.2, …)`, and no warning about the slider or the game's limit.
+156. **(game)** In a mod, set the T. rex's sizes to adult 0.8 and baby 0.2, and on its Size card its **Nursery size
+     slider range** to 0.5 to 1.5: a file `sizes/tyrannosaurus.json` with
+     `{ "format": 1, "target": "Tyrannosaurus", "adult": 0.8, "baby": 0.2, "nursery": [0.5, 1.5] }`. Install it, turn on
+     the game's size editing (the Nursery's **Customize size**), and open a park.
+     - `MelonLoader\Latest.log` has `Nursery size slider ranges: Tyrannosaurus 0.5 to 1.5; uncustomised eggs and other
+       species keep the game's range.` and `Tyrannosaurus: sizes applied (adult 0.8, baby 0.2, …)`, and no warning about
+       the slider or the game's limit.
      - Incubate a T. rex with the size slider at its left end (the readout shows 0.50), one at its right end (1.50),
        and one with **Customize size** off: the uncustomised one is a normal-sized T. rex (its random size stays in the
        game's 0.925 to 1.075, not the slider's range).
+     - Select another species in the Nursery (an Allosaurus): its slider readout goes from 0.93 to 1.08, the game's.
+       Back on the T. rex it is 0.50 to 1.50 again.
      - Place them: the hatchlings are about a fifth of their adult size; grown, the 1.50 one is about three times the
        0.50 one, and a T. rex is about 0.8 of a vanilla one. The animals neither float nor sink.
      - Save the park, quit to the menu and load it: every T. rex has the same size as before, and the log has no new
        warning. Remove the mod and load the park again: the uncustomised T. rex is back to a vanilla size. The 0.50 and
-     1.50 ones keep the genetic size the slider gave them (it is saved with each animal), so grown they are about 0.5
-     and 1.5 of a vanilla T. rex.
-157. **(game)** Size limit: in the same mod, set the limit to 20 (Mod details → **Size limit**: untick **Game's limit**,
-     set **Maximum** to 20; or `tyrant mod size-ranges <mod> --limit 0.05,20`) and the T. rex's **Adult size ×**
-     to 4 (its slider now goes up to 20). Check warns that Tyrannosaurus can grow past the game's normal 2× limit, and
-     shows no error. Install it and open a park.
-     - `MelonLoader\Latest.log` has `Animal size limit: 0.05 to 20 (the game's is 0.05 to 2).`, no warning that animals
-       keep the game's size limit, and `Tyrannosaurus: sizes applied (adult 4, …)` with no "would pass" warning.
+       1.50 ones keep the genetic size the slider gave them (it is saved with each animal), so grown they are about 0.5
+       and 1.5 of a vanilla T. rex.
+156b. **(game, long)** Breeding: on the T. rex's Size card set **Breeding size range** to 0.5 to 1.5, install, and open
+     a park with a T. rex pair. The log has `Breeding size ranges: Tyrannosaurus 0.5 to 1.5; other species keep the game's
+     range.` Bred T. rex young spread wider in size than the game's 0.85 to 1.15; another species' bred young stay in the
+     game's range.
+157. **(game)** Size limit: on the T. rex's Size card set **Size limit** Maximum to 20 (or
+     `tyrant mod size <mod> Tyrannosaurus --limit 0.05,20`) and its **Adult size ×** to 4 (its slider now goes up to 20).
+     Check warns that Tyrannosaurus can grow past the game's normal 2× limit, and shows no error. Install it and open a
+     park.
+     - `MelonLoader\Latest.log` has `Animal size limits: Tyrannosaurus 0.05 to 20 (the game's, 0.05 to 2, for the other
+       species).`, no warning that animals keep the game's size limit, and `Tyrannosaurus: sizes applied (adult 4, …)`
+       with no "would pass" warning.
      - Place a grown T. rex: it is about four times a vanilla one (not stopped at twice), and the hatchlings grow into it.
+       Other species are their normal size.
      - Let it walk and eat for a few minutes: the log has no `has invalid scale` error spam.
-     - Tick **Game's limit** again: Check now reports that the T. rex would be scaled past 0.05 to 2, and Install refuses.
-       Set **Adult size ×** back to 0.8, install, and load the park: the log has no `Animal size limit` line, the T. rex
-       is back to 0.8 of a vanilla one, and there is still no error spam.
+     - **↺** on the Size limit row (back to the game's): Check now reports that the T. rex would be scaled past 0.05 to 2,
+       and Install refuses. Set **Adult size ×** back to 0.8, install, and load the park: the log has no `Animal size
+       limits` line, the T. rex is back to 0.8 of a vanilla one, and there is still no error spam.

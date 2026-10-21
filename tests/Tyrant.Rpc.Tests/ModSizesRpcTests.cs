@@ -34,7 +34,7 @@ public class ModSizesRpcTests
     private const string GameRanges = """{"incubationGeneticSizeMinMax":{"x":0.925,"y":1.075},"breedingGeneticSizeMinMax":{"x":0.85,"y":1.15}}""";
 
     [Fact]
-    public async Task Check_warns_when_a_mod_that_only_sets_ranges_pushes_a_species_past_the_limit()
+    public async Task Check_judges_a_species_ranges_against_its_own_limit()
     {
         using var game = new FakeGame();
         var (h, ws, _) = await AssetFixtures.Opened(game);
@@ -44,13 +44,18 @@ public class ModSizesRpcTests
         DumpWriter.Write(Path.Combine(ws, "data"), objects, [], new DumpManifest { RequestId = "r1", BuildGuid = "b" });
         await h.Call("mods.create", new { id = "wide-nursery" });
         var detail = await h.Call("mods.get", new { id = "wide-nursery" });
-        Assert.DoesNotContain((await h.Call("mods.check", new { id = "wide-nursery" })).GetProperty("warnings").EnumerateArray(),
-            w => w.GetString()!.Contains("genetic size ranges"));
 
-        await h.Call("mods.setSizeRanges", new { id = "wide-nursery", revision = Rev(detail), nursery = new[] { 0.5, 1.5 } }); // females: 1.35 x 1.5 = 2.03
-        var warnings = (await h.Call("mods.check", new { id = "wide-nursery" })).GetProperty("warnings").EnumerateArray().Select(w => w.GetString()!).ToList();
+        // The species' own Nursery range: females 1.35 x 1.5 = 2.03, past the game's 2.
+        var set = await h.Call("mods.setSizes", new { id = "wide-nursery", revision = Rev(detail), target = "Allosaurus Anax", nursery = new[] { 0.5, 1.5 } });
+        var check = await h.Call("mods.check", new { id = "wide-nursery" });
+        Assert.Contains(check.GetProperty("errors").EnumerateArray(), e => e.GetString()!.Contains("Allosaurus Anax would be scaled from") && e.GetString()!.Contains("the game allows 0.05 to 2"));
+        Assert.DoesNotContain(check.GetProperty("warnings").EnumerateArray(), w => w.GetString()!.Contains("genetic size ranges"));
 
-        Assert.Contains(warnings, w => w.Contains("genetic size ranges") && w.Contains("Allosaurus Anax"));
+        // Its own limit lets it: then only the past-2x caution.
+        await h.Call("mods.setSizes", new { id = "wide-nursery", revision = Rev(set), target = "Allosaurus Anax", nursery = new[] { 0.5, 1.5 }, limit = new[] { 0.05, 3.0 } });
+        check = await h.Call("mods.check", new { id = "wide-nursery" });
+        Assert.DoesNotContain(check.GetProperty("errors").EnumerateArray(), e => e.GetString()!.Contains("Allosaurus Anax"));
+        Assert.Contains(check.GetProperty("warnings").EnumerateArray(), w => w.GetString()!.Contains("Allosaurus Anax can grow past the game's normal 2× limit"));
     }
 
     private static bool IsNull(JsonElement e, string name) => !e.TryGetProperty(name, out var v) || v.ValueKind == JsonValueKind.Null;
@@ -120,60 +125,74 @@ public class ModSizesRpcTests
         var detail = await h.Call("mods.get", new { id = "size-pack" });
 
         var ex = await Assert.ThrowsAsync<RpcCallException>(() => h.Call("mods.setSizes", new { id = "size-pack", revision = Rev(detail), target = "Alpha", adult = 21 }));
-        var range = await Assert.ThrowsAsync<RpcCallException>(() => h.Call("mods.setSizeRanges", new { id = "size-pack", revision = Rev(detail), nursery = new[] { 0.0, 1.0 } }));
+        var range = await Assert.ThrowsAsync<RpcCallException>(() => h.Call("mods.setSizes", new { id = "size-pack", revision = Rev(detail), target = "Alpha", nursery = new[] { 0.0, 1.0 } }));
+        var limit = await Assert.ThrowsAsync<RpcCallException>(() => h.Call("mods.setSizes", new { id = "size-pack", revision = Rev(detail), target = "Alpha", limit = new[] { 0.05, 25.0 } }));
 
         Assert.Equal("MOD_INVALID", ex.DataCode);
         Assert.Equal("MOD_INVALID", range.DataCode);
+        Assert.Equal("MOD_INVALID", limit.DataCode);
+        Assert.Contains("\"limit\" must be [min, max] with 0.01 <= min <= 0.05 and 2 <= max <= 20", limit.Message);
     }
 
     [Fact]
-    public async Task Size_ranges_round_trip()
+    public async Task Sizes_carry_the_species_ranges_and_limit_with_the_games()
+    {
+        using var game = new FakeGame();
+        var (h, _) = await WithAlpha(game);
+        var detail = await h.Call("mods.get", new { id = "size-pack" });
+        static IEnumerable<double> Pair(JsonElement e, string name) => e.GetProperty(name).EnumerateArray().Select(x => Math.Round(x.GetDouble(), 6));
+
+        // Unset: null, with the game's values to show (the dump has no global parameters here: the vanilla ones).
+        var unset = await h.Call("mods.sizes", new { id = "size-pack", target = "Alpha" });
+        Assert.True(IsNull(unset, "nursery"));
+        Assert.True(IsNull(unset, "breeding"));
+        Assert.True(IsNull(unset, "limit"));
+        Assert.Equal([0.925, 1.075], Pair(unset, "gameNursery"));
+        Assert.Equal([0.85, 1.15], Pair(unset, "gameBreeding"));
+        Assert.Equal([0.05, 2], Pair(unset, "gameLimit"));
+
+        var set = await h.Call("mods.setSizes", new
+        {
+            id = "size-pack", revision = Rev(detail), target = "Alpha", adult = 1.2,
+            nursery = new[] { 0.5, 3.0 }, breeding = new[] { 0.8, 1.2 }, limit = new[] { 0.02, 20.0 },
+        });
+        var sizes = await h.Call("mods.sizes", new { id = "size-pack", target = "Alpha" });
+        Assert.Equal([0.5, 3], Pair(sizes, "nursery"));
+        Assert.Equal([0.8, 1.2], Pair(sizes, "breeding"));
+        Assert.Equal([0.02, 20], Pair(sizes, "limit"));
+        Assert.Equal(1.2, sizes.GetProperty("adult").GetDouble());
+        Assert.True(IsNull(await h.Call("mods.sizes", new { id = "size-pack", target = "Beta" }), "limit")); // another species' is its own
+
+        // Leaving a key out clears it (the card's Reset).
+        await h.Call("mods.setSizes", new { id = "size-pack", revision = Rev(set), target = "Alpha", adult = 1.2, nursery = new[] { 0.5, 3.0 } });
+        var reset = await h.Call("mods.sizes", new { id = "size-pack", target = "Alpha" });
+        Assert.True(IsNull(reset, "limit"));
+        Assert.True(IsNull(reset, "breeding"));
+        Assert.Equal([0.5, 3], Pair(reset, "nursery"));
+    }
+
+    [Fact]
+    public async Task The_mod_wide_size_range_methods_are_gone()
     {
         using var game = new FakeGame();
         var (h, _) = await WithAlpha(game);
         var detail = await h.Call("mods.get", new { id = "size-pack" });
 
-        var set = await h.Call("mods.setSizeRanges", new { id = "size-pack", revision = Rev(detail), nursery = new[] { 0.9, 1.1 }, breeding = new[] { 0.8, 1.2 } });
-        var ranges = await h.Call("mods.sizeRanges", new { id = "size-pack" });
+        var get = await Assert.ThrowsAsync<RpcCallException>(() => h.Call("mods.sizeRanges", new { id = "size-pack" }));
+        var set = await Assert.ThrowsAsync<RpcCallException>(() => h.Call("mods.setSizeRanges", new { id = "size-pack", revision = Rev(detail), limit = new[] { 0.05, 20.0 } }));
 
-        Assert.Equal([0.9, 1.1], ranges.GetProperty("nursery").EnumerateArray().Select(x => x.GetDouble()));
-        Assert.Equal([0.8, 1.2], ranges.GetProperty("breeding").EnumerateArray().Select(x => x.GetDouble()));
-        Assert.Equal(0.925, ranges.GetProperty("gameNursery")[0].GetDouble());
-
-        Assert.True(IsNull(ranges, "limit"));
-        Assert.Equal([0.05, 2], ranges.GetProperty("gameLimit").EnumerateArray().Select(x => Math.Round(x.GetDouble(), 6)));
-
-        var limited = await h.Call("mods.setSizeRanges", new { id = "size-pack", revision = Rev(set), nursery = new[] { 0.9, 1.1 }, limit = new[] { 0.05, 20.0 } });
-        Assert.Equal([0.05, 20], (await h.Call("mods.sizeRanges", new { id = "size-pack" })).GetProperty("limit").EnumerateArray().Select(x => x.GetDouble()));
-        var bad = await Assert.ThrowsAsync<RpcCallException>(() => h.Call("mods.setSizeRanges", new { id = "size-pack", revision = Rev(limited), limit = new[] { 0.05, 25.0 } }));
-        Assert.Equal("MOD_INVALID", bad.DataCode);
-
-        await h.Call("mods.setSizeRanges", new { id = "size-pack", revision = Rev(limited) });
-        Assert.True(IsNull(await h.Call("mods.sizeRanges", new { id = "size-pack" }), "nursery"));
-        Assert.True(IsNull(await h.Call("mods.sizeRanges", new { id = "size-pack" }), "limit"));
+        Assert.Equal(Tyrant.Rpc.Protocol.RpcErrorCodes.MethodNotFound, get.Code);
+        Assert.Equal(Tyrant.Rpc.Protocol.RpcErrorCodes.MethodNotFound, set.Code);
     }
 
     [Fact]
-    public async Task Sizes_carry_the_size_limit_in_effect()
-    {
-        using var game = new FakeGame();
-        var (h, _) = await WithAlpha(game);
-        var detail = await h.Call("mods.get", new { id = "size-pack" });
-
-        Assert.Equal([0.05, 2], (await h.Call("mods.sizes", new { id = "size-pack", target = "Alpha" })).GetProperty("limit").EnumerateArray().Select(x => Math.Round(x.GetDouble(), 6)));
-        await h.Call("mods.setSizeRanges", new { id = "size-pack", revision = Rev(detail), limit = new[] { 0.02, 20.0 } });
-
-        Assert.Equal([0.02, 20], (await h.Call("mods.sizes", new { id = "size-pack", target = "Alpha" })).GetProperty("limit").EnumerateArray().Select(x => Math.Round(x.GetDouble(), 6)));
-    }
-
-    [Fact]
-    public async Task Undo_puts_back_the_size_files_and_the_size_ranges()
+    public async Task Undo_puts_back_the_size_files()
     {
         using var game = new FakeGame();
         var (h, ws) = await WithAlpha(game);
         var before = await h.Call("mods.get", new { id = "size-pack" });
         var afterSizes = await h.Call("mods.setSizes", new { id = "size-pack", revision = Rev(before), target = "Alpha", adult = 1.5 });
-        var afterRanges = await h.Call("mods.setSizeRanges", new { id = "size-pack", revision = Rev(afterSizes), breeding = new[] { 0.9, 1.1 } });
+        var afterRanges = await h.Call("mods.setSizes", new { id = "size-pack", revision = Rev(afterSizes), target = "Alpha", adult = 1.5, breeding = new[] { 0.9, 1.1 } });
         var file = Path.Combine(ws, "mods", "size-pack", "sizes", "alpha.json");
 
         // Undo both: the files and mod.json of the first state.
@@ -183,10 +202,9 @@ public class ModSizesRpcTests
             prefabs = new Dictionary<string, string>(), sizes = new Dictionary<string, string>(),
         });
         Assert.False(File.Exists(file));
-        Assert.DoesNotContain("sizeRanges", undone.GetProperty("manifestJson").GetString());
         Assert.Empty(undone.GetProperty("sizeFiles").EnumerateObject());
 
-        // Redo: sizes come back from the snapshot of the later state.
+        // Redo: sizes come back from the snapshot of the later state, ranges and all.
         var redone = await h.Call("mods.restoreSnapshot", new
         {
             id = "size-pack", revision = Rev(undone), manifest = afterRanges.GetProperty("manifestJson").GetString(),
@@ -194,8 +212,10 @@ public class ModSizesRpcTests
             sizes = afterRanges.GetProperty("sizeFiles").EnumerateObject().ToDictionary(p => p.Name, p => p.Value.GetString()!),
         });
         Assert.True(File.Exists(file));
-        Assert.Equal(1.5, (await h.Call("mods.sizes", new { id = "size-pack", target = "Alpha" })).GetProperty("adult").GetDouble());
-        Assert.Contains("sizeRanges", redone.GetProperty("manifestJson").GetString());
+        var sizes = await h.Call("mods.sizes", new { id = "size-pack", target = "Alpha" });
+        Assert.Equal(1.5, sizes.GetProperty("adult").GetDouble());
+        Assert.Equal([0.9, 1.1], sizes.GetProperty("breeding").EnumerateArray().Select(x => x.GetDouble()));
+        Assert.DoesNotContain("sizeRanges", redone.GetProperty("manifestJson").GetString());
 
         // A snapshot without sizes leaves the size files as they are.
         await h.Call("mods.restoreSnapshot", new { id = "size-pack", revision = Rev(redone), manifest = redone.GetProperty("manifestJson").GetString(), prefabs = new Dictionary<string, string>() });
@@ -208,4 +228,5 @@ public class ModSizesRpcTests
         }));
         Assert.Equal("MOD_INVALID", bad.DataCode);
     }
+
 }

@@ -15,7 +15,6 @@ export type EditMethod =
   | 'mods.setSpeciesPrefab'
   | 'mods.setSizes'
   | 'mods.removeSizeEdits'
-  | 'mods.setSizeRanges'
   | 'mods.setPortraits'
   | 'mods.setSpeciesPortraits'
   | 'mods.renameSkin'

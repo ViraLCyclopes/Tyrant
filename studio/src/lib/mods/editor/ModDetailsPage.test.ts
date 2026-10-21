@@ -1,7 +1,6 @@
-import { fireEvent, screen, waitFor, within } from '@testing-library/svelte';
+import { fireEvent, screen, waitFor } from '@testing-library/svelte';
 import type { ModTexturesResult } from '$lib/rpc/types.gen';
 import { describe, expect, it } from 'vitest';
-import { RpcError } from '$lib/rpc/client';
 import { Tab } from '$lib/shell/tab.svelte';
 import { memoryStore } from '$lib/storage';
 import { Session } from '$lib/stores/session.svelte';
@@ -68,107 +67,20 @@ describe('Mod details page', () => {
     expect(await screen.findByText(/out of date/)).toBeInTheDocument();
   });
 
-  describe('size ranges', () => {
-    const ranges = { nursery: null, breeding: [0.9, 1.1], gameNursery: [0.8, 1.2], gameBreeding: [0.85, 1.15], limit: null, gameLimit: [0.05, 2] };
-    async function sizeSetup(refuse = false, limit: number[] | null = null) {
-      const rpc = new FakeRpc()
-        .on('mods.get', () => modDetail())
-        .on('mods.check', () => ({ errors: [], warnings: [], missingCutouts: [] }))
-        .on('mods.sizeRanges', () => ({ ...ranges, limit }))
-        .on('mods.setSizeRanges', () => {
-          if (refuse) throw new RpcError('The mod folder is read-only.', 'IO_ERROR');
-          return modDetail({ revision: 'r2' });
-        });
-      const session = new Session(rpc, new FakePlatform(), memoryStore());
-      const tab = new Tab('tab-mod', session.log, { retitle: () => {}, openTool: () => null });
-      const doc = new ModDoc('red-spot', rpc, tab, () => {});
-      await doc.load();
-      renderWith(ModDetailsPage, session, { doc }, tab);
-      await screen.findByText('Nursery size slider range');
-      return rpc;
-    }
-
-    it('shows the game ranges and the note, and sets the nursery range with the breeding range kept', async () => {
-      const rpc = await sizeSetup();
-      expect(screen.getByText(/Random eggs keep the game's range/)).toBeInTheDocument();
-      expect(screen.getByText('Breeding size range')).toBeInTheDocument();
-      expect(screen.getByText(/Game: 0.80 – 1.20/)).toBeInTheDocument();
-      await fireEvent.click(within(screen.getByRole('group', { name: 'Nursery size slider range' })).getByRole('checkbox', { name: /Game's range/ }));
-      await waitFor(() => expect(rpc.callsTo('mods.setSizeRanges')).toHaveLength(1));
-      expect(rpc.callsTo('mods.setSizeRanges')[0].params).toMatchObject({ nursery: [0.8, 1.2], breeding: [0.9, 1.1], limit: null });
-    });
-
-    it('the ranges reach 20', async () => {
-      await sizeSetup();
-      await fireEvent.click(within(screen.getByRole('group', { name: 'Nursery size slider range' })).getByRole('checkbox', { name: /Game's range/ }));
-      expect(screen.getByRole('slider', { name: 'Breeding size range to' })).toHaveAttribute('max', '20');
-    });
-
-    it('shows the size limit and its note, and sets each end with the ranges kept', async () => {
-      const rpc = await sizeSetup(false, [0.05, 5]);
-      expect(screen.getByText('The game caps animals at 0.05×–2×. A wider limit lets sizes past 2× show in game; the game was tuned for normal sizes, so very big animals may clip, get stuck or frame badly.')).toBeInTheDocument();
-      const group = screen.getByRole('group', { name: 'Size limit' });
-      const max = within(group).getByRole('spinbutton', { name: 'Size limit maximum' });
-      expect(max).toHaveAttribute('min', '2');
-      expect(max).toHaveAttribute('max', '20');
-      await fireEvent.input(max, { target: { value: '20' } });
-      await fireEvent.change(max);
-      await waitFor(() => expect(rpc.callsTo('mods.setSizeRanges')).toHaveLength(1));
-      expect(rpc.callsTo('mods.setSizeRanges')[0].params).toMatchObject({ limit: [0.05, 20], nursery: null, breeding: [0.9, 1.1] });
-
-      const min = within(screen.getByRole('group', { name: 'Size limit' })).getByRole('spinbutton', { name: 'Size limit minimum' });
-      expect(min).toHaveAttribute('min', '0.01');
-      expect(min).toHaveAttribute('max', '0.05');
-      await fireEvent.input(min, { target: { value: '0.02' } });
-      await fireEvent.change(min);
-      await waitFor(() => expect(rpc.callsTo('mods.setSizeRanges')).toHaveLength(2));
-      expect((rpc.callsTo('mods.setSizeRanges')[1].params as { limit: number[] }).limit[0]).toBe(0.02);
-    });
-
-    it('does not save a size limit outside its bounds, and Game\'s limit clears it', async () => {
-      const rpc = await sizeSetup(false, [0.05, 5]);
-      const group = screen.getByRole('group', { name: 'Size limit' });
-      const min = within(group).getByRole('spinbutton', { name: 'Size limit minimum' });
-      await fireEvent.input(min, { target: { value: '1' } });
-      await fireEvent.change(min);
-      expect(screen.getByRole('alert')).toHaveTextContent('Size limit: the minimum must be from 0.01 to 0.05.');
-      const max = within(group).getByRole('spinbutton', { name: 'Size limit maximum' });
-      await fireEvent.input(max, { target: { value: '25' } });
-      await fireEvent.change(max);
-      expect(screen.getByRole('alert')).toHaveTextContent('Size limit: the maximum must be from 2 to 20.');
-      expect(rpc.callsTo('mods.setSizeRanges')).toHaveLength(0);
-
-      await fireEvent.click(within(group).getByRole('checkbox', { name: /Game's limit/ }));
-      await waitFor(() => expect(rpc.callsTo('mods.setSizeRanges')).toHaveLength(1));
-      expect(rpc.callsTo('mods.setSizeRanges')[0].params).toMatchObject({ limit: null });
-    });
-
-    it('unticking Game\'s limit starts from the game\'s 0.05 to 2', async () => {
-      const rpc = await sizeSetup();
-      expect(within(screen.getByRole('group', { name: 'Size limit' })).queryByRole('spinbutton')).toBeNull();
-      await fireEvent.click(within(screen.getByRole('group', { name: 'Size limit' })).getByRole('checkbox', { name: /Game's limit/ }));
-      await waitFor(() => expect(rpc.callsTo('mods.setSizeRanges')).toHaveLength(1));
-      expect(rpc.callsTo('mods.setSizeRanges')[0].params).toMatchObject({ limit: [0.05, 2] });
-    });
-
-    it('a save that fails puts the saved range back', async () => {
-      const rpc = await sizeSetup(true);
-      const game = () => within(screen.getByRole('group', { name: 'Nursery size slider range' })).getByRole('checkbox', { name: /Game's range/ });
-      expect(game()).toBeChecked();
-      await fireEvent.click(game());
-      await waitFor(() => expect(rpc.callsTo('mods.setSizeRanges')).toHaveLength(1));
-      await waitFor(() => expect(game()).toBeChecked());
-    });
-
-    it('never sends a minimum above the maximum', async () => {
-      const rpc = await sizeSetup();
-      const from = screen.getByRole('slider', { name: 'Breeding size range from' });
-      await fireEvent.input(from, { target: { value: '3' } });
-      await fireEvent.change(from);
-      await waitFor(() => expect(rpc.callsTo('mods.setSizeRanges')).toHaveLength(1));
-      const [min, max] = (rpc.callsTo('mods.setSizeRanges')[0].params as { breeding: number[] }).breeding;
-      expect(min).toBeLessThanOrEqual(max);
-      expect(max).toBe(1.1);
-    });
+  it('has no size settings: they are on each species’ Size card', async () => {
+    const rpc = new FakeRpc()
+      .on('mods.get', () => modDetail())
+      .on('mods.check', () => ({ errors: [], warnings: [], missingCutouts: [] }));
+    const session = new Session(rpc, new FakePlatform(), memoryStore());
+    const tab = new Tab('tab-mod', session.log, { retitle: () => {}, openTool: () => null });
+    const doc = new ModDoc('red-spot', rpc, tab, () => {});
+    await doc.load();
+    renderWith(ModDetailsPage, session, { doc }, tab);
+    await screen.findByText('Mod details');
+    expect(screen.queryByText('Size ranges')).toBeNull();
+    expect(screen.queryByText('Nursery size slider range')).toBeNull();
+    expect(screen.queryByText('Breeding size range')).toBeNull();
+    expect(screen.queryByRole('group', { name: 'Size limit' })).toBeNull();
+    expect(rpc.callsTo("mods.sizeRanges")).toHaveLength(0);
   });
 });

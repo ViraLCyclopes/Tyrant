@@ -4,8 +4,8 @@ using System.Globalization;
 namespace Tyrant.Framework.Core
 {
     /// <summary>
-    /// The final scale an animal may have. The game caps it at 0.05 to 2 (AnimalNative.CurrentScale); mod.json
-    /// "sizeRanges.limit" widens that, within 0.01 to 0.05 for the minimum and 2 to 20 for the maximum.
+    /// The final scale an animal may have. The game caps it at 0.05 to 2 (AnimalNative.CurrentScale); a species' "limit"
+    /// (sizes/&lt;species&gt;.json) widens that for it, within 0.01 to 0.05 for the minimum and 2 to 20 for the maximum.
     /// </summary>
     public readonly struct SizeLimit : IEquatable<SizeLimit>
     {
@@ -21,7 +21,7 @@ namespace Tyrant.Framework.Core
         /// <summary>The game's own limit, 0.05 to 2.</summary>
         public static SizeLimit Game => new SizeLimit(SizeMath.FinalMin, SizeMath.FinalMax);
 
-        /// <summary>A mod's [min, max] ("sizeRanges.limit"); null is the game's.</summary>
+        /// <summary>A species' [min, max] ("limit"); null is the game's.</summary>
         public static SizeLimit Of(double[]? limit) => limit == null ? Game : new SizeLimit((float)limit[0], (float)limit[1]);
 
         public float Min { get; }

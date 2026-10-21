@@ -5,9 +5,10 @@
   import type { ModDoc } from './modDoc.svelte';
 
   /**
-   * One species' size changes: the adult size, the newborn's share of it, and each sex's multiplier. A key the mod leaves
-   * unset shows the game's value and Reset puts it back. The sex sizes multiply each skin's own, so theirs is 1× (the skin's
-   * own shows as information only). The server replaces the whole set, so every save carries all four.
+   * One species' size changes: the adult size, the newborn's share of it, each sex's multiplier, and the species' genetic size
+   * ranges (the Nursery slider's and breeding's) and size limit. A key the mod leaves unset shows the game's value and Reset
+   * puts it back. The sex sizes multiply each skin's own, so theirs is 1× (the skin's own shows as information only). The
+   * server replaces the whole set, so every save carries all seven.
    */
   let { doc, target }: { doc: ModDoc; target: string } = $props();
   const session = getSession();
@@ -15,8 +16,18 @@
 
   type Key = 'adult' | 'baby' | 'male' | 'female';
   type Field = { key: Key; label: string; min: number; max: number; slider: number; step: number };
+  type RangeKey = 'nursery' | 'breeding' | 'limit';
+  type Own = Record<Key, number | null> & Record<RangeKey, number[] | null>;
+  /** A [min, max] row: each end's bounds (null: the other end's value) and step. */
+  type RangeRow = { key: RangeKey; label: string; min: [number, number | null]; max: [number | null, number]; step: [number, number] };
+  // The genetic ranges take 0 < min <= max <= 20; the limit's minimum 0.01–0.05 and its maximum 2–20 (as sizes/<file>.json takes them).
+  const RANGES: RangeRow[] = [
+    { key: 'nursery', label: 'Nursery size slider range', min: [0.01, null], max: [null, 20], step: [0.01, 0.01] },
+    { key: 'breeding', label: 'Breeding size range', min: [0.01, null], max: [null, 20], step: [0.01, 0.01] },
+    { key: 'limit', label: 'Size limit', min: [0.01, 0.05], max: [2, 20], step: [0.01, 0.5] },
+  ];
   // The number fields take what the files take (up to 20×; Check says whether it fits the size limit). The sliders reach 5×,
-  // or the mod's size limit when it is higher, so their usual range stays easy to drag.
+  // or the species' size limit when it is higher, so their usual range stays easy to drag.
   const MAX = 20;
   const reach = (limit: number[] | undefined) => Math.min(MAX, Math.max(5, limit?.[1] ?? 0));
   const fieldsFor = (top: number): Field[] => [
@@ -28,7 +39,7 @@
 
   let loaded = $state.raw<ModSizesDto | null>(null);
   let failed = $state(false);
-  let own = $state<Record<Key, number | null>>({ adult: null, baby: null, male: null, female: null });
+  let own = $state<Own>({ adult: null, baby: null, male: null, female: null, nursery: null, breeding: null, limit: null });
   let problem = $state('');
   let loads = 0; // the newest request: older replies (another target, or out of order) are dropped
 
@@ -42,12 +53,15 @@
       failed = r === null;
       if (!r) return;
       loaded = r;
-      own = { adult: r.adult, baby: r.baby, male: r.male, female: r.female };
+      own = ownOf(r);
       problem = '';
     });
   });
+  const ownOf = (r: ModSizesDto): Own => ({
+    adult: r.adult, baby: r.baby, male: r.male, female: r.female, nursery: r.nursery, breeding: r.breeding, limit: r.limit,
+  });
   const ready = $derived(loaded?.target.toLowerCase() === target.toLowerCase() ? loaded : null);
-  const fields = $derived(fieldsFor(reach(ready?.limit)));
+  const fields = $derived(fieldsFor(reach(own.limit ?? ready?.gameLimit)));
 
   // Unchanged values: adult, male and female are multipliers (1×); baby is the game's own share.
   const original = $derived<Record<Key, number>>({ adult: 1, baby: ready?.original.babyShare ?? 1, male: 1, female: 1 });
@@ -57,13 +71,37 @@
   const shown = (key: Key) => own[key] ?? original[key];
 
   let saves = 0;
-  async function save(next: Record<Key, number | null>) {
+  async function save(next: Own) {
     own = next;
     problem = '';
     const [mine, reads, saved] = [++saves, loads, ready];
     // Not saved (the edit failed, nothing changed on disk): back to what the mod has, unless a later save or a reload came first.
-    if (!(await doc.edit('mods.setSizes', { target, ...next })) && mine === saves && reads === loads && saved)
-      own = { adult: saved.adult, baby: saved.baby, male: saved.male, female: saved.female };
+    if (!(await doc.edit('mods.setSizes', { target, ...next })) && mine === saves && reads === loads && saved) own = ownOf(saved);
+  }
+
+  // A range unset shows the game's (the base species', for a custom species its template's), and an edit starts from it.
+  const gameOf = (key: RangeKey) => (key === 'nursery' ? ready?.gameNursery : key === 'breeding' ? ready?.gameBreeding : ready?.gameLimit) ?? [0, 0];
+  const rangeShown = (key: RangeKey) => own[key] ?? gameOf(key);
+  const pairText = (v: number[]) => `${round(v[0])} – ${round(v[1])}`;
+
+  /** One end of a range from its number field; a number outside that end's bounds is not saved. */
+  function changeEnd(row: RangeRow, end: 0 | 1, text: string) {
+    const now = rangeShown(row.key);
+    const [lo, hi] = end === 0 ? [row.min[0], row.min[1] ?? now[1]] : [row.max[0] ?? now[0], row.max[1]];
+    const n = Number(text);
+    // A genetic range's minimum only has to be above 0 (its field's 0.01 is a step, not a bound); the limit's ends have bounds.
+    const low = row.key !== 'limit' && end === 0 ? n <= 0 : n < lo;
+    if (text.trim() === '' || !Number.isFinite(n) || low || n > hi) {
+      const which = end === 0 ? 'minimum' : 'maximum';
+      problem =
+        row.key === 'limit'
+          ? `${row.label}: the ${which} must be from ${lo} to ${hi}.`
+          : end === 0
+            ? `${row.label}: the minimum must be above 0 and at most the maximum (${round(now[1])}).`
+            : `${row.label}: the maximum must be from the minimum (${round(now[0])}) to ${hi}.`;
+      return;
+    }
+    void save({ ...own, [row.key]: end === 0 ? [n, now[1]] : [now[0], n] });
   }
 
   function change(f: Field, text: string) {
@@ -124,6 +162,26 @@
         <button type="button" onclick={() => doc.edit('mods.removeSizeEdits', { target }, { undoable: false })}>Remove old size edits</button>
       </p>
     {/if}
+    {#each RANGES as row (row.key)}
+      {@const shownRange = rangeShown(row.key)}
+      <div class="range" class:changed={own[row.key] !== null} role="group" aria-label={row.label}>
+        <span class="name">{row.label}</span>
+        <label class="end">Minimum <input type="number" aria-label="{row.label} minimum" min={row.min[0]} max={row.min[1] ?? shownRange[1]} step={row.step[0]}
+          value={shownRange[0]} onchange={(e) => changeEnd(row, 0, e.currentTarget.value)} /></label>
+        <label class="end">Maximum <input type="number" aria-label="{row.label} maximum" min={row.max[0] ?? shownRange[0]} max={row.max[1]} step={row.step[1]}
+          value={shownRange[1]} onchange={(e) => changeEnd(row, 1, e.currentTarget.value)} /></label>
+        <span class="hint">{own[row.key] === null ? "game's" : `game: ${pairText(gameOf(row.key))}`}</span>
+        {#if own[row.key] !== null}
+          <button class="ghost" aria-label="Reset {row.label}" title="Back to the game's" onclick={() => save({ ...own, [row.key]: null })}>↺</button>
+        {/if}
+      </div>
+      {#if row.key === 'nursery'}
+        <p class="hint">The game's own Customize size slider in the Nursery covers this range for this species. Random eggs keep the game's range.</p>
+      {:else if row.key === 'limit'}
+        <p class="hint">The game caps animals at 0.05×–2×. A wider limit lets sizes past 2× show in game; the game was tuned for normal sizes, so very big animals may clip, get stuck or frame badly.</p>
+        <p class="hint">Minimum 0.01–0.05, maximum 2–20. With several mods on, the widest limit wins.</p>
+      {/if}
+    {/each}
     {#if problem}<p class="warn" role="alert">{problem}</p>{/if}
     {#each issues as m (m)}<p class="warn">{m}</p>{/each}
   {/if}
@@ -133,6 +191,10 @@
   .sizes { display: grid; gap: 6px; }
   .field { display: grid; grid-template-columns: minmax(170px, 1fr) 90px minmax(100px, 160px) auto auto; gap: 8px; align-items: center; }
   .field.changed .name { font-weight: 600; }
+  .range { display: grid; grid-template-columns: minmax(170px, 1fr) auto auto auto auto; gap: 8px; align-items: center; }
+  .range.changed .name { font-weight: 600; }
+  .range .end { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+  .range .end input { width: 70px; }
   .bars { display: grid; gap: 4px; }
   .bars p { margin: 0; }
   .bar { height: 10px; background: var(--border); border-radius: 5px; overflow: hidden; }

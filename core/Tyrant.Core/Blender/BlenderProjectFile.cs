@@ -30,6 +30,12 @@ public sealed record BlenderSexes(BlenderSex Male, BlenderSex Female);
 /// </summary>
 public sealed record BlenderSizes(double? Adult, double? Baby, double? Male, double? Female, double MaleOriginal, double FemaleOriginal);
 
+/// <summary>
+/// The genetic size ranges [min, max] in effect for the species, as Check and Send count them: random eggs' (the game's), the
+/// Nursery slider's (the species' own; null: the game's, as random eggs') and breeding's (the species' own, else the game's).
+/// </summary>
+public sealed record BlenderGeneticRanges(double[] Incubation, double[]? Nursery, double[] Breeding);
+
 /// <summary>A skeleton node's rest transform in glTF space (rotation x, y, z, w), for the growth slider's bone proportions.</summary>
 public sealed record BlenderBoneRest(string Name, float[] Position, float[] Rotation, float[] Scale);
 
@@ -70,8 +76,14 @@ public sealed record BlenderProject(int Version, string Workspace, string Tyrant
     /// <summary>Whether Blender may change the sizes: only when the destination is a species (a skin's sizes are its species').</summary>
     public bool SizesEditable { get; init; }
 
-    /// <summary>The size limit [min, max] the Growth slider clamps the size shown to: the destination mod's "sizeRanges.limit", else the game's.</summary>
+    /// <summary>The species' size limit [min, max] in the destination mod (its sizes/ file's "limit"), else the game's; the Size box notes when the game caps the animal there.</summary>
     public float[] SizeLimit { get; init; } = [global::Tyrant.Framework.Core.SizeMath.FinalMin, global::Tyrant.Framework.Core.SizeMath.FinalMax];
+
+    /// <summary>The species' genetic size ranges in the destination mod, for the Size box's note (null without a data dump).</summary>
+    public BlenderGeneticRanges? GeneticRanges { get; init; }
+
+    /// <summary>Every skin's own [male, female] sizes, for the Size box's note: the limit is the species', so all skins count (null without a data dump).</summary>
+    public IReadOnlyList<double[]>? SizeSkins { get; init; }
 
     /// <summary>The game's growth shape keys (the first two of LOD 0: baby, juvenile), so the add-on can check them before Send.</summary>
     public IReadOnlyList<string> GrowthKeys { get; init; } = [];
