@@ -86,7 +86,7 @@ public class SizeMathTests
         var rebuilt = SizeMath.Rebuild(Allosaurus, adult, null);
         var (male, female) = SizeMath.Sex(1, 1, new SizeSettings { Adult = adult, Male = 1.12 });
         var (min, max) = SizeMath.Extremes(rebuilt, new[] { male, female }, ranges);
-        Assert.True(max <= 2f + 1e-4f && min >= 0.05f, $"extremes {min}..{max}");
+        Assert.True(max < 2f && min > 0.05f, $"extremes {min}..{max}");
     }
 
     [Fact]

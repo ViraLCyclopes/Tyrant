@@ -12,6 +12,10 @@ namespace Tyrant.Framework.Core
     public static class SizeMath
     {
         public const float FinalMin = 0.05f, FinalMax = 2f;
+
+        /// <summary>The margin BackOff keeps inside the game's limits, so float rounding in the game never pushes the scale over them. The plain limits stay the error threshold.</summary>
+        public const float SafeMargin = 0.001f;
+        public const float SafeMin = FinalMin * (1 + SafeMargin), SafeMax = FinalMax * (1 - SafeMargin);
         private const int Steps = 16, Samples = 101;
 
         /// <summary>The game's maturity fade f(m) = 0.2 + 0.8·(1 − (1 − m)²), clamped to 0–1 in m.</summary>
@@ -111,7 +115,7 @@ namespace Tyrant.Framework.Core
                 var settings = new SizeSettings { Adult = adult, Male = male, Female = female };
                 var sexes = skinList.SelectMany(s => { var (m, f) = Sex(s.Male0, s.Female0, settings); return new[] { m, f }; });
                 var (min, max) = Extremes(curve, sexes, ranges);
-                return min >= FinalMin - 1e-6f && max <= FinalMax + 1e-6f;
+                return min >= SafeMin && max <= SafeMax;
             }
 
             if (Fits(requested)) return requested;
