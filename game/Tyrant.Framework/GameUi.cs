@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using HarmonyLib;
+using Tyrant.Framework.Core;
 using UnityEngine;
 using UnityEngine.Events;
 
@@ -71,11 +72,8 @@ namespace Tyrant.Framework
         public static void OnClick(GameObject button, Action action)
         {
             var component = button.GetComponent(Button!);
-            var property = AccessTools.Property(Button!, "onClick");
-            if (component == null || property == null) return;
-            var clicked = (UnityEvent)Activator.CreateInstance(property.PropertyType); // drops the original's listeners
+            if (component == null || !(Members.Replace(component, "onClick") is UnityEvent clicked)) return; // drops the original's listeners
             clicked.AddListener(() => action());
-            property.SetValue(component, clicked, null);
             Traverse.Create(component).Property("interactable").SetValue(true);
         }
 
@@ -210,7 +208,7 @@ namespace Tyrant.Framework
             s.Property("minValue").SetValue(min);
             s.Property("maxValue").SetValue(max);
             s.Property("value").SetValue(value);
-            if (s.Property("onValueChanged").GetValue() is UnityEvent<float> moved) moved.AddListener(v => changed(v));
+            if (Members.Get(slider, "onValueChanged") is UnityEvent<float> moved) moved.AddListener(v => changed(v));
             return slider;
         }
 
@@ -269,17 +267,14 @@ namespace Tyrant.Framework
             box.anchoredPosition = Vector2.zero;
             box.sizeDelta = Vector2.zero;
             foreach (var name in new[] { "onValueChanged", "onEndEdit", "onSubmit", "onSelect", "onDeselect" })
-            {
-                var property = AccessTools.Property(input.GetType(), name);
-                if (property != null && property.CanWrite) property.SetValue(input, Activator.CreateInstance(property.PropertyType), null);
-            }
+                Members.Replace(input, name); // a cloned box keeps its template's handlers otherwise
             var i = Traverse.Create(input);
             i.Property("text").SetValue("");
             i.Property("characterLimit").SetValue(10);
             i.Property("pointSize").SetValue(11f); // the text and placeholder of a cloned (bigger) box
             var lineType = AccessTools.Property(input.GetType(), "lineType")?.PropertyType;
             if (lineType != null) i.Property("lineType").SetValue(Enum.Parse(lineType, "SingleLine"));
-            if (i.Property("onEndEdit").GetValue() is UnityEvent<string> ended) ended.AddListener(text => endEdit(text ?? ""));
+            if (Members.Get(input, "onEndEdit") is UnityEvent<string> ended) ended.AddListener(text => endEdit(text ?? ""));
             go.SetActive(true);
             return input;
         }
