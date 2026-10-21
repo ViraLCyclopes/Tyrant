@@ -133,7 +133,7 @@ public class ModSizeCommandTests
         Assert.Equal(ExitCodes.Ok, Run("mod", "size", "size-pack", "Alpha", "--adult", "2", "--nursery", "0.5,12", "-w", ws).Code); // 2 x 12 = 24
         var check = Run("mod", "check", "size-pack", "-w", ws);
 
-        Assert.Contains("The biggest Alpha can reach 24× a normal Alpha (adult 2 × Nursery slider up to 12), more than Tyrant's 20× limit", check.Out + check.Err);
+        Assert.Contains("The biggest Alpha can reach 24× a normal Alpha (adult 2 × male 1 × Nursery slider up to 12), more than Tyrant's 20× limit", check.Out + check.Err);
     }
 
     [Fact]
@@ -147,5 +147,4 @@ public class ModSizeCommandTests
         Assert.NotEqual(ExitCodes.Ok, gone.Code);
         Assert.DoesNotContain("sizeRanges", File.ReadAllText(Path.Combine(ws, "mods", "size-pack", "mod.json")));
     }
-
 }

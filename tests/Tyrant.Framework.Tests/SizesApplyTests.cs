@@ -197,7 +197,7 @@ public class SizesApplyTests
 
         // The Allosaurus fits a limit of its own (5.5) and keeps its size; the T. rex passes Tyrant's 20 and is backed off.
         Assert.Equal((1.08 * 4, 1.12 * 4), (pass.Skins.Single(s => s.Skin == allo).Male, pass.Skins.Single(s => s.Skin == allo).Female));
-        Assert.Matches(@"^Tyrannosaurus: size 20\.0 would pass its size limit \(0\.05 to 20\); using \d+\.\d\d\.$", Assert.Single(pass.Warnings));
+        Assert.Matches(@"^Tyrannosaurus: size 20\.0 would pass its size limit \(0\.05 to 20\.02\); using \d+\.\d\d\.$", Assert.Single(pass.Warnings));
 
         // When the game's cap could not be lifted, every species keeps to the game's limit.
         var capped = new SizePlan(table, Incubation, Breeding, () => false).Next(species);
@@ -216,7 +216,7 @@ public class SizesApplyTests
         var pass = new SizePlan(table, Incubation, Breeding, () => true)
             .Next(new[] { Species(new object(), "Allosaurus", (allo, 1.08, 1.12)), Species(new object(), "Tyrannosaurus", (rex, 1.08, 1.12)) });
 
-        Assert.StartsWith("Allosaurus: size 10.0 would pass its size limit (0.05 to 20); using 8.", Assert.Single(pass.Warnings));
+        Assert.StartsWith("Allosaurus: size 10.0 would pass its size limit (0.05 to 20.02); using 8.", Assert.Single(pass.Warnings));
         Assert.Equal(1.08 * 10, pass.Skins.Single(s => s.Skin == rex).Male, 9);
         Assert.True(pass.Skins.Single(s => s.Skin == allo).Male < 1.08 * 10);
     }
@@ -228,7 +228,7 @@ public class SizesApplyTests
 
         var pass = plan.Next(new[] { Species(new object(), "Allosaurus", (new object(), 1.08, 1.12)) });
 
-        Assert.Equal("Allosaurus: its sizes pass its size limit (0.05 to 20) with the size ranges in effect; the game clamps those animals.", Assert.Single(pass.Warnings));
+        Assert.Equal("Allosaurus: its sizes pass its size limit (0.05 to 20.02) with the size ranges in effect; the game clamps those animals.", Assert.Single(pass.Warnings));
         Assert.Empty(pass.Skins);
         Assert.Empty(pass.Curves);
     }
@@ -240,7 +240,37 @@ public class SizesApplyTests
 
         var pass = new SizePlan(table, Incubation, Breeding, () => true).Next(new[] { Species(new object(), "Allosaurus", (new object(), 1.08, 1.12)) });
 
-        Assert.Matches(@"^Allosaurus: size 20\.0 would pass its size limit \(0\.05 to 20\); using \d+\.\d\d\.$", Assert.Single(pass.Warnings));
+        Assert.Matches(@"^Allosaurus: size 20\.0 would pass its size limit \(0\.05 to 20\.02\); using \d+\.\d\d\.$", Assert.Single(pass.Warnings));
+    }
+
+    [Fact]
+    public void Just_inside_20_and_001_is_never_backed_off()
+    {
+        // One skin of 1/1 and the game's ranges: the largest is adult x 1.15 at maturity 1, the smallest the hatchling.
+        var big = 19.99 / 1.15;
+        double lo = 0.05, hi = 1;
+        for (var i = 0; i < 60; i++)
+        {
+            var baby = (lo + hi) / 2;
+            var curve = SizeMath.Rebuild(Allosaurus, 0.05, baby);
+            if (SizeMath.Extremes(curve, new[] { 0.05, 0.05 }, SizePlan.InEffect(null, Incubation, Breeding)).Min < 0.010005f) lo = baby; else hi = baby;
+        }
+        var table = Table(
+            "{ \"format\": 1, \"target\": \"Allosaurus\", \"adult\": " + big.ToString("R", System.Globalization.CultureInfo.InvariantCulture) + " }",
+            "{ \"format\": 1, \"target\": \"Tyrannosaurus\", \"adult\": 0.05, \"baby\": " + hi.ToString("R", System.Globalization.CultureInfo.InvariantCulture) + " }");
+        object allo = new object(), rex = new object();
+
+        var pass = new SizePlan(table, Incubation, Breeding, () => true)
+            .Next(new[] { Species(new object(), "Allosaurus", (allo, 1.0, 1.0)), Species(new object(), "Tyrannosaurus", (rex, 1.0, 1.0)) });
+
+        var sizes = pass.Curves.ToDictionary(c => c.Id, c => c.Curve);
+        var (_, max) = SizeMath.Extremes(sizes["Allosaurus"], new[] { big, big }, SizePlan.InEffect(null, Incubation, Breeding));
+        var (min, _) = SizeMath.Extremes(sizes["Tyrannosaurus"], new[] { 0.05, 0.05 }, SizePlan.InEffect(null, Incubation, Breeding));
+        Assert.InRange(max, 19.981f, 20f); // past what a cap of exactly 20 would allow
+        Assert.InRange(min, 0.01f, 0.010009f);
+        Assert.Empty(pass.Warnings); // no back-off
+        Assert.Equal(big, pass.Skins.Single(s => s.Skin == allo).Male, 9);
+        Assert.Equal(0.05, pass.Skins.Single(s => s.Skin == rex).Male, 9);
     }
 
     [Fact]

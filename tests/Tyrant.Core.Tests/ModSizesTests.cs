@@ -332,7 +332,7 @@ public class ModSizesTests
 
         Assert.Equal(SizeLimit.Game, SpeciesSizes.LimitOf(rex, new SizeSettings(), facts));
         Assert.Equal(new SizeLimit(0.05f, 3f), SpeciesSizes.LimitOf(rex, new SizeSettings { Adult = 2.63 }, facts)); // 0.98 x 2.63 x 1.15 = 2.96
-        Assert.Equal(new SizeLimit(0.05f, 20f), SpeciesSizes.LimitOf(rex, new SizeSettings { Adult = 20 }, facts)); // no further than 20
+        Assert.Equal(new SizeLimit(0.05f, SizeLimit.OuterMax), SpeciesSizes.LimitOf(rex, new SizeSettings { Adult = 20 }, facts)); // no further than 20 (its outermost)
         // The names Check and the card use: the species as the game shows it, and the animal it is a size of.
         Assert.Equal(("Tyrannosaurus", "Tyrannosaurus"), (rex.Name, rex.BaseName));
         var key = mod.AddSpecies(Species, "maximus", "Rex", "Tyranno Maximus", "Tyrannus", "maximus").Key(mod.Id);
@@ -371,12 +371,20 @@ public class ModSizesTests
 
         var errors = Check(ws, mod).Errors.Where(e => e.StartsWith("sizes/", StringComparison.Ordinal)).ToList();
 
-        Assert.Equal([$"sizes/{mod.SizeFileOf(key)}: The biggest Tyranno Maximus can reach {Text(max, "0.##")}× a normal Tyrannosaurus "
-            + "(adult 2.63 × Nursery slider up to 10), more than Tyrant's 20× limit; lower the adult size or the size ranges."], errors);
+        // The factors multiply out to the number: the skin's own sex size is in it, and the sex named is the one that gives it.
+        Assert.Equal("25.77", Text(max, "0.##"));
+        Assert.Equal([$"sizes/{mod.SizeFileOf(key)}: The biggest Tyranno Maximus can reach 25.77× a normal Tyrannosaurus "
+            + "(adult 2.63 × female 0.98 × Nursery slider up to 10), more than Tyrant's 20× limit; lower the adult size or the size ranges."], errors);
 
+        // Big grows to 1.5 of its model: that is a factor too. A male multiplier that makes him the bigger sex is named.
         mod.SetSizes("Big", new SizeSettings { Breeding = [0.5, 15] }); // 1.5 x 15 = 22.5
-        Assert.Contains("sizes/big.json: The biggest Big can reach 22.5× a normal Big (adult 1 × breeding up to 15), more than Tyrant's 20× limit; lower the adult size or the size ranges.",
+        Assert.Contains("sizes/big.json: The biggest Big can reach 22.5× a normal Big (grown size 1.5 × adult 1 × male 1 × breeding up to 15), more than Tyrant's 20× limit; lower the adult size or the size ranges.",
             Check(ws, mod).Errors);
+        mod.SetSizes("Rex", new SizeSettings { Adult = 10, Male = 2 }); // the male 0.95 x 2 = 1.9 beats the female 0.98
+        var rex = SpeciesSizes.Extremes(facts.Original("Rex")!, mod.Sizes("Rex")!, facts)!.Value.Max;
+        Assert.Contains($"sizes/rex.json: The biggest Tyrannosaurus can reach {Text(rex, "0.##")}× a normal Tyrannosaurus (adult 10 × male 1.9 × breeding up to 1.15), "
+            + "more than Tyrant's 20× limit; lower the adult size or the size ranges.", Check(ws, mod).Errors);
+        Assert.Equal(Text(10 * 1.9 * 1.15, "0.##"), Text(rex, "0.##"));
     }
 
     [Fact]
@@ -389,12 +397,41 @@ public class ModSizesTests
         var facts = SpeciesSizes.Facts(ws, mod)!;
         var min = SpeciesSizes.Extremes(facts.Original("Alpha")!, sizes, facts)!.Value.Min;
 
-        Assert.Contains($"sizes/alpha.json: The smallest Alpha can be {Text(min, "0.###")}× a normal Alpha (a hatchling: adult 0.05 × baby 0.1 × breeding "
-            + "down to 0.85), less than Tyrant's 0.01× limit; raise the adult size, the baby size or the size ranges.", Check(ws, mod).Errors);
+        // A hatchling's size is no plain product (the game fades the genetic size in): the inputs are listed, not multiplied.
+        Assert.Contains($"sizes/alpha.json: The smallest Alpha can be {Text(min, "0.###")}× a normal Alpha (a hatchling, with adult 0.05, baby 0.1, male 1 "
+            + "and breeding down to 0.85), less than Tyrant's 0.01× limit; raise the adult size, the baby size or the size ranges.", Check(ws, mod).Errors);
 
         // 0.05 x 0.5 at birth (0.025, with the smallest bred young 0.02) is under the game's 0.05 but within Tyrant's 0.01: no error.
         mod.SetSizes("Alpha", new SizeSettings { Adult = 0.05 });
         Assert.DoesNotContain(Check(ws, mod).Errors, e => e.StartsWith("sizes/alpha.json", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Just_inside_20_and_001_is_no_error_and_its_limit_holds_it()
+    {
+        var (game, ws, mod) = Setup();
+        using var _ = game;
+        var facts = SpeciesSizes.Facts(ws, mod)!;
+        var big = new SizeSettings { Adult = 19.99 / 1.725 }; // Big: 1.5 x adult x 1.15 = 19.99
+        double lo = 0.1, hi = 1;
+        for (var i = 0; i < 60; i++)
+        {
+            var baby = (lo + hi) / 2;
+            if (SpeciesSizes.Extremes(facts.Original("Alpha")!, new SizeSettings { Adult = 0.05, Baby = baby }, facts)!.Value.Min < 0.010005f) lo = baby; else hi = baby;
+        }
+        var alpha = new SizeSettings { Adult = 0.05, Baby = hi };
+        mod.SetSizes("Big", big);
+        mod.SetSizes("Alpha", alpha);
+
+        var max = SpeciesSizes.Extremes(facts.Original("Big")!, big, facts)!.Value.Max;
+        var min = SpeciesSizes.Extremes(facts.Original("Alpha")!, alpha, facts)!.Value.Min;
+        Assert.InRange(max, 19.981f, 20f);
+        Assert.InRange(min, 0.01f, 0.010009f);
+        Assert.DoesNotContain(Check(ws, mod).Errors, e => e.StartsWith("sizes/", StringComparison.Ordinal));
+        var bigLimit = SpeciesSizes.LimitOf(facts.Original("Big")!, big, facts)!.Value;
+        var alphaLimit = SpeciesSizes.LimitOf(facts.Original("Alpha")!, alpha, facts)!.Value;
+        Assert.True(max <= bigLimit.SafeMax, $"{bigLimit} holds {max}"); // the game does not back it off
+        Assert.True(min >= alphaLimit.SafeMin, $"{alphaLimit} holds {min}");
     }
 
     [Fact]

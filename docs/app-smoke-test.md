@@ -465,7 +465,8 @@ Needs the game. Steps marked **(game)** start the game.
        stopped at twice). Other species are their normal size.
      - Let it walk and eat for a few minutes: the log has no `has invalid scale` error spam.
      - Set the Nursery maximum to 1000%: Check now reports "The biggest Tyrannosaurus can reach …× a normal Tyrannosaurus
-       (adult 2.63 × Nursery slider up to 10), more than Tyrant's 20× limit; lower the adult size or the size ranges.",
+       (adult 2.63 × female … × Nursery slider up to 10), more than Tyrant's 20× limit; lower the adult size or the size
+       ranges." (the female's number is the T. rex skin's own female size; the factors multiply out to the first number),
        and Install refuses. Set **Adult size ×** back to 0.8 and **↺** the Nursery range, install, and load the park: the
        log has no `Animal size limits` line, the T. rex is back to 0.8 of a vanilla one, and there is still no error
        spam.

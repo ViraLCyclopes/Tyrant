@@ -121,7 +121,6 @@ namespace Tyrant.Framework.Core
             if (Female is double female) map["female"] = female;
             if (Nursery != null) map["nursery"] = Nursery.Cast<object?>().ToList();
             if (Breeding != null) map["breeding"] = Breeding.Cast<object?>().ToList();
-
             return Json.Write(map) + "\n";
         }
 
@@ -171,7 +170,6 @@ namespace Tyrant.Framework.Core
         /// <summary>Whether any species sets a breeding range (breeding is patched only then).</summary>
         public bool SetsBreeding => _targets.Values.Any(s => s.Breeding != null);
 
-
         /// <summary>The Nursery slider range of each species that sets one.</summary>
         public IReadOnlyDictionary<string, (double Min, double Max)> SliderRanges => RangesOf(s => s.Nursery);
 
@@ -181,9 +179,7 @@ namespace Tyrant.Framework.Core
         public SizeSettings? For(string? target) =>
             target != null && _targets.TryGetValue(target, out var sizes) ? sizes : null;
 
-
         public IEnumerable<SizeSettings> All => _targets.Values;
-
 
         private Dictionary<string, (double, double)> RangesOf(Func<SizeSettings, double[]?> range)
         {
@@ -210,7 +206,6 @@ namespace Tyrant.Framework.Core
                     merged.Female = sizes.Female ?? merged.Female;
                     merged.Nursery = sizes.Nursery ?? merged.Nursery;
                     merged.Breeding = sizes.Breeding ?? merged.Breeding;
-
                 }
                 messages.AddRange(problems.Select(p => $"{mod.Manifest.Id}: {p}"));
             }

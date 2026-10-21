@@ -480,7 +480,9 @@ multipliers of every skin and its genetic ranges (the random eggs', its `nursery
   0.5, and the min is the smallest rounded down to the next 0.01.
 - Each keeps 0.1% to spare. That is the margin the framework's scale-back keeps inside a limit, so a largest of 2.999
   gets 3.5 (the game would back anything past 2.997 off under a limit of 3).
-- Tyrant's own bounds are 0.01 to 20: no species goes past them.
+- Tyrant's own bounds are 0.01 to 20: no species goes past them. Past the last step inside them, the limit is the
+  outermost one, 0.00999 to 20.02 (0.01 / 1.001 and 20 / 0.999). That keeps a size of exactly 20× (or 0.01×) inside the
+  band the scale-back keeps to, so the game never backs off a species within 0.01 to 20.
 
 In game, the framework changes the game's one check (`AnimalNative.CurrentScale`) to read each animal's species' limit,
 but only once a species needs more than 0.05 to 2. While every species fits the game's limit, nothing is changed. If a
@@ -494,11 +496,14 @@ with the smallest genetic size. So a small adult with a small baby can go under 
 
 **Past Tyrant's bounds.** Tyrant's Check reports a species whose sizes would pass 20× or go under 0.01× as an error. It
 names the species as the game shows it, and the animal its sizes are relative to (a custom species' template), for
-example: "The biggest Tyranno Maximus can reach 26.3× a normal Tyrannosaurus (adult 2.63 × Nursery slider up to 10),
-more than Tyrant's 20× limit; lower the adult size or the size ranges." The smallest case reads the same way: "The
-smallest … can be …× a normal … (a hatchling: adult … × baby … × breeding down to …), less than Tyrant's 0.01× limit;
-raise the adult size, the baby size or the size ranges." In game, the framework scales the adult back until the
-sizes fit 20× (or 0.01×) and logs one warning.
+example: "The biggest Tyranno Maximus can reach 25.77× a normal Tyrannosaurus (adult 2.63 × female 0.98 × Nursery slider
+up to 10), more than Tyrant's 20× limit; lower the adult size or the size ranges." The number is the one Check counts,
+and for a grown adult the factors multiply out to it: the sex named is the one that gives it, with the skin's own sex
+size (0.98 here) and the mod's multiplier in it, and a species whose model grows past 1 adds its "grown size". The
+smallest case lists its inputs instead, since a hatchling's size is no plain product (the game fades the genetic size
+in): "The smallest … can be …× a normal … (a hatchling, with adult …, baby …, male … and breeding down to …), less than
+Tyrant's 0.01× limit; raise the adult size, the baby size or the size ranges." Within 0.01× to 20× the game never
+backs a species off. Past them, the framework scales the adult back until the sizes fit and logs one warning.
 
 **Past 2×.** A size past the game's 2 (within 20) is allowed, and Check warns about it for a species whose sizes or
 ranges can pass 2: "{species} can grow past the game's normal 2× limit; the size class, camera framing, foot

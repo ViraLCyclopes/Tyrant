@@ -29,6 +29,8 @@
     { key: 'breeding', label: 'Breeding size range' },
   ];
   const RANGE_MAX = 20;
+  /** The smallest end a range field takes (0.5%, its step): its field's min and its check agree. */
+  const RANGE_MIN = 0.005;
   // The number fields take what the files take (up to 20×; Check says when a species passes Tyrant's 20×). The sliders reach
   // 5×, or the saved value when it is higher, so their usual range stays easy to drag.
   const MAX = 20;
@@ -93,15 +95,15 @@
   const rangeShown = (key: RangeKey) => own[key] ?? gameOf(key);
   const pairText = (v: number[]) => `${percent(v[0])}% – ${percent(v[1])}%`;
 
-  /** One end of a range from its percentage field (saved as a multiplier); outside 0 < min <= max <= 2000% it is not saved. */
+  /** One end of a range from its percentage field (saved as a multiplier); outside 0.5% <= min <= max <= 2000% it is not saved. */
   function changeEnd(row: RangeRow, end: 0 | 1, text: string) {
     const now = rangeShown(row.key);
     const n = Number(text) / 100;
-    const bad = end === 0 ? n <= 0 || n > now[1] : n < now[0] || n > RANGE_MAX;
+    const bad = end === 0 ? n < RANGE_MIN || n > now[1] : n < now[0] || n > RANGE_MAX;
     if (text.trim() === '' || !Number.isFinite(n) || bad) {
       problem =
         end === 0
-          ? `${row.label}: the minimum must be above 0% and at most the maximum (${percent(now[1])}%).`
+          ? `${row.label}: the minimum must be from ${percent(RANGE_MIN)}% to the maximum (${percent(now[1])}%).`
           : `${row.label}: the maximum must be from the minimum (${percent(now[0])}%) to ${RANGE_MAX * 100}%.`;
       return;
     }
@@ -203,7 +205,7 @@
       {@const shownRange = rangeShown(row.key)}
       <div class="range" class:changed={own[row.key] !== null} role="group" aria-label={row.label}>
         <span class="name">{row.label}</span>
-        <label class="end">Minimum <input type="number" aria-label="{row.label} minimum" min="0" max={percent(shownRange[1])} step="0.5"
+        <label class="end">Minimum <input type="number" aria-label="{row.label} minimum" min={percent(RANGE_MIN)} max={percent(shownRange[1])} step="0.5"
           value={percent(shownRange[0])} onchange={(e) => changeEnd(row, 0, e.currentTarget.value)} />%</label>
         <label class="end">Maximum <input type="number" aria-label="{row.label} maximum" min={percent(shownRange[0])} max={RANGE_MAX * 100} step="0.5"
           value={percent(shownRange[1])} onchange={(e) => changeEnd(row, 1, e.currentTarget.value)} />%</label>
@@ -217,7 +219,6 @@
         <p class="hint">The game's own Customize size slider in the Nursery covers this range for this species, as a percentage of its size. Random eggs keep the game's range.</p>
       {/if}
     {/each}
-
     {#if problem}<p class="warn" role="alert">{problem}</p>{/if}
     {#each issues as m (m)}<p class="warn">{m}</p>{/each}
   {/if}

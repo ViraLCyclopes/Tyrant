@@ -19,8 +19,7 @@ SCALE_BASE = "tyrant_scale_base"  # armature: the object's own scale, without th
 SCALE_SHOWN = "tyrant_scale_shown"  # the size last shown on top of it
 EDITS = "tyrant_size_edits"  # the Size panel's changes not sent yet (JSON: adult, baby, male, female)
 SIZE_KEYS = ("adult", "baby", "male", "female")
-FINAL_MIN, FINAL_MAX = 0.05, 2.0  # the game's own cap on the final scale; a species' automatic size limit widens it (sizeLimit)
-SHOWN_MIN, SHOWN_MAX = 0.01, 20.0  # the widest a size limit can be: the view shows any size within these, never the species' cap
+SHOWN_MIN, SHOWN_MAX = 0.01, 20.0  # Tyrant's own bounds (SizeLimit.PastBounds): the view shows any size within these; past them the game caps it
 # The game's genetic size ranges when the project has none (SpeciesSizes.DefaultIncubation and DefaultBreeding).
 GAME_INCUBATION, GAME_BREEDING = (0.925, 1.075), (0.85, 1.15)
 
@@ -209,15 +208,6 @@ def sex_sizes(armature, data):
         return tuple(float((sexes.get(sex) or {}).get("size", 1.0)) for sex in ("male", "female"))
     own = data["sizes"]
     return tuple(own[f"{sex}Original"] * (sizes["adult"] or 1.0) * (sizes[sex] or 1.0) for sex in ("male", "female"))
-
-
-def size_limit(data):
-    """(min, max) the game clamps the final scale to: the project's size limit (the destination species' automatic one, which
-    its sizes need, as Tyrant wrote it), else the game's own. The view does not keep to it."""
-    limit = (data or {}).get("sizeLimit")
-    if isinstance(limit, (list, tuple)) and len(limit) == 2:
-        return float(limit[0]), float(limit[1])
-    return FINAL_MIN, FINAL_MAX
 
 
 def _shown_curve(armature, data):

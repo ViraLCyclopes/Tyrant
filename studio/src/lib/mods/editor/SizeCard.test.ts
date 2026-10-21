@@ -227,9 +227,13 @@ describe('SizeCard', () => {
   it('does not send a range outside its bounds', async () => {
     const { rpc } = await setup();
     const from = screen.getByRole('spinbutton', { name: 'Breeding size range minimum' });
+    expect(from).toHaveAttribute('min', '0.5'); // the smallest it takes, as its check says
     await fireEvent.input(from, { target: { value: '300' } }); // past the maximum (115%)
     await fireEvent.change(from);
-    expect(screen.getByRole('alert')).toHaveTextContent('Breeding size range: the minimum must be above 0% and at most the maximum (115%).');
+    expect(screen.getByRole('alert')).toHaveTextContent('Breeding size range: the minimum must be from 0.5% to the maximum (115%).');
+    await fireEvent.input(from, { target: { value: '0' } });
+    await fireEvent.change(from);
+    expect(screen.getByRole('alert')).toHaveTextContent('Breeding size range: the minimum must be from 0.5% to the maximum (115%).');
     const to = screen.getByRole('spinbutton', { name: 'Nursery size slider range maximum' });
     await fireEvent.input(to, { target: { value: '2100' } });
     await fireEvent.change(to);

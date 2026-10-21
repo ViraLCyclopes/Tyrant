@@ -125,41 +125,57 @@ public static partial class SpeciesSizes
 
     /// <summary>
     /// Check's error when the sizes take the species past Tyrant's own bounds (over 20 or under 0.01, <see cref="SizeLimit.PastBounds"/>):
-    /// how big (or small) it gets, relative to a normal animal of its base species, and what makes it so; null within them.
+    /// how big (or small) it gets, relative to a normal animal of its base species, and what makes it so; null within them. The
+    /// extreme is found as <see cref="Extremes"/> finds it (the same samples and float maths), so the number is Check's own, and the
+    /// sex named is the one that gives it (the skin's own sex size times the mod's multiplier). A grown adult is a plain product of
+    /// the factors named; anything younger is not (the game fades the genetic size in), so its inputs are listed instead.
     /// </summary>
     public static string? PastBoundsProblem(OriginalSize original, SizeSettings sizes, SizeFacts facts)
     {
-        if (Extremes(original, sizes, facts) is not { } e || !SizeLimit.PastBounds(e.Min, e.Max)) return null;
-        // Where the genetic size comes from (the first site wins a tie: an unset Nursery slider range is the random eggs').
-        var sites = new[] { (Site: SizeSite.RandomEgg, Label: "random eggs"), (Site: SizeSite.NurserySlider, Label: "Nursery slider"), (Site: SizeSite.Breeding, Label: "breeding") }
-            .Select(s => (Range: SizePlan.RangeFor(s.Site, sizes, facts.Incubation, facts.Breeding), s.Label)).ToList();
-        var adult = $"adult {Text(sizes.Adult ?? 1)}";
-        if (e.Max > SizeLimit.HighestMax)
+        if (original.Curve.Length == 0) return null;
+        var adult = sizes.Adult ?? 1;
+        var curve = SizeMath.Rebuild(original.Curve, adult, sizes.Baby);
+        var skins = original.Skins.Count == 0 ? [(1.0, 1.0)] : original.Skins;
+        var sexes = skins.SelectMany(k => new[] { (Name: "male", Size: k.Male * (sizes.Male ?? 1), Final: k.Male * adult * (sizes.Male ?? 1)),
+            (Name: "female", Size: k.Female * (sizes.Female ?? 1), Final: k.Female * adult * (sizes.Female ?? 1)) }).ToList();
+        var genetics = new[] { (Site: SizeSite.RandomEgg, Label: "random eggs"), (Site: SizeSite.NurserySlider, Label: "Nursery slider"), (Site: SizeSite.Breeding, Label: "breeding") }
+            .Select(x => (Range: SizePlan.RangeFor(x.Site, sizes, facts.Incubation, facts.Breeding), x.Label))
+            .SelectMany(x => new[] { (x.Label, G: x.Range.Min), (x.Label, G: x.Range.Max) }).ToList();
+        // The same samples as SizeMath.Extremes; the first of equal sizes is kept.
+        (float Size, int Step, int Sex, int Gene) low = (float.MaxValue, 0, 0, 0), high = (float.MinValue, 0, 0, 0);
+        for (var i = 0; i < 101; i++)
         {
-            var top = sites.OrderByDescending(s => s.Range.Max).First();
-            var sex = (sizes.Male, sizes.Female) switch
-            {
-                (double m, double f) => m >= f ? $" × male {Text(m)}" : $" × female {Text(f)}",
-                (double m, null) => $" × male {Text(m)}",
-                (null, double f) => $" × female {Text(f)}",
-                _ => "",
-            };
-            return $"The biggest {original.Name} can reach {e.Max.ToString("0.##", CultureInfo.InvariantCulture)}× a normal {original.BaseName} "
-                + $"({adult}{sex} × {top.Label} up to {Text(top.Range.Max)}), more than Tyrant's {Text(SizeLimit.HighestMax)}× limit; lower the adult size or the size ranges.";
+            var m = i / 100f;
+            var at = SizeMath.Evaluate(curve, m);
+            var fade = SizeMath.Fade(m);
+            for (var x = 0; x < sexes.Count; x++)
+                for (var y = 0; y < genetics.Count; y++)
+                {
+                    var size = (float)(at * (1 + (sexes[x].Final * genetics[y].G - 1) * fade));
+                    if (size < low.Size) low = (size, i, x, y);
+                    if (size > high.Size) high = (size, i, x, y);
+                }
         }
-        var bottom = sites.OrderBy(s => s.Range.Min).First();
-        var small = (sizes.Male, sizes.Female) switch
+        if (!SizeLimit.PastBounds(low.Size, high.Size)) return null;
+        if (high.Size > SizeLimit.HighestMax)
         {
-            (double m, double f) => m <= f ? $" × male {Text(m)}" : $" × female {Text(f)}",
-            (double m, null) => $" × male {Text(m)}",
-            (null, double f) => $" × female {Text(f)}",
-            _ => "",
-        };
-        var c1 = SizeMath.Evaluate(original.Curve, 1f);
-        var baby = sizes.Baby ?? (c1 == 0f ? 1 : SizeMath.Evaluate(original.Curve, 0f) / (double)c1);
-        return $"The smallest {original.Name} can be {e.Min.ToString("0.###", CultureInfo.InvariantCulture)}× a normal {original.BaseName} "
-            + $"(a hatchling: {adult}{small} × baby {Text(baby)} × {bottom.Label} down to {Text(bottom.Range.Min)}), less than Tyrant's {Text(SizeLimit.LowestMin)}× limit; "
-            + "raise the adult size, the baby size or the size ranges.";
+            var (sex, gene) = (sexes[high.Sex], genetics[high.Gene]);
+            var grown = SizeMath.Evaluate(curve, 1f);
+            var why = high.Step == 100
+                ? (Math.Abs(grown - 1) > 1e-4 ? $"grown size {Text(grown)} × " : "") + $"adult {Text(adult)} × {sex.Name} {Text(sex.Size)} × {gene.Label} up to {Text(gene.G)}"
+                : $"at {high.Step}% grown, with adult {Text(adult)}, {sex.Name} {Text(sex.Size)} and {gene.Label} up to {Text(gene.G)}";
+            return $"The biggest {original.Name} can reach {high.Size.ToString("0.##", CultureInfo.InvariantCulture)}× a normal {original.BaseName} ({why}), "
+                + $"more than Tyrant's {Text(SizeLimit.HighestMax)}× limit; lower the adult size or the size ranges.";
+        }
+        {
+            var (sex, gene) = (sexes[low.Sex], genetics[low.Gene]);
+            var c1 = SizeMath.Evaluate(original.Curve, 1f);
+            var baby = sizes.Baby ?? (c1 == 0f ? 1 : SizeMath.Evaluate(original.Curve, 0f) / (double)c1);
+            var when = low.Step == 0 ? "a hatchling" : $"at {low.Step}% grown";
+            return $"The smallest {original.Name} can be {low.Size.ToString("0.###", CultureInfo.InvariantCulture)}× a normal {original.BaseName} "
+                + $"({when}, with adult {Text(adult)}, baby {Text(baby)}, {sex.Name} {Text(sex.Size)} and {gene.Label} down to {Text(gene.G)}), "
+                + $"less than Tyrant's {Text(SizeLimit.LowestMin)}× limit; raise the adult size, the baby size or the size ranges.";
+        }
     }
 
     private static string Text(double value) => value.ToString("0.###", CultureInfo.InvariantCulture);
