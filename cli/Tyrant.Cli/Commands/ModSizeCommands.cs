@@ -17,7 +17,7 @@ public sealed class ModSizeCommand : Command<ModSizeCommand.Settings>
         public string Target { get; set; } = "";
 
         [CommandOption("--adult <X>")]
-        [Description("Multiplies the adult size (0.05 to 5).")]
+        [Description("Multiplies the adult size (0.05 to 20; past the size limit it is lowered in game).")]
         public double? Adult { get; set; }
 
         [CommandOption("--baby <X>")]
@@ -25,11 +25,11 @@ public sealed class ModSizeCommand : Command<ModSizeCommand.Settings>
         public double? Baby { get; set; }
 
         [CommandOption("--male <X>")]
-        [Description("Multiplies males' size (0.1 to 5).")]
+        [Description("Multiplies males' size (0.1 to 20).")]
         public double? Male { get; set; }
 
         [CommandOption("--female <X>")]
-        [Description("Multiplies females' size (0.1 to 5).")]
+        [Description("Multiplies females' size (0.1 to 20).")]
         public double? Female { get; set; }
 
         [CommandOption("--clear")]
@@ -92,15 +92,19 @@ public sealed class ModSizeRangesCommand : Command<ModSizeRangesCommand.Settings
     public sealed class Settings : ModSettings
     {
         [CommandOption("--nursery <RANGE>")]
-        [Description("The range of the Nursery size slider's genetic size, e.g. 0.9,1.1 (0 < min <= max <= 10).")]
+        [Description("The range of the Nursery size slider's genetic size, e.g. 0.9,1.1 (0 < min <= max <= 20).")]
         public string? Nursery { get; set; }
 
         [CommandOption("--breeding <RANGE>")]
         [Description("The range of the genetic size of bred young, e.g. 0.85,1.15.")]
         public string? Breeding { get; set; }
 
+        [CommandOption("--limit <RANGE>")]
+        [Description("The size limit on an animal's final scale, e.g. 0.05,20 (0.01 <= min <= 0.05, 2 <= max <= 20; the game's is 0.05,2). Among enabled mods the widest wins.")]
+        public string? Limit { get; set; }
+
         [CommandOption("--clear")]
-        [Description("Remove this mod's size ranges (before applying any range given with it).")]
+        [Description("Remove this mod's size ranges and size limit (before applying any range given with it).")]
         public bool Clear { get; set; }
     }
 
@@ -110,14 +114,17 @@ public sealed class ModSizeRangesCommand : Command<ModSizeRangesCommand.Settings
         var mod = ModProject.Open(ws, settings.Id);
         var nursery = Range("--nursery", settings.Nursery);
         var breeding = Range("--breeding", settings.Breeding);
-        if (settings.Clear || nursery is not null || breeding is not null)
+        var limit = Range("--limit", settings.Limit);
+        if (settings.Clear || nursery is not null || breeding is not null || limit is not null)
         {
             var old = settings.Clear ? null : mod.Manifest.SizeRanges;
-            mod.SetSizeRanges(new SizeRanges { Nursery = nursery ?? old?.Nursery, Breeding = breeding ?? old?.Breeding });
+            mod.SetSizeRanges(new SizeRanges { Nursery = nursery ?? old?.Nursery, Breeding = breeding ?? old?.Breeding, Limit = limit ?? old?.Limit });
         }
         var ranges = mod.Manifest.SizeRanges;
-        static string Show(double[]? r) => r is null ? "the game's" : $"{r[0].ToString("0.###", CultureInfo.InvariantCulture)} to {r[1].ToString("0.###", CultureInfo.InvariantCulture)}";
-        Console.WriteLine($"Size ranges of '{settings.Id}': nursery {Show(ranges?.Nursery)}, breeding {Show(ranges?.Breeding)}");
+        static string Text(double[] r) => $"{r[0].ToString("0.###", CultureInfo.InvariantCulture)} to {r[1].ToString("0.###", CultureInfo.InvariantCulture)}";
+        static string Show(double[]? r) => r is null ? "the game's" : Text(r);
+        Console.WriteLine($"Size ranges of '{settings.Id}': nursery {Show(ranges?.Nursery)}, breeding {Show(ranges?.Breeding)}, "
+            + $"limit {(ranges?.Limit is { } l ? Text(l) : $"the game's ({SizeLimit.Game})")}");
         return ExitCodes.Ok;
     }
 
