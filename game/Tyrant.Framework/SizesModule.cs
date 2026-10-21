@@ -21,6 +21,10 @@ namespace Tyrant.Framework
     /// - Breeding: written into GlobalAnimalParameters.breedingGeneticSizeMinMax (only EmbryoGroup reads it).
     /// - Nursery: a transpiler swaps NurseryMenuV2's slider reads of incubationGeneticSizeMinMax for <see cref="SliderRange"/>.
     ///   The shared field is never written, so uncustomised eggs (VirtualAnimal.GenerateGeneticSize) keep the game's range.
+    /// - Size limit: when the widest limit among the mods is not the game's 0.05 to 2, a transpiler swaps the cap constants of
+    ///   AnimalNative.CurrentScale's getter for <see cref="ScaleLimit"/>'s fields, all or none (<see cref="ScaleCap"/>). The game's
+    ///   error log stays: with the constants swapped it fires only outside Tyrant's limit and names it, so a scale nothing should
+    ///   reach (a broken curve, another mod) is still reported, while sizes Tyrant backed off never log.
     /// With no sizes and no ranges nothing is patched.
     /// </summary>
     internal static class SizesModule
@@ -31,12 +35,15 @@ namespace Tyrant.Framework
         private static bool _off;
         private static Vector2 _slider;
         private static FieldInfo? _incubation;
+        private static SizeLimit _limit = SizeLimit.Game;
+        private static bool _limitSwapped;
 
         public static void Start(IReadOnlyList<LoadedMod> mods, HarmonyLib.Harmony harmony)
         {
             _table = SizeTable.Build(mods, out var messages);
             foreach (var message in messages) FrameworkMod.Log.Warning(message);
             if (!_table.HasAny) return;
+            if (!_table.Limit.IsGame) PatchLimit(harmony, _table.Limit);
             if (_table.Ranges.Nursery is { } nursery) PatchSlider(harmony, nursery);
             if (!_table.All.Any(s => !s.IsEmpty) && _table.Ranges.Breeding == null) return;
             var native = AccessTools.Method(AccessTools.TypeByName("PrehistoricKingdom.AnimalsV2.AI.AnimalsGlobal"), "InitializeNativeData");
@@ -109,7 +116,7 @@ namespace Tyrant.Framework
                     breedingField.SetValue(globals, new Vector2((float)min, (float)max));
                     FrameworkMod.Log.Msg($"Breeding size range: {Number(min)} to {Number(max)} (the game's is {Number(breeding.Min)} to {Number(breeding.Max)}).");
                 }
-                return new SizePlan(_table, SizePlan.InEffect(_table.Ranges, incubation, breeding));
+                return new SizePlan(_table, SizePlan.InEffect(_table.Ranges, incubation, breeding), _limit);
             }
             catch (Exception ex)
             {
@@ -197,6 +204,50 @@ namespace Tyrant.Framework
         /// <summary>The Customize size slider's range (sizeRanges.nursery).</summary>
         internal static Vector2 SliderRange() => _slider;
 
+        // ---- Size limit: the game's cap on the final scale ----
+
+        private static void PatchLimit(HarmonyLib.Harmony harmony, SizeLimit limit)
+        {
+            try
+            {
+                var native = AccessTools.TypeByName(ScaleCap.Type) ?? throw new TypeLoadException(ScaleCap.Type);
+                var getter = AccessTools.PropertyGetter(native, ScaleCap.Property) ?? throw new MissingMethodException("AnimalNative", "get_" + ScaleCap.Property);
+                // All or none: a getter that compared with one limit and returned the other would size animals wrongly.
+                if (ScaleCap.Find(Code(PatchProcessor.GetOriginalInstructions(getter))) == null)
+                    throw new InvalidOperationException("AnimalNative.CurrentScale no longer caps the scale as Tyrant expects (game updated?)");
+                ScaleLimit.Min = limit.Min;
+                ScaleLimit.Max = limit.Max;
+                harmony.Patch(getter, transpiler: new HarmonyMethod(typeof(SizesModule), nameof(LimitTranspiler)));
+                // Harmony transpiles while patching: the swap is known now (another mod's transpiler could have changed the code first).
+                if (!_limitSwapped)
+                {
+                    harmony.Unpatch(getter, HarmonyPatchType.Transpiler, harmony.Id);
+                    throw new InvalidOperationException("AnimalNative.CurrentScale was changed by another patch; its cap was left alone");
+                }
+                _limit = limit;
+                FrameworkMod.Log.Msg($"Animal size limit: {limit} (the game's is {SizeLimit.Game}).");
+            }
+            catch (Exception ex)
+            {
+                FrameworkMod.Log.Warning($"Animals keep the game's size limit ({SizeLimit.Game}): " + ex.GetBaseException().Message);
+            }
+        }
+
+        /// <summary>Each ldc.r4 0.05 and ldc.r4 2 of the getter becomes a read of ScaleLimit.Min or Max (the instruction keeps its labels).</summary>
+        private static IEnumerable<CodeInstruction> LimitTranspiler(IEnumerable<CodeInstruction> instructions)
+        {
+            var code = instructions.ToList();
+            if (!(ScaleCap.Find(Code(code)) is { } found)) return code; // PatchLimit then unpatches and warns
+            var minField = AccessTools.Field(typeof(ScaleLimit), nameof(ScaleLimit.Min));
+            var maxField = AccessTools.Field(typeof(ScaleLimit), nameof(ScaleLimit.Max));
+            foreach (var i in found.Min) (code[i].opcode, code[i].operand) = (OpCodes.Ldsfld, minField);
+            foreach (var i in found.Max) (code[i].opcode, code[i].operand) = (OpCodes.Ldsfld, maxField);
+            _limitSwapped = true;
+            return code;
+        }
+
+        private static List<(OpCode, object?)> Code(IEnumerable<CodeInstruction> code) => code.Select(i => (i.opcode, (object?)i.operand)).ToList();
+
         // ---- Helpers ----
 
         private static FieldInfo IncubationField(Type globals) =>
@@ -210,5 +261,14 @@ namespace Tyrant.Framework
 
         private static void Set(object target, string name, object value) =>
             (AccessTools.Field(target.GetType(), name) ?? throw new MissingFieldException(target.GetType().FullName, name)).SetValue(target, value);
+    }
+
+    /// <summary>
+    /// The size limit the patched AnimalNative.CurrentScale reads. Its own class with no static initialiser, so the read stays a plain
+    /// static field load on that hot path (no type-initialisation check).
+    /// </summary>
+    internal static class ScaleLimit
+    {
+        internal static float Min, Max;
     }
 }
