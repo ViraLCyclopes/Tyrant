@@ -368,7 +368,7 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
             if (sizes.Adult is double adult && (adult >= 1.5 || adult <= 0.65))
                 warnings.Add($"sizes/{file}: {sizes.Target}'s adult size {text(adult)} is far from the original: {SizeClassWarning}.");
             if (facts?.Original(sizes.Target) is not { } original) continue;
-            if (SizeExtremes(original, sizes, facts, mod.Manifest.SizeRanges) is not { } extremes) continue;
+            if (SpeciesSizes.Extremes(original, sizes, facts, mod.Manifest.SizeRanges) is not { } extremes) continue;
             if (!limit.Contains(extremes.Min, extremes.Max))
                 errors.Add($"sizes/{file}: {sizes.Target} would be scaled from {text(extremes.Min)} to {text(extremes.Max)} ({allows}); lower the adult or sex sizes.");
             else if (PastNormal(extremes))
@@ -389,8 +389,8 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
         {
             if (facts.Original(vanilla.SpeciesId) is not { } original) continue;
             var none = new SizeSettings();
-            if (SizeExtremes(original, none, facts, null) is not { } before || !limit.Contains(before.Min, before.Max)) continue; // already clamped without this mod
-            if (SizeExtremes(original, none, facts, ranges) is not { } after) continue;
+            if (SpeciesSizes.Extremes(original, none, facts, null) is not { } before || !limit.Contains(before.Min, before.Max)) continue; // already clamped without this mod
+            if (SpeciesSizes.Extremes(original, none, facts, ranges) is not { } after) continue;
             if (!limit.Contains(after.Min, after.Max)) past.Add(vanilla.SpeciesId);
             else if (PastNormal(after) && !PastNormal(before)) pastNormal.Add(vanilla.SpeciesId);
         }
@@ -399,19 +399,6 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
             warnings.Add($"The mod's genetic size ranges push {Names(past)} past {(limit.IsGame ? "the game's" : "the mod's")} {limit} size limits; the game clamps them.");
         if (pastNormal.Count > 0)
             warnings.Add($"{Names(pastNormal)} {Past2xWarning}");
-    }
-
-    /// <summary>The smallest and largest scale a species reaches with these sizes; null when its data has no growth curve.</summary>
-    private static (float Min, float Max)? SizeExtremes(OriginalSize original, SizeSettings sizes, SizeFacts facts, SizeRanges? modRanges)
-    {
-        if (original.Curve.Length == 0) return null;
-        var curve = SizeMath.Rebuild(original.Curve, sizes.Adult ?? 1, sizes.Baby);
-        var skins = original.Skins.Count == 0 ? [(1.0, 1.0)] : original.Skins;
-        var sexes = skins.SelectMany(k => { var (male, female) = SizeMath.Sex(k.Male, k.Female, sizes); return new[] { male, female }; });
-        var ranges = new List<(double Min, double Max)> { facts.Incubation };
-        if (modRanges?.Nursery is { } nursery) ranges.Add((nursery[0], nursery[1]));
-        ranges.Add(modRanges?.Breeding is { } breeding ? (breeding[0], breeding[1]) : facts.Breeding);
-        return SizeMath.Extremes(curve, sexes, ranges);
     }
 
     private List<string> MissingCutouts(ModProject mod, AssetIndex index, IReadOnlyList<SpeciesSkins>? species, List<string> warnings)

@@ -20,6 +20,7 @@ SCALE_SHOWN = "tyrant_scale_shown"  # the size last shown on top of it
 EDITS = "tyrant_size_edits"  # the Size panel's changes not sent yet (JSON: adult, baby, male, female)
 SIZE_KEYS = ("adult", "baby", "male", "female")
 FINAL_MIN, FINAL_MAX = 0.05, 2.0  # the game clamps the final scale to this; a mod's size limit widens it (sizeLimit)
+SHOWN_MIN, SHOWN_MAX = 0.01, 20.0  # the widest a size limit can be: the view shows any size within these, never the mod's cap
 
 
 def sample(table, t):
@@ -180,11 +181,11 @@ def sizes_of(armature, data):
     return shown
 
 
-def changed_sizes(armature, data):
+def changed_sizes(armature, data, editable=None):
     """What Send writes to the species: only the keys edited here since the last Open or Send ({key: value}), which Tyrant
     merges onto the mod's current sizes (the app may have changed the others meanwhile). None when this project may not
-    change them or nothing changed."""
-    if not data or not data.get("sizesEditable"):
+    change them (editable: whether the destination chosen now may, else the project's) or nothing changed."""
+    if not data or not (data.get("sizesEditable") if editable is None else editable):
         return None
     sizes = data.get("sizes") or {}
     changed = {k: v for k, v in size_edits(armature).items() if sizes.get(k) is None or abs(sizes[k] - v) >= 1e-9}
@@ -209,16 +210,16 @@ def sex_sizes(armature, data):
 
 
 def size_limit(data):
-    """(min, max) the game clamps the final scale to: the project's size limit (the destination mod's), else the game's own."""
+    """(min, max) the game clamps the final scale to: the project's size limit (the destination mod's), else the game's own.
+    The view does not keep to it; the Size box notes when the game would cap the animal there."""
     limit = (data or {}).get("sizeLimit")
     if isinstance(limit, (list, tuple)) and len(limit) == 2:
         return float(limit[0]), float(limit[1])
     return FINAL_MIN, FINAL_MAX
 
 
-def size_factor(armature, data, maturity):
-    """The animal's size at this maturity (the Growth slider's value) as the game scales it, S(m, s, 1) for the sex shown;
-    None without a scale curve."""
+def _shown_curve(armature, data):
+    """The scale curve of the sizes shown (rebuilt for the panel's changes as Tyrant does for the game); None without one."""
     growth = (data or {}).get("growth") or {}
     curve = growth.get("scale")
     if not curve:
@@ -227,11 +228,46 @@ def size_factor(armature, data, maturity):
     sizes = sizes_of(armature, data)
     if original and sizes and size_edits(armature) and data.get("sizesEditable"):
         adult, baby = sizes["adult"] or 1.0, sizes["baby"]
-        curve = original if adult == 1.0 and baby is None else rebuild(original, adult, baby)  # as Tyrant does for the game
+        curve = original if adult == 1.0 and baby is None else rebuild(original, adult, baby)
+    return curve
+
+
+def _scale(curve, s, maturity):
+    """S(m, s, 1): the game's final scale at this maturity for sex size s, before its limit."""
+    return evaluate(curve, maturity) * (1 + (s - 1) * fade(maturity))
+
+
+def size_factor(armature, data, maturity):
+    """The animal's size at this maturity (the Growth slider's value) as the game scales it, S(m, s, 1) for the sex shown;
+    None without a scale curve. It shows the size set, within Tyrant's own bounds only: the mod's size limit would cap it in
+    game, which the Size box's note says (limit_note)."""
+    curve = _shown_curve(armature, data)
+    if curve is None:
+        return None
     male, female = sex_sizes(armature, data)
     s = female if sex_of(armature) == "female" else male
-    low, high = size_limit(data)
-    return min(max(evaluate(curve, maturity) * (1 + (s - 1) * fade(maturity)), low), high)
+    return min(max(_scale(curve, s, maturity), SHOWN_MIN), SHOWN_MAX)
+
+
+def extremes(armature, data):
+    """(min, max): the smallest and largest scale the animal shown reaches over maturity 0–1 (101 samples) for both sexes,
+    as Check counts them (SizeMath.Extremes) with the genetic size at 1; None without a scale curve."""
+    curve = _shown_curve(armature, data)
+    if curve is None:
+        return None
+    scales = [_scale(curve, s, i / 100) for i in range(101) for s in sex_sizes(armature, data)]
+    return min(scales), max(scales)
+
+
+def limit_note(armature, data):
+    """The Size box's note when the game would cap the animal shown at the project's size limit; None within it."""
+    found = extremes(armature, data)
+    if found is None:
+        return None
+    high = size_limit(data)[1]
+    if found[1] <= high:
+        return None
+    return f"In game this is capped at {high:g}×. Send to Tyrant will raise the mod's Size limit to fit."
 
 
 def own_scale(armature):

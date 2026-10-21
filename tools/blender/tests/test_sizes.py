@@ -57,6 +57,24 @@ def glb_nodes(path):
     return json.loads(data[20:20 + struct.unpack_from("<I", data, 12)[0]])["nodes"]
 
 
+def drawn_sizes(arm, data):
+    """What the Size box draws, as (call, args, kwargs)."""
+    drawn = []
+
+    class Layout:
+        def __getattr__(self, name):
+            def call(*args, **kwargs):
+                drawn.append((name, args, kwargs))
+                return self
+            return call
+
+    def say(layout, context, text, icon="NONE"):
+        drawn.append(("say", (text,), {}))
+
+    panel.draw_sizes(Layout(), bpy.context, arm, data, say)
+    return drawn
+
+
 class SizeTests(unittest.TestCase):
     def setUp(self):
         bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -94,24 +112,64 @@ class SizeTests(unittest.TestCase):
         curve = 0.164 + (1 - 0.164) * 0.25
         self.assertScale(arm, curve * (1 + 0.08 * (0.2 + 0.8 * (1 - 0.75 ** 2))))
 
-    def test_the_size_shown_keeps_to_the_projects_size_limit(self):
+    def test_size_display_not_capped_by_project_limit(self):
+        # The view shows the size you set; the note says where the game would cap it (Send raises the mod's limit to fit).
         path = allosaurus(sizes={"adult": 4.0})  # an adult male of 1.08 x 4
+        data = project.load(path)
+        data["sizeLimit"] = [0.05, 2.0]
+        project.save(path, data)
         arm = importer.import_project(path)
         arm.tyrant_growth = 1.0
-        self.assertScale(arm, 2.0)  # no limit in the project: the game's 0.05 to 2
-
-        data = project.load(path)
-        data["sizeLimit"] = [0.05, 20.0]
-        project.save(path, data)
-        growth.forget(path)
-        arm.tyrant_growth = 1.0
+        self.assertGreater(arm.scale.x, 2.0)
         self.assertScale(arm, 1.08 * 4)
 
-        data["sizeLimit"] = [0.05, 3.0]
+        arm.tyrant_size_adult = 20.0
+        arm.tyrant_size_male = 20.0  # 1.08 x 20 x 20: only Tyrant's own bound of 20 holds it
+        self.assertScale(arm, 20.0)
+
+    def test_note_when_past_the_limit(self):
+        path = allosaurus(sizes={"adult": 4.0})
+        data = project.load(path)
+        data["sizeLimit"] = [0.05, 2.0]
+        project.save(path, data)
+        arm = importer.import_project(path)
+        note = "In game this is capped at 2×. Send to Tyrant will raise the mod's Size limit to fit."
+        self.assertEqual(growth.limit_note(arm, data), note)
+        self.assertIn(("say", (note,), {}), drawn_sizes(arm, data))
+
+        data["sizeLimit"] = [0.05, 3.5]
+        self.assertEqual(growth.limit_note(arm, data), "In game this is capped at 3.5×. Send to Tyrant will raise the mod's Size limit to fit.")
+
+        data["sizeLimit"] = [0.05, 20.0]  # within the limit: no note
+        self.assertIsNone(growth.limit_note(arm, data))
+        self.assertFalse([d for d in drawn_sizes(arm, data) if d[0] == "say" and "capped" in d[1][0]])
+
+        data["sizeLimit"] = [0.05, 2.0]
+        arm.tyrant_size_adult = 1.0  # 1.08 at most: within the game's 2
+        self.assertIsNone(growth.limit_note(arm, data))
+
+    def test_sizes_go_to_a_species_chosen_on_send(self):
+        # Sizes edited for a destination that is gone (Send cleared it) still go to the species model chosen next.
+        path = allosaurus(sizes={})
+        arm = importer.import_project(path)
+        arm.tyrant_size_adult = 4.0
+        data = project.load(path)
+        data["destination"] = None
+        data["sizesEditable"] = False
         project.save(path, data)
         growth.forget(path)
-        arm.tyrant_growth = 1.0
-        self.assertScale(arm, 3.0)
+        bpy.context.view_layer.objects.active = arm
+        started = []
+        real = send.run_async
+        send.run_async = lambda args, done: started.append(args)
+        try:
+            panel._start_send(bpy.context, arm, {"mod": "horny-rex", "species": "Carcharodontosaurus", "skin": None}, "Horny Rex")
+            panel._start_send(bpy.context, arm, {"mod": "horny-rex", "species": "Carcharodontosaurus", "skin": "red"})
+        finally:
+            send.run_async = real
+        with open(started[0][started[0].index("--sizes") + 1], encoding="utf-8") as f:
+            self.assertEqual(json.load(f), {"format": 1, "target": "Carcharodontosaurus", "adult": 4.0})
+        self.assertNotIn("--sizes", started[1])  # a skin's sizes are the species'
 
     def test_the_size_panel_reaches_20(self):
         arm = importer.import_project(allosaurus())

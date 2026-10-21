@@ -186,4 +186,88 @@ public class BlenderSizesTests
         Assert.Equal(1.3, ModProject.Open(c.Ws, "pack").Sizes("Carcharodontosaurus")!.Adult);
         Assert.Null(ModProject.Open(c.Ws, "pack").Skin(skin.Id).Model);
     }
+
+    /// <summary>The fixture species' extremes as Check counts them: both skins' sexes, the game's genetic ranges and a Nursery range.</summary>
+    private static (float Min, float Max) Extremes(double adult, (double, double)? nursery = null)
+    {
+        var settings = new SizeSettings { Adult = adult };
+        var sexes = new[] { (1.3, 1.35), (1.2, 1.25) }.SelectMany(s => { var (m, f) = SizeMath.Sex(s.Item1, s.Item2, settings); return new[] { m, f }; });
+        (double, double)[] ranges = nursery is { } n ? [SpeciesSizes.DefaultIncubation, n, SpeciesSizes.DefaultBreeding] : [SpeciesSizes.DefaultIncubation, SpeciesSizes.DefaultBreeding];
+        return SizeMath.Extremes(SizeMath.Rebuild(Original, adult, null), sexes, ranges);
+    }
+
+    private static (BlenderProjectResult Opened, string Glb) OpenToSend(Ctx c)
+    {
+        var opened = BlenderProjectWriter.Write(new BlenderOpenRequest("Carcharodontosaurus", null, null, false, false), c.Ws, c.Install, c.Index, c.Species, c.Reader, "t.exe");
+        var glb = Path.Combine(opened.Dir, "send.glb");
+        GltfModelWriter.WriteGlb(c.Prefab, c.Prefab.Renderers[0], glb, [new GltfMaterial("Carch")]);
+        return (opened, glb);
+    }
+
+    [Fact]
+    public void Blender_send_raises_the_mod_size_limit_to_fit()
+    {
+        using var c = Setup();
+        var (opened, glb) = OpenToSend(c);
+        var pack = ModProject.Create(c.Ws, "pack", null, null);
+        pack.SetSizeRanges(new SizeRanges { Nursery = [0.5, 1.5] });
+
+        var sent = BlenderService.Send(c.Ws, c.Install, c.Index, c.Species, c.Reader, opened.ProjectFile, glb,
+            new BlenderDestination("pack", "Carcharodontosaurus", null), null, sizes: new SizeSettings { Target = "Carcharodontosaurus", Adult = 4 });
+
+        Assert.True(sent.Ok, string.Join(" | ", sent.Errors));
+        var ranges = ModProject.Open(c.Ws, "pack").Manifest.SizeRanges!;
+        var extremes = Extremes(4, (0.5, 1.5)); // the mod's Nursery range counts, as in Check
+        var max = Math.Ceiling(extremes.Max * 2) / 2; // the extremes' max, rounded up to the next 0.5
+        Assert.InRange(max, 2.5, 20);
+        Assert.Equal([0.05, max], ranges.Limit!);
+        Assert.True(ranges.Limit![1] >= extremes.Max);
+        Assert.Equal([0.5, 1.5], ranges.Nursery!); // the other ranges stay
+        Assert.Contains($"Raised the mod's Size limit to {max.ToString(System.Globalization.CultureInfo.InvariantCulture)}×.", sent.Warnings);
+        Assert.Equal([0.05f, (float)max], BlenderProjectFile.Read(opened.ProjectFile).SizeLimit); // the note in Blender goes away
+
+        // Past 20 the limit stops at 20.
+        var huge = BlenderService.Send(c.Ws, c.Install, c.Index, c.Species, c.Reader, opened.ProjectFile, glb, null, null,
+            sizes: new SizeSettings { Target = "Carcharodontosaurus", Adult = 20 });
+        Assert.True(huge.Ok, string.Join(" | ", huge.Errors));
+        Assert.Equal([0.05, 20.0], ModProject.Open(c.Ws, "pack").Manifest.SizeRanges!.Limit!);
+    }
+
+    [Fact]
+    public void Blender_send_never_lowers_the_limit()
+    {
+        using var c = Setup();
+        var (opened, glb) = OpenToSend(c);
+        ModProject.Create(c.Ws, "pack", null, null).SetSizeRanges(new SizeRanges { Limit = [0.02, 10] });
+
+        var sent = BlenderService.Send(c.Ws, c.Install, c.Index, c.Species, c.Reader, opened.ProjectFile, glb,
+            new BlenderDestination("pack", "Carcharodontosaurus", null), null, sizes: new SizeSettings { Target = "Carcharodontosaurus", Adult = 4 });
+
+        Assert.True(sent.Ok, string.Join(" | ", sent.Errors));
+        Assert.Equal([0.02, 10.0], ModProject.Open(c.Ws, "pack").Manifest.SizeRanges!.Limit!); // 4 fits within 10: unchanged
+        Assert.DoesNotContain(sent.Warnings, w => w.Contains("Size limit", StringComparison.Ordinal));
+
+        var small = BlenderService.Send(c.Ws, c.Install, c.Index, c.Species, c.Reader, opened.ProjectFile, glb, null, null,
+            sizes: new SizeSettings { Target = "Carcharodontosaurus", Adult = 1 });
+        Assert.True(small.Ok, string.Join(" | ", small.Errors));
+        Assert.Equal([0.02, 10.0], ModProject.Open(c.Ws, "pack").Manifest.SizeRanges!.Limit!);
+    }
+
+    [Fact]
+    public void Blender_send_to_a_new_mod_writes_sizes_and_limit()
+    {
+        using var c = Setup();
+        var (opened, glb) = OpenToSend(c);
+
+        var sent = BlenderService.Send(c.Ws, c.Install, c.Index, c.Species, c.Reader, opened.ProjectFile, glb,
+            new BlenderDestination("horny-rex", "Carcharodontosaurus", null), "Horny Rex", sizes: new SizeSettings { Target = "Carcharodontosaurus", Adult = 4 });
+
+        Assert.True(sent.Ok, string.Join(" | ", sent.Errors));
+        var mod = ModProject.Open(c.Ws, "horny-rex");
+        Assert.Equal(4, mod.Sizes("Carcharodontosaurus")!.Adult);
+        var max = Math.Ceiling(Extremes(4).Max * 2) / 2;
+        Assert.Equal([0.05, max], mod.Manifest.SizeRanges!.Limit!);
+        Assert.Null(mod.Manifest.SizeRanges.Nursery);
+        Assert.Contains(sent.Warnings, w => w.StartsWith("Raised the mod's Size limit to ", StringComparison.Ordinal));
+    }
 }

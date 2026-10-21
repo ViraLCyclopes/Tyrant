@@ -257,10 +257,11 @@ public sealed class BlenderService(BlenderEnvironment env)
                     Female = sizes.Female ?? current?.Female,
                 });
             }
+            string[] limitNotes = sizes is not null && FitSizeLimit(ws, mod, destination.Species) is { } note ? [note] : [];
             BlenderProjectFile.Write(projectFile, BlenderProjectWriter.WithSizes(project with { Destination = destination }, ws));
             // Only after the model went in: a refused model leaves the mod as it was.
             var pictures = BlenderImages.Apply(mod, ws, index, species, destination, images ?? [], sex, project.Source.Kind == "game" ? project.Source.Skin : null);
-            return new BlenderSendResult(true, [], [.. report?.Warnings ?? [], .. rigWarnings, .. pictures.Warnings], report?.Lods.Select(l => l.Vertices).ToList() ?? [], destination)
+            return new BlenderSendResult(true, [], [.. report?.Warnings ?? [], .. rigWarnings, .. limitNotes, .. pictures.Warnings], report?.Lods.Select(l => l.Vertices).ToList() ?? [], destination)
             {
                 Images = pictures.Written,
                 ImagesTo = pictures.To,
@@ -270,6 +271,27 @@ public sealed class BlenderService(BlenderEnvironment env)
         {
             return new BlenderSendResult(false, [ex.Message], [], [], destination);
         }
+    }
+
+    /// <summary>
+    /// Widens the mod's own size limit, never narrowing it, when the species' sizes would pass it (as Check counts them): the
+    /// maximum to the extremes' max rounded up to the next 0.5 (at most 20), the minimum to their min rounded down to the next
+    /// 0.01 (at least 0.01); the other ranges stay. Returns what changed for the result, or null when they fit or without the
+    /// game's data.
+    /// </summary>
+    private static string? FitSizeLimit(Workspace ws, ModProject mod, string species)
+    {
+        if (mod.Sizes(species) is not { } sizes || SpeciesSizes.Facts(ws, mod) is not { } facts || facts.Original(species) is not { } original
+            || SpeciesSizes.Extremes(original, sizes, facts, mod.Manifest.SizeRanges) is not { } extremes) return null;
+        var ranges = mod.Manifest.SizeRanges;
+        if (SizeLimit.Of(ranges?.Limit).Contains(extremes.Min, extremes.Max)) return null;
+        var limit = ranges?.Limit ?? [SizeLimit.HighestMin, SizeLimit.LowestMax]; // the game's own 0.05 to 2
+        var min = Math.Min(limit[0], Math.Max(SizeLimit.LowestMin, Math.Floor(extremes.Min * 100.0) / 100));
+        var max = Math.Max(limit[1], Math.Min(SizeLimit.HighestMax, Math.Ceiling(extremes.Max * 2.0) / 2));
+        if (min == limit[0] && max == limit[1]) return null; // already at the bounds: Check reports it
+        mod.SetSizeRanges(new SizeRanges { Nursery = ranges?.Nursery, Breeding = ranges?.Breeding, Limit = [min, max] });
+        static string Text(double value) => value.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
+        return max != limit[1] ? $"Raised the mod's Size limit to {Text(max)}×." : $"Lowered the mod's Size limit's minimum to {Text(min)}×.";
     }
 
     /// <summary>The user's Blender as Tyrant's FBX converter; without Blender, says FBX needs it (glb works without).</summary>

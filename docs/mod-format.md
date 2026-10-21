@@ -507,8 +507,14 @@ only: the mesh and bones keep their size, and **Send to Tyrant** exports at the 
 the four keys when the model goes to a species (a base-game species model or a mod's own species); Send to Tyrant then
 writes the keys edited in Blender into that species' `sizes/` file (`tyrant blender send --sizes <file>`), keeping the
 others as the mod has them, so a change made in the app meanwhile stays. For a skin it shows the species' sizes
-read-only, since sizes apply to the whole species. The view keeps the size within the destination mod's size limit
-(else the game's 0.05 to 2) as the game does, but does not scale the adult back to fit as the framework does.
+read-only, since sizes apply to the whole species. The view shows the size you set, within Tyrant's own bounds (0.01 to
+20) only, not capped by the destination mod's size limit. When the animal shown (both sexes, baby to adult, genetic size
+1) would pass that limit (else the game's 0.05 to 2), the Size box says: "In game this is capped at {max}×. Send to
+Tyrant will raise the mod's Size limit to fit." When Send to Tyrant writes sizes that would pass the mod's own `limit`,
+counted as Check does (with the genetic ranges), it widens that limit just enough: the max to the largest size rounded
+up to the next 0.5 (at most 20), the min to the smallest rounded down to the next 0.01 (at least 0.01). It keeps the
+other ranges, never narrows a limit, and says so in its report: "Raised the mod's Size limit to {max}×." A new mod made
+by the send gets its sizes and limit the same way.
 
 ## Rig edits (changing an animal's skeleton)
 

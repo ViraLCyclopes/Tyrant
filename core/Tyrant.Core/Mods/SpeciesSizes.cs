@@ -81,6 +81,22 @@ public static partial class SpeciesSizes
         }, incubation, breeding);
     }
 
+    /// <summary>
+    /// The smallest and largest scale a species reaches with these sizes, as Check counts it: every skin's sexes, the hatching
+    /// range and the widest genetic ranges (the mod's, else the game's); null when its data has no growth curve.
+    /// </summary>
+    internal static (float Min, float Max)? Extremes(OriginalSize original, SizeSettings sizes, SizeFacts facts, SizeRanges? modRanges)
+    {
+        if (original.Curve.Length == 0) return null;
+        var curve = SizeMath.Rebuild(original.Curve, sizes.Adult ?? 1, sizes.Baby);
+        var skins = original.Skins.Count == 0 ? [(1.0, 1.0)] : original.Skins;
+        var sexes = skins.SelectMany(k => { var (male, female) = SizeMath.Sex(k.Male, k.Female, sizes); return new[] { male, female }; });
+        var ranges = new List<(double Min, double Max)> { facts.Incubation };
+        if (modRanges?.Nursery is { } nursery) ranges.Add((nursery[0], nursery[1]));
+        ranges.Add(modRanges?.Breeding is { } breeding ? (breeding[0], breeding[1]) : facts.Breeding);
+        return SizeMath.Extremes(curve, sexes, ranges);
+    }
+
     private static (double, double)? Range(JsonElement root, string name) =>
         root.TryGetProperty(name, out var range) && range.ValueKind == JsonValueKind.Object
             && range.TryGetProperty("x", out var x) && x.TryGetDouble(out var min) && range.TryGetProperty("y", out var y) && y.TryGetDouble(out var max)

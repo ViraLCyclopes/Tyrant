@@ -157,6 +157,12 @@ Release build: `npm run build:app`, install `studio/src-tauri/target/release/bun
     The send is a change from outside the app: the mod reloads and Undo is greyed out. **↺** on Adult size × puts 1
     back (or Adult size × 1 in Blender and Send again). On a skin destination the Size fields are greyed out with "Sizes apply to the whole species; set them
     in the app."
+    - **Past the limit.** Destination a mod with no Size limit (or **Send to Tyrant → New mod…**): **Adult size ×** 4.
+      The model keeps growing past 2× (an adult male T. rex is 4 times the game's), and the Size box says "In game this
+      is capped at 2×. Send to Tyrant will raise the mod's Size limit to fit." **Send to Tyrant**: the report says
+      "Raised the mod's Size limit to {max}×." (a max a little above 4, on a 0.5 step), the mod's **Size limit** in Mod
+      details shows that maximum with its other ranges unchanged, the note in Blender is gone, and Check has no size
+      error. Adult size × 1 and Send again: the limit stays (Send never lowers it).
 77b. Tyrant panel -> **Sex** Female: her maps show and (Allosaurus Anax) her adult keeps part of the Adolescent shape,
     like a female in the Nursery; Male puts it back. Open in Blender -> Options -> Sex starts as the female.
 78. Save the file (Ctrl+S), close Blender. From the mod's model page → **Open in Blender**: Blender starts with that file and
