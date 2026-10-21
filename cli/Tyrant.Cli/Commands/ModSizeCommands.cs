@@ -32,8 +32,20 @@ public sealed class ModSizeCommand : Command<ModSizeCommand.Settings>
         [Description("Multiplies females' size (0.1 to 20).")]
         public double? Female { get; set; }
 
+        [CommandOption("--nursery <RANGE>")]
+        [Description("The range the Nursery's Customize size slider covers for this species, e.g. 0.5,3 (0 < min <= max <= 20). Random eggs keep the game's range.")]
+        public string? Nursery { get; set; }
+
+        [CommandOption("--breeding <RANGE>")]
+        [Description("The genetic size range of this species' bred young, e.g. 0.85,1.15 (0 < min <= max <= 20).")]
+        public string? Breeding { get; set; }
+
+        [CommandOption("--limit <RANGE>")]
+        [Description("The size limit on this species' final scale, e.g. 0.05,20 (0.01 <= min <= 0.05, 2 <= max <= 20; the game's is 0.05,2). Among enabled mods the widest wins.")]
+        public string? Limit { get; set; }
+
         [CommandOption("--clear")]
-        [Description("Remove all of this species' size settings (before applying any value given with it).")]
+        [Description("Remove all of this species' size settings, ranges and limit (before applying any value given with it).")]
         public bool Clear { get; set; }
 
         [CommandOption("--remove-record-edits")]
@@ -52,13 +64,18 @@ public sealed class ModSizeCommand : Command<ModSizeCommand.Settings>
             var removed = mod.RemoveSizeRecordEdits(settings.Target);
             Console.WriteLine(removed.Count == 0 ? $"{settings.Target} has no old record edits of its size." : "removed the old record edits: " + string.Join(", ", removed));
         }
+        var nursery = Range("--nursery", settings.Nursery);
+        var breeding = Range("--breeding", settings.Breeding);
+        var limit = Range("--limit", settings.Limit);
         var current = settings.Clear ? null : mod.Sizes(settings.Target);
-        if (settings.Clear || settings.Adult is not null || settings.Baby is not null || settings.Male is not null || settings.Female is not null)
+        if (settings.Clear || settings.Adult is not null || settings.Baby is not null || settings.Male is not null || settings.Female is not null
+            || nursery is not null || breeding is not null || limit is not null)
         {
             var next = new SizeSettings
             {
                 Target = settings.Target, Adult = settings.Adult ?? current?.Adult, Baby = settings.Baby ?? current?.Baby,
                 Male = settings.Male ?? current?.Male, Female = settings.Female ?? current?.Female,
+                Nursery = nursery ?? current?.Nursery, Breeding = breeding ?? current?.Breeding, Limit = limit ?? current?.Limit,
             };
             mod.SetSizes(settings.Target, next);
             current = mod.Sizes(settings.Target);
@@ -66,6 +83,11 @@ public sealed class ModSizeCommand : Command<ModSizeCommand.Settings>
         var shown = new[] { ("adult", current?.Adult), ("baby", current?.Baby), ("male", current?.Male), ("female", current?.Female) }
             .Where(v => v.Item2 is not null).Select(v => $"{v.Item1} {Text(v.Item2!.Value)}").ToList();
         Console.WriteLine($"{settings.Target} in '{settings.Id}': {(shown.Count == 0 ? "no size settings" : string.Join(", ", shown))}");
+        var (gameNursery, gameBreeding) = SpeciesSizes.GameRanges(ws);
+        static string Pair(double min, double max) => $"{Text(min)} to {Text(max)}";
+        static string Show(double[]? own, (double Min, double Max) game) => own is null ? $"the game's ({Pair(game.Min, game.Max)})" : Pair(own[0], own[1]);
+        Console.WriteLine($"nursery {Show(current?.Nursery, gameNursery)}, breeding {Show(current?.Breeding, gameBreeding)}, "
+            + $"limit {Show(current?.Limit, (SizeLimit.Game.Min, SizeLimit.Game.Max))}");
         if (mod.SizeRecordEdits(settings.Target) is { Count: > 0 } edits)
             Console.WriteLine($"old record edits: {string.Join(", ", edits)} (they change its size outside these settings; remove them with --remove-record-edits)");
         OriginalSize? original = null;
@@ -83,48 +105,6 @@ public sealed class ModSizeCommand : Command<ModSizeCommand.Settings>
         if (original.Skins.Count > 0) parts.Add("skins (male/female) " + string.Join(", ", original.Skins.Select(s => $"{Text(s.Male)}/{Text(s.Female)}")));
         Console.WriteLine("original: " + string.Join("; ", parts));
         if (original.LengthHeightWidth is { Length: > 0 } length) Console.WriteLine($"final length {Text(length[0] * (current?.Adult ?? 1))}");
-        return ExitCodes.Ok;
-    }
-}
-
-public sealed class ModSizeRangesCommand : Command<ModSizeRangesCommand.Settings>
-{
-    public sealed class Settings : ModSettings
-    {
-        [CommandOption("--nursery <RANGE>")]
-        [Description("The range of the Nursery size slider's genetic size, e.g. 0.9,1.1 (0 < min <= max <= 20).")]
-        public string? Nursery { get; set; }
-
-        [CommandOption("--breeding <RANGE>")]
-        [Description("The range of the genetic size of bred young, e.g. 0.85,1.15.")]
-        public string? Breeding { get; set; }
-
-        [CommandOption("--limit <RANGE>")]
-        [Description("The size limit on an animal's final scale, e.g. 0.05,20 (0.01 <= min <= 0.05, 2 <= max <= 20; the game's is 0.05,2). Among enabled mods the widest wins.")]
-        public string? Limit { get; set; }
-
-        [CommandOption("--clear")]
-        [Description("Remove this mod's size ranges and size limit (before applying any range given with it).")]
-        public bool Clear { get; set; }
-    }
-
-    public override int Execute(CommandContext context, Settings settings)
-    {
-        var (ws, _) = CliServices.OpenWorkspace(settings);
-        var mod = ModProject.Open(ws, settings.Id);
-        var nursery = Range("--nursery", settings.Nursery);
-        var breeding = Range("--breeding", settings.Breeding);
-        var limit = Range("--limit", settings.Limit);
-        if (settings.Clear || nursery is not null || breeding is not null || limit is not null)
-        {
-            var old = settings.Clear ? null : mod.Manifest.SizeRanges;
-            mod.SetSizeRanges(new SizeRanges { Nursery = nursery ?? old?.Nursery, Breeding = breeding ?? old?.Breeding, Limit = limit ?? old?.Limit });
-        }
-        var ranges = mod.Manifest.SizeRanges;
-        static string Text(double[] r) => $"{r[0].ToString("0.###", CultureInfo.InvariantCulture)} to {r[1].ToString("0.###", CultureInfo.InvariantCulture)}";
-        static string Show(double[]? r) => r is null ? "the game's" : Text(r);
-        Console.WriteLine($"Size ranges of '{settings.Id}': nursery {Show(ranges?.Nursery)}, breeding {Show(ranges?.Breeding)}, "
-            + $"limit {(ranges?.Limit is { } l ? Text(l) : $"the game's ({SizeLimit.Game})")}");
         return ExitCodes.Ok;
     }
 

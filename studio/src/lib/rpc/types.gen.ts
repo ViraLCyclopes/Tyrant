@@ -1052,14 +1052,6 @@ export interface ModSetPrefabFieldParams {
   value: unknown;
 }
 
-export interface ModSetSizeRangesParams {
-  id: string;
-  revision: string;
-  nursery?: number[] | null;
-  breeding?: number[] | null;
-  limit?: number[] | null;
-}
-
 export interface ModSetSizesParams {
   id: string;
   revision: string;
@@ -1068,6 +1060,9 @@ export interface ModSetSizesParams {
   baby?: number | null;
   male?: number | null;
   female?: number | null;
+  nursery?: number[] | null;
+  breeding?: number[] | null;
+  limit?: number[] | null;
 }
 
 export interface ModSetSkinFileParams {
@@ -1151,19 +1146,6 @@ export interface ModSetThumbnailParams {
   png?: string | null;
 }
 
-export interface ModSizeRangesDto {
-  nursery: number[] | null;
-  breeding: number[] | null;
-  gameNursery: number[];
-  gameBreeding: number[];
-  limit: number[] | null;
-  gameLimit: number[];
-}
-
-export interface ModSizeRangesParams {
-  id: string;
-}
-
 export interface ModSizeTargetsDto {
   targets: string[];
 }
@@ -1182,7 +1164,12 @@ export interface ModSizesDto {
   original: ModOriginalSizeDto;
   finalAdultLength: number | null;
   recordEdits: string[];
-  limit: number[];
+  nursery: number[] | null;
+  breeding: number[] | null;
+  limit: number[] | null;
+  gameNursery: number[];
+  gameBreeding: number[];
+  gameLimit: number[];
 }
 
 export interface ModSizesParams {
@@ -1752,7 +1739,6 @@ export interface RpcMethods {
   "mods.setMaterials": { params: ModSetMaterialsParams; result: ModDetail };
   "mods.setPortraits": { params: ModSetPortraitsParams; result: ModDetail };
   "mods.setPrefabField": { params: ModSetPrefabFieldParams; result: ModDetail };
-  "mods.setSizeRanges": { params: ModSetSizeRangesParams; result: ModDetail };
   "mods.setSizes": { params: ModSetSizesParams; result: ModDetail };
   "mods.setSkinFile": { params: ModSetSkinFileParams; result: ModDetail };
   "mods.setSound": { params: ModSetSoundParams; result: ModDetail };
@@ -1763,7 +1749,6 @@ export interface RpcMethods {
   "mods.setSpeciesStartingSkin": { params: ModSetSpeciesStartingSkinParams; result: ModDetail };
   "mods.setSpeciesSwatch": { params: ModSetSpeciesSwatchParams; result: ModDetail };
   "mods.setThumbnail": { params: ModSetThumbnailParams; result: ModDetail };
-  "mods.sizeRanges": { params: ModSizeRangesParams; result: ModSizeRangesDto };
   "mods.sizeTargets": { params: ModSizeTargetsParams; result: ModSizeTargetsDto };
   "mods.sizes": { params: ModSizesParams; result: ModSizesDto };
   "mods.skinModel": { params: ModSkinModelParams; result: ModSkinModel };

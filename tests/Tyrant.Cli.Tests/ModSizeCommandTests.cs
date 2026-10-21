@@ -56,7 +56,7 @@ public class ModSizeCommandTests
     }
 
     [Fact]
-    public void Check_warns_when_a_mod_that_only_sets_ranges_pushes_a_species_past_the_limit()
+    public void Check_judges_a_species_range_against_its_limit()
     {
         using var game = new FakeGame();
         var ws = Path.Combine(Path.GetTempPath(), "tyrant-tests", Guid.NewGuid().ToString("N"), "ws");
@@ -74,10 +74,13 @@ public class ModSizeCommandTests
             """{"incubationGeneticSizeMinMax":{"x":0.925,"y":1.075},"breedingGeneticSizeMinMax":{"x":0.85,"y":1.15}}"""));
         DumpWriter.Write(Path.Combine(ws, "data"), objects, [], new DumpManifest { RequestId = "r1", BuildGuid = "b" });
 
-        Assert.Equal(ExitCodes.Ok, Run("mod", "size-ranges", "wide-nursery", "--nursery", "0.5,1.5", "-w", ws).Code); // females: 1.35 x 1.5 = 2.03
+        var set = Run("mod", "size", "wide-nursery", "Allosaurus Anax", "--nursery", "0.5,1.5", "-w", ws); // females: 1.35 x 1.5 = 2.03
+        Assert.True(set.Code == ExitCodes.Ok, set.Err);
         var check = Run("mod", "check", "wide-nursery", "-w", ws);
 
-        Assert.Contains(check.Out.Split(Environment.NewLine), l => l.Contains("genetic size ranges") && l.Contains("Allosaurus Anax"));
+        var lines = (check.Out + check.Err).Split(Environment.NewLine);
+        Assert.Contains(lines, l => l.Contains("Allosaurus Anax would be scaled from") && l.Contains("the game allows 0.05 to 2"));
+        Assert.DoesNotContain(lines, l => l.Contains("genetic size ranges"));
     }
 
     [Fact]
@@ -116,36 +119,51 @@ public class ModSizeCommandTests
     }
 
     [Fact]
-    public void Sets_prints_and_clears_size_ranges()
+    public void Sets_prints_and_clears_a_species_ranges_and_limit()
+    {
+        using var game = new FakeGame();
+        var ws = Workspace(game);
+        var file = Path.Combine(ws, "mods", "size-pack", "sizes", "alpha.json");
+
+        var set = Run("mod", "size", "size-pack", "Alpha", "--nursery", "0.9,1.1", "--breeding", "0.8,1.2", "-w", ws);
+        Assert.True(set.Code == ExitCodes.Ok, set.Err);
+        Assert.Contains("nursery 0.9 to 1.1", set.Out);
+        Assert.Contains("breeding 0.8 to 1.2", set.Out);
+        Assert.Contains("limit the game's (0.05 to 2)", set.Out);
+        Assert.Contains("\"nursery\"", File.ReadAllText(file));
+        Assert.DoesNotContain("sizeRanges", File.ReadAllText(Path.Combine(ws, "mods", "size-pack", "mod.json")));
+
+        var bad = Run("mod", "size", "size-pack", "Alpha", "--nursery", "0,1", "-w", ws);
+        Assert.NotEqual(ExitCodes.Ok, bad.Code);
+        Assert.Contains("\"nursery\" must be [min, max]", bad.Err);
+
+        var shape = Run("mod", "size", "size-pack", "Alpha", "--nursery", "0.9", "-w", ws);
+        Assert.NotEqual(ExitCodes.Ok, shape.Code);
+        Assert.Contains("takes two numbers", shape.Err);
+
+        var limit = Run("mod", "size", "size-pack", "Alpha", "--limit", "0.05,20", "--adult", "4", "-w", ws);
+        Assert.True(limit.Code == ExitCodes.Ok, limit.Err);
+        Assert.Contains("limit 0.05 to 20", limit.Out);
+        Assert.Contains("adult 4", limit.Out);
+        Assert.Contains("nursery 0.9 to 1.1", limit.Out); // the other values are kept
+        var tooBig = Run("mod", "size", "size-pack", "Alpha", "--limit", "0.05,25", "-w", ws);
+        Assert.NotEqual(ExitCodes.Ok, tooBig.Code);
+        Assert.Contains("\"limit\" must be [min, max] with 0.01 <= min <= 0.05 and 2 <= max <= 20", tooBig.Err);
+        Assert.Contains("takes two numbers", Run("mod", "size", "size-pack", "Alpha", "--limit", "20", "-w", ws).Err);
+
+        Assert.Equal(ExitCodes.Ok, Run("mod", "size", "size-pack", "Alpha", "--clear", "-w", ws).Code);
+        Assert.False(File.Exists(file));
+    }
+
+    [Fact]
+    public void The_mod_wide_size_ranges_command_is_gone()
     {
         using var game = new FakeGame();
         var ws = Workspace(game);
 
-        var set = Run("mod", "size-ranges", "size-pack", "--nursery", "0.9,1.1", "--breeding", "0.8,1.2", "-w", ws);
-        Assert.True(set.Code == ExitCodes.Ok, set.Err);
-        Assert.Contains("nursery 0.9 to 1.1", set.Out);
-        Assert.Contains("breeding 0.8 to 1.2", set.Out);
-        Assert.Contains("sizeRanges", File.ReadAllText(Path.Combine(ws, "mods", "size-pack", "mod.json")));
+        var gone = Run("mod", "size-ranges", "size-pack", "--limit", "0.05,20", "-w", ws);
 
-        var bad = Run("mod", "size-ranges", "size-pack", "--nursery", "0,1", "-w", ws);
-        Assert.NotEqual(ExitCodes.Ok, bad.Code);
-        Assert.Contains("sizeRanges.nursery must be [min, max]", bad.Err);
-
-        var shape = Run("mod", "size-ranges", "size-pack", "--nursery", "0.9", "-w", ws);
-        Assert.NotEqual(ExitCodes.Ok, shape.Code);
-        Assert.Contains("takes two numbers", shape.Err);
-
-        Assert.Contains("limit the game's (0.05 to 2)", set.Out);
-        var limit = Run("mod", "size-ranges", "size-pack", "--limit", "0.05,20", "-w", ws);
-        Assert.True(limit.Code == ExitCodes.Ok, limit.Err);
-        Assert.Contains("limit 0.05 to 20", limit.Out);
-        Assert.Contains("nursery 0.9 to 1.1", limit.Out); // the other ranges are kept
-        var tooBig = Run("mod", "size-ranges", "size-pack", "--limit", "0.05,25", "-w", ws);
-        Assert.NotEqual(ExitCodes.Ok, tooBig.Code);
-        Assert.Contains("sizeRanges.limit must be [min, max] with 0.01 <= min <= 0.05 and 2 <= max <= 20", tooBig.Err);
-        Assert.Contains("takes two numbers", Run("mod", "size-ranges", "size-pack", "--limit", "20", "-w", ws).Err);
-
-        Assert.Equal(ExitCodes.Ok, Run("mod", "size-ranges", "size-pack", "--clear", "-w", ws).Code);
+        Assert.NotEqual(ExitCodes.Ok, gone.Code);
         Assert.DoesNotContain("sizeRanges", File.ReadAllText(Path.Combine(ws, "mods", "size-pack", "mod.json")));
     }
 }
