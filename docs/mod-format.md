@@ -177,6 +177,7 @@ name get `-2`, `-3`. The owner comes from the file, not the folder name:
 | Key | Meaning |
 |---|---|
 | `iridescence.strength` | A number 0–1 for every animal, or an object with `normal` (required) and optionally `albino`, `melanistic`, `leucistic`. A mutation left out uses `normal`. `0` turns iridescence off, also on skins that have it in vanilla. Leaving `iridescence` out keeps the game's settings: only some vanilla skins shimmer (Microraptor's, for example), as their own skin data says. |
+| `iridescence.babyStrength` | 0–1, one number for every mutation. A hatchling's strength: as the animal grows up, the strength shown slides from `babyStrength` to `strength` (the game's integument growth: lerp(baby, adult, integument)). Left out it is `0`, the game's own: a vanilla baby never shimmers. With no `strength` set at any level, the adult end is the game's own strength for that animal. Above 0 it also turns iridescence on where the game gives none, so a baby shimmers. Varies between animals like `strength`. `{ "strength": 0, "babyStrength": 0.3 }`: a shimmer only the young wear, gone by the time they are grown. |
 | `iridescence.variation` | 0–1. How much strength differs between animals, as a fraction of the strength (0.15: each lands within ±15 %). Default `0.15` when `strength` is set. Each animal's offset comes from its ID, so it is stable across save and load and nothing is saved. An animal without an ID (the Nursery hologram) uses the set strength. |
 | `iridescence.ramp` | The colours, along the viewing angle: a PNG in the mod (`"materials/skins/rainbow/iridescence-ramp.png"`), `{ "stops": ["#ff0000", …] }` (1 to 32 colours, evenly spaced) or `{ "thinFilm": { "thickness": 420, "index": 1.56 } }` (`thickness` 0–2000 nm, `index` 1–3, default 1.56). `"game"`: the game material's own ramp, also over a ramp a lower level (species, starting skin) sets. `{ "species": "Microraptor" }`: that vanilla species' ramp, by reference (see **Starting from a species** below). Left out: the lower level's, else the game's. |
 | `iridescence.mask` | Where it shows: `"everywhere"`, a PNG in the mod, or `{ "from": "extra", "channel": "g", "invert": false }` (`from` is `extra`, `pattern` or `fur`; `channel` is `r`, `g`, `b` or `a`). `"game"`: the game's own mask, over a lower level's. `{ "species": "Microraptor" }`: that vanilla species' mask, by reference, at any level (a species file too). Left out: the lower level's, else the game's. |
@@ -184,6 +185,7 @@ name get `-2`, `-3`. The owner comes from the file, not the folder name:
 | `iridescence.scale`, `power`, `bias` | −10 to 10. Shape the strength across the viewing angle (edge falloff, falloff curve, brightness offset). |
 | `fur.mask`, `fur.infantMask` | The fur mask of adults and of babies: a PNG in the mod (`"materials/skins/rainbow/fur-mask.png"`). `"game"`: the game's own per-animal mask, over a lower level's. Left out: the lower level's, else the game's (a baby mask left out uses the adult one). One file serves both sexes. PNG files or `"game"` only: no `everywhere`, no `from`. |
 | `fur.grow` | `true` grows fur on skins the game gives none (Ouranosaurus, Allosaurus Anax, …): the game's fur shader variant, full fur amount, and, where no level sets a fur mask and the game has none, fur on the whole body (a `"game"` fur mask keeps the game's). `false` means this level does not force fur over a lower one that does; it never takes away fur the game has. Left out: the levels below decide. Works on skins, vanilla skins, species and per-animal looks. |
+| `fur.age` | Which ages wear fur: `"babies"`, `"adults"` or `"both"`. The game fades fur by growth, from the baby's fur amount to the adult's (each 1 where that age's fur map exists, else 0: Acrocanthosaurus has a baby fur map only, so its fluff goes as it grows). `fur.age` sets those two ends: `babies` 1 to 0, `adults` 0 to 1, `both` 1 to 1. An age that should have fur and has no fur mask (the game's, or a level's `fur.mask` / `fur.infantMask`) gets one as **Grow fur** gives it: fur on the whole body, the fur shader variant, and in the editors a starting `_Length`. Left out: the levels below decide, else the game's fur maps. Droop still follows the game (baby droop to adult droop, or `_DroopDirection`). Works at every level. |
 | `settings` | Animal shader values, below. |
 
 **Growing fur.** Grown fur needs the game's tessellated fur (its Fur graphics setting); with tessellation off the game draws no grown fur
@@ -191,6 +193,12 @@ name get `-2`, `-3`. The owner comes from the file, not the folder name:
 and the app start it at `0.5` when nothing gives the fur any length). Bodies never made for fur have no fur mask, droop or
 wind tuned for them, so the look needs tuning in game: a fur mask PNG limits where it grows, and `_Length`, `_Droopage`,
 `_DroopDirection` and the wind settings shape it.
+
+**`fur.grow` and `fur.age` together.** `fur.age` decides which ages wear fur; Tyrant supplies the masks for them the way
+`fur.grow` does. `fur.grow` alone keeps its meaning: fur at every age, wherever the game has none (the same as `"both"`).
+With an age set at any level, `grow` adds nothing and `"grow": false` does not take the age's fur away. `"adults"` on a
+species whose babies have fur (Acrocanthosaurus) takes the baby fur away and gives the adults fur on the whole body; add a
+`fur.mask` PNG to say where.
 
 **Starting from a species.** A look can start from a vanilla species: its iridescence (the species whose skins shimmer:
 Microraptor, Velociraptor, Oviraptor, Edmontosaurus, …, listed from the game's data, not fixed) or its fur (species with a
@@ -201,7 +209,7 @@ fur map). Picking one (the app's **Start from a species…**, the in-game editor
   `"everywhere"` on any other species (a mask is painted for its own species' UV layout, so on another body it would land
   anywhere) or when the species' material has no mask. `scale`, `power` and `bias` are copied from that species' material,
   `strength` from its first shimmering skin (a mutation's own where it differs; not known: a strength already there stays),
-  and iridescence is on.
+  and iridescence is on. A vanilla species' babies never shimmer, so a preset sets no `babyStrength`: one already there stays.
 - **Fur:** `fur.grow` is `true`; `_Length`, `_Droopage`, `_FurWindStrength`, `_FurWindSpeed` and `_FurWindScale` are copied
   from the species' material, `_DroopDirection` from its first furred skin's adult droop (kept within ±20). The fur mask stays.
 - Numbers are copied as plain numbers, kept within their ranges. **The game's images are never copied into a file**: the
@@ -306,6 +314,14 @@ game update moves the panels and a button cannot be placed, the MelonLoader log 
   after it, **-** removes it. The colour square sets its saturation (across) and brightness (up), the strip beside it its
   hue; drag either and the animals follow. Or type `#rrggbb` in the box. A look from the app with more than 8 colours
   keeps them all: the window edits the first 8.
+- **Baby strength** (Iridescence tab, under **Strength**) is `babyStrength`: the strength of a hatchling, sliding to
+  **Strength** as it grows. Watch a baby in the Nursery or the park to see it. **On** / **Off** count it: a look that
+  shimmers only as a baby shows **On**, and **Off** sets it to 0 too (**On** puts it back). Raising it on an animal that
+  shimmers at no age starts a thin film and shaping, as **On** does, so the sheen shows at once.
+- **Fur on** (Fur tab, under **Grow fur**): **Babies**, **Adults**, **Both** or **Game's** is `fur.age`; **Game's**
+  removes it (the skin's fur maps decide). An age gives the fur a starting length when nothing gives it one, as **Grow
+  fur** does, and **Game's** takes that length back unless **Grow fur** is still on. Over a lower layer's age the row shows
+  it, marked *(below)*, and **Game's** is greyed out: there is no `"game"` value to write over it, so pick the age you want.
 - **Export mask PNG** writes the mask as a PNG to edit in an image editor. It is staged until **Save**, then written under the
   fixed file name (`iridescence-mask.png`, `fur-mask.png`, …) and becomes the mask. **Reload images** picks up your edits
   without restarting. The PNG pickers list the target's folder and `UserData/Tyrant/Masks`.

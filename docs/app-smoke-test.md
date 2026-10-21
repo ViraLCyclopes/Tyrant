@@ -433,6 +433,17 @@ Needs the game and a Tyrant Framework installed from this build. Steps marked **
      starts from the film's colours (8); **Reset** goes back. Do the same on **Whole skin** of a mod skin and **Save**: in
      the app, that skin's material card shows the four colours in **Colours**. Give it 10 colours in the app and save: the
      window shows *Colour 1 of 10*, **+** is off, and an edit there keeps all 10 in `materials.json`.
+155b. **(app, game)** Baby looks: in the app, give Acrocanthosaurus a **Species materials** block (or a skin's **Material**):
+     tick **Iridescence**, pick **Real iridescence (thin film)**, set **Strength** 0 and **Baby strength** 0.3; in the **Fur**
+     group pick **Fur on** → **Adults** (the fur length becomes 0.5). Save: `materials.json` has `"strength": 0,
+     "babyStrength": 0.3` and `"fur": { "age": "adults" }`; **Check** is clean (no *strength is 0 everywhere*). CLI:
+     `tyrant mod materials <mod> --species Acrocanthosaurus --show` prints the same. Install, start the game with tessellated
+     fur on, and incubate an Acrocanthosaurus. The hatchling shimmers and has no fluff (its baby fur is gone); as it grows,
+     the shimmer fades out and fur grows in over the whole body; the grown animal has fur and no shimmer. In the window
+     (**T** on it, the block's scope) the Iridescence tab shows **On** with **Baby strength** 0.3, and the Fur tab **Fur on**
+     **Adults**. **Game's** under **Fur on** puts the baby fluff back and takes the adult fur away; **Off** under
+     Iridescence takes the baby shimmer away (and **On** brings it back). A vanilla Acrocanthosaurus (no mod) keeps its
+     baby fluff and never shimmers.
 
 ## Animal sizes
 
