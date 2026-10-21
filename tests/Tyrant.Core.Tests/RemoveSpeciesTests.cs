@@ -53,6 +53,7 @@ public class RemoveSpeciesTests
             Mod.Manifest.Sounds.AddRange([mine, skinOnly, everyone]);
             Mod.Save();
             Mod.SetSpeciesIcon("mira", Png("icon.png"));
+            Mod.SetSpeciesPaleopediaPicture("mira", Png("page.png"));
             var prefab = new PrefabOverrides { Target = Key };
             prefab.Fields.Add(new PrefabField { Component = "Animal", Field = "speed", Value = 2.0 });
             File("prefabs/" + PrefabOverrides.FileName(Key), prefab.ToJson());
@@ -96,7 +97,7 @@ public class RemoveSpeciesTests
 
         var removed = s.Mod.RemoveSpecies("mira", deleteFiles: true);
 
-        foreach (var file in new[] { startFile, "skins/mira-blue/male_D.png", "models/mira.glb", "sounds/mira.wav", "sounds/blue.wav", "icons/mira.png" })
+        foreach (var file in new[] { startFile, "skins/mira-blue/male_D.png", "models/mira.glb", "sounds/mira.wav", "sounds/blue.wav", "icons/mira.png", "icons/mira-paleopedia.png" })
         {
             Assert.True(TestRecycleBin.Instance.Holds(s.Full(file)), file);
             Assert.Contains(file, removed.Recycled);

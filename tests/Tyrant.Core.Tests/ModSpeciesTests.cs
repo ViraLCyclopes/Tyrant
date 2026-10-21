@@ -119,6 +119,65 @@ public class ModSpeciesTests
     }
 
     [Fact]
+    public void Paleopedia_picture_is_copied_into_the_mod_ships_with_it_and_survives_species_edits()
+    {
+        using var game = new FakeGame();
+        var ws = Workspace.Create(Path.Combine(game.LibraryRoot, "workspace"), new GameInstall(game.Root, null));
+        var mod = ModProject.Create(ws, "animal-pack", null, null);
+        var entry = mod.AddSpecies([Template()], "new-animal", "Allosaurus Anax", "Animal", "Example", "animal");
+        var png = Path.Combine(ws.Dir, "page.png");
+        File.WriteAllBytes(png, Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jWWQAAAAASUVORK5CYII="));
+        mod.SetSpeciesIcon(entry.Id, png);
+        mod.SetSpeciesPaleopediaPicture(entry.Id, png);
+        Assert.True(File.Exists(Path.Combine(mod.Dir, "icons", "new-animal-paleopedia.png")));
+
+        var reopened = ModProject.Open(ws, mod.Id);
+        reopened.SetSpecies(entry.Id, "New name", "Example", "animal", 2000, new Dictionary<string, double>());
+        var saved = Assert.Single(AnimalDatabaseFile.Read(mod.DatabasePath));
+        Assert.Equal(("icons/new-animal.png", "icons/new-animal-paleopedia.png"), (saved.Icon, saved.PaleopediaPicture));
+        Assert.Contains("icons/new-animal-paleopedia.png", ModSharing.SharedFiles(reopened));
+
+        reopened.SetSpeciesPaleopediaPicture(entry.Id, null);
+        var cleared = Assert.Single(AnimalDatabaseFile.Read(mod.DatabasePath));
+        Assert.Equal(("icons/new-animal.png", (string?)null), (cleared.Icon, cleared.PaleopediaPicture));
+    }
+
+    [Fact]
+    public void Check_reports_a_missing_or_unreadable_paleopedia_picture()
+    {
+        using var game = new FakeGame();
+        var ws = Workspace.Create(Path.Combine(game.LibraryRoot, "workspace"), new GameInstall(game.Root, null));
+        var mod = ModProject.Create(ws, "animal-pack", null, null);
+        var entry = mod.AddSpecies([Template()], "new-animal", "Allosaurus Anax", "Animal", "Example", "animal");
+        var png = Path.Combine(ws.Dir, "page.png");
+        File.WriteAllBytes(png, Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jWWQAAAAASUVORK5CYII="));
+        mod.SetSpeciesPaleopediaPicture(entry.Id, png);
+        var picture = Path.Combine(mod.Dir, "icons", "new-animal-paleopedia.png");
+        Assert.DoesNotContain(new ModChecker(_ => null).Check(mod, null).Errors, e => e.Contains("Paleopedia picture"));
+
+        File.WriteAllBytes(picture, [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 1, 2, 3]); // a PNG signature, then garbage
+        Assert.Contains(new ModChecker(_ => null).Check(mod, null).Errors, e => e.Contains("Species new-animal Paleopedia picture"));
+
+        File.Delete(picture);
+        Assert.Contains(new ModChecker(_ => null).Check(mod, null).Errors,
+            e => e.Contains("Species new-animal Paleopedia picture") && e.Contains("icons/new-animal-paleopedia.png is missing"));
+    }
+
+    [Fact]
+    public void Paleopedia_picture_must_be_a_png_and_the_species_must_exist()
+    {
+        using var game = new FakeGame();
+        var ws = Workspace.Create(Path.Combine(game.LibraryRoot, "workspace"), new GameInstall(game.Root, null));
+        var mod = ModProject.Create(ws, "animal-pack", null, null);
+        var entry = mod.AddSpecies([Template()], "new-animal", "Allosaurus Anax", "Animal", "Example", "animal");
+        var jpg = Path.Combine(ws.Dir, "page.jpg");
+        File.WriteAllBytes(jpg, [0xFF, 0xD8, 0xFF, 0xE0]);
+        Assert.Equal(TyrantErrorCode.ModInvalid, Assert.Throws<TyrantException>(() => mod.SetSpeciesPaleopediaPicture(entry.Id, jpg)).Code);
+        Assert.Equal(TyrantErrorCode.TargetNotFound, Assert.Throws<TyrantException>(() => mod.SetSpeciesPaleopediaPicture("missing", null)).Code);
+        Assert.Null(Assert.Single(AnimalDatabaseFile.Read(mod.DatabasePath)).PaleopediaPicture);
+    }
+
+    [Fact]
     public void Icon_and_language_files_ship_with_database_keys_and_survive_other_species_edits()
     {
         using var game = new FakeGame();

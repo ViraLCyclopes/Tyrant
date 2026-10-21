@@ -156,8 +156,12 @@
     await doc.edit('mods.makeStartingSkin', { skin });
   }
   async function pickIcon() {
-    const png = await session.platform.openFile('Choose a Paleopedia photo PNG (512×256)', ['png']);
+    const png = await session.platform.openFile('Choose a Nursery picture PNG (512×256)', ['png']);
     if (png) await doc.edit('mods.setSpeciesIcon', { speciesId: selected, png }, { undoable: false });
+  }
+  async function pickPaleopediaPicture() {
+    const png = await session.platform.openFile('Choose a Paleopedia picture PNG (16:9; the game uses 2048×1152)', ['png']);
+    if (png) await doc.edit('mods.setSpeciesPaleopediaPicture', { speciesId: selected, png }, { undoable: false });
   }
 </script>
 
@@ -248,11 +252,17 @@
       <h3>Size</h3>
       <SizeCard {doc} target={animal.key} />
       <SpeciesSoundsCard {doc} species={animal.key} onOpen={onOpenSound} onAdd={() => onAddSound(animal.key)} />
-      <h3>Paleopedia photo</h3>
-      <p class="hint">The picture in the Paleopedia and the Nursery's species panel. {animal.icon ? `Using ${animal.icon}.` : "Using the template's photo."} The game's are 512×256 PNGs.</p>
+      <h3>Nursery picture</h3>
+      <p class="hint">The picture on its Nursery card and the Nursery's species panel. {animal.icon ? `Using ${animal.icon}.` : "Using the template's picture."} The game's are 512×256 PNGs.</p>
       <div class="toolbar">
-        <button type="button" onclick={pickIcon}>Choose photo PNG…</button>
-        <button type="button" disabled={!animal.icon} onclick={() => doc.edit('mods.setSpeciesIcon', { speciesId: selected, png: null }, { undoable: false })}>Use template photo</button>
+        <button type="button" aria-label="Nursery picture: Choose PNG…" onclick={pickIcon}>Choose PNG…</button>
+        <button type="button" aria-label="Nursery picture: Use template picture" disabled={!animal.icon} onclick={() => doc.edit('mods.setSpeciesIcon', { speciesId: selected, png: null }, { undoable: false })}>Use template picture</button>
+      </div>
+      <h3>Paleopedia picture</h3>
+      <p class="hint">The big picture on the species' own Paleopedia page (also its row in the Paleopedia's animal list, and its notifications). {animal.paleopediaPicture ? `Using ${animal.paleopediaPicture}.` : "Using the template's picture."} The game's are 2048×1152 (16:9) PNGs.</p>
+      <div class="toolbar">
+        <button type="button" aria-label="Paleopedia picture: Choose PNG…" onclick={pickPaleopediaPicture}>Choose PNG…</button>
+        <button type="button" aria-label="Paleopedia picture: Use template picture" disabled={!animal.paleopediaPicture} onclick={() => doc.edit('mods.setSpeciesPaleopediaPicture', { speciesId: selected, png: null }, { undoable: false })}>Use template picture</button>
       </div>
     {/if}
     {#if animal && !creating}

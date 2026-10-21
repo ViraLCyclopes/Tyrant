@@ -82,7 +82,7 @@ public sealed partial class ModProject
             Stats = new Dictionary<string, double>(stats),
             Fields = copiedFields,
             Localization = new Dictionary<string, string>(localization ?? old.Localization),
-            Icon = old.Icon,
+            Icon = old.Icon, PaleopediaPicture = old.PaleopediaPicture,
             Prefab = old.Prefab,
             StartingSkin = old.StartingSkin, StartingSkinName = old.StartingSkinName, Swatch = old.Swatch,
         };
@@ -128,6 +128,22 @@ public sealed partial class ModProject
         entry.Icon = file;
         try { SaveSpecies(); }
         catch { entry.Icon = old; throw; }
+    }
+
+    /// <summary>
+    /// The species' own Paleopedia page picture (copied to icons/&lt;id&gt;-paleopedia.png); null goes back to the template's.
+    /// In game it replaces the picture of the species' own copy of the template's info sign.
+    /// </summary>
+    public void SetSpeciesPaleopediaPicture(string id, string? png)
+    {
+        var entry = Manifest.Species.FirstOrDefault(s => s.Id == id)
+            ?? throw new TyrantException(TyrantErrorCode.TargetNotFound, "Species not found: " + id);
+        var old = entry.PaleopediaPicture;
+        var file = png == null ? null : $"icons/{id}-paleopedia.png";
+        if (png != null) CopyPng(png, file!);
+        entry.PaleopediaPicture = file;
+        try { SaveSpecies(); }
+        catch { entry.PaleopediaPicture = old; throw; }
     }
 
     /// <summary>Which template skin the species starts with, and its name in game (blank = the template skin's name).</summary>

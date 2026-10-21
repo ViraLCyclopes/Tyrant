@@ -495,6 +495,7 @@ export interface ModAnimalDto {
   swatch?: string | null;
   portraits?: Record<string, string> | null;
   startingSkinId?: string | null;
+  paleopediaPicture?: string | null;
 }
 
 export interface ModAnimalFieldDto {
@@ -1090,6 +1091,13 @@ export interface ModSetSoundParams {
 }
 
 export interface ModSetSpeciesIconParams {
+  id: string;
+  revision: string;
+  speciesId: string;
+  png?: string | null;
+}
+
+export interface ModSetSpeciesPaleopediaPictureParams {
   id: string;
   revision: string;
   speciesId: string;
@@ -1745,6 +1753,7 @@ export interface RpcMethods {
   "mods.setSound": { params: ModSetSoundParams; result: ModDetail };
   "mods.setSpecies": { params: ModSetSpeciesParams; result: ModDetail };
   "mods.setSpeciesIcon": { params: ModSetSpeciesIconParams; result: ModDetail };
+  "mods.setSpeciesPaleopediaPicture": { params: ModSetSpeciesPaleopediaPictureParams; result: ModDetail };
   "mods.setSpeciesPortraits": { params: ModSetSpeciesPortraitsParams; result: ModDetail };
   "mods.setSpeciesPrefab": { params: ModSetSpeciesPrefabParams; result: ModDetail };
   "mods.setSpeciesStartingSkin": { params: ModSetSpeciesStartingSkinParams; result: ModDetail };

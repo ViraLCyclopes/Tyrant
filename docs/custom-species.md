@@ -68,12 +68,12 @@ The database has eight tables:
 | `animal_stats` | `species_id`, `stat`, `value` | Numeric overrides; primary key is `(species_id, stat)` |
 | `animal_fields` | `species_id`, `path`, `kind`, `value`, `template_value`, `editable` | Full serialized fields and linked animal configurations |
 | `animal_localization` | `species_id`, `slot`, `term` | Localization keys, with text in separate language files |
-| `animal_assets` | `species_id`, `slot`, `file` | Custom icon PNG paths |
+| `animal_assets` | `species_id`, `slot`, `file` | Picture PNG paths: `icon` (the Nursery picture) and `paleopedia` (the Paleopedia picture); see [Nursery and Paleopedia pictures](#nursery-and-paleopedia-pictures) |
 | `animal_prefabs` | `species_id`, `bundle`, `asset` | Optional Unity AssetBundle and lowercase prefab asset path |
 | `animal_starting_skin` | `species_id`, `skin`, `name`, `swatch` | Starting skin: the template skin number, optional name and swatch PNG (see [Skins](#skins)) |
 | `animal_portraits` | `species_id`, `slot`, `file` | Starting skin portraits: slot (`adultMale` … `infantLeucistic`) to PNG path (see [Skins](#skins)) |
 
-`PRAGMA user_version` is `5`. Existing v1–v4 databases upgrade on their next save. Species ids are unique; a stat references its species
+`PRAGMA user_version` is `6`. Existing v1–v5 databases upgrade on their next save (version 6 lets `animal_assets` hold the `paleopedia` slot). Species ids are unique; a stat references its species
 id. Enable foreign keys when editing. If you create the database manually, use the
 schema in [animal-database-schema.sql](animal-database-schema.sql).
 
@@ -179,17 +179,46 @@ The editor provides key inputs, a language selector, and separate buttons to rev
 each text file. Legacy combined language files remain readable for compatibility,
 but new species write one plain text file per field.
 
-## Paleopedia photo
+## Nursery and Paleopedia pictures
 
-The picture at the top of a species' Paleopedia page, also shown in the Nursery's species panel, is its
-photo (the game's `heroRender`; the game's photos are 512×256 PNGs). On the species page choose
-**Paleopedia photo → Choose photo PNG…**, or run
-`tyrant mod set-species-photo <MOD> <SPECIES-ID> (--png <FILE> | --clear)`. Tyrant copies the PNG to
-`icons/<species-id>.png` and records its path in `animal_assets` with `slot = 'icon'`. Transparent PNGs are
-supported. Skin swatches (a species' starting skin swatch is set under [Skins](#skins)) and animal-info-sign
-backgrounds remain separate template assets. **Use template photo** (or `--clear`) removes the override.
-SQL users may supply another relative PNG path inside the mod.
-Language files and photo PNGs are included in mod exports and installs.
+A species has two pictures of its own, each set on the species page or with the CLI. Without one, the species shows
+its template's.
+
+**Nursery picture** is the game's `heroRender`: the picture on the species' Nursery card and at the top right of the
+Nursery's species panel (also the education sign's species drop-down). The game's are 512×256 PNGs. On the species page
+choose **Nursery picture → Choose PNG…**, or run
+`tyrant mod set-species-photo <MOD> <SPECIES-ID> (--png <FILE> | --clear)` (also named
+`set-species-nursery-picture`). Tyrant copies the PNG to `icons/<species-id>.png` and records it in `animal_assets`
+with `slot = 'icon'`. It does not change the Paleopedia page.
+
+**Paleopedia picture** is the big picture on the species' own Paleopedia page. The game does not take it from
+`heroRender` but from the animal's info sign (`infoSign`, an `AnimalInfoSignCanvas` prefab whose first child's image is the
+picture), which a new species shares with its template. With a Paleopedia picture, Tyrant gives the species its own copy
+of that sign and puts the picture on the copy, so the template's page keeps its own. The game's are 2048×1152 PNGs
+(16:9); use a 16:9 picture, for example 1280×720 or 2048×1152, or it is stretched. On the species page choose
+**Paleopedia picture → Choose PNG…**, or run
+`tyrant mod set-species-paleopedia-picture <MOD> <SPECIES-ID> (--png <FILE> | --clear)`. Tyrant copies the PNG to
+`icons/<species-id>-paleopedia.png` and records it in `animal_assets` with `slot = 'paleopedia'`. The game uses the same
+picture for the species' row in the Paleopedia's animal list, as the background of its notifications (an egg hatched,
+an animal died, the most popular animal) and as the preview in an education sign's info panel. The painted sign standing
+in the park is not changed: the game draws it from a texture array of the base-game species' pictures, which
+Tyrant does not extend.
+
+**Use template picture** (or `--clear`) removes either override. Transparent PNGs are supported. SQL users may supply
+another relative PNG path inside the mod. Check reports a picture PNG that is missing or unreadable. Skin swatches (a
+species' starting skin swatch is set under [Skins](#skins)) are separate. Language files and picture PNGs are included
+in mod exports and installs.
+
+### What the Paleopedia page shows
+
+A new species is listed in the Paleopedia's animal list like any animal, and the Nursery's **Open Paleopedia** opens its
+own page: its genus and species name, its description, character
+notes and social info (see [Localization](#localization)), its Paleopedia picture and its own stats. A field the species
+does not change is its template's, so a species made from Allosaurus Anax with no other edits shows Allosaurus Anax's
+base rating (the Nursery's Base Rating is the preview animal's own total, so its size and genetics change it), length,
+height, weight, popularity, region, era and clade, its call and its narrated introduction. If the page ever opens on
+another animal, Tyrant sets it back to the species and writes `Open Paleopedia showed … instead of …` to the
+MelonLoader log; please report that line.
 
 At runtime Tyrant reads `animals.db`, clones the template's animal data, applies
 the overrides and registers the result in PK's in-memory animal database before
@@ -273,7 +302,8 @@ tyrant mod add-species my-animal-pack example-animal "Allosaurus Anax" --name "E
 tyrant mod set-species-skin my-animal-pack example-animal --starting-skin 0 --name "Mirabilis" --swatch swatch.png -w <workspace>
 tyrant mod add-skin other-pack tyrant.my-animal-pack.example-animal --name "Blue" -w <workspace>
 tyrant mod set-starting-skin my-animal-pack blue -w <workspace>
-tyrant mod set-species-photo my-animal-pack example-animal --png photo.png -w <workspace>
+tyrant mod set-species-photo my-animal-pack example-animal --png nursery.png -w <workspace>
+tyrant mod set-species-paleopedia-picture my-animal-pack example-animal --png paleopedia.png -w <workspace>
 tyrant mod remove-species my-animal-pack example-animal -w <workspace>
 ```
 

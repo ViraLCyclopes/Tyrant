@@ -280,8 +280,12 @@ Release build: `npm run build:app`, install `studio/src-tauri/target/release/bun
      **Delete species** the species and its skins leave the side list, and its files are in the Recycle Bin.
 121. With a second workspace mod that has a skin for that species, the dialog names that mod; after deleting, Check
      on the second mod reports its skin's species is missing, and in game only that skin is skipped.
-122. On a custom species page, **Paleopedia photo → Choose photo PNG…** with a 512×256 PNG: in game the
-     species' Paleopedia page and the Nursery species panel show it; **Use template photo** brings the template's back.
+122. On a custom species page, **Nursery picture → Choose PNG…** with a 512×256 PNG and **Paleopedia picture → Choose
+     PNG…** with a 16:9 PNG: in game the species' Nursery card and the Nursery species panel show the first; **Open
+     Paleopedia** opens the species' own page (its genus, name and description) with the second, and the template's page
+     still shows its own picture. **Use template picture** on each brings the template's back. With more than 5 skins the
+     Nursery skin row has ‹ › buttons at its ends that move 5 skins at a time and grey out at their end; the wheel still
+     scrolls it. Opening **All skins** writes no `onValueChanged` warning to the MelonLoader log.
 123. On a species with a starting skin and a second skin with only a diffuse PNG, **Make default** on the second skin:
      after confirming it is tagged *starting skin* and listed first and looks the same; in game a new animal of the species
      starts with it, and the old starting skin is still in the skin picker.

@@ -10,7 +10,7 @@ import { modDetail } from '$lib/test/modFixtures';
 import { ModDoc } from './modDoc.svelte';
 import SpeciesDatabase from './SpeciesDatabase.svelte';
 
-const animal = { id: 'new-animal', key: 'tyrant.red-spot.new-animal', base: 'Allosaurus Anax', name: 'New animal', genus: 'Example', epithet: 'animal', cost: null, stats: { adultMassKg: 4500 }, inheritedCost: 20000, inheritedStats: { adultMassKg: 4010, maxAgeYears: 40 }, dataFields: [{ path: '/brain/needs/adult/native/hitPoints', kind: 'number', value: '660', templateValue: '660', editable: true }], localization: { description: 'pack.description' }, icon: null };
+const animal = { id: 'new-animal', key: 'tyrant.red-spot.new-animal', base: 'Allosaurus Anax', name: 'New animal', genus: 'Example', epithet: 'animal', cost: null, stats: { adultMassKg: 4500 }, inheritedCost: 20000, inheritedStats: { adultMassKg: 4010, maxAgeYears: 40 }, dataFields: [{ path: '/brain/needs/adult/native/hitPoints', kind: 'number', value: '660', templateValue: '660', editable: true }], localization: { description: 'pack.description' }, icon: null, paleopediaPicture: null as string | null };
 const fields = [{ id: 'adultMassKg', label: 'Adult mass', unit: 'kg', min: 0.001, max: 1000000 }, { id: 'maxAgeYears', label: 'Lifespan', unit: 'years', min: 0.001, max: 10000 }];
 
 async function setup(animals: (typeof animal)[] = [animal], props: { onPrefab?: (t: string) => void; onAddSkin?: (k: string) => void; onOpenSkin?: (id: string) => void; onAddSound?: (k: string) => void; onOpenSound?: (s: unknown) => void } = {}, templateFound = true, detail = modDetail()) {
@@ -76,10 +76,23 @@ describe('Species database', () => {
     await waitFor(() => expect(rpc.callsTo('mods.setSpecies')[0]?.params).toMatchObject({ dataFields: { '/brain/needs/adult/native/hitPoints': '800' }, localization: { description: 'pack.mirabilis.description' } }));
     rpc.on('mods.setSpeciesIcon', () => modDetail({ revision: 'r3' }));
     platform.files.push('C:/icons/mirabilis.png');
-    expect(screen.getByRole('heading', { name: 'Paleopedia photo' })).toBeInTheDocument();
-    expect(screen.getByText(/the Paleopedia and the Nursery's species panel/)).toBeInTheDocument();
-    await fireEvent.click(screen.getByRole('button', { name: 'Choose photo PNG…' }));
+    expect(screen.getByRole('heading', { name: 'Nursery picture' })).toBeInTheDocument();
+    expect(screen.getByText(/its Nursery card and the Nursery's species panel/)).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Nursery picture: Choose PNG…' }));
     await waitFor(() => expect(rpc.callsTo('mods.setSpeciesIcon')[0]?.params).toMatchObject({ speciesId: 'new-animal', png: 'C:/icons/mirabilis.png' }));
+  });
+  it('sets the Paleopedia picture apart from the Nursery picture, and goes back to the template one', async () => {
+    const { rpc, platform } = await setup([{ ...animal, paleopediaPicture: 'icons/new-animal-paleopedia.png' }]);
+    rpc.on('mods.setSpeciesPaleopediaPicture', () => modDetail({ revision: 'r2' }));
+    expect(screen.getByRole('heading', { name: 'Paleopedia picture' })).toBeInTheDocument();
+    expect(screen.getByText(/Using icons\/new-animal-paleopedia\.png\./)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Nursery picture: Use template picture' })).toBeDisabled();
+    platform.files.push('C:/art/page.png');
+    await fireEvent.click(screen.getByRole('button', { name: 'Paleopedia picture: Choose PNG…' }));
+    await waitFor(() => expect(rpc.callsTo('mods.setSpeciesPaleopediaPicture')[0]?.params).toMatchObject({ speciesId: 'new-animal', png: 'C:/art/page.png' }));
+    expect(rpc.callsTo('mods.setSpeciesIcon')).toHaveLength(0);
+    await fireEvent.click(screen.getByRole('button', { name: 'Paleopedia picture: Use template picture' }));
+    await waitFor(() => expect(rpc.callsTo('mods.setSpeciesPaleopediaPicture')[1]?.params).toMatchObject({ speciesId: 'new-animal', png: null }));
   });
   it('saves overrides and can reset them to inherited values', async () => {
     const { rpc, doc } = await setup();

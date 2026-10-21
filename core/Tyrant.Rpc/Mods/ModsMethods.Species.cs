@@ -11,9 +11,12 @@ public sealed record ModAnimalDto(string Id, string Key, string Base, string Nam
     int? Cost, IReadOnlyDictionary<string, double> Stats, int? InheritedCost, IReadOnlyDictionary<string, double> InheritedStats,
     IReadOnlyList<ModAnimalFieldDto> DataFields, IReadOnlyDictionary<string, string> Localization, string? Icon, SpeciesPrefab? Prefab,
     int StartingSkin = 0, string? StartingSkinName = null, string? Swatch = null,
-    IReadOnlyDictionary<string, string>? Portraits = null, string? StartingSkinId = null);
+    IReadOnlyDictionary<string, string>? Portraits = null, string? StartingSkinId = null, string? PaleopediaPicture = null);
 public sealed record ModAnimalFieldDto(string Path, string Kind, string Value, string TemplateValue, bool Editable);
+/// <summary>The Nursery picture (the game's heroRender); a null Png goes back to the template's.</summary>
 public sealed record ModSetSpeciesIconParams(string Id, string Revision, string SpeciesId, string? Png = null);
+/// <summary>The species' own Paleopedia page picture; a null Png goes back to the template's.</summary>
+public sealed record ModSetSpeciesPaleopediaPictureParams(string Id, string Revision, string SpeciesId, string? Png = null);
 public sealed record ModSetSpeciesPrefabParams(string Id, string Revision, string SpeciesId, string? Bundle = null, string? Asset = null);
 public sealed record ModUnityProjectDto(string Directory, string Readme);
 public sealed record ModStatDto(string Id, string Label, string Unit, double Min, double Max);
@@ -89,7 +92,7 @@ public sealed partial class ModsMethods
                 inherited?.Cost, inherited?.Stats ?? new Dictionary<string, double>(),
                 (s.Fields.Count > 0 ? s.Fields : inherited?.Fields ?? []).Where(f => !SpeciesSizes.IsSizePath(f.Path)).Select(f => new ModAnimalFieldDto(f.Path, f.Kind, f.Value, f.TemplateValue, f.Editable)).ToList(),
                 s.Localization, s.Icon, s.Prefab, s.StartingSkin, s.StartingSkinName, s.Swatch, s.Portraits.Count == 0 ? null : s.Portraits,
-                mod.StartingSkinOf(s.Id)?.Id);
+                mod.StartingSkinOf(s.Id)?.Id, s.PaleopediaPicture);
         }).ToList(), SpeciesStats.Fields.Select(f => new ModStatDto(f.Id, f.Label, f.Unit, f.Min, f.Max)).ToList());
     }
 
@@ -169,7 +172,11 @@ public sealed partial class ModsMethods
 
     [RpcMethod("mods.setSpeciesIcon")]
     public ModDetail SetSpeciesIcon(ModSetSpeciesIconParams p) => Edit(p.Id, p.Revision,
-        mod => mod.SetSpeciesIcon(p.SpeciesId, p.Png), "updated species icon " + p.SpeciesId);
+        mod => mod.SetSpeciesIcon(p.SpeciesId, p.Png), "updated Nursery picture " + p.SpeciesId);
+
+    [RpcMethod("mods.setSpeciesPaleopediaPicture")]
+    public ModDetail SetSpeciesPaleopediaPicture(ModSetSpeciesPaleopediaPictureParams p) => Edit(p.Id, p.Revision,
+        mod => mod.SetSpeciesPaleopediaPicture(p.SpeciesId, p.Png), "updated Paleopedia picture " + p.SpeciesId);
 
     [RpcMethod("mods.setSpeciesStartingSkin")]
     public ModDetail SetSpeciesStartingSkin(ModSetSpeciesStartingSkinParams p) => Edit(p.Id, p.Revision, mod =>

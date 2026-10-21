@@ -46,7 +46,8 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
         var warnings = new List<string>();
         foreach (var entry in mod.Manifest.Species)
         {
-            if (entry.Icon != null) Image(mod, $"Species {entry.Id} icon", entry.Icon, errors);
+            if (entry.Icon != null) Image(mod, $"Species {entry.Id} Nursery picture", entry.Icon, errors);
+            if (entry.PaleopediaPicture != null) Image(mod, $"Species {entry.Id} Paleopedia picture", entry.PaleopediaPicture, errors);
             if (entry.Swatch != null) Image(mod, $"Species {entry.Id} swatch", entry.Swatch, errors);
             foreach (var (slot, file) in entry.Portraits) Portrait(mod, $"Species {entry.Id} portrait {slot}", file, errors, warnings);
             if (entry.Prefab != null)

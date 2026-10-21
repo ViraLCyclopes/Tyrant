@@ -150,6 +150,7 @@ public sealed class ModSpeciesPortraitCommand : Command<ModSpeciesPortraitComman
     }
 }
 
+/// <summary>The Nursery picture (the game's heroRender). Its command keeps its old name, set-species-photo.</summary>
 public sealed class ModSpeciesPhotoCommand : Command<ModSpeciesPhotoCommand.Settings>
 {
     public sealed class Settings : ModSettings
@@ -159,11 +160,11 @@ public sealed class ModSpeciesPhotoCommand : Command<ModSpeciesPhotoCommand.Sett
         public string SpeciesId { get; set; } = "";
 
         [CommandOption("--png <FILE>")]
-        [Description("The photo PNG (the game's are 512x256), shown in the Paleopedia and the Nursery's species panel.")]
+        [Description("The picture PNG (the game's are 512x256), shown on the species' Nursery card and in the Nursery's species panel.")]
         public string? Png { get; set; }
 
         [CommandOption("--clear")]
-        [Description("Show the template's photo again.")]
+        [Description("Show the template's Nursery picture again.")]
         public bool Clear { get; set; }
     }
 
@@ -177,8 +178,41 @@ public sealed class ModSpeciesPhotoCommand : Command<ModSpeciesPhotoCommand.Sett
         var (ws, _) = CliServices.OpenWorkspace(settings);
         var mod = ModProject.Open(ws, settings.Id);
         mod.SetSpeciesIcon(settings.SpeciesId, settings.Png);
-        var photo = mod.Manifest.Species.First(s => s.Id == settings.SpeciesId).Icon;
-        Console.WriteLine(photo is null ? $"{settings.SpeciesId} uses its template's Paleopedia photo." : $"{settings.SpeciesId}: Paleopedia photo <- {photo}");
+        var picture = mod.Manifest.Species.First(s => s.Id == settings.SpeciesId).Icon;
+        Console.WriteLine(picture is null ? $"{settings.SpeciesId} uses its template's Nursery picture." : $"{settings.SpeciesId}: Nursery picture <- {picture}");
+        return ExitCodes.Ok;
+    }
+}
+
+public sealed class ModSpeciesPaleopediaPictureCommand : Command<ModSpeciesPaleopediaPictureCommand.Settings>
+{
+    public sealed class Settings : ModSettings
+    {
+        [CommandArgument(1, "<SPECIES-ID>")]
+        [Description("The species' id in the mod (see 'tyrant mod show').")]
+        public string SpeciesId { get; set; } = "";
+
+        [CommandOption("--png <FILE>")]
+        [Description("The picture PNG for the species' Paleopedia page (the game's are 2048x1152, 16:9).")]
+        public string? Png { get; set; }
+
+        [CommandOption("--clear")]
+        [Description("Show the template's Paleopedia picture again.")]
+        public bool Clear { get; set; }
+    }
+
+    public override int Execute(CommandContext context, Settings settings)
+    {
+        if (settings.Clear == (settings.Png is not null))
+        {
+            Console.Error.WriteLine("Give --png or --clear (not both).");
+            return ExitCodes.Error;
+        }
+        var (ws, _) = CliServices.OpenWorkspace(settings);
+        var mod = ModProject.Open(ws, settings.Id);
+        mod.SetSpeciesPaleopediaPicture(settings.SpeciesId, settings.Png);
+        var picture = mod.Manifest.Species.First(s => s.Id == settings.SpeciesId).PaleopediaPicture;
+        Console.WriteLine(picture is null ? $"{settings.SpeciesId} uses its template's Paleopedia picture." : $"{settings.SpeciesId}: Paleopedia picture <- {picture}");
         return ExitCodes.Ok;
     }
 }

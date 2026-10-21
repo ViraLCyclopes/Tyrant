@@ -234,9 +234,11 @@ portraits with **Render from 3D…**). The species page's Skins section then sho
 **Open**. Species without one show the older controls and **Make an editable starting skin**.
 **Make default** beside another skin in that list makes it the starting skin; the old one stays as an ordinary skin.
 
-**Paleopedia photo**, under the species page's Prefab and look, sets the picture at the top of the species'
-Paleopedia page and in the Nursery's species panel (a PNG; the game's are 512×256). **Use template photo** goes back
-to the template's.
+**Nursery picture**, under the species page's Prefab and look, sets the picture on the species' Nursery card and in
+the Nursery's species panel (a PNG; the game's are 512×256). It is not the Paleopedia page's picture.
+**Paleopedia picture**, below it, sets the big picture on the species' own Paleopedia page (also its row in the
+Paleopedia's animal list and its notifications; a 16:9 PNG, the game's are 2048×1152). Each has **Choose PNG…** and
+**Use template picture**, which goes back to the template's.
 
 **Delete species…** at the bottom of the species page removes the species with its skins, models, sounds and
 prefab settings, after a dialog that lists them and any other workspace mods that use the species. Its files go to

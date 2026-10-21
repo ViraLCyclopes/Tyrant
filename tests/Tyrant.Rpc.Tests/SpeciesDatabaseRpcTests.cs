@@ -31,6 +31,36 @@ public class SpeciesDatabaseRpcTests
     }
 
     [Fact]
+    public async Task Nursery_and_paleopedia_pictures_are_set_and_cleared_separately()
+    {
+        using var game = new FakeGame();
+        var (h, ws, _) = await AssetFixtures.Opened(game);
+        var objects = new DumpResult();
+        var skin = AssetFixtures.TexturedSkin(objects, "Default", 50);
+        objects.Objects.Add(new DumpObject(typeof(object), new EngineObjectInfo("PrehistoricKingdom.AnimalData", "Allosaurus", 1), $$"""
+            {"speciesID":"Allosaurus Anax", "cost":20000, "skinsData":[{{skin}}]}
+            """));
+        DumpWriter.Write(Path.Combine(ws, "data"), objects, [], new DumpManifest { RequestId = "r1", BuildGuid = "b" });
+        await h.Call("mods.create", new { id = "mod-a" });
+        string Rev(System.Text.Json.JsonElement d) => d.GetProperty("revision").GetString()!;
+        var a = await h.Call("mods.get", new { id = "mod-a" });
+        a = await h.Call("mods.addSpecies", new { id = "mod-a", revision = Rev(a), speciesId = "mirabilis", template = "Allosaurus Anax", name = "Mirabilis", genus = "Example", epithet = "mirabilis" });
+        var png = Path.Combine(ws, "picture.png");
+        File.WriteAllBytes(png, Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jWWQAAAAASUVORK5CYII="));
+
+        a = await h.Call("mods.setSpeciesIcon", new { id = "mod-a", revision = Rev(a), speciesId = "mirabilis", png });
+        a = await h.Call("mods.setSpeciesPaleopediaPicture", new { id = "mod-a", revision = Rev(a), speciesId = "mirabilis", png });
+        var animal = Assert.Single((await h.Call("mods.animalDatabase", new { id = "mod-a" })).GetProperty("animals").EnumerateArray());
+        Assert.Equal("icons/mirabilis.png", animal.GetProperty("icon").GetString());
+        Assert.Equal("icons/mirabilis-paleopedia.png", animal.GetProperty("paleopediaPicture").GetString());
+
+        await h.Call("mods.setSpeciesPaleopediaPicture", new { id = "mod-a", revision = Rev(a), speciesId = "mirabilis", png = (string?)null });
+        animal = Assert.Single((await h.Call("mods.animalDatabase", new { id = "mod-a" })).GetProperty("animals").EnumerateArray());
+        Assert.Equal("icons/mirabilis.png", animal.GetProperty("icon").GetString());
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, animal.GetProperty("paleopediaPicture").ValueKind);
+    }
+
+    [Fact]
     public async Task Editor_creates_sqlite_species_edits_stats_and_rejects_external_conflicts()
     {
         using var game = new FakeGame();

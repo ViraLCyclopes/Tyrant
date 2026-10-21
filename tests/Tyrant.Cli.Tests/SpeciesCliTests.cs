@@ -160,7 +160,7 @@ public class SpeciesCliTests : IDisposable
     }
 
     [Fact]
-    public void Set_species_photo_sets_and_clears_the_paleopedia_photo()
+    public void Set_species_photo_sets_and_clears_the_nursery_picture()
     {
         using var game = new FakeGame();
         var ws = TexturedAllosaurus(game);
@@ -171,12 +171,38 @@ public class SpeciesCliTests : IDisposable
         var (code, output, err) = Run("mod", "set-species-photo", "mod-a", "mirabilis", "--png", png, "-w", ws);
 
         Assert.True(code == ExitCodes.Ok, err);
-        Assert.Contains("mirabilis: Paleopedia photo <- icons/mirabilis.png", output);
+        Assert.Contains("mirabilis: Nursery picture <- icons/mirabilis.png", output);
         Assert.True(File.Exists(Path.Combine(ws, "mods", "mod-a", "icons", "mirabilis.png")));
 
         var cleared = Run("mod", "set-species-photo", "mod-a", "mirabilis", "--clear", "-w", ws);
-        Assert.Contains("mirabilis uses its template's Paleopedia photo.", cleared.Out);
+        Assert.Contains("mirabilis uses its template's Nursery picture.", cleared.Out);
         Assert.Equal(ExitCodes.Error, Run("mod", "set-species-photo", "mod-a", "mirabilis", "-w", ws).Code);
+
+        var alias = Run("mod", "set-species-nursery-picture", "mod-a", "mirabilis", "--png", png, "-w", ws);
+        Assert.True(alias.Code == ExitCodes.Ok, alias.Err);
+        Assert.Contains("mirabilis: Nursery picture <- icons/mirabilis.png", alias.Out);
+    }
+
+    [Fact]
+    public void Set_species_paleopedia_picture_sets_and_clears_the_paleopedia_page_picture()
+    {
+        using var game = new FakeGame();
+        var ws = TexturedAllosaurus(game);
+        Assert.Equal(ExitCodes.Ok, AddMirabilis(ws).Code);
+        var png = Path.Combine(ws, "page.png");
+        File.WriteAllBytes(png, Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jWWQAAAAASUVORK5CYII="));
+
+        var (code, output, err) = Run("mod", "set-species-paleopedia-picture", "mod-a", "mirabilis", "--png", png, "-w", ws);
+
+        Assert.True(code == ExitCodes.Ok, err);
+        Assert.Contains("mirabilis: Paleopedia picture <- icons/mirabilis-paleopedia.png", output);
+        Assert.True(File.Exists(Path.Combine(ws, "mods", "mod-a", "icons", "mirabilis-paleopedia.png")));
+        Assert.False(File.Exists(Path.Combine(ws, "mods", "mod-a", "icons", "mirabilis.png"))); // the Nursery picture is separate
+
+        var cleared = Run("mod", "set-species-paleopedia-picture", "mod-a", "mirabilis", "--clear", "-w", ws);
+        Assert.Contains("mirabilis uses its template's Paleopedia picture.", cleared.Out);
+        Assert.Equal(ExitCodes.Error, Run("mod", "set-species-paleopedia-picture", "mod-a", "mirabilis", "-w", ws).Code);
+        Assert.Equal(ExitCodes.Error, Run("mod", "set-species-paleopedia-picture", "mod-a", "mirabilis", "--png", png, "--clear", "-w", ws).Code);
     }
 
     private static (int Code, string Out, string Err) Run(params string[] args)

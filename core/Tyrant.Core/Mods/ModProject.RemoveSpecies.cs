@@ -102,7 +102,7 @@ public sealed partial class ModProject
             .Concat(MaterialFiles(speciesMaterials))
             .Concat(inMaterialFolders)
             .Concat(sounds.SelectMany(s => s.Files))
-            .Concat(new[] { entry.Icon, entry.Swatch, entry.Prefab?.Bundle }.OfType<string>())
+            .Concat(new[] { entry.Icon, entry.PaleopediaPicture, entry.Swatch, entry.Prefab?.Bundle }.OfType<string>())
             .Concat(entry.Portraits.Values)
             .Concat(languageFiles);
         var removed = new List<string>();

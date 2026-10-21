@@ -73,6 +73,7 @@ namespace Tyrant.Framework
                 if (rebuildAll != null) harmony.Patch(rebuildAll, postfix: new HarmonyMethod(typeof(SpeciesModule), nameof(AllAnimalsRebuilt)));
                 else FrameworkMod.Log.Warning("AnimalDatabase.RebuildAllAnimalDataAssets not found; new species are listed last in the Nursery's Alphabet sort.");
                 harmony.Patch(displayName, postfix: new HarmonyMethod(typeof(SpeciesModule), nameof(LocalizedName)));
+                SpeciesPaleopedia.Patch(harmony);
             }
             catch (Exception ex)
             {
@@ -151,6 +152,9 @@ namespace Tyrant.Framework
                     ApplyStats(data, entry.Stats);
                     ApplyText(data, id, entry.Texts);
                     if (entry.Icon != null) Set(data, "heroRender", LoadSprite(mod.Directory, entry.Icon, id + ".icon"));
+                    if (entry.PaleopediaPicture != null)
+                        try { SpeciesPaleopedia.UsePicture(data, LoadSprite(mod.Directory, entry.PaleopediaPicture, id + ".paleopedia"), id); }
+                        catch (Exception ex) { FrameworkMod.Log.Warning($"{id}: its Paleopedia picture is not used ({ex.GetBaseException().Message}); its page shows the template's."); }
                     var sourceSkins = Field(data, "skinsData") as IList ?? throw new MissingFieldException("skinsData");
                     if (sourceSkins.Count == 0) throw new InvalidOperationException("template has no skins");
                     if (entry.StartingSkin >= sourceSkins.Count)
@@ -184,7 +188,7 @@ namespace Tyrant.Framework
             }
         }
 
-        /// <summary>A sprite from a PNG inside the mod folder (species icon or swatch).</summary>
+        /// <summary>A sprite from a PNG inside the mod folder (Nursery picture, Paleopedia picture or swatch).</summary>
         private static Sprite LoadSprite(string modDirectory, string file, string name)
         {
             var path = Path.GetFullPath(Path.Combine(modDirectory, file));
@@ -230,8 +234,9 @@ namespace Tyrant.Framework
                 throw new InvalidOperationException("Authored prefab contains a missing script.");
             return prefab;
         }
-        private static object? StaticValue(Type type, string name) =>
-            AccessTools.Property(type, name)?.GetValue(null, null) ?? AccessTools.Field(type, name)?.GetValue(null);
+        // Field or property, whichever the game has (PKLocalizationManager.PKLanguages is a field): asking AccessTools for the
+        // wrong kind logs a warning.
+        private static object? StaticValue(Type type, string name) => Members.GetStatic(type, name);
         private static void Set(object data, string name, object? value) =>
             (AccessTools.Field(data.GetType(), name) ?? throw new MissingFieldException(data.GetType().FullName, name)).SetValue(data, value);
 

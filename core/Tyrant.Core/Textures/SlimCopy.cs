@@ -43,6 +43,7 @@ public static partial class SlimCopy
         foreach (var species in m.Species)
         {
             Add(species.Icon);
+            Add(species.PaleopediaPicture);
             Add(species.Swatch);
             Add(species.Prefab?.Bundle);
             foreach (var portrait in species.Portraits.Values) Add(portrait);
