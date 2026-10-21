@@ -19,7 +19,7 @@ SCALE_BASE = "tyrant_scale_base"  # armature: the object's own scale, without th
 SCALE_SHOWN = "tyrant_scale_shown"  # the size last shown on top of it
 EDITS = "tyrant_size_edits"  # the Size panel's changes not sent yet (JSON: adult, baby, male, female)
 SIZE_KEYS = ("adult", "baby", "male", "female")
-FINAL_MIN, FINAL_MAX = 0.05, 2.0  # the game clamps the final scale to this
+FINAL_MIN, FINAL_MAX = 0.05, 2.0  # the game clamps the final scale to this; a mod's size limit widens it (sizeLimit)
 
 
 def sample(table, t):
@@ -208,6 +208,14 @@ def sex_sizes(armature, data):
     return tuple(own[f"{sex}Original"] * (sizes["adult"] or 1.0) * (sizes[sex] or 1.0) for sex in ("male", "female"))
 
 
+def size_limit(data):
+    """(min, max) the game clamps the final scale to: the project's size limit (the destination mod's), else the game's own."""
+    limit = (data or {}).get("sizeLimit")
+    if isinstance(limit, (list, tuple)) and len(limit) == 2:
+        return float(limit[0]), float(limit[1])
+    return FINAL_MIN, FINAL_MAX
+
+
 def size_factor(armature, data, maturity):
     """The animal's size at this maturity (the Growth slider's value) as the game scales it, S(m, s, 1) for the sex shown;
     None without a scale curve."""
@@ -222,7 +230,8 @@ def size_factor(armature, data, maturity):
         curve = original if adult == 1.0 and baby is None else rebuild(original, adult, baby)  # as Tyrant does for the game
     male, female = sex_sizes(armature, data)
     s = female if sex_of(armature) == "female" else male
-    return min(max(evaluate(curve, maturity) * (1 + (s - 1) * fade(maturity)), FINAL_MIN), FINAL_MAX)
+    low, high = size_limit(data)
+    return min(max(evaluate(curve, maturity) * (1 + (s - 1) * fade(maturity)), low), high)
 
 
 def own_scale(armature):

@@ -95,6 +95,19 @@ public class BlenderSizesTests
     }
 
     [Fact]
+    public void Project_file_carries_the_destinations_size_limit()
+    {
+        using var c = Setup();
+        var mod = SpeciesModelMod(c, "plain");
+
+        Assert.Equal([0.05f, 2f], c.Open(new BlenderOpenRequest("Carcharodontosaurus", null, "plain", false, false)).SizeLimit);
+        mod.SetSizeRanges(new SizeRanges { Limit = [0.02, 20] });
+
+        Assert.Equal([0.02f, 20f], c.Open(new BlenderOpenRequest("Carcharodontosaurus", null, "plain", false, false)).SizeLimit);
+        Assert.Equal([0.05f, 2f], c.Open(new BlenderOpenRequest("Carcharodontosaurus", "Alt 1", null, false, false)).SizeLimit); // no destination: the game's
+    }
+
+    [Fact]
     public void Growth_slider_curves_follow_the_games_hermite_curve()
     {
         using var c = Setup();

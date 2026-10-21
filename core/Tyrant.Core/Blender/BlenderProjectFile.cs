@@ -70,6 +70,9 @@ public sealed record BlenderProject(int Version, string Workspace, string Tyrant
     /// <summary>Whether Blender may change the sizes: only when the destination is a species (a skin's sizes are its species').</summary>
     public bool SizesEditable { get; init; }
 
+    /// <summary>The size limit [min, max] the Growth slider clamps the size shown to: the destination mod's "sizeRanges.limit", else the game's.</summary>
+    public float[] SizeLimit { get; init; } = [global::Tyrant.Framework.Core.SizeMath.FinalMin, global::Tyrant.Framework.Core.SizeMath.FinalMax];
+
     /// <summary>The game's growth shape keys (the first two of LOD 0: baby, juvenile), so the add-on can check them before Send.</summary>
     public IReadOnlyList<string> GrowthKeys { get; init; } = [];
 
