@@ -107,7 +107,7 @@ namespace Tyrant.Framework
                 Cycler("Ramp", Pngs(ramp!.File), ramp.File!, file => draft.SetRamp(new RampSource { File = file }));
             else if (rampKind == RampKind.Species)
                 SpeciesStepper("Rainbow of", SpeciesLooks.List(PresetKind.Iridescence), ramp!.Species, none: false,
-                    species => draft.SetRamp(new RampSource { Species = species }), null);
+                    species => PickSpecies(species, s => draft.SetRamp(new RampSource { Species = s })), null); // loads it and redraws
 
             // Mask.
             var mask = own?.Mask ?? below?.Mask;
@@ -135,7 +135,7 @@ namespace Tyrant.Framework
                 Cycler("Mask", Pngs(mask!.File), mask.File!, file => draft.SetMask(new MaskSource { File = file }));
             else if (maskKind == MaskKind.Species)
                 SpeciesStepper("Mask of", SpeciesLooks.List(PresetKind.Iridescence), mask!.Species, none: false,
-                    species => draft.SetMask(new MaskSource { Species = species }), null);
+                    species => PickSpecies(species, s => draft.SetMask(new MaskSource { Species = s })), null);
 
             // Shaping, folded away.
             Choices(null, new[] { Option(_shapingOpen ? "Shaping  -" : "Shaping  +", false, true, () =>
