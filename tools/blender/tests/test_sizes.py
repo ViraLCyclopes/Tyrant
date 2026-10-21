@@ -94,6 +94,32 @@ class SizeTests(unittest.TestCase):
         curve = 0.164 + (1 - 0.164) * 0.25
         self.assertScale(arm, curve * (1 + 0.08 * (0.2 + 0.8 * (1 - 0.75 ** 2))))
 
+    def test_the_size_shown_keeps_to_the_projects_size_limit(self):
+        path = allosaurus(sizes={"adult": 4.0})  # an adult male of 1.08 x 4
+        arm = importer.import_project(path)
+        arm.tyrant_growth = 1.0
+        self.assertScale(arm, 2.0)  # no limit in the project: the game's 0.05 to 2
+
+        data = project.load(path)
+        data["sizeLimit"] = [0.05, 20.0]
+        project.save(path, data)
+        growth.forget(path)
+        arm.tyrant_growth = 1.0
+        self.assertScale(arm, 1.08 * 4)
+
+        data["sizeLimit"] = [0.05, 3.0]
+        project.save(path, data)
+        growth.forget(path)
+        arm.tyrant_growth = 1.0
+        self.assertScale(arm, 3.0)
+
+    def test_the_size_panel_reaches_20(self):
+        arm = importer.import_project(allosaurus())
+        arm.tyrant_size_adult = 15.0
+        self.assertAlmostEqual(growth.size_edits(arm)["adult"], 15.0, places=5)
+        arm.tyrant_size_female = 25.0  # past the file's maximum: Blender keeps it at 20
+        self.assertAlmostEqual(growth.size_edits(arm)["female"], 20.0, places=5)
+
     def test_without_a_scale_curve_the_model_keeps_its_scale(self):
         arm = importer.import_project(fresh_project())  # the fixture's species has no scale curve
         arm.tyrant_growth = 0.0

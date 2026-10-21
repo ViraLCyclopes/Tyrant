@@ -341,9 +341,13 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
     /// <summary>The caution shown for an adult size this far from 1: the size class (agentSize) is never changed, because that needs navmesh data.</summary>
     private const string SizeClassWarning = "the species keeps its size class (paths, enclosure filters); a much bigger or smaller animal may not fit them";
 
+    /// <summary>The caution shown for a species that can grow past the game's own 2× within a raised size limit.</summary>
+    private const string Past2xWarning = "can grow past the game's normal 2× limit; the size class, camera framing, foot placement and enclosure needs were tuned for normal sizes.";
+
     /// <summary>
-    /// Sizes: each sizes/ file's target and values, whether a sized species stays within the game's 0.05 to 2 scale limits (with the
-    /// random hatching range and the mod's ranges), old record edits of the growth curve, and ranges that push unsized species past the limits.
+    /// Sizes: each sizes/ file's target and values, whether a sized species stays within the size limit (the mod's "sizeRanges.limit",
+    /// else the game's 0.05 to 2; with the random hatching range and the mod's ranges) and whether it passes 2× within it, old record
+    /// edits of the growth curve, and ranges that push unsized species past the limit or past 2×.
     /// </summary>
     private static void SizeProblems(ModProject mod, IReadOnlyList<SpeciesSkins>? species, SizeFacts? facts, List<string> errors, List<string> warnings)
     {
@@ -351,6 +355,9 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
         var sized = SizeSettings.ReadFolder(mod.Dir, problems);
         errors.AddRange(problems);
         var text = (double value) => value.ToString("0.###", CultureInfo.InvariantCulture);
+        var limit = SizeLimit.Of(mod.Manifest.SizeRanges?.Limit);
+        var allows = limit.IsGame ? $"the game allows {limit}, and clamps it" : $"the mod's size limit allows {limit}; the game clamps it there";
+        bool PastNormal((float Min, float Max) e) => e.Max > SizeMath.FinalMax;
         foreach (var (file, sizes) in sized)
         {
             if (species is not null && !species.Any(s => string.Equals(s.SpeciesId, sizes.Target, StringComparison.OrdinalIgnoreCase)))
@@ -361,9 +368,11 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
             if (sizes.Adult is double adult && (adult >= 1.5 || adult <= 0.65))
                 warnings.Add($"sizes/{file}: {sizes.Target}'s adult size {text(adult)} is far from the original: {SizeClassWarning}.");
             if (facts?.Original(sizes.Target) is not { } original) continue;
-            var found = SizeExtremes(original, sizes, facts, mod.Manifest.SizeRanges);
-            if (found is { } extremes && (extremes.Min < SizeMath.FinalMin || extremes.Max > SizeMath.FinalMax))
-                errors.Add($"sizes/{file}: {sizes.Target} would be scaled from {text(extremes.Min)} to {text(extremes.Max)} (the game allows {SizeMath.FinalMin} to {SizeMath.FinalMax}, and clamps it); lower the adult or sex sizes.");
+            if (SizeExtremes(original, sizes, facts, mod.Manifest.SizeRanges) is not { } extremes) continue;
+            if (!limit.Contains(extremes.Min, extremes.Max))
+                errors.Add($"sizes/{file}: {sizes.Target} would be scaled from {text(extremes.Min)} to {text(extremes.Max)} ({allows}); lower the adult or sex sizes.");
+            else if (PastNormal(extremes))
+                warnings.Add($"sizes/{file}: {sizes.Target} {Past2xWarning}");
         }
         foreach (var entry in mod.Manifest.Species)
         {
@@ -375,15 +384,21 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
         if (facts is null || species is null || mod.Manifest.SizeRanges is not { IsEmpty: false } ranges) return;
         var sizedTargets = new HashSet<string>(sized.Select(s => s.Sizes.Target), StringComparer.OrdinalIgnoreCase);
         var past = new List<string>();
+        var pastNormal = new List<string>();
         foreach (var vanilla in species.Where(s => !s.Vivarium && !s.SpeciesId.StartsWith("tyrant.", StringComparison.Ordinal) && !sizedTargets.Contains(s.SpeciesId)))
         {
             if (facts.Original(vanilla.SpeciesId) is not { } original) continue;
             var none = new SizeSettings();
-            if (SizeExtremes(original, none, facts, null) is { } before && (before.Min < SizeMath.FinalMin || before.Max > SizeMath.FinalMax)) continue; // already clamped without this mod
-            if (SizeExtremes(original, none, facts, ranges) is { } after && (after.Min < SizeMath.FinalMin || after.Max > SizeMath.FinalMax)) past.Add(vanilla.SpeciesId);
+            if (SizeExtremes(original, none, facts, null) is not { } before || !limit.Contains(before.Min, before.Max)) continue; // already clamped without this mod
+            if (SizeExtremes(original, none, facts, ranges) is not { } after) continue;
+            if (!limit.Contains(after.Min, after.Max)) past.Add(vanilla.SpeciesId);
+            else if (PastNormal(after) && !PastNormal(before)) pastNormal.Add(vanilla.SpeciesId);
         }
+        static string Names(List<string> ids) => string.Join(", ", ids.Take(5)) + (ids.Count > 5 ? $" and {ids.Count - 5} more" : "");
         if (past.Count > 0)
-            warnings.Add($"The mod's genetic size ranges push {string.Join(", ", past.Take(5))}{(past.Count > 5 ? $" and {past.Count - 5} more" : "")} past the game's {SizeMath.FinalMin} to {SizeMath.FinalMax} size limits; the game clamps them.");
+            warnings.Add($"The mod's genetic size ranges push {Names(past)} past {(limit.IsGame ? "the game's" : "the mod's")} {limit} size limits; the game clamps them.");
+        if (pastNormal.Count > 0)
+            warnings.Add($"{Names(pastNormal)} {Past2xWarning}");
     }
 
     /// <summary>The smallest and largest scale a species reaches with these sizes; null when its data has no growth curve.</summary>

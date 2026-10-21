@@ -1057,6 +1057,7 @@ export interface ModSetSizeRangesParams {
   revision: string;
   nursery?: number[] | null;
   breeding?: number[] | null;
+  limit?: number[] | null;
 }
 
 export interface ModSetSizesParams {
@@ -1155,6 +1156,8 @@ export interface ModSizeRangesDto {
   breeding: number[] | null;
   gameNursery: number[];
   gameBreeding: number[];
+  limit: number[] | null;
+  gameLimit: number[];
 }
 
 export interface ModSizeRangesParams {
@@ -1179,6 +1182,7 @@ export interface ModSizesDto {
   original: ModOriginalSizeDto;
   finalAdultLength: number | null;
   recordEdits: string[];
+  limit: number[];
 }
 
 export interface ModSizesParams {

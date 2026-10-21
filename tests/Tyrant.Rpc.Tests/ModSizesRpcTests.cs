@@ -119,7 +119,7 @@ public class ModSizesRpcTests
         var (h, _) = await WithAlpha(game);
         var detail = await h.Call("mods.get", new { id = "size-pack" });
 
-        var ex = await Assert.ThrowsAsync<RpcCallException>(() => h.Call("mods.setSizes", new { id = "size-pack", revision = Rev(detail), target = "Alpha", adult = 9 }));
+        var ex = await Assert.ThrowsAsync<RpcCallException>(() => h.Call("mods.setSizes", new { id = "size-pack", revision = Rev(detail), target = "Alpha", adult = 21 }));
         var range = await Assert.ThrowsAsync<RpcCallException>(() => h.Call("mods.setSizeRanges", new { id = "size-pack", revision = Rev(detail), nursery = new[] { 0.0, 1.0 } }));
 
         Assert.Equal("MOD_INVALID", ex.DataCode);
@@ -140,8 +140,30 @@ public class ModSizesRpcTests
         Assert.Equal([0.8, 1.2], ranges.GetProperty("breeding").EnumerateArray().Select(x => x.GetDouble()));
         Assert.Equal(0.925, ranges.GetProperty("gameNursery")[0].GetDouble());
 
-        await h.Call("mods.setSizeRanges", new { id = "size-pack", revision = Rev(set) });
+        Assert.True(IsNull(ranges, "limit"));
+        Assert.Equal([0.05, 2], ranges.GetProperty("gameLimit").EnumerateArray().Select(x => Math.Round(x.GetDouble(), 6)));
+
+        var limited = await h.Call("mods.setSizeRanges", new { id = "size-pack", revision = Rev(set), nursery = new[] { 0.9, 1.1 }, limit = new[] { 0.05, 20.0 } });
+        Assert.Equal([0.05, 20], (await h.Call("mods.sizeRanges", new { id = "size-pack" })).GetProperty("limit").EnumerateArray().Select(x => x.GetDouble()));
+        var bad = await Assert.ThrowsAsync<RpcCallException>(() => h.Call("mods.setSizeRanges", new { id = "size-pack", revision = Rev(limited), limit = new[] { 0.05, 25.0 } }));
+        Assert.Equal("MOD_INVALID", bad.DataCode);
+
+        await h.Call("mods.setSizeRanges", new { id = "size-pack", revision = Rev(limited) });
         Assert.True(IsNull(await h.Call("mods.sizeRanges", new { id = "size-pack" }), "nursery"));
+        Assert.True(IsNull(await h.Call("mods.sizeRanges", new { id = "size-pack" }), "limit"));
+    }
+
+    [Fact]
+    public async Task Sizes_carry_the_size_limit_in_effect()
+    {
+        using var game = new FakeGame();
+        var (h, _) = await WithAlpha(game);
+        var detail = await h.Call("mods.get", new { id = "size-pack" });
+
+        Assert.Equal([0.05, 2], (await h.Call("mods.sizes", new { id = "size-pack", target = "Alpha" })).GetProperty("limit").EnumerateArray().Select(x => Math.Round(x.GetDouble(), 6)));
+        await h.Call("mods.setSizeRanges", new { id = "size-pack", revision = Rev(detail), limit = new[] { 0.02, 20.0 } });
+
+        Assert.Equal([0.02, 20], (await h.Call("mods.sizes", new { id = "size-pack", target = "Alpha" })).GetProperty("limit").EnumerateArray().Select(x => Math.Round(x.GetDouble(), 6)));
     }
 
     [Fact]

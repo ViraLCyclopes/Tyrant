@@ -108,10 +108,10 @@ public class ModSizeCommandTests
         using var game = new FakeGame();
         var ws = Workspace(game);
 
-        var bad = Run("mod", "size", "size-pack", "Alpha", "--adult", "9", "-w", ws);
+        var bad = Run("mod", "size", "size-pack", "Alpha", "--adult", "21", "-w", ws);
 
         Assert.NotEqual(ExitCodes.Ok, bad.Code);
-        Assert.Contains("\"adult\" must be from 0.05 to 5", bad.Err);
+        Assert.Contains("\"adult\" must be from 0.05 to 20", bad.Err);
         Assert.False(File.Exists(Path.Combine(ws, "mods", "size-pack", "sizes", "alpha.json")));
     }
 
@@ -134,6 +134,16 @@ public class ModSizeCommandTests
         var shape = Run("mod", "size-ranges", "size-pack", "--nursery", "0.9", "-w", ws);
         Assert.NotEqual(ExitCodes.Ok, shape.Code);
         Assert.Contains("takes two numbers", shape.Err);
+
+        Assert.Contains("limit the game's (0.05 to 2)", set.Out);
+        var limit = Run("mod", "size-ranges", "size-pack", "--limit", "0.05,20", "-w", ws);
+        Assert.True(limit.Code == ExitCodes.Ok, limit.Err);
+        Assert.Contains("limit 0.05 to 20", limit.Out);
+        Assert.Contains("nursery 0.9 to 1.1", limit.Out); // the other ranges are kept
+        var tooBig = Run("mod", "size-ranges", "size-pack", "--limit", "0.05,25", "-w", ws);
+        Assert.NotEqual(ExitCodes.Ok, tooBig.Code);
+        Assert.Contains("sizeRanges.limit must be [min, max] with 0.01 <= min <= 0.05 and 2 <= max <= 20", tooBig.Err);
+        Assert.Contains("takes two numbers", Run("mod", "size-ranges", "size-pack", "--limit", "20", "-w", ws).Err);
 
         Assert.Equal(ExitCodes.Ok, Run("mod", "size-ranges", "size-pack", "--clear", "-w", ws).Code);
         Assert.DoesNotContain("sizeRanges", File.ReadAllText(Path.Combine(ws, "mods", "size-pack", "mod.json")));

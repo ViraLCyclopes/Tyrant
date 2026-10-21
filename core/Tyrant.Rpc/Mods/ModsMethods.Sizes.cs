@@ -14,10 +14,11 @@ public sealed record ModOriginalSizeDto(double? AdultLength, double BabyShare, I
 /// <summary>
 /// A mod's size changes for one species (null: unchanged), the game's original, and the model length they give. File: the
 /// sizes/ file they are in (or would go in); Check's messages about it start with "sizes/&lt;file&gt;:". RecordEdits: a mod
-/// species' old record edits that change its size outside Size (mods.removeSizeEdits removes them).
+/// species' old record edits that change its size outside Size (mods.removeSizeEdits removes them). Limit: the size limit
+/// [min, max] the mod's sizes are judged by (its "sizeRanges.limit", else the game's).
 /// </summary>
 public sealed record ModSizesDto(string Target, string File, double? Adult, double? Baby, double? Male, double? Female, ModOriginalSizeDto Original,
-    double? FinalAdultLength, IReadOnlyList<string> RecordEdits);
+    double? FinalAdultLength, IReadOnlyList<string> RecordEdits, IReadOnlyList<double> Limit);
 
 public sealed record ModSizesParams(string Id, string Target);
 public sealed record ModRemoveSizeEditsParams(string Id, string Revision, string Target);
@@ -26,13 +27,23 @@ public sealed record ModSizeTargetsParams(string Id);
 public sealed record ModSizeTargetsDto(IReadOnlyList<string> Targets);
 public sealed record ModSizeRangesParams(string Id);
 
-/// <summary>Nursery and Breeding are the mod's [min, max] (null: the game's); GameNursery and GameBreeding are the game's own.</summary>
-public sealed record ModSizeRangesDto(IReadOnlyList<double>? Nursery, IReadOnlyList<double>? Breeding, IReadOnlyList<double> GameNursery, IReadOnlyList<double> GameBreeding);
-public sealed record ModSetSizeRangesParams(string Id, string Revision, IReadOnlyList<double>? Nursery = null, IReadOnlyList<double>? Breeding = null);
+/// <summary>
+/// Nursery, Breeding and Limit are the mod's [min, max] (null: the game's); GameNursery, GameBreeding and GameLimit are the game's own.
+/// Limit is the size limit on an animal's final scale.
+/// </summary>
+public sealed record ModSizeRangesDto(IReadOnlyList<double>? Nursery, IReadOnlyList<double>? Breeding, IReadOnlyList<double> GameNursery, IReadOnlyList<double> GameBreeding,
+    IReadOnlyList<double>? Limit, IReadOnlyList<double> GameLimit);
+
+/// <summary>Replaces all three: a range left out (null) is the game's.</summary>
+public sealed record ModSetSizeRangesParams(string Id, string Revision, IReadOnlyList<double>? Nursery = null, IReadOnlyList<double>? Breeding = null,
+    IReadOnlyList<double>? Limit = null);
 
 /// <summary>mods.sizes and the size edits (undo and redo go through mods.restoreSnapshot).</summary>
 public sealed partial class ModsMethods
 {
+    /// <summary>The game's size limit, 0.05 to 2 (as doubles: the game's floats rounded).</summary>
+    private static double[] GameLimit => [Math.Round(SizeMath.FinalMin, 6), Math.Round(SizeMath.FinalMax, 6)];
+
     [RpcMethod("mods.sizes")]
     public ModSizesDto Sizes(ModSizesParams p)
     {
@@ -52,7 +63,7 @@ public sealed partial class ModsMethods
         var c1 = found is null ? 0f : SizeMath.Evaluate(found.Curve, 1f);
         var original = new ModOriginalSizeDto(length, c1 == 0f ? 1 : c0 / (double)c1, (found?.Skins ?? []).Select(s => new ModSkinSizeDto(s.Male, s.Female)).ToList());
         return new ModSizesDto(set?.Target ?? p.Target, mod.SizeFileOf(p.Target), set?.Adult, set?.Baby, set?.Male, set?.Female, original, length is { } l ? l * (set?.Adult ?? 1) : null,
-            mod.SizeRecordEdits(p.Target));
+            mod.SizeRecordEdits(p.Target), mod.Manifest.SizeRanges?.Limit ?? GameLimit);
     }
 
     [RpcMethod("mods.setSizes")]
@@ -80,10 +91,11 @@ public sealed partial class ModsMethods
         var facts = SpeciesSizes.Facts(ws, mod);
         var (incubation, breeding) = (facts?.Incubation ?? SpeciesSizes.DefaultIncubation, facts?.Breeding ?? SpeciesSizes.DefaultBreeding);
         var ranges = mod.Manifest.SizeRanges;
-        return new ModSizeRangesDto(ranges?.Nursery, ranges?.Breeding, [incubation.Min, incubation.Max], [breeding.Min, breeding.Max]);
+        return new ModSizeRangesDto(ranges?.Nursery, ranges?.Breeding, [incubation.Min, incubation.Max], [breeding.Min, breeding.Max], ranges?.Limit, GameLimit);
     }
 
     [RpcMethod("mods.setSizeRanges")]
     public ModDetail SetSizeRanges(ModSetSizeRangesParams p) =>
-        Edit(p.Id, p.Revision, mod => mod.SetSizeRanges(new SizeRanges { Nursery = p.Nursery?.ToArray(), Breeding = p.Breeding?.ToArray() }), "set its genetic size ranges");
+        Edit(p.Id, p.Revision, mod => mod.SetSizeRanges(new SizeRanges { Nursery = p.Nursery?.ToArray(), Breeding = p.Breeding?.ToArray(), Limit = p.Limit?.ToArray() }),
+            "set its size ranges");
 }

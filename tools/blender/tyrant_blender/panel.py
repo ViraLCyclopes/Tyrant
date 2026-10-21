@@ -250,11 +250,12 @@ SKIN_SIZES = "Sizes apply to the whole species; set them in the app."
 
 # The Size panel's fields: key, label, limits (as sizes/<file>.json), tooltip.
 SIZE_FIELDS = (
-    ("adult", "Adult size ×", 0.05, 5.0, "Multiplies the real adult size (both sexes)"),
+    ("adult", "Adult size ×", 0.05, 20.0, "Multiplies the real adult size (both sexes)"),
     ("baby", "Baby size (share of adult)", 0.001, 1.0, "The newborn's size as a share of the adult's"),
-    ("male", "Male size ×", 0.1, 5.0, "Multiplies the males' size"),
-    ("female", "Female size ×", 0.1, 5.0, "Multiplies the females' size"),
+    ("male", "Male size ×", 0.1, 20.0, "Multiplies the males' size"),
+    ("female", "Female size ×", 0.1, 20.0, "Multiplies the females' size"),
 )
+_SIZE_LIMITS = {key: (low, high) for key, _label, low, high, _about in SIZE_FIELDS}
 
 
 def size_getter(key):
@@ -281,7 +282,8 @@ def size_setter(key):
         if not (data or {}).get("sizesEditable"):
             return
         edits = growth.size_edits(obj)
-        edits[key] = round(value, 6)  # Blender's fields are single precision: 1.2 arrives as 1.2000000477
+        low, high = _SIZE_LIMITS[key]  # a field with its own setter is not kept to its limits by Blender
+        edits[key] = round(min(max(value, low), high), 6)  # Blender's fields are single precision: 1.2 arrives as 1.2000000477
         obj[growth.EDITS] = json.dumps(edits)
         growth.set_growth(obj, obj.tyrant_growth)
     return set_

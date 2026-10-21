@@ -74,7 +74,7 @@ public class ModSizesTests
         Assert.Empty(mod.SizeTargets);
         Assert.False(Directory.Exists(Path.Combine(mod.Dir, "sizes")));
 
-        var bad = Assert.Throws<TyrantException>(() => mod.SetSizes("Alpha", new SizeSettings { Adult = 9 }));
+        var bad = Assert.Throws<TyrantException>(() => mod.SetSizes("Alpha", new SizeSettings { Adult = 21 }));
         Assert.Equal(TyrantErrorCode.ModInvalid, bad.Code);
         Assert.Empty(mod.SizeTargets);
 
@@ -193,7 +193,7 @@ public class ModSizesTests
         var (game, ws, mod) = Setup();
         using var _ = game;
         Directory.CreateDirectory(Path.Combine(mod.Dir, "sizes"));
-        File.WriteAllText(Path.Combine(mod.Dir, "sizes", "alpha.json"), """{"format":1,"target":"Alpha","adult":9}""");
+        File.WriteAllText(Path.Combine(mod.Dir, "sizes", "alpha.json"), """{"format":1,"target":"Alpha","adult":21}""");
 
         Assert.Contains(Check(ws, mod).Errors, e => e.Contains("sizes/alpha.json") && e.Contains("adult"));
     }
@@ -305,6 +305,71 @@ public class ModSizesTests
 
         mod.SetSizes("Big", new SizeSettings { Adult = 0.5 }); // sized species are judged by their own error, not this warning
         Assert.DoesNotContain(Check(ws, mod).Warnings, w => w.Contains("genetic size"));
+    }
+
+    private const string Past2x = "can grow past the game's normal 2× limit; the size class, camera framing, foot placement and enclosure needs were tuned for normal sizes.";
+
+    [Fact]
+    public void SetSizeRanges_keeps_the_limit_within_its_bounds()
+    {
+        var (game, ws, mod) = Setup();
+        using var _ = game;
+
+        mod.SetSizeRanges(new SizeRanges { Limit = [0.05, 20], Nursery = [0.25, 20] });
+
+        var again = ModProject.Open(ws, "size-pack").Manifest.SizeRanges!;
+        Assert.Equal([0.05, 20], again.Limit!);
+        Assert.Equal([0.25, 20], again.Nursery!);
+        foreach (var bad in new double[][] { [0.06, 20], [0.009, 20], [0.05, 1.9], [0.05, 21], [0.05] })
+        {
+            var ex = Assert.Throws<TyrantException>(() => mod.SetSizeRanges(new SizeRanges { Limit = bad }));
+            Assert.Equal(TyrantErrorCode.ModInvalid, ex.Code);
+            Assert.Contains("sizeRanges.limit must be [min, max] with 0.01 <= min <= 0.05 and 2 <= max <= 20", ex.Message);
+        }
+        Assert.Throws<TyrantException>(() => mod.SetSizeRanges(new SizeRanges { Breeding = [0.5, 20.5] }));
+        Assert.Equal([0.05, 20], ModProject.Open(ws, "size-pack").Manifest.SizeRanges!.Limit!);
+    }
+
+    [Fact]
+    public void A_raised_limit_moves_the_cap_and_warns_past_2x()
+    {
+        var (game, ws, mod) = Setup();
+        using var _ = game;
+        mod.SetSizes("Big", new SizeSettings { Adult = 1.5 }); // past 2, inside 20
+        Assert.DoesNotContain(Check(ws, mod).Warnings, w => w.Contains(Past2x));
+
+        mod.SetSizeRanges(new SizeRanges { Limit = [0.05, 20] });
+        var result = Check(ws, mod);
+
+        Assert.DoesNotContain(result.Errors, e => e.Contains("Big"));
+        Assert.Contains("sizes/big.json: Big " + Past2x, result.Warnings);
+
+        mod.SetSizes("Big", new SizeSettings { Adult = 15 }); // 1.5 x 15 x 1.15 is past 20
+        Assert.Contains(Check(ws, mod).Errors, e => e.StartsWith("sizes/big.json: Big would be scaled from") && e.Contains("the mod's size limit allows 0.05 to 20"));
+
+        mod.SetSizes("Big", new SizeSettings { Adult = 1.1 }); // 1.5 x 1.1 x 1.15 is under 2
+        Assert.DoesNotContain(Check(ws, mod).Warnings, w => w.Contains(Past2x));
+    }
+
+    [Fact]
+    public void Ranges_within_a_raised_limit_warn_past_2x_instead()
+    {
+        var (game, ws, mod) = Setup();
+        using var _ = game;
+
+        mod.SetSizeRanges(new SizeRanges { Breeding = [0.5, 1.5], Limit = [0.05, 20] }); // Big: 1.5 x 1.5 = 2.25
+        var warnings = Check(ws, mod).Warnings;
+
+        Assert.DoesNotContain(warnings, w => w.Contains("genetic size"));
+        Assert.Contains("Big " + Past2x, warnings);
+
+        mod.SetSizeRanges(new SizeRanges { Breeding = [0.5, 15], Limit = [0.05, 20] }); // Big: 1.5 x 15 = 22.5; Alpha: 1.2 x 15 = 18
+        warnings = Check(ws, mod).Warnings;
+        var past = Assert.Single(warnings, w => w.Contains("genetic size"));
+        Assert.Contains("Big", past);
+        Assert.DoesNotContain("Alpha", past);
+        Assert.Contains("0.05 to 20", past);
+        Assert.Contains("Alpha " + Past2x, warnings);
     }
 
     [Fact]

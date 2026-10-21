@@ -79,14 +79,14 @@ public sealed partial class ModProject
         return edits;
     }
 
-    /// <summary>Sets the genetic size ranges in mod.json; null (or both unset) removes them.</summary>
+    /// <summary>Sets the genetic size ranges and the size limit in mod.json; null (or all unset) removes them.</summary>
     public void SetSizeRanges(SizeRanges? ranges)
     {
-        foreach (var (name, range) in new[] { ("nursery", ranges?.Nursery), ("breeding", ranges?.Breeding) })
-            if (range is not null && !(range.Length == 2 && range[0] > SizeRanges.Min && range[0] <= range[1] && range[1] <= SizeRanges.Max))
-                throw new TyrantException(TyrantErrorCode.ModInvalid, $"sizeRanges.{name} must be [min, max] with 0 < min <= max <= {SizeRanges.Max}.");
+        foreach (var (name, range) in new[] { ("nursery", ranges?.Nursery), ("breeding", ranges?.Breeding), ("limit", ranges?.Limit) })
+            if (range is not null && SizeRanges.Problem(name, range) is { } problem)
+                throw new TyrantException(TyrantErrorCode.ModInvalid, $"sizeRanges.{name} {problem}.");
         var old = Manifest.SizeRanges;
-        Manifest.SizeRanges = ranges is null || ranges.IsEmpty ? null : new SizeRanges { Nursery = ranges.Nursery, Breeding = ranges.Breeding };
+        Manifest.SizeRanges = ranges is null || ranges.IsEmpty ? null : new SizeRanges { Nursery = ranges.Nursery, Breeding = ranges.Breeding, Limit = ranges.Limit };
         try { Save(); }
         catch { Manifest.SizeRanges = old; throw; }
     }

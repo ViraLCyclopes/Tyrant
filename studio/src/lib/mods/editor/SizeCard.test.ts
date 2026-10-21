@@ -13,7 +13,7 @@ import { ModDoc } from './modDoc.svelte';
 import SizeCard from './SizeCard.svelte';
 
 const sizes = (over: Partial<ModSizesDto> = {}): ModSizesDto => ({
-  target: 'Spinosaurus', file: 'spinosaurus.json', adult: null, baby: null, male: null, female: null, recordEdits: [],
+  target: 'Spinosaurus', file: 'spinosaurus.json', adult: null, baby: null, male: null, female: null, recordEdits: [], limit: [0.05, 2],
   original: { adultLength: 12.1, babyShare: 0.25, skins: [{ male: 1, female: 1.1 }] }, finalAdultLength: 12.1, ...over,
 });
 
@@ -86,10 +86,38 @@ describe('SizeCard', () => {
   it('a value past the limits is not sent', async () => {
     const { rpc } = await setup();
     const adult = screen.getByRole('spinbutton', { name: 'Adult size ×' });
-    await fireEvent.input(adult, { target: { value: '9' } });
+    await fireEvent.input(adult, { target: { value: '21' } });
     await fireEvent.change(adult);
     expect(rpc.callsTo('mods.setSizes')).toHaveLength(0);
-    expect(screen.getByText(/from 0.05 to 5/)).toBeInTheDocument();
+    expect(screen.getByText(/from 0.05 to 20/)).toBeInTheDocument();
+  });
+
+  it('the number fields take up to 20 under the game’s limit; the sliders stay at 5', async () => {
+    const { rpc } = await setup(); // the game's limit, 0.05 to 2
+    expect(screen.getByRole('spinbutton', { name: 'Adult size ×' })).toHaveAttribute('max', '20');
+    expect(screen.getByRole('spinbutton', { name: 'Female size ×' })).toHaveAttribute('max', '20');
+    expect(screen.getByRole('slider', { name: 'Adult size × slider' })).toHaveAttribute('max', '5');
+    const male = screen.getByRole('spinbutton', { name: 'Male size ×' });
+    await fireEvent.input(male, { target: { value: '9' } });
+    await fireEvent.change(male);
+    await waitFor(() => expect(rpc.callsTo('mods.setSizes')).toHaveLength(1));
+    expect(rpc.callsTo('mods.setSizes')[0].params).toMatchObject({ male: 9 });
+  });
+
+  it('with a raised size limit the sliders reach it', async () => {
+    const { rpc } = await setup(sizes({ limit: [0.05, 20] }));
+    expect(screen.getByRole('slider', { name: 'Adult size × slider' })).toHaveAttribute('max', '20');
+    expect(screen.getByRole('slider', { name: 'Male size × slider' })).toHaveAttribute('max', '20');
+    expect(screen.getByRole('slider', { name: 'Female size × slider' })).toHaveAttribute('max', '20');
+    expect(screen.getByRole('slider', { name: 'Baby size (share of adult) slider' })).toHaveAttribute('max', '1');
+    const adult = screen.getByRole('spinbutton', { name: 'Adult size ×' });
+    await fireEvent.input(adult, { target: { value: '21' } });
+    await fireEvent.change(adult);
+    expect(screen.getByText(/from 0.05 to 20/)).toBeInTheDocument();
+    await fireEvent.input(adult, { target: { value: '12' } });
+    await fireEvent.change(adult);
+    await waitFor(() => expect(rpc.callsTo('mods.setSizes')).toHaveLength(1));
+    expect(rpc.callsTo('mods.setSizes')[0].params).toMatchObject({ adult: 12 });
   });
 
   it('names old record edits of the size and removes them', async () => {
