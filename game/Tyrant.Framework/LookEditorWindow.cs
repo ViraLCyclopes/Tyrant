@@ -51,6 +51,7 @@ namespace Tyrant.Framework
         private static SaveTarget? _target;
         private static MaterialOverride? _below;
         private static bool? _lastOn, _lastGrow;
+        private static FurAge? _lastAge;
         private static string _furNote = ""; // the status line's fur note when Tick last looked
         private static object? _previewShown; // the Nursery preview a Next created draft shows on (MaterialsModule.SetPreviewLook)
         private static List<object> _matching = new List<object>();
@@ -321,6 +322,7 @@ namespace Tyrant.Framework
             _draft = new LookDraft(_scope, SavedBlock(c));
             _lastOn = OwnOn();
             _lastGrow = _draft.Current.Fur?.Grow;
+            _lastAge = _draft.Current.Fur?.Age;
             try
             {
                 _target = SaveTargets.For(_scope, c.Species, c.ModSkin, c.VanillaSkinKey, c.CustomSpeciesModId != null, c.CustomSpeciesModId, MaterialsModule.Table, c.MaterialName);
@@ -395,19 +397,24 @@ namespace Tyrant.Framework
             if (_draft == null || _context == null) return;
             var on = OwnOn();
             var grow = _draft.Current.Fur?.Grow;
-            var keywords = on != _lastOn || grow != _lastGrow; // the shader variant changes only when iridescence or grown fur turns on or off
+            var age = _draft.Current.Fur?.Age;
+            // The shader variant changes only when iridescence or grown fur turns on or off (an age grows fur too).
+            var keywords = on != _lastOn || grow != _lastGrow || age != _lastAge;
             _lastOn = on;
             _lastGrow = grow;
+            _lastAge = age;
             PushLive(keywords);
             if (rebuild) Rebuild();
             else Footer();
         }
 
+        /// <summary>The draft's own on (a strength of any variant, or the baby strength, above 0); null when it sets neither.</summary>
         private static bool? OwnOn()
         {
-            var strength = _draft?.Current.Iridescence?.Strength;
-            if (strength == null) return null;
-            return LookEditing.Variants.Any(v => LookEditing.StrengthFor(strength, v) > 0);
+            var iridescence = _draft?.Current.Iridescence;
+            var strength = iridescence?.Strength;
+            if (strength == null && iridescence?.BabyStrength == null) return null;
+            return iridescence!.BabyStrength > 0 || (strength != null && LookEditing.Variants.Any(v => LookEditing.StrengthFor(strength, v) > 0));
         }
 
         private static void PushLive(bool keywords)

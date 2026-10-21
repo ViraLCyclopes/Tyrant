@@ -14,10 +14,11 @@ namespace Tyrant.Framework
 {
     /// <summary>
     /// Mod material settings, iridescence and fur masks per animal, at draw time and never saved: a transpiler on
-    /// AnimalMaterials.CalculateKeywords adds ExtraFeatures (the shader variant with iridescence) when the animal's strength is
-    /// above 0 and the fur variant when a block grows fur ("fur.grow"), and postfixes on AnimalVisuals.SetAnimalMaterialVariation
-    /// and AnimalGrowthManager.UpdateGrowth (the two places the game writes _IridescenceStrength, _FresnelIntensity and
-    /// _DroopDirection) write the settings, ramp, masks, shaping, strength and grown fur into the property block, read from the
+    /// AnimalMaterials.CalculateKeywords adds ExtraFeatures (the shader variant with iridescence) when the animal's strength or
+    /// baby strength is above 0 and the fur variant when a block grows fur ("fur.grow", "fur.age"), and postfixes on
+    /// AnimalVisuals.SetAnimalMaterialVariation and AnimalGrowthManager.UpdateGrowth (the two places the game writes
+    /// _IridescenceStrength, _FresnelIntensity and _DroopDirection, each a lerp from baby to adult by the integument: see
+    /// <see cref="AgeLooks"/>) write the settings, ramp, masks, shaping, strength and grown fur into the property block, read from the
     /// first LOD renderer and written to every LOD like the game's own edit scope. On top of the mods' table lie the in-game
     /// editor's live edits and the park's per-animal looks (<see cref="MaterialTable.MergeLayers"/>). A key Tyrant wrote on a
     /// renderer and no longer sets (the Nursery preview reuses one animal for every skin, the vivarium reuses pooled animals) goes back to the base material's value, or to the game's for the keys the game writes per animal.
@@ -275,9 +276,10 @@ namespace Tyrant.Framework
         }
 
         /// <summary>
-        /// Adds ExtraFeatures when the animal's iridescence strength for its variant is above 0. When a block grows fur and the
-        /// game's tessellation is on, gives the fur variant as the game gives a skin with a fur map (TessellationFur and
-        /// ExtraFeatures in place of TessellationOff). Never removes another keyword.
+        /// Adds ExtraFeatures when the animal's iridescence strength for its variant, or its baby strength, is above 0 (so a baby
+        /// shimmers on a skin the game gives none). When a block grows fur (grow or an age) and the game's tessellation is on,
+        /// gives the fur variant as the game gives a skin with a fur map (TessellationFur and ExtraFeatures in place of
+        /// TessellationOff). Never removes another keyword.
         /// </summary>
         private static int AddKeywords(int keywords, object animal)
         {
@@ -286,9 +288,8 @@ namespace Tyrant.Framework
             {
                 var found = Resolve(animal, MembersOf(animal.GetType()));
                 if (found == null) return keywords;
-                var strength = found.Override.Iridescence?.Strength;
-                if (strength != null && strength.For(SkinTypeOf(found.Members, animal)) > 0) keywords |= ExtraFeatures;
-                if (found.Override.Fur?.Grow == true) keywords = WithFur(keywords);
+                if (AgeLooks.Shimmers(found.Override.Iridescence, SkinTypeOf(found.Members, animal))) keywords |= ExtraFeatures;
+                if (AgeLooks.NeedsFurVariant(found.Override.Fur)) keywords = WithFur(keywords);
             }
             catch (Exception ex)
             {
@@ -667,22 +668,29 @@ namespace Tyrant.Framework
                     SetVector("_IridescenceMask_ST", new Vector4(i.Tiling?[0] ?? 1, i.Tiling?[1] ?? 1, i.Offset?[0] ?? 0, i.Offset?[1] ?? 0));
                 if (ramp != null) SetTexture(RampProperty, ramp);
                 if (mask != null) SetTexture(MaskProperty, mask);
-                if (i.Strength != null)
+                if (AgeLooks.WritesStrength(i))
                 {
-                    var strength = MaterialStrength.For(i.Strength.For(SkinTypeOf(members, animal)), MaterialTable.EffectiveVariation(i), IdOf(members, animal));
-                    SetGameFloat(record, StrengthProperty, strength * Block.GetFloat("_IntegumentMaturity"), fromHook);
+                    // From the baby strength (0 when left out, the game's own) to the adult one (Tyrant's, else the game's), by
+                    // the integument the game wrote just before; both vary between animals alike.
+                    var variation = MaterialTable.EffectiveVariation(i);
+                    var id = IdOf(members, animal);
+                    var adult = i.Strength != null ? MaterialStrength.For(i.Strength.For(SkinTypeOf(members, animal)), variation, id) : GameStrength(members, animal);
+                    var baby = MaterialStrength.For(i.BabyStrength ?? 0, variation, id);
+                    SetGameFloat(record, StrengthProperty, AgeLooks.Strength(baby, adult, Block.GetFloat("_IntegumentMaturity")), fromHook);
                 }
             }
-            // Grown fur: the full fur amount (the game writes 0 without fur maps), and where neither Tyrant nor the game has a
-            // fur mask for an age, white (fur on the whole body); a "game" fur mask keeps the game's. The keywords come from AddKeywords.
+            // Grown fur: the fur amount from the age's ends (grow alone: full at every age; the game writes 0 without fur maps),
+            // and where neither Tyrant nor the game has a fur mask for an age that should have fur, white (fur on the whole
+            // body); a "game" fur mask keeps the game's. The keywords come from AddKeywords.
             var grow = o.Fur?.Grow == true;
+            var stages = AgeLooks.GrownStages(o.Fur?.Age, grow);
             var adultGame = o.Fur?.Mask?.Game == true;
             var infantGame = o.Fur?.InfantMask?.Game ?? adultGame;
-            if (grow) SetGameFloat(record, FuzzProperty, 1f, fromHook);
+            if (AgeLooks.FuzzEnds(o.Fur?.Age, grow) is { } ends) SetGameFloat(record, FuzzProperty, AgeLooks.Fuzz(ends, Block.GetFloat("_IntegumentMaturity")), fromHook);
             if (adultFur != null) SetGameTexture(record, AdultFurProperty, adultFur);
-            else if (grow && !adultGame && !GameHasFur(members, animal, record, AdultFurProperty, "adultFurMap")) SetGameTexture(record, AdultFurProperty, Texture2D.whiteTexture);
+            else if (stages.Adult && !adultGame && !GameHasFur(members, animal, record, AdultFurProperty, "adultFurMap")) SetGameTexture(record, AdultFurProperty, Texture2D.whiteTexture);
             if (infantFur != null) SetGameTexture(record, InfantFurProperty, infantFur);
-            else if (grow && !infantGame && !GameHasFur(members, animal, record, InfantFurProperty, "infantFurMap")) SetGameTexture(record, InfantFurProperty, Texture2D.whiteTexture);
+            else if (stages.Baby && !infantGame && !GameHasFur(members, animal, record, InfantFurProperty, "infantFurMap")) SetGameTexture(record, InfantFurProperty, Texture2D.whiteTexture);
 
             Restore(record, found.Material, Writing, fromHook);
             foreach (var renderer in Renderers) renderer.SetPropertyBlock(Block);
@@ -1275,6 +1283,7 @@ namespace Tyrant.Framework
                 BaseData = AccessTools.Property(type, "BaseData");
                 SkinData = AccessTools.Property(type, "SkinData");
                 OwnSkinVariationData = AccessTools.Property(type, "OwnSkinVariationData");
+                SkinVariationRuntime = AccessTools.Property(type, "SkinVariationRuntime");
                 SkinType = AccessTools.Property(type, "SkinType");
                 Sex = AccessTools.Property(type, "Sex");
                 BaseMaterial = AccessTools.Property(type, "BaseMaterial");
@@ -1298,6 +1307,9 @@ namespace Tyrant.Framework
 
             /// <summary>IAnimal.OwnSkinVariationData (an AnimalSkinVariationAsset): its fur map references say whether the game has fur.</summary>
             public PropertyInfo? OwnSkinVariationData { get; }
+
+            /// <summary>IAnimal.SkinVariationRuntime: the animal's own iridescenceOn and iridescenceStrength.</summary>
+            public PropertyInfo? SkinVariationRuntime { get; }
 
             public PropertyInfo? SkinType { get; }
             public PropertyInfo? Sex { get; }
@@ -1376,6 +1388,17 @@ namespace Tyrant.Framework
         /// <summary>IAnimal.SkinType as the game's AnimalSkinType number (0 base, 1 albino, 2 melanistic, 3 leucistic).</summary>
         private static int SkinTypeOf(Members members, object animal) =>
             members.SkinType?.GetValue(animal, null) is IConvertible value ? value.ToInt32(null) : 0;
+
+        /// <summary>
+        /// The grown animal's strength in the game (SkinVariationRuntime: iridescenceStrength while iridescenceOn, else 0), the
+        /// adult end of a baby strength's lerp when no layer sets the adult one; 0 when it cannot be read.
+        /// </summary>
+        private static float GameStrength(Members members, object animal)
+        {
+            var runtime = members.SkinVariationRuntime?.GetValue(animal, null);
+            if (runtime == null || !(FieldOf(runtime, "iridescenceOn")?.GetValue(runtime) is bool on) || !on) return 0f;
+            return FieldOf(runtime, "iridescenceStrength")?.GetValue(runtime) is float strength ? strength : 0f;
+        }
 
         /// <summary>PersistentID.uniqueID when the animal has a valid one; null otherwise (then it gets the set strength exactly).</summary>
         private static ulong? IdOf(Members members, object animal)
