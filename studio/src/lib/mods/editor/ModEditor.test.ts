@@ -44,7 +44,7 @@ describe('ModEditor', () => {
     const { rpc } = setup();
     rpc.on('mods.species', () => ({ hasDump: true, species: [{ speciesId: 'Spinosaurus', vivarium: false, skins: [] }] }))
       .on('mods.animalDatabase', () => ({ animals: [], fields: [] }))
-      .on('mods.sizes', () => ({ target: 'Spinosaurus', file: 'spinosaurus.json', adult: null, baby: null, male: null, female: null, original: { adultLength: 12, babyShare: 0.25, skins: [] }, finalAdultLength: 12, recordEdits: [], limit: [0.05, 2] }));
+      .on('mods.sizes', () => ({ target: 'Spinosaurus', file: 'spinosaurus.json', adult: null, baby: null, male: null, female: null, original: { adultLength: 12, babyShare: 0.25, skins: [], curve: [] }, finalAdultLength: 12, recordEdits: [], nursery: null, breeding: null, gameNursery: [0.925, 1.075], gameBreeding: [0.85, 1.15], name: 'Spinosaurus', baseName: 'Spinosaurus' }));
 
     await fireEvent.click(await screen.findByRole('button', { name: 'Add sizes' }));
     expect(await screen.findByRole('heading', { name: 'Add sizes' })).toBeInTheDocument();

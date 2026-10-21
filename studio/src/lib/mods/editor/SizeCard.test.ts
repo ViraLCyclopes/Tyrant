@@ -14,11 +14,11 @@ import SizeCard from './SizeCard.svelte';
 
 const sizes = (over: Partial<ModSizesDto> = {}): ModSizesDto => ({
   target: 'Spinosaurus', file: 'spinosaurus.json', adult: null, baby: null, male: null, female: null, recordEdits: [],
-  nursery: null, breeding: null, limit: null, gameNursery: [0.925, 1.075], gameBreeding: [0.85, 1.15], gameLimit: [0.05, 2],
-  original: { adultLength: 12.1, babyShare: 0.25, skins: [{ male: 1, female: 1.1 }] }, finalAdultLength: 12.1, ...over,
+  nursery: null, breeding: null, gameNursery: [0.925, 1.075], gameBreeding: [0.85, 1.15], name: 'Spinosaurus', baseName: 'Spinosaurus',
+  original: { adultLength: 12.1, babyShare: 0.25, skins: [{ male: 1, female: 1.1 }], curve: [[0, 0.25], [1, 1]] }, finalAdultLength: 12.1, ...over,
 });
 
-async function setup(dto: ModSizesDto = sizes(), errors: string[] = [], refuse = false, notes: string[] | null = null) {
+async function setup(dto: ModSizesDto = sizes(), errors: string[] = [], refuse = false) {
   const rpc = new FakeRpc()
     .on('mods.get', () => modDetail())
     .on('mods.check', () => ({ errors, warnings: [], missingCutouts: [] }))
@@ -26,7 +26,7 @@ async function setup(dto: ModSizesDto = sizes(), errors: string[] = [], refuse =
     .on('mods.removeSizeEdits', () => modDetail({ revision: 'r3' }))
     .on('mods.setSizes', () => {
       if (refuse) throw new RpcError('The mod folder is read-only.', 'IO_ERROR');
-      return modDetail({ revision: 'r2', notes });
+      return modDetail({ revision: 'r2' });
     });
   const session = new Session(rpc, new FakePlatform(), memoryStore());
   const tab = new Tab('tab-mod', session.log, { retitle: () => {}, openTool: () => null });
@@ -93,8 +93,8 @@ describe('SizeCard', () => {
     expect(screen.getByText(/from 0.05 to 20/)).toBeInTheDocument();
   });
 
-  it('the number fields take up to 20 under the game’s limit; the sliders stay at 5', async () => {
-    const { rpc } = await setup(); // the game's limit, 0.05 to 2
+  it('the number fields take up to 20; the sliders stay at 5', async () => {
+    const { rpc } = await setup();
     expect(screen.getByRole('spinbutton', { name: 'Adult size ×' })).toHaveAttribute('max', '20');
     expect(screen.getByRole('spinbutton', { name: 'Female size ×' })).toHaveAttribute('max', '20');
     expect(screen.getByRole('slider', { name: 'Adult size × slider' })).toHaveAttribute('max', '5');
@@ -103,23 +103,6 @@ describe('SizeCard', () => {
     await fireEvent.change(male);
     await waitFor(() => expect(rpc.callsTo('mods.setSizes')).toHaveLength(1));
     expect(rpc.callsTo('mods.setSizes')[0].params).toMatchObject({ male: 9 });
-  });
-
-  it('with a raised size limit the sliders reach it', async () => {
-    // The species' own limit, from its Size card.
-    const { rpc } = await setup(sizes({ limit: [0.05, 20] }));
-    expect(screen.getByRole('slider', { name: 'Adult size × slider' })).toHaveAttribute('max', '20');
-    expect(screen.getByRole('slider', { name: 'Male size × slider' })).toHaveAttribute('max', '20');
-    expect(screen.getByRole('slider', { name: 'Female size × slider' })).toHaveAttribute('max', '20');
-    expect(screen.getByRole('slider', { name: 'Baby size (share of adult) slider' })).toHaveAttribute('max', '1');
-    const adult = screen.getByRole('spinbutton', { name: 'Adult size ×' });
-    await fireEvent.input(adult, { target: { value: '21' } });
-    await fireEvent.change(adult);
-    expect(screen.getByText(/from 0.05 to 20/)).toBeInTheDocument();
-    await fireEvent.input(adult, { target: { value: '12' } });
-    await fireEvent.change(adult);
-    await waitFor(() => expect(rpc.callsTo('mods.setSizes')).toHaveLength(1));
-    expect(rpc.callsTo('mods.setSizes')[0].params).toMatchObject({ adult: 12 });
   });
 
   it('names old record edits of the size and removes them', async () => {
@@ -149,87 +132,6 @@ describe('SizeCard', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Reset Adult size ×' }));
     await waitFor(() => expect(rpc.callsTo('mods.setSizes')).toHaveLength(1));
     expect(rpc.callsTo('mods.setSizes')[0].params).toMatchObject({ target: 'Spinosaurus', adult: null, male: 1.2, baby: null, female: null });
-  });
-
-  it('shows the game’s ranges and limit pre-filled, marked as the game’s', async () => {
-    await setup();
-    const nursery = screen.getByRole('group', { name: 'Nursery size slider range' });
-    expect(within(nursery).getByRole('spinbutton', { name: 'Nursery size slider range minimum' })).toHaveValue(0.925);
-    expect(within(nursery).getByRole('spinbutton', { name: 'Nursery size slider range maximum' })).toHaveValue(1.075);
-    expect(within(nursery).getByText("game's")).toBeInTheDocument();
-    const breeding = screen.getByRole('group', { name: 'Breeding size range' });
-    expect(within(breeding).getByRole('spinbutton', { name: 'Breeding size range minimum' })).toHaveValue(0.85);
-    expect(within(breeding).getByRole('spinbutton', { name: 'Breeding size range maximum' })).toHaveValue(1.15);
-    const limit = screen.getByRole('group', { name: 'Size limit' });
-    expect(within(limit).getByRole('spinbutton', { name: 'Size limit minimum' })).toHaveValue(0.05);
-    expect(within(limit).getByRole('spinbutton', { name: 'Size limit maximum' })).toHaveValue(2);
-    expect(within(limit).getByText("game's")).toBeInTheDocument();
-    expect(screen.getByText(/Random eggs keep the game's range/)).toBeInTheDocument();
-    expect(screen.getByText('The game caps animals at 0.05×–2×. A wider limit lets sizes past 2× show in game; the game was tuned for normal sizes, so very big animals may clip, get stuck or frame badly.')).toBeInTheDocument();
-    expect(screen.getByText('Minimum 0.01–0.05, maximum 2–20. With several mods on, the widest limit wins.')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /^Reset/ })).toBeNull();
-  });
-
-  it('editing a range end sends that key from the game’s values, the other keys as they are', async () => {
-    const { rpc } = await setup(sizes({ adult: 1.2 }));
-    const max = screen.getByRole('spinbutton', { name: 'Nursery size slider range maximum' });
-    await fireEvent.input(max, { target: { value: '3' } });
-    await fireEvent.change(max);
-    await waitFor(() => expect(rpc.callsTo('mods.setSizes')).toHaveLength(1));
-    expect(rpc.callsTo('mods.setSizes')[0].params).toMatchObject({ target: 'Spinosaurus', adult: 1.2, nursery: [0.925, 3], breeding: null, limit: null });
-  });
-
-  it('a set range shows its values and the game’s, and Reset clears only that key', async () => {
-    const { rpc } = await setup(sizes({ breeding: [0.7, 1.3], limit: [0.05, 20] }));
-    const breeding = screen.getByRole('group', { name: 'Breeding size range' });
-    expect(within(breeding).getByRole('spinbutton', { name: 'Breeding size range minimum' })).toHaveValue(0.7);
-    expect(within(breeding).getByText('game: 0.85 – 1.15')).toBeInTheDocument();
-    await fireEvent.click(screen.getByRole('button', { name: 'Reset Size limit' }));
-    await waitFor(() => expect(rpc.callsTo('mods.setSizes')).toHaveLength(1));
-    expect(rpc.callsTo('mods.setSizes')[0].params).toMatchObject({ limit: null, breeding: [0.7, 1.3], nursery: null, adult: null });
-  });
-
-  it('sets each end of the size limit within its bounds', async () => {
-    const { rpc } = await setup();
-    const max = screen.getByRole('spinbutton', { name: 'Size limit maximum' });
-    expect(max).toHaveAttribute('min', '2');
-    expect(max).toHaveAttribute('max', '20');
-    await fireEvent.input(max, { target: { value: '20' } });
-    await fireEvent.change(max);
-    await waitFor(() => expect(rpc.callsTo('mods.setSizes')).toHaveLength(1));
-    expect(rpc.callsTo('mods.setSizes')[0].params).toMatchObject({ limit: [0.05, 20] });
-  });
-
-  it('sets the size limit minimum with its maximum kept', async () => {
-    const { rpc } = await setup(sizes({ limit: [0.05, 20] }));
-    const min = screen.getByRole('spinbutton', { name: 'Size limit minimum' });
-    expect(min).toHaveAttribute('min', '0.01');
-    expect(min).toHaveAttribute('max', '0.05');
-    await fireEvent.input(min, { target: { value: '0.02' } });
-    await fireEvent.change(min);
-    await waitFor(() => expect(rpc.callsTo('mods.setSizes')).toHaveLength(1));
-    expect(rpc.callsTo('mods.setSizes')[0].params).toMatchObject({ limit: [0.02, 20] });
-  });
-
-  it('does not send a limit or a range outside its bounds', async () => {
-    const { rpc } = await setup();
-    const min = screen.getByRole('spinbutton', { name: 'Size limit minimum' });
-    await fireEvent.input(min, { target: { value: '1' } });
-    await fireEvent.change(min);
-    expect(screen.getByRole('alert')).toHaveTextContent('Size limit: the minimum must be from 0.01 to 0.05.');
-    const max = screen.getByRole('spinbutton', { name: 'Size limit maximum' });
-    await fireEvent.input(max, { target: { value: '25' } });
-    await fireEvent.change(max);
-    expect(screen.getByRole('alert')).toHaveTextContent('Size limit: the maximum must be from 2 to 20.');
-    const from = screen.getByRole('spinbutton', { name: 'Breeding size range minimum' });
-    await fireEvent.input(from, { target: { value: '3' } }); // past the maximum (1.15)
-    await fireEvent.change(from);
-    expect(screen.getByRole('alert')).toHaveTextContent('Breeding size range: the minimum must be above 0 and at most the maximum (1.15).');
-    const to = screen.getByRole('spinbutton', { name: 'Nursery size slider range maximum' });
-    await fireEvent.input(to, { target: { value: '21' } });
-    await fireEvent.change(to);
-    expect(screen.getByRole('alert')).toHaveTextContent('Nursery size slider range: the maximum must be from the minimum (0.925) to 20.');
-    expect(rpc.callsTo('mods.setSizes')).toHaveLength(0);
   });
 
   it('shows the errors Check found for this species', async () => {
@@ -262,28 +164,6 @@ describe('SizeCard', () => {
     expect(screen.getByRole('spinbutton', { name: 'Adult size ×' })).toHaveValue(2);
   });
 
-  it('shows what a save did besides, as information', async () => {
-    await setup(sizes(), [], false, ["Raised this species' Size limit to 3×."]);
-    const adult = screen.getByRole('spinbutton', { name: 'Adult size ×' });
-    await fireEvent.input(adult, { target: { value: '2.63' } });
-    await fireEvent.change(adult);
-    const note = await screen.findByText("Raised this species' Size limit to 3×.");
-    expect(note).toHaveClass('note');
-    expect(note).not.toHaveClass('warn');
-    expect(screen.queryByRole('alert')).toBeNull();
-  });
-
-  it('the number fields show 3 decimals and keep the full value when not edited', async () => {
-    const { rpc } = await setup(sizes({ original: { adultLength: 12.1, babyShare: 0.121014, skins: [{ male: 1, female: 1.1 }] }, breeding: [0.8512345, 1.15] }));
-    expect(screen.getByRole('spinbutton', { name: 'Baby size (share of adult)' })).toHaveValue(0.121);
-    expect(screen.getByRole('spinbutton', { name: 'Breeding size range minimum' })).toHaveValue(0.851);
-    const adult = screen.getByRole('spinbutton', { name: 'Adult size ×' });
-    await fireEvent.input(adult, { target: { value: '1.2' } });
-    await fireEvent.change(adult);
-    await waitFor(() => expect(rpc.callsTo('mods.setSizes')).toHaveLength(1));
-    expect(rpc.callsTo('mods.setSizes')[0].params).toMatchObject({ adult: 1.2, baby: null, breeding: [0.8512345, 1.15] });
-  });
-
   it('a set baby share shows 3 decimals and is sent whole', async () => {
     const { rpc } = await setup(sizes({ baby: 0.121014 }));
     expect(screen.getByRole('spinbutton', { name: 'Baby size (share of adult)' })).toHaveValue(0.121);
@@ -292,5 +172,89 @@ describe('SizeCard', () => {
     await fireEvent.change(male);
     await waitFor(() => expect(rpc.callsTo('mods.setSizes')).toHaveLength(1));
     expect(rpc.callsTo('mods.setSizes')[0].params).toMatchObject({ male: 1.1, baby: 0.121014 });
+  });
+
+  it('has no size limit row: the limit is automatic', async () => {
+    await setup();
+    expect(screen.queryByRole('group', { name: 'Size limit' })).toBeNull();
+    expect(screen.queryByRole('spinbutton', { name: /Size limit/ })).toBeNull();
+    expect(screen.getByText(/The size limit is automatic/)).toBeInTheDocument();
+  });
+
+  it('a slider reaches 5, or the saved value when it is higher', async () => {
+    await setup(sizes({ adult: 12 }));
+    expect(screen.getByRole('slider', { name: 'Adult size × slider' })).toHaveAttribute('max', '12');
+    expect(screen.getByRole('slider', { name: 'Male size × slider' })).toHaveAttribute('max', '5');
+    expect(screen.getByRole('slider', { name: 'Baby size (share of adult) slider' })).toHaveAttribute('max', '1');
+  });
+
+  it('shows the ranges as percentages of this species’ size, with the sizes they give', async () => {
+    await setup(sizes({ adult: 2.5, nursery: [0.725, 5], baseName: 'Tyrannosaurus' }));
+    const nursery = screen.getByRole('group', { name: 'Nursery size slider range' });
+    expect(within(nursery).getByRole('spinbutton', { name: 'Nursery size slider range minimum' })).toHaveValue(72.5);
+    expect(within(nursery).getByRole('spinbutton', { name: 'Nursery size slider range maximum' })).toHaveValue(500);
+    expect(within(nursery).getByText('→ 1.8× to 12.5× a normal Tyrannosaurus')).toBeInTheDocument();
+    expect(within(nursery).getByText('game: 92.5% – 107.5%')).toBeInTheDocument();
+    const breeding = screen.getByRole('group', { name: 'Breeding size range' });
+    expect(within(breeding).getByRole('spinbutton', { name: 'Breeding size range minimum' })).toHaveValue(85);
+    expect(within(breeding).getByRole('spinbutton', { name: 'Breeding size range maximum' })).toHaveValue(115);
+    expect(within(breeding).getByText("game's")).toBeInTheDocument();
+    expect(screen.getByText(/Random eggs keep the game's range/)).toBeInTheDocument();
+  });
+
+  it('a percentage edit sends the multiplier, the other keys as they are', async () => {
+    const { rpc } = await setup(sizes({ adult: 1.2 }));
+    const max = screen.getByRole('spinbutton', { name: 'Nursery size slider range maximum' });
+    await fireEvent.input(max, { target: { value: '300' } });
+    await fireEvent.change(max);
+    await waitFor(() => expect(rpc.callsTo('mods.setSizes')).toHaveLength(1));
+    const sent = rpc.callsTo('mods.setSizes')[0].params as Record<string, unknown>;
+    expect(sent).toMatchObject({ target: 'Spinosaurus', adult: 1.2, breeding: null });
+    expect(sent.nursery).toEqual([0.925, 3]);
+    expect(sent).not.toHaveProperty('limit');
+  });
+
+  it('a set range shows the game’s beside it, and Reset clears only that key', async () => {
+    const { rpc } = await setup(sizes({ breeding: [0.7, 1.3], nursery: [0.5, 3] }));
+    const breeding = screen.getByRole('group', { name: 'Breeding size range' });
+    expect(within(breeding).getByRole('spinbutton', { name: 'Breeding size range minimum' })).toHaveValue(70);
+    expect(within(breeding).getByText('game: 85% – 115%')).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Reset Breeding size range' }));
+    await waitFor(() => expect(rpc.callsTo('mods.setSizes')).toHaveLength(1));
+    expect(rpc.callsTo('mods.setSizes')[0].params).toMatchObject({ breeding: null, nursery: [0.5, 3], adult: null });
+  });
+
+  it('does not send a range outside its bounds', async () => {
+    const { rpc } = await setup();
+    const from = screen.getByRole('spinbutton', { name: 'Breeding size range minimum' });
+    await fireEvent.input(from, { target: { value: '300' } }); // past the maximum (115%)
+    await fireEvent.change(from);
+    expect(screen.getByRole('alert')).toHaveTextContent('Breeding size range: the minimum must be above 0% and at most the maximum (115%).');
+    const to = screen.getByRole('spinbutton', { name: 'Nursery size slider range maximum' });
+    await fireEvent.input(to, { target: { value: '2100' } });
+    await fireEvent.change(to);
+    expect(screen.getByRole('alert')).toHaveTextContent('Nursery size slider range: the maximum must be from the minimum (92.5%) to 2000%.');
+    expect(rpc.callsTo('mods.setSizes')).toHaveLength(0);
+  });
+
+  it('says the smallest hatchling and the biggest adult, following a drag', async () => {
+    const { rpc } = await setup(); // the female 1.1 x the bred young's 1.15; a hatchling 0.25 x the smallest bred young
+    expect(screen.getByText('Smallest hatchling 0.24×, biggest adult 1.3× a normal Spinosaurus')).toBeInTheDocument();
+    const slider = screen.getByRole('slider', { name: 'Adult size × slider' });
+    await fireEvent.input(slider, { target: { value: '3' } });
+    expect(screen.getByText(/biggest adult 3.8× a normal Spinosaurus/)).toBeInTheDocument(); // 3 x 1.1 x 1.15 = 3.8
+    expect(within(screen.getByRole('group', { name: 'Nursery size slider range' })).getByText('→ 2.8× to 3.2× a normal Spinosaurus')).toBeInTheDocument();
+    expect(rpc.callsTo('mods.setSizes')).toHaveLength(0);
+  });
+
+  it('the number fields show 3 decimals and keep the full value when not edited', async () => {
+    const { rpc } = await setup(sizes({ original: { adultLength: 12.1, babyShare: 0.121014, skins: [{ male: 1, female: 1.1 }], curve: [[0, 0.121014], [1, 1]] }, breeding: [0.8512345, 1.15] }));
+    expect(screen.getByRole('spinbutton', { name: 'Baby size (share of adult)' })).toHaveValue(0.121);
+    expect(screen.getByRole('spinbutton', { name: 'Breeding size range minimum' })).toHaveValue(85.123);
+    const adult = screen.getByRole('spinbutton', { name: 'Adult size ×' });
+    await fireEvent.input(adult, { target: { value: '1.2' } });
+    await fireEvent.change(adult);
+    await waitFor(() => expect(rpc.callsTo('mods.setSizes')).toHaveLength(1));
+    expect(rpc.callsTo('mods.setSizes')[0].params).toMatchObject({ adult: 1.2, baby: null, breeding: [0.8512345, 1.15] });
   });
 });
