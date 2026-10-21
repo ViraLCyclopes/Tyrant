@@ -66,8 +66,8 @@ export interface MaterialModel {
 export type FurAge = 'babies' | 'adults' | 'both';
 export const FUR_AGES: FurAge[] = ['babies', 'adults', 'both'];
 
-/** The fur length growing fur starts with when nothing gives the fur any (the shader's `_Length` runs 0 to 4). */
-export const START_FUR_LENGTH = 0.5;
+/** The fur length growing fur (or a fur age) starts with when nothing gives the fur any (the shader's `_Length` runs 0 to 4; vanilla fur is short). */
+export const START_FUR_LENGTH = 0.15;
 
 export const MAX_RAMP_STOPS = 32;
 export const DEFAULT_SHAPING = { scale: -0.25, power: -0.3, bias: 1.3 };

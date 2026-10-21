@@ -385,11 +385,14 @@ Needs the game and a Tyrant Framework installed from this build. Steps marked **
      the park loads vanilla, with no error.
 151. **(game)** Grow fur: with the game's Fur graphics setting on (tessellation), open the Nursery on Ouranosaurus, click
      **T**, choose **Whole species**, then **Fur** → **Grow fur** **On**: fur appears over the whole body at once, and
-     **Length** shows 0.5. Change **Length** and **Droop**: the fur follows. **Off**: the bare skin is back. **On** again,
+     **Length** shows 0.15. Change **Length** and **Droop**: the fur follows. **Off**: the bare skin is back. **On** again,
      **Save**, close the Nursery and place an Ouranosaurus: it has fur; the species' `materials.json` (in **Vanilla Looks**
      when no mod set that species) has `"fur": { "grow": true }`. Turn the Fur graphics setting's
      tessellation off: the fur goes, the status line in the editor says grown fur needs tessellated fur, and
      `Latest.log` has one warning about it.
+     - Masks on a furless species: with tessellation on again, **Export mask PNG**, paint the tail black in the red channel
+       (and the head grey), put it in as the fur mask (**PNG**), **Reload images**: no fur on the tail and shorter fur on the
+       head. `Latest.log` says once that fur masks are on for the Ouranosaurus material.
 152. **(game)** Next created: save the park, open the Nursery on an Allosaurus (male), click **T**, choose **Next created**
      (the status line says it saves to the next Allosaurus you incubate). Change the iridescence strength or a fur setting:
      the preview shows it. **Save**: the status line says *Saved for the next Allosaurus you incubate.* and the preview keeps
@@ -441,7 +444,7 @@ Needs the game and a Tyrant Framework installed from this build. Steps marked **
      window shows *Colour 1 of 10*, **+** is off, and an edit there keeps all 10 in `materials.json`.
 155b. **(app, game)** Baby looks: in the app, give Acrocanthosaurus a **Species materials** block (or a skin's **Material**):
      tick **Iridescence**, pick **Real iridescence (thin film)**, set **Strength** 0 and **Baby strength** 0.3; in the **Fur**
-     group pick **Fur on** → **Adults** (the fur length becomes 0.5). Save: `materials.json` has `"strength": 0,
+     group pick **Fur on** → **Adults** (the fur length becomes 0.15). Save: `materials.json` has `"strength": 0,
      "babyStrength": 0.3` and `"fur": { "age": "adults" }`; **Check** is clean (no *strength is 0 everywhere*). CLI:
      `tyrant mod materials <mod> --species Acrocanthosaurus --show` prints the same. Install, start the game with tessellated
      fur on, and incubate an Acrocanthosaurus. The hatchling shimmers and has no fluff (its baby fur is gone); as it grows,

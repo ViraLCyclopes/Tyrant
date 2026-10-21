@@ -209,8 +209,9 @@ namespace Tyrant.Framework.Core
         public bool? Grow { get; set; }
 
         /// <summary>
-        /// Which ages wear fur, over the game's choice from its fur maps (null: the game's). Tyrant grows fur, as for
-        /// <see cref="Grow"/>, on each age that should have fur and has no fur mask; with an age set, grow adds nothing.
+        /// Which ages wear fur, over the game's choice from its fur maps (null: the game's), through the masks: an age without
+        /// fur gets a black mask; Tyrant grows fur, as for <see cref="Grow"/>, on each age that should have fur and has no fur
+        /// mask (<see cref="AgeLooks.FurSlot"/>). With an age set, grow adds nothing.
         /// </summary>
         public FurAge? Age { get; set; }
 

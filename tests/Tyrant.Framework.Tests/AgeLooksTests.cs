@@ -14,8 +14,8 @@ public class AgeLooksTests
     [InlineData(0.3f, 0f, 1f, 0f)]
     [InlineData(0.4f, 0.4f, 0.5f, 0.4f)] // the same at every age
     [InlineData(0.2f, 0.8f, 0.5f, 0.5f)]
-    [InlineData(0.2f, 0.8f, 1.5f, 0.8f)] // the integument is kept within 0..1
-    [InlineData(0.2f, 0.8f, -1f, 0.2f)]
+    [InlineData(0.2f, 0.8f, 1.5f, 1.1f)] // like the game's math.lerp, the integument is not clamped
+    [InlineData(0.2f, 0.8f, -1f, -0.4f)]
     public void The_shown_strength_slides_from_the_baby_s_to_the_adult_s(float baby, float adult, float integument, float shown)
     {
         Assert.Equal(shown, AgeLooks.Strength(baby, adult, integument), 5);
@@ -43,38 +43,65 @@ public class AgeLooksTests
         Assert.False(AgeLooks.WritesStrength(null));
     }
 
-    [Theory]
-    // age, grow, the fuzz at a hatchling and at a grown animal; null: the game's own (Tyrant writes none)
-    [InlineData(FurAge.Babies, false, 1f, 0f)]
-    [InlineData(FurAge.Adults, false, 0f, 1f)]
-    [InlineData(FurAge.Both, false, 1f, 1f)]
-    [InlineData(FurAge.Babies, true, 1f, 0f)] // the age decides which stages, grow adds nothing
-    [InlineData(FurAge.Adults, true, 0f, 1f)]
-    [InlineData(null, true, 1f, 1f)] // grow alone: fur at every age, as before
-    public void The_fuzz_ends_follow_the_fur_age(FurAge? age, bool grow, float baby, float adult)
+    /// <summary>The two fur slots of an animal: (infant, adult).</summary>
+    private static (FurFill Infant, FurFill Adult) Slots(FurAge? age, bool grow = false, bool infantMap = false, bool adultMap = false,
+        bool file = false, bool game = false) =>
+        (AgeLooks.FurSlot(age, grow, infant: true, file, game, infantMap), AgeLooks.FurSlot(age, grow, infant: false, file, game, adultMap));
+
+    [Fact]
+    public void Acrocanthosaurus_adults_get_fur_and_lose_the_baby_fluff_through_the_masks()
     {
-        Assert.Equal((baby, adult), AgeLooks.FuzzEnds(age, grow));
+        // Acrocanthosaurus has a baby fur map only (its adult slot is the game's blank FurMaskEmpty).
+        Assert.Equal((FurFill.Black, FurFill.White), Slots(FurAge.Adults, infantMap: true));
+        Assert.Equal((FurFill.Leave, FurFill.Black), Slots(FurAge.Babies, infantMap: true)); // its own baby map stays
+        Assert.Equal((FurFill.Leave, FurFill.White), Slots(FurAge.Both, infantMap: true));
     }
 
     [Fact]
-    public void Without_an_age_or_grow_the_fuzz_is_the_game_s_from_its_fur_maps()
+    public void An_age_with_fur_keeps_its_own_mask_and_one_without_is_black_over_anything()
     {
-        Assert.Null(AgeLooks.FuzzEnds(null, grow: false));
-        Assert.Equal((1f, 0f), AgeLooks.GameFuzzEnds(babyMap: true, adultMap: false)); // Acrocanthosaurus: a baby fur map only
-        Assert.Equal((0f, 1f), AgeLooks.GameFuzzEnds(babyMap: false, adultMap: true));
-        Assert.Equal((1f, 1f), AgeLooks.GameFuzzEnds(babyMap: true, adultMap: true));
-        Assert.Equal((0f, 0f), AgeLooks.GameFuzzEnds(babyMap: false, adultMap: false));
+        Assert.Equal((FurFill.Leave, FurFill.Leave), Slots(FurAge.Both, infantMap: true, adultMap: true)); // the game's maps stay
+        Assert.Equal((FurFill.Black, FurFill.File), Slots(FurAge.Adults, file: true)); // a file serves the age with fur only
+        Assert.Equal((FurFill.File, FurFill.Black), Slots(FurAge.Babies, file: true));
+        Assert.Equal((FurFill.Leave, FurFill.Black), Slots(FurAge.Babies, game: true)); // "game": the game's own mask stays
+        Assert.Equal((FurFill.Black, FurFill.Leave), Slots(FurAge.Adults, game: true, adultMap: false));
+        Assert.Equal((FurFill.Black, FurFill.White), Slots(FurAge.Adults, grow: true)); // with an age, grow adds nothing
     }
 
-    [Theory]
-    [InlineData(1f, 0f, 0f, 1f)]
-    [InlineData(1f, 0f, 0.25f, 0.75f)]
-    [InlineData(1f, 0f, 1f, 0f)]
-    [InlineData(0f, 1f, 0.5f, 0.5f)]
-    [InlineData(1f, 1f, 0.5f, 1f)]
-    public void The_fuzz_lerps_between_its_ends_like_the_game(float baby, float adult, float integument, float fuzz)
+    [Fact]
+    public void Grow_alone_whitens_each_age_without_a_mask_and_nothing_set_leaves_the_game_s()
     {
-        Assert.Equal(fuzz, AgeLooks.Fuzz((baby, adult), integument), 5);
+        Assert.Equal((FurFill.White, FurFill.White), Slots(null, grow: true));
+        Assert.Equal((FurFill.Leave, FurFill.White), Slots(null, grow: true, infantMap: true));
+        Assert.Equal((FurFill.File, FurFill.File), Slots(null, grow: true, file: true));
+        Assert.Equal((FurFill.Leave, FurFill.Leave), Slots(null, grow: true, game: true));
+        Assert.Equal((FurFill.Leave, FurFill.Leave), Slots(null)); // vanilla stays vanilla
+        Assert.Equal((FurFill.File, FurFill.File), Slots(null, file: true)); // a mask file alone, as before
+    }
+
+    [Fact]
+    public void Tyrant_writes_the_fur_sheen_whenever_it_grows_fur_or_an_age_is_set()
+    {
+        Assert.True(AgeLooks.WritesFurSheen(new FurMasks { Grow = true }));
+        Assert.True(AgeLooks.WritesFurSheen(new FurMasks { Age = FurAge.Babies }));
+        Assert.False(AgeLooks.WritesFurSheen(new FurMasks { Grow = false }));
+        Assert.False(AgeLooks.WritesFurSheen(null));
+    }
+
+    [Fact]
+    public void A_fur_variant_on_a_furless_template_switches_to_texture_masking()
+    {
+        Assert.True(FurMasking.NeedsTextureMasking(tessellationFur: true, textureMasking: false)); // _FURMASKING_NONE: no mask read at all
+        Assert.False(FurMasking.NeedsTextureMasking(tessellationFur: true, textureMasking: true)); // a furry species: already
+        Assert.False(FurMasking.NeedsTextureMasking(tessellationFur: false, textureMasking: false)); // no fur variant: nothing drawn
+        Assert.Equal((4f, 4f), FurMasking.DispScale(1, 1)); // the furless template's (1,1): a furry default
+        Assert.Null(FurMasking.DispScale(3, 3)); // a scale of its own stays
+    }
+
+    [Fact]
+    public void The_starting_fur_length_is_short_like_vanilla_fur()
+    {
+        Assert.Equal(0.15f, LookEditing.StartFurLength);
     }
 
     [Theory]

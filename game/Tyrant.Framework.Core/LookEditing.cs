@@ -19,8 +19,11 @@ namespace Tyrant.Framework.Core
         public const float DefaultThickness = 420;
         public const float StartScale = -0.25f, StartPower = -0.3f, StartBias = 1.3f;
 
-        /// <summary>The fur length Grow fur starts with on a skin whose fur has none (the shader's _Length runs 0 to 4).</summary>
-        public const float StartFurLength = 0.5f;
+        /// <summary>
+        /// The fur length Grow fur and a fur age start with when nothing gives the fur one (the shader's _Length runs 0 to 4;
+        /// vanilla fur is short, Panthera's 0.75 under a mask whose red tops out at 0.42).
+        /// </summary>
+        public const float StartFurLength = 0.15f;
 
         public const float MaxThickness = 2000;
         public const float MinShaping = -10, MaxShaping = 10;

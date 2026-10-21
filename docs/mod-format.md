@@ -183,22 +183,28 @@ name get `-2`, `-3`. The owner comes from the file, not the folder name:
 | `iridescence.mask` | Where it shows: `"everywhere"`, a PNG in the mod, or `{ "from": "extra", "channel": "g", "invert": false }` (`from` is `extra`, `pattern` or `fur`; `channel` is `r`, `g`, `b` or `a`). `"game"`: the game's own mask, over a lower level's. `{ "species": "Microraptor" }`: that vanilla species' mask, by reference, at any level (a species file too). Left out: the lower level's, else the game's. |
 | `iridescence.tiling`, `iridescence.offset` | `[x, y]`, beside `mask`: repeat and shift the mask. |
 | `iridescence.scale`, `power`, `bias` | −10 to 10. Shape the strength across the viewing angle (edge falloff, falloff curve, brightness offset). |
-| `fur.mask`, `fur.infantMask` | The fur mask of adults and of babies: a PNG in the mod (`"materials/skins/rainbow/fur-mask.png"`). `"game"`: the game's own per-animal mask, over a lower level's. Left out: the lower level's, else the game's (a baby mask left out uses the adult one). One file serves both sexes. PNG files or `"game"` only: no `everywhere`, no `from`. |
-| `fur.grow` | `true` grows fur on skins the game gives none (Ouranosaurus, Allosaurus Anax, …): the game's fur shader variant, full fur amount, and, where no level sets a fur mask and the game has none, fur on the whole body (a `"game"` fur mask keeps the game's). `false` means this level does not force fur over a lower one that does; it never takes away fur the game has. Left out: the levels below decide. Works on skins, vanilla skins, species and per-animal looks. |
-| `fur.age` | Which ages wear fur: `"babies"`, `"adults"` or `"both"`. The game fades fur by growth, from the baby's fur amount to the adult's (each 1 where that age's fur map exists, else 0: Acrocanthosaurus has a baby fur map only, so its fluff goes as it grows). `fur.age` sets those two ends: `babies` 1 to 0, `adults` 0 to 1, `both` 1 to 1. An age that should have fur and has no fur mask (the game's, or a level's `fur.mask` / `fur.infantMask`) gets one as **Grow fur** gives it: fur on the whole body, the fur shader variant, and in the editors a starting `_Length`. Left out: the levels below decide, else the game's fur maps. Droop still follows the game (baby droop to adult droop, or `_DroopDirection`). Works at every level. |
+| `fur.mask`, `fur.infantMask` | The fur mask of adults and of babies: a PNG in the mod (`"materials/skins/rainbow/fur-mask.png"`). Paint the **red channel**: it scales the fur length per area (black = no fur, grey = shorter, white = the full `_Length`); green, blue and alpha are ignored. The shader blends the baby mask into the adult one as the animal grows. Vanilla masks are dark: their red tops out at about 0.1–0.6. `"game"`: the game's own per-animal mask, over a lower level's. Left out: the lower level's, else the game's (a baby mask left out uses the adult one). One file serves both sexes. PNG files or `"game"` only: no `everywhere`, no `from`. |
+| `fur.grow` | `true` grows fur on skins the game gives none (Ouranosaurus, Allosaurus Anax, …): the game's fur shader variant, the fur sheen of a furry skin, and, where no level sets a fur mask and the game has none, fur on the whole body (a `"game"` fur mask keeps the game's). On a furless species Tyrant also switches its material to read fur masks (see **Growing fur**). `false` means this level does not force fur over a lower one that does; it never takes away fur the game has. Left out: the levels below decide. Works on skins, vanilla skins, species and per-animal looks. |
+| `fur.age` | Which ages wear fur: `"babies"`, `"adults"` or `"both"`. It works through the two masks, as the game does: Acrocanthosaurus' baby fluff goes as it grows because its adult mask is the game's all-black `FurMaskEmpty`. An age without fur gets an all-black mask (Tyrant's own, over any mask a level sets for it): `babies` blackens the adult mask, `adults` the baby one. An age with fur keeps its mask (a level's `fur.mask` / `fur.infantMask`, else the game's fur map), and one with none gets fur on the whole body as **Grow fur** gives it; `both` keeps or grows both. It also gives the fur shader variant, the fur sheen of a furry skin, and in the editors a starting `_Length`. Left out: the levels below decide, else the game's fur maps. Droop still follows the game (baby droop to adult droop, or `_DroopDirection`). Works at every level. |
 | `settings` | Animal shader values, below. |
 
 **Growing fur.** Grown fur needs the game's tessellated fur (its Fur graphics setting); with tessellation off the game draws no grown fur
-(Tyrant still sets the fur amount and masks, so the fur appears when tessellation is turned back on) and the MelonLoader log says so once. Set `_Length` too (the in-game editor
-and the app start it at `0.5` when nothing gives the fur any length). Bodies never made for fur have no fur mask, droop or
+(Tyrant still sets the masks, so the fur appears when tessellation is turned back on) and the MelonLoader log says so once. Set `_Length` too (the in-game editor
+and the app start it at `0.15` when nothing gives the fur any length; the game's own length counts). A furless species'
+material reads no fur mask at all (its `_FURMASKING_NONE` mode: full length everywhere), so when Tyrant gives it the fur
+variant it switches that material to texture masking (`_FURMASKING_TEXTURE`, as furry species have) and gives its strand
+noise a furry tiling (`_FurDispTexScale` 4, 4 in place of 1, 1); the log names each material once. Should a game update
+remove the hook for it, the log says so once and grown fur on a furless species covers the whole body whatever the masks
+say. Bodies never made for fur have no fur mask, droop or
 wind tuned for them, so the look needs tuning in game: a fur mask PNG limits where it grows, and `_Length`, `_Droopage`,
 `_DroopDirection` and the wind settings shape it.
 
 **`fur.grow` and `fur.age` together.** `fur.age` decides which ages wear fur; Tyrant supplies the masks for them the way
-`fur.grow` does. `fur.grow` alone keeps its meaning: fur at every age, wherever the game has none (the same as `"both"`).
-With an age set at any level, `grow` adds nothing and `"grow": false` does not take the age's fur away. `"adults"` on a
-species whose babies have fur (Acrocanthosaurus) takes the baby fur away and gives the adults fur on the whole body; add a
-`fur.mask` PNG to say where.
+`fur.grow` does, and blackens the mask of the age without fur. `fur.grow` alone keeps its meaning: fur at every age,
+wherever the game has none (the same as `"both"`). With an age set at any level, `grow` adds nothing and `"grow": false`
+does not take the age's fur away. `"adults"` on a species whose babies have fur (Acrocanthosaurus) blackens the baby mask
+and gives the adults fur on the whole body; add a `fur.mask` PNG to say where. `"babies"` on it keeps its baby map and
+blackens the adult mask, as the game does already.
 
 **Starting from a species.** A look can start from a vanilla species: its iridescence (the species whose skins shimmer:
 Microraptor, Velociraptor, Oviraptor, Edmontosaurus, …, listed from the game's data, not fixed) or its fur (species with a
@@ -319,7 +325,8 @@ game update moves the panels and a button cannot be placed, the MelonLoader log 
   shimmers only as a baby shows **On**, and **Off** sets it to 0 too (**On** puts it back). Raising it on an animal that
   shimmers at no age starts a thin film and shaping, as **On** does, so the sheen shows at once.
 - **Fur on** (Fur tab, under **Grow fur**): **Babies**, **Adults**, **Both** or **Game's** is `fur.age`; **Game's**
-  removes it (the skin's fur maps decide). An age gives the fur a starting length when nothing gives it one, as **Grow
+  removes it (the skin's fur maps decide). An age without fur gets an all-black fur mask, the way the game removes baby
+  fluff. An age gives the fur a starting length (0.15) when nothing gives it one, as **Grow
   fur** does, and **Game's** takes that length back unless **Grow fur** is still on. Over a lower layer's age the row shows
   it, marked *(below)*, and **Game's** is greyed out: there is no `"game"` value to write over it, so pick the age you want.
 - **Export mask PNG** writes the mask the animal shows as a PNG to edit in an image editor, into `UserData/Tyrant/Masks`.

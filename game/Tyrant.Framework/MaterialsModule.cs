@@ -179,6 +179,59 @@ namespace Tyrant.Framework
             _active = Hook(harmony, "PrehistoricKingdom.AnimalMaterials", m => m.Name == "CalculateKeywords" && m.IsStatic && m.GetParameters().Length == 2, nameof(KeywordTranspiler), transpiler: true)
                 && Hook(harmony, "PrehistoricKingdom.AnimalVisuals", m => m.Name == "SetAnimalMaterialVariation", nameof(AfterVariation), transpiler: false)
                 && Hook(harmony, "PrehistoricKingdom.AnimalGrowthManager", m => m.Name == "UpdateGrowth" && m.GetParameters().Length == 1, nameof(AfterGrowth), transpiler: false);
+            if (_active) HookMaterialKeywords(harmony);
+        }
+
+        /// <summary>
+        /// A postfix on AnimalMaterials.ApplyKeywordsToMaterial (it sets a new shared material's keywords). Without it grown fur
+        /// still shows, but on a furless species it ignores every mask: that is said once in the log.
+        /// </summary>
+        private static void HookMaterialKeywords(HarmonyLib.Harmony harmony)
+        {
+            try
+            {
+                var type = AccessTools.TypeByName("PrehistoricKingdom.AnimalMaterials");
+                var method = type == null ? null : AccessTools.Method(type, "ApplyKeywordsToMaterial");
+                if (method != null && method.GetParameters().Length == 2 && method.GetParameters()[0].ParameterType == typeof(Material))
+                {
+                    harmony.Patch(method, postfix: new HarmonyMethod(typeof(MaterialsModule), nameof(AfterMaterialKeywords)));
+                    return;
+                }
+                FrameworkMod.Log.Warning("AnimalMaterials.ApplyKeywordsToMaterial was not found (game updated?); on a furless species, grown fur ignores fur masks (it covers the whole body) and fur ages show no difference.");
+            }
+            catch (Exception ex)
+            {
+                FrameworkMod.Log.Warning($"AnimalMaterials.ApplyKeywordsToMaterial could not be hooked ({ex.GetBaseException().Message}); on a furless species, grown fur ignores fur masks.");
+            }
+        }
+
+        /// <summary>
+        /// After the game set a new shared material's keywords: a fur variant made from a furless template (_FURMASKING_NONE,
+        /// which reads no mask) switches to texture masking, so Grow fur and fur ages obey the fur masks, and its strand noise
+        /// tiling of 1, 1 becomes a furry skin's (<see cref="FurMasking"/>). Furry species' materials have texture masking
+        /// already and are left alone; the material is the game's per-variant copy, never its asset.
+        /// </summary>
+        private static void AfterMaterialKeywords(object[] __args)
+        {
+            if (!_active || __args.Length < 1 || !(__args[0] is Material material) || material == null) return;
+            try
+            {
+                if (!FurMasking.NeedsTextureMasking(material.IsKeywordEnabled("_FEATURETESSELLATION_FUR"), material.IsKeywordEnabled(FurMasking.Texture))) return;
+                material.DisableKeyword(FurMasking.None);
+                material.DisableKeyword(FurMasking.VertexColor);
+                material.EnableKeyword(FurMasking.Texture);
+                if (material.HasProperty(FurMasking.DispTexScale))
+                {
+                    var scale = material.GetVector(FurMasking.DispTexScale);
+                    if (FurMasking.DispScale(scale.x, scale.y) is { } tiled)
+                        material.SetVector(FurMasking.DispTexScale, new Vector4(tiled.X, tiled.Y, scale.z, scale.w));
+                }
+                if (Announced.Add("masking|" + material.name)) FrameworkMod.Log.Msg($"fur masks on for {material.name} (its species has no fur of its own)");
+            }
+            catch (Exception ex)
+            {
+                Failed(ex);
+            }
         }
 
         private static void Build()
@@ -571,9 +624,11 @@ namespace Tyrant.Framework
                 var material = members.BaseMaterial?.GetValue(animal, null) as Material;
                 if (fur)
                 {
+                    var property = infant ? InfantFurProperty : AdultFurProperty;
+                    // An age the fur age leaves bare shows Tyrant's black, over any mask PNG.
+                    if (record != null && record.Ours.TryGetValue(property, out var bare) && bare == _noFur && Block.GetTexture(property) == bare) return bare;
                     var source = found?.Override.Fur is FurMasks masks ? infant ? masks.InfantMask ?? masks.Mask : masks.Mask : null;
                     if (source != null && FileMask(source) is Texture own && own != null) return own;
-                    var property = infant ? InfantFurProperty : AdultFurProperty;
                     if (record != null && record.Ours.TryGetValue(property, out var ours) && ours == Texture2D.whiteTexture && Block.GetTexture(property) == ours)
                     {
                         white = PaintSize(record, material, infant);
@@ -692,18 +747,21 @@ namespace Tyrant.Framework
                     SetGameFloat(record, StrengthProperty, AgeLooks.Strength(baby, adult, Block.GetFloat("_IntegumentMaturity")), fromHook);
                 }
             }
-            // Grown fur: the fur amount from the age's ends (grow alone: full at every age; the game writes 0 without fur maps),
-            // and where neither Tyrant nor the game has a fur mask for an age that should have fur, white (fur on the whole
-            // body); a "game" fur mask keeps the game's. The keywords come from AddKeywords.
+            // Fur, through the masks (the shader's fur height is lerp(infant mask R, adult mask R, integument) × _Length): an age
+            // the fur age leaves bare gets black; an age that should have fur keeps the block's PNG or the game's own mask, else
+            // white (fur on the whole body); a "game" fur mask keeps the game's. With grow or an age, the fur sheen is a furry
+            // skin's 1 (the game writes 0 without fur maps). The keywords, and texture masking on a furless template, come
+            // from AddKeywords and AfterMaterialKeywords.
             var grow = o.Fur?.Grow == true;
-            var stages = AgeLooks.GrownStages(o.Fur?.Age, grow);
+            var age = o.Fur?.Age;
+            var growing = AgeLooks.NeedsFurVariant(o.Fur);
             var adultGame = o.Fur?.Mask?.Game == true;
             var infantGame = o.Fur?.InfantMask?.Game ?? adultGame;
-            if (AgeLooks.FuzzEnds(o.Fur?.Age, grow) is { } ends) SetGameFloat(record, FuzzProperty, AgeLooks.Fuzz(ends, Block.GetFloat("_IntegumentMaturity")), fromHook);
-            if (adultFur != null) SetGameTexture(record, AdultFurProperty, adultFur);
-            else if (stages.Adult && !adultGame && !GameHasFur(members, animal, record, AdultFurProperty, "adultFurMap")) SetGameTexture(record, AdultFurProperty, Texture2D.whiteTexture);
-            if (infantFur != null) SetGameTexture(record, InfantFurProperty, infantFur);
-            else if (stages.Baby && !infantGame && !GameHasFur(members, animal, record, InfantFurProperty, "infantFurMap")) SetGameTexture(record, InfantFurProperty, Texture2D.whiteTexture);
+            if (AgeLooks.WritesFurSheen(o.Fur)) SetGameFloat(record, FuzzProperty, 1f, fromHook);
+            FurSlot(record, AdultFurProperty, AgeLooks.FurSlot(age, grow, infant: false, adultFur != null, adultGame,
+                growing && GameHasFur(members, animal, record, AdultFurProperty, "adultFurMap")), adultFur);
+            FurSlot(record, InfantFurProperty, AgeLooks.FurSlot(age, grow, infant: true, infantFur != null, infantGame,
+                growing && GameHasFur(members, animal, record, InfantFurProperty, "infantFurMap")), infantFur);
 
             Restore(record, found.Material, Writing, fromHook);
             foreach (var renderer in Renderers) renderer.SetPropertyBlock(Block);
@@ -712,6 +770,38 @@ namespace Tyrant.Framework
             var skin = found.SkinKey ?? found.VanillaKey;
             if (Reported.Add(("on", skin ?? found.Species, "")))
                 FrameworkMod.Log.Msg($"materials on {found.Species}{(skin == null ? "" : ", skin " + skin)} ({(found.ModId.Length > 0 ? found.ModId : "in-game look")})");
+        }
+
+        /// <summary>Writes one fur slot as <see cref="AgeLooks.FurSlot"/> decided; Leave writes nothing (a key Tyrant wrote before goes back).</summary>
+        private static void FurSlot(Written record, string property, FurFill fill, Texture? file)
+        {
+            switch (fill)
+            {
+                case FurFill.File:
+                    SetGameTexture(record, property, file!);
+                    break;
+                case FurFill.White:
+                    SetGameTexture(record, property, Texture2D.whiteTexture);
+                    break;
+                case FurFill.Black:
+                    SetGameTexture(record, property, NoFur);
+                    break;
+            }
+        }
+
+        private static Texture2D? _noFur;
+
+        /// <summary>Tyrant's own all-black 4 × 4 fur mask: no fur at that age (the game's FurMaskEmpty does the same; no game image is used).</summary>
+        private static Texture2D NoFur
+        {
+            get
+            {
+                if (_noFur != null) return _noFur;
+                _noFur = new Texture2D(4, 4, TextureFormat.RGBA32, false, true) { name = "Tyrant no fur", hideFlags = HideFlags.DontUnloadUnusedAsset };
+                _noFur.SetPixels32(new Color32[16]); // all 0: black, no fur
+                _noFur.Apply(false, true);
+                return _noFur;
+            }
         }
 
         private enum Kind
