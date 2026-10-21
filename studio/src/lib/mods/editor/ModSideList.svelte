@@ -5,6 +5,7 @@
   import NameDialog from './NameDialog.svelte';
   import { groupNames, moveGroup, moveSkin, moveSkinTo, renameGroup, sections, setGroup, type SkinPlace } from './skinGroups';
   import type { Selection } from './selection';
+  import { sizeTargets } from './sizes';
 
   let {
     detail,
@@ -18,6 +19,7 @@
     onAddSound = () => {},
     onAddReplacement = () => {},
     onAddPrefab = () => {},
+    onAddSize = () => {},
     onAddMaterial = () => {},
     onAddVanillaMaterial = () => {},
   }: {
@@ -33,6 +35,7 @@
     onAddSound?: () => void;
     onAddReplacement?: () => void;
     onAddPrefab?: () => void;
+    onAddSize?: () => void;
     onAddMaterial?: () => void;
     onAddVanillaMaterial?: () => void;
   } = $props();
@@ -45,6 +48,10 @@
   const prefabTargets = $derived([
     ...(detail.prefabTargets ?? []).map((t) => t.target),
     ...(selection.kind === 'prefab' && !(detail.prefabTargets ?? []).some((t) => t.target === selection.target) ? [selection.target] : []),
+  ]);
+  const sizedTargets = $derived([
+    ...sizeTargets(detail),
+    ...(selection.kind === 'size' && !sizeTargets(detail).some((t) => t.toLowerCase() === selection.target.toLowerCase()) ? [selection.target] : []),
   ]);
   /** Species with material settings, and the selected one while it has none yet (as prefab settings do). */
   const materialSpecies = $derived([
@@ -341,6 +348,16 @@
   </div>
   {#each prefabTargets as t (t)}
     <button class:on={selection.kind === 'prefab' && selection.target === t} onclick={() => onSelect({ kind: 'prefab', target: t })}>{t}</button>
+  {:else}
+    <p class="empty">None.</p>
+  {/each}
+
+  <div class="heading">
+    <span>Sizes ({sizeTargets(detail).length})</span>
+    <button class="add" aria-label="Add sizes" onclick={onAddSize}>+ Add</button>
+  </div>
+  {#each sizedTargets as t (t)}
+    <button class:on={selection.kind === 'size' && selection.target === t} onclick={() => onSelect({ kind: 'size', target: t })}>{t}</button>
   {:else}
     <p class="empty">None.</p>
   {/each}

@@ -117,6 +117,12 @@ files that changed; again after a game update).
   2. Reshape or replace the mesh; keep the armature, its bone names, the two growth shape keys and the material names. Sculpt or edit with the Basis selected in Shape Keys: the growth keys follow it, so do not repeat the change on them. Do not use Voxel Remesh (it deletes the shape keys). File → Export → glTF 2.0 (.glb).
   3. Assets tab → the prefab → **Replace model in a mod…** → pick a mod (or **New mod…**) → **Browse…** your `.glb` → **Add to mod**. Tyrant checks it, builds its levels of detail and adds it. For one skin only, use the skin's **Model** row in the mod editor.
   4. CLI: `tyrant mod replace-model <mod> <species> <file.glb> [--skin <id>]`, `tyrant mod remove-model`, `tyrant mod rebuild-models`.
+- **Change an animal's size:**
+  1. Mod editor → **Sizes +** → pick the species (the game's or your mod's) → **Open**. A mod's own species also has the card under **Size** on its species page.
+  2. Four fields, each a number and a slider: **Adult size ×** (0.05 to 5), **Baby size (share of adult)** (above 0, at most 1), **Male size ×** and **Female size ×** (0.1 to 5). An unset field shows the game's value; **↺** puts it back.
+  3. The size bar shows the original and new sizes, as lengths when the game's model length is known (for example 12.1 m → 10.3 m). Problems Check finds show under the fields, for instance a species scaled outside the game's 0.05 to 2 limit.
+  4. **Mod details** has **Nursery size slider range** (the game's own Customize size slider in the Nursery covers this range; random eggs keep the game's range) and **Breeding size range**. Leave **Game's range** ticked to keep the game's, or untick it to set your own (the smallest value cannot pass the largest).
+  5. Changes can be undone. CLI: the `tyrant mod` size commands.
 - **Replace a sound:**
   1. Species tab → **Sounds…** on the animal (or **All sounds…**) → **Replace…** on the sound.
   2. Pick a mod (or **New mod…**) and **Choose files…**: WAV, OGG, MP3 or FLAC; pick several and one plays at random each time.

@@ -8,6 +8,7 @@
   import type { ModAnimalDatabase, ModSpeciesTemplateDto, SpeciesRemoval, SpeciesSkinsRow } from '$lib/rpc/types.gen';
   import OpenInBlender from '$lib/blender/OpenInBlender.svelte';
   import RecordTree from './RecordTree.svelte';
+  import SizeCard from './SizeCard.svelte';
   import type { ModDoc } from './modDoc.svelte';
 
   let { doc, onPrefab = () => {}, onAddSkin = () => {}, onOpenSkin = () => {} }: { doc: ModDoc; onPrefab?: (target: string) => void; onAddSkin?: (species: string) => void; onOpenSkin?: (id: string) => void } = $props();
@@ -238,6 +239,8 @@
           <span class="hint">This species loads a Unity bundle ({animal.prefab.bundle}); the Unity path is parked.</span>
         {/if}
       </div>
+      <h3>Size</h3>
+      <SizeCard {doc} target={animal.key} />
       <h3>Paleopedia photo</h3>
       <p class="hint">The picture in the Paleopedia and the Nursery's species panel. {animal.icon ? `Using ${animal.icon}.` : "Using the template's photo."} The game's are 512×256 PNGs.</p>
       <div class="toolbar">

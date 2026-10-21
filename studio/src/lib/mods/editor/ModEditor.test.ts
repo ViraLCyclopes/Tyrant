@@ -40,6 +40,21 @@ describe('ModEditor', () => {
     expect(await screen.findByRole('heading', { name: /Prefab settings: Spinosaurus/ })).toBeInTheDocument();
   });
 
+  it('Sizes has + Add; the species it picks opens the size page', async () => {
+    const { rpc } = setup();
+    rpc.on('mods.species', () => ({ hasDump: true, species: [{ speciesId: 'Spinosaurus', vivarium: false, skins: [] }] }))
+      .on('mods.animalDatabase', () => ({ animals: [], fields: [] }))
+      .on('mods.sizes', () => ({ target: 'Spinosaurus', adult: null, baby: null, male: null, female: null, original: { adultLength: 12, babyShare: 0.25, skins: [] }, finalAdultLength: 12 }));
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Add sizes' }));
+    expect(await screen.findByRole('heading', { name: 'Add sizes' })).toBeInTheDocument();
+    await screen.findByRole('option', { name: 'Spinosaurus' });
+    await fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+
+    expect(await screen.findByRole('heading', { name: /Sizes: Spinosaurus/ })).toBeInTheDocument();
+    expect(await screen.findByRole('spinbutton', { name: 'Adult size ×' })).toBeInTheDocument();
+  });
+
   it('Species materials has + Add; the species it picks opens its Material card, and Remove clears it', async () => {
     const { rpc } = setup(modDetail({ speciesMaterials: [{ species: 'Titanoboa', materialsJson: '{"Titanoboa":{"settings":{"_Smoothness":0.5}}}' }] }));
     rpc.on('mods.species', () => ({ hasDump: true, species: [{ speciesId: 'Spinosaurus', vivarium: false, skins: [] }] }))

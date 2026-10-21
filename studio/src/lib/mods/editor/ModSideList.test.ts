@@ -239,3 +239,25 @@ describe('ModSideList vanilla skin materials', () => {
     expect(onAddVanillaMaterial).toHaveBeenCalled();
   });
 });
+
+describe('ModSideList sizes', () => {
+  it('lists the species the mod sizes and selects one; + Add asks for the form', async () => {
+    const files = { 'spinosaurus.json': '{"format":1,"target":"Spinosaurus","adult":1.2}' };
+    const { props } = setup(modDetail({ sizeFiles: files }));
+    expect(screen.getByText('Sizes (1)')).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Spinosaurus' }));
+    expect(props.onSelect).toHaveBeenCalledWith({ kind: 'size', target: 'Spinosaurus' });
+    const onAddSize = vi.fn();
+    cleanup();
+    const session = new Session(new FakeRpc(), new FakePlatform(), memoryStore());
+    renderWith(ModSideList, session, { detail: modDetail(), check: null, selection: { kind: 'details' as const }, onSelect: vi.fn(), onAddSkin: vi.fn(), onAddSize });
+    await fireEvent.click(screen.getByRole('button', { name: 'Add sizes' }));
+    expect(onAddSize).toHaveBeenCalled();
+  });
+
+  it('also lists the selected target while it has no file yet', () => {
+    const session = new Session(new FakeRpc(), new FakePlatform(), memoryStore());
+    renderWith(ModSideList, session, { detail: modDetail(), check: null, selection: { kind: 'size' as const, target: 'Allosaurus' }, onSelect: vi.fn(), onAddSkin: vi.fn() });
+    expect(screen.getByRole('button', { name: 'Allosaurus' })).toBeInTheDocument();
+  });
+});
