@@ -111,7 +111,7 @@ public class BlenderServiceTests
         var s = new BlenderService(env).Status(ws);
 
         Assert.False(s.Supported);
-        Assert.Contains("5.0 or newer", s.Problem);
+        Assert.Contains("5.2 or newer", s.Problem);
     }
 
     [Fact]

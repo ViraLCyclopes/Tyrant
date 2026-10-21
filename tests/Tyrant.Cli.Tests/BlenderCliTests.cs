@@ -163,7 +163,7 @@ public class BlenderCliTests
     }
 
     [Theory]
-    [InlineData("""{"format":1,"target":"Carcharodontosaurus","adult":21}""", "\"adult\" must be from 0.05 to 20")]
+    [InlineData("""{"format":1,"target":"Carcharodontosaurus","adult":101}""", "\"adult\" must be from 0.05 to 100")]
     [InlineData("not json", "The sizes could not be read")]
     public void Send_reports_bad_sizes_as_its_json_line(string sizes, string message)
     {

@@ -5,13 +5,13 @@ namespace Tyrant.Framework.Core
 {
     /// <summary>
     /// The final scale an animal may have. The game caps it at 0.05 to 2 (AnimalNative.CurrentScale). The limit is automatic: a
-    /// species whose sizes need more gets the limit they need (<see cref="Fitting"/>), within Tyrant's own bounds of 0.01 to 20.
+    /// species whose sizes need more gets the limit they need (<see cref="Fitting"/>), within Tyrant's own bounds of 0.01 to 100.
     /// The framework, Check and Blender all derive it the same way.
     /// </summary>
     public readonly struct SizeLimit : IEquatable<SizeLimit>
     {
         /// <summary>The absolute bounds of a limit: its minimum in LowestMin to HighestMin, its maximum in LowestMax to HighestMax.</summary>
-        public const double LowestMin = 0.01, HighestMin = 0.05, LowestMax = 2, HighestMax = 20;
+        public const double LowestMin = 0.01, HighestMin = 0.05, LowestMax = 2, HighestMax = 100;
 
         public SizeLimit(float min, float max)
         {
@@ -33,13 +33,13 @@ namespace Tyrant.Framework.Core
 
         public bool Contains(float min, float max) => min >= Min && max <= Max;
 
-        /// <summary>Whether a species' smallest and largest pass Tyrant's own bounds (under 0.01 or over 20): Check's error; the game backs it off.</summary>
+        /// <summary>Whether a species' smallest and largest pass Tyrant's own bounds (under 0.01 or over 100): Check's error; the game backs it off.</summary>
         public static bool PastBounds(float min, float max) => min < (float)LowestMin || max > (float)HighestMax; // as floats: 0.01f itself is within
 
         /// <summary>
-        /// The outermost limit, just outside Tyrant's bounds: 20 / (1 − <see cref="SizeMath.SafeMargin"/>) and 0.01 / (1 + margin),
-        /// nudged in float until its safe band holds 20 and 0.01 themselves. So the game never backs off a species within 0.01 to
-        /// 20, the band where Check reports no error.
+        /// The outermost limit, just outside Tyrant's bounds: 100 / (1 − <see cref="SizeMath.SafeMargin"/>) and 0.01 / (1 + margin),
+        /// nudged in float until its safe band holds 100 and 0.01 themselves. So the game never backs off a species within 0.01 to
+        /// 100, the band where Check reports no error.
         /// </summary>
         public static readonly float OuterMax = Outer(HighestMax, up: true), OuterMin = Outer(LowestMin, up: false);
 
@@ -55,8 +55,8 @@ namespace Tyrant.Framework.Core
         /// The size limit a species gets for its smallest and largest final scale (<see cref="SizeMath.Extremes"/>): never narrower
         /// than the game's 0.05 to 2; past it, the maximum is max / (1 − <see cref="SizeMath.SafeMargin"/>) rounded up to the next
         /// 0.5 and the minimum min / (1 + margin) rounded down to the next 0.01, so the extremes stay inside the band back-off keeps
-        /// to (<see cref="SafeMin"/>, <see cref="SafeMax"/>). Past the last step inside Tyrant's 20 (or 0.01) it is the outermost
-        /// limit (<see cref="OuterMax"/>, <see cref="OuterMin"/>), which still holds 20 (or 0.01).
+        /// to (<see cref="SafeMin"/>, <see cref="SafeMax"/>). Past the last step inside Tyrant's 100 (or 0.01) it is the outermost
+        /// limit (<see cref="OuterMax"/>, <see cref="OuterMin"/>), which still holds 100 (or 0.01).
         /// </summary>
         public static SizeLimit Fitting(float min, float max)
         {

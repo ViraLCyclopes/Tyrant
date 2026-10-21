@@ -24,7 +24,7 @@ namespace Tyrant.Framework
     ///   group's species). The shared fields are never written, so uncustomised eggs (VirtualAnimal.GenerateGeneticSize) and
     ///   species without a range keep the game's.
     /// - Size limit: automatic. Each species gets the limit its sizes need (<see cref="SizePlan"/>, <see cref="SizeLimit.Fitting"/>,
-    ///   up to Tyrant's 20). The first time a species needs more than the game's 0.05 to 2, a transpiler swaps the cap constants of
+    ///   up to Tyrant's 100). The first time a species needs more than the game's 0.05 to 2, a transpiler swaps the cap constants of
     ///   AnimalNative.CurrentScale's getter for a read of the animal's species' limit (<see cref="ScaleLimit"/>, by native species
     ///   index, filled at each InitializeNativeData), all or none (<see cref="ScaleCap"/>). The game's error log stays: with the
     ///   constants swapped it fires only outside the species' limit and names it, so a scale nothing should reach (a broken

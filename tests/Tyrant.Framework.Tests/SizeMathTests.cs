@@ -101,15 +101,15 @@ public class SizeMathTests
     {
         var skins = new[] { (1.0, 1.0) };
         var ranges = new[] { (0.85, 1.15) };
-        var limit = new SizeLimit(0.05f, 20f);
+        var limit = new SizeLimit(0.05f, 100f);
 
         Assert.Equal(4.0, SizeMath.BackOff(Allosaurus, 4, null, skins, null, null, ranges, limit));
         Assert.True(SizeMath.BackOff(Allosaurus, 4, null, skins, null, null, ranges) < 2, "the game's limit is the default");
 
-        var adult = SizeMath.BackOff(Allosaurus, 20, null, skins, null, null, ranges, limit); // 20 x 1.15 would pass 20
-        Assert.True(adult < 20 && adult > 15, "adult was " + adult);
+        var adult = SizeMath.BackOff(Allosaurus, 100, null, skins, null, null, ranges, limit); // 100 x 1.15 would pass 100
+        Assert.True(adult < 100 && adult > 75, "adult was " + adult);
         var (min, max) = SizeMath.Extremes(SizeMath.Rebuild(Allosaurus, adult, null), new[] { adult }, ranges);
-        Assert.True(max <= limit.SafeMax && max > 19.9f && min >= limit.SafeMin, $"extremes {min}..{max}");
+        Assert.True(max <= limit.SafeMax && max > 99.8f && min >= limit.SafeMin, $"extremes {min}..{max}");
     }
 
     [Theory]
@@ -129,29 +129,30 @@ public class SizeMathTests
     }
 
     [Theory]
-    [InlineData(0.3f, 19.99f)]   // inside 20, past the 19.98 a cap of exactly 20 would back off to
-    [InlineData(0.3f, 20f)]      // exactly Tyrant's 20
+    [InlineData(0.3f, 99.99f)]   // inside 100, past the 99.9 a cap of exactly 100 would back off to
+    [InlineData(0.3f, 100f)]     // exactly Tyrant's 100
     [InlineData(0.01001f, 1f)]   // inside 0.01, under the 0.01001 a cap of exactly 0.01 would back off to
-    [InlineData(0.01f, 20f)]     // both of Tyrant's bounds
+    [InlineData(0.01f, 100f)]    // both of Tyrant's bounds
     public void Within_tyrants_bounds_the_game_never_backs_off(float min, float max)
     {
         var limit = SizeLimit.Fitting(min, max);
 
-        // The outermost step sits just outside 20 and 0.01 (20 / (1 - margin), 0.01 / (1 + margin)), so the band back-off
-        // keeps to still holds them; Check calls nothing within 0.01 to 20 an error.
+        // The outermost step sits just outside 100 and 0.01 (100 / (1 - margin), 0.01 / (1 + margin)), so the band back-off
+        // keeps to still holds them; Check calls nothing within 0.01 to 100 an error.
         Assert.True(min >= limit.SafeMin && max <= limit.SafeMax, $"{limit} keeps {min}..{max} in its safe band");
-        Assert.True(limit.Max <= 20.03f && limit.Min >= 0.0099f, $"{limit} stays at Tyrant's bounds");
+        Assert.True(limit.Max <= 100.15f && limit.Min >= 0.0099f, $"{limit} stays at Tyrant's bounds");
         Assert.False(SizeLimit.PastBounds(min, max));
     }
 
     [Fact]
     public void Past_tyrants_bounds_the_limit_stops_at_them()
     {
-        var limit = SizeLimit.Fitting(0.001f, 30f);
+        var limit = SizeLimit.Fitting(0.001f, 150f);
 
-        Assert.Equal(SizeLimit.Fitting(0.01f, 20f), limit);
+        Assert.Equal(SizeLimit.Fitting(0.01f, 100f), limit);
         Assert.True(SizeLimit.PastBounds(0.001f, 1f));
-        Assert.True(SizeLimit.PastBounds(0.3f, 20.01f));
+        Assert.True(SizeLimit.PastBounds(0.3f, 100.01f));
+        Assert.False(SizeLimit.PastBounds(0.3f, 99.99f));
     }
 
     [Fact]

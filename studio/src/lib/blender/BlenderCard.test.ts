@@ -88,9 +88,9 @@ describe('BlenderCard', () => {
   });
 
   it('says why Blender 4 cannot be used', async () => {
-    const { session } = setup({ ...found, version: '4.5.0', supported: false, problem: "Tyrant's Blender tools need Blender 5.0 or newer (found 4.5)." });
+    const { session } = setup({ ...found, version: '4.5.0', supported: false, problem: "Tyrant's Blender tools need Blender 5.2 or newer (found 4.5)." });
     renderWith(BlenderCard, session);
-    expect(await screen.findByText(/5\.0 or newer/)).toBeInTheDocument();
+    expect(await screen.findByText(/5\.2 or newer/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Install add-on' })).not.toBeInTheDocument();
   });
 });

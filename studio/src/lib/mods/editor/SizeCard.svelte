@@ -10,7 +10,7 @@
    * ranges (the Nursery slider's and breeding's), shown as percentages of this species' size with the sizes they give. A key
    * the mod leaves unset shows the game's value and Reset puts it back. The sex sizes multiply each skin's own, so theirs is
    * 1× (the skin's own shows as information only). The server replaces the whole set, so every save carries all six. The
-   * size limit is automatic (it follows the sizes, up to 20×): there is nothing to set. A slider moves its number field, the
+   * size limit is automatic (it follows the sizes, up to 100×): there is nothing to set. A slider moves its number field, the
    * size bar, the lengths, the range results and the smallest/biggest line while it is dragged, and saves once, on release
    * (one undo step). The number fields show 3 decimals; an unedited value keeps its full precision.
    */
@@ -23,17 +23,17 @@
   type RangeKey = 'nursery' | 'breeding';
   type Own = Record<Key, number | null> & Record<RangeKey, number[] | null>;
   type RangeRow = { key: RangeKey; label: string };
-  // The genetic ranges take 0 < min <= max <= 20 (as sizes/<file>.json takes them); their fields show them as percentages.
+  // The genetic ranges take 0 < min <= max <= 100 (as sizes/<file>.json takes them); their fields show them as percentages.
   const RANGES: RangeRow[] = [
     { key: 'nursery', label: 'Nursery size slider range' },
     { key: 'breeding', label: 'Breeding size range' },
   ];
-  const RANGE_MAX = 20;
+  const RANGE_MAX = 100;
   /** The smallest end a range field takes (0.5%, its step): its field's min and its check agree. */
   const RANGE_MIN = 0.005;
-  // The number fields take what the files take (up to 20×; Check says when a species passes Tyrant's 20×). The sliders reach
+  // The number fields take what the files take (up to 100×; Check says when a species passes Tyrant's 100×). The sliders reach
   // 5×, or the saved value when it is higher, so their usual range stays easy to drag.
-  const MAX = 20;
+  const MAX = 100;
   const reach = (saved: number | null) => Math.min(MAX, Math.max(5, Math.ceil(saved ?? 0)));
   const fieldsFor = (o: Own): Field[] => [
     { key: 'adult', label: 'Adult size ×', min: 0.05, max: MAX, slider: reach(o.adult), step: 0.01 },
@@ -95,7 +95,7 @@
   const rangeShown = (key: RangeKey) => own[key] ?? gameOf(key);
   const pairText = (v: number[]) => `${percent(v[0])}% – ${percent(v[1])}%`;
 
-  /** One end of a range from its percentage field (saved as a multiplier); outside 0.5% <= min <= max <= 2000% it is not saved. */
+  /** One end of a range from its percentage field (saved as a multiplier); outside 0.5% <= min <= max <= 10000% it is not saved. */
   function changeEnd(row: RangeRow, end: 0 | 1, text: string) {
     const now = rangeShown(row.key);
     const n = Number(text) / 100;
@@ -193,7 +193,7 @@
       <p class="hint">Baby <span>{babyText}</span></p>
       {#if reached}<p class="hint reach">Smallest hatchling {times(reached.min)}×, biggest adult {times(reached.max)}× a normal {baseName}</p>{/if}
     </div>
-    <p class="hint">The size limit is automatic: in game this species may reach the sizes set here, up to Tyrant's 20×. Past the game's normal 2×, very big animals may clip, get stuck or frame badly.</p>
+    <p class="hint">The size limit is automatic: in game this species may reach the sizes set here, up to Tyrant's 100×. Past the game's normal 2×, very big animals may clip, get stuck or frame badly.</p>
     {#if ready.recordEdits.length > 0}
       <!-- Edits made in the species' record before Size existed: the field editor hides them, so they are cleared here. -->
       <p class="warn">

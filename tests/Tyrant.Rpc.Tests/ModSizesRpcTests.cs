@@ -99,7 +99,7 @@ public class ModSizesRpcTests
         var (h, _) = await WithAlpha(game);
         var detail = await h.Call("mods.get", new { id = "size-pack" });
 
-        var ex = await Assert.ThrowsAsync<RpcCallException>(() => h.Call("mods.setSizes", new { id = "size-pack", revision = Rev(detail), target = "Alpha", adult = 21 }));
+        var ex = await Assert.ThrowsAsync<RpcCallException>(() => h.Call("mods.setSizes", new { id = "size-pack", revision = Rev(detail), target = "Alpha", adult = 101 }));
         var range = await Assert.ThrowsAsync<RpcCallException>(() => h.Call("mods.setSizes", new { id = "size-pack", revision = Rev(detail), target = "Alpha", nursery = new[] { 0.0, 1.0 } }));
 
         Assert.Equal("MOD_INVALID", ex.DataCode);
@@ -107,7 +107,7 @@ public class ModSizesRpcTests
     }
 
     [Fact]
-    public async Task Check_judges_a_species_against_tyrants_20x()
+    public async Task Check_judges_a_species_against_tyrants_100x()
     {
         using var game = new FakeGame();
         var (h, ws, _) = await AssetFixtures.Opened(game);
@@ -118,14 +118,14 @@ public class ModSizesRpcTests
         await h.Call("mods.create", new { id = "wide-nursery" });
         var detail = await h.Call("mods.get", new { id = "wide-nursery" });
 
-        // The species' own Nursery range: females 1.35 x 15 = 20.25, past Tyrant's 20.
-        var set = await h.Call("mods.setSizes", new { id = "wide-nursery", revision = Rev(detail), target = "Allosaurus Anax", nursery = new[] { 0.5, 15.0 } });
+        // The species' own Nursery range: females 1.35 x 75 = 101.25, past Tyrant's 100.
+        var set = await h.Call("mods.setSizes", new { id = "wide-nursery", revision = Rev(detail), target = "Allosaurus Anax", nursery = new[] { 0.5, 75.0 } });
         var check = await h.Call("mods.check", new { id = "wide-nursery" });
         Assert.Contains(check.GetProperty("errors").EnumerateArray(), e => e.GetString() ==
-            "sizes/allosaurus anax.json: The biggest Allosaurus Anax can reach 20.25× a normal Allosaurus Anax (adult 1 × female 1.35 × Nursery slider up to 15), more than Tyrant's 20× limit; lower the adult size or the size ranges.");
+            "sizes/allosaurus anax.json: The biggest Allosaurus Anax can reach 101.25× a normal Allosaurus Anax (adult 1 × female 1.35 × Nursery slider up to 75), more than Tyrant's 100× limit; lower the adult size or the size ranges.");
         Assert.False(set.TryGetProperty("notes", out _)); // nothing is raised: the limit is automatic
 
-        // Within 20: only the past-2x caution.
+        // Within 100: only the past-2x caution.
         await h.Call("mods.setSizes", new { id = "wide-nursery", revision = Rev(set), target = "Allosaurus Anax", nursery = new[] { 0.5, 1.5 } });
         check = await h.Call("mods.check", new { id = "wide-nursery" });
         Assert.DoesNotContain(check.GetProperty("errors").EnumerateArray(), e => e.GetString()!.Contains("Allosaurus Anax"));

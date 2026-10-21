@@ -125,37 +125,37 @@ class SizeTests(unittest.TestCase):
         self.assertGreater(arm.scale.x, 2.0)
         self.assertScale(arm, 1.08 * 4)
 
-        arm.tyrant_size_adult = 20.0
-        arm.tyrant_size_male = 20.0  # 1.08 x 20 x 20: only Tyrant's own bound of 20 holds it
-        self.assertScale(arm, 20.0)
+        arm.tyrant_size_adult = 100.0
+        arm.tyrant_size_male = 100.0  # 1.08 x 100 x 100: only Tyrant's own bound of 100 holds it
+        self.assertScale(arm, 100.0)
 
-    def test_no_note_within_tyrants_20x(self):
+    def test_no_note_within_tyrants_100x(self):
         path = allosaurus(sizes={"adult": 4.0})
         data = project.load(path)
         data["sizeLimit"] = [0.05, 5.0]  # automatic: the limit its sizes need (1.08 x 4 x 1.15 = 4.97)
         project.save(path, data)
         arm = importer.import_project(path)
-        # The size limit is automatic up to 20, so a size past the game's 2 needs no note.
+        # The size limit is automatic up to 100, so a size past the game's 2 needs no note.
         self.assertIsNone(growth.limit_note(arm, data))
         self.assertFalse([d for d in drawn_sizes(arm, data) if d[0] == "say" and "capped" in d[1][0]])
 
         data["geneticRanges"] = {"incubation": [0.925, 1.075], "nursery": [0.5, 3.0], "breeding": [0.85, 1.15]}
-        self.assertIsNone(growth.limit_note(arm, data))  # 1.08 x 4 x 3 = 12.96: still within 20
+        self.assertIsNone(growth.limit_note(arm, data))  # 1.08 x 4 x 3 = 12.96: still within 100
 
-    def test_note_past_20x_counts_the_ranges_and_every_skin(self):
+    def test_note_past_100x_counts_the_ranges_and_every_skin(self):
         path = allosaurus(sizes={"adult": 4.0})
         data = project.load(path)
-        data["geneticRanges"] = {"incubation": [0.925, 1.075], "nursery": [0.5, 5.0], "breeding": [0.85, 1.15]}
+        data["geneticRanges"] = {"incubation": [0.925, 1.075], "nursery": [0.5, 25.0], "breeding": [0.85, 1.15]}
         project.save(path, data)
         arm = importer.import_project(path)
-        # The species' own Nursery range: 1.08 x 4 x 5 = 21.6, past Tyrant's 20.
-        note = "In game this is capped at 20×."
+        # The species' own Nursery range: 1.08 x 4 x 25 = 108, past Tyrant's 100.
+        note = "In game this is capped at 100×."
         self.assertEqual(growth.limit_note(arm, data), note)
         self.assertIn(("say", (note,), {}), drawn_sizes(arm, data))
 
         data["geneticRanges"] = {"incubation": [0.925, 1.075], "nursery": None, "breeding": [0.85, 1.15]}
         self.assertIsNone(growth.limit_note(arm, data))
-        data["sizeSkins"] = [[1.08, 1.0], [4.5, 1.2]]  # another skin is far bigger: 4.5 x 4 x 1.15 = 20.7
+        data["sizeSkins"] = [[1.08, 1.0], [22.0, 1.2]]  # another skin is far bigger: 22 x 4 x 1.15 = 101.2
         self.assertEqual(growth.limit_note(arm, data), note)
 
     def test_note_under_001x(self):
@@ -187,12 +187,12 @@ class SizeTests(unittest.TestCase):
             self.assertEqual(json.load(f), {"format": 1, "target": "Carcharodontosaurus", "adult": 4.0})
         self.assertNotIn("--sizes", started[1])  # a skin's sizes are the species'
 
-    def test_the_size_panel_reaches_20(self):
+    def test_the_size_panel_reaches_100(self):
         arm = importer.import_project(allosaurus())
         arm.tyrant_size_adult = 15.0
         self.assertAlmostEqual(growth.size_edits(arm)["adult"], 15.0, places=5)
-        arm.tyrant_size_female = 25.0  # past the file's maximum: Blender keeps it at 20
-        self.assertAlmostEqual(growth.size_edits(arm)["female"], 20.0, places=5)
+        arm.tyrant_size_female = 125.0  # past the file's maximum: Blender keeps it at 100
+        self.assertAlmostEqual(growth.size_edits(arm)["female"], 100.0, places=5)
 
     def test_without_a_scale_curve_the_model_keeps_its_scale(self):
         arm = importer.import_project(fresh_project())  # the fixture's species has no scale curve

@@ -250,10 +250,10 @@ SKIN_SIZES = "Sizes apply to the whole species; set them in the app."
 
 # The Size panel's fields: key, label, limits (as sizes/<file>.json), tooltip.
 SIZE_FIELDS = (
-    ("adult", "Adult size ×", 0.05, 20.0, "Multiplies the real adult size (both sexes)"),
+    ("adult", "Adult size ×", 0.05, 100.0, "Multiplies the real adult size (both sexes)"),
     ("baby", "Baby size (share of adult)", 0.001, 1.0, "The newborn's size as a share of the adult's"),
-    ("male", "Male size ×", 0.1, 20.0, "Multiplies the males' size"),
-    ("female", "Female size ×", 0.1, 20.0, "Multiplies the females' size"),
+    ("male", "Male size ×", 0.1, 100.0, "Multiplies the males' size"),
+    ("female", "Female size ×", 0.1, 100.0, "Multiplies the females' size"),
 )
 _SIZE_LIMITS = {key: (low, high) for key, _label, low, high, _about in SIZE_FIELDS}
 

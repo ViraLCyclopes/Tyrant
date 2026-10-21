@@ -87,16 +87,16 @@ describe('SizeCard', () => {
   it('a value past the limits is not sent', async () => {
     const { rpc } = await setup();
     const adult = screen.getByRole('spinbutton', { name: 'Adult size ×' });
-    await fireEvent.input(adult, { target: { value: '21' } });
+    await fireEvent.input(adult, { target: { value: '101' } });
     await fireEvent.change(adult);
     expect(rpc.callsTo('mods.setSizes')).toHaveLength(0);
-    expect(screen.getByText(/from 0.05 to 20/)).toBeInTheDocument();
+    expect(screen.getByText(/from 0.05 to 100/)).toBeInTheDocument();
   });
 
-  it('the number fields take up to 20; the sliders stay at 5', async () => {
+  it('the number fields take up to 100; the sliders stay at 5', async () => {
     const { rpc } = await setup();
-    expect(screen.getByRole('spinbutton', { name: 'Adult size ×' })).toHaveAttribute('max', '20');
-    expect(screen.getByRole('spinbutton', { name: 'Female size ×' })).toHaveAttribute('max', '20');
+    expect(screen.getByRole('spinbutton', { name: 'Adult size ×' })).toHaveAttribute('max', '100');
+    expect(screen.getByRole('spinbutton', { name: 'Female size ×' })).toHaveAttribute('max', '100');
     expect(screen.getByRole('slider', { name: 'Adult size × slider' })).toHaveAttribute('max', '5');
     const male = screen.getByRole('spinbutton', { name: 'Male size ×' });
     await fireEvent.input(male, { target: { value: '9' } });
@@ -235,9 +235,9 @@ describe('SizeCard', () => {
     await fireEvent.change(from);
     expect(screen.getByRole('alert')).toHaveTextContent('Breeding size range: the minimum must be from 0.5% to the maximum (115%).');
     const to = screen.getByRole('spinbutton', { name: 'Nursery size slider range maximum' });
-    await fireEvent.input(to, { target: { value: '2100' } });
+    await fireEvent.input(to, { target: { value: '10100' } });
     await fireEvent.change(to);
-    expect(screen.getByRole('alert')).toHaveTextContent('Nursery size slider range: the maximum must be from the minimum (92.5%) to 2000%.');
+    expect(screen.getByRole('alert')).toHaveTextContent('Nursery size slider range: the maximum must be from the minimum (92.5%) to 10000%.');
     expect(rpc.callsTo('mods.setSizes')).toHaveLength(0);
   });
 

@@ -3,10 +3,10 @@ using Tyrant.Core.Install;
 
 namespace Tyrant.Core.Blender;
 
-/// <summary>A blender.exe and its version; Tyrant's tools need 5.0 or newer.</summary>
+/// <summary>A blender.exe and its version; Tyrant's tools need 5.2 or newer.</summary>
 public sealed record BlenderInstall(string Exe, Version Version)
 {
-    public bool Supported => Version.Major >= 5;
+    public bool Supported => Version >= new Version(5, 2);
     public string MajorMinor => $"{Version.Major}.{Version.Minor}";
 }
 

@@ -83,10 +83,10 @@ public class ModSizeCommandTests
         using var game = new FakeGame();
         var ws = Workspace(game);
 
-        var bad = Run("mod", "size", "size-pack", "Alpha", "--adult", "21", "-w", ws);
+        var bad = Run("mod", "size", "size-pack", "Alpha", "--adult", "101", "-w", ws);
 
         Assert.NotEqual(ExitCodes.Ok, bad.Code);
-        Assert.Contains("\"adult\" must be from 0.05 to 20", bad.Err);
+        Assert.Contains("\"adult\" must be from 0.05 to 100", bad.Err);
         Assert.False(File.Exists(Path.Combine(ws, "mods", "size-pack", "sizes", "alpha.json")));
     }
 
@@ -116,24 +116,24 @@ public class ModSizeCommandTests
         Assert.DoesNotContain("limit", File.ReadAllText(file));
 
         // There is no --limit: the limit is automatic.
-        var limit = Run("mod", "size", "size-pack", "Alpha", "--limit", "0.05,20", "-w", ws);
+        var limit = Run("mod", "size", "size-pack", "Alpha", "--limit", "0.05,100", "-w", ws);
         Assert.NotEqual(ExitCodes.Ok, limit.Code);
-        Assert.Contains("--limit is gone: the size limit is automatic now (it follows the sizes, up to 20×).", limit.Err);
+        Assert.Contains("--limit is gone: the size limit is automatic now (it follows the sizes, up to 100×).", limit.Err);
 
         Assert.Equal(ExitCodes.Ok, Run("mod", "size", "size-pack", "Alpha", "--clear", "-w", ws).Code);
         Assert.False(File.Exists(file));
     }
 
     [Fact]
-    public void Check_names_a_species_past_20x()
+    public void Check_names_a_species_past_100x()
     {
         using var game = new FakeGame();
         var ws = Workspace(game);
 
-        Assert.Equal(ExitCodes.Ok, Run("mod", "size", "size-pack", "Alpha", "--adult", "2", "--nursery", "0.5,12", "-w", ws).Code); // 2 x 12 = 24
+        Assert.Equal(ExitCodes.Ok, Run("mod", "size", "size-pack", "Alpha", "--adult", "10", "--nursery", "0.5,12", "-w", ws).Code); // 10 x 12 = 120
         var check = Run("mod", "check", "size-pack", "-w", ws);
 
-        Assert.Contains("The biggest Alpha can reach 24× a normal Alpha (adult 2 × male 1 × Nursery slider up to 12), more than Tyrant's 20× limit", check.Out + check.Err);
+        Assert.Contains("The biggest Alpha can reach 120× a normal Alpha (adult 10 × male 1 × Nursery slider up to 12), more than Tyrant's 100× limit", check.Out + check.Err);
     }
 
     [Fact]
@@ -142,7 +142,7 @@ public class ModSizeCommandTests
         using var game = new FakeGame();
         var ws = Workspace(game);
 
-        var gone = Run("mod", "size-ranges", "size-pack", "--limit", "0.05,20", "-w", ws);
+        var gone = Run("mod", "size-ranges", "size-pack", "--limit", "0.05,100", "-w", ws);
 
         Assert.NotEqual(ExitCodes.Ok, gone.Code);
         Assert.DoesNotContain("sizeRanges", File.ReadAllText(Path.Combine(ws, "mods", "size-pack", "mod.json")));

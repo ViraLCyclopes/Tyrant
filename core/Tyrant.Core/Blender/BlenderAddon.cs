@@ -81,8 +81,8 @@ public static partial class BlenderAddon
         return have < ship ? AddonState.Older : have > ship ? AddonState.Newer : AddonState.Current;
     }
 
-    /// <summary>The "needs 5.0" message, also used by the app and CLI before opening.</summary>
-    public static string TooOld(BlenderInstall blender) => $"Tyrant's Blender tools need Blender 5.0 or newer (found {blender.MajorMinor}).";
+    /// <summary>The "needs 5.2" message, also used by the app and CLI before opening.</summary>
+    public static string TooOld(BlenderInstall blender) => $"Tyrant's Blender tools need Blender 5.2 or newer (found {blender.MajorMinor}).";
 
     /// <summary>
     /// Installs the zip with Blender's own extension installer, then enables it. The install runs with --factory-startup (the

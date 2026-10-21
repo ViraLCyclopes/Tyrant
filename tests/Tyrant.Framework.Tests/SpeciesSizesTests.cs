@@ -63,12 +63,12 @@ public class SpeciesSizesTests
 
     [Theory]
     [InlineData("adult", "0.04")]
-    [InlineData("adult", "20.1")]
+    [InlineData("adult", "100.1")]
     [InlineData("baby", "0")]
     [InlineData("baby", "1.01")]
     [InlineData("male", "0.09")]
-    [InlineData("female", "20.1")]
-    [InlineData("male", "20.1")]
+    [InlineData("female", "100.1")]
+    [InlineData("male", "100.1")]
     public void Rejects_out_of_range(string key, string value)
     {
         var ex = Assert.Throws<ManifestException>(() => SizeSettings.Parse($$"""{ "format": 1, "target": "A", "{{key}}": {{value}} }"""));
@@ -79,7 +79,7 @@ public class SpeciesSizesTests
     [Theory]
     [InlineData("nursery", "[1.2, 1.1]")]
     [InlineData("nursery", "[0, 1]")]
-    [InlineData("nursery", "[1, 20.1]")]
+    [InlineData("nursery", "[1, 100.1]")]
     [InlineData("nursery", "[1]")]
     [InlineData("breeding", "[1.2, 1.1]")]
     [InlineData("breeding", "[0, 1]")]
@@ -94,11 +94,11 @@ public class SpeciesSizesTests
     [Fact]
     public void Raised_maximums_reach_the_highest_limit()
     {
-        var s = SizeSettings.Parse("""{ "format": 1, "target": "A", "adult": 20, "male": 20, "female": 20, "nursery": [0.25, 20], "breeding": [1, 20] }""");
+        var s = SizeSettings.Parse("""{ "format": 1, "target": "A", "adult": 100, "male": 100, "female": 100, "nursery": [0.25, 100], "breeding": [1, 100] }""");
 
-        Assert.Equal((20.0, 20.0, 20.0), (s.Adult!.Value, s.Male!.Value, s.Female!.Value));
-        Assert.Equal([0.25, 20], s.Nursery!);
-        Assert.Equal([1, 20], s.Breeding!);
+        Assert.Equal((100.0, 100.0, 100.0), (s.Adult!.Value, s.Male!.Value, s.Female!.Value));
+        Assert.Equal([0.25, 100], s.Nursery!);
+        Assert.Equal([1, 100], s.Breeding!);
     }
 
     [Fact]
@@ -115,13 +115,13 @@ public class SpeciesSizesTests
     [InlineData("[0.009, 20]")]
     [InlineData("[0.06, 20]")]
     [InlineData("[0.05, 1.9]")]
-    [InlineData("[0.05, 20.1]")]
+    [InlineData("[0.05, 100.1]")]
     [InlineData("[0.05]")]
     public void Limit_has_absolute_bounds(string limit)
     {
         var ex = Assert.Throws<ManifestException>(() => SizeSettings.Parse("{ \"format\": 1, \"target\": \"A\", \"limit\": " + limit + " }"));
 
-        Assert.Contains("\"limit\" must be [min, max] with 0.01 <= min <= 0.05 and 2 <= max <= 20", ex.Message);
+        Assert.Contains("\"limit\" must be [min, max] with 0.01 <= min <= 0.05 and 2 <= max <= 100", ex.Message);
     }
 
     [Fact]
@@ -190,7 +190,7 @@ public class SpeciesSizesTests
         const string t = """{"format":1,"target":"A","adult":1}""";
         File.WriteAllText(Path.Combine(dir, "sizes", "a.json"), t);
         File.WriteAllText(Path.Combine(dir, "sizes", "b.json"), t);
-        File.WriteAllText(Path.Combine(dir, "sizes", "c.json"), """{"format":1,"target":"C","adult":21}""");
+        File.WriteAllText(Path.Combine(dir, "sizes", "c.json"), """{"format":1,"target":"C","adult":101}""");
         var problems = new List<string>();
 
         var read = SizeSettings.ReadFolder(dir, problems);

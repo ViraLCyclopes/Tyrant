@@ -124,7 +124,7 @@ public static partial class SpeciesSizes
         Extremes(original, sizes, facts) is { } e ? SizeLimit.Fitting(e.Min, e.Max) : null;
 
     /// <summary>
-    /// Check's error when the sizes take the species past Tyrant's own bounds (over 20 or under 0.01, <see cref="SizeLimit.PastBounds"/>):
+    /// Check's error when the sizes take the species past Tyrant's own bounds (over 100 or under 0.01, <see cref="SizeLimit.PastBounds"/>):
     /// how big (or small) it gets, relative to a normal animal of its base species, and what makes it so; null within them. The
     /// extreme is found as <see cref="Extremes"/> finds it (the same samples and float maths), so the number is Check's own, and the
     /// sex named is the one that gives it (the skin's own sex size times the mod's multiplier). A grown adult is a plain product of
