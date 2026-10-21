@@ -87,7 +87,7 @@ public sealed partial class ModsMethods
             var inherited = SpeciesDatabase.Template(ws, s.Base);
             return new ModAnimalDto(s.Id, s.Key(mod.Id), s.Base, s.Name, s.Genus, s.Epithet, s.Cost, s.Stats,
                 inherited?.Cost, inherited?.Stats ?? new Dictionary<string, double>(),
-                (s.Fields.Count > 0 ? s.Fields : inherited?.Fields ?? []).Select(f => new ModAnimalFieldDto(f.Path, f.Kind, f.Value, f.TemplateValue, f.Editable)).ToList(),
+                (s.Fields.Count > 0 ? s.Fields : inherited?.Fields ?? []).Where(f => !SpeciesSizes.IsSizePath(f.Path)).Select(f => new ModAnimalFieldDto(f.Path, f.Kind, f.Value, f.TemplateValue, f.Editable)).ToList(),
                 s.Localization, s.Icon, s.Prefab, s.StartingSkin, s.StartingSkinName, s.Swatch, s.Portraits.Count == 0 ? null : s.Portraits,
                 mod.StartingSkinOf(s.Id)?.Id);
         }).ToList(), SpeciesStats.Fields.Select(f => new ModStatDto(f.Id, f.Label, f.Unit, f.Min, f.Max)).ToList());

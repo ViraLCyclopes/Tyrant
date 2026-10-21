@@ -1,3 +1,4 @@
+using System.Globalization;
 using StbImageSharp;
 using Tyrant.Core.Assets;
 using Tyrant.Core.Install;
@@ -39,7 +40,7 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
     public ModCheckResult Check(ModProject mod, AssetIndex? index, IReadOnlyList<SpeciesSkins>? species = null, SoundCatalog? sounds = null,
         Func<string, Rigging.RigInfo?>? rigInfo = null, Func<string, SpeciesTemplateStats?>? templateStats = null,
         Func<string, IReadOnlyList<PrefabFieldInfo>?>? prefabFields = null, OtherMods? others = null,
-        Func<AssetIndex, AssetRecord, AnimalMaterial?>? animalMaterialOf = null)
+        Func<AssetIndex, AssetRecord, AnimalMaterial?>? animalMaterialOf = null, SizeFacts? sizeFacts = null)
     {
         var errors = new List<string>();
         var warnings = new List<string>();
@@ -81,7 +82,8 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
         }
         if (species is not null) species = ModProject.WithSpecies(species, mod.Manifest, others?.Species);
         if (mod.Manifest.Replace.Count == 0 && mod.Manifest.Skins.Count == 0 && mod.Manifest.Models.Count == 0 && mod.Manifest.Sounds.Count == 0
-            && mod.Manifest.Species.Count == 0 && mod.Manifest.Assembly is null && mod.PrefabTargets().Count == 0)
+            && mod.Manifest.Species.Count == 0 && mod.Manifest.Assembly is null && mod.PrefabTargets().Count == 0
+            && mod.SizeTargets.Count == 0 && mod.Manifest.SizeRanges is not { IsEmpty: false })
             warnings.Add("The mod does nothing yet: add a texture replacement, a skin, a model or a sound.");
         if (index is null && mod.Manifest.Replace.Count > 0)
             warnings.Add("There is no asset index, so the target textures were not checked. Click Index assets on the Workspace tab.");
@@ -178,6 +180,7 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
         RigProblems(mod, rigInfo, errors, warnings);
         SoundProblems(mod, species, sounds, errors, warnings);
         PrefabProblems(mod, species, prefabFields, errors, warnings);
+        SizeProblems(mod, species, sizeFacts, errors, warnings);
         var missing = index is null || pixelsOf is null ? [] : MissingCutouts(mod, index, species, warnings);
         return new ModCheckResult(errors, warnings) { MissingCutouts = missing };
     }
@@ -333,6 +336,66 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
             }
         }
         errors.AddRange(problems);
+    }
+
+    /// <summary>The caution shown for an adult size this far from 1: the size class (agentSize) is never changed, because that needs navmesh data.</summary>
+    private const string SizeClassWarning = "the species keeps its size class (paths, enclosure filters); a much bigger or smaller animal may not fit them";
+
+    /// <summary>
+    /// Sizes: each sizes/ file's target and values, whether a sized species stays within the game's 0.05 to 2 scale limits (with the
+    /// random hatching range and the mod's ranges), old record edits of the growth curve, and ranges that push unsized species past the limits.
+    /// </summary>
+    private static void SizeProblems(ModProject mod, IReadOnlyList<SpeciesSkins>? species, SizeFacts? facts, List<string> errors, List<string> warnings)
+    {
+        var problems = new List<string>();
+        var sized = SizeSettings.ReadFolder(mod.Dir, problems);
+        errors.AddRange(problems);
+        var text = (double value) => value.ToString("0.###", CultureInfo.InvariantCulture);
+        foreach (var (file, sizes) in sized)
+        {
+            if (species is not null && !species.Any(s => string.Equals(s.SpeciesId, sizes.Target, StringComparison.OrdinalIgnoreCase)))
+            {
+                errors.Add($"sizes/{file}: {sizes.Target} is not a species of the game or of this mod; fix the target or remove the file.");
+                continue;
+            }
+            if (sizes.Adult is double adult && (adult >= 1.5 || adult <= 0.65))
+                warnings.Add($"sizes/{file}: {sizes.Target}'s adult size {text(adult)} is far from the original: {SizeClassWarning}.");
+            if (facts?.Original(sizes.Target) is not { } original) continue;
+            var found = SizeExtremes(original, sizes, facts, mod.Manifest.SizeRanges);
+            if (found is { } extremes && (extremes.Min < SizeMath.FinalMin || extremes.Max > SizeMath.FinalMax))
+                errors.Add($"sizes/{file}: {sizes.Target} would be scaled from {text(extremes.Min)} to {text(extremes.Max)} (the game allows {SizeMath.FinalMin} to {SizeMath.FinalMax}, and clamps it); lower the adult or sex sizes.");
+        }
+        foreach (var entry in mod.Manifest.Species)
+        {
+            var edited = entry.Fields.Where(f => SpeciesSizes.IsSizePath(f.Path) && f.Value != f.TemplateValue).Select(f => f.Path).ToList();
+            if (edited.Count > 0)
+                warnings.Add($"Species {entry.Id}: its record edits {string.Join(", ", edited)} change its size outside Size. Set sizes in Size instead.");
+        }
+        if (facts is null || species is null || mod.Manifest.SizeRanges is not { IsEmpty: false } ranges) return;
+        var sizedTargets = new HashSet<string>(sized.Select(s => s.Sizes.Target), StringComparer.OrdinalIgnoreCase);
+        var past = new List<string>();
+        foreach (var vanilla in species.Where(s => !s.Vivarium && !s.SpeciesId.StartsWith("tyrant.", StringComparison.Ordinal) && !sizedTargets.Contains(s.SpeciesId)))
+        {
+            if (facts.Original(vanilla.SpeciesId) is not { } original) continue;
+            var none = new SizeSettings();
+            if (SizeExtremes(original, none, facts, null) is { } before && (before.Min < SizeMath.FinalMin || before.Max > SizeMath.FinalMax)) continue; // already clamped without this mod
+            if (SizeExtremes(original, none, facts, ranges) is { } after && (after.Min < SizeMath.FinalMin || after.Max > SizeMath.FinalMax)) past.Add(vanilla.SpeciesId);
+        }
+        if (past.Count > 0)
+            warnings.Add($"The mod's genetic size ranges push {string.Join(", ", past.Take(5))}{(past.Count > 5 ? $" and {past.Count - 5} more" : "")} past the game's {SizeMath.FinalMin} to {SizeMath.FinalMax} size limits; the game clamps them.");
+    }
+
+    /// <summary>The smallest and largest scale a species reaches with these sizes; null when its data has no growth curve.</summary>
+    private static (float Min, float Max)? SizeExtremes(OriginalSize original, SizeSettings sizes, SizeFacts facts, SizeRanges? modRanges)
+    {
+        if (original.Curve.Length == 0) return null;
+        var curve = SizeMath.Rebuild(original.Curve, sizes.Adult ?? 1, sizes.Baby);
+        var skins = original.Skins.Count == 0 ? [(1.0, 1.0)] : original.Skins;
+        var sexes = skins.SelectMany(k => { var (male, female) = SizeMath.Sex(k.Male, k.Female, sizes); return new[] { male, female }; });
+        var ranges = new List<(double Min, double Max)> { facts.Incubation };
+        if (modRanges?.Nursery is { } nursery) ranges.Add((nursery[0], nursery[1]));
+        ranges.Add(modRanges?.Breeding is { } breeding ? (breeding[0], breeding[1]) : facts.Breeding);
+        return SizeMath.Extremes(curve, sexes, ranges);
     }
 
     private List<string> MissingCutouts(ModProject mod, AssetIndex index, IReadOnlyList<SpeciesSkins>? species, List<string> warnings)

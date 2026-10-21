@@ -39,6 +39,7 @@ public static class ModSharing
                 foreach (var code in AnimalLocalization.Codes) named.Add($"localization/{code}/{term.Replace('\\', '/')}.txt");
         named.AddRange(mod.NamedFiles());
         named.AddRange(mod.PrefabFiles().Keys.Select(f => PrefabOverrides.Folder + "/" + f));
+        named.AddRange(mod.SizeFiles().Keys.Select(f => SizeSettings.Folder + "/" + f));
         return named.Where(f => !string.IsNullOrWhiteSpace(f))
             .Select(f => f!.Replace('\\', '/'))
             .Where(f => ModPaths.IsInside(Path.Combine(mod.Dir, f), mod.Dir) && File.Exists(Path.Combine(mod.Dir, f)))

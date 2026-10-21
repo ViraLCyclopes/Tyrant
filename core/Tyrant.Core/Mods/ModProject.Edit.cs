@@ -25,6 +25,7 @@ public sealed partial class ModProject
                 var path = AnimalLocalization.FileFor(Dir, code, term);
                 return "\n" + code + "/" + term + "\n" + (File.Exists(path) ? File.ReadAllText(path) : "");
             }))) + string.Concat(PrefabFiles().Select(p => "\nprefabs/" + p.Key + "\n" + p.Value))
+            + string.Concat(SizeFiles().Select(p => "\nsizes/" + p.Key + "\n" + p.Value))
         + string.Concat(MaterialFileTexts().Select(p => "\n" + p.Key + "\n" + p.Value)))));
 
     /// <summary>The three kinds of material folder under materials/ (<see cref="MaterialFolders"/>).</summary>

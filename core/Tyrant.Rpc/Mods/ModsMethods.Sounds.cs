@@ -76,7 +76,7 @@ public sealed partial class ModsMethods
             }
         };
         var hasPrefabs = mod.PrefabTargets().Count > 0;
-        var checkSpecies = m.Species.Count > 0 || m.Skins.Count > 0 || m.Sounds.Count > 0 || hasPrefabs ? species : null;
+        var checkSpecies = m.Species.Count > 0 || m.Skins.Count > 0 || m.Sounds.Count > 0 || hasPrefabs || mod.SizeTargets.Count > 0 ? species : null;
         Func<string, IReadOnlyList<PrefabFieldInfo>?>? prefabFields = !hasPrefabs || index is null || species is null ? null : target =>
         {
             try
@@ -90,7 +90,7 @@ public sealed partial class ModsMethods
         };
         return ModChecker.ForGame(install).Check(mod, index, checkSpecies,
             m.Sounds.Count > 0 ? TrySounds(ws) : null, rigInfo, id => SpeciesDatabase.Template(ws, id), prefabFields,
-            others, AnimalMaterialOf(install));
+            others, AnimalMaterialOf(install), SpeciesSizes.Facts(ws, mod));
     }
 
     /// <summary>A prefab's animal material for Check; null when its bundle cannot be read (the name check is then skipped).</summary>
