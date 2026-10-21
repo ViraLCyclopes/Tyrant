@@ -413,3 +413,21 @@ Needs the game and a Tyrant Framework installed from this build. Steps marked **
      starts from the film's colours (8); **Reset** goes back. Do the same on **Whole skin** of a mod skin and **Save**: in
      the app, that skin's material card shows the four colours in **Colours**. Give it 10 colours in the app and save: the
      window shows *Colour 1 of 10*, **+** is off, and an edit there keeps all 10 in `materials.json`.
+
+## Animal sizes
+
+Needs the game. Steps marked **(game)** start the game.
+
+156. **(game)** In a mod, set the T. rex's sizes to adult 0.8 and baby 0.2: a file `sizes/tyrannosaurus.json` with
+     `{ "format": 1, "target": "Tyrannosaurus", "adult": 0.8, "baby": 0.2 }`. In its `mod.json`, set
+     `"sizeRanges": { "nursery": [0.5, 1.5] }`. Install it, turn on the game's size editing (the Nursery's
+     **Customize size**), and open a park.
+     - `MelonLoader\Latest.log` has `Nursery size slider range: 0.5 to 1.5` and `Tyrannosaurus: sizes applied (adult 0.8,
+       baby 0.2, …)`, and no warning about the slider or the game's limit.
+     - Incubate a T. rex with the size slider at its left end (the readout shows 0.50), one at its right end (1.50),
+       and one with **Customize size** off: the uncustomised one is a normal-sized T. rex (its random size stays in the
+       game's 0.925 to 1.075, not the slider's range).
+     - Place them: the hatchlings are about a fifth of their adult size; grown, the 1.50 one is about three times the
+       0.50 one, and a T. rex is about 0.8 of a vanilla one. The animals neither float nor sink.
+     - Save the park, quit to the menu and load it: every T. rex has the same size as before, and the log has no new
+       warning. Remove the mod and load the park again: the T. rexes are back to their vanilla sizes.

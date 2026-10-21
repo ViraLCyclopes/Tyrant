@@ -93,6 +93,7 @@ namespace Tyrant.Framework
             ModelModule.Start(plan.Mods);
             if (ModelModule.HasModels) RigModule.Start(HarmonyInstance);
             HeadRigModule.Start(plan.Mods, HarmonyInstance);
+            SizesModule.Start(plan.Mods, HarmonyInstance); // species sizes and size ranges; nothing is patched without them
             MaterialsModule.Start(plan.Mods);
             MaterialsModule.Patch(HarmonyInstance); // always: the in-game editor works on animals no mod covers
             LookEditorModule.Patch(HarmonyInstance); // the placement hook for looks bound to an incubating animal
