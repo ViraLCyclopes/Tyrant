@@ -499,3 +499,10 @@ Needs the game. Steps marked **(game)** start the game.
        spam.
      - A sizes file from an older Tyrant with `"limit": [0.05, 20]`: Check warns "The size limit is automatic now; this
        file's limit is ignored and is removed the next time you save.", and a change on its Size card removes the key.
+158. **(game)** A custom species' own call: in a mod with a species copied from Carcharodontosaurus, mod editor → **Sounds +**
+     → under **This mod's species** pick it by name: the list says it plays Carcharodontosaurus' sounds. **Replace…** on the
+     social call, **Only <its name>** (the default), choose a file, **Add to mod**: mod.json has
+     `"species": "tyrant.<mod-id>.<species-id>"`, and the species page's **Sounds** section lists it with its file and
+     volume (**Edit** opens it; its **+ Add** opens the list on this species). Check shows no problem for it. Install and
+     open a park with both the custom species and a vanilla Carcharodontosaurus: the custom one calls with your file
+     (the log has `Replaced … for tyrant.<mod-id>.<species-id>`), the Carcharodontosaurus keeps the game's call.
