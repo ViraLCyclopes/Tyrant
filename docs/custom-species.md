@@ -199,8 +199,9 @@ of that sign and puts the picture on the copy, so the template's page keeps its 
 **Paleopedia picture → Choose PNG…**, or run
 `tyrant mod set-species-paleopedia-picture <MOD> <SPECIES-ID> (--png <FILE> | --clear)`. Tyrant copies the PNG to
 `icons/<species-id>-paleopedia.png` and records it in `animal_assets` with `slot = 'paleopedia'`. The game uses the same
-picture for the species' row in the Paleopedia's animal list, as the background of its notifications (an egg hatched,
-an animal died, the most popular animal) and as the preview in an education sign's info panel. The painted sign standing
+picture for the species' row in the Paleopedia's animal list and in a formation's species list, as the background of
+its notifications (an egg hatched, an animal died, the species unlocked), for the most popular animal in the animals
+overview, in objective pictures and as the preview in an education sign's info panel. The painted sign standing
 in the park is not changed: the game draws it from a texture array of the base-game species' pictures, which
 Tyrant does not extend.
 
@@ -211,14 +212,27 @@ in mod exports and installs.
 
 ### What the Paleopedia page shows
 
-A new species is listed in the Paleopedia's animal list like any animal, and the Nursery's **Open Paleopedia** opens its
-own page: its genus and species name, its description, character
-notes and social info (see [Localization](#localization)), its Paleopedia picture and its own stats. A field the species
-does not change is its template's, so a species made from Allosaurus Anax with no other edits shows Allosaurus Anax's
-base rating (the Nursery's Base Rating is the preview animal's own total, so its size and genetics change it), length,
-height, weight, popularity, region, era and clade, its call and its narrated introduction. If the page ever opens on
-another animal, Tyrant sets it back to the species and writes `Open Paleopedia showed … instead of …` to the
-MelonLoader log; please report that line.
+A new species is listed in the Paleopedia's animal list like any animal. The Nursery panel's **Open Paleopedia** button
+calls the game's `NurseryMenuV2.OpenPaleopedia`, which hands the page the species selected in the Nursery. The page is
+expected to show the species' genus and species name, its description, character notes and social info (see
+[Localization](#localization)), its Paleopedia picture and its stats. A field the species does not change is its
+template's, so a species made from Allosaurus Anax with no other edits shows Allosaurus Anax's base rating (the
+Nursery's Base Rating is the preview animal's own total, so its size and genetics change it), length, height, weight,
+popularity, region, era and clade, its call and its narrated introduction. This has not been confirmed in game yet: one
+report showed the template's page instead, and its cause is not known.
+
+To find out, Tyrant watches the page. It records every time the game sets the Paleopedia's animal page (which animal, and
+the game methods that asked for it). One frame after **Open Paleopedia** on a new species, it reads the page's header.
+Each of these lines is written to the MelonLoader log once per species per game session:
+
+- `Open Paleopedia shows Ultimasaurus anax (tyrant.…)'s own page (set with … by …).`: the page was right.
+- `Open Paleopedia showed Allosaurus anax (set with <animal> by <game methods>, <n>s earlier) instead of Ultimasaurus anax
+  (tyrant.…); switched it.`: the header showed another animal. Tyrant set the page to the species again and it now shows
+  it. The `set with` part names the last animal the page was set to and what set it; `which threw …` there, or
+  `Open Paleopedia threw …` at the end, means the game's method failed part way.
+- The same line ending `switching it left … on the page.` or `switching it threw …` means it could not be fixed.
+
+If you see a `showed … instead of …` line, please report it with the lines around it.
 
 At runtime Tyrant reads `animals.db`, clones the template's animal data, applies
 the overrides and registers the result in PK's in-memory animal database before

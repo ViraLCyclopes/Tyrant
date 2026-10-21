@@ -90,6 +90,7 @@ namespace Tyrant.Framework
         {
             EnsureReady();
             SpeciesMaterialDiagnostics.Tick();
+            SpeciesPaleopedia.Tick();
         }
 
         private static void EnsureReady()
@@ -152,9 +153,7 @@ namespace Tyrant.Framework
                     ApplyStats(data, entry.Stats);
                     ApplyText(data, id, entry.Texts);
                     if (entry.Icon != null) Set(data, "heroRender", LoadSprite(mod.Directory, entry.Icon, id + ".icon"));
-                    if (entry.PaleopediaPicture != null)
-                        try { SpeciesPaleopedia.UsePicture(data, LoadSprite(mod.Directory, entry.PaleopediaPicture, id + ".paleopedia"), id); }
-                        catch (Exception ex) { FrameworkMod.Log.Warning($"{id}: its Paleopedia picture is not used ({ex.GetBaseException().Message}); its page shows the template's."); }
+                    if (entry.PaleopediaPicture != null) UsePaleopediaPicture(data, mod.Directory, entry.PaleopediaPicture, id);
                     var sourceSkins = Field(data, "skinsData") as IList ?? throw new MissingFieldException("skinsData");
                     if (sourceSkins.Count == 0) throw new InvalidOperationException("template has no skins");
                     if (entry.StartingSkin >= sourceSkins.Count)
@@ -182,9 +181,33 @@ namespace Tyrant.Framework
                 }
                 catch (Exception ex)
                 {
-                    if (data != null && !Added.ContainsKey(data)) UnityEngine.Object.Destroy(data);
+                    if (data != null && !Added.ContainsKey(data))
+                    {
+                        SpeciesPaleopedia.Discard(data);
+                        UnityEngine.Object.Destroy(data);
+                    }
                     FrameworkMod.Log.Error($"{id}: species skipped: {ex.GetBaseException().Message}");
                 }
+            }
+        }
+
+        /// <summary>The species' own Paleopedia picture; on any failure the page keeps the template's, and nothing is left behind.</summary>
+        private static void UsePaleopediaPicture(object data, string modDirectory, string file, string id)
+        {
+            Sprite? picture = null;
+            try
+            {
+                picture = LoadSprite(modDirectory, file, id + ".paleopedia");
+                SpeciesPaleopedia.UsePicture(data, picture, id);
+            }
+            catch (Exception ex)
+            {
+                if (picture != null)
+                {
+                    UnityEngine.Object.Destroy(picture.texture);
+                    UnityEngine.Object.Destroy(picture);
+                }
+                FrameworkMod.Log.Warning($"{id}: its Paleopedia picture is not used ({ex.GetBaseException().Message}); its page shows the template's.");
             }
         }
 
