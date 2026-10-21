@@ -46,7 +46,7 @@ async function setup({ materialsJson = null, onDraft, infoOver = {} }: { materia
       species: p.species,
       name: p.species,
       materialJson: p.kind === 'fur'
-        ? `{"fur":{"grow":true},"settings":{"_Length":${p.species === 'Short' ? 0.5 : 1.5},"_DroopDirection":[0,-10.3,8.11]}}`
+        ? `{"fur":{"grow":true},"settings":{"_Length":${p.species === 'Short' ? 0.15 : 1.5},"_DroopDirection":[0,-10.3,8.11]}}`
         : `{"iridescence":{"strength":0.25,"ramp":{"species":"${p.species}"},"mask":{"species":"${p.species}"},"scale":-0.25,"power":-0.3,"bias":1.3}}`,
     }));
   const platform = new FakePlatform();
@@ -274,7 +274,7 @@ describe('MaterialEditor', () => {
     expect(grow).not.toBeChecked();
     await fireEvent.click(grow);
     await waitFor(() => expect(rpc.callsTo('mods.setMaterials')).toHaveLength(1));
-    expect(sent(rpc)).toEqual({ Titanoboa: { fur: { grow: true }, settings: { _Length: 0.5 } } });
+    expect(sent(rpc)).toEqual({ Titanoboa: { fur: { grow: true }, settings: { _Length: 0.15 } } });
     // Unticking takes the starting length back with grow (it is still the one ticking set).
     await waitFor(() => expect(screen.getByRole('checkbox', { name: 'Grow fur on skins without fur' })).toBeChecked());
     await fireEvent.click(screen.getByRole('checkbox', { name: 'Grow fur on skins without fur' }));
@@ -284,15 +284,15 @@ describe('MaterialEditor', () => {
 
   it("a fur preset's length is the preset's: unticking Grow fur afterwards keeps it, even at the starting length", async () => {
     const { rpc } = await setup({ infoOver: furLength('0') });
-    await fireEvent.click(screen.getByRole('checkbox', { name: 'Grow fur on skins without fur' })); // seeds _Length 0.5
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Grow fur on skins without fur' })); // seeds _Length 0.15
     await waitFor(() => expect(rpc.callsTo('mods.setMaterials')).toHaveLength(1));
     const picker = screen.getByRole('combobox', { name: 'Start the fur from a species' });
     await waitFor(() => expect(within(picker).getByRole('option', { name: 'Short fur' })).toBeInTheDocument());
-    await fireEvent.change(picker, { target: { value: 'Short' } }); // its length is 0.5 too
+    await fireEvent.change(picker, { target: { value: 'Short' } }); // its length is 0.15 too
     await waitFor(() => expect(rpc.callsTo('mods.setMaterials')).toHaveLength(2));
     await fireEvent.click(screen.getByRole('checkbox', { name: 'Grow fur on skins without fur' }));
     await waitFor(() => expect(rpc.callsTo('mods.setMaterials')).toHaveLength(3));
-    expect(sent(rpc, 2)).toEqual({ Titanoboa: { settings: { _Length: 0.5, _DroopDirection: [0, -10.3, 8.11] } } });
+    expect(sent(rpc, 2)).toEqual({ Titanoboa: { settings: { _Length: 0.15, _DroopDirection: [0, -10.3, 8.11] } } });
   });
 
   it('the starting length is still taken back after the page hands the card a fresh object for the same skin', async () => {
@@ -307,7 +307,7 @@ describe('MaterialEditor', () => {
   });
 
   it('a starting length set on one skin is not taken back on another one the card moves to', async () => {
-    const red = '{"Titanoboa":{"fur":{"grow":true},"settings":{"_Length":0.5}}}';
+    const red = '{"Titanoboa":{"fur":{"grow":true},"settings":{"_Length":0.15}}}';
     let blue: string | null = null;
     let saves = 0;
     const skins = () => modDetail().skins.map((s) => ({ ...s, species: 'Titanoboa', materialsJson: s.id === 'blue' ? blue : red }));
@@ -325,15 +325,15 @@ describe('MaterialEditor', () => {
     await doc.load();
     const view = renderWith(MaterialEditor, session, { doc, skin: doc.detail!.skins[0] }, tab);
     await screen.findByText('Material: Titanoboa');
-    await fireEvent.click(screen.getByRole('checkbox', { name: 'Grow fur on skins without fur' })); // seeds 0.5 on blue
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Grow fur on skins without fur' })); // seeds 0.15 on blue
     await waitFor(() => expect(rpc.callsTo('mods.setMaterials')).toHaveLength(1));
 
-    await view.rerender({ doc, skin: doc.detail!.skins[1] }); // the same card, now on red (its own 0.5)
+    await view.rerender({ doc, skin: doc.detail!.skins[1] }); // the same card, now on red (its own 0.15)
     await waitFor(() => expect(screen.getByRole('checkbox', { name: 'Grow fur on skins without fur' })).toBeChecked());
     await fireEvent.click(screen.getByRole('checkbox', { name: 'Grow fur on skins without fur' }));
     await waitFor(() => expect(rpc.callsTo('mods.setMaterials')).toHaveLength(2));
     expect(rpc.callsTo('mods.setMaterials')[1].params).toMatchObject({ skin: 'red' });
-    expect(sent(rpc, 1)).toEqual({ Titanoboa: { settings: { _Length: 0.5 } } }); // red's own length stays
+    expect(sent(rpc, 1)).toEqual({ Titanoboa: { settings: { _Length: 0.15 } } }); // red's own length stays
   });
 
   it('unticking keeps a length the player changed after ticking', async () => {
@@ -407,6 +407,56 @@ describe('MaterialEditor', () => {
     await fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Ramp source' })).getByRole('radio', { name: 'Game’s' }));
     await waitFor(() => expect(rpc.callsTo('mods.setMaterials')).toHaveLength(1));
     expect(sent(rpc)).toEqual({ Titanoboa: { iridescence: { strength: 0.3 } } });
+  });
+
+  it('the Baby strength slider saves a baby strength beside the adult one', async () => {
+    const { rpc } = await setup({ materialsJson: '{"Titanoboa":{"iridescence":{"strength":0.6}}}' });
+    const baby = screen.getByRole('slider', { name: 'Baby strength' });
+    expect(baby).toHaveValue('0'); // the game's: a hatchling never shimmers
+    await fireEvent.change(baby, { target: { value: '0.3' } });
+    await waitFor(() => expect(rpc.callsTo('mods.setMaterials')).toHaveLength(1));
+    expect(sent(rpc)).toEqual({ Titanoboa: { iridescence: { strength: 0.6, babyStrength: 0.3 } } });
+  });
+
+  it('a look that shimmers only as a baby is ticked, and off removes it with nothing below', async () => {
+    const { rpc } = await setup({ materialsJson: '{"Titanoboa":{"iridescence":{"strength":0,"babyStrength":0.3,"ramp":{"thinFilm":{"thickness":420}}}}}' });
+    expect(screen.getByRole('checkbox', { name: 'Iridescence' })).toBeChecked();
+    expect(screen.getByRole('slider', { name: 'Baby strength' })).toHaveValue('0.3');
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Iridescence' }));
+    await waitFor(() => expect(rpc.callsTo('mods.setMaterials')).toHaveLength(1));
+    expect((rpc.callsTo('mods.setMaterials')[0].params as { materials: string | null }).materials).toBeNull();
+  });
+
+  it("turning it off over a lower level's baby shimmer saves both strengths 0", async () => {
+    const { rpc } = await setup({ infoOver: { inheritedIridescenceJson: '{"strength":0,"babyStrength":0.4}' } });
+    expect(screen.getByRole('checkbox', { name: 'Iridescence' })).toBeChecked();
+    expect(screen.getByRole('slider', { name: 'Baby strength' })).toHaveValue('0.4');
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Iridescence' }));
+    await waitFor(() => expect(rpc.callsTo('mods.setMaterials')).toHaveLength(1));
+    expect(sent(rpc)).toEqual({ Titanoboa: { iridescence: { strength: 0, babyStrength: 0 } } });
+  });
+
+  it('Fur on: Adults saves the age and a starting length, and Game’s takes both back', async () => {
+    const { rpc } = await setup({ infoOver: furLength('0') });
+    const ages = screen.getByRole('radiogroup', { name: 'Fur on' });
+    expect(within(ages).getByRole('radio', { name: 'Game’s' })).toBeChecked();
+    await fireEvent.click(within(ages).getByRole('radio', { name: 'Adults' }));
+    await waitFor(() => expect(rpc.callsTo('mods.setMaterials')).toHaveLength(1));
+    expect(sent(rpc)).toEqual({ Titanoboa: { fur: { age: 'adults' }, settings: { _Length: 0.15 } } });
+    await waitFor(() => expect(within(screen.getByRole('radiogroup', { name: 'Fur on' })).getByRole('radio', { name: 'Adults' })).toBeChecked());
+    await fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Fur on' })).getByRole('radio', { name: 'Game’s' }));
+    await waitFor(() => expect(rpc.callsTo('mods.setMaterials')).toHaveLength(2));
+    expect((rpc.callsTo('mods.setMaterials')[1].params as { materials: string | null }).materials).toBeNull();
+  });
+
+  it("a lower level's fur age shows chosen, and unticking Grow fur keeps the length while an age grows fur", async () => {
+    const { rpc } = await setup({ materialsJson: '{"Titanoboa":{"fur":{"grow":true},"settings":{"_Length":0.15}}}', infoOver: { ...furLength('0'), inheritedFurJson: '{"age":"babies"}' } });
+    const ages = screen.getByRole('radiogroup', { name: 'Fur on' });
+    expect(within(ages).getByRole('radio', { name: 'Babies' })).toBeChecked();
+    expect(within(ages).getByRole('radio', { name: 'Game’s' })).toBeDisabled(); // there is no "game" to write over a lower level's age
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Grow fur on skins without fur' }));
+    await waitFor(() => expect(rpc.callsTo('mods.setMaterials')).toHaveLength(1));
+    expect(sent(rpc)).toEqual({ Titanoboa: { settings: { _Length: 0.15 } } });
   });
 
   it('importing a fur mask calls setMaterialFile with part furMask', async () => {

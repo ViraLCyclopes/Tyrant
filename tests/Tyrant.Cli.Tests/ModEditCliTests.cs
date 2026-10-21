@@ -154,6 +154,26 @@ public class ModEditCliTests
     }
 
     [Fact]
+    public void Materials_set_accepts_a_baby_strength_and_a_fur_age()
+    {
+        using var game = new FakeGame();
+        var ws = WorkspaceWithSkin(game);
+        var file = Path.Combine(ws, "materials.json");
+        File.WriteAllText(file, "{\"Titanoboa\":{\"iridescence\":{\"strength\":0,\"babyStrength\":0.3},\"fur\":{\"age\":\"adults\"}}}");
+
+        Assert.Equal(ExitCodes.Ok, Run("mod", "materials", "red-spot", "blue", "--set", file, "-w", ws).Code);
+        var shown = string.Concat(Run("mod", "materials", "red-spot", "blue", "--show", "-w", ws).Out.Where(c => !char.IsWhiteSpace(c)));
+        Assert.Contains("\"babyStrength\":0.3", shown);
+        Assert.Contains("\"age\":\"adults\"", shown);
+        File.WriteAllText(file, "{\"Titanoboa\":{\"fur\":{\"age\":\"teens\"}}}");
+        var bad = Run("mod", "materials", "red-spot", "blue", "--set", file, "-w", ws);
+        Assert.Equal(ExitCodes.Error, bad.Code);
+        Assert.Contains("must be \"babies\", \"adults\" or \"both\"", bad.Err);
+        File.WriteAllText(file, "{\"Titanoboa\":{\"iridescence\":{\"babyStrength\":-1}}}");
+        Assert.Equal(ExitCodes.Error, Run("mod", "materials", "red-spot", "blue", "--set", file, "-w", ws).Code);
+    }
+
+    [Fact]
     public void Materials_preset_starts_a_material_from_a_species_over_its_own_settings()
     {
         using var game = new FakeGame();

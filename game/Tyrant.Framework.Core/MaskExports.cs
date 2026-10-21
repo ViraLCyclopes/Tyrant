@@ -34,6 +34,22 @@ namespace Tyrant.Framework.Core
     /// </summary>
     public static class MaskExports
     {
+        /// <summary>
+        /// The RGBA pixels of an opaque one-colour mask: white (fur or shimmer everywhere) or black (no fur: an age the fur
+        /// age leaves bare), to export at the skin's size and paint on.
+        /// </summary>
+        public static byte[] SolidPixels(int width, int height, bool white)
+        {
+            var pixels = new byte[width * height * 4];
+            var value = white ? (byte)255 : (byte)0;
+            for (var i = 0; i < pixels.Length; i += 4)
+            {
+                pixels[i] = pixels[i + 1] = pixels[i + 2] = value;
+                pixels[i + 3] = 255;
+            }
+            return pixels;
+        }
+
         /// <summary>The size of a colours strip: x runs N·V 0 to 1, every row the same.</summary>
         public const int RampWidth = 256, RampHeight = 8;
 
@@ -123,6 +139,57 @@ namespace Tyrant.Framework.Core
         }
     }
 
+    /// <summary>The fixed-name images one Save wrote into a mod, with backups of those they replaced, until the save is done.</summary>
+    public sealed class ExportCommit
+    {
+        private readonly List<(string Target, string? Backup)> _written = new List<(string, string?)>();
+
+        internal void Replaced(string target, string? backup) => _written.Add((target, backup));
+
+        /// <summary>The save failed: each replaced image comes back from its backup, and one that was new is deleted.</summary>
+        public void Undo()
+        {
+            for (var i = _written.Count - 1; i >= 0; i--)
+            {
+                var (target, backup) = _written[i];
+                try
+                {
+                    if (backup == null)
+                    {
+                        if (File.Exists(target)) File.Delete(target);
+                    }
+                    else if (File.Exists(backup))
+                    {
+                        File.Copy(backup, target, true);
+                        File.Delete(backup);
+                    }
+                }
+                catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+                {
+                    // nothing more can be done; the backup, if any, stays next to it
+                }
+            }
+            _written.Clear();
+        }
+
+        /// <summary>The save went through: the backups go.</summary>
+        public void Keep()
+        {
+            foreach (var (_, backup) in _written)
+            {
+                try
+                {
+                    if (backup != null && File.Exists(backup)) File.Delete(backup);
+                }
+                catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+                {
+                    // a stale .bak is harmless
+                }
+            }
+            _written.Clear();
+        }
+    }
+
     /// <summary>
     /// The exports a draft made, by kind. Saving into a mod names each one the block uses in its own slot by its fixed name in
     /// the owner's folder and copies it there (over the saved look's own); the export stays in Masks. Forgetting deletes nothing:
@@ -147,21 +214,44 @@ namespace Tyrant.Framework.Core
             return copy;
         }
 
-        /// <summary>Copies each export the block uses in its own slot over its fixed name in <paramref name="folder"/>.</summary>
-        public void Commit(MaterialOverride block, string folder)
+        /// <summary>
+        /// Copies each export the block uses in its own slot over its fixed name in <paramref name="folder"/>. The images it
+        /// replaces are backed up until the save is done: <see cref="ExportCommit.Undo"/> when the rest of the save fails,
+        /// <see cref="ExportCommit.Keep"/> when it went through. A failure here undoes what it copied before throwing.
+        /// </summary>
+        public ExportCommit Commit(MaterialOverride block, string folder)
         {
             var files = Slots(block).Select(s => (s.Source.File, s.Kind)).ToList();
             if (block.Iridescence?.Ramp?.File is string ramp) files.Add((ramp, ExportKind.Colours));
-            foreach (var (file, kind) in files)
+            var commit = new ExportCommit();
+            try
             {
-                if (!Exported(file, kind) || !File.Exists(file)) continue;
-                Directory.CreateDirectory(folder);
-                var target = Path.Combine(folder, MaskExports.FixedName(kind));
-                var temp = target + ".tmp";
-                File.Copy(file!, temp, true);
-                if (File.Exists(target)) File.Replace(temp, target, null);
-                else File.Move(temp, target);
+                foreach (var (file, kind) in files)
+                {
+                    if (!Exported(file, kind) || !File.Exists(file)) continue;
+                    Directory.CreateDirectory(folder);
+                    var target = Path.Combine(folder, MaskExports.FixedName(kind));
+                    var temp = target + ".tmp";
+                    File.Copy(file!, temp, true);
+                    if (File.Exists(target))
+                    {
+                        var backup = target + ".bak";
+                        File.Replace(temp, target, backup);
+                        commit.Replaced(target, backup);
+                    }
+                    else
+                    {
+                        File.Move(temp, target);
+                        commit.Replaced(target, null);
+                    }
+                }
             }
+            catch
+            {
+                commit.Undo();
+                throw;
+            }
+            return commit;
         }
 
         private bool Exported(string? file, ExportKind kind) => file != null && _kinds.TryGetValue(LookFiles.Full(file), out var k) && k == kind;

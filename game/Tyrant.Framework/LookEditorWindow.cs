@@ -51,6 +51,7 @@ namespace Tyrant.Framework
         private static SaveTarget? _target;
         private static MaterialOverride? _below;
         private static bool? _lastOn, _lastGrow;
+        private static FurAge? _lastAge;
         private static string _furNote = ""; // the status line's fur note when Tick last looked
         private static object? _previewShown; // the Nursery preview a Next created draft shows on (MaterialsModule.SetPreviewLook)
         private static List<object> _matching = new List<object>();
@@ -322,6 +323,7 @@ namespace Tyrant.Framework
             _draft = new LookDraft(_scope, SavedBlock(c));
             _lastOn = OwnOn();
             _lastGrow = _draft.Current.Fur?.Grow;
+            _lastAge = _draft.Current.Fur?.Age;
             try
             {
                 _target = SaveTargets.For(_scope, c.Species, c.ModSkin, c.VanillaSkinKey, c.CustomSpeciesModId != null, c.CustomSpeciesModId, MaterialsModule.Table, c.MaterialName);
@@ -396,19 +398,24 @@ namespace Tyrant.Framework
             if (_draft == null || _context == null) return;
             var on = OwnOn();
             var grow = _draft.Current.Fur?.Grow;
-            var keywords = on != _lastOn || grow != _lastGrow; // the shader variant changes only when iridescence or grown fur turns on or off
+            var age = _draft.Current.Fur?.Age;
+            // The shader variant changes only when iridescence or grown fur turns on or off (an age grows fur too).
+            var keywords = on != _lastOn || grow != _lastGrow || age != _lastAge;
             _lastOn = on;
             _lastGrow = grow;
+            _lastAge = age;
             PushLive(keywords);
             if (rebuild) Rebuild();
             else Footer();
         }
 
+        /// <summary>The draft's own on (a strength of any variant, or the baby strength, above 0); null when it sets neither.</summary>
         private static bool? OwnOn()
         {
-            var strength = _draft?.Current.Iridescence?.Strength;
-            if (strength == null) return null;
-            return LookEditing.Variants.Any(v => LookEditing.StrengthFor(strength, v) > 0);
+            var iridescence = _draft?.Current.Iridescence;
+            var strength = iridescence?.Strength;
+            if (strength == null && iridescence?.BabyStrength == null) return null;
+            return iridescence!.BabyStrength > 0 || (strength != null && LookEditing.Variants.Any(v => LookEditing.StrengthFor(strength, v) > 0));
         }
 
         private static void PushLive(bool keywords)
@@ -518,9 +525,19 @@ namespace Tyrant.Framework
                 {
                     var owner = _target.Owner!;
                     var modDir = ModDirectory(create: true)!;
-                    if (exportFolder != null) Exports.Commit(_draft.Current, exportFolder); // before the reload, so the new image is the one read
-                    var block = LookFiles.Adopt(current, modDir, MaterialFolders.FolderOf(owner), missing); // the mod keeps its own copy of outside images
-                    MaterialFolders.SaveOwner(modDir, owner, new Dictionary<string, MaterialOverride>(StringComparer.Ordinal) { [c.MaterialName] = block });
+                    // Before the reload, so the new image is the one read; the images it replaces come back if the rest fails.
+                    var committed = exportFolder != null ? Exports.Commit(_draft.Current, exportFolder) : null;
+                    try
+                    {
+                        var block = LookFiles.Adopt(current, modDir, MaterialFolders.FolderOf(owner), missing); // the mod keeps its own copy of outside images
+                        MaterialFolders.SaveOwner(modDir, owner, new Dictionary<string, MaterialOverride>(StringComparer.Ordinal) { [c.MaterialName] = block });
+                    }
+                    catch
+                    {
+                        committed?.Undo();
+                        throw;
+                    }
+                    committed?.Keep();
                     where = TargetName();
                 }
             }
@@ -581,7 +598,7 @@ namespace Tyrant.Framework
 
         /// <summary>
         /// Writes the mask the animal shows now as a grey PNG (all white for Everywhere, for no mask at all, and while grown fur
-        /// covers the whole body) into UserData/Tyrant/Masks under a new name, and points the draft at it.
+        /// covers the whole body; all black, at the same size, for a fur slot the fur age leaves bare) into UserData/Tyrant/Masks under a new name, and points the draft at it.
         /// </summary>
         private static void ExportMask()
         {
@@ -592,7 +609,7 @@ namespace Tyrant.Framework
                 Footer();
                 return;
             }
-            var texture = MaterialsModule.EffectiveMask(_animal, fur: _onFurTab, infant: false, out var white, out var taken);
+            var texture = MaterialsModule.EffectiveMask(_animal, fur: _onFurTab, infant: false, out var white, out var black, out var taken);
             // The game's images never go into files: a species' mask stays a reference (the draft's, or the one the animal wears).
             if (!_onFurTab && (taken ?? (_draft.Current.Iridescence?.Mask ?? _below?.Iridescence?.Mask)?.Species) is string species)
             {
@@ -613,7 +630,7 @@ namespace Tyrant.Framework
                 return;
             }
             var kind = _onFurTab ? ExportKind.FurMask : ExportKind.IridescenceMask;
-            if (!(TryExport(kind, () => white is Vector2Int size ? WhitePng(size) : GreyPng(texture!)) is string file)) return;
+            if (!(TryExport(kind, () => white is Vector2Int size ? SolidPng(size, white: !black) : GreyPng(texture!)) is string file)) return;
             if (_onFurTab) _draft.SetFurMask(new MaskSource { File = file }, infant: false);
             else _draft.SetMask(new MaskSource { File = file });
             Changed(rebuild: true);
@@ -665,13 +682,9 @@ namespace Tyrant.Framework
             }
         }
 
-        /// <summary>An all-white PNG of this size (fur or shimmer everywhere), to paint the limits on.</summary>
-        private static byte[] WhitePng(Vector2Int size)
-        {
-            var pixels = new byte[size.x * size.y * 4];
-            for (var i = 0; i < pixels.Length; i++) pixels[i] = 255;
-            return Png(size.x, size.y, pixels, linear: true);
-        }
+        /// <summary>An all-white (fur or shimmer everywhere) or all-black (no fur at that age) PNG of this size, to paint on.</summary>
+        private static byte[] SolidPng(Vector2Int size, bool white) =>
+            Png(size.x, size.y, MaskExports.SolidPixels(size.x, size.y, white), linear: true);
 
         /// <summary>The texture's red channel as a grey PNG (read like a mask made from a skin map, so compressed maps read too).</summary>
         private static byte[] GreyPng(Texture source)

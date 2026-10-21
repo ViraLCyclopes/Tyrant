@@ -173,6 +173,13 @@ namespace Tyrant.Framework.Core
         public const int MaxRampStops = 32;
 
         public VariantNumbers? Strength { get; set; }
+
+        /// <summary>
+        /// The strength of a hatchling (one number for every variant): the shown strength slides from it to <see cref="Strength"/>
+        /// as the animal's skin grows (<see cref="AgeLooks.Strength"/>). Left out it is 0, the game's own (a baby never shimmers).
+        /// </summary>
+        public float? BabyStrength { get; set; }
+
         public float? Variation { get; set; }
         public RampSource? Ramp { get; set; }
         public MaskSource? Mask { get; set; }
@@ -182,9 +189,12 @@ namespace Tyrant.Framework.Core
         public float? Power { get; set; }
         public float? Bias { get; set; }
 
-        public bool IsEmpty => Strength == null && Variation == null && Ramp == null && Mask == null && Tiling == null && Offset == null
+        public bool IsEmpty => Strength == null && BabyStrength == null && Variation == null && Ramp == null && Mask == null && Tiling == null && Offset == null
             && Scale == null && Power == null && Bias == null;
     }
+
+    /// <summary>Which ages wear fur ("fur.age"): the ends of the game's fuzz lerp, from a hatchling to a grown animal.</summary>
+    public enum FurAge { Babies, Adults, Both }
 
     /// <summary>
     /// A material's fur: masks taken from files (the fur slots of a skin, replaced for one material; only files or "game", never
@@ -198,7 +208,14 @@ namespace Tyrant.Framework.Core
         /// <summary>True: Tyrant switches the game's fur on. False: Tyrant does not force it (fur the game has stays). Null: lower layers decide.</summary>
         public bool? Grow { get; set; }
 
-        public bool IsEmpty => Mask == null && InfantMask == null && Grow == null;
+        /// <summary>
+        /// Which ages wear fur, over the game's choice from its fur maps (null: the game's), through the masks: an age without
+        /// fur gets a black mask; Tyrant grows fur, as for <see cref="Grow"/>, on each age that should have fur and has no fur
+        /// mask (<see cref="AgeLooks.FurSlot"/>). With an age set, grow adds nothing.
+        /// </summary>
+        public FurAge? Age { get; set; }
+
+        public bool IsEmpty => Mask == null && InfantMask == null && Grow == null && Age == null;
     }
 
     /// <summary>One material's changes (materials.json "materials.&lt;name&gt;"): iridescence, shader settings and/or fur masks.</summary>
@@ -268,6 +285,7 @@ namespace Tyrant.Framework.Core
                     if (FurJson(pair.Value.Fur.Mask) is string mask) fur["mask"] = mask;
                     if (FurJson(pair.Value.Fur.InfantMask) is string infant) fur["infantMask"] = infant;
                     if (pair.Value.Fur.Grow is bool grow) fur["grow"] = grow;
+                    if (pair.Value.Fur.Age is FurAge age) fur["age"] = AgeNames[(int)age];
                     entry["fur"] = fur;
                 }
                 if (pair.Value.Settings.Count > 0)
@@ -279,6 +297,9 @@ namespace Tyrant.Framework.Core
         }
 
         private const string GameValue = "game";
+
+        /// <summary>"fur.age" as written, in <see cref="FurAge"/> order.</summary>
+        private static readonly string[] AgeNames = { "babies", "adults", "both" };
 
         private static string? FurJson(MaskSource? mask) => mask == null ? null : mask.Game ? GameValue : mask.File;
 
@@ -307,7 +328,7 @@ namespace Tyrant.Framework.Core
         private static FurMasks ParseFur(object value, string owner, string path)
         {
             var map = Map(value, owner, path);
-            Known(map, owner, path, "mask", "infantMask", "grow");
+            Known(map, owner, path, "mask", "infantMask", "grow", "age");
             MaskSource? File(string key) =>
                 !map.TryGetValue(key, out var v) || v == null ? null
                 : v is GameValue ? new MaskSource { Game = true }
@@ -316,7 +337,14 @@ namespace Tyrant.Framework.Core
             bool? grow = null;
             if (map.TryGetValue("grow", out var g) && g != null)
                 grow = g as bool? ?? throw new ManifestException($"{owner}: \"{path}.grow\" must be true or false.");
-            return new FurMasks { Mask = File("mask"), InfantMask = File("infantMask"), Grow = grow };
+            FurAge? age = null;
+            if (map.TryGetValue("age", out var a) && a != null)
+            {
+                var index = a is string name ? Array.IndexOf(AgeNames, name) : -1;
+                if (index < 0) throw new ManifestException($"{owner}: \"{path}.age\" must be \"babies\", \"adults\" or \"both\".");
+                age = (FurAge)index;
+            }
+            return new FurMasks { Mask = File("mask"), InfantMask = File("infantMask"), Grow = grow, Age = age };
         }
 
         private static void ParseSettings(object value, string owner, string path, Dictionary<string, MaterialValue> into)
@@ -346,10 +374,11 @@ namespace Tyrant.Framework.Core
         private static IridescenceSettings ParseIridescence(object value, string owner, string path, bool skinLevel)
         {
             var map = Map(value, owner, path);
-            Known(map, owner, path, "strength", "variation", "ramp", "mask", "tiling", "offset", "scale", "power", "bias");
+            Known(map, owner, path, "strength", "babyStrength", "variation", "ramp", "mask", "tiling", "offset", "scale", "power", "bias");
             return new IridescenceSettings
             {
                 Strength = map.TryGetValue("strength", out var strength) && strength != null ? ParseStrength(strength, owner, path + ".strength") : null,
+                BabyStrength = Optional(map, "babyStrength", owner, path, 0, 1),
                 Variation = Optional(map, "variation", owner, path, 0, 1),
                 Ramp = map.TryGetValue("ramp", out var ramp) && ramp != null ? ParseRamp(ramp, owner, path + ".ramp") : null,
                 Mask = map.TryGetValue("mask", out var mask) && mask != null ? ParseMask(mask, owner, path + ".mask", skinLevel) : null,
@@ -514,6 +543,7 @@ namespace Tyrant.Framework.Core
                     map["strength"] = strength;
                 }
             }
+            if (i.BabyStrength is float baby) map["babyStrength"] = Num(baby);
             if (i.Variation is float variation) map["variation"] = Num(variation);
             if (i.Ramp is RampSource ramp)
             {

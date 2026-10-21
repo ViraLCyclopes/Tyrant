@@ -19,12 +19,14 @@ namespace Tyrant.Framework
 
         private static readonly Dictionary<string, string> InfoTexts = new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            ["variation"] = "Each animal's shimmer strength differs from the set strength by up to this share (0.15 = ±15%), so a herd doesn't look identical. Each animal keeps its own offset. The Nursery preview always shows the exact strength; the variation shows on the animals you create.",
+            ["variation"] = "Each animal's shimmer strength differs from the set strength by up to this share (0.15 = ±15%), so a herd doesn't look identical. Each animal keeps its own offset. The Nursery preview always shows the exact strength; the variation shows on the animals you create. Not available for one animal (This animal / Next created): there is nothing to vary between.",
+            ["babyStrength"] = "How strong the shimmer is on a newborn. It slides from this to Strength as the animal grows (0 = no shimmer on babies, as in the game).",
+            ["furAge"] = "Which ages have fur: Babies (fluff that goes away), Adults, Both, or Game's (the skin's own). An age without fur gets an all-black fur mask, the way the game removes baby fluff.",
             ["shaping"] = "How the shimmer changes with the viewing angle: Scale sets how strong the edge effect is, Power how sharply it falls off from the edges to the middle, Bias shifts it all brighter or darker.",
             ["mask"] = "Where the shimmer shows. White = full, black = none, grey = partial. A PNG mask is laid out like the skin texture. Everywhere = the whole body; Channel = taken from one channel of a skin map; Species = another species' mask.",
             ["colours"] = "The colours the shimmer cycles through as the angle changes: one colour gives a single tone, several give a blend.",
             ["grow"] = "Grows fur on skins the game gives none. Needs the game's Fur graphics setting on. Where the game has no fur mask, fur covers the whole body until you give it a mask.",
-            ["length"] = "How long the fur grows. 0 is no fur.",
+            ["length"] = "How long the fur is at its longest. The fur mask's red channel scales it per area: black = none, grey = shorter, white = this full length.",
             ["droop"] = "How much the fur hangs down instead of standing out from the skin. Droop X, Y and Z set the direction it falls towards.",
             ["wind"] = "How the fur sways in the wind: strength is how far it moves, speed how fast, scale how big the gusts are across the body.",
         };

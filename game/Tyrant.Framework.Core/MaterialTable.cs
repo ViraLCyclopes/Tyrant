@@ -179,11 +179,13 @@ namespace Tyrant.Framework.Core
                     fur.Mask ??= f.Mask;
                     fur.InfantMask ??= f.InfantMask;
                     fur.Grow ??= f.Grow; // a higher false beats a lower true: that layer does not force fur
+                    fur.Age ??= f.Age;
                 }
                 var i = layer.Iridescence;
                 if (i == null) continue;
                 iridescence ??= new IridescenceSettings();
                 iridescence.Strength ??= i.Strength;
+                iridescence.BabyStrength ??= i.BabyStrength;
                 iridescence.Variation ??= i.Variation;
                 iridescence.Ramp ??= i.Ramp;
                 iridescence.Mask ??= i.Mask;
@@ -244,9 +246,9 @@ namespace Tyrant.Framework.Core
         /// <summary>A deep copy with each file path passed through <paramref name="map"/> (null drops that ramp or mask). The input is not changed.</summary>
         public static MaterialOverride WithPaths(MaterialOverride block, Func<string, string?> map) => CopyOne(block, map);
 
-        /// <summary>The variation of the strength between animals: as set, else a little when a strength is set, else none.</summary>
+        /// <summary>The variation of the strength between animals: as set, else a little when a strength (adult or baby) is set, else none.</summary>
         public static float EffectiveVariation(IridescenceSettings i) =>
-            i.Variation ?? (i.Strength != null ? IridescenceSettings.DefaultVariation : 0);
+            i.Variation ?? (i.Strength != null || i.BabyStrength != null ? IridescenceSettings.DefaultVariation : 0);
 
         private static MaterialOverride? Find(Dictionary<string, Dictionary<string, MaterialOverride>> map, string? key, string material) =>
             key != null && map.TryGetValue(key, out var materials) && materials.TryGetValue(material, out var found) ? found : null;
@@ -273,6 +275,7 @@ namespace Tyrant.Framework.Core
                 var iridescence = new IridescenceSettings
                 {
                     Strength = i.Strength == null ? null : new VariantNumbers { Normal = i.Strength.Normal, Albino = i.Strength.Albino, Melanistic = i.Strength.Melanistic, Leucistic = i.Strength.Leucistic },
+                    BabyStrength = i.BabyStrength,
                     Variation = i.Variation,
                     Ramp = CopyRamp(i.Ramp, resolve),
                     Mask = CopyMask(i.Mask, resolve),
@@ -286,7 +289,7 @@ namespace Tyrant.Framework.Core
             }
             if (source.Fur is FurMasks fur)
             {
-                var masks = new FurMasks { Mask = CopyMask(fur.Mask, resolve), InfantMask = CopyMask(fur.InfantMask, resolve), Grow = fur.Grow };
+                var masks = new FurMasks { Mask = CopyMask(fur.Mask, resolve), InfantMask = CopyMask(fur.InfantMask, resolve), Grow = fur.Grow, Age = fur.Age };
                 if (!masks.IsEmpty) copy.Fur = masks;
             }
             return copy;

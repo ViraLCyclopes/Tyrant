@@ -224,4 +224,42 @@ public class MaterialSettingsTests
         Assert.DoesNotContain("materials", manifest.ToJson());
         Assert.Null(WithMaterials("""{ "Empty": {} }""").Manifest.Skins[0].Materials);
     }
+
+    [Fact]
+    public void Baby_strength_and_fur_age_read_and_write_back()
+    {
+        const string Block = """{ "Titanoboa": { "iridescence": { "strength": 0, "babyStrength": 0.3 }, "fur": { "age": "adults" } } }""";
+        var m = Titanoboa(Block);
+        Assert.Equal(0.3f, m.Iridescence!.BabyStrength);
+        Assert.Equal(0f, m.Iridescence.Strength!.Normal);
+        Assert.Equal(FurAge.Adults, m.Fur!.Age);
+        Assert.False(m.Fur.IsEmpty);
+
+        var json = Json.Write(MaterialOverrides.ToJson(new Dictionary<string, MaterialOverride> { ["Titanoboa"] = m }));
+        Assert.Equal(Json.Write(Json.Parse(Block)), json);
+        var species = MaterialOverrides.Parse(Json.Parse(Block), "Species", skinLevel: false)!["Titanoboa"]; // any level
+        Assert.Equal(0.3f, species.Iridescence!.BabyStrength);
+
+        Assert.Equal(FurAge.Babies, Titanoboa("""{ "Titanoboa": { "fur": { "age": "babies" } } }""").Fur!.Age);
+        Assert.Equal(FurAge.Both, Titanoboa("""{ "Titanoboa": { "fur": { "age": "both" } } }""").Fur!.Age);
+        var alone = Titanoboa("""{ "Titanoboa": { "iridescence": { "babyStrength": 0.5 } } }""").Iridescence!;
+        Assert.False(alone.IsEmpty); // a block holding only a baby strength is not empty
+        Assert.Null(alone.Strength);
+        Assert.Null(Titanoboa("""{ "Titanoboa": { "fur": { "grow": true } } }""").Fur!.Age); // left out: the game's own
+    }
+
+    [Theory]
+    [InlineData("""{ "Titanoboa": { "iridescence": { "babyStrength": 1.5 } } }""", "\"materials.Titanoboa.iridescence.babyStrength\" must be from 0 to 1")]
+    [InlineData("""{ "Titanoboa": { "iridescence": { "babyStrength": "high" } } }""", "\"materials.Titanoboa.iridescence.babyStrength\" must be a number from 0 to 1")]
+    [InlineData("""{ "Titanoboa": { "fur": { "age": "kids" } } }""", "\"materials.Titanoboa.fur.age\" must be \"babies\", \"adults\" or \"both\"")]
+    [InlineData("""{ "Titanoboa": { "fur": { "age": true } } }""", "\"materials.Titanoboa.fur.age\" must be \"babies\", \"adults\" or \"both\"")]
+    [InlineData("""{ "Titanoboa": { "fur": { "length": 1 } } }""", "use mask, infantMask, grow, age")]
+    [InlineData("""{ "Titanoboa": { "iridescence": { "glow": 1 } } }""", "babyStrength")]
+    public void Baby_strength_and_fur_age_problems_are_explained(string materials, string expected)
+    {
+        var (manifest, problems) = WithMaterials(materials);
+
+        Assert.Contains(expected, Assert.Single(problems));
+        Assert.Null(manifest.Skins[0].Materials);
+    }
 }

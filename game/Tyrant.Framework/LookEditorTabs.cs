@@ -56,7 +56,7 @@ namespace Tyrant.Framework
             var shown = own?.Strength ?? below?.Strength;
             var strength = shown != null ? LookEditing.StrengthFor(shown, variant) : GameStrength();
 
-            var on = strength > 0;
+            var on = LookEditing.Shimmers(own, below, variant, GameStrength());
             var onOff = Choices("Iridescence", new[]
             {
                 Option("On", on, true, () =>
@@ -68,7 +68,7 @@ namespace Tyrant.Framework
                 Option("Off", !on, true, () =>
                 {
                     if (!ShownOn()) return;
-                    Switch.Off(draft);
+                    Switch.Off(draft, _below);
                     Changed(rebuild: true);
                 }),
             });
@@ -77,6 +77,14 @@ namespace Tyrant.Framework
             var perVariant = shown != null && (shown.Albino != null || shown.Melanistic != null || shown.Leucistic != null);
             SliderRow(perVariant && variant != "normal" ? $"Strength ({variant})" : "Strength", strength, 0f, 1f, 0f, 1f, true,
                 v => LookEditing.SetStrength(draft, shown, variant, v));
+            // A hatchling's strength: the shown one slides from it to Strength as the animal grows (the game's own is 0).
+            SliderRow("Baby strength", LookEditing.BabyStrengthOf(own, below), 0f, 1f, 0f, 1f, true, v =>
+            {
+                var ramp = draft.Current.Iridescence?.Ramp;
+                LookEditing.SetBabyStrength(draft, _below, GameHasRamp(), v);
+                if (draft.Current.Iridescence?.Ramp != ramp) Changed(rebuild: true); // a thin film was started: the colour rows show it
+            });
+            Info("babyStrength");
             var variation = own?.Variation ?? below?.Variation ?? (shown != null ? IridescenceSettings.DefaultVariation : 0f);
             SliderRow("Variation between animals", variation, 0f, 1f, 0f, 1f, _scope != LookScope.Animal,
                 v => draft.SetVariation(v));
@@ -298,11 +306,8 @@ namespace Tyrant.Framework
             }
         }
 
-        private static bool ShownOn()
-        {
-            var strength = _draft?.Current.Iridescence?.Strength ?? _below?.Iridescence?.Strength;
-            return (strength != null ? LookEditing.StrengthFor(strength, _context?.Variant ?? "normal") : GameStrength()) > 0;
-        }
+        private static bool ShownOn() =>
+            LookEditing.Shimmers(_draft?.Current.Iridescence, _below?.Iridescence, _context?.Variant ?? "normal", GameStrength());
 
         /// <summary>After a slider or typed strength: the On/Off pair shows the state without redrawing (a drag must keep its slider).</summary>
         private static void RefreshOnOff()
@@ -329,6 +334,17 @@ namespace Tyrant.Framework
                 Option("Off", !growing, true, () => SetGrow(false)),
             });
             Info("grow");
+            // Fur on: which ages wear fur (fur.age); Tyrant grows it, like Grow fur, on an age the game gives none. Game's: its fur maps decide.
+            var ownAge = draft.Current.Fur?.Age;
+            var age = LookEditing.FurAgeOf(draft, _below);
+            Choices("Fur on" + (ownAge == null && age != null ? " <size=10>(below)</size>" : ""), new[]
+            {
+                Option("Babies", age == FurAge.Babies, true, () => SetAge(FurAge.Babies)),
+                Option("Adults", age == FurAge.Adults, true, () => SetAge(FurAge.Adults)),
+                Option("Both", age == FurAge.Both, true, () => SetAge(FurAge.Both)),
+                Option("Game's", age == null, ownAge != null || age == null, () => SetAge(null)), // over a lower layer's age there is no "game" to write
+            });
+            Info("furAge");
             if (NumberRow("_Droopage", "Droop")) Info("droop");
             var droop = Vector("_DroopDirection");
             var range = MaterialProperties.Find("_DroopDirection");
@@ -371,9 +387,17 @@ namespace Tyrant.Framework
             Changed(rebuild: true); // the shader variant changes: Changed re-picks the keywords
         }
 
+        private static void SetAge(FurAge? age)
+        {
+            if (_draft == null || _draft.Current.Fur?.Age == age) return;
+            FurSwitch.SetAge(_draft, _below, MaterialFloat("_Length"), age);
+            _message = "";
+            Changed(rebuild: true); // the shader variant can change: Changed re-picks the keywords
+        }
+
         /// <summary>A note for the status line while this look grows fur and the game draws none (its Fur graphics setting); "" otherwise.</summary>
         private static string FurNote() =>
-            _draft != null && LookEditing.GrowsFur(_draft, _below) && MaterialsModule.TessellationOn == false
+            _draft != null && (LookEditing.GrowsFur(_draft, _below) || LookEditing.FurAgeOf(_draft, _below) != null) && MaterialsModule.TessellationOn == false
                 ? " Grown fur needs tessellated fur in the game's graphics settings."
                 : "";
 

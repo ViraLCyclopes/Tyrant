@@ -177,20 +177,34 @@ name get `-2`, `-3`. The owner comes from the file, not the folder name:
 | Key | Meaning |
 |---|---|
 | `iridescence.strength` | A number 0–1 for every animal, or an object with `normal` (required) and optionally `albino`, `melanistic`, `leucistic`. A mutation left out uses `normal`. `0` turns iridescence off, also on skins that have it in vanilla. Leaving `iridescence` out keeps the game's settings: only some vanilla skins shimmer (Microraptor's, for example), as their own skin data says. |
+| `iridescence.babyStrength` | 0–1, one number for every mutation. A hatchling's strength: as the animal grows up, the strength shown slides from `babyStrength` to `strength` (the game's integument growth: lerp(baby, adult, integument)). Left out it is `0`, the game's own: a vanilla baby never shimmers. With no `strength` set at any level, the adult end is the game's own strength for that animal. Above 0 it also turns iridescence on where the game gives none, so a baby shimmers. Varies between animals like `strength`. `{ "strength": 0, "babyStrength": 0.3 }`: a shimmer only the young wear, gone by the time they are grown. |
 | `iridescence.variation` | 0–1. How much strength differs between animals, as a fraction of the strength (0.15: each lands within ±15 %). Default `0.15` when `strength` is set. Each animal's offset comes from its ID, so it is stable across save and load and nothing is saved. An animal without an ID (the Nursery hologram) uses the set strength. |
 | `iridescence.ramp` | The colours, along the viewing angle: a PNG in the mod (`"materials/skins/rainbow/iridescence-ramp.png"`), `{ "stops": ["#ff0000", …] }` (1 to 32 colours, evenly spaced) or `{ "thinFilm": { "thickness": 420, "index": 1.56 } }` (`thickness` 0–2000 nm, `index` 1–3, default 1.56). `"game"`: the game material's own ramp, also over a ramp a lower level (species, starting skin) sets. `{ "species": "Microraptor" }`: that vanilla species' ramp, by reference (see **Starting from a species** below). Left out: the lower level's, else the game's. |
 | `iridescence.mask` | Where it shows: `"everywhere"`, a PNG in the mod, or `{ "from": "extra", "channel": "g", "invert": false }` (`from` is `extra`, `pattern` or `fur`; `channel` is `r`, `g`, `b` or `a`). `"game"`: the game's own mask, over a lower level's. `{ "species": "Microraptor" }`: that vanilla species' mask, by reference, at any level (a species file too). Left out: the lower level's, else the game's. |
 | `iridescence.tiling`, `iridescence.offset` | `[x, y]`, beside `mask`: repeat and shift the mask. |
 | `iridescence.scale`, `power`, `bias` | −10 to 10. Shape the strength across the viewing angle (edge falloff, falloff curve, brightness offset). |
-| `fur.mask`, `fur.infantMask` | The fur mask of adults and of babies: a PNG in the mod (`"materials/skins/rainbow/fur-mask.png"`). `"game"`: the game's own per-animal mask, over a lower level's. Left out: the lower level's, else the game's (a baby mask left out uses the adult one). One file serves both sexes. PNG files or `"game"` only: no `everywhere`, no `from`. |
-| `fur.grow` | `true` grows fur on skins the game gives none (Ouranosaurus, Allosaurus Anax, …): the game's fur shader variant, full fur amount, and, where no level sets a fur mask and the game has none, fur on the whole body (a `"game"` fur mask keeps the game's). `false` means this level does not force fur over a lower one that does; it never takes away fur the game has. Left out: the levels below decide. Works on skins, vanilla skins, species and per-animal looks. |
+| `fur.mask`, `fur.infantMask` | The fur mask of adults and of babies: a PNG in the mod (`"materials/skins/rainbow/fur-mask.png"`). Paint the **red channel**: it scales the fur length per area (black = no fur, grey = shorter, white = the full `_Length`); green, blue and alpha are ignored. The shader blends the baby mask into the adult one as the animal grows. Vanilla masks are dark: their red tops out at about 0.1–0.6. `"game"`: the game's own per-animal mask, over a lower level's. Left out: the lower level's, else the game's (a baby mask left out uses the adult one). One file serves both sexes. PNG files or `"game"` only: no `everywhere`, no `from`. |
+| `fur.grow` | `true` grows fur on skins the game gives none (Ouranosaurus, Allosaurus Anax, …): the game's fur shader variant, the fur sheen of a furry skin, and, where no level sets a fur mask and the game has none, fur on the whole body (a `"game"` fur mask keeps the game's). On a furless species Tyrant also switches its material to read fur masks (see **Growing fur**). `false` means this level does not force fur over a lower one that does; it never takes away fur the game has. Left out: the levels below decide. Works on skins, vanilla skins, species and per-animal looks. |
+| `fur.age` | Which ages wear fur: `"babies"`, `"adults"` or `"both"`. It works through the two masks, as the game does: Acrocanthosaurus' baby fluff goes as it grows because its adult mask is the game's all-black `FurMaskEmpty`. An age without fur gets an all-black mask (Tyrant's own, over any mask a level sets for it): `babies` blackens the adult mask, `adults` the baby one. An age with fur keeps its mask (a level's `fur.mask` / `fur.infantMask`, else the game's fur map), and one with none gets fur on the whole body as **Grow fur** gives it; `both` keeps or grows both. It also gives the fur shader variant, the fur sheen of a furry skin, and in the editors a starting `_Length`. Left out: the levels below decide, else the game's fur maps. Droop still follows the game (baby droop to adult droop, or `_DroopDirection`). Works at every level. |
 | `settings` | Animal shader values, below. |
 
 **Growing fur.** Grown fur needs the game's tessellated fur (its Fur graphics setting); with tessellation off the game draws no grown fur
-(Tyrant still sets the fur amount and masks, so the fur appears when tessellation is turned back on) and the MelonLoader log says so once. Set `_Length` too (the in-game editor
-and the app start it at `0.5` when nothing gives the fur any length). Bodies never made for fur have no fur mask, droop or
+(Tyrant still sets the masks, so the fur appears when tessellation is turned back on) and the MelonLoader log says so once. Set `_Length` too (the in-game editor
+and the app start it at `0.15` when nothing gives the fur any length; the game's own length counts). A furless species'
+material reads no fur mask at all (its `_FURMASKING_NONE` mode: full length everywhere), so when Tyrant gives it the fur
+variant it switches that material to texture masking (`_FURMASKING_TEXTURE`, as furry species have) and gives its strand
+noise a furry tiling (`_FurDispTexScale` 4, 4 in place of 1, 1); the log names each material once. Should a game update
+remove the hook for it, the log says so once and grown fur on a furless species covers the whole body whatever the masks
+say. Bodies never made for fur have no fur mask, droop or
 wind tuned for them, so the look needs tuning in game: a fur mask PNG limits where it grows, and `_Length`, `_Droopage`,
 `_DroopDirection` and the wind settings shape it.
+
+**`fur.grow` and `fur.age` together.** `fur.age` decides which ages wear fur; Tyrant supplies the masks for them the way
+`fur.grow` does, and blackens the mask of the age without fur. `fur.grow` alone keeps its meaning: fur at every age,
+wherever the game has none (the same as `"both"`). With an age set at any level, `grow` adds nothing and `"grow": false`
+does not take the age's fur away. `"adults"` on a species whose babies have fur (Acrocanthosaurus) blackens the baby mask
+and gives the adults fur on the whole body; add a `fur.mask` PNG to say where. `"babies"` on it keeps its baby map and
+blackens the adult mask, as the game does already.
 
 **Starting from a species.** A look can start from a vanilla species: its iridescence (the species whose skins shimmer:
 Microraptor, Velociraptor, Oviraptor, Edmontosaurus, …, listed from the game's data, not fixed) or its fur (species with a
@@ -201,7 +215,7 @@ fur map). Picking one (the app's **Start from a species…**, the in-game editor
   `"everywhere"` on any other species (a mask is painted for its own species' UV layout, so on another body it would land
   anywhere) or when the species' material has no mask. `scale`, `power` and `bias` are copied from that species' material,
   `strength` from its first shimmering skin (a mutation's own where it differs; not known: a strength already there stays),
-  and iridescence is on.
+  and iridescence is on. A vanilla species' babies never shimmer, so a preset sets no `babyStrength`: one already there stays.
 - **Fur:** `fur.grow` is `true`; `_Length`, `_Droopage`, `_FurWindStrength`, `_FurWindSpeed` and `_FurWindScale` are copied
   from the species' material, `_DroopDirection` from its first furred skin's adult droop (kept within ±20). The fur mask stays.
 - Numbers are copied as plain numbers, kept within their ranges. **The game's images are never copied into a file**: the
@@ -306,9 +320,18 @@ game update moves the panels and a button cannot be placed, the MelonLoader log 
   after it, **-** removes it. The colour square sets its saturation (across) and brightness (up), the strip beside it its
   hue; drag either and the animals follow. Or type `#rrggbb` in the box. A look from the app with more than 8 colours
   keeps them all: the window edits the first 8.
+- **Baby strength** (Iridescence tab, under **Strength**) is `babyStrength`: the strength of a hatchling, sliding to
+  **Strength** as it grows. Watch a baby in the Nursery or the park to see it. **On** / **Off** count it: a look that
+  shimmers only as a baby shows **On**, and **Off** sets it to 0 too (**On** puts it back). Raising it on an animal that
+  shimmers at no age starts a thin film and shaping, as **On** does, so the sheen shows at once.
+- **Fur on** (Fur tab, under **Grow fur**): **Babies**, **Adults**, **Both** or **Game's** is `fur.age`; **Game's**
+  removes it (the skin's fur maps decide). An age without fur gets an all-black fur mask, the way the game removes baby
+  fluff. An age gives the fur a starting length (0.15) when nothing gives it one, as **Grow
+  fur** does, and **Game's** takes that length back unless **Grow fur** is still on. Over a lower layer's age the row shows
+  it, marked *(below)*, and **Game's** is greyed out: there is no `"game"` value to write over it, so pick the age you want.
 - **Export mask PNG** writes the mask the animal shows as a PNG to edit in an image editor, into `UserData/Tyrant/Masks`.
   With the mask on **Everywhere**, or no mask at all, it is all white, the size of the skin's mask or diffuse map (else
-  1024 × 1024); on the Fur tab, grown fur over the whole body is all white too. A **Channel** mask exports what the animal
+  1024 × 1024); on the Fur tab, grown fur over the whole body is all white too, and an age the **Fur on** choice leaves bare is all black at the same size. A **Channel** mask exports what the animal
   shows (from a vanilla skin's map, that is an image made from the game's). A **Species** mask is not exported (it stays a
   reference).
 - **Export colours PNG** (Iridescence tab, beside it) writes the shimmer colours of **Colours** or **Thin film** as a
@@ -327,23 +350,25 @@ game update moves the panels and a button cannot be placed, the MelonLoader log 
   before, so the mod carries its images; a PNG picked from Masks keeps its own name there. A look of **This animal** names
   the file in Masks (`"Masks/…"`). Nothing is written into a mod before **Save**, so **Reset** and **Discard** never touch a
   saved look's images.
-- **Info buttons:** the round **i** beside **Variation between animals**, **Shimmer colours**, **Mask**, **Shaping**, **Grow
-  fur**, **Length**, **Droop** and **Wind strength** opens a short explanation under the row (one at a time on each tab); press
-  it again to close it. **Variation between animals** is set for a whole skin or species: the Nursery preview always shows
-  the exact strength, and the variation shows on the animals you create.
+- **Info buttons:** the round **i** beside **Baby strength**, **Variation between animals**, **Shimmer colours**, **Mask**,
+  **Shaping**, **Grow fur**, **Fur on**, **Length**, **Droop** and **Wind strength** opens a short explanation under the row
+  (one at a time on each tab); press it again to close it. **Variation between animals** is set for a whole skin or species:
+  the Nursery preview always shows the exact strength, and the variation shows on the animals you create; it is not
+  available for one animal (**This animal**, **Next created**), where there is nothing to vary between.
 
 | What you edit | Save goes to |
 |---|---|
 | A mod skin | That mod's folder in the game (whoever made it) |
 | A vanilla skin | The mod whose block for it currently applies; otherwise the `vanilla-looks` mod, created for it |
 | A custom species | Its own mod |
-| **This animal** | `UserData/Tyrant/Looks/<save>.json`, named after the save file and keyed by the animal's persistent ID (its images in `Looks/<save>/<id>/`); never the park save |
+| **This animal** | `UserData/Tyrant/Looks/<save>.json`, named after the save file and keyed by the animal's persistent ID; its images stay in `UserData/Tyrant/Masks`, named in the file as `"Masks/…"` (a look saved before Tyrant exported to Masks keeps its images in `Looks/<save>/<id>/`); never the park save |
 
 - Looks of single animals follow the **save file**, not the park's name: loading a save reads its own file, and every save
-  (Save As and autosaves too) writes its own copy, with the animal's images copied into that save's folder. Deleting a save
-  in the game deletes its looks. A new park needs its first save before **This animal** can be saved.
+  (Save As and autosaves too) writes its own copy. Images in `Masks` are shared, not copied; an older look's images in
+  another save's `Looks/<save>/<id>/` folder are copied into the new save's. Deleting a save in the game deletes its looks
+  (and its `Looks/<save>/` folder; `Masks` is never touched). A new park needs its first save before **This animal** can be saved.
 - A look on **This animal** stays with the animal when you move it. Looks of animals that have left the park are dropped
-  (with their images) the next time the park is saved; only the file of the save being loaded or written is ever changed.
+  (with any images in their `Looks/<save>/<id>/` folder; `Masks` stays) the next time the park is saved; only the file of the save being loaded or written is ever changed.
 - Saves into a mod change the **game's copy**; a manual mod update replaces those edits. Before you install, remove, delete or
   uninstall, the app offers to bring them into the project (**Bring in looks**, see the app guide), or use
   `tyrant mod looks <mod> --bring-in`. Uninstalling Tyrant keeps `UserData/Tyrant/Looks` and `UserData/Tyrant/Masks` (looks point at images there); without Tyrant the park loads vanilla.

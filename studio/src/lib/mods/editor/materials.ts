@@ -35,6 +35,11 @@ export interface StrengthModel {
 
 export interface IridescenceModel {
   strength: StrengthModel | null;
+  /**
+   * A hatchling's strength (one number for every variant): the shown strength slides from it to `strength` as the animal grows.
+   * Null leaves it to the levels below (the game's own is 0); 0 is kept, over a lower level's baby shimmer.
+   */
+  babyStrength: number | null;
   variation: number | null;
   ramp: RampModel;
   mask: MaskModel;
@@ -51,13 +56,18 @@ export interface MaterialModel {
   settings: Record<string, number | string | number[]>;
   /**
    * Fur masks taken from files (mod-relative paths, or `"game"`: the game's own): the adult one and the baby one. `grow` true turns the game's fur on for
-   * skins without any; false says this level does not (over a lower one that does); left out, the levels below decide.
+   * skins without any; false says this level does not (over a lower one that does); left out, the levels below decide. `age`
+   * picks which ages wear fur (Tyrant grows it where an age has no fur map); left out, the game's fur maps decide.
    */
-  fur?: { mask?: string; infantMask?: string; grow?: boolean };
+  fur?: { mask?: string; infantMask?: string; grow?: boolean; age?: FurAge };
 }
 
-/** The fur length growing fur starts with when nothing gives the fur any (the shader's `_Length` runs 0 to 4). */
-export const START_FUR_LENGTH = 0.5;
+/** "fur.age": which ages wear fur. */
+export type FurAge = 'babies' | 'adults' | 'both';
+export const FUR_AGES: FurAge[] = ['babies', 'adults', 'both'];
+
+/** The fur length growing fur (or a fur age) starts with when nothing gives the fur any (the shader's `_Length` runs 0 to 4; vanilla fur is short). */
+export const START_FUR_LENGTH = 0.15;
 
 export const MAX_RAMP_STOPS = 32;
 export const DEFAULT_SHAPING = { scale: -0.25, power: -0.3, bias: 1.3 };
@@ -71,7 +81,7 @@ export const CHANNELS: Channel[] = ['r', 'g', 'b', 'a'];
 type Json = Record<string, unknown>;
 
 export function emptyIridescence(): IridescenceModel {
-  return { strength: null, variation: null, ramp: { kind: 'inherit' }, mask: { kind: 'inherit' }, scale: null, power: null, bias: null };
+  return { strength: null, babyStrength: null, variation: null, ramp: { kind: 'inherit' }, mask: { kind: 'inherit' }, scale: null, power: null, bias: null };
 }
 
 export function parseMaterial(json: string | null, name: string): MaterialModel {
@@ -161,6 +171,7 @@ function readIridescence(value: unknown): IridescenceModel | null {
   const offset = numbers(i.offset, 2, 2);
   return {
     strength: readStrength(i.strength),
+    babyStrength: num(i.babyStrength),
     variation: num(i.variation),
     ramp: readRamp(i.ramp),
     mask: readMask(i.mask),
@@ -215,8 +226,9 @@ function readFur(value: unknown): MaterialModel['fur'] | null {
   const mask = typeof f?.mask === 'string' && f.mask ? f.mask : undefined;
   const infantMask = typeof f?.infantMask === 'string' && f.infantMask ? f.infantMask : undefined;
   const grow = typeof f?.grow === 'boolean' ? f.grow : undefined;
-  return mask || infantMask || grow !== undefined
-    ? { ...(mask ? { mask } : {}), ...(infantMask ? { infantMask } : {}), ...(grow !== undefined ? { grow } : {}) }
+  const age = FUR_AGES.includes(f?.age as FurAge) ? (f!.age as FurAge) : undefined;
+  return mask || infantMask || grow !== undefined || age
+    ? { ...(mask ? { mask } : {}), ...(infantMask ? { infantMask } : {}), ...(grow !== undefined ? { grow } : {}), ...(age ? { age } : {}) }
     : null;
 }
 
@@ -234,7 +246,7 @@ function writeBlock(model: MaterialModel): Json | null {
   const block: Json = {};
   const iridescence = model.iridescence ? writeIridescence(model.iridescence) : null;
   if (iridescence) block.iridescence = iridescence;
-  if (model.fur && (model.fur.mask || model.fur.infantMask || typeof model.fur.grow === 'boolean')) block.fur = { ...model.fur };
+  if (model.fur && (model.fur.mask || model.fur.infantMask || typeof model.fur.grow === 'boolean' || model.fur.age)) block.fur = { ...model.fur };
   if (Object.keys(model.settings).length) block.settings = { ...model.settings };
   return Object.keys(block).length ? block : null;
 }
@@ -242,6 +254,7 @@ function writeBlock(model: MaterialModel): Json | null {
 function writeIridescence(i: IridescenceModel): Json | null {
   const out: Json = {};
   if (i.strength) out.strength = writeStrength(i.strength);
+  if (i.babyStrength !== null && i.babyStrength !== undefined) out.babyStrength = i.babyStrength;
   if (i.variation !== null) out.variation = i.variation;
   const ramp = writeRamp(i.ramp);
   if (ramp !== undefined) out.ramp = ramp;

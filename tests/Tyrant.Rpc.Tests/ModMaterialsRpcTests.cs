@@ -169,6 +169,35 @@ public class ModMaterialsRpcTests
     }
 
     [Fact]
+    public async Task Baby_strength_and_fur_age_round_trip_and_show_below()
+    {
+        using var game = new FakeGame();
+        var (h, _, reader) = await WithSkinAndPrefab(game);
+        reader.PrefabMaterials = [CarchMaterial()];
+        var json = "{\"" + Animal + "\":{\"iridescence\":{\"strength\":0,\"babyStrength\":0.3},\"fur\":{\"age\":\"adults\"}}}";
+
+        var detail = await h.Call("mods.get", new { id = "red-spot" });
+        detail = await h.Call("mods.setMaterials", new { id = "red-spot", revision = Rev(detail), skin = "blue", materials = json });
+        using (var saved = JsonDocument.Parse(detail.GetProperty("skins")[0].GetProperty("materialsJson").GetString()!))
+        {
+            var block = saved.RootElement.GetProperty(Animal);
+            Assert.Equal(0.3, block.GetProperty("iridescence").GetProperty("babyStrength").GetDouble(), 3);
+            Assert.Equal("adults", block.GetProperty("fur").GetProperty("age").GetString());
+        }
+
+        detail = await h.Call("mods.setMaterials", new { id = "red-spot", revision = Rev(detail), species = "Carcharodontosaurus", materials = json });
+        var info = await h.Call("mods.materialInfo", new { id = "red-spot", skin = "blue" });
+        using var iridescence = JsonDocument.Parse(info.GetProperty("inheritedIridescenceJson").GetString()!);
+        Assert.Equal(0.3, iridescence.RootElement.GetProperty("babyStrength").GetDouble(), 3);
+        using var fur = JsonDocument.Parse(info.GetProperty("inheritedFurJson").GetString()!);
+        Assert.Equal("adults", fur.RootElement.GetProperty("age").GetString());
+
+        var bad = await Assert.ThrowsAnyAsync<Exception>(() => h.Call("mods.setMaterials", new { id = "red-spot", revision = Rev(detail), skin = "blue",
+            materials = "{\"" + Animal + "\":{\"iridescence\":{\"babyStrength\":1.5}}}" }));
+        Assert.Contains("babyStrength\" must be from 0 to 1", bad.Message);
+    }
+
+    [Fact]
     public async Task Restore_snapshot_brings_back_material_files()
     {
         using var game = new FakeGame();

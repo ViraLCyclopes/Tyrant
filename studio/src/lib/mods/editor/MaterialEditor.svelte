@@ -3,7 +3,7 @@
   import type { ModDetail, ModMaterialInfo, ModMaterialProperty, ModSkinDto, ModSpeciesPresets } from '$lib/rpc/types.gen';
   import { getSession } from '$lib/stores/session.svelte';
   import IridescencePanel from './IridescencePanel.svelte';
-  import { applyPresetBlock, cloneMaterial, GAME, parseFurJson, parseIridescenceJson, parseMaterial, replaceMaterial, START_FUR_LENGTH, toMaterialsJson, type MaterialModel } from './materials';
+  import { applyPresetBlock, cloneMaterial, GAME, parseFurJson, parseIridescenceJson, parseMaterial, replaceMaterial, START_FUR_LENGTH, toMaterialsJson, type FurAge, type MaterialModel } from './materials';
   import type { ModDoc } from './modDoc.svelte';
 
   /**
@@ -170,22 +170,27 @@
   function setFur(m: MaterialModel, change: (fur: NonNullable<MaterialModel['fur']>) => void) {
     const fur = { ...(m.fur ?? {}) };
     change(fur);
-    if (fur.mask || fur.infantMask || fur.grow !== undefined) m.fur = fur;
+    if (fur.mask || fur.infantMask || fur.grow !== undefined || fur.age) m.fur = fur;
     else delete m.fur;
+  }
+
+  /** The fur length shown: this level's, else the one below, else 0. */
+  function shownLength(): number {
+    const below = info?.properties.find((p) => p.key === '_Length');
+    const inheritedLength = below ? inheritedOf(below) : null;
+    const own = shown?.settings._Length;
+    return typeof own === 'number' ? own : typeof inheritedLength === 'number' ? inheritedLength : 0;
   }
 
   /**
    * Grow fur (fur.grow): on also sets a starting fur length when neither this level nor anything below gives the fur one, so it
    * shows at once. Off writes false over a level below that grows fur, else removes the key; it also takes back the starting
-   * length while it is still the one on set.
+   * length while it is still the one on set, unless an age still grows fur.
    */
   function setGrow(on: boolean) {
-    const below = info?.properties.find((p) => p.key === '_Length');
-    const inheritedLength = below ? inheritedOf(below) : null;
     const own = shown?.settings._Length;
-    const length = typeof own === 'number' ? own : typeof inheritedLength === 'number' ? inheritedLength : 0;
-    const seed = on && length <= 0;
-    const unseed = !on && seededLength && own === START_FUR_LENGTH;
+    const seed = on && shownLength() <= 0;
+    const unseed = !on && seededLength && own === START_FUR_LENGTH && !age;
     const overBelow = inheritedFur?.grow === true;
     void edit((m) => {
       setFur(m, (fur) => {
@@ -196,7 +201,36 @@
       if (seed) m.settings._Length = START_FUR_LENGTH;
       if (unseed) delete m.settings._Length;
     }, true);
-    seededLength = seed;
+    seededLength = seed || (seededLength && !unseed);
+  }
+
+  /** Which ages wear fur: this level's, else the one below; undefined is the game's own (its fur maps). */
+  const age = $derived<FurAge | undefined>(shown?.fur?.age ?? inheritedFur?.age);
+  const AGES: { id: FurAge | 'game'; label: string }[] = [
+    { id: 'babies', label: 'Babies' },
+    { id: 'adults', label: 'Adults' },
+    { id: 'both', label: 'Both' },
+    { id: 'game', label: 'Game’s' },
+  ];
+
+  /**
+   * Fur on (fur.age): an age sets a starting fur length like Grow fur when nothing gives the fur one; Game's removes the key and
+   * takes back that length unless Grow fur still grows fur.
+   */
+  function setAge(next: FurAge | null) {
+    if ((shown?.fur?.age ?? null) === next) return;
+    const own = shown?.settings._Length;
+    const seed = next !== null && shownLength() <= 0;
+    const unseed = next === null && seededLength && own === START_FUR_LENGTH && !growing && !inheritedFur?.age;
+    void edit((m) => {
+      setFur(m, (fur) => {
+        if (next) fur.age = next;
+        else delete fur.age;
+      });
+      if (seed) m.settings._Length = START_FUR_LENGTH;
+      if (unseed) delete m.settings._Length;
+    }, true);
+    seededLength = seed || (seededLength && !unseed);
   }
 
   /** The fur mask's Game's over a level below that sets one: "game" (leaving it out would show that one again). */
@@ -246,6 +280,19 @@
             Grow fur on skins without fur
           </label>
           {#if shown.fur?.grow === undefined && inheritedFur?.grow === true}<p class="hint">Fur is grown by a level below; untick to turn it off here.</p>{/if}
+          <div class="ages">
+            <span class="label">Fur on</span>
+            <div class="choices" role="radiogroup" aria-label="Fur on">
+              {#each AGES as a (a.id)}
+                {@const current = (age ?? 'game') === a.id}
+                <button role="radio" aria-checked={current} class:on={current} disabled={a.id === 'game' && !shown.fur?.age && !!inheritedFur?.age}
+                  onclick={() => setAge(a.id === 'game' ? null : a.id)}>{a.label}</button>
+              {/each}
+            </div>
+          </div>
+          <p class="hint">
+            {shown.fur?.age === undefined && inheritedFur?.age ? 'Chosen by a level below. ' : ''}Which ages wear fur; Tyrant grows it on an age the game gives none. Game’s: the skin's fur maps decide.
+          </p>
           <p class="hint">Needs tessellated fur in the game's graphics settings. The preview here shows no fur; tune the look in game.</p>
         {/if}
         {#each rows as p (p.key)}
@@ -308,5 +355,9 @@
   input[type='color'] { width: 28px; height: 24px; padding: 0; border: 1px solid var(--border); border-radius: 4px; background: none; }
   .x { padding: 0 4px; font-size: 10px; }
   .grow { display: flex; align-items: center; gap: 6px; }
+  .ages { display: flex; align-items: center; gap: 8px; }
+  .choices { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .choices button { border: none; border-radius: 0; padding: 4px 10px; background: none; color: var(--muted); }
+  .choices button.on { background: var(--accent); color: var(--accent-text); }
   .preset { justify-self: start; }
 </style>

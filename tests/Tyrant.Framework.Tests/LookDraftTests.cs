@@ -119,4 +119,42 @@ public class LookDraftTests
         draft.SetIridescenceOn(true);
         Assert.Equal(1, draft.Current.Iridescence.Strength.Normal);
     }
+
+    [Fact]
+    public void Baby_strength_is_set_and_null_drops_it()
+    {
+        var draft = new LookDraft(LookScope.Skin, null);
+        draft.SetBabyStrength(0.3f);
+        Assert.Equal(0.3f, draft.Current.Iridescence!.BabyStrength);
+        Assert.Null(draft.Current.Iridescence.Strength); // the adult strength is left to the layers below
+        Assert.True(draft.IsDirty);
+
+        draft.SetBabyStrength(null);
+        Assert.Null(draft.Current.Iridescence);
+        Assert.False(draft.IsDirty);
+    }
+
+    [Fact]
+    public void Fur_age_is_kept_beside_grow_and_null_drops_it()
+    {
+        var draft = new LookDraft(LookScope.Species, null);
+        draft.SetFurAge(FurAge.Adults);
+        Assert.Equal(FurAge.Adults, draft.Current.Fur!.Age);
+        draft.SetFurGrow(true);
+        draft.SetFurGrow(null);
+        Assert.Equal(FurAge.Adults, draft.Current.Fur!.Age); // removing grow keeps the age
+
+        draft.SetFurAge(null);
+        Assert.Null(draft.Current.Fur);
+        Assert.False(draft.IsDirty);
+    }
+
+    [Fact]
+    public void Iridescence_off_also_zeroes_a_baby_strength()
+    {
+        var draft = new LookDraft(LookScope.Skin, new MaterialOverride { Iridescence = new IridescenceSettings { BabyStrength = 0.3f } });
+        draft.SetIridescenceOn(false);
+        Assert.Equal(0f, draft.Current.Iridescence!.BabyStrength);
+        Assert.Equal(0f, draft.Current.Iridescence.Strength!.Normal);
+    }
 }

@@ -67,9 +67,12 @@
 
   /** The game's own shimmer for this skin; unknown counts as none (a neutral "Game's" state). */
   const gameOn = $derived((gameStrength ?? 0) > 0);
-  const baselineOn = $derived(inherited?.strength ? maxStrength(inherited.strength) > 0 : gameOn);
+  /** What lies below shimmers at some age: its adult strength (else the game's) or its baby strength. */
+  const baselineOn = $derived((inherited?.strength ? maxStrength(inherited.strength) > 0 : gameOn) || (inherited?.babyStrength ?? 0) > 0);
   const strength = $derived<StrengthModel | null>(model?.strength ?? inherited?.strength ?? null);
-  const on = $derived(strength ? maxStrength(strength) > 0 : gameOn);
+  /** A hatchling's strength: this level's, else the one below, else the game's (none). */
+  const baby = $derived(model?.babyStrength ?? inherited?.babyStrength ?? null);
+  const on = $derived((strength ? maxStrength(strength) > 0 : gameOn) || (baby ?? 0) > 0);
   /** What a strength edit starts from when no layer sets one: the game's own, else a visible default. */
   const startStrength = $derived(gameOn ? gameStrength! : DEFAULT_STRENGTH);
   const variation = $derived(model?.variation ?? inherited?.variation ?? DEFAULT_VARIATION);
@@ -91,13 +94,18 @@
   function toggle(turnOn: boolean) {
     onEdit((m) => {
       if (!turnOn) {
-        // Over iridescence from below, off is strength 0, keeping this level's ramp, mask and shaping for turning it on again.
-        if (baselineOn) (m.iridescence ??= emptyIridescence()).strength = { normal: 0 };
-        else m.iridescence = null;
+        // Over iridescence from below, off is strength 0 (and baby strength 0 over a baby shimmer below), keeping this level's
+        // ramp, mask and shaping for turning it on again.
+        if (baselineOn) {
+          const i = (m.iridescence ??= emptyIridescence());
+          i.strength = { normal: 0 };
+          i.babyStrength = (inherited?.babyStrength ?? 0) > 0 ? 0 : null;
+        } else m.iridescence = null;
         return;
       }
       const i = (m.iridescence ??= emptyIridescence());
       i.strength = baselineOn ? null : { normal: DEFAULT_STRENGTH };
+      if (baselineOn) i.babyStrength = null; // handed back to the level below
       const shaped = [inherited?.scale, inherited?.power, inherited?.bias, i.scale, i.power, i.bias].some((v) => v != null);
       if (!gameHasRamp && !shaped) Object.assign(i, DEFAULT_SHAPING);
     }, true);
@@ -111,6 +119,11 @@
       else next[variant] = value;
       i.strength = next;
     }, save);
+  }
+
+  /** The baby strength (null: the level below's); the value is read before the save runs. */
+  function setBaby(value: number | null, save: boolean) {
+    edit((i) => (i.babyStrength = value), save);
   }
 
   async function importPart(part: 'ramp' | 'mask') {
@@ -223,6 +236,13 @@
       <input type="range" aria-label="Strength" min="0" max="1" step="0.01" value={strength?.normal ?? startStrength}
         oninput={(e) => setStrength('normal', num(e), false)} onchange={(e) => setStrength('normal', num(e), true)} />
       <span>{strength ? pct(strength.normal) : gameOn ? `game’s, ${pct(gameStrength!)}` : 'game’s'}</span>
+    </div>
+    <div class="slider" title="A hatchling's shimmer: it slides to Strength as the animal grows up (the game's babies have none).">
+      <span class="label">Baby strength</span>
+      <input type="range" aria-label="Baby strength" min="0" max="1" step="0.01" value={baby ?? 0}
+        oninput={(e) => setBaby(num(e), false)} onchange={(e) => setBaby(num(e), true)} />
+      <span>{baby !== null ? pct(baby) : 'game’s, none'}</span>
+      <button class="ghost x" aria-label="Baby strength from below" disabled={model?.babyStrength == null} onclick={() => setBaby(null, true)}>✕</button>
     </div>
     <details>
       <summary>Per mutation</summary>
