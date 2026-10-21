@@ -76,18 +76,23 @@ namespace Tyrant.Framework
                 Place((RectTransform)_furTab.Button.transform, 0.5f, 1f, 2f, 0f);
 
                 var body = Child(main, "Body", Vector2.zero, Vector2.one, new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
-                body.offsetMin = new Vector2(0f, 92f);
+                body.offsetMin = new Vector2(0f, 120f);
                 body.offsetMax = new Vector2(0f, -104f);
                 _content = ScrollView(body, "Viewport");
 
-                _status = Label(BottomRow(main, 62f, 26f), _font, "", 10f);
+                _status = Label(BottomRow(main, 90f, 26f), _font, "", 10f);
                 Traverse.Create(_status).Property("color").SetValue(Faint);
                 Traverse.Create(_status).Property("enableWordWrapping").SetValue(true); // two lines: where it saves, and why "This animal" is off
-                var upper = BottomRow(main, 34f, 24f);
-                _export = FlatButton(upper, _font, "Export mask PNG", Idle, Safe(ExportMask));
-                Place((RectTransform)_export.Button.transform, 0f, 0.5f, 0f, -2f);
-                _reload = FlatButton(upper, _font, "Reload images", Idle, Safe(ReloadImages));
-                Place((RectTransform)_reload.Button.transform, 0.5f, 1f, 2f, 0f);
+                var exports = BottomRow(main, 62f, 24f);
+                _export = FlatButton(exports, _font, "Export mask PNG", Idle, Safe(ExportMask));
+                Place((RectTransform)_export.Button.transform, 0f, 0.5f, 0f, -2f); // the whole row on the Fur tab (Header)
+                _exportColours = FlatButton(exports, _font, "Export colours PNG", Idle, Safe(ExportColours));
+                Place((RectTransform)_exportColours.Button.transform, 0.5f, 1f, 2f, 0f);
+                var images = BottomRow(main, 34f, 24f);
+                _reload = FlatButton(images, _font, "Reload images", Idle, Safe(ReloadImages));
+                Place((RectTransform)_reload.Button.transform, 0f, 0.5f, 0f, -2f);
+                _openFolder = FlatButton(images, _font, "Open folder", Idle, Safe(OpenMasksFolder));
+                Place((RectTransform)_openFolder.Button.transform, 0.5f, 1f, 2f, 0f);
                 var lower = BottomRow(main, 6f, 24f);
                 _reset = FlatButton(lower, _font, "Reset", Idle, Safe(Reset));
                 Place((RectTransform)_reset.Button.transform, 0f, 0.5f, 0f, -2f);
@@ -284,6 +289,7 @@ namespace Tyrant.Framework
             if (_animal == null || _context == null)
             {
                 _title = _details = null;
+                _names = default;
                 return;
             }
             try
@@ -293,6 +299,7 @@ namespace Tyrant.Framework
                 var species = data == null ? null : AccessTools.Property(data.GetType(), "DisplayName")?.GetValue(data, null) as string;
                 var skinData = AccessTools.Property(_animal.GetType(), "SkinData")?.GetValue(_animal, null);
                 var skin = skinData == null ? null : AccessTools.Field(skinData.GetType(), "skinName")?.GetValue(skinData) as string;
+                _names = (species, skin, name);
                 _title = "<b>" + (string.IsNullOrEmpty(name) ? species ?? _context.Species : name) + "</b>" + (_entry == EditorEntry.Nursery ? "  (Nursery)" : "");
                 var variant = _context.Variant == "normal" ? "" : " (" + _context.Variant + ")";
                 _details = $"{species ?? _context.Species} · {skin ?? "?"}{variant} · {_context.Source}";
@@ -327,6 +334,8 @@ namespace Tyrant.Framework
             }
             SetColor(_irisTab.Button.GetComponent(Image!), _onFurTab ? Idle : Green);
             SetColor(_furTab.Button.GetComponent(Image!), _onFurTab ? Green : Idle);
+            _exportColours.Button.SetActive(!_onFurTab); // the shimmer colours are the Iridescence tab's
+            Place((RectTransform)_export.Button.transform, 0f, _onFurTab ? 1f : 0.5f, 0f, _onFurTab ? 0f : -2f);
         }
 
         private static void Footer()
@@ -340,7 +349,9 @@ namespace Tyrant.Framework
             SetInteractable(_save.Button.GetComponent(Button!), dirty && _target != null);
             SetInteractable(_reset.Button.GetComponent(Button!), dirty);
             SetInteractable(_export.Button.GetComponent(Button!), editing && _target != null);
+            SetInteractable(_exportColours.Button.GetComponent(Button!), editing && _target != null);
             SetInteractable(_reload.Button.GetComponent(Button!), true);
+            SetInteractable(_openFolder.Button.GetComponent(Button!), true);
             SetColor(_save.Button.GetComponent(Image!), dirty && _target != null ? Green : Idle);
         }
     }

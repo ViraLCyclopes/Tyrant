@@ -551,7 +551,8 @@ namespace Tyrant.Framework
         /// material's iridescence mask). The infant fur mask falls back to the adult one Tyrant sets. Null when there is none,
         /// and also when the mask is not a texture to read: <paramref name="white"/> is the size of an all-white mask to write
         /// instead while Grow fur paints Unity's white texture over the whole body (the game's own under it is its blank
-        /// FurMaskEmpty), and <paramref name="species"/> names the species whose iridescence mask the animal shows by reference
+        /// FurMaskEmpty), and for an iridescence mask that is everywhere or none at all (<see cref="MaskExports.IridescenceMode"/>);
+        /// <paramref name="species"/> names the species whose iridescence mask the animal shows by reference
         /// (the game's images are never exported).
         /// </summary>
         public static Texture? EffectiveMask(object animal, bool fur, bool infant, out Vector2Int? white, out string? species)
@@ -585,9 +586,21 @@ namespace Tyrant.Framework
                     species = taken;
                     return null;
                 }
-                if (found?.Override.Iridescence?.Mask is MaskSource mask && MaskTexture(mask, found, IsMale(members, animal), record) is Texture made && made != null)
-                    return made;
-                return MaterialTexture(material, MaskProperty);
+                var shown = found?.Override.Iridescence?.Mask;
+                var texture = shown != null && !shown.Everywhere && MaskTexture(shown, found!, IsMale(members, animal), record) is Texture made && made != null
+                    ? made
+                    : MaterialTexture(material, MaskProperty);
+                switch (MaskExports.IridescenceMode(shown, texture != null))
+                {
+                    case MaskExportMode.Image:
+                        return texture;
+                    case MaskExportMode.White: // everywhere, or no mask at all: a white mask the size of the skin's mask or diffuse map
+                        var game = Present(GameTexture(record, MaskProperty)) ?? MaterialTexture(material, MaskProperty);
+                        white = game != null && game.width >= 64 && game.height >= 64 ? new Vector2Int(game.width, game.height) : PaintSize(record, material, infant: false);
+                        return null;
+                    default:
+                        return null;
+                }
             }
             catch (Exception ex)
             {
@@ -597,7 +610,7 @@ namespace Tyrant.Framework
         }
 
         /// <summary>A size to paint a whole-body mask at: the animal's diffuse map's (the block's, else the material's), else 1024 × 1024.</summary>
-        private static Vector2Int PaintSize(Written record, Material? material, bool infant)
+        private static Vector2Int PaintSize(Written? record, Material? material, bool infant)
         {
             var property = SkinSlotNames.Property(infant ? "infantDiffuse" : "diffuse");
             var diffuse = Present(GameTexture(record, property)) ?? MaterialTexture(material, property);

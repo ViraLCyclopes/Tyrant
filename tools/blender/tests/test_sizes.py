@@ -129,51 +129,40 @@ class SizeTests(unittest.TestCase):
         arm.tyrant_size_male = 20.0  # 1.08 x 20 x 20: only Tyrant's own bound of 20 holds it
         self.assertScale(arm, 20.0)
 
-    def test_note_when_past_the_limit(self):
+    def test_no_note_within_tyrants_20x(self):
         path = allosaurus(sizes={"adult": 4.0})
         data = project.load(path)
-        data["sizeLimit"] = [0.05, 2.0]
+        data["sizeLimit"] = [0.05, 5.0]  # automatic: the limit its sizes need (1.08 x 4 x 1.15 = 4.97)
         project.save(path, data)
         arm = importer.import_project(path)
-        # Counted as Check and Send count it, the game's genetic ranges included: 1.08 x 4 x 1.15 = 4.97, so Send raises the
-        # limit to 5 (BlenderSizesTests.Blender_note_and_send_agree_on_the_add_ons_fixture pins Tyrant's side of this number).
-        note = "In game this is capped at 2×. Send to Tyrant will raise this species' Size limit to 5×."
-        self.assertEqual(growth.limit_note(arm, data), note)
-        self.assertIn(("say", (note,), {}), drawn_sizes(arm, data))
-
-        data["sizeLimit"] = [0.05, 3.5]
-        self.assertEqual(growth.limit_note(arm, data), "In game this is capped at 3.5×. Send to Tyrant will raise this species' Size limit to 5×.")
-
-        data["sizeLimit"] = [0.05, 20.0]  # within the limit: no note
+        # The size limit is automatic up to 20, so a size past the game's 2 needs no note.
         self.assertIsNone(growth.limit_note(arm, data))
         self.assertFalse([d for d in drawn_sizes(arm, data) if d[0] == "say" and "capped" in d[1][0]])
 
-        data["sizeLimit"] = [0.05, 2.0]
-        arm.tyrant_size_adult = 1.0  # 1.08 x 1.15 = 1.24 at most: within the game's 2
-        self.assertIsNone(growth.limit_note(arm, data))
+        data["geneticRanges"] = {"incubation": [0.925, 1.075], "nursery": [0.5, 3.0], "breeding": [0.85, 1.15]}
+        self.assertIsNone(growth.limit_note(arm, data))  # 1.08 x 4 x 3 = 12.96: still within 20
 
-    def test_note_counts_the_species_ranges_and_every_skin(self):
+    def test_note_past_20x_counts_the_ranges_and_every_skin(self):
         path = allosaurus(sizes={"adult": 4.0})
         data = project.load(path)
-        data["sizeLimit"] = [0.05, 2.0]
-        data["geneticRanges"] = {"incubation": [0.925, 1.075], "nursery": [0.5, 3.0], "breeding": [0.85, 1.15]}
+        data["geneticRanges"] = {"incubation": [0.925, 1.075], "nursery": [0.5, 5.0], "breeding": [0.85, 1.15]}
         project.save(path, data)
         arm = importer.import_project(path)
-        # The species' own Nursery range: 1.08 x 4 x 3 = 12.96, raised to 13.
-        self.assertEqual(growth.limit_note(arm, data), "In game this is capped at 2×. Send to Tyrant will raise this species' Size limit to 13×.")
+        # The species' own Nursery range: 1.08 x 4 x 5 = 21.6, past Tyrant's 20.
+        note = "In game this is capped at 20×."
+        self.assertEqual(growth.limit_note(arm, data), note)
+        self.assertIn(("say", (note,), {}), drawn_sizes(arm, data))
 
         data["geneticRanges"] = {"incubation": [0.925, 1.075], "nursery": None, "breeding": [0.85, 1.15]}
-        data["sizeSkins"] = [[1.08, 1.0], [1.5, 1.2]]  # another skin is bigger: 1.5 x 4 x 1.15 = 6.9
-        self.assertEqual(growth.limit_note(arm, data), "In game this is capped at 2×. Send to Tyrant will raise this species' Size limit to 7×.")
+        self.assertIsNone(growth.limit_note(arm, data))
+        data["sizeSkins"] = [[1.08, 1.0], [4.5, 1.2]]  # another skin is far bigger: 4.5 x 4 x 1.15 = 20.7
+        self.assertEqual(growth.limit_note(arm, data), note)
 
-    def test_note_at_the_highest_limit_promises_no_raise(self):
-        path = allosaurus(sizes={"adult": 20.0})
-        data = project.load(path)
-        data["sizeLimit"] = [0.05, 20.0]
-        project.save(path, data)
+    def test_note_under_001x(self):
+        path = allosaurus(sizes={"adult": 0.05, "baby": 0.1})
         arm = importer.import_project(path)
-        # 1.08 x 20 x 1.15 is past 20, the highest limit: Send cannot raise it, so the note does not say it will.
-        self.assertEqual(growth.limit_note(arm, data), "In game this is capped at 20×.")
+        # A hatchling of 0.05 x 0.1 = 0.005, with the smallest bred young less: under Tyrant's 0.01.
+        self.assertEqual(growth.limit_note(arm, project.load(path)), "In game this is capped at 0.01×.")
 
     def test_sizes_go_to_a_species_chosen_on_send(self):
         # Sizes edited for a destination that is gone (Send cleared it) still go to the species model chosen next.

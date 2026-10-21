@@ -3,7 +3,7 @@ using Tyrant.Framework.Core;
 
 namespace Tyrant.Core.Mods;
 
-/// <summary>Size settings: a mod's size changes per species (with its genetic size ranges and size limit), one sizes/&lt;file&gt;.json each.</summary>
+/// <summary>Size settings: a mod's size changes per species (with its genetic size ranges; its size limit follows them), one sizes/&lt;file&gt;.json each.</summary>
 public sealed partial class ModProject
 {
     private string SizeFolder => Path.Combine(Dir, SizeSettings.Folder);
@@ -25,7 +25,10 @@ public sealed partial class ModProject
     public SizeSettings? Sizes(string target) =>
         SizeSettings.ReadFolder(Dir, null).FirstOrDefault(t => string.Equals(t.Sizes.Target, target, StringComparison.OrdinalIgnoreCase)).Sizes;
 
-    /// <summary>Writes a target's sizes (its existing file name if it has one); null, or every value unset, deletes its file.</summary>
+    /// <summary>
+    /// Writes a target's sizes (its existing file name if it has one); null, or every value unset, deletes its file. An old
+    /// file's "limit" is not written again: the size limit is automatic (<see cref="SpeciesSizes.LimitOf"/>).
+    /// </summary>
     public void SetSizes(string target, SizeSettings? sizes)
     {
         var existing = SizeSettings.ReadFolder(Dir, null).FirstOrDefault(t => string.Equals(t.Sizes.Target, target, StringComparison.OrdinalIgnoreCase)).File;
@@ -47,7 +50,7 @@ public sealed partial class ModProject
         var written = new SizeSettings
         {
             Target = target, Adult = sizes.Adult, Baby = sizes.Baby, Male = sizes.Male, Female = sizes.Female,
-            Nursery = sizes.Nursery, Breeding = sizes.Breeding, Limit = sizes.Limit,
+            Nursery = sizes.Nursery, Breeding = sizes.Breeding,
         };
         var json = written.ToJson();
         try

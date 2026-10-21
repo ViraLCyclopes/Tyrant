@@ -33,31 +33,6 @@ public class ModSizesRpcTests
         """;
     private const string GameRanges = """{"incubationGeneticSizeMinMax":{"x":0.925,"y":1.075},"breedingGeneticSizeMinMax":{"x":0.85,"y":1.15}}""";
 
-    [Fact]
-    public async Task Check_judges_a_species_ranges_against_its_own_limit()
-    {
-        using var game = new FakeGame();
-        var (h, ws, _) = await AssetFixtures.Opened(game);
-        var objects = new DumpResult();
-        objects.Objects.Add(new DumpObject(typeof(object), new EngineObjectInfo("PrehistoricKingdom.AnimalData", "Allosaurus Anax", 1), AnaxData));
-        objects.Objects.Add(new DumpObject(typeof(object), new EngineObjectInfo("PrehistoricKingdom.AnimalsV2.Data.GlobalAnimalParameters", "GlobalAnimalParameters", 2), GameRanges));
-        DumpWriter.Write(Path.Combine(ws, "data"), objects, [], new DumpManifest { RequestId = "r1", BuildGuid = "b" });
-        await h.Call("mods.create", new { id = "wide-nursery" });
-        var detail = await h.Call("mods.get", new { id = "wide-nursery" });
-
-        // The species' own Nursery range: females 1.35 x 1.5 = 2.03, past the game's 2.
-        var set = await h.Call("mods.setSizes", new { id = "wide-nursery", revision = Rev(detail), target = "Allosaurus Anax", nursery = new[] { 0.5, 1.5 } });
-        var check = await h.Call("mods.check", new { id = "wide-nursery" });
-        Assert.Contains(check.GetProperty("errors").EnumerateArray(), e => e.GetString()!.Contains("Allosaurus Anax would be scaled from") && e.GetString()!.Contains("the game allows 0.05 to 2"));
-        Assert.DoesNotContain(check.GetProperty("warnings").EnumerateArray(), w => w.GetString()!.Contains("genetic size ranges"));
-
-        // Its own limit lets it: then only the past-2x caution.
-        await h.Call("mods.setSizes", new { id = "wide-nursery", revision = Rev(set), target = "Allosaurus Anax", nursery = new[] { 0.5, 1.5 }, limit = new[] { 0.05, 3.0 } });
-        check = await h.Call("mods.check", new { id = "wide-nursery" });
-        Assert.DoesNotContain(check.GetProperty("errors").EnumerateArray(), e => e.GetString()!.Contains("Allosaurus Anax"));
-        Assert.Contains(check.GetProperty("warnings").EnumerateArray(), w => w.GetString()!.Contains("Allosaurus Anax can grow past the game's normal 2× limit"));
-    }
-
     private static bool IsNull(JsonElement e, string name) => !e.TryGetProperty(name, out var v) || v.ValueKind == JsonValueKind.Null;
 
     [Fact]
@@ -126,47 +101,72 @@ public class ModSizesRpcTests
 
         var ex = await Assert.ThrowsAsync<RpcCallException>(() => h.Call("mods.setSizes", new { id = "size-pack", revision = Rev(detail), target = "Alpha", adult = 21 }));
         var range = await Assert.ThrowsAsync<RpcCallException>(() => h.Call("mods.setSizes", new { id = "size-pack", revision = Rev(detail), target = "Alpha", nursery = new[] { 0.0, 1.0 } }));
-        var limit = await Assert.ThrowsAsync<RpcCallException>(() => h.Call("mods.setSizes", new { id = "size-pack", revision = Rev(detail), target = "Alpha", limit = new[] { 0.05, 25.0 } }));
 
         Assert.Equal("MOD_INVALID", ex.DataCode);
         Assert.Equal("MOD_INVALID", range.DataCode);
-        Assert.Equal("MOD_INVALID", limit.DataCode);
-        Assert.Contains("\"limit\" must be [min, max] with 0.01 <= min <= 0.05 and 2 <= max <= 20", limit.Message);
     }
 
     [Fact]
-    public async Task Sizes_carry_the_species_ranges_and_limit_with_the_games()
+    public async Task Check_judges_a_species_against_tyrants_20x()
+    {
+        using var game = new FakeGame();
+        var (h, ws, _) = await AssetFixtures.Opened(game);
+        var objects = new DumpResult();
+        objects.Objects.Add(new DumpObject(typeof(object), new EngineObjectInfo("PrehistoricKingdom.AnimalData", "Allosaurus Anax", 1), AnaxData));
+        objects.Objects.Add(new DumpObject(typeof(object), new EngineObjectInfo("PrehistoricKingdom.AnimalsV2.Data.GlobalAnimalParameters", "GlobalAnimalParameters", 2), GameRanges));
+        DumpWriter.Write(Path.Combine(ws, "data"), objects, [], new DumpManifest { RequestId = "r1", BuildGuid = "b" });
+        await h.Call("mods.create", new { id = "wide-nursery" });
+        var detail = await h.Call("mods.get", new { id = "wide-nursery" });
+
+        // The species' own Nursery range: females 1.35 x 15 = 20.25, past Tyrant's 20.
+        var set = await h.Call("mods.setSizes", new { id = "wide-nursery", revision = Rev(detail), target = "Allosaurus Anax", nursery = new[] { 0.5, 15.0 } });
+        var check = await h.Call("mods.check", new { id = "wide-nursery" });
+        Assert.Contains(check.GetProperty("errors").EnumerateArray(), e => e.GetString() ==
+            "sizes/allosaurus anax.json: The biggest Allosaurus Anax can reach 20.25× a normal Allosaurus Anax (adult 1 × female 1.35 × Nursery slider up to 15), more than Tyrant's 20× limit; lower the adult size or the size ranges.");
+        Assert.False(set.TryGetProperty("notes", out _)); // nothing is raised: the limit is automatic
+
+        // Within 20: only the past-2x caution.
+        await h.Call("mods.setSizes", new { id = "wide-nursery", revision = Rev(set), target = "Allosaurus Anax", nursery = new[] { 0.5, 1.5 } });
+        check = await h.Call("mods.check", new { id = "wide-nursery" });
+        Assert.DoesNotContain(check.GetProperty("errors").EnumerateArray(), e => e.GetString()!.Contains("Allosaurus Anax"));
+        Assert.Contains(check.GetProperty("warnings").EnumerateArray(), w => w.GetString()!.Contains("Allosaurus Anax can grow past the game's normal 2× limit"));
+    }
+
+    [Fact]
+    public async Task Sizes_carry_the_species_ranges_names_and_curve_with_the_games()
     {
         using var game = new FakeGame();
         var (h, _) = await WithAlpha(game);
         var detail = await h.Call("mods.get", new { id = "size-pack" });
         static IEnumerable<double> Pair(JsonElement e, string name) => e.GetProperty(name).EnumerateArray().Select(x => Math.Round(x.GetDouble(), 6));
 
-        // Unset: null, with the game's values to show (the dump has no global parameters here: the vanilla ones).
+        // Unset: null, with the game's values to show (the dump has no global parameters here: the vanilla ones). No limit: it is automatic.
         var unset = await h.Call("mods.sizes", new { id = "size-pack", target = "Alpha" });
         Assert.True(IsNull(unset, "nursery"));
         Assert.True(IsNull(unset, "breeding"));
-        Assert.True(IsNull(unset, "limit"));
+        Assert.False(unset.TryGetProperty("limit", out _));
+        Assert.False(unset.TryGetProperty("gameLimit", out _));
         Assert.Equal([0.925, 1.075], Pair(unset, "gameNursery"));
         Assert.Equal([0.85, 1.15], Pair(unset, "gameBreeding"));
-        Assert.Equal([0.05, 2], Pair(unset, "gameLimit"));
+        Assert.Equal("Alpha", unset.GetProperty("name").GetString());
+        Assert.Equal("Alpha", unset.GetProperty("baseName").GetString());
+        // The game's curve as Tyrant reads it, so the card can count the smallest and biggest as the sizes change.
+        var curve = unset.GetProperty("original").GetProperty("curve").EnumerateArray().Select(k => (k[0].GetDouble(), k[1].GetDouble())).ToList();
+        Assert.Equal((0.0, 0.5), curve[0]);
+        Assert.Equal((1.0, 1.0), curve[^1]);
 
         var set = await h.Call("mods.setSizes", new
         {
-            id = "size-pack", revision = Rev(detail), target = "Alpha", adult = 1.2,
-            nursery = new[] { 0.5, 3.0 }, breeding = new[] { 0.8, 1.2 }, limit = new[] { 0.02, 20.0 },
+            id = "size-pack", revision = Rev(detail), target = "Alpha", adult = 1.2, nursery = new[] { 0.5, 3.0 }, breeding = new[] { 0.8, 1.2 },
         });
         var sizes = await h.Call("mods.sizes", new { id = "size-pack", target = "Alpha" });
         Assert.Equal([0.5, 3], Pair(sizes, "nursery"));
         Assert.Equal([0.8, 1.2], Pair(sizes, "breeding"));
-        Assert.Equal([0.02, 20], Pair(sizes, "limit"));
         Assert.Equal(1.2, sizes.GetProperty("adult").GetDouble());
-        Assert.True(IsNull(await h.Call("mods.sizes", new { id = "size-pack", target = "Beta" }), "limit")); // another species' is its own
 
         // Leaving a key out clears it (the card's Reset).
         await h.Call("mods.setSizes", new { id = "size-pack", revision = Rev(set), target = "Alpha", adult = 1.2, nursery = new[] { 0.5, 3.0 } });
         var reset = await h.Call("mods.sizes", new { id = "size-pack", target = "Alpha" });
-        Assert.True(IsNull(reset, "limit"));
         Assert.True(IsNull(reset, "breeding"));
         Assert.Equal([0.5, 3], Pair(reset, "nursery"));
     }
@@ -228,5 +228,4 @@ public class ModSizesRpcTests
         }));
         Assert.Equal("MOD_INVALID", bad.DataCode);
     }
-
 }

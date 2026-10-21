@@ -322,9 +322,32 @@ game update moves the panels and a button cannot be placed, the MelonLoader log 
   removes it (the skin's fur maps decide). An age gives the fur a starting length when nothing gives it one, as **Grow
   fur** does, and **Game's** takes that length back unless **Grow fur** is still on. Over a lower layer's age the row shows
   it, marked *(below)*, and **Game's** is greyed out: there is no `"game"` value to write over it, so pick the age you want.
-- **Export mask PNG** writes the mask as a PNG to edit in an image editor. It is staged until **Save**, then written under the
-  fixed file name (`iridescence-mask.png`, `fur-mask.png`, …) and becomes the mask. **Reload images** picks up your edits
-  without restarting. The PNG pickers list the target's folder and `UserData/Tyrant/Masks`.
+- **Export mask PNG** writes the mask the animal shows as a PNG to edit in an image editor, into `UserData/Tyrant/Masks`.
+  With the mask on **Everywhere**, or no mask at all, it is all white, the size of the skin's mask or diffuse map (else
+  1024 × 1024); on the Fur tab, grown fur over the whole body is all white too. A **Channel** mask exports what the animal
+  shows (from a vanilla skin's map, that is an image made from the game's). A **Species** mask is not exported (it stays a
+  reference).
+- **Export colours PNG** (Iridescence tab, beside it) writes the shimmer colours of **Colours** or **Thin film** as a
+  256 × 8 strip into the same folder; the colours of **Game's** and **Species** stay the game's and are not exported.
+- **Names:** `{species} {skin} {kind}.png`, for example `Tyrannosaurus Leatherhide fur mask.png`; the kind is
+  `iridescence mask`, `fur mask`, `baby fur mask` or `colours`. On **This animal** the animal's name follows the skin
+  when it has one; on **Whole species** only the species is named. Characters a file name cannot hold become `_`. An
+  export never overwrites: when the name is taken, it gets ` 2`, ` 3`, ….
+- After an export, that slot of the draft is **PNG**, on the new file, and the status line names it (*Exported
+  Tyrannosaurus Leatherhide fur mask.png to UserData/Tyrant/Masks. Edit it, then Reload images.*). It is an unsaved change:
+  **Reset** goes back (the file stays in Masks). **Reload images** picks up your edits without restarting; **Open folder**
+  opens `UserData/Tyrant/Masks` in File Explorer (made when it is missing). The PNG pickers list the target's folder and
+  `UserData/Tyrant/Masks`.
+- **Save** into a mod (**Whole skin**, **Whole species**) copies an export the look uses into the owner's folder under the
+  fixed name (`iridescence-mask.png`, `fur-mask.png`, `fur-infant-mask.png`, `iridescence-ramp.png`), over the one saved
+  before, so the mod carries its images; a PNG picked from Masks keeps its own name there. A look of **This animal** names
+  the file in Masks (`"Masks/…"`). Nothing is written into a mod before **Save**, so **Reset** and **Discard** never touch a
+  saved look's images.
+- **Info buttons:** the round **i** beside **Baby strength**, **Variation between animals**, **Shimmer colours**, **Mask**,
+  **Shaping**, **Grow fur**, **Fur on**, **Length**, **Droop** and **Wind strength** opens a short explanation under the row
+  (one at a time on each tab); press it again to close it. **Variation between animals** is set for a whole skin or species:
+  the Nursery preview always shows the exact strength, and the variation shows on the animals you create; it is not
+  available for one animal (**This animal**, **Next created**), where there is nothing to vary between.
 
 | What you edit | Save goes to |
 |---|---|
@@ -446,7 +469,7 @@ folder. `mod.json` does not list these files; Tyrant finds them by folder.
 
 ```json
 { "format": 1, "target": "Tyrannosaurus", "adult": 4, "baby": 0.10, "male": 1.0, "female": 1.1,
-  "nursery": [0.5, 3], "breeding": [0.85, 1.15], "limit": [0.05, 5] }
+  "nursery": [0.5, 3], "breeding": [0.85, 1.15] }
 ```
 
 - `target`: a base-game species id or a custom species identity (`tyrant.<mod-id>.<species-id>`), as for prefab settings.
@@ -455,20 +478,20 @@ folder. `mod.json` does not list these files; Tyrant finds them by folder.
 - `adult`: multiplies the real adult size (0.05 to 20).
 - `baby`: the newborn's size as a share of the adult's (above 0, at most 1).
 - `male`, `female`: multiply the size of each sex (0.1 to 20).
-- The maximums reach the highest size limit (see below). Past the species' limit, the framework scales the adult back.
+- The maximums reach Tyrant's 20×, the most a species' automatic size limit allows (see below).
 - `nursery`: the range of the Nursery's Customize size slider for this species. The random size of uncustomised eggs
   stays as in the base game.
 - `breeding`: the range of the random size of this species' bred young.
 - `nursery` and `breeding` are each `[min, max]` with 0 < min <= max <= 20. In this game the base ranges are the same
   for every species: Nursery 0.925 to 1.075 and breeding 0.85 to 1.15 (a custom species has its template's, which are
   the same).
-- `limit`: the smallest and largest final size an animal of this species may have, `[min, max]` with 0.01 <= min <= 0.05
-  and 2 <= max <= 20. Left out, it is the game's own 0.05 to 2.
+- There is no size limit to set: it is automatic (see below). A `limit` key from an older Tyrant is read but ignored;
+  Check warns "The size limit is automatic now; this file's limit is ignored and is removed the next time you save.",
+  and the next save of the file leaves it out.
 - A key outside its bounds, or one Tyrant does not know, is an error.
 
 If several mods set the same key on the same target, the later mod in load order wins, per key. Keys the other mods set
-are kept. The exception is `limit`: if several enabled mods set one for the same species, the **widest** wins (the lowest
-min and the highest max among them), so a mod cannot cap another mod's sizes again.
+are kept. The species' size limit then follows the merged sizes.
 
 The genetic size an animal gets is saved with it in the park. An animal made with a wider range (the Nursery slider or
 breeding) keeps that size after the mod is removed: a T. rex made at 1.5 stays 1.5 times a vanilla one.
@@ -487,31 +510,53 @@ width and radius.
 incubation time. The game times incubation by the growth curve, not by the real size, and Tyrant keeps the curve's adult
 value, so only a hatchling's time changes, and by less than its size does.
 
-**The size limit.** The game keeps every animal's size between 0.05 and 2 (it logs an error each time a size passes
-that). When a species has a `limit`, the framework changes that one check (`AnimalNative.CurrentScale`) to read the
-animal's species' limit, so the game keeps each species within its own limit instead, and logs an error only past it.
-Species without a `limit` keep 0.05 to 2. If a game update changes that code, the framework leaves it alone and logs one
-warning; sizes then keep to the game's 0.05 to 2. With no `limit` on any species, nothing is changed.
+**The size limit is automatic.** The game keeps every animal's size between 0.05 and 2 (it logs an error each time a size
+passes that). Tyrant gives each species the limit its sizes need instead, worked out the same way by the framework in
+game, by Check and by Blender. It counts the species' smallest and largest size: the youngest baby to the adult, the sex
+multipliers of every skin and its genetic ranges (the random eggs', its `nursery` and its `breeding`, else the game's).
 
-Tyrant's Check reports a size that would pass the species' limit (its own `limit`, else the game's) as an error,
-counting the youngest baby, the sex multipliers of every skin and its genetic ranges (the random eggs', its `nursery` and
-its `breeding`, else the game's). In the game, the framework scales the adult size back until the sizes fit the species'
-limit and logs one warning.
+- The limit is never narrower than the game's 0.05 to 2. Past it, the max is the largest size rounded up to the next
+  0.5, and the min is the smallest rounded down to the next 0.01.
+- Each keeps 0.1% to spare. That is the margin the framework's scale-back keeps inside a limit, so a largest of 2.999
+  gets 3.5 (the game would back anything past 2.997 off under a limit of 3).
+- Tyrant's own bounds are 0.01 to 20: no species goes past them. Past the last step inside them, the limit is the
+  outermost one, 0.00999 to 20.02 (0.01 / 1.001 and 20 / 0.999). That keeps a size of exactly 20× (or 0.01×) inside the
+  band the scale-back keeps to, so the game never backs off a species within 0.01 to 20.
 
-**Past 2×.** A size within a raised limit but past the game's 2 is allowed, and Check warns about it, for a species
-whose sizes or ranges can pass 2: "{species} can grow past the game's normal 2× limit; the size class, camera framing,
-foot placement and enclosure needs were tuned for normal sizes." The game was made for normal sizes, so a very big
-animal may clip into things, get stuck or be framed badly.
+In game, the framework changes the game's one check (`AnimalNative.CurrentScale`) to read each animal's species' limit,
+but only once a species needs more than 0.05 to 2. While every species fits the game's limit, nothing is changed. If a
+game update changes that code, the framework leaves it alone and logs one warning; sizes then keep to the game's 0.05
+to 2, and the framework scales the adult back until they fit. The log names each species' limit, for example
+`Tyrannosaurus: size limit 0.05 to 13.5 (from its sizes).`
 
-**Uncapped Nursery slider.** For a size slider that goes far past the game's, set a wide limit and a wide Nursery range
-on the same species:
+**The minimum.** The game's smallest size is 0.05×, and the automatic limit can lower it to 0.01×. `adult` takes 0.05
+at least, but babies count: the smallest size is the youngest baby (its `baby` share of the adult) of the smallest sex
+with the smallest genetic size. So a small adult with a small baby can go under 0.05×.
+
+**Past Tyrant's bounds.** Tyrant's Check reports a species whose sizes would pass 20× or go under 0.01× as an error. It
+names the species as the game shows it, and the animal its sizes are relative to (a custom species' template), for
+example: "The biggest Tyranno Maximus can reach 25.77× a normal Tyrannosaurus (adult 2.63 × female 0.98 × Nursery slider
+up to 10), more than Tyrant's 20× limit; lower the adult size or the size ranges." The number is the one Check counts,
+and for a grown adult the factors multiply out to it: the sex named is the one that gives it, with the skin's own sex
+size (0.98 here) and the mod's multiplier in it, and a species whose model grows past 1 adds its "grown size". The
+smallest case lists its inputs instead, since a hatchling's size is no plain product (the game fades the genetic size
+in): "The smallest … can be …× a normal … (a hatchling, with adult …, baby …, male … and breeding down to …), less than
+Tyrant's 0.01× limit; raise the adult size, the baby size or the size ranges." Within 0.01× to 20× the game never
+backs a species off. Past them, the framework scales the adult back until the sizes fit and logs one warning.
+
+**Past 2×.** A size past the game's 2 (within 20) is allowed, and Check warns about it for a species whose sizes or
+ranges can pass 2: "{species} can grow past the game's normal 2× limit; the size class, camera framing, foot
+placement and enclosure needs were tuned for normal sizes." The game was made for normal sizes, so a very big animal
+may clip into things, get stuck or be framed badly.
+
+**A wide Nursery slider.** For a size slider that goes far past the game's, set a wide Nursery range on the species:
 
 ```json
-{ "format": 1, "target": "Tyrannosaurus", "limit": [0.05, 20], "nursery": [0.25, 5] }
+{ "format": 1, "target": "Tyrannosaurus", "nursery": [0.25, 5] }
 ```
 
-The slider then covers 0.25 to 5 times the normal genetic size for that species, and the limit lets the biggest of them
-show.
+The slider then covers 0.25 to 5 times the normal genetic size for that species, and its automatic limit lets the
+biggest of them show (5 × a T. rex's own sex size, up to Tyrant's 20×).
 
 **In Blender.** The Tyrant panel's **Growth** slider scales the armature object as the game scales the animal:
 curve(m) × (1 + (s − 1) × f(m)), with the species' growth curve (rebuilt for the mod's `adult` and `baby`), s the shown
@@ -519,17 +564,12 @@ sex's multiplier with the mod's `adult` and `male` or `female` applied, and the 
 only: the mesh and bones keep their size, and **Send to Tyrant** exports at the object's own scale. The **Size** box edits
 the four size keys when the model goes to a species (a base-game species model or a mod's own species); Send to Tyrant
 then writes the keys edited in Blender into that species' `sizes/` file (`tyrant blender send --sizes <file>`), keeping
-the others as the mod has them, so a change made in the app meanwhile stays. The ranges and the limit are set in the app
-only. For a skin it shows the species' sizes read-only, since sizes apply to the whole species. The view shows the size
-you set, within Tyrant's own bounds (0.01 to 20) only, not capped by the species' size limit. When the species (every
-skin's sexes, baby to adult, its genetic ranges, counted as Check does) would pass its limit (else the game's 0.05 to 2),
-the Size box says: "In game this is capped at {current}×. Send to Tyrant will raise this species' Size limit to {new}×."
-Whenever the destination is a species and its sizes in effect pass its `limit`, edited in Blender or not, Send to Tyrant
-widens that limit in its `sizes/` file just enough: the max to the largest size rounded up to the next 0.5 (at most 20,
-the {new} the note names), the min to the smallest rounded down to the next 0.01 (at least 0.01). It keeps the species'
-other values, never narrows a limit, and says so in its report: "Raised this species' Size limit to {max}×." At the
-highest limit (20) the note only says where the game caps it. A new mod made by the send gets its sizes and limit the
-same way.
+the others as the mod has them, so a change made in the app meanwhile stays. The ranges are set in the app only, and
+the size limit is automatic. For a skin it shows the species' sizes read-only, since sizes apply to the whole species. The view shows the size
+you set, within Tyrant's own bounds (0.01 to 20) only. The project file carries the species' automatic limit. Since
+that limit follows the sizes up to 20×, the Size box has a note only when the species (every skin's sexes, baby to
+adult, its genetic ranges, counted as Check does) would pass 20× or go under 0.01×: "In game this is capped at 20×."
+(or "… at 0.01×."). Send to Tyrant raises nothing: it writes the sizes, and the limit follows them.
 
 ## Rig edits (changing an animal's skeleton)
 

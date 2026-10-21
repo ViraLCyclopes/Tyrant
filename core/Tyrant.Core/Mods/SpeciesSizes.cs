@@ -11,9 +11,14 @@ namespace Tyrant.Core.Mods;
 
 /// <summary>
 /// A species' size as the game data has it: the growth curve as the game reads it (sampled, <see cref="SizeMath.Sample"/>), each
-/// skin's sex size multipliers and the model's raw length, height and width.
+/// skin's sex size multipliers and the model's raw length, height and width. Name: the species as the game shows it (a mod's
+/// own species by its display name); BaseName: the animal its sizes are relative to (a custom species' template's display name).
 /// </summary>
-public sealed record OriginalSize((float Time, float Value)[] Curve, IReadOnlyList<(double Male, double Female)> Skins, float[]? LengthHeightWidth);
+public sealed record OriginalSize((float Time, float Value)[] Curve, IReadOnlyList<(double Male, double Female)> Skins, float[]? LengthHeightWidth)
+{
+    public string Name { get; init; } = "";
+    public string BaseName { get; init; } = "";
+}
 
 /// <summary>What Check needs to judge sizes: every species' original size and the vanilla genetic size ranges.</summary>
 public sealed record SizeFacts(Func<string, OriginalSize?> Original, (double Min, double Max) Incubation, (double Min, double Max) Breeding);
@@ -114,6 +119,67 @@ public static partial class SpeciesSizes
         return SizeMath.Extremes(curve, sexes, SizePlan.InEffect(sizes, facts.Incubation, facts.Breeding));
     }
 
+    /// <summary>The species' size limit with these sizes: automatic, the one its extremes need (<see cref="SizeLimit.Fitting"/>); null without a curve.</summary>
+    public static SizeLimit? LimitOf(OriginalSize original, SizeSettings sizes, SizeFacts facts) =>
+        Extremes(original, sizes, facts) is { } e ? SizeLimit.Fitting(e.Min, e.Max) : null;
+
+    /// <summary>
+    /// Check's error when the sizes take the species past Tyrant's own bounds (over 20 or under 0.01, <see cref="SizeLimit.PastBounds"/>):
+    /// how big (or small) it gets, relative to a normal animal of its base species, and what makes it so; null within them. The
+    /// extreme is found as <see cref="Extremes"/> finds it (the same samples and float maths), so the number is Check's own, and the
+    /// sex named is the one that gives it (the skin's own sex size times the mod's multiplier). A grown adult is a plain product of
+    /// the factors named; anything younger is not (the game fades the genetic size in), so its inputs are listed instead.
+    /// </summary>
+    public static string? PastBoundsProblem(OriginalSize original, SizeSettings sizes, SizeFacts facts)
+    {
+        if (original.Curve.Length == 0) return null;
+        var adult = sizes.Adult ?? 1;
+        var curve = SizeMath.Rebuild(original.Curve, adult, sizes.Baby);
+        var skins = original.Skins.Count == 0 ? [(1.0, 1.0)] : original.Skins;
+        var sexes = skins.SelectMany(k => new[] { (Name: "male", Size: k.Male * (sizes.Male ?? 1), Final: k.Male * adult * (sizes.Male ?? 1)),
+            (Name: "female", Size: k.Female * (sizes.Female ?? 1), Final: k.Female * adult * (sizes.Female ?? 1)) }).ToList();
+        var genetics = new[] { (Site: SizeSite.RandomEgg, Label: "random eggs"), (Site: SizeSite.NurserySlider, Label: "Nursery slider"), (Site: SizeSite.Breeding, Label: "breeding") }
+            .Select(x => (Range: SizePlan.RangeFor(x.Site, sizes, facts.Incubation, facts.Breeding), x.Label))
+            .SelectMany(x => new[] { (x.Label, G: x.Range.Min), (x.Label, G: x.Range.Max) }).ToList();
+        // The same samples as SizeMath.Extremes; the first of equal sizes is kept.
+        (float Size, int Step, int Sex, int Gene) low = (float.MaxValue, 0, 0, 0), high = (float.MinValue, 0, 0, 0);
+        for (var i = 0; i < 101; i++)
+        {
+            var m = i / 100f;
+            var at = SizeMath.Evaluate(curve, m);
+            var fade = SizeMath.Fade(m);
+            for (var x = 0; x < sexes.Count; x++)
+                for (var y = 0; y < genetics.Count; y++)
+                {
+                    var size = (float)(at * (1 + (sexes[x].Final * genetics[y].G - 1) * fade));
+                    if (size < low.Size) low = (size, i, x, y);
+                    if (size > high.Size) high = (size, i, x, y);
+                }
+        }
+        if (!SizeLimit.PastBounds(low.Size, high.Size)) return null;
+        if (high.Size > SizeLimit.HighestMax)
+        {
+            var (sex, gene) = (sexes[high.Sex], genetics[high.Gene]);
+            var grown = SizeMath.Evaluate(curve, 1f);
+            var why = high.Step == 100
+                ? (Math.Abs(grown - 1) > 1e-4 ? $"grown size {Text(grown)} × " : "") + $"adult {Text(adult)} × {sex.Name} {Text(sex.Size)} × {gene.Label} up to {Text(gene.G)}"
+                : $"at {high.Step}% grown, with adult {Text(adult)}, {sex.Name} {Text(sex.Size)} and {gene.Label} up to {Text(gene.G)}";
+            return $"The biggest {original.Name} can reach {high.Size.ToString("0.##", CultureInfo.InvariantCulture)}× a normal {original.BaseName} ({why}), "
+                + $"more than Tyrant's {Text(SizeLimit.HighestMax)}× limit; lower the adult size or the size ranges.";
+        }
+        {
+            var (sex, gene) = (sexes[low.Sex], genetics[low.Gene]);
+            var c1 = SizeMath.Evaluate(original.Curve, 1f);
+            var baby = sizes.Baby ?? (c1 == 0f ? 1 : SizeMath.Evaluate(original.Curve, 0f) / (double)c1);
+            var when = low.Step == 0 ? "a hatchling" : $"at {low.Step}% grown";
+            return $"The smallest {original.Name} can be {low.Size.ToString("0.###", CultureInfo.InvariantCulture)}× a normal {original.BaseName} "
+                + $"({when}, with adult {Text(adult)}, baby {Text(baby)}, {sex.Name} {Text(sex.Size)} and {gene.Label} down to {Text(gene.G)}), "
+                + $"less than Tyrant's {Text(SizeLimit.LowestMin)}× limit; raise the adult size, the baby size or the size ranges.";
+        }
+    }
+
+    private static string Text(double value) => value.ToString("0.###", CultureInfo.InvariantCulture);
+
     private static (double, double)? Range(JsonElement root, string name) =>
         root.TryGetProperty(name, out var range) && range.ValueKind == JsonValueKind.Object
             && range.TryGetProperty("x", out var x) && x.TryGetDouble(out var min) && range.TryGetProperty("y", out var y) && y.TryGetDouble(out var max)
@@ -121,6 +187,8 @@ public static partial class SpeciesSizes
 
     private static OriginalSize Read(JsonElement root, SpeciesEntry? own)
     {
+        var id = root.TryGetProperty("speciesID", out var speciesId) && speciesId.ValueKind == JsonValueKind.String ? speciesId.GetString() ?? "" : "";
+        var shown = root.TryGetProperty("displayName", out var display) && display.ValueKind == JsonValueKind.String && display.GetString() is { Length: > 0 } d ? d : id;
         // A custom species may carry edits of these fields from before Size existed (animals.db); they still decide its size.
         var edits = new Dictionary<string, double>(StringComparer.Ordinal);
         foreach (var field in own?.Fields ?? [])
@@ -159,6 +227,10 @@ public static partial class SpeciesSizes
         float[]? size = null;
         if (root.TryGetProperty("animalLengthHeightWidthRaw", out var raw) && raw.ValueKind == JsonValueKind.Object)
             size = new[] { "x", "y", "z" }.Select(axis => raw.TryGetProperty(axis, out var a) ? (float)Value($"/animalLengthHeightWidthRaw/{axis}", a) : 0f).ToArray();
-        return new OriginalSize(SizeMath.Sample(curve.Select(k => k.Time), t => UnityCurve.Evaluate(curve, t)), skins, size);
+        return new OriginalSize(SizeMath.Sample(curve.Select(k => k.Time), t => UnityCurve.Evaluate(curve, t)), skins, size)
+        {
+            Name = own is { Name.Length: > 0 } ? own.Name : shown,
+            BaseName = shown,
+        };
     }
 }

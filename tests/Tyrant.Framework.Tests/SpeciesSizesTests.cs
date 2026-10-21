@@ -30,12 +30,12 @@ public class SpeciesSizesTests
         Assert.Equal((0.85, 0.1, 1.0, 1.1), (s.Adult, s.Baby, s.Male, s.Female));
         Assert.Equal([0.5, 3], s.Nursery!);
         Assert.Equal([0.85, 1.15], s.Breeding!);
-        Assert.Equal([0.05, 5], s.Limit!);
+        Assert.Equal([0.05, 5], s.Limit!); // an old file's limit is read (Check names it), never written again
         var again = SizeSettings.Parse(s.ToJson());
         Assert.Equal((s.Target, s.Adult, s.Baby, s.Male, s.Female), (again.Target, again.Adult, again.Baby, again.Male, again.Female));
         Assert.Equal(s.Nursery, again.Nursery!);
         Assert.Equal(s.Breeding, again.Breeding!);
-        Assert.Equal(s.Limit, again.Limit!);
+        Assert.Null(again.Limit);
         Assert.Equal("tyrannosaurus.json", SizeSettings.FileName("Tyrannosaurus"));
     }
 
@@ -55,8 +55,8 @@ public class SpeciesSizesTests
         Assert.DoesNotContain("nursery", s.ToJson());
         Assert.DoesNotContain("limit", s.ToJson());
 
-        // A file with only a range or a limit is not empty: it changes that species.
-        Assert.False(SizeSettings.Parse("""{ "format": 1, "target": "A", "limit": [0.05, 5] }""").IsEmpty);
+        // A file with only a range is not empty: it changes that species. One with only an old limit is: the limit is automatic now.
+        Assert.True(SizeSettings.Parse("""{ "format": 1, "target": "A", "limit": [0.05, 5] }""").IsEmpty);
         Assert.False(SizeSettings.Parse("""{ "format": 1, "target": "A", "nursery": [0.5, 3] }""").IsEmpty);
         Assert.True(SizeSettings.Parse("""{ "format": 1, "target": "A" }""").IsEmpty);
     }
@@ -102,13 +102,13 @@ public class SpeciesSizesTests
     }
 
     [Fact]
-    public void Limit_parses_and_round_trips()
+    public void An_old_limit_is_read_and_dropped_when_written()
     {
-        var s = SizeSettings.Parse("""{ "format": 1, "target": "A", "limit": [0.01, 20] }""");
+        var s = SizeSettings.Parse("""{ "format": 1, "target": "A", "adult": 2, "limit": [0.01, 20] }""");
 
         Assert.Equal([0.01, 20], s.Limit!);
-        Assert.Equal([0.01, 20], SizeSettings.Parse(s.ToJson()).Limit!);
-        Assert.Equal((0.01f, 20f), (SizeLimit.Of(s.Limit).Min, SizeLimit.Of(s.Limit).Max));
+        Assert.DoesNotContain("limit", s.ToJson());
+        Assert.Null(SizeSettings.Parse(s.ToJson()).Limit);
     }
 
     [Theory]
@@ -142,25 +142,17 @@ public class SpeciesSizesTests
     }
 
     [Fact]
-    public void The_widest_limit_wins_per_species()
+    public void Old_limits_are_ignored_in_game()
     {
         var a = Mod("mod-a", """{"format":1,"target":"Tyrannosaurus","limit":[0.02,5]}""");
         var b = Mod("mod-b", """{"format":1,"target":"tyrannosaurus","limit":[0.05,20],"nursery":[0.5,1.5]}""");
-        var c = Mod("mod-c", """{"format":1,"target":"Tyrannosaurus","limit":[0.04,3]}""");
-        var d = Mod("mod-d", """{"format":1,"target":"Allosaurus","limit":[0.05,3]}""");
 
-        var table = SizeTable.Build([a, b, c, d], out _);
+        var table = SizeTable.Build([a, b], out _);
 
-        Assert.Equal([0.02, 20], table.For("Tyrannosaurus")!.Limit!);
-        Assert.Equal((0.02f, 20f), (table.LimitOf("Tyrannosaurus").Min, table.LimitOf("Tyrannosaurus").Max));
-        Assert.Equal((0.05f, 3f), (table.LimitOf("Allosaurus").Min, table.LimitOf("Allosaurus").Max)); // a species' limit is its own
-        Assert.True(table.LimitOf("Spinosaurus").IsGame);
-        Assert.True(table.LimitOf(null).IsGame);
-        Assert.True(table.HasAny);
-        var none = SizeTable.Build([Mod("mod-e", null)], out _);
-        Assert.False(none.HasAny);
-        Assert.True(none.LimitOf("Tyrannosaurus").IsGame);
-        Assert.Equal((0.05f, 2f), (none.LimitOf("Tyrannosaurus").Min, none.LimitOf("Tyrannosaurus").Max));
+        Assert.Null(table.For("Tyrannosaurus")!.Limit); // the limit is automatic: derived from the sizes (SizePlan)
+        Assert.Equal([0.5, 1.5], table.For("Tyrannosaurus")!.Nursery!);
+        Assert.False(SizeTable.Build([a], out _).HasAny);
+        Assert.False(SizeTable.Build([Mod("mod-e", null)], out _).HasAny);
     }
 
     [Fact]
