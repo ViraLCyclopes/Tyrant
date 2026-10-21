@@ -384,7 +384,7 @@ Needs the game and a Tyrant Framework installed from this build. Steps marked **
 153. **(game)** Presets: open the Nursery on an Ouranosaurus, click **T**, **Whole species**, tab **Iridescence**. The **Preset** row
      lists the shimmering species by name (Microraptor, Velociraptor, Oviraptor, Edmontosaurus, … from the game's data). Pick
      **Microraptor** and **Apply**: the preview shimmers with Microraptor's blue sheen (on a first use the status line may say
-     *Loading Microraptor's look…* for a moment, then it applies), **Rainbow** shows **Species** ‹ Microraptor › and **Mask**
+     *Loading Microraptor's look…* for a moment, then it applies), **Shimmer colours** shows **Species** ‹ Microraptor › and **Mask**
      **Everywhere** (Microraptor's mask is painted for Microraptor's body),
      and the shaping shows Microraptor's numbers. Move **Strength**: it follows. **Save**, close the Nursery, place an
      Ouranosaurus: it shimmers. The species' `materials.json` has `"ramp": { "species": "Microraptor" }` and
@@ -403,3 +403,13 @@ Needs the game and a Tyrant Framework installed from this build. Steps marked **
      species' id in `materials.json` to `Microraptorr`: **Check** reports it is not in the game data. In the **Fur** group,
      **Start from a species…** ticks **Grow fur** and fills the fur settings. CLI:
      `tyrant mod materials <mod> <skin> --preset Microraptor --kind iridescence`, then `--show`: the same block.
+155. **(game)** Shimmer colours: open the editor on a placed animal, **This animal**, tab **Iridescence**, **On**. Under
+     **Shimmer colours** pick **Game's**, then **Colours**: a strip shows Microraptor's blues (`#39149c` → `#2e6be1`), two swatches, the colour
+     square and the hue strip. Press **-** once: one colour, a single tone; drag the square and the hue strip: the animal
+     follows smoothly and the swatch, strip and hex box follow. Type `#20c060` in the box and press Enter: it applies; type
+     `blue`: the box shows the colour again. **+** three times (four colours), click a swatch, change it. Shrink the window to
+     its smallest: the square still fits. **Save**, save the park, quit to the menu and load it: the animal has the four
+     colours, and `UserData/Tyrant/Looks/<save>.json` has `"ramp": { "stops": [4 colours] }`. **Thin film** then **Colours**
+     starts from the film's colours (8); **Reset** goes back. Do the same on **Whole skin** of a mod skin and **Save**: in
+     the app, that skin's material card shows the four colours in **Colours**. Give it 10 colours in the app and save: the
+     window shows *Colour 1 of 10*, **+** is off, and an edit there keeps all 10 in `materials.json`.
