@@ -9,9 +9,15 @@
   import OpenInBlender from '$lib/blender/OpenInBlender.svelte';
   import RecordTree from './RecordTree.svelte';
   import SizeCard from './SizeCard.svelte';
+  import SpeciesSoundsCard from './SpeciesSoundsCard.svelte';
+  import type { AddedSound } from '$lib/sounds/audio';
   import type { ModDoc } from './modDoc.svelte';
 
-  let { doc, onPrefab = () => {}, onAddSkin = () => {}, onOpenSkin = () => {} }: { doc: ModDoc; onPrefab?: (target: string) => void; onAddSkin?: (species: string) => void; onOpenSkin?: (id: string) => void } = $props();
+  let { doc, onPrefab = () => {}, onAddSkin = () => {}, onOpenSkin = () => {}, onAddSound = () => {}, onOpenSound = () => {} }: {
+    doc: ModDoc; onPrefab?: (target: string) => void; onAddSkin?: (species: string) => void; onOpenSkin?: (id: string) => void;
+    /** The species page's Sounds: + Add (the sound picker on this species) and Edit (a replacement's own page). */
+    onAddSound?: (species: string) => void; onOpenSound?: (sound: AddedSound) => void;
+  } = $props();
   const session = getSession();
   const tab = getTab();
   let database = $state<ModAnimalDatabase | null>(null);
@@ -241,6 +247,7 @@
       </div>
       <h3>Size</h3>
       <SizeCard {doc} target={animal.key} />
+      <SpeciesSoundsCard {doc} species={animal.key} onOpen={onOpenSound} onAdd={() => onAddSound(animal.key)} />
       <h3>Paleopedia photo</h3>
       <p class="hint">The picture in the Paleopedia and the Nursery's species panel. {animal.icon ? `Using ${animal.icon}.` : "Using the template's photo."} The game's are 512×256 PNGs.</p>
       <div class="toolbar">

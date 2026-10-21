@@ -629,6 +629,9 @@ Needs Tyrant Framework 0.1.0 or newer (Tyrant writes `requires.tyrant` for you w
     "species": "Carcharodontosaurus",
     "files": ["sounds/carch-call-1a2b3c4d.ogg", "sounds/carch-call-2-5e6f7a8b.ogg"],
     "volume": 0.9 },
+  { "event": "event:/AnimalFamily Master/Dinosaurs/Shared_TheropodLarge/_TheroLarge_Comp/Vox/TheroLarge_VoxSocialCall",
+    "species": "tyrant.carch-voice.anax",
+    "files": ["sounds/anax-call-3c4d5e6f.ogg"] },
   { "event": "event:/User Interface/Buttons/UI_Click", "files": ["sounds/click-9a8b7c6d.wav"] }
 ]
 ```
@@ -636,7 +639,7 @@ Needs Tyrant Framework 0.1.0 or newer (Tyrant writes `requires.tyrant` for you w
 | Field | Meaning |
 |---|---|
 | `event` | The game sound (an FMOD event path). Copy it from a species' **Sounds…** or **All sounds…** on the Assets tab, or from `tyrant sounds list`. |
-| `species` | Only this species hears the new sound (the exact species id, e.g. `Carcharodontosaurus`). |
+| `species` | Only this species hears the new sound: a game species id (the exact id, e.g. `Carcharodontosaurus`), or a custom species' `tyrant.<mod-id>.<species-id>` (this mod's or another mod's, e.g. `tyrant.carch-voice.anax`). |
 | `skin` | Only animals wearing this skin hear it: `<mod id>/<skin id>` for a Tyrant skin, `<species>/<skin name>` for a game skin (`Carcharodontosaurus/Alt 1`). Use `species` or `skin`, not both. |
 | `files` | One or more audio files in the mod: WAV, OGG, MP3 or FLAC (Tyrant checks the contents, not the name). With several, one is picked at random each time, never the same one twice in a row. |
 | `volume` | 0–2; 1 (the default) plays the file as it is. |
@@ -649,6 +652,12 @@ Needs Tyrant Framework 0.1.0 or newer (Tyrant writes `requires.tyrant` for you w
   shared call plays for a Carcharodontosaurus with its own call and for an Acrocanthosaurus at the same moment, each
   hears its own. Sounds the game plays in menus (the Nursery and Paleopedia calls) or without an animal can only be
   replaced for everyone; Check warns about a `species` or `skin` entry for one.
+- **A custom species** plays its template's sounds: one copied from Carcharodontosaurus uses Carcharodontosaurus' calls.
+  A `species` entry with its `tyrant.<mod-id>.<species-id>` (the second entry above) changes that species only; the
+  template, and every other species that shares the call, keeps its own. Check warns when a `species` entry names a sound
+  that species (for a custom species: its template) never plays. A custom species this mod does not have, or that another
+  mod Tyrant can see does not have, is an error; one from a mod Tyrant cannot see is a warning (it plays only when that mod
+  is installed).
 - **How it plays:** the game's sound is silenced and the file plays in its place, at the animal and in the game's own
   mixer, so the Sounds and Music sliders apply. A looping sound (breathing) loops the file until the game stops it; a
   one-shot plays the file to its end.

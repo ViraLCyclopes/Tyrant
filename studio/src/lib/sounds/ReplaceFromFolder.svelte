@@ -6,10 +6,11 @@
   /**
    * Replace from folder: a sound pack's files matched to this species' sounds by name ("AlloAnax_VoxAngry_03.wav" is take 3
    * of Angry), shown to tick before anything changes; onReplace saves the ticked ones in one edit, for the whole species or
-   * one of its skins (skin: its key, or null).
+   * one of its skins (skin: its key, or null). name: the species as shown (a custom species' display name).
    */
-  let { species, skins = [], onReplace }: {
+  let { species, name = species, skins = [], onReplace }: {
     species: string;
+    name?: string;
     skins?: { key: string; label: string }[];
     onReplace: (sounds: { event: string; files: string[] }[], skin: string | null) => Promise<boolean>;
   } = $props();
@@ -30,7 +31,7 @@
   );
 
   async function chooseFolder() {
-    const folder = await session.platform.pickFolder(`Sounds for ${species} (named like the game's, e.g. AlloAnax_VoxAngry_01.wav)`);
+    const folder = await session.platform.pickFolder(`Sounds for ${name} (named like the game's, e.g. AlloAnax_VoxAngry_01.wav)`);
     if (!folder) return;
     const result = await tab.safely(() => session.rpc.call('sounds.matchFolder', { folder, species }));
     if (!result) return;
@@ -53,7 +54,7 @@
   <button onclick={chooseFolder}>Replace from folder…</button>
   {#if match}
     {#if match.groups.length === 0}
-      <p class="hint">No file in that folder is named like one of {species}'s sounds.</p>
+      <p class="hint">No file in that folder is named like one of {name}'s sounds.</p>
     {:else}
       <table>
         <thead><tr><th></th><th>Files</th><th>Replaces</th></tr></thead>
@@ -82,7 +83,7 @@
       <label>
         Who hears them
         <select aria-label="Who hears them" bind:value={skin}>
-          <option value="">Every {species}</option>
+          <option value="">Every {name}</option>
           {#each skins as s (s.key)}<option value={s.key}>Only the {s.label} skin</option>{/each}
         </select>
       </label>

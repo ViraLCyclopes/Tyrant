@@ -178,7 +178,7 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
         MaterialProblems(mod, index, species, animalMaterialOf, errors, warnings);
         ModelProblems(mod, species, errors, warnings);
         RigProblems(mod, rigInfo, errors, warnings);
-        SoundProblems(mod, species, sounds, errors, warnings);
+        SoundProblems(mod, species, sounds, others, errors, warnings);
         PrefabProblems(mod, species, prefabFields, errors, warnings);
         SizeProblems(mod, species, sizeFacts, errors, warnings);
         var missing = index is null || pixelsOf is null ? [] : MissingCutouts(mod, index, species, warnings);
@@ -187,9 +187,14 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
 
     public const long LargeSoundBytes = 20L * 1024 * 1024;
 
-    /// <summary>Each sound replacement's files, scope and event (against the dump's sound lists and species when there is a dump).</summary>
-    private static void SoundProblems(ModProject mod, IReadOnlyList<SpeciesSkins>? species, SoundCatalog? sounds, List<string> errors, List<string> warnings)
+    /// <summary>
+    /// Each sound replacement's files, scope and event (against the dump's sound lists and species when there is a dump). A custom
+    /// species ("tyrant.&lt;mod&gt;.&lt;id&gt;", this mod's or another's) plays its template's sounds.
+    /// </summary>
+    private static void SoundProblems(ModProject mod, IReadOnlyList<SpeciesSkins>? species, SoundCatalog? sounds, OtherMods? others,
+        List<string> errors, List<string> warnings)
     {
+        string? TemplateOf(string id) => CustomSpeciesTemplate.Of(id, mod.Manifest, others?.Species);
         foreach (var sound in mod.Manifest.Sounds)
         {
             var label = $"Sound {sound.Event} {ModProject.ScopeText(sound.Species, sound.Skin)}";
@@ -224,8 +229,22 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
                     ? $"{label}: {sound.Event} is not one of the game's sounds, so it never plays; copy the name from a species' Sounds list or All sounds."
                     : $"{label}: {sound.Event} is not in the species sound lists. To check every game sound, on the Workspace tab click Run data dump once more.");
 
+            if (sounds?.Find(sound.Event) is { PerAnimal: true } played && sound.Species is { } hearer
+                && sounds.SoundsOf(hearer, TemplateOf) is { Sounds.Count: > 0 } plays
+                && !plays.Sounds.Any(s => string.Equals(s.Event, sound.Event, StringComparison.OrdinalIgnoreCase)))
+                warnings.Add(plays.Template is null
+                    ? $"{label}: {plays.SpeciesId} does not play {played.Name.ToLowerInvariant()}, so this replacement is never heard; pick one from its Sounds list."
+                    : $"{label}: {hearer} plays {plays.Template}'s sounds and {played.Name.ToLowerInvariant()} is not one of them, so this replacement is never heard; pick one from its Sounds list.");
+
+            if (sound.Species is { } customId && SpeciesUse.ModOf(customId) is { } owner && TemplateOf(customId) is null)
+            {
+                if (owner == mod.Id) errors.Add($"{label}: species \"{customId}\" is not one of this mod's species.");
+                else if (others is not null && others.Mods.ContainsKey(owner)) errors.Add($"{label}: species \"{customId}\" is not in mod '{owner}'.");
+                else warnings.Add($"{label}: it plays only when mod '{owner}', which adds {customId}, is installed.");
+            }
+
             if (species is null) continue;
-            if (sound.Species is { } speciesId)
+            if (sound.Species is { } speciesId && SpeciesUse.ModOf(speciesId) is null)
             {
                 var target = species.FirstOrDefault(s => string.Equals(s.SpeciesId, speciesId, StringComparison.OrdinalIgnoreCase));
                 if (target is null) warnings.Add($"{label}: species \"{speciesId}\" is not in the game data, so it never plays.");

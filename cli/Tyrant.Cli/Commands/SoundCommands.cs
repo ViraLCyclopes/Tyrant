@@ -15,7 +15,7 @@ public sealed class SoundsListCommand : Command<SoundsListCommand.Settings>
     public sealed class Settings : WorkspaceSettings
     {
         [CommandOption("--species <ID>")]
-        [Description("Only this species' sounds (its own and the ones it shares), e.g. Carcharodontosaurus.")]
+        [Description("Only this species' sounds (its own and the ones it shares), e.g. Carcharodontosaurus, or a custom species' tyrant.<mod-id>.<species-id> (its template's sounds).")]
         public string? Species { get; set; }
 
         [CommandOption("--search <TEXT>")]
@@ -25,18 +25,21 @@ public sealed class SoundsListCommand : Command<SoundsListCommand.Settings>
 
     public override int Execute(CommandContext context, Settings settings)
     {
-        var (ws, _) = CliServices.OpenWorkspace(settings);
+        var (ws, install) = CliServices.OpenWorkspace(settings);
         var catalog = SoundCatalog.Load(ws);
-        var sounds = settings.Species is { } species
-            ? catalog.ForSpecies(species).Where(s => settings.Search is null
+        var list = settings.Species is { } species ? SoundCli.SoundsOf(ws, install, catalog, species) : null;
+        var sounds = settings.Species is not null
+            ? (list?.Sounds ?? []).Where(s => settings.Search is null
                 || s.Event.Contains(settings.Search, StringComparison.OrdinalIgnoreCase) || s.Name.Contains(settings.Search, StringComparison.OrdinalIgnoreCase)).ToList()
             : catalog.Search(settings.Search, int.MaxValue);
+        if (list?.Template is { } template) Console.WriteLine($"{list.SpeciesId} plays {template}'s sounds (its template's).");
+        var self = list?.Template ?? list?.SpeciesId ?? settings.Species;
         foreach (var group in sounds.GroupBy(s => s.Group))
         {
             Console.WriteLine(group.Key);
             foreach (var s in group)
             {
-                var others = s.Species.Where(x => !string.Equals(x, settings.Species, StringComparison.OrdinalIgnoreCase)).ToList();
+                var others = s.Species.Where(x => !string.Equals(x, self, StringComparison.OrdinalIgnoreCase)).ToList();
                 var shared = others.Count == 0 ? "" : $"  (also {string.Join(", ", others.Take(4))}{(others.Count > 4 ? $" and {others.Count - 4} more" : "")})";
                 var length = s.LengthMs is { } ms && ms > 0 ? $"  {ms / 1000.0:0.0}s" : "";
                 Console.WriteLine($"  {s.Name,-28} {s.Event}{length}{shared}");
@@ -56,7 +59,7 @@ public class ModSoundSettings : ModSettings
     public string Event { get; set; } = "";
 
     [CommandOption("--species <ID>")]
-    [Description("The replacement only this species hears (with set-sound and remove-sound: the one to change).")]
+    [Description("The replacement only this species hears (with set-sound and remove-sound: the one to change): a game species id, or a custom species' tyrant.<mod-id>.<species-id>.")]
     public string? Species { get; set; }
 
     [CommandOption("--skin <KEY>")]
@@ -111,7 +114,7 @@ public sealed class ModReplaceSoundsCommand : Command<ModReplaceSoundsCommand.Se
         public string Folder { get; set; } = "";
 
         [CommandOption("--species <ID>")]
-        [Description("Match that species' own sounds; only it hears the replacements.")]
+        [Description("Match that species' own sounds; only it hears the replacements. A custom species (tyrant.<mod-id>.<species-id>) matches its template's sounds.")]
         public string? Species { get; set; }
 
         [CommandOption("--skin <KEY>")]
@@ -135,15 +138,16 @@ public sealed class ModReplaceSoundsCommand : Command<ModReplaceSoundsCommand.Se
             throw new TyrantException(TyrantErrorCode.ModInvalid, "--skin needs --species (the skin's species, whose sounds are matched), not --for-everyone.");
         var folder = Path.GetFullPath(settings.Folder);
         if (!Directory.Exists(folder)) throw new TyrantException(TyrantErrorCode.ModInvalid, $"The folder '{folder}' does not exist.");
-        var (ws, _) = CliServices.OpenWorkspace(settings);
+        var (ws, install) = CliServices.OpenWorkspace(settings);
         var catalog = SoundCatalog.Load(ws);
         IReadOnlyList<SoundInfo> sounds = catalog.Search(null, int.MaxValue);
         string? species = null;
         if (!settings.ForEveryone)
         {
-            species = catalog.SpeciesIdFor(settings.Species!)
+            var list = SoundCli.SoundsOf(ws, install, catalog, settings.Species!)
                 ?? throw new TyrantException(TyrantErrorCode.TargetNotFound, $"'{settings.Species}' has no sounds in the game data (see 'tyrant sounds list').");
-            sounds = catalog.ForSpecies(species).Where(s => s.PerAnimal).ToList();
+            species = list.SpeciesId;
+            sounds = list.Sounds.Where(s => s.PerAnimal).ToList();
         }
         var match = SoundFolderMatcher.Match(Directory.GetFiles(folder), sounds);
         var chosen = new List<SoundFiles>();
@@ -182,7 +186,7 @@ public sealed class ModSetSoundCommand : Command<ModSetSoundCommand.Settings>
         public double? AgePitch { get; set; }
 
         [CommandOption("--to-species <ID>")]
-        [Description("Move the replacement: only this species hears it.")]
+        [Description("Move the replacement: only this species hears it (a game species id or tyrant.<mod-id>.<species-id>).")]
         public string? ToSpecies { get; set; }
 
         [CommandOption("--to-skin <KEY>")]
@@ -226,6 +230,10 @@ public sealed class ModRemoveSoundCommand : Command<ModSoundSettings>
 
 internal static class SoundCli
 {
+    /// <summary>A game species' sounds, or a custom species' (of any mod Tyrant can see) its template's; null when unknown.</summary>
+    public static SpeciesSoundList? SoundsOf(Tyrant.Core.Workspaces.Workspace ws, Tyrant.Core.Install.GameInstall install, SoundCatalog catalog, string species) =>
+        catalog.SoundsOf(species, id => CustomSpeciesTemplate.Of(ws, () => new GameMods().List(install), id));
+
     /// <summary>One line for 'tyrant mod show'.</summary>
     public static string Line(SoundReplacement s) =>
         $"  {SoundCatalog.NameOf(s.Event),-24} {ModProject.ScopeText(s.Species, s.Skin)}  {s.Files.Count} file(s)  volume {s.Volume.ToString("0.##", CultureInfo.InvariantCulture)}"

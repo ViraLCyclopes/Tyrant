@@ -13,6 +13,9 @@ namespace Tyrant.Core.Sounds;
 /// </summary>
 public sealed record SoundInfo(string Event, string Name, string Group, IReadOnlyList<string> Species, int? LengthMs, bool? OneShot, bool PerAnimal);
 
+/// <summary>The sounds an animal of a species plays. Template: the game species a custom species copies (and whose sounds these are).</summary>
+public sealed record SpeciesSoundList(string SpeciesId, string? Template, IReadOnlyList<SoundInfo> Sounds);
+
 /// <summary>
 /// The game's sounds from the data dump: each species' audio databases and event fields (AnimalData), and every event the
 /// dumper listed from FMOD (data/audio/events.json, when the dump has it).
@@ -127,6 +130,17 @@ public sealed class SoundCatalog
     /// <summary>The species' sounds (its audio databases and its own event fields), by group then name; empty when unknown.</summary>
     public IReadOnlyList<SoundInfo> ForSpecies(string speciesId) =>
         _bySpecies.TryGetValue(speciesId, out var sounds) ? sounds : [];
+
+    /// <summary>
+    /// The sounds an animal of this species plays: a game species' own (by id in any case or asset key), a custom species'
+    /// ("tyrant.&lt;mod&gt;.&lt;id&gt;") its template's, which <paramref name="templateOf"/> names. Null when neither is known.
+    /// </summary>
+    public SpeciesSoundList? SoundsOf(string species, Func<string, string?> templateOf)
+    {
+        if (Mods.SpeciesUse.ModOf(species) is not null)
+            return templateOf(species) is { } template && SpeciesIdFor(template) is { } id ? new SpeciesSoundList(species, id, ForSpecies(id)) : null;
+        return SpeciesIdFor(species) is { } game ? new SpeciesSoundList(game, null, ForSpecies(game)) : null;
+    }
 
     /// <summary>The dump's species id for an id in any case or an asset key ("carcharodontosaurus"); null when unknown.</summary>
     public string? SpeciesIdFor(string idOrKey)

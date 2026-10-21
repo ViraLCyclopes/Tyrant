@@ -147,6 +147,24 @@ describe('ModEditor', () => {
     expect(await screen.findByRole('heading', { name: 'Sound: Social call' })).toBeInTheDocument();
   });
 
+  it("the species page's Sounds → + Add opens the sound picker on that species", async () => {
+    const key = 'tyrant.red-spot.anax';
+    const anax = { id: 'anax', key, base: 'Carcharodontosaurus', name: 'Anax', genus: 'A', epithet: 'anax', cost: null, stats: {}, inheritedCost: null, inheritedStats: {}, dataFields: [], localization: {}, icon: null };
+    const { rpc } = setup();
+    rpc.on('mods.species', () => ({ hasDump: true, species: [{ speciesId: 'Carcharodontosaurus', vivarium: false, skins: [] }] }))
+      .on('mods.animalDatabase', () => ({ animals: [anax], fields: [] }))
+      .on('mods.sizes', () => ({ target: key, file: 'anax.json', adult: null, baby: null, male: null, female: null, original: { adultLength: 12, babyShare: 0.25, skins: [], curve: [] }, finalAdultLength: 12, recordEdits: [], nursery: null, breeding: null, gameNursery: [0.925, 1.075], gameBreeding: [0.85, 1.15], name: 'Anax', baseName: 'Carcharodontosaurus' }))
+      .on('blender.status', () => ({ found: false, exe: null, version: null, supported: false, missingConfigured: null, addon: 'missing', addonInstalled: null, addonBundled: '0.1.0', problem: null }))
+      .on('mods.customSpecies', () => ({ species: [{ speciesId: key, name: 'Anax', modId: 'red-spot', modName: 'Carch pack', own: true, inWorkspace: true, installed: false, enabled: false, skins: [] }] }))
+      .on('sounds.forSpecies', () => ({ speciesId: key, template: 'Carcharodontosaurus', hasEventList: true, sounds: [] }));
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Species database' }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Add a sound for this species' }));
+
+    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Sounds of' })).toHaveValue(key));
+    expect(rpc.callsTo('sounds.forSpecies')[0]?.params).toEqual({ species: key });
+  });
+
   it('a folder of sounds can be for one of the species skins', async () => {
     const { rpc, platform } = setup();
     platform.folders.push('C:\\pack');

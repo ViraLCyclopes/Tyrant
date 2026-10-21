@@ -18,4 +18,8 @@ public static class SpeciesUse
         manifest.Skins.Select(s => ModOf(s.Species)).OfType<string>().Where(m => m != manifest.Id)
             .GroupBy(m => m, StringComparer.Ordinal).Select(g => new SpeciesUseCount(g.Key, g.Count()))
             .OrderBy(u => u.ModId, StringComparer.Ordinal).ToList();
+
+    /// <summary>True when a sound replacement is for another mod's custom species (Check then reads the other mods).</summary>
+    public static bool SoundsUseOtherMods(ModManifest manifest) =>
+        manifest.Sounds.Any(s => s.Species is { } species && ModOf(species) is { } owner && owner != manifest.Id);
 }

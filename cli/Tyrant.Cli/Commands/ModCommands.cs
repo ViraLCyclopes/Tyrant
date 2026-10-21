@@ -83,7 +83,7 @@ internal static class ModCli
         var index = TryIndex(ws);
         var species = TrySpecies(ws);
         var hasPrefabs = mod.PrefabTargets().Count > 0;
-        var others = m.Skins.Count > 0 ? OtherModSpecies.Load(ws, new GameMods().List(install), mod.Id) : null;
+        var others = m.Skins.Count > 0 || SpeciesUse.SoundsUseOtherMods(m) ? OtherModSpecies.Load(ws, new GameMods().List(install), mod.Id) : null;
         Func<string, IReadOnlyList<PrefabFieldInfo>?>? prefabFields = !hasPrefabs || index is null || species is null ? null : target =>
         {
             try

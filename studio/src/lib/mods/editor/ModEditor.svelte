@@ -37,6 +37,8 @@
   let failed = $state(false);
   let addingGroup = $state<string | null>(null);
   let addingSpecies = $state<string | null>(null);
+  /** The species the sound picker opens on (the species page's Sounds → + Add). */
+  let addingSoundFor = $state('');
   let removingSkin = $state<string | null>(null);
   /** The form shown instead of a page: + Add on Skins, Models or Sounds. */
   let adding = $state<'skin' | 'model' | 'sound' | 'texture' | 'prefab' | 'size' | 'material' | 'vanillaMaterial' | null>(null);
@@ -217,7 +219,7 @@
   <div class="editor">
     <ModSideList detail={doc.detail} check={doc.check} {selection} onSelect={(s) => { adding = null; selection = s; }}
       onAddSkin={(group) => { addingGroup = group; addingSpecies = null; adding = 'skin'; }}
-      onArrange={(build) => doc.edit('mods.arrangeSkins', (d) => { const order = build(d.skins); return order ? { order } : null; })} onRemoveSkin={(id) => (removingSkin = id)} onAddModel={() => (adding = 'model')} onAddSound={() => (adding = 'sound')}
+      onArrange={(build) => doc.edit('mods.arrangeSkins', (d) => { const order = build(d.skins); return order ? { order } : null; })} onRemoveSkin={(id) => (removingSkin = id)} onAddModel={() => (adding = 'model')} onAddSound={() => { addingSoundFor = ''; adding = 'sound'; }}
       onAddReplacement={() => (adding = 'texture')} onAddPrefab={() => (adding = 'prefab')} onAddSize={() => (adding = 'size')} onAddMaterial={() => (adding = 'material')} onAddVanillaMaterial={() => (adding = 'vanillaMaterial')} />
     <section class="page">
       {#if adding === 'skin'}
@@ -225,7 +227,7 @@
       {:else if adding === 'model'}
         <AddModel {doc} onDone={modelAdded} />
       {:else if adding === 'sound'}
-        <AddSound modId={doc.id} onDone={soundAdded} onReplaceMany={soundsReplaced} modSkins={doc.detail?.skins ?? []} />
+        <AddSound modId={doc.id} species={addingSoundFor} onDone={soundAdded} onReplaceMany={soundsReplaced} modSkins={doc.detail?.skins ?? []} />
       {:else if adding === 'texture'}
         <AddReplacement modId={doc.id} onDone={replacementAdded} />
       {:else if adding === 'prefab'}
@@ -240,7 +242,8 @@
         <ModDetailsPage {doc} />
       {:else if selection.kind === 'speciesDatabase'}
         <SpeciesDatabase {doc} onPrefab={(t) => (selection = { kind: 'prefab', target: t })} onOpenSkin={(id) => (selection = { kind: 'skin', id })}
-          onAddSkin={(k) => { addingGroup = null; addingSpecies = k; adding = 'skin'; }} />
+          onAddSkin={(k) => { addingGroup = null; addingSpecies = k; adding = 'skin'; }}
+          onAddSound={(k) => { addingSoundFor = k; adding = 'sound'; }} onOpenSound={(s) => (selection = { kind: 'sound', ...s })} />
       {:else if selectedSkin}
         <SkinPage {doc} skin={selectedSkin} onOpenModel={(target, skin) => (selection = { kind: 'model', target, skin })} />
       {:else if selectedModel}

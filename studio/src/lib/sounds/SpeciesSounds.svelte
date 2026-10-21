@@ -6,7 +6,7 @@
   import type { AddedSound } from './audio';
   import ReplaceSoundInMod from './ReplaceSoundInMod.svelte';
 
-  /** One species' sounds (its own and the ones it shares), by moment, each with Replace…. */
+  /** One species' sounds (its own and the ones it shares), by moment, each with Replace…; a custom species lists its template's. */
   let { speciesKey, displayName, modId, onAdded }: { speciesKey: string; displayName: string; modId?: string; onAdded?: (added: AddedSound) => void } =
     $props();
 
@@ -31,8 +31,11 @@
   {:else if !result.speciesId || !result.sounds.length}
     <p class="hint">The data dump has no sounds for {displayName}.</p>
   {:else}
+    {#if result.template}
+      <p class="hint">{displayName} plays {result.template}'s sounds (its template's); a replacement for {displayName} leaves {result.template}'s own.</p>
+    {/if}
     <p class="hint">
-      Shared sounds play for every species that uses them; Replace… can change one for {result.speciesId} only. Babies play the new sound
+      Shared sounds play for every species that uses them; Replace… can change one for {displayName} only. Babies play the new sound
       higher, as they do the game's.
     </p>
     {#each groups as [group, sounds] (group)}
@@ -43,7 +46,7 @@
             <li>
               <span class="name" title={sound.event}>{sound.name}</span>
               {#if sound.species.length > 1}<span class="shared">shared with {sound.species.length} species</span>{/if}
-              <ReplaceSoundInMod {sound} speciesId={result.speciesId} {modId} {onAdded} />
+              <ReplaceSoundInMod {sound} speciesId={result.speciesId} speciesName={displayName} {modId} {onAdded} />
             </li>
           {/each}
         </ul>

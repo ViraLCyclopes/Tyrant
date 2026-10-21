@@ -62,7 +62,7 @@ public sealed partial class ModsMethods
         var m = mod.Manifest;
         var index = TryIndex(ws);
         var species = TrySpecies(ws);
-        var others = m.Skins.Count > 0 ? OtherModSpecies.Load(ws, Game.List(install), m.Id) : null;
+        var others = m.Skins.Count > 0 || SpeciesUse.SoundsUseOtherMods(m) ? OtherModSpecies.Load(ws, Game.List(install), m.Id) : null;
         var rigSpecies = species is null ? null : ModProject.WithSpecies(species, m, others?.Species); // a skin's rig edit may be on a custom species
         Func<string, Tyrant.Core.Rigging.RigInfo?>? rigInfo = index is null || rigSpecies is null ? null : id =>
         {

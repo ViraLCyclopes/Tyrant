@@ -7,14 +7,16 @@
   /**
    * Replace… on a game sound: the user's audio files play instead of it, in a mod. From a species' list the replacement can be
    * that species' own (speciesId) or for every animal that uses the sound; from All sounds it is for everyone. modId: add to
-   * this mod (the mod editor) without asking which; onAdded: told which replacement was added.
+   * this mod (the mod editor) without asking which; onAdded: told which replacement was added. speciesName: the species as
+   * shown (a custom species' display name; its id is what the mod stores).
    */
   let {
     sound,
     speciesId = null,
+    speciesName = null,
     modId,
     onAdded,
-  }: { sound: SoundDto; speciesId?: string | null; modId?: string; onAdded?: (added: AddedSound) => void } = $props();
+  }: { sound: SoundDto; speciesId?: string | null; speciesName?: string | null; modId?: string; onAdded?: (added: AddedSound) => void } = $props();
 
   const NEW = '__new__';
   const session = getSession();
@@ -30,6 +32,7 @@
   /** Only sounds an animal plays can be one species' own; menu sounds are replaced for everyone. */
   const canBeUnique = $derived(speciesId !== null && sound.perAnimal);
   const unique = $derived(canBeUnique && onlySpecies);
+  const shownName = $derived(speciesName ?? speciesId);
 
   async function start() {
     open = true;
@@ -55,10 +58,10 @@
     const species = unique ? speciesId : null;
     const detail = await tab.safely(() => session.rpc.call('mods.replaceSound', { id, event: sound.event, files, species, skin: null }));
     if (!detail) return;
-    tab.info(`${sound.name} is now replaced in '${id}' ${species ? `for ${species}` : 'for everyone'}. Install it from the Mods tab.`);
+    tab.info(`${sound.name} is now replaced in '${id}' ${species ? `for ${shownName}` : 'for everyone'}. Install it from the Mods tab.`);
     const others = sound.species.filter((s) => s !== speciesId);
     if (!species && others.length)
-      tab.warn(`${others.slice(0, 5).join(', ')}${others.length > 5 ? ` and ${others.length - 5} more` : ''} ${others.length === 1 ? 'hears' : 'hear'} it too. Choose Only ${speciesId ?? 'one species'} to change it for one animal.`);
+      tab.warn(`${others.slice(0, 5).join(', ')}${others.length > 5 ? ` and ${others.length - 5} more` : ''} ${others.length === 1 ? 'hears' : 'hear'} it too. Choose Only ${shownName ?? 'one species'} to change it for one animal.`);
     open = false;
     files = [];
     onAdded?.({ event: sound.event, species, skin: null });
@@ -89,7 +92,7 @@
     {#if canBeUnique}
       <fieldset class="scope">
         <legend class="visually-hidden">Who hears it</legend>
-        <label><input type="radio" name="scope-{sound.event}" checked={onlySpecies} onchange={() => (onlySpecies = true)} /> Only {speciesId}</label>
+        <label><input type="radio" name="scope-{sound.event}" checked={onlySpecies} onchange={() => (onlySpecies = true)} /> Only {shownName}</label>
         <label><input type="radio" name="scope-{sound.event}" checked={!onlySpecies} onchange={() => (onlySpecies = false)} /> For every animal that uses it</label>
       </fieldset>
     {/if}
