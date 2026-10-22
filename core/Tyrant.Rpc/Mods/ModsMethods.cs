@@ -318,7 +318,7 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
 
     /// <summary>
     /// The model the skin wears in this mod (its own, else the mod's species replacement) at <paramref name="lod"/> (default the first; past the
-    /// last, the last); null when it is the game's or not built. <paramref name="strict"/> throws why it is not built instead of returning null.
+    /// last, the last; below the first, the first); null when it is the game's or not built. <paramref name="strict"/> throws why it is not built instead of returning null.
     /// </summary>
     private ModSkinOwnModel? OwnModelOf(ModProject mod, string species, string? skinId, int? lod = null, bool strict = false)
     {
@@ -327,7 +327,7 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
         {
             var preview = ModelPreview(new ModModelPreviewParams(mod.Id, species, skinId));
             // The game's animal-shader materials wear the skin's maps (the model page shows the game's own textures instead).
-            return preview.Lods.Count == 0 ? null : new ModSkinOwnModel(preview.Lods[Math.Min(lod ?? 0, preview.Lods.Count - 1)].File, preview.Materials.Select(m => m with { Skinnable = m.Animal }).ToList());
+            return preview.Lods.Count == 0 ? null : new ModSkinOwnModel(preview.Lods[Math.Clamp(lod ?? 0, 0, preview.Lods.Count - 1)].File, preview.Materials.Select(m => m with { Skinnable = m.Animal }).ToList());
         }
         catch (TyrantException) when (!strict)
         {

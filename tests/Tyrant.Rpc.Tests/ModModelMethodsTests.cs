@@ -166,6 +166,17 @@ public class ModModelMethodsTests
     }
 
     [Fact]
+    public async Task SkinModel_negative_lod_shows_the_first()
+    {
+        using var game = new FakeGame();
+        var (h, _) = await SkinWithTwoLods(game);
+
+        var model = await h.Call("mods.skinModel", new { id = "big-carch", skin = "spiked", sex = "male", lod = -1 });
+
+        Assert.EndsWith("lod0.glb", model.GetProperty("ownModel").GetProperty("file").GetString());
+    }
+
+    [Fact]
     public async Task SkinModel_strict_throws_the_build_reason()
     {
         using var game = new FakeGame();
