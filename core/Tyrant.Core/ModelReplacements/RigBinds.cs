@@ -16,19 +16,7 @@ public static class RigBinds
     {
         var binds = renderer.Mesh.BindPoses;
         if (rig is null || rig.Count == 0) return binds;
-        var index = new Dictionary<SkeletonNode, int>(ReferenceEqualityComparer.Instance);
-        for (var i = 0; i < renderer.Bones.Count && i < binds.Length; i++) index.TryAdd(renderer.Bones[i], i);
-        Matrix4x4.Invert(PrefabWorld(renderer.Owner), out var meshFromWorld);
-
-        // Bind worlds in mesh space (row vectors): skinned bones from their bind poses, the rest from the prefab's pose.
-        var world = new Dictionary<SkeletonNode, Matrix4x4>(ReferenceEqualityComparer.Instance);
-        foreach (var node in model.Root.DepthFirst())
-        {
-            if (index.TryGetValue(node, out var i) && Matrix4x4.Invert(binds[i], out var bound)) world[node] = bound;
-            else world[node] = node.Parent is { } parent && world.TryGetValue(parent, out var parentWorld)
-                ? Local(node) * parentWorld
-                : PrefabWorld(node) * meshFromWorld;
-        }
+        var world = GameWorlds(model, renderer);
 
         var edited = new Dictionary<SkeletonNode, Matrix4x4>(ReferenceEqualityComparer.Instance);
         var touched = new HashSet<SkeletonNode>(ReferenceEqualityComparer.Instance);
@@ -58,6 +46,60 @@ public static class RigBinds
         for (var i = 0; i < renderer.Bones.Count && i < result.Length; i++)
             if (touched.Contains(renderer.Bones[i]) && Matrix4x4.Invert(edited[renderer.Bones[i]], out var bind)) result[i] = bind;
         return result;
+    }
+
+    /// <summary>
+    /// The game's bind skeleton in the renderer's mesh space (row vectors): skinned bones from their bind poses, the rest from
+    /// the prefab's own transforms, the root at <c>P0(root) · G⁻¹</c> (G = <see cref="ExpectedFrame"/>), so the top skinned
+    /// bone's local is its prefab local without scale, as the framework composes an offset on it in game.
+    /// </summary>
+    internal static Dictionary<SkeletonNode, Matrix4x4> GameWorlds(PrefabModel model, RendererModel renderer)
+    {
+        var binds = renderer.Mesh.BindPoses;
+        var index = BoneIndex(renderer);
+        Matrix4x4.Invert(ExpectedFrame(model, renderer), out var unframe);
+        var world = new Dictionary<SkeletonNode, Matrix4x4>(ReferenceEqualityComparer.Instance);
+        foreach (var node in model.Root.DepthFirst())
+        {
+            if (index.TryGetValue(node, out var i) && Matrix4x4.Invert(binds[i], out var bound)) world[node] = bound;
+            else world[node] = node.Parent is { } parent && world.TryGetValue(parent, out var parentWorld)
+                ? Local(node) * parentWorld
+                : Matrix4x4.CreateScale(node.LocalScale) * unframe;
+        }
+        return world;
+    }
+
+    /// <summary>
+    /// G: the frame a plain Blender export of the prefab is in against the renderer's mesh (file world = game bind world · G),
+    /// from the game data alone: <c>B_r · NoScale(Local(r)) · P0(parent(r))</c> for the first top skinned bone r. P0 is the
+    /// prefab world with the root's position and rotation dropped, as GltfModelWriter writes it.
+    /// </summary>
+    internal static Matrix4x4 ExpectedFrame(PrefabModel model, RendererModel renderer)
+    {
+        var top = TopBones(renderer);
+        if (top.Count == 0) return Matrix4x4.Identity;
+        var r = top[0];
+        var i = BoneIndex(renderer)[r];
+        if (i >= renderer.Mesh.BindPoses.Length) return Matrix4x4.Identity;
+        var placed = r.Parent is { } parent ? NoScale(Local(r)) * P0(parent) : Matrix4x4.Identity;
+        return renderer.Mesh.BindPoses[i] * placed;
+    }
+
+    /// <summary>The skinned bones whose parent is not skinned, in the renderer's order (one on every game animal).</summary>
+    internal static IReadOnlyList<SkeletonNode> TopBones(RendererModel renderer)
+    {
+        var skinned = new HashSet<SkeletonNode>(renderer.Bones, ReferenceEqualityComparer.Instance);
+        var top = new List<SkeletonNode>();
+        foreach (var bone in renderer.Bones)
+            if ((bone.Parent is null || !skinned.Contains(bone.Parent)) && !top.Contains(bone, ReferenceEqualityComparer.Instance)) top.Add(bone);
+        return top;
+    }
+
+    private static Dictionary<SkeletonNode, int> BoneIndex(RendererModel renderer)
+    {
+        var index = new Dictionary<SkeletonNode, int>(ReferenceEqualityComparer.Instance);
+        for (var i = 0; i < renderer.Bones.Count && i < renderer.Mesh.BindPoses.Length; i++) index.TryAdd(renderer.Bones[i], i);
+        return index;
     }
 
     /// <summary>
@@ -99,7 +141,14 @@ public static class RigBinds
     private static Matrix4x4 Local(SkeletonNode n) =>
         Matrix4x4.CreateScale(n.LocalScale) * Matrix4x4.CreateFromQuaternion(n.LocalRotation) * Matrix4x4.CreateTranslation(n.LocalPosition);
 
-    private static Matrix4x4 PrefabWorld(SkeletonNode n) => n.Parent is null ? Local(n) : Local(n) * PrefabWorld(n.Parent);
+    /// <summary>The prefab world as the glTF writer writes it: the root keeps only its scale.</summary>
+    private static Matrix4x4 P0(SkeletonNode n) => n.Parent is null ? Matrix4x4.CreateScale(n.LocalScale) : Local(n) * P0(n.Parent);
+
+    internal static Matrix4x4 NoScale(Matrix4x4 m)
+    {
+        Matrix4x4.Decompose(m, out _, out var rotation, out var position);
+        return Matrix4x4.CreateFromQuaternion(rotation) * Matrix4x4.CreateTranslation(position);
+    }
 }
 
 /// <summary>Framework.Core's dependency-free rig types ↔ System.Numerics.</summary>
