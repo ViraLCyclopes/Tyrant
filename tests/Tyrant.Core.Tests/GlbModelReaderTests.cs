@@ -125,7 +125,7 @@ public class GlbModelReaderTests
         var lod1 = new RendererModel("Carch_LOD1", Renamed(prefab.Renderers[0].Mesh, "Carch_LOD1"), prefab.Renderers[0].Bones, prefab.Renderers[0].Owner);
         GltfModelWriter.WriteGlbs(prefab with { Renderers = [lod1, prefab.Renderers[0]] }, path);
 
-        var skeleton = GlbModelReader.ReadSkeleton(path);
+        var skeleton = GlbModelReader.ReadSkeleton(path, prefab);
 
         Assert.Equal(["Hip", "Tail"], skeleton.JointNames);
         var binds = prefab.Renderers[0].Mesh.BindPoses;
@@ -142,7 +142,7 @@ public class GlbModelReaderTests
         var lod1 = new RendererModel("Carch_LOD1", moved, prefab.Renderers[0].Bones, prefab.Renderers[0].Owner);
         GltfModelWriter.WriteGlbs(prefab with { Renderers = [prefab.Renderers[0], lod1] }, path);
 
-        var skeleton = GlbModelReader.ReadSkeleton(path);
+        var skeleton = GlbModelReader.ReadSkeleton(path, prefab);
 
         Assert.True(Near(Matrix4x4.CreateTranslation(0, -1, 0), skeleton.InverseBinds[1]));
         var warning = Assert.Single(skeleton.LodWarnings);
@@ -162,7 +162,7 @@ public class GlbModelReaderTests
         var horn = new RendererModel("Horn", ModelFixture.Triangle(name: "Horn"), [hornBase, hornTip], prefab.Root);
         GltfModelWriter.WriteGlbs(prefab with { Renderers = [horn, prefab.Renderers[0]] }, path);
 
-        var skeleton = GlbModelReader.ReadSkeleton(path, new HashSet<string>(["Hip", "Tail"], StringComparer.Ordinal));
+        var skeleton = GlbModelReader.ReadSkeleton(path, prefab);
 
         Assert.Equal(["Hip", "Tail"], skeleton.JointNames);
     }

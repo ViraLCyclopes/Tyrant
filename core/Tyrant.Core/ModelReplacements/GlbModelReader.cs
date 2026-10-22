@@ -64,18 +64,27 @@ public static partial class GlbModelReader
     }
 
     /// <summary>
-    /// LOD 0's skin: the mesh ModelBuilder.PickMeshes keeps (on <paramref name="gameBones"/> when given, else the first), its
-    /// joints and inverse binds. Other LODs whose bones in common sit elsewhere are noted; the rig edit is read from LOD 0.
+    /// LOD 0's skin, read for <paramref name="game"/>: the mesh on the game's skeleton (LOD 0 renderer's bones), as
+    /// ModelBuilder.PickMeshes keeps it, its joints and inverse binds. Other LODs whose bones in common sit elsewhere are
+    /// noted; the rig edit is read from LOD 0.
     /// </summary>
-    public static ModelSkeleton ReadSkeleton(string glbPath, IReadOnlySet<string>? gameBones = null)
+    public static ModelSkeleton ReadSkeleton(string glbPath, PrefabModel game) =>
+        ReadSkeleton(glbPath, ModelBuilder.GameRenderers(game) is [var renderer, ..]
+            ? renderer.Bones.Select(b => b.Name).ToHashSet(StringComparer.Ordinal)
+            : new HashSet<string>(StringComparer.Ordinal));
+
+    internal static ModelSkeleton ReadSkeleton(string glbPath, IReadOnlySet<string> gameBones)
     {
         var meshes = Read(glbPath);
-        var picked = gameBones is null
-            ? meshes.GroupBy(m => m.Lod).Select(g => g.First()).ToList()
-            : ModelBuilder.PickMeshes(meshes, gameBones, [], []);
+        var picked = ModelBuilder.PickMeshes(meshes, gameBones, [], []);
         var lowest = meshes[0].Lod;
+        // When PickMeshes cannot choose (two meshes on the game's skeleton: an accessory skinned to a few of its bones), the
+        // one with the most game bones is the model.
         var main = picked.FirstOrDefault(m => m.Lod == lowest)
-            ?? meshes.Where(m => m.Lod == lowest).MaxBy(m => m.JointNames.Count(j => gameBones?.Contains(j) ?? true) / (float)Math.Max(1, m.JointNames.Length))!;
+            ?? meshes.Where(m => m.Lod == lowest)
+                .OrderByDescending(m => m.JointNames.Count(gameBones.Contains))
+                .ThenByDescending(m => m.JointNames.Count(gameBones.Contains) / (float)Math.Max(1, m.JointNames.Length))
+                .First();
 
         var warnings = new List<string>();
         var lod0 = new Dictionary<string, Matrix4x4>(StringComparer.Ordinal);

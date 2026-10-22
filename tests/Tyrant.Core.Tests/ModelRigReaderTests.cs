@@ -117,7 +117,7 @@ public class ModelRigReaderTests
         return path;
     }
 
-    private static ModelSkeleton Skeleton(string glb) => GlbModelReader.ReadSkeleton(glb);
+    private static ModelSkeleton Skeleton(string glb, PrefabModel game) => GlbModelReader.ReadSkeleton(glb, game);
 
     private static float Angle(Quaternion q) => 2 * MathF.Atan2(new Vector3(q.X, q.Y, q.Z).Length(), MathF.Abs(q.W)) / Degrees;
 
@@ -139,7 +139,7 @@ public class ModelRigReaderTests
     {
         var game = Game();
 
-        var reading = ModelRigReader.Read(Skeleton(Export(game, R())), game, saved: null, rigFile: null, "Fixture");
+        var reading = ModelRigReader.Read(Skeleton(Export(game, R()), game), game, saved: null, rigFile: null, "Fixture");
 
         Assert.Equal(RigSource.Bones, reading.Source);
         AssertRig(R(), reading.Rig);
@@ -152,7 +152,7 @@ public class ModelRigReaderTests
         var game = Game();
         var rig = Rig(Move("MainBone", 0, 0.1f, 0));
 
-        var reading = ModelRigReader.Read(Skeleton(Export(game, rig)), game, null, null, "Fixture");
+        var reading = ModelRigReader.Read(Skeleton(Export(game, rig), game), game, null, null, "Fixture");
 
         Assert.Equal(RigSource.Bones, reading.Source);
         AssertRig(rig, reading.Rig);
@@ -163,7 +163,7 @@ public class ModelRigReaderTests
     {
         var game = Game();
 
-        var reading = ModelRigReader.Read(Skeleton(Export(game, null)), game, null, null, "Fixture");
+        var reading = ModelRigReader.Read(Skeleton(Export(game, null), game), game, null, null, "Fixture");
 
         Assert.Equal(RigSource.GameSkeleton, reading.Source);
         Assert.Empty(reading.Rig);
@@ -176,7 +176,7 @@ public class ModelRigReaderTests
         var game = Game();
         var rig = Rig(Move("Neck2", 0.5f * ModelRigReader.MoveTolerance, 0, 0), Turn("Tail3", Vector3.UnitX, 0.5f * ModelRigReader.TurnToleranceDegrees));
 
-        var reading = ModelRigReader.Read(Skeleton(Export(game, rig)), game, null, null, "Fixture");
+        var reading = ModelRigReader.Read(Skeleton(Export(game, rig), game), game, null, null, "Fixture");
 
         Assert.Equal(RigSource.GameSkeleton, reading.Source);
         Assert.Empty(reading.Rig);
@@ -196,7 +196,7 @@ public class ModelRigReaderTests
     {
         var game = Game();
         var saved = WithScaledTail();
-        var file = Skeleton(Export(game, saved));
+        var file = Skeleton(Export(game, saved), game);
 
         var reading = ModelRigReader.Read(file, game, saved, rigFile: null, "Fixture");
 
@@ -213,7 +213,7 @@ public class ModelRigReaderTests
         var rigFile = WithScaledTail();
         var saved = Rig(Turn("Head", Vector3.UnitX, 30));
 
-        var reading = ModelRigReader.Read(Skeleton(Export(game, rigFile)), game, saved, rigFile, "Fixture", "Fixture.glb.rig.json");
+        var reading = ModelRigReader.Read(Skeleton(Export(game, rigFile), game), game, saved, rigFile, "Fixture", "Fixture.glb.rig.json");
 
         Assert.Equal(RigSource.RigFile, reading.Source);
         Assert.Same(rigFile, reading.Rig);
@@ -227,7 +227,7 @@ public class ModelRigReaderTests
         var game = Game();
         var rigFile = Rig(Turn("Head", Vector3.UnitX, 30));
 
-        var reading = ModelRigReader.Read(Skeleton(Export(game, R())), game, null, rigFile, "Fixture", "Fixture.glb.rig.json");
+        var reading = ModelRigReader.Read(Skeleton(Export(game, R()), game), game, null, rigFile, "Fixture", "Fixture.glb.rig.json");
 
         Assert.Equal(RigSource.Bones, reading.Source);
         AssertRig(R(), reading.Rig);
@@ -242,7 +242,7 @@ public class ModelRigReaderTests
         var saved = WithScaledTail();
         var rig = Rig(Turn("Head", Vector3.UnitX, 30));
 
-        var reading = ModelRigReader.Read(Skeleton(Export(game, rig)), game, saved, null, "Fixture");
+        var reading = ModelRigReader.Read(Skeleton(Export(game, rig), game), game, saved, null, "Fixture");
 
         Assert.Equal(RigSource.Bones, reading.Source);
         AssertRig(rig, reading.Rig);
@@ -256,7 +256,7 @@ public class ModelRigReaderTests
         var game = Game();
         var rig = Rig(("Tail1", Vector3.Zero, Quaternion.Identity, 1.3f));
 
-        var file = Skeleton(Export(game, rig));
+        var file = Skeleton(Export(game, rig), game);
         var reading = ModelRigReader.Read(file, game, null, null, "Fixture");
 
         Assert.True(ModelRigReader.Matches(file, game, rig)); // the file built for the scaled rig edit still matches it
@@ -276,7 +276,7 @@ public class ModelRigReaderTests
     {
         var game = Game();
 
-        var reading = ModelRigReader.Read(Skeleton(Export(game, R(), leaveOut: "Tail2")), game, null, null, "Fixture");
+        var reading = ModelRigReader.Read(Skeleton(Export(game, R(), leaveOut: "Tail2"), game), game, null, null, "Fixture");
 
         Assert.Equal(RigSource.Bones, reading.Source);
         AssertRig(R(), reading.Rig);
@@ -298,10 +298,26 @@ public class ModelRigReaderTests
         var path = TempGlb();
         GltfModelWriter.WriteGlb(game, file, path);
 
-        var reading = ModelRigReader.Read(Skeleton(path), game, null, null, "Fixture");
+        var reading = ModelRigReader.Read(Skeleton(path, game), game, null, null, "Fixture");
 
         Assert.Equal(RigSource.GameSkeleton, reading.Source);
         Assert.Empty(reading.Warnings);
+    }
+
+    [Fact]
+    public void The_main_meshs_skeleton_is_read_when_an_accessory_comes_first_in_the_file()
+    {
+        // Eyes skinned to two of the game's bones, first in the file, placed where the main mesh's bones are not.
+        var game = Game();
+        var renderer = Renderer(game);
+        var eyes = new RendererModel("Eyes", ModelFixture.Triangle(name: "Eyes"), [.. renderer.Bones.Where(b => b.Name is "Neck3" or "Head")], renderer.Owner);
+        var path = TempGlb();
+        GltfModelWriter.WriteGlb(game, [eyes, renderer], path);
+
+        var reading = ModelRigReader.Read(Skeleton(path, game), game, null, null, "Fixture");
+
+        Assert.Equal(RigSource.GameSkeleton, reading.Source);
+        Assert.Empty(reading.Warnings); // no bones "missing": the eyes are not the model
     }
 
     [Fact]
@@ -312,7 +328,7 @@ public class ModelRigReaderTests
         var rig = Rig([.. turned.Select(b => Turn(b, Vector3.UnitZ, 20))]);
         rig["Hip"] = rig["Hip"] with { Move = new RigVector3(0, 0.3f, 0) };
 
-        var reading = ModelRigReader.Read(Skeleton(Export(game, rig)), game, null, null, "Tyrannosaurus");
+        var reading = ModelRigReader.Read(Skeleton(Export(game, rig), game), game, null, null, "Tyrannosaurus");
 
         Assert.Equal(RigSource.Bones, reading.Source);
         Assert.Equal(["This model's skeleton is very different from Tyrannosaurus's (12 bones moved, up to 30 cm): was it exported from another species' project?"],
@@ -320,7 +336,7 @@ public class ModelRigReaderTests
 
         // Fewer than 10 bones turned is a rig edit, however large a share of the skeleton.
         var fewer = Rig([.. turned.Take(9).Select(b => Turn(b, Vector3.UnitZ, 20))]);
-        Assert.Empty(ModelRigReader.Read(Skeleton(Export(game, fewer)), game, null, null, "Tyrannosaurus").Warnings);
+        Assert.Empty(ModelRigReader.Read(Skeleton(Export(game, fewer), game), game, null, null, "Tyrannosaurus").Warnings);
     }
 
     [Fact]
@@ -333,8 +349,8 @@ public class ModelRigReaderTests
         var rig = R();
         rig["MainBone"] = new RigOffset { Move = new RigVector3(0, 0, 0.1f), Rotate = RigQuaternion.Identity, Scale = RigVector3.One };
 
-        var reading = ModelRigReader.Read(Skeleton(Export(game, rig, k)), game, null, null, "Fixture");
-        var unedited = ModelRigReader.Read(Skeleton(Export(game, null, k)), game, null, null, "Fixture");
+        var reading = ModelRigReader.Read(Skeleton(Export(game, rig, k), game), game, null, null, "Fixture");
+        var unedited = ModelRigReader.Read(Skeleton(Export(game, null, k), game), game, null, null, "Fixture");
 
         Assert.Equal(RigSource.Bones, reading.Source);
         AssertRig(rig, reading.Rig);
