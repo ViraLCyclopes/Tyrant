@@ -434,6 +434,12 @@ namespace Tyrant.Framework
             Apply(animal, fromHook: true);
         }
 
+        /// <summary>
+        /// After a Tyrant skin's PNGs went onto the animal (AnimalTexturePatch, which runs after the game's variation hook): the
+        /// look is written again so its fur masks win over the skin's.
+        /// </summary>
+        public static void AfterSkinTextures(object animal) => AfterVariation(new[] { animal });
+
         // __args[0]: the AnimalGrowthFlags; only a Material update writes _IridescenceStrength (the rest is bones and shapes).
         private static void AfterGrowth(object __instance, object[] __args)
         {
@@ -1165,13 +1171,14 @@ namespace Tyrant.Framework
 
         /// <summary>
         /// True when the game gives this age a fur mask of its own: its skin data names a fur map (CalculateKeywords' test) and
-        /// the block holds a mask that is not the blank FurMaskEmpty (AnimalVisuals' test). Grow fur leaves such a mask alone. A
-        /// mask in the block without a map is another skin's (the Nursery reuses one animal), so it does not count.
+        /// the block holds a mask that is not the blank FurMaskEmpty (AnimalVisuals' test), nor a skin's mask with no red (a
+        /// starting skin's copy of a furless template's). Grow fur leaves such a mask alone. A mask in the block without a map
+        /// is another skin's (the Nursery reuses one animal), so it does not count.
         /// </summary>
         private static bool GameHasFur(Members members, object animal, Written record, string property, string mapField)
         {
             var texture = Present(GameTexture(record, property));
-            if (texture == null || texture.name == FurMaskEmpty) return false;
+            if (texture == null || texture.name == FurMaskEmpty || TextureCache.HasNoFur(texture)) return false;
             var data = members.OwnSkinVariationData?.GetValue(animal, null);
             var field = data == null ? null : FieldOf(data, mapField);
             if (field == null) return true; // the skin data cannot be read: the block alone tells

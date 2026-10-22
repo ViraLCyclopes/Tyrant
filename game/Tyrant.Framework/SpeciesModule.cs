@@ -18,6 +18,9 @@ namespace Tyrant.Framework
         private static readonly HashSet<string> Ids = new HashSet<string>(StringComparer.Ordinal);
         /// <summary>Each added species' template: it is unlocked when its template is.</summary>
         private static readonly Dictionary<string, string> Templates = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        /// <summary>A custom species' template (the vanilla species it was made from); any other id is returned as it is.</summary>
+        public static string TemplateOf(string species) => Templates.TryGetValue(species, out var template) ? template : species;
         /// <summary>Each added species' scientific name, its place in the game's alphabetical animal list (<see cref="NurseryOrder"/>).</summary>
         private static readonly Dictionary<string, string> SortNames = new Dictionary<string, string>(StringComparer.Ordinal);
         private static MethodInfo? _isUnlocked;
