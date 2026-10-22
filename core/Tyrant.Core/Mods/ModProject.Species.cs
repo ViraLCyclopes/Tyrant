@@ -76,6 +76,9 @@ public sealed partial class ModProject
             field.Value = pair.Value;
             try { field.Validate(); }
             catch (ManifestException ex) { throw new TyrantException(TyrantErrorCode.ModInvalid, ex.Message); }
+            if (SpeciesDatabase.IsWholeNumberField(field.Path)
+                && !int.TryParse(field.Value, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out _))
+                throw new TyrantException(TyrantErrorCode.ModInvalid, $"{field.Path}: a group size must be a whole number of 0 or more.");
         }
         Manifest.Species[index] = new SpeciesEntry
         {

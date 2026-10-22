@@ -1,3 +1,4 @@
+using Tyrant.Core.Errors;
 using Tyrant.Core.Install;
 using Tyrant.Core.Mods;
 using Tyrant.Core.Workspaces;
@@ -38,6 +39,37 @@ public class SpeciesFieldRowsTests
         Assert.Equal("3", merged[2].TemplateValue);
         Assert.True(merged[2].Editable);
         Assert.NotSame(NewTemplate[1], merged[1]);
+    }
+
+    [Fact]
+    public void Group_sizes_already_partly_stored_are_kept_and_only_the_missing_rows_are_added()
+    {
+        var stored = OldTemplate.Select(f => f.Copy()).Append(Row("/brain/social/adult/socialMaleCountRange/x", "number", "2")).ToList();
+
+        var merged = SpeciesDatabase.FillEmptyObjects(stored, NewTemplate);
+
+        Assert.Equal("2", merged.Single(f => f.Path == "/brain/social/adult/socialMaleCountRange/x").Value);
+        Assert.Single(merged, f => f.Path == "/brain/social/adult/socialMaleCountRange/y");
+        Assert.DoesNotContain(merged, f => f.Path == "/brain/social/adult/socialMaleCountRange");
+    }
+
+    [Theory]
+    [InlineData("2.5")]
+    [InlineData("-1")]
+    [InlineData("1e9")]
+    public void A_group_size_must_be_a_whole_number_the_game_can_hold(string value)
+    {
+        using var game = new FakeGame();
+        var ws = Workspace.Create(Path.Combine(game.LibraryRoot, "workspace"), new GameInstall(game.Root, null));
+        var mod = ModProject.Create(ws, "animal-pack", null, null);
+        var template = new SpeciesTemplateStats(null, new Dictionary<string, double>()) { Fields = NewTemplate };
+        var entry = mod.AddSpecies([ModSpeciesTests.Template()], "new-animal", "Allosaurus Anax", "Animal", "Example", "animal", templateStats: template);
+
+        var ex = Assert.Throws<TyrantException>(() => mod.SetSpecies(entry.Id, entry.Name, entry.Genus, entry.Epithet, entry.Cost, entry.Stats,
+            new Dictionary<string, string> { ["/brain/social/adult/socialMaleCountRange/y"] = value }, template));
+        Assert.Contains("whole number", ex.Message);
+        mod.SetSpecies(entry.Id, entry.Name, entry.Genus, entry.Epithet, entry.Cost, entry.Stats,
+            new Dictionary<string, string> { ["/brain/social/adult/socialMaleCountRange/y"] = "6" }, template);
     }
 
     [Fact]

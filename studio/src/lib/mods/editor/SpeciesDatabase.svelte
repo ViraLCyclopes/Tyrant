@@ -124,7 +124,8 @@
   const inheritedStats = $derived<Record<string, number>>(creating ? (templateStats?.stats ?? {}) : (animal?.inheritedStats ?? {}));
 
   const validId = $derived(/^[a-z0-9](?:[a-z0-9-]{1,62})[a-z0-9]$/.test(speciesId));
-  const canSave = $derived(!!name.trim() && !!genus.trim() && !!epithet.trim() && (!creating || (validId && !!template && !(choice.kind === 'png' && !choice.male))));
+  let socialValid = $state(true);
+  const canSave = $derived((creating || socialValid) && !!name.trim() && !!genus.trim() && !!epithet.trim() && (!creating || (validId && !!template && !(choice.kind === 'png' && !choice.male))));
   /** This mod's starting skin of the shown species, when it has one. */
   const startingSkin = $derived(animal?.startingSkinId ? doc.detail?.skins.find((s) => s.id === animal.startingSkinId) : undefined);
 
@@ -253,7 +254,7 @@
           {/each}
         </div>
         {#if !creating}
-          <SocialCard fields={animal?.dataFields ?? []} bind:values={dataValues} />
+          <SocialCard fields={animal?.dataFields ?? []} bind:values={dataValues} bind:valid={socialValid} />
           <section class="texts" aria-label="Paleopedia text">
             <h3>Paleopedia text</h3>
             <p class="hint">What the species' Paleopedia page says. Every language without its own text uses the English, so write English first and translate later.</p>
