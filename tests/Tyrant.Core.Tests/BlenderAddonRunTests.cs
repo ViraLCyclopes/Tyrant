@@ -359,6 +359,48 @@ public class BlenderAddonRunTests(RealGameIndex real, RigReadWorkspace rigRead) 
         }
     }
 
+    /// <summary>
+    /// The add-on's Export model for Tyrant… (export_model_run.py) on a rig-edited project, scale included: each format is
+    /// read back from its .rig.json, as the send rig edit.
+    /// </summary>
+    [SkippableTheory]
+    [Trait("Category", "Integration")]
+    [InlineData("glb")]
+    [InlineData("fbx")]
+    public void An_exported_model_brings_its_rig_file_with_scale(string format)
+    {
+        SkipWithoutTheRealGame();
+        const string species = "Carcharodontosaurus";
+        var dir = rigRead.Exports(species + " export", () =>
+        {
+            var ws = RealWorkspace();
+            var project = BlenderProjectWriter.Write(new BlenderOpenRequest(species, null, null, true, false), ws, real.Install, real.Index,
+                SpeciesSkinsReader.Load(ws), new BundleAssetReader(), "tyrant.exe").ProjectFile;
+            var exportDir = Path.Combine(Path.GetDirectoryName(project)!, "export-model");
+            var run = RunPython("export_model_run.py", project, exportDir);
+            Assert.True(run.ExitCode == 0 && run.Output.Contains("EXPORTMODEL"), run.Output[^Math.Min(4000, run.Output.Length)..]);
+            return exportDir;
+        });
+        var mod = ModProject.Create(RealWorkspace(), "rigread-" + Guid.NewGuid().ToString("N")[..8], null, null);
+
+        var preview = PreviewRig(mod, species, Path.Combine(dir, "model." + format));
+
+        Assert.Equal(RigSource.RigFile, preview.Reading.Source);
+        Assert.True(preview.Changes);
+        var sent = RigEdit.Parse(Json.Parse(File.ReadAllText(Path.Combine(dir, "unity_rig.json"))), "unity_rig.json");
+        Assert.Equal(sent.Keys.Order(), preview.Reading.Rig.Keys.Order());
+        foreach (var (bone, want) in sent)
+        {
+            var got = preview.Reading.Rig[bone];
+            Assert.True(RigVector3.Distance(want.Move, got.Move) <= ModelRigReader.MoveTolerance, $"{bone}: move {got.Move} for {want.Move}");
+            var difference = got.Rotate.ToNumerics() * Quaternion.Conjugate(want.Rotate.ToNumerics());
+            var turned = 2 * MathF.Atan2(new Vector3(difference.X, difference.Y, difference.Z).Length(), MathF.Abs(difference.W)) * 180 / MathF.PI;
+            Assert.True(turned <= ModelRigReader.TurnToleranceDegrees, $"{bone}: rotate {got.Rotate} for {want.Rotate}");
+            Assert.True(RigVector3.Distance(want.Scale, got.Scale) <= 1e-4f, $"{bone}: scale {got.Scale} for {want.Scale}");
+        }
+        Assert.Contains(sent.Values, o => RigVector3.Distance(o.Scale, RigVector3.One) > 0.1f); // the scaled bone is in the edit
+    }
+
     [SkippableFact]
     [Trait("Category", "Integration")]
     public void An_fbx_exported_with_blender_defaults_reads_the_same_rig_edit()

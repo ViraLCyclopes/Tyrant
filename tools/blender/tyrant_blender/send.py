@@ -27,8 +27,8 @@ class SendError(Exception):
     pass
 
 
-def export(armature, path):
-    """Writes the .glb Tyrant builds the model from: adult, rest pose, deforming bones only (Tyrant's IK bones stay out),
+def export(armature, path, fmt="glb"):
+    """Writes the .glb Tyrant builds (fmt "fbx" writes an .fbx of the same objects and state, for Export model for Tyrant) the model from: adult, rest pose, deforming bones only (Tyrant's IK bones stay out),
     materials as names and viewport colours only (Tyrant matches them by name; placeholder mode drops the names). Hidden
     objects go too (hidden only for the export's length), and at the object's own scale: the size Growth shows is not sent.
     Your pose and the Growth shown are as before afterwards."""
@@ -37,13 +37,13 @@ def export(armature, path):
     growth.set_growth(armature, 1.0)
     growth.hide_size(armature)
     try:
-        _export(armature, path)
+        _export(armature, path, fmt)
     finally:
         armature.tyrant_growth = shown
         growth.set_growth(armature, shown)
 
 
-def _export(armature, path):
+def _export(armature, path, fmt="glb"):
     """The export itself, at adult (see export)."""
     objects = sendable(armature)
     view_layer = bpy.context.view_layer
@@ -70,10 +70,18 @@ def _export(armature, path):
         for obj in view_layer.objects:
             obj.select_set(obj in objects)
         view_layer.objects.active = armature
-        bpy.ops.export_scene.gltf(filepath=path, export_format="GLB", use_selection=True, export_skins=True, export_morph=True,
-                                  export_morph_normal=True, export_animations=False, export_materials="VIEWPORT", export_yup=True,
-                                  export_rest_position_armature=True, export_apply=False,
-                                  export_def_bones=True)
+        if fmt == "fbx":
+            # Blender's defaults, as measured to read back right through Tyrant's FBX reader (leaf bones kept: it ignores them).
+            bpy.ops.export_scene.fbx(filepath=path, use_selection=True, object_types={"ARMATURE", "MESH"},
+                                     use_armature_deform_only=False, add_leaf_bones=True, primary_bone_axis="Y",
+                                     secondary_bone_axis="X", axis_forward="-Z", axis_up="Y", global_scale=1.0,
+                                     apply_unit_scale=True, apply_scale_options="FBX_SCALE_NONE", bake_space_transform=False,
+                                     bake_anim=False, use_mesh_modifiers=False)
+        else:
+            bpy.ops.export_scene.gltf(filepath=path, export_format="GLB", use_selection=True, export_skins=True, export_morph=True,
+                                      export_morph_normal=True, export_animations=False, export_materials="VIEWPORT", export_yup=True,
+                                      export_rest_position_armature=True, export_apply=False,
+                                      export_def_bones=True)
     finally:
         for obj in view_layer.objects:
             obj.select_set(obj in selected)
