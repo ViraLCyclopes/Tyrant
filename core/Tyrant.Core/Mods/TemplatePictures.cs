@@ -82,7 +82,7 @@ public static class TemplatePictures
             throw new TyrantException(TyrantErrorCode.AssetNotFound, $"The game data gives {species} no {Label(kind)} ({field} is empty).");
         }
         throw new TyrantException(TyrantErrorCode.TargetNotFound,
-            $"No species '{speciesId}' in the game data dump; check the name with 'tyrant species list', or run the data dump again.");
+            $"No species '{speciesId}' in the game data dump; check the name on the Species tab (or 'tyrant species list'), or run the data dump again.");
     }
 
     /// <summary>Follows references between indexed objects (as the asset browser lists them) through the reader.</summary>
