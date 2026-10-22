@@ -243,7 +243,9 @@ public sealed class BlenderService(BlenderEnvironment env)
                 mod.SetRig(install, index, species, reader, destination.Species, destination.Skin, rig);
                 report = null;
             }
-            else report = mod.ReplaceModel(install, index, species, reader, glb, destination.Skin is null ? destination.Species : null, null, destination.Skin, rig: rig);
+            // Without a rig edit from the add-on (an older one), the destination keeps its own, as Send always did.
+            else report = mod.ReplaceModel(install, index, species, reader, glb, destination.Skin is null ? destination.Species : null, null, destination.Skin, rig: rig,
+                rigChoice: rig is null ? ModelRigChoice.KeepCurrent : ModelRigChoice.Auto);
             mod.RefreshHeadRigs(ws, install, index, species, reader); // a species-wide rig edit re-aims the species' head look
             if (sizes is not null)
             {

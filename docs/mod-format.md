@@ -601,6 +601,12 @@ scale = scale × scale.
 
 - **Made in Blender:** Tyrant panel → Rig edit → **Start rig edit**, pose the bones, **Apply rig edit**, then **Send to
   Tyrant**. Tyrant writes the `rig` and builds the model's bind poses for the edited skeleton.
+- **Made in Blender, added by hand:** **Export model for Tyrant…** writes the model plus `<file>.glb.rig.json` (or
+  `<file>.fbx.rig.json`) holding the whole rig edit, scale included. Adding the model in Tyrant (Models → + Add,
+  Replace…, Re-import, `tyrant mod replace-model`) reads it, shows the bones, and lets you use it or keep the mod's
+  current rig edit (`--use-file-rig` / `--keep-rig`; `--dry-run` only prints). Without the `.rig.json`, Tyrant reads
+  moves and turns from the model's bones; a plain File → Export cannot carry bone scale, and Tyrant warns when that
+  drops a scale the current rig edit had. Moving the armature object reads as a MainBone move.
 - **Species or skin:** a species entry's rig edit applies to every animal of that species, the game's own skins
   included. A skin's rig edit (or its own model) replaces the species' for animals wearing it.
 - **With or without a model:** with a model made for it, the mesh fits the edited bones. A `models` entry with a `rig`

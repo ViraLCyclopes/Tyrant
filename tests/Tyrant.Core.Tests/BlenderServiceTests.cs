@@ -465,6 +465,30 @@ public class BlenderServiceTests
     }
 
     [Fact]
+    public void Send_without_a_rig_keeps_the_destinations_rig_edit_whatever_the_models_bones_say()
+    {
+        var ws = Ws(out var game);
+        using var _ = game;
+        var prefab = RigFixture.Game();
+        prefab = prefab with { Renderers = [prefab.Renderers[0] with { Materials = [new MaterialModel("Quad_LOD0", [])] }] };
+        var (install, index, species) = (new GameInstall(game.Root, null), new AssetIndex { Assets = [.. SkinDumps.Textures, SkinDumps.Prefab] }, SpeciesSkinsReader.Load(ws));
+        var reader = new FakeAssetReader { PrefabModelToReturn = prefab };
+        var project = BlenderProjectWriter.Write(new BlenderOpenRequest("Carcharodontosaurus", null, null, false, false), ws, install, index, species, reader, "t.exe");
+        var mod = ModProject.Create(ws, "rig-mod", "R", null);
+        mod.SetRig(install, index, species, reader, "Carcharodontosaurus", null, RigFixture.Rig(RigFixture.Turn("Head", System.Numerics.Vector3.UnitX, 30)));
+        var current = Tyrant.Framework.Core.RigEdit.Hash(ModProject.Open(ws, "rig-mod").RigOf("Carcharodontosaurus", null));
+        // A send.glb whose bones carry another rig edit (as an add-on older than --rig would send it).
+        var glb = Path.Combine(project.Dir, "send.glb");
+        File.Copy(RigFixture.Export(prefab, RigFixture.R()), glb, overwrite: true);
+
+        var sent = BlenderService.Send(ws, install, index, species, reader, project.ProjectFile, glb,
+            new BlenderDestination("rig-mod", "Carcharodontosaurus", null), null);
+
+        Assert.True(sent.Ok, string.Join(" ", sent.Errors));
+        Assert.Equal(current, Tyrant.Framework.Core.RigEdit.Hash(ModProject.Open(ws, "rig-mod").RigOf("Carcharodontosaurus", null)));
+    }
+
+    [Fact]
     public void Send_with_an_empty_rig_clears_the_destinations_rig()
     {
         var s = SendSetup();

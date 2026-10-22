@@ -20,6 +20,7 @@ function setup() {
   platform.files.push('D:\\blender\\carch.glb');
   const rpc = new FakeRpc()
     .on('mods.list', () => ({ mods: [{ id: 'big-carch', name: 'Big Carch', state: 'workspace' }] }))
+    .on('mods.readModelRig', () => ({ source: 'gameSkeleton', bones: [], current: null, question: 'none', changes: false, errors: [], warnings: [], rigFile: null, errorsIfUseFile: [], errorsIfKeep: [] }))
     .on('mods.replaceModel', () => added);
   return { rpc, session: new Session(rpc, platform, memoryStore()) };
 }
@@ -33,7 +34,7 @@ describe('ReplaceModelInMod', () => {
     await fireEvent.click(await screen.findByRole('button', { name: 'Browse…' }));
     await fireEvent.click(screen.getByRole('button', { name: 'Add to mod' }));
 
-    await waitFor(() => expect(rpc.callsTo('mods.replaceModel')[0]?.params).toEqual({ id: 'big-carch', file: 'D:\\blender\\carch.glb', prefabRef: 'carch#1' }));
+    await waitFor(() => expect(rpc.callsTo('mods.replaceModel')[0]?.params).toEqual({ id: 'big-carch', file: 'D:\\blender\\carch.glb', prefabRef: 'carch#1', rig: 'auto' }));
     await waitFor(() => expect(messages(session, 'tab-test').join('\n')).toContain("Carcharodontosaurus's model is now in 'big-carch' (2 LOD(s))"));
     expect(messages(session, 'tab-test').join('\n')).toContain("'Smile' was left out");
   });
@@ -50,6 +51,25 @@ describe('ReplaceModelInMod', () => {
 
     await waitFor(() => expect(messages(session, 'tab-test').join('\n')).toContain('(2 LOD(s))'));
     expect(messages(session, 'tab-test').join('\n')).not.toContain('Allosaurus warning');
+  });
+
+  it('choosing another mod with the rig question open adds nothing, and shows no question', async () => {
+    const { rpc, session } = setup();
+    rpc.on('mods.list', () => ({ mods: [{ id: 'big-carch', name: 'Big Carch', state: 'workspace' }, { id: 'other', name: 'Other', state: 'workspace' }] }));
+    rpc.on('mods.readModelRig', () => ({
+      source: 'bones', bones: [{ bone: 'Jaw', move: [0, 1, 0], rotate: [0, 0, 0, 1], scale: [1, 1, 1] }], current: [], question: 'useOrKeep', changes: true,
+      errors: [], warnings: [], rigFile: null, errorsIfUseFile: [], errorsIfKeep: [],
+    }));
+    renderWith(ReplaceModelInMod, session, { asset: prefab });
+    await fireEvent.click(screen.getByRole('button', { name: 'Replace model in a mod…' }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Browse…' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Add to mod' }));
+    await screen.findByRole('group', { name: 'Rig edit' });
+
+    await fireEvent.change(screen.getByRole('combobox', { name: 'Mod' }), { target: { value: 'other' } });
+
+    await waitFor(() => expect(screen.queryByRole('group', { name: 'Rig edit' })).toBeNull());
+    expect(rpc.callsTo('mods.replaceModel')).toHaveLength(0);
   });
 
   it('asks for a file before adding', async () => {

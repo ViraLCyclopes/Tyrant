@@ -6,6 +6,8 @@
   import { getTab } from '$lib/shell/tab.svelte';
   import { getSession } from '$lib/stores/session.svelte';
   import type { ModDoc } from './modDoc.svelte';
+  import ModelRigHost from './ModelRigHost.svelte';
+  import { askFor, chooseModelRig, createRigAsk } from './modelRig';
   import RigEdit from './RigEdit.svelte';
 
   /**
@@ -14,6 +16,7 @@
    */
   let { doc, model, onRemoved = () => {} }: { doc: Pick<ModDoc, 'id' | 'detail' | 'edit'>; model: ModModelDto; onRemoved?: () => void } = $props();
   const session = getSession();
+  const rigAsk = createRigAsk();
   const tab = getTab();
   let lod = $state(0);
   let canvas = $state<HTMLCanvasElement>();
@@ -76,13 +79,32 @@
     viewer?.dispose();
   });
 
+  // A question asked for one model is not answered for another: opening another model (the page stays) cancels it.
+  const destination = $derived(`${model.target}|${model.skin ?? ''}`);
+  $effect(() => {
+    void destination;
+    return () => rigAsk.dispose();
+  });
+
   async function replace() {
+    const asked = destination;
     const file = await session.platform.openFile(`Choose your model for ${model.target} (.glb or .fbx)`, ['glb', 'fbx']);
-    if (file) await doc.edit('mods.replaceModel', { file, target: model.skin ? null : model.target, skin: model.skin });
+    if (file && asked === destination) await addFile(file, false);
   }
 
   async function reimport() {
-    if (model.origin) await doc.edit('mods.replaceModel', { file: model.origin, target: model.skin ? null : model.target, skin: model.skin });
+    if (model.origin) await addFile(model.origin, true);
+  }
+
+  /** Reads the rig edit in the model, asks about it when it matters, then puts the model in the mod. */
+  async function addFile(file: string, reimporting: boolean) {
+    // The destination the question is about, read once: a question cancelled by opening another model saves nothing.
+    const [asked, skin] = [destination, model.skin];
+    const target = skin ? null : model.target;
+    const action = reimporting || model.file ? 'Replace' : 'Add';
+    const ask = askFor(rigAsk, () => destination === asked);
+    const rig = await tab.safely(() => chooseModelRig(session.rpc, { id: doc.id, file, target, skin }, { reimport: reimporting, action }, ask));
+    if (rig) await doc.edit('mods.replaceModel', { file, target, skin, rig });
   }
 
   async function remove() {
@@ -98,6 +120,7 @@
     <button onclick={replace}>Add a model…</button>
     <OpenInBlender species={model.target} mod={doc.id} skin={model.skin ?? undefined} />
   </div>
+  <ModelRigHost ask={rigAsk} />
   {:else}
   {#if reason}<p class="hint">{reason}</p>{/if}
   <canvas bind:this={canvas} class="viewport" class:hidden={!!reason} aria-label="3D preview of the replacement model"></canvas>
@@ -118,6 +141,7 @@
     <p class="hint">{model.origin} changed since you added it. Re-import it to use the new version.</p>
     <div class="row"><button onclick={reimport}>Re-import</button></div>
   {/if}
+  <ModelRigHost ask={rigAsk} />
   <div class="row">
     <button onclick={replace}>Replace…</button>
     <button onclick={() => doc.edit('mods.rebuildModels', {})}>Rebuild LODs</button>
@@ -127,7 +151,8 @@
   <p class="hint">
     Made in Blender from Tyrant's export: keep the armature, its bone names and the growth shape keys. Sculpt or edit with the Basis selected
     in Shape Keys and the growth keys follow it; do not repeat the change on them, and do not use Voxel Remesh (it deletes them). Name extra meshes …_LOD1 / …_LOD2 to use your own levels of detail; otherwise
-    Tyrant makes them.
+    Tyrant makes them. To replace the model, export a .glb or .fbx (use Export model for Tyrant… in Blender's Tyrant panel to keep a rig
+    edit's scale).
   </p>
   {/if}
   <RigEdit {doc} target={model.target} skin={model.skin} />

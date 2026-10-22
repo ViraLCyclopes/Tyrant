@@ -126,7 +126,20 @@ public sealed record ModModelDto(string Target, string? Skin, string File, IRead
     IReadOnlyList<string> Warnings, bool Stale, string? Origin, bool OriginChanged, IReadOnlyList<ModRigBone>? Rig = null);
 
 /// <summary>Revision is null from the Assets tab (no editor open); Target or PrefabRef names the species, Skin gives a skin its own model.</summary>
-public sealed record ModReplaceModelParams(string Id, string File, string? Revision = null, string? Target = null, string? PrefabRef = null, string? Skin = null);
+/// <summary>Rig: what to do with the destination's rig edit when the model brings its own: "auto" (null), "useFile" or "keepCurrent".</summary>
+public sealed record ModReplaceModelParams(string Id, string File, string? Revision = null, string? Target = null, string? PrefabRef = null, string? Skin = null,
+    string? Rig = null);
+
+public sealed record ModReadModelRigParams(string Id, string File, string? Target = null, string? PrefabRef = null, string? Skin = null);
+
+/// <summary>
+/// The rig edit a model file brings: Source "gameSkeleton" | "bones" | "rigFile" | "saved"; Bones the rig edit read from it; Current the
+/// destination's own; Question "none" | "keepOrRemove" | "useOrKeep" (what to ask); Changes whether adding the model (auto) changes the
+/// destination's rig edit; Errors the rig rules' errors for auto's choice, ErrorsIfUseFile / ErrorsIfKeep for "useFile" / "keepCurrent"
+/// (errors refuse that choice); RigFile the .rig.json's file name when it was used.
+/// </summary>
+public sealed record ModModelRigPreviewDto(string Source, IReadOnlyList<ModRigBone> Bones, IReadOnlyList<ModRigBone>? Current, string Question, bool Changes,
+    IReadOnlyList<string> Errors, IReadOnlyList<string> Warnings, string? RigFile, IReadOnlyList<string> ErrorsIfUseFile, IReadOnlyList<string> ErrorsIfKeep);
 
 public sealed record ModRemoveModelParams(string Id, string Revision, string Target, string? Skin = null);
 

@@ -5,6 +5,7 @@ import subprocess
 import textwrap
 
 import bpy
+from bpy_extras.io_utils import ExportHelper
 
 from . import animpanel, checks, gamematerial, growth, ikpanel, images, project, rig, rigpanel, send, ui
 
@@ -140,6 +141,69 @@ class TYRANT_OT_send(bpy.types.Operator):
         except (project.ProjectError, send.SendError) as ex:
             self.report({"ERROR"}, str(ex))
             return {"CANCELLED"}
+        return {"FINISHED"}
+
+
+class TYRANT_OT_export_model(bpy.types.Operator, ExportHelper):
+    """Export the model as .glb or .fbx, with its rig edit beside it, to add it in Tyrant yourself"""
+
+    bl_idname = "tyrant.export_model"
+    bl_label = "Export model for Tyrant…"
+
+    filename_ext = ".glb"
+    filter_glob: bpy.props.StringProperty(default="*.glb;*.fbx", options={"HIDDEN"})
+    format: bpy.props.EnumProperty(name="Format", items=(("glb", "glb", "Binary glTF"), ("fbx", "fbx", "Autodesk FBX")), default="glb")
+
+    def invoke(self, context, event):
+        armature = project.armature_of(context)
+        if armature is not None and not self.filepath:
+            self.filepath = armature.name + ".glb"
+        return super().invoke(context, event)
+
+    def check(self, context):
+        # The file name's ending follows the chosen format.
+        want = "." + self.format
+        base, ext = os.path.splitext(self.filepath)
+        if ext.lower() != want:
+            self.filepath = base + want
+            return True
+        return False
+
+    def execute(self, context):
+        reason = send.why_not_sendable(context)
+        if reason:
+            self.report({"ERROR"}, reason)
+            return {"CANCELLED"}
+        armature = project.armature_of(context)
+        data, error = project_data(armature)
+        if error:
+            self.report({"ERROR"}, error)
+            return {"CANCELLED"}
+        path = self.filepath
+        if os.path.splitext(path)[1].lower() not in (".glb", ".fbx"):
+            path += "." + self.format
+        fmt = os.path.splitext(path)[1].lower()[1:]
+        try:
+            if armature.get(rig.PROBLEM):
+                raise send.SendError("This model's rig edit could not be shown, so exporting would leave it out: open the model "
+                                     "again from Tyrant (Open in Blender → Options → Start fresh).")
+            if rig.editing(armature):
+                raise send.SendError("A rig edit is started: Apply it or Cancel it first.")
+            _stop_on_problems(armature, data)
+            send.export(armature, path, fmt)
+            rig_file = path + ".rig.json"
+            if rig.offsets(armature):
+                with open(rig_file, "w", encoding="utf-8") as f:
+                    json.dump(rig.unity_rig(armature), f)
+                written = f"{os.path.basename(path)} and {os.path.basename(rig_file)}"
+            else:
+                if os.path.isfile(rig_file):
+                    os.remove(rig_file)  # a rig file from an earlier export would give this model an edit it no longer has
+                written = os.path.basename(path)
+        except (project.ProjectError, send.SendError, OSError) as ex:
+            self.report({"ERROR"}, str(ex))
+            return {"CANCELLED"}
+        self.report({"INFO"}, f"Exported {written}.")
         return {"FINISHED"}
 
 
@@ -392,6 +456,9 @@ class VIEW3D_PT_tyrant(bpy.types.Panel):
         row = layout.row()
         row.enabled = not is_busy(armature) and not rig.editing(armature)
         row.operator("tyrant.send", icon="EXPORT")
+        row = layout.row()
+        row.enabled = not rig.editing(armature)
+        row.operator("tyrant.export_model", icon="FILE_3D")
 
         report = armature.get(REPORT)
         if report:
@@ -411,4 +478,4 @@ class VIEW3D_PT_tyrant(bpy.types.Panel):
                 say(box, context, warning, "ERROR")
 
 
-CLASSES = (TYRANT_OT_send, TYRANT_OT_choose_destination, TYRANT_OT_use_game_material, VIEW3D_PT_tyrant)
+CLASSES = (TYRANT_OT_send, TYRANT_OT_export_model, TYRANT_OT_choose_destination, TYRANT_OT_use_game_material, VIEW3D_PT_tyrant)

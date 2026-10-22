@@ -21,7 +21,7 @@ const model: ModModelDto = {
 };
 
 function setup() {
-  const rpc = new FakeRpc().on('mods.modelPreview', () => ({
+  const rpc = new FakeRpc().on('mods.readModelRig', () => ({ source: 'gameSkeleton', bones: [], current: null, question: 'none', changes: false, errors: [], warnings: [], rigFile: null, errorsIfUseFile: [], errorsIfKeep: [] })).on('mods.modelPreview', () => ({
     prefabRef: 'carch#1', materials: [],
     lods: [{ file: 'D:\\p\\lod0.glb', vertices: 9000 }, { file: 'D:\\p\\lod1.glb', vertices: 3000 }],
   }));
@@ -65,7 +65,7 @@ describe('ModelPage', () => {
     expect(screen.getByText(/D:\\blender\\carch.glb changed since you added it/)).toBeInTheDocument();
     await fireEvent.click(screen.getByRole('button', { name: 'Re-import' }));
 
-    expect(doc.edit).toHaveBeenCalledWith('mods.replaceModel', { file: 'D:\\blender\\carch.glb', target: 'Carcharodontosaurus', skin: null });
+    await waitFor(() => expect(doc.edit).toHaveBeenCalledWith('mods.replaceModel', { file: 'D:\\blender\\carch.glb', target: 'Carcharodontosaurus', skin: null, rig: 'auto' }));
   });
 
   it('shows each LOD against the game and the warnings', () => {
@@ -88,8 +88,43 @@ describe('ModelPage', () => {
 
     await waitFor(() => expect(onRemoved).toHaveBeenCalled());
     expect(doc.edit).toHaveBeenCalledWith('mods.rebuildModels', {});
-    expect(doc.edit).toHaveBeenCalledWith('mods.replaceModel', { file: 'D:\\blender\\carch2.glb', target: 'Carcharodontosaurus', skin: null });
+    expect(doc.edit).toHaveBeenCalledWith('mods.replaceModel', { file: 'D:\\blender\\carch2.glb', target: 'Carcharodontosaurus', skin: null, rig: 'auto' });
     expect(doc.edit).toHaveBeenCalledWith('mods.removeModel', { target: 'Carcharodontosaurus', skin: null });
+  });
+
+  it('opening another model with the rig question open saves nothing, and the other model shows no question', async () => {
+    const { rpc, session, doc, platform } = setup();
+    rpc.on('mods.readModelRig', () => ({
+      source: 'bones', bones: [{ bone: 'Jaw', move: [0, 1, 0], rotate: [0, 0, 0, 1], scale: [1, 1, 1] }], current: [], question: 'useOrKeep', changes: true,
+      errors: [], warnings: [], rigFile: null, errorsIfUseFile: [], errorsIfKeep: [],
+    }));
+    platform.files.push('D:\\blender\\carch2.glb');
+    const view = renderWith(ModelPage, session, { doc, model });
+    await fireEvent.click(screen.getByRole('button', { name: 'Replace…' }));
+    await screen.findByRole('group', { name: 'Rig edit' });
+
+    await view.rerender({ doc, model: { ...model, target: 'Allosaurus Anax', file: 'models/allo-1a2b.glb' } });
+
+    await waitFor(() => expect(screen.queryByRole('group', { name: 'Rig edit' })).toBeNull());
+    expect(doc.edit).not.toHaveBeenCalled();
+  });
+
+  it('a fresh copy of the same model keeps the rig question open', async () => {
+    const { rpc, session, doc, platform } = setup();
+    rpc.on('mods.readModelRig', () => ({
+      source: 'bones', bones: [{ bone: 'Jaw', move: [0, 1, 0], rotate: [0, 0, 0, 1], scale: [1, 1, 1] }], current: [], question: 'useOrKeep', changes: true,
+      errors: [], warnings: [], rigFile: null, errorsIfUseFile: [], errorsIfKeep: [],
+    }));
+    platform.files.push('D:\\blender\\carch2.glb');
+    const view = renderWith(ModelPage, session, { doc, model });
+    await fireEvent.click(screen.getByRole('button', { name: 'Replace…' }));
+    await screen.findByRole('group', { name: 'Rig edit' });
+
+    await view.rerender({ doc, model: { ...model } }); // as the editor reading the saved mod again does
+
+    expect(screen.getByRole('group', { name: 'Rig edit' })).toBeInTheDocument();
+    await fireEvent.click(screen.getAllByRole('button', { name: 'Replace' }).at(-1)!);
+    await waitFor(() => expect(doc.edit).toHaveBeenCalledWith('mods.replaceModel', { file: 'D:\\blender\\carch2.glb', target: 'Carcharodontosaurus', skin: null, rig: 'useFile' }));
   });
 
   it('a model that cannot be previewed says why', async () => {

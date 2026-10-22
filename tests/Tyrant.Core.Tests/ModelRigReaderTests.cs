@@ -1,0 +1,251 @@
+using System.Numerics;
+using Tyrant.Core.ModelReplacements;
+using Tyrant.Core.Models;
+using Tyrant.Framework.Core;
+using static Tyrant.Core.Tests.RigFixture;
+
+namespace Tyrant.Core.Tests;
+
+public class ModelRigReaderTests
+{
+    [Fact]
+    public void A_model_written_for_a_rig_edit_reads_back_its_moves_and_turns()
+    {
+        var game = Game();
+
+        var reading = ModelRigReader.Read(Skeleton(Export(game, R()), game), game, saved: null, rigFile: null, "Fixture");
+
+        Assert.Equal(RigSource.Bones, reading.Source);
+        AssertRig(R(), reading.Rig);
+        Assert.Empty(reading.Warnings);
+    }
+
+    [Fact]
+    public void A_top_bone_move_is_read_as_a_rig_edit_not_as_the_frame()
+    {
+        var game = Game();
+        var rig = Rig(Move("MainBone", 0, 0.1f, 0));
+
+        var reading = ModelRigReader.Read(Skeleton(Export(game, rig), game), game, null, null, "Fixture");
+
+        Assert.Equal(RigSource.Bones, reading.Source);
+        AssertRig(rig, reading.Rig);
+    }
+
+    [Fact]
+    public void The_game_skeleton_reads_as_no_rig_edit()
+    {
+        var game = Game();
+
+        var reading = ModelRigReader.Read(Skeleton(Export(game, null), game), game, null, null, "Fixture");
+
+        Assert.Equal(RigSource.GameSkeleton, reading.Source);
+        Assert.Empty(reading.Rig);
+        Assert.Empty(reading.Warnings);
+    }
+
+    [Fact]
+    public void Changes_below_the_tolerance_count_as_none()
+    {
+        var game = Game();
+        var rig = Rig(Move("Neck2", 0.5f * ModelRigReader.MoveTolerance, 0, 0), Turn("Tail3", Vector3.UnitX, 0.5f * ModelRigReader.TurnToleranceDegrees));
+
+        var reading = ModelRigReader.Read(Skeleton(Export(game, rig), game), game, null, null, "Fixture");
+
+        Assert.Equal(RigSource.GameSkeleton, reading.Source);
+        Assert.Empty(reading.Rig);
+    }
+
+    [Fact]
+    public void A_saved_rig_edit_with_scale_counts_as_the_same_when_the_bones_match()
+    {
+        var game = Game();
+        var saved = WithScaledTail();
+        var file = Skeleton(Export(game, saved), game);
+
+        var reading = ModelRigReader.Read(file, game, saved, rigFile: null, "Fixture");
+
+        Assert.True(ModelRigReader.Matches(file, game, saved));
+        Assert.Equal(RigSource.Saved, reading.Source);
+        Assert.Same(saved, reading.Rig);
+        Assert.Empty(reading.Warnings);
+    }
+
+    [Fact]
+    public void A_matching_rig_file_wins_and_keeps_its_scale()
+    {
+        var game = Game();
+        var rigFile = WithScaledTail();
+        var saved = Rig(Turn("Head", Vector3.UnitX, 30));
+
+        var reading = ModelRigReader.Read(Skeleton(Export(game, rigFile), game), game, saved, rigFile, "Fixture", "Fixture.glb.rig.json");
+
+        Assert.Equal(RigSource.RigFile, reading.Source);
+        Assert.Same(rigFile, reading.Rig);
+        Assert.Equal(new RigVector3(1.3f, 1.3f, 1.3f), reading.Rig["Tail1"].Scale);
+        Assert.Empty(reading.Warnings);
+    }
+
+    [Fact]
+    public void A_rig_file_that_does_not_match_the_bones_is_ignored_with_a_warning()
+    {
+        var game = Game();
+        var rigFile = Rig(Turn("Head", Vector3.UnitX, 30));
+
+        var reading = ModelRigReader.Read(Skeleton(Export(game, R()), game), game, null, rigFile, "Fixture", "Fixture.glb.rig.json");
+
+        Assert.Equal(RigSource.Bones, reading.Source);
+        AssertRig(R(), reading.Rig);
+        Assert.Equal(["Fixture.glb.rig.json does not match this model's bones (it may be from an older export), so the rig edit was read from the bones and has no scale."],
+            reading.Warnings);
+    }
+
+    [Fact]
+    public void Reading_bones_over_a_scaled_saved_rig_edit_warns_that_scale_is_dropped()
+    {
+        var game = Game();
+        var saved = WithScaledTail();
+        var rig = Rig(Turn("Head", Vector3.UnitX, 30));
+
+        var reading = ModelRigReader.Read(Skeleton(Export(game, rig), game), game, saved, null, "Fixture");
+
+        Assert.Equal(RigSource.Bones, reading.Source);
+        AssertRig(rig, reading.Rig);
+        Assert.Equal(["The current rig edit scales Tail1; reading this model's bones cannot see scale, so using it drops that scale. Export with Export model for Tyrant… in Blender to keep it."],
+            reading.Warnings);
+    }
+
+    [Fact]
+    public void A_plain_export_of_a_scaled_bone_reads_as_moves_on_its_descendants()
+    {
+        var game = Game();
+        var rig = Rig(("Tail1", Vector3.Zero, Quaternion.Identity, 1.3f));
+
+        var file = Skeleton(Export(game, rig), game);
+        var reading = ModelRigReader.Read(file, game, null, null, "Fixture");
+
+        Assert.True(ModelRigReader.Matches(file, game, rig)); // the file built for the scaled rig edit still matches it
+        // The scale also moves Tail1's own head (move + rotate(scale ⊙ p)); every descendant moves 0.3 × its local position.
+        var tail = Renderer(game).Bones.Where(b => b.Name.StartsWith("Tail", StringComparison.Ordinal)).ToList();
+        Assert.Equal(["Tail1", "Tail2", "Tail3", "Tail4"], reading.Rig.Keys.Order());
+        foreach (var bone in tail)
+        {
+            var got = reading.Rig[bone.Name];
+            Assert.True(Angle(got.Rotate.ToNumerics()) < 0.01f, bone.Name);
+        }
+        Assert.True(reading.Rig["Tail3"].Move.ToNumerics().Length() > 0.3f * 0.35f - 1e-3f);
+    }
+
+    [Fact]
+    public void Bones_missing_from_the_file_are_left_out_and_listed()
+    {
+        var game = Game();
+
+        var reading = ModelRigReader.Read(Skeleton(Export(game, R(), leaveOut: "Tail2"), game), game, null, null, "Fixture");
+
+        Assert.Equal(RigSource.Bones, reading.Source);
+        AssertRig(R(), reading.Rig);
+        Assert.Contains(reading.Warnings, w => w.Contains("'Tail2'", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void File_joints_that_are_not_the_games_skinned_bones_are_ignored()
+    {
+        // A default FBX export adds *_end leaf bones whose names are the game's unskinned tips, placed elsewhere.
+        var game = Game();
+        var renderer = Renderer(game);
+        var tip = game.Root.DepthFirst().First(n => n.Name == "Tail4_end");
+        var file = renderer with
+        {
+            Bones = [.. renderer.Bones, tip],
+            Mesh = ModelFixture.SplitQuad([.. renderer.Mesh.BindPoses, Matrix4x4.CreateTranslation(0.3f, -2, 0.5f)]),
+        };
+        var path = TempGlb();
+        GltfModelWriter.WriteGlb(game, file, path);
+
+        var reading = ModelRigReader.Read(Skeleton(path, game), game, null, null, "Fixture");
+
+        Assert.Equal(RigSource.GameSkeleton, reading.Source);
+        Assert.Empty(reading.Warnings);
+    }
+
+    [Fact]
+    public void The_main_meshs_skeleton_is_read_when_an_accessory_comes_first_in_the_file()
+    {
+        // Eyes skinned to two of the game's bones, first in the file, placed where the main mesh's bones are not.
+        var game = Game();
+        var renderer = Renderer(game);
+        var eyes = new RendererModel("Eyes", ModelFixture.Triangle(name: "Eyes"), [.. renderer.Bones.Where(b => b.Name is "Neck3" or "Head")], renderer.Owner);
+        var path = TempGlb();
+        GltfModelWriter.WriteGlb(game, [eyes, renderer], path);
+
+        var reading = ModelRigReader.Read(Skeleton(path, game), game, null, null, "Fixture");
+
+        Assert.Equal(RigSource.GameSkeleton, reading.Source);
+        Assert.Empty(reading.Warnings); // no bones "missing": the eyes are not the model
+    }
+
+    [Fact]
+    public void A_skeleton_far_from_the_game_warns_it_may_be_another_species()
+    {
+        var game = Game();
+        string[] turned = ["Hip", "Neck1", "Neck2", "Neck3", "Head", "Tail1", "Tail2", "Tail3", "Leg.L", "Shin.L", "Leg.R", "Shin.R"];
+        var rig = Rig([.. turned.Select(b => Turn(b, Vector3.UnitZ, 20))]);
+        rig["Hip"] = rig["Hip"] with { Move = new RigVector3(0, 0.3f, 0) };
+
+        var reading = ModelRigReader.Read(Skeleton(Export(game, rig), game), game, null, null, "Tyrannosaurus");
+
+        Assert.Equal(RigSource.Bones, reading.Source);
+        Assert.Equal(["This model's skeleton is very different from Tyrannosaurus's (12 bones moved, up to 30 cm): was it exported from another species' project?"],
+            reading.Warnings);
+
+        // Fewer than 10 bones turned is a rig edit, however large a share of the skeleton.
+        var fewer = Rig([.. turned.Take(9).Select(b => Turn(b, Vector3.UnitZ, 20))]);
+        Assert.Empty(ModelRigReader.Read(Skeleton(Export(game, fewer), game), game, null, null, "Tyrannosaurus").Warnings);
+    }
+
+    [Fact]
+    public void A_scaled_bind_pose_prefab_reads_its_edit_through_the_expected_frame()
+    {
+        // As Panthera atrox: bind poses scaled 100× and turned against the prefab's frame, the armature node scaled; Blender
+        // writes the file upright and rescaled (game bind skeleton × G).
+        var k = Matrix4x4.CreateRotationX(90 * Degrees) * Matrix4x4.CreateScale(0.01f) * Matrix4x4.CreateTranslation(0.0004f, 0, 0.0007f);
+        var game = Game(k, armatureScale: 1.0490f);
+        var rig = R();
+        rig["MainBone"] = new RigOffset { Move = new RigVector3(0, 0, 0.1f), Rotate = RigQuaternion.Identity, Scale = RigVector3.One };
+
+        var reading = ModelRigReader.Read(Skeleton(Export(game, rig, k), game), game, null, null, "Fixture");
+        var unedited = ModelRigReader.Read(Skeleton(Export(game, null, k), game), game, null, null, "Fixture");
+
+        Assert.Equal(RigSource.Bones, reading.Source);
+        AssertRig(rig, reading.Rig);
+        Assert.Equal(RigSource.GameSkeleton, unedited.Source);
+    }
+
+    [Fact]
+    public void A_glb_tyrant_wrote_itself_reads_as_the_game_skeleton_in_any_frame()
+    {
+        // Tyrant's own glb (Assets tab export) keeps the game's bind poses: not moved into the frame Blender writes.
+        var k = Matrix4x4.CreateRotationX(90 * Degrees) * Matrix4x4.CreateScale(0.01f);
+        var game = Game(k, armatureScale: 1.0490f);
+        var path = TempGlb();
+        GltfModelWriter.WriteGlb(game, Renderer(game), path);
+
+        var reading = ModelRigReader.Read(Skeleton(path, game), game, null, null, "Fixture");
+
+        Assert.Equal(RigSource.GameSkeleton, reading.Source);
+        Assert.Empty(reading.Warnings);
+    }
+
+    [Fact]
+    public void A_rig_file_sits_beside_the_model_with_its_full_name()
+    {
+        var glb = TempGlb();
+        Directory.CreateDirectory(Path.GetDirectoryName(glb)!);
+        File.WriteAllText(glb, "");
+
+        Assert.Null(ModelRigReader.RigFilePathFor(glb));
+        File.WriteAllText(glb + ".rig.json", "{}");
+        Assert.Equal(glb + ".rig.json", ModelRigReader.RigFilePathFor(glb));
+    }
+}

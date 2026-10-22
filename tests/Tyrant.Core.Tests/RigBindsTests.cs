@@ -82,6 +82,37 @@ public class RigBindsTests
     }
 
     [Fact]
+    public void A_top_bone_move_is_made_in_its_parent_nodes_frame_not_the_mesh_nodes()
+    {
+        // As Carcharodontosaurus: the armature node "Carch" and the mesh node are turned -90° about X (Unity local +Z is
+        // world up), the root is saved away from the origin, and the bind poses are in the prefab's frame with the root's
+        // position and rotation dropped, not in the mesh node's.
+        var turn = Quaternion.CreateFromAxisAngle(Vector3.UnitX, -MathF.PI / 2);
+        var root = new SkeletonNode("Carcharodontosaurus", new Vector3(30, 0, 12), Quaternion.CreateFromAxisAngle(Vector3.UnitY, 1f), Vector3.One);
+        var carch = new SkeletonNode("Carch", Vector3.Zero, turn, Vector3.One, root);
+        var meshNode = new SkeletonNode("Carch_LOD0", Vector3.Zero, turn, Vector3.One, root);
+        root.Children.AddRange([carch, meshNode]);
+        var main = new SkeletonNode("MainBone", new Vector3(0, 0, 1.5f), Quaternion.CreateFromAxisAngle(Vector3.UnitX, MathF.PI / 2), Vector3.One, carch);
+        carch.Children.Add(main);
+        var hip = new SkeletonNode("Hip", new Vector3(0, 0.2f, 0.1f), Quaternion.Identity, Vector3.One, main);
+        main.Children.Add(hip);
+        static Matrix4x4 Local(SkeletonNode n) =>
+            Matrix4x4.CreateScale(n.LocalScale) * Matrix4x4.CreateFromQuaternion(n.LocalRotation) * Matrix4x4.CreateTranslation(n.LocalPosition);
+        var mainWorld = Local(main) * Local(carch);
+        Matrix4x4[] binds = [Inverse(mainWorld), Inverse(Local(hip) * mainWorld)];
+        var renderer = new RendererModel("Carch_LOD0", ModelFixture.SplitQuad(binds), [main, hip], meshNode);
+        var model = new PrefabModel("Carcharodontosaurus", root, [renderer], []);
+
+        var edited = RigBinds.Edited(model, renderer, Rig("MainBone", move: new RigVector3(0, 0, 0.1f)));
+
+        // The parent's local +Z is world up: the bone and its child rise 0.1, they do not slide along the mesh's Z.
+        for (var i = 0; i < binds.Length; i++)
+            Assert.True(Vector3.Distance(WorldPos(binds[i]) + new Vector3(0, 0.1f, 0), WorldPos(edited[i])) < 1e-5f, renderer.Bones[i].Name);
+    }
+
+    private static Matrix4x4 Inverse(Matrix4x4 m) => Matrix4x4.Invert(m, out var inverse) ? inverse : throw new InvalidOperationException();
+
+    [Fact]
     public void A_bone_the_skeleton_does_not_have_changes_nothing()
     {
         var model = IkFixture.Prefab();

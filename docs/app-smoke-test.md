@@ -537,3 +537,11 @@ Needs the game. Steps marked **(game)** start the game.
      into the workspace's `mods` folder is refused ("… not to be shared or put in a mod"). The mod folder, Check and an
      export have no trace of the pictures. From the CLI, `tyrant species save-picture "Allosaurus Anax" --paleopedia
      --out <FILE.png>` prints the same kind of line.
+163. **(game)** Rig edit from the model file. In Blender make a rig edit (Start rig edit, move and scale a few bones, Apply),
+     then **Export model for Tyrant…** as FBX: `<name>.fbx` and `<name>.fbx.rig.json` appear together. In the app, on
+     another mod's species, **Replace…** the model with that FBX: the preview says *From <name>.fbx.rig.json* and lists
+     the bones from the `.rig.json`. If the mod already had a rig edit, the choice *Use the model's rig edit / Keep the
+     current one* shows; use the model's. Add it, install, and check in game that the animal has the edited bones.
+     `tyrant mod replace-model <mod> <species> <file.fbx> --dry-run` prints the same bones and saves nothing. Then
+     export plain from File → Export (FBX), **Re-import**: the preview reads the bones instead and warns that the scale
+     is dropped (when the current rig edit had one).

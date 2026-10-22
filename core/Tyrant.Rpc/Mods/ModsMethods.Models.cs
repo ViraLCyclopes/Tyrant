@@ -17,15 +17,43 @@ public sealed partial class ModsMethods
     [RpcMethod("mods.replaceModel")]
     public ModDetail ReplaceModel(ModReplaceModelParams p)
     {
+        var choice = RigChoiceOf(p.Rig);
         var (ws, install) = session.Current();
         var mod = ModProject.Open(ws, p.Id, p.Revision);
         var (index, species) = (RequireIndex(ws), mod.SpeciesFor(ws, install, RequireSpecies(ws)));
+        // With ws, ReplaceModel checks the rig rules and keeps converted FBX files in the workspace's cache.
         var report = mod.ReplaceModel(install, index, species, Options.AssetReader, p.File, p.Target, p.PrefabRef, p.Skin,
-            () => new BlenderService(Options.Blender).Converter(ws));
+            () => new BlenderService(Options.Blender).Converter(ws), rigChoice: choice, ws: ws);
         mod.RefreshHeadRigs(ws, install, index, species, Options.AssetReader);
         session.Log($"'{p.Id}' replaces a model with {Path.GetFileName(p.File)} ({report.Lods.Count} LOD(s)){(report.Warnings.Count == 0 ? "" : ": " + string.Join(" ", report.Warnings))}.");
         return DetailOf(ws, mod);
     }
+
+    /// <summary>The rig edit a model file brings and what adding it would do to the destination's, saving nothing (the Replace model dialog's question).</summary>
+    [RpcMethod("mods.readModelRig")]
+    public ModModelRigPreviewDto ReadModelRig(ModReadModelRigParams p)
+    {
+        var (ws, install) = session.Current();
+        var mod = ModProject.Open(ws, p.Id);
+        var (index, species) = (RequireIndex(ws), mod.SpeciesFor(ws, install, RequireSpecies(ws)));
+        var preview = mod.PreviewModelRig(ws, install, index, species, Options.AssetReader, p.File, p.Target, p.PrefabRef, p.Skin,
+            () => new BlenderService(Options.Blender).Converter(ws));
+        var reading = preview.Reading;
+        return new ModModelRigPreviewDto(Camel(reading.Source.ToString()), ModRigBone.Of(reading.Rig) ?? [], ModRigBone.Of(preview.Current),
+            Camel(preview.Question.ToString()), preview.Changes, preview.Errors, preview.Warnings,
+            reading.Source == RigSource.RigFile && ModelRigReader.RigFilePathFor(p.File) is { } rigFile ? Path.GetFileName(rigFile) : null,
+            preview.ErrorsIfUseFile, preview.ErrorsIfKeep);
+    }
+
+    private static string Camel(string name) => char.ToLowerInvariant(name[0]) + name[1..];
+
+    private static ModelRigChoice RigChoiceOf(string? rig) => rig switch
+    {
+        null or "auto" => ModelRigChoice.Auto,
+        "useFile" => ModelRigChoice.UseFile,
+        "keepCurrent" => ModelRigChoice.KeepCurrent,
+        _ => throw new TyrantException(TyrantErrorCode.ModInvalid, $"Unknown rig choice '{rig}': use auto, useFile or keepCurrent."),
+    };
 
     [RpcMethod("mods.removeModel")]
     public ModDetail RemoveModel(ModRemoveModelParams p) =>

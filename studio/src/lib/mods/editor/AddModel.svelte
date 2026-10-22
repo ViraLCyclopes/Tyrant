@@ -3,12 +3,15 @@
   import type { ModSpeciesResult } from '$lib/rpc/types.gen';
   import { getTab } from '$lib/shell/tab.svelte';
   import { getSession } from '$lib/stores/session.svelte';
+  import ModelRigHost from './ModelRigHost.svelte';
+  import { askFor, chooseModelRig, createRigAsk } from './modelRig';
   import type { ModDoc } from './modDoc.svelte';
 
   /** The mod editor's Models → + Add: a species' model from your .glb, into this mod (as Replace model in a mod… does). */
   let { doc, onDone }: { doc: Pick<ModDoc, 'id' | 'detail' | 'edit'>; onDone: (target: string | null) => void } = $props();
 
   const session = getSession();
+  const rigAsk = createRigAsk();
   const tab = getTab();
   let data = $state.raw<ModSpeciesResult | null>(null);
   let species = $state('');
@@ -24,8 +27,16 @@
     if (picked) file = picked;
   }
 
+  // A question asked for one species is not answered for another: choosing another species cancels it.
+  $effect(() => {
+    void species;
+    return () => rigAsk.dispose();
+  });
+
   async function add() {
-    if (await doc.edit('mods.replaceModel', { file: file.trim(), target: species })) onDone(species);
+    const [path, target] = [file.trim(), species]; // the destination the question is about
+    const rig = await tab.safely(() => chooseModelRig(session.rpc, { id: doc.id, file: path, target }, { reimport: false, action: 'Add' }, askFor(rigAsk, () => species === target)));
+    if (rig && (await doc.edit('mods.replaceModel', { file: path, target, rig }))) onDone(target);
   }
 </script>
 
@@ -51,9 +62,10 @@
       <button class="primary" disabled={!file.trim() || !species || session.busy} onclick={add}>Add</button>
       <button onclick={() => onDone(null)}>Cancel</button>
     </div>
+    <ModelRigHost ask={rigAsk} />
     <p class="hint">
       Start from Tyrant's export of the species' prefab (Assets tab → the prefab → Export selected). In Blender keep the armature, its
-      bone names, the growth shape keys and the material names. Tyrant checks the model and builds its levels of detail.
+      bone names, the growth shape keys and the material names. Tyrant checks the model and builds its levels of detail. To keep a rig edit's scale, export it from Blender with Export model for Tyrant… in the Tyrant panel.
     </p>
   {/if}
 </section>

@@ -14,6 +14,7 @@
     <Compile Include="..\Tyrant.Core.Tests\TestRecycleBin.cs" Link="TestRecycleBin.cs" />
     <Compile Include="..\Tyrant.Core.Tests\CatalogFixture.cs" Link="CatalogFixture.cs" />
     <Compile Include="..\Tyrant.Core.Tests\ModelFixture.cs" Link="ModelFixture.cs" />
+    <Compile Include="..\Tyrant.Core.Tests\RigFixture.cs" Link="RigFixture.cs" />
     <Compile Include="..\Tyrant.Core.Tests\FakeAssetReader.cs" Link="FakeAssetReader.cs" />
     <Compile Include="..\Tyrant.Core.Tests\SkinDumps.cs" Link="SkinDumps.cs" />
     <Compile Include="..\Tyrant.Core.Tests\PictureDumps.cs" Link="PictureDumps.cs" />

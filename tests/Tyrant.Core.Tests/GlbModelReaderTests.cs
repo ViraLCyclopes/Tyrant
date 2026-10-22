@@ -103,6 +103,70 @@ public class GlbModelReaderTests
         Assert.Equal([0, 1], GlbModelReader.Read(path).Select(m => m.Lod));
     }
 
+    private static MeshData Renamed(MeshData mesh, string name, Matrix4x4[]? bindPoses = null) => new()
+    {
+        Name = name, Positions = mesh.Positions, Normals = mesh.Normals, Uv0 = mesh.Uv0, Colors = mesh.Colors, Skin = mesh.Skin,
+        Indices = mesh.Indices, SubMeshes = mesh.SubMeshes, BindPoses = bindPoses ?? mesh.BindPoses, BlendShapes = mesh.BlendShapes,
+    };
+
+    private static bool Near(Matrix4x4 a, Matrix4x4 b)
+    {
+        for (var row = 0; row < 4; row++)
+            for (var col = 0; col < 4; col++)
+                if (MathF.Abs(a[row, col] - b[row, col]) > 1e-5f) return false;
+        return true;
+    }
+
+    [Fact]
+    public void The_skeleton_is_lod_0s_joints_and_inverse_binds()
+    {
+        var path = TempGlb();
+        var prefab = ModelFixture.Prefab(ModelFixture.Triangle(name: "Carch_LOD0"), skinned: true);
+        var lod1 = new RendererModel("Carch_LOD1", Renamed(prefab.Renderers[0].Mesh, "Carch_LOD1"), prefab.Renderers[0].Bones, prefab.Renderers[0].Owner);
+        GltfModelWriter.WriteGlbs(prefab with { Renderers = [lod1, prefab.Renderers[0]] }, path);
+
+        var skeleton = GlbModelReader.ReadSkeleton(path, prefab);
+
+        Assert.Equal(["Hip", "Tail"], skeleton.JointNames);
+        var binds = prefab.Renderers[0].Mesh.BindPoses;
+        Assert.All(Enumerable.Range(0, binds.Length), i => Assert.True(Near(binds[i], skeleton.InverseBinds[i]), $"bone {i}"));
+        Assert.Empty(skeleton.LodWarnings);
+    }
+
+    [Fact]
+    public void A_lod_whose_bones_sit_elsewhere_is_noted_and_lod_0_is_read()
+    {
+        var path = TempGlb();
+        var prefab = ModelFixture.Prefab(ModelFixture.Triangle(name: "Carch_LOD0"), skinned: true);
+        var moved = Renamed(prefab.Renderers[0].Mesh, "Carch_LOD1", [Matrix4x4.Identity, Matrix4x4.CreateTranslation(0, -1.2f, 0)]);
+        var lod1 = new RendererModel("Carch_LOD1", moved, prefab.Renderers[0].Bones, prefab.Renderers[0].Owner);
+        GltfModelWriter.WriteGlbs(prefab with { Renderers = [prefab.Renderers[0], lod1] }, path);
+
+        var skeleton = GlbModelReader.ReadSkeleton(path, prefab);
+
+        Assert.True(Near(Matrix4x4.CreateTranslation(0, -1, 0), skeleton.InverseBinds[1]));
+        var warning = Assert.Single(skeleton.LodWarnings);
+        Assert.Contains("LOD 1", warning);
+        Assert.Contains("'Tail'", warning);
+    }
+
+    [Fact]
+    public void With_several_main_meshes_the_skeleton_is_the_one_on_the_games_bones()
+    {
+        var path = TempGlb();
+        var prefab = ModelFixture.Prefab(ModelFixture.Triangle(name: "Body"), skinned: true);
+        var hornBase = new SkeletonNode("HornBase", new Vector3(0, 2, 0), Quaternion.Identity, Vector3.One, prefab.Root);
+        var hornTip = new SkeletonNode("HornTip", new Vector3(0, 0.5f, 0), Quaternion.Identity, Vector3.One, hornBase);
+        prefab.Root.Children.Add(hornBase);
+        hornBase.Children.Add(hornTip);
+        var horn = new RendererModel("Horn", ModelFixture.Triangle(name: "Horn"), [hornBase, hornTip], prefab.Root);
+        GltfModelWriter.WriteGlbs(prefab with { Renderers = [horn, prefab.Renderers[0]] }, path);
+
+        var skeleton = GlbModelReader.ReadSkeleton(path, prefab);
+
+        Assert.Equal(["Hip", "Tail"], skeleton.JointNames);
+    }
+
     [Fact]
     public void Blenders_duplicate_name_suffix_is_ignored_on_materials()
     {
