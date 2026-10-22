@@ -10,8 +10,8 @@ namespace Tyrant.Framework.Core
     /// </summary>
     public static class FurMaskContent
     {
-        /// <summary>Unity's TextureFormat.RGBA32: an uncompressed PNG as Tyrant loads it.</summary>
-        public const int Rgba32 = 4;
+        /// <summary>Unity's uncompressed TextureFormats a PNG can load as (LoadImage).</summary>
+        public const int Rgb24 = 3, Rgba32 = 4, Argb32 = 5;
 
         /// <summary>A skin's fur slot texture, as Tyrant names it ("&lt;mod&gt;/&lt;skin&gt;:fur" or ":infantFur").</summary>
         public static bool IsSkinFurSlot(string textureName) =>
@@ -19,20 +19,22 @@ namespace Tyrant.Framework.Core
 
         /// <summary>
         /// True when the largest level of <paramref name="data"/> has no red anywhere. DXT1 and DXT5 are judged by each block's
-        /// two end colours (every colour in a block lies between them); RGBA32 pixel by pixel. Other formats, and data shorter
-        /// than the level, count as fur: Tyrant then keeps the mask, as before.
+        /// two end colours (every colour in a block lies between them); RGB24, RGBA32 and ARGB32 pixel by pixel. Other formats,
+        /// and data shorter than the level, count as fur: Tyrant then keeps the mask, as before.
         /// </summary>
         public static bool HasNoFur(int format, int width, int height, IList<byte> data) => HasNoFur(format, width, height, data.Count, i => data[i]);
 
         /// <summary><see cref="HasNoFur(int, int, int, IList{byte})"/> over <paramref name="length"/> bytes read in place (a texture's own buffer).</summary>
         public static bool HasNoFur(int format, int width, int height, long length, Func<int, byte> at)
         {
-            if (format == Rgba32)
+            if (format == Rgb24 || format == Rgba32 || format == Argb32)
             {
+                var stride = format == Rgb24 ? 3 : 4;
+                var red = format == Argb32 ? 1 : 0;
                 var pixels = (long)width * height;
-                if (length < pixels * 4) return false;
+                if (length < pixels * stride) return false;
                 for (var i = 0L; i < pixels; i++)
-                    if (at((int)(i * 4)) != 0) return false;
+                    if (at((int)(i * stride) + red) != 0) return false;
                 return true;
             }
             if (format != UnityTextureFormats.Dxt1 && format != UnityTextureFormats.Dxt5) return false;

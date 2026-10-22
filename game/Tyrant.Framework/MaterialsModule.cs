@@ -436,9 +436,10 @@ namespace Tyrant.Framework
 
         /// <summary>
         /// After a Tyrant skin's PNGs went onto the animal (AnimalTexturePatch, which runs after the game's variation hook): the
-        /// look is written again so its fur masks win over the skin's.
+        /// look is written again so its fur masks win over the skin's. As the editor's write (not the hook's), so the game's
+        /// values recorded by the hook are kept, not replaced by Tyrant's own still in the block.
         /// </summary>
-        public static void AfterSkinTextures(object animal) => AfterVariation(new[] { animal });
+        public static void AfterSkinTextures(object animal) => Reapply(animal, keywords: false);
 
         // __args[0]: the AnimalGrowthFlags; only a Material update writes _IridescenceStrength (the rest is bones and shapes).
         private static void AfterGrowth(object __instance, object[] __args)

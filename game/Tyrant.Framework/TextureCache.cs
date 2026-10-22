@@ -74,7 +74,7 @@ namespace Tyrant.Framework
                     return null;
                 }
                 if (kind == SlotKind.Normal) PackNormals(texture, replacement, file);
-                NoteFur(texture, replacement.Texture, FurMaskContent.Rgba32, texture.width, texture.height, texture.GetRawTextureData<byte>());
+                NoteFur(texture, replacement.Texture, (int)texture.format, texture.width, texture.height, texture.GetRawTextureData<byte>());
                 if (texture.width % 4 == 0 && texture.height % 4 == 0) texture.Compress(true); // DXT5 (RGBA source)
                 else FrameworkMod.Log.Warning($"{replacement.ModId}: {file} is {texture.width}x{texture.height}; sizes divisible by 4 use less memory.");
                 texture.Apply(false, true); // no longer readable: frees the CPU copy

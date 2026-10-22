@@ -516,10 +516,9 @@ public class LookEditingTests
     [Fact]
     public void Game_colours_show_nothing_when_the_template_has_no_shimmer_of_its_own()
     {
-        string[] shimmering = ["Acrocanthosaurus", "Microraptor"];
-        Assert.True(LookEditing.GameRampMissing(RampKind.Game, shimmering, "Allosaurus Anax"));
-        Assert.False(LookEditing.GameRampMissing(RampKind.Game, shimmering, "Microraptor"));
-        Assert.False(LookEditing.GameRampMissing(RampKind.ThinFilm, shimmering, "Allosaurus Anax"));
-        Assert.False(LookEditing.GameRampMissing(RampKind.Game, [], "Allosaurus Anax")); // the list is not read yet
+        Assert.True(LookEditing.GameRampMissing(RampKind.Game, ownRamp: false));
+        Assert.False(LookEditing.GameRampMissing(RampKind.Game, ownRamp: true));
+        Assert.False(LookEditing.GameRampMissing(RampKind.ThinFilm, ownRamp: false));
+        Assert.False(LookEditing.GameRampMissing(RampKind.Game, ownRamp: null)); // its material is not read yet
     }
 }

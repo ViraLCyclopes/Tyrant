@@ -46,9 +46,28 @@ public class FurMaskContentTests
     }
 
     [Fact]
+    public void An_argb32_or_rgb24_png_is_read_at_its_own_red_byte()
+    {
+        // ARGB32 (Unity's usual LoadImage result): byte 0 is alpha. Opaque black has no fur; alpha 0 with red is fur.
+        var opaqueBlack = new byte[4 * 4 * 4];
+        for (var i = 0; i < opaqueBlack.Length; i += 4) opaqueBlack[i] = 255;
+        Assert.True(FurMaskContent.HasNoFur(FurMaskContent.Argb32, 4, 4, opaqueBlack));
+        var redNoAlpha = new byte[4 * 4 * 4];
+        for (var i = 1; i < redNoAlpha.Length; i += 4) redNoAlpha[i] = 128;
+        Assert.False(FurMaskContent.HasNoFur(FurMaskContent.Argb32, 4, 4, redNoAlpha));
+
+        var rgb = new byte[4 * 4 * 3];
+        for (var i = 1; i < rgb.Length; i += 3) rgb[i] = 90; // green only
+        Assert.True(FurMaskContent.HasNoFur(FurMaskContent.Rgb24, 4, 4, rgb));
+        rgb[3 * 5] = 1;
+        Assert.False(FurMaskContent.HasNoFur(FurMaskContent.Rgb24, 4, 4, rgb));
+    }
+
+    [Fact]
     public void Formats_it_cannot_read_and_short_data_count_as_fur()
     {
         Assert.False(FurMaskContent.HasNoFur(UnityTextureFormats.Bc7, 4, 4, new byte[16]));
+        Assert.False(FurMaskContent.HasNoFur(74, 4, 4, new byte[128])); // RGBA64: not read
         Assert.False(FurMaskContent.HasNoFur(UnityTextureFormats.Dxt1, 8, 8, new byte[8]));
     }
 

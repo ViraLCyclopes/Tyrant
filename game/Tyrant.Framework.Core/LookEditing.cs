@@ -46,12 +46,11 @@ namespace Tyrant.Framework.Core
         public static IReadOnlyList<MaskKind> MaskKinds(LookScope scope) => scope == LookScope.Species ? SpeciesMasks : AllMasks;
 
         /// <summary>
-        /// True when the shown colours are the game's but the species (a custom species': its template) has none of its own,
-        /// so the shimmer shows nothing. <paramref name="shimmering"/> is the species the game gives a shimmer; empty while
-        /// it is not read yet (then nothing is claimed).
+        /// True when the shown colours are the game's but the species (a custom species': its template) has no ramp of its
+        /// own, so the shimmer shows nothing. <paramref name="ownRamp"/> is null while its material is not read yet (then
+        /// nothing is claimed).
         /// </summary>
-        public static bool GameRampMissing(RampKind kind, IReadOnlyCollection<string> shimmering, string species) =>
-            kind == RampKind.Game && shimmering.Count > 0 && !shimmering.Contains(species);
+        public static bool GameRampMissing(RampKind kind, bool? ownRamp) => kind == RampKind.Game && ownRamp == false;
 
         /// <summary>Game for no ramp and for the explicit "game" one.</summary>
         public static RampKind RampKindOf(RampSource? ramp) =>
