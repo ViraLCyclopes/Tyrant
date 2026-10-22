@@ -158,6 +158,7 @@ public sealed partial class ModsMethods
         var entry = mod.Manifest.Species.FirstOrDefault(s => s.Id == p.SpeciesId)
             ?? throw new TyrantException(TyrantErrorCode.TargetNotFound, "Species not found: " + p.SpeciesId);
         ValidateStats(p.Stats, SpeciesDatabase.Template(ws, entry.Base));
+        if (p.Texts != null) ModProject.ValidateSpeciesTexts(p.Texts);
         mod.SetSpecies(p.SpeciesId, p.Name, p.Genus, p.Epithet, p.Cost, p.Stats, p.DataFields, SpeciesDatabase.Template(ws, entry.Base),
             p.Localization);
         if (p.Texts != null) mod.SetSpeciesTexts(p.SpeciesId, p.Texts);

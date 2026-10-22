@@ -5,27 +5,25 @@ namespace Tyrant.Core.Mods;
 
 public sealed partial class ModProject
 {
-    /// <summary>A species' text files, language code → field (name, description, characterNotes, socialInfo) → text; missing files read as empty.</summary>
+    /// <summary>
+    /// A species' texts as the game reads them (its own files, else an older mod's combined language file), language code →
+    /// field (name, description, characterNotes, socialInfo) → text; a text it has none of reads as empty.
+    /// </summary>
     public IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> SpeciesTexts(string id)
     {
         var entry = Manifest.Species.FirstOrDefault(s => s.Id == id)
             ?? throw new TyrantException(TyrantErrorCode.TargetNotFound, $"No species '{id}' in this mod.");
-        return AnimalLocalization.Codes.ToDictionary(code => code, code => (IReadOnlyDictionary<string, string>)AnimalText.Keys.ToDictionary(slot => slot, slot =>
-        {
-            if (!entry.Localization.TryGetValue(slot, out var term)) return "";
-            var path = AnimalLocalization.FileFor(Dir, code, term);
-            return File.Exists(path) ? File.ReadAllText(path) : "";
-        }));
+        var read = new SpeciesEntry { Localization = new Dictionary<string, string>(entry.Localization) };
+        try { AnimalLocalization.Load(Dir, [read]); }
+        catch (ManifestException ex) { throw new TyrantException(TyrantErrorCode.ModInvalid, ex.Message); }
+        return AnimalLocalization.Codes.Select((code, i) => (code, language: AnimalText.Languages[i])).ToDictionary(c => c.code,
+            c => (IReadOnlyDictionary<string, string>)AnimalText.Keys.ToDictionary(slot => slot,
+                slot => read.Texts.FirstOrDefault(t => t.Language == c.language && t.Key == slot)?.Text ?? ""));
     }
 
-    /// <summary>
-    /// Writes the given texts (language code → field → text). An empty translation falls back to English in game. The English
-    /// name is the Display name (<see cref="SetSpecies"/>). A field without a key gets the default key &lt;species-id&gt;/&lt;field&gt;.
-    /// </summary>
-    public void SetSpeciesTexts(string id, IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> texts)
+    /// <summary>Refuses unknown languages and fields, and the English name (that is the Display name), before anything is saved.</summary>
+    public static void ValidateSpeciesTexts(IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> texts)
     {
-        var index = Manifest.Species.FindIndex(s => s.Id == id);
-        if (index < 0) throw new TyrantException(TyrantErrorCode.TargetNotFound, $"No species '{id}' in this mod.");
         foreach (var (code, fields) in texts)
         {
             if (!AnimalLocalization.Codes.Contains(code))
@@ -38,6 +36,18 @@ public sealed partial class ModProject
                     throw new TyrantException(TyrantErrorCode.ModInvalid, "The English name is the species' Display name: change that instead.");
             }
         }
+    }
+
+    /// <summary>
+    /// Writes the given texts (language code → field → text). An empty translation falls back to English in game, so a blank one
+    /// is saved empty. The English name is the Display name (<see cref="SetSpecies"/>). A field without a key gets the default
+    /// key &lt;species-id&gt;/&lt;field&gt;.
+    /// </summary>
+    public void SetSpeciesTexts(string id, IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> texts)
+    {
+        var index = Manifest.Species.FindIndex(s => s.Id == id);
+        if (index < 0) throw new TyrantException(TyrantErrorCode.TargetNotFound, $"No species '{id}' in this mod.");
+        ValidateSpeciesTexts(texts);
         var entry = Manifest.Species[index];
         var missing = texts.Values.SelectMany(f => f.Keys).Distinct().Where(slot => !entry.Localization.ContainsKey(slot)).ToList();
         if (missing.Count > 0)
@@ -49,7 +59,8 @@ public sealed partial class ModProject
         }
         foreach (var (code, fields) in texts)
             foreach (var (slot, text) in fields)
-                WriteText(AnimalLocalization.FileFor(Dir, code, entry.Localization[slot]), text);
+                // The game treats only empty text as missing, so a blank translation would show blank instead of English.
+                WriteText(AnimalLocalization.FileFor(Dir, code, entry.Localization[slot]), code != "en-US" && text.Trim().Length == 0 ? "" : text);
     }
 
     private static void WriteText(string path, string text)

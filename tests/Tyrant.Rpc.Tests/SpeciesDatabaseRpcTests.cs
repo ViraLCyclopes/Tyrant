@@ -97,6 +97,31 @@ public class SpeciesDatabaseRpcTests
         Assert.Equal("Grand.", texts.GetProperty("fr").GetProperty("description").GetString());
         Assert.Equal("Mirabilis roi", texts.GetProperty("fr").GetProperty("name").GetString());
         Assert.Equal("", texts.GetProperty("es").GetProperty("description").GetString());
+
+        // Bad texts refuse the whole save: the name is not changed either.
+        a = await h.Call("mods.get", new { id = "mod-a" });
+        var bad = await Assert.ThrowsAsync<RpcCallException>(() => h.Call("mods.setSpecies", new
+        {
+            id = "mod-a", revision = Rev(a), speciesId = "mirabilis", name = "Renamed", genus = "Example", epithet = "mirabilis",
+            cost = (int?)null, stats = new Dictionary<string, double>(),
+            texts = new Dictionary<string, Dictionary<string, string>> { ["xx"] = new() { ["description"] = "?" } },
+        }));
+        Assert.Equal("MOD_INVALID", bad.DataCode);
+        var mod = Path.Combine(ws, "mods", "mod-a");
+        Assert.Equal("Mirabilis Rex", Assert.Single(AnimalDatabaseFile.Read(Path.Combine(mod, "animals.db"))).Name);
+
+        // A language file edited elsewhere after the page loaded is not overwritten.
+        var french = Path.Combine(mod, "localization", "fr", "mirabilis", "description.txt");
+        File.WriteAllText(french, "Édité dans le Bloc-notes.");
+        var stale = await Assert.ThrowsAsync<RpcCallException>(() => h.Call("mods.setSpecies", new
+        {
+            id = "mod-a", revision = Rev(a), speciesId = "mirabilis", name = "Mirabilis Rex", genus = "Example", epithet = "mirabilis",
+            cost = (int?)null, stats = new Dictionary<string, double>(),
+            texts = new Dictionary<string, Dictionary<string, string>> { ["fr"] = new() { ["description"] = "Vieux formulaire." } },
+        }));
+        Assert.Equal("MOD_CHANGED", stale.DataCode);
+        Assert.Contains("language", stale.Message);
+        Assert.Equal("Édité dans le Bloc-notes.", File.ReadAllText(french));
     }
 
     [Fact]

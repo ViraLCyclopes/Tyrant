@@ -127,6 +127,54 @@ describe('Species database', () => {
     await waitFor(() => expect((rpc.callsTo('mods.setSpecies')[0]?.params as { texts?: unknown } | undefined)?.texts).toEqual({ fr: { description: 'Grand.', name: 'Nouvel animal', socialInfo: '' } }));
   });
 
+  it('typed text survives a reload from another change on the page, and the save still sends it', async () => {
+    let revision = 1;
+    const { rpc, platform } = await setup();
+    rpc.on('mods.setSpeciesIcon', () => modDetail({ revision: `r${++revision}` }));
+    rpc.on('mods.setSpecies', () => modDetail({ revision: `r${++revision}` }));
+    const section = screen.getByRole('region', { name: 'Paleopedia text' });
+    await fireEvent.input(within(section).getByRole('textbox', { name: 'Social info' }), { target: { value: 'Lives in packs.' } });
+
+    platform.files.push('C:/icons/mirabilis.png');
+    await fireEvent.click(screen.getByRole('button', { name: 'Nursery picture: Choose PNG…' }));
+    await waitFor(() => expect(rpc.callsTo('mods.animalDatabase').length).toBeGreaterThan(1));
+
+    expect(within(section).getByRole('textbox', { name: 'Social info' })).toHaveValue('Lives in packs.');
+    expect(within(section).getByRole('textbox', { name: 'Description' })).toHaveValue('English description.');
+    await fireEvent.click(screen.getByRole('button', { name: 'Save species' }));
+    await waitFor(() => expect((rpc.callsTo('mods.setSpecies')[0]?.params as { texts?: unknown } | undefined)?.texts).toEqual({ 'en-US': { socialInfo: 'Lives in packs.' } }));
+  });
+
+  it('another species starts from its own texts, not what was typed on the last one', async () => {
+    const other = { ...animal, id: 'other-animal', key: 'tyrant.red-spot.other-animal', name: 'Other animal', texts: languageTexts({ 'en-US': { description: 'Other description.' } }) };
+    await setup([animal, other]);
+    const section = () => screen.getByRole('region', { name: 'Paleopedia text' });
+    await fireEvent.input(within(section()).getByRole('textbox', { name: 'Description' }), { target: { value: 'Typed.' } });
+
+    await fireEvent.change(screen.getByRole('combobox', { name: 'Animal' }), { target: { value: 'other-animal' } });
+    await waitFor(() => expect(within(section()).getByRole('textbox', { name: 'Description' })).toHaveValue('Other description.'));
+    await fireEvent.change(screen.getByRole('combobox', { name: 'Animal' }), { target: { value: 'new-animal' } });
+    await waitFor(() => expect(within(section()).getByRole('textbox', { name: 'Description' })).toHaveValue('English description.'));
+  });
+
+  it('renaming the species saves the Display name and never sends the English name text', async () => {
+    const { rpc } = await setup();
+    rpc.on('mods.setSpecies', () => modDetail({ revision: 'r2' }));
+    await fireEvent.input(screen.getByRole('textbox', { name: 'Display name' }), { target: { value: 'Ultimasaurus' } });
+    await fireEvent.input(within(screen.getByRole('region', { name: 'Paleopedia text' })).getByRole('textbox', { name: 'Description' }), { target: { value: 'The biggest.' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Save species' }));
+    await waitFor(() => expect(rpc.callsTo('mods.setSpecies')[0]?.params).toMatchObject({ name: 'Ultimasaurus' }));
+    expect((rpc.callsTo('mods.setSpecies')[0]?.params as { texts?: unknown }).texts).toEqual({ 'en-US': { description: 'The biggest.' } });
+  });
+
+  it('a blank translation counts as using English', async () => {
+    await setup([{ ...animal, texts: languageTexts({ 'en-US': { description: 'English description.' }, fr: { description: '  ' } }) }]);
+    const section = screen.getByRole('region', { name: 'Paleopedia text' });
+    expect(within(within(section).getByRole('combobox', { name: 'Language' })).getByRole('option', { name: 'French (uses English)' })).toBeInTheDocument();
+    await fireEvent.change(within(section).getByRole('combobox', { name: 'Language' }), { target: { value: 'fr' } });
+    expect(within(section).getAllByText('Uses English').length).toBe(4);
+  });
+
   it('the language picker marks the languages that have their own text', async () => {
     await setup([{ ...animal, texts: languageTexts({ 'en-US': { description: 'English description.' }, de: { description: 'Groß.' } }) }]);
     const picker = within(screen.getByRole('region', { name: 'Paleopedia text' })).getByRole('combobox', { name: 'Language' });

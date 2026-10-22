@@ -209,7 +209,9 @@ public class SpeciesCliTests : IDisposable
         Assert.Equal(ExitCodes.Error, Run("mod", "set-species-text", "mod-a", "mirabilis", "description", "-w", ws).Code);
         Assert.Equal(ExitCodes.Error, Run("mod", "set-species-text", "mod-a", "mirabilis", "description", "--text", "a", "--file", file, "-w", ws).Code);
         Assert.Equal(ExitCodes.Error, Run("mod", "set-species-text", "mod-a", "mirabilis", "description", "--english", "-w", ws).Code);
-        Assert.NotEqual(ExitCodes.Ok, Run("mod", "set-species-text", "mod-a", "mirabilis", "name", "--text", "X", "-w", ws).Code);
+        var englishName = Run("mod", "set-species-text", "mod-a", "mirabilis", "name", "--text", "X", "-w", ws);
+        Assert.NotEqual(ExitCodes.Ok, englishName.Code);
+        Assert.Contains("Display name", englishName.Err);
     }
 
     [Fact]

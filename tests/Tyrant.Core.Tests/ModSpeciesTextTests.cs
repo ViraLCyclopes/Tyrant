@@ -96,6 +96,31 @@ public class ModSpeciesTextTests
     }
 
     [Fact]
+    public void A_blank_translation_is_saved_empty_so_the_game_uses_english()
+    {
+        var (game, mod, entry) = NewSpecies();
+        using var _ = game;
+        mod.SetSpeciesTexts("new-animal", new Dictionary<string, IReadOnlyDictionary<string, string>>
+        {
+            ["fr"] = new Dictionary<string, string> { ["description"] = "  \n " },
+            ["en-US"] = new Dictionary<string, string> { ["characterNotes"] = " " },
+        });
+        Assert.Equal("", Read(mod, "fr", entry.Localization["description"]));
+        Assert.Equal(" ", Read(mod, "en-US", entry.Localization["characterNotes"]));
+    }
+
+    [Fact]
+    public void Texts_of_an_older_mod_with_combined_language_files_show_what_the_game_shows()
+    {
+        var (game, mod, entry) = NewSpecies();
+        using var _ = game;
+        File.Delete(AnimalLocalization.FileFor(mod.Dir, "fr", entry.Localization["description"]));
+        File.WriteAllText(Path.Combine(mod.Dir, "localization", "fr.txt"), "[" + entry.Localization["description"] + "]\nAncien texte.");
+
+        Assert.Equal("Ancien texte.", mod.SpeciesTexts("new-animal")["fr"]["description"]);
+    }
+
+    [Fact]
     public void Renaming_the_species_updates_its_english_name_file()
     {
         var (game, mod, entry) = NewSpecies();

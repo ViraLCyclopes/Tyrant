@@ -2,7 +2,7 @@
   import PortraitsCard from './PortraitsCard.svelte';
   import RemoveSpeciesDialog from './RemoveSpeciesDialog.svelte';
   import StartingSkinChoice, { freshChoice, startParams, startingSkinOf, type StartingChoice } from './StartingSkinChoice.svelte';
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import { getSession } from '$lib/stores/session.svelte';
   import { getTab } from '$lib/shell/tab.svelte';
   import type { ModAnimalDatabase, ModSpeciesTemplateDto, SpeciesRemoval, SpeciesSkinsRow } from '$lib/rpc/types.gen';
@@ -38,6 +38,10 @@
   let textLanguage = $state('en-US');
   /** Each language's Paleopedia texts as edited (language code → field → text); an empty translation uses the English text in game. */
   let texts = $state<Record<string, Record<string, string>>>({});
+  /** The texts as last loaded and whose they are: a reload keeps what was typed since, unless it is another species or this page saved. */
+  let loadedTexts: Record<string, Record<string, string>> = {};
+  let textsOf = '';
+  let savedTexts = false;
   let busy = $state(false);
   let failed = $state(false);
   let initialized = false;
@@ -78,7 +82,17 @@
     values = { ...(source?.stats ?? {}) };
     dataValues = Object.fromEntries((source?.dataFields ?? []).filter(f => f.editable).map(f => [f.path, f.value]));
     localization = { ...(source?.localization ?? {}) };
-    texts = Object.fromEntries(Object.entries(source?.texts ?? {}).map(([code, slots]) => [code, { ...slots }]));
+    const server = source?.texts ?? {};
+    untrack(() => {
+      const fresh = !source || source.id !== textsOf || savedTexts;
+      texts = Object.fromEntries(Object.entries(server).map(([code, slots]) => [code, Object.fromEntries(Object.entries(slots).map(([slot, text]) => {
+        const typed = texts[code]?.[slot];
+        return [slot, !fresh && typed !== undefined && typed !== (loadedTexts[code]?.[slot] ?? '') ? typed : text];
+      }))]));
+      loadedTexts = server;
+      textsOf = source?.id ?? '';
+      savedTexts = false;
+    });
     if (source) template = source.base;
   });
 
@@ -135,6 +149,7 @@
       const added = creating;
       const start = { startingSkin: startingSkinOf(choice, template), ...startParams(choice) };
       if (await doc.edit(added ? 'mods.addSpecies' : 'mods.setSpecies', added ? { ...fields, template, ...start } : { ...fields, texts: changedTexts() }, { undoable: false })) {
+        savedTexts = true;
         selected = speciesId;
         await reload();
         tab.info(added ? `Added species '${name}'.` : `Saved '${name}' and its stats.`);
@@ -264,7 +279,7 @@
             {/each}
           </section>
           {#snippet fallback(slot: string, label: string)}
-            {#if (texts[textLanguage]?.[slot] ?? '') === ''}<span class="hint">Uses English</span>
+            {#if (texts[textLanguage]?.[slot] ?? '').trim() === ''}<span class="hint">Uses English</span>
             {:else}<span><button type="button" class="small" aria-label="{label}: Use English" onclick={() => setText(textLanguage, slot, '')}>Use English</button></span>{/if}
           {/snippet}
           <details class="advanced">
