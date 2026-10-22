@@ -90,6 +90,9 @@ public sealed partial class ModProject
         };
         try { EnsureLocalizationFiles(Manifest.Species[index]); SaveSpecies(); }
         catch { Manifest.Species[index] = old; throw; }
+        // The English name file is what the game shows, so it follows the Display name.
+        if (Manifest.Species[index].Name != old.Name && Manifest.Species[index].Localization.TryGetValue("name", out var nameTerm))
+            WriteText(AnimalLocalization.FileFor(Dir, "en-US", nameTerm), Manifest.Species[index].Name);
     }
 
     private void SaveSpecies()

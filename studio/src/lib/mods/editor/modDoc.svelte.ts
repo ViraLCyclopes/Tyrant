@@ -206,7 +206,7 @@ export class ModDoc {
     this.undoStack = [];
     this.redoStack = [];
     this.sync();
-    this.tab.info('mod.json, animals.db, prefab or material settings files changed outside this tab; reloaded.');
+    this.tab.info('mod.json, animals.db, language text, prefab or material settings files changed outside this tab; reloaded.');
     this.scheduleCheck(0);
   }
 

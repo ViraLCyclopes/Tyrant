@@ -65,7 +65,7 @@ public sealed partial class ModProject
         var mod = Open(ws, id);
         if (expectedRevision is not null && !string.Equals(mod.Revision(), expectedRevision, StringComparison.OrdinalIgnoreCase))
             throw new TyrantException(TyrantErrorCode.ModChanged,
-                $"'{id}' changed outside this editor (mod.json, animals.db, prefab or material settings files were edited elsewhere). It was reloaded; make your change again.");
+                $"'{id}' changed outside this editor (mod.json, animals.db, language text, prefab or material settings files were edited elsewhere). It was reloaded; make your change again.");
         return mod;
     }
 

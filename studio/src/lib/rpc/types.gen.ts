@@ -496,6 +496,7 @@ export interface ModAnimalDto {
   portraits?: Record<string, string> | null;
   startingSkinId?: string | null;
   paleopediaPicture?: string | null;
+  texts?: Record<string, Record<string, string>> | null;
 }
 
 export interface ModAnimalFieldDto {
@@ -1115,6 +1116,7 @@ export interface ModSetSpeciesParams {
   stats: Record<string, number>;
   dataFields?: Record<string, string> | null;
   localization?: Record<string, string> | null;
+  texts?: Record<string, Record<string, string>> | null;
 }
 
 export interface ModSetSpeciesPortraitsParams {

@@ -175,9 +175,19 @@ and a placeholder description, plus empty files for every other language, ready 
 translate. Empty or missing translations fall back to English. Empty or
 missing notes retain the template's notes. At runtime Tyrant creates separate PK
 localization assets and follows the current game language; original CSVs are unchanged.
-The editor provides key inputs, a language selector, and separate buttons to reveal
-each text file. Legacy combined language files remain readable for compatibility,
-but new species write one plain text file per field.
+On the species page, **Paleopedia text** edits these files directly. Pick a language, type the
+description, character notes and social info, and press **Save species**. English is written
+first: every other language uses the English text until you give it its own, and its fields show
+the English text greyed out with **Uses English** beside them. Typing in another language
+translates that field; **Use English** empties it again. Other languages also get a translated
+name; the English name is the **Display name**, and renaming the species rewrites its English
+name file. The language picker marks each language as translated or as using English. The keys
+and **Show … text file** buttons are under **Text files**. Legacy combined language files remain
+readable for compatibility, but new species write one plain text file per field.
+
+From the CLI, `tyrant mod set-species-text <MOD> <SPECIES-ID> <FIELD> [--lang <CODE>] (--text <TEXT> | --file <FILE> | --english)`
+sets one field (`description`, `characterNotes`, `socialInfo`, or `name` for a translation);
+`--lang` defaults to `en-US`, and `--english` empties a translation so it uses English.
 
 ## Nursery and Paleopedia pictures
 
@@ -318,6 +328,8 @@ tyrant mod add-skin other-pack tyrant.my-animal-pack.example-animal --name "Blue
 tyrant mod set-starting-skin my-animal-pack blue -w <workspace>
 tyrant mod set-species-photo my-animal-pack example-animal --png nursery.png -w <workspace>
 tyrant mod set-species-paleopedia-picture my-animal-pack example-animal --png paleopedia.png -w <workspace>
+tyrant mod set-species-text my-animal-pack example-animal description --file description.txt -w <workspace>
+tyrant mod set-species-text my-animal-pack example-animal description --lang fr --text "Un grand prédateur." -w <workspace>
 tyrant mod remove-species my-animal-pack example-animal -w <workspace>
 ```
 

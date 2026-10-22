@@ -240,6 +240,12 @@ the Nursery's species panel (a PNG; the game's are 512×256). It is not the Pale
 Paleopedia's animal list and its notifications; a 16:9 PNG, the game's are 2048×1152). Each has **Choose PNG…** and
 **Use template picture**, which goes back to the template's.
 
+**Paleopedia text**, in the species form, is what its Paleopedia page says: the description, character notes and social
+info. Pick a language, type, and press **Save species**. Write English first: every other language uses the English text
+until it has its own (its fields show the English greyed out, marked **Uses English**); typing translates a field and
+**Use English** empties it again. Other languages also take a translated name; the English name is the **Display name**.
+Empty English character notes or social info show the template's. **Text files** below it lists where each text is stored.
+
 **Delete species…** at the bottom of the species page removes the species with its skins, models, sounds and
 prefab settings, after a dialog that lists them and any other workspace mods that use the species. Its files go to
 the Recycle Bin unless you untick that. Saved parks with the species can no longer load its animals.

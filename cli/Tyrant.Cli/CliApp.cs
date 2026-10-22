@@ -154,6 +154,8 @@ public static class CliApp
                     .WithDescription("Set or clear a custom species' Nursery picture (its Nursery card and the Nursery species panel).");
                 mod.AddCommand<ModSpeciesPaleopediaPictureCommand>("set-species-paleopedia-picture")
                     .WithDescription("Set or clear the picture on a custom species' own Paleopedia page.");
+                mod.AddCommand<ModSpeciesTextCommand>("set-species-text")
+                    .WithDescription("Set a custom species' Paleopedia text (description, character notes, social info) or a translated name, per language.");
                 mod.AddCommand<ModCleanSkinsCommand>("clean-skins").WithDescription("List or forget skin numbers left by removed mods.");
                 mod.AddCommand<ModListCommand>("list").WithDescription("List your mods and what is installed in the game.");
                 mod.AddCommand<ModShowCommand>("show").WithDescription("Show a mod's details, replacements and skins.");
