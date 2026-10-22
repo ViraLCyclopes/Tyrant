@@ -237,6 +237,9 @@ public class BlenderAddonRunTests
 
         var report = Tyrant.Core.ModelReplacements.ModelBuilder.Build(dir, "back.glb", prefab);
         Assert.True(report.Errors.Count == 0, string.Join(" | ", report.Errors)); // bones, growth keys and material survived
+        // The chain's tip (Tail) is a real bone: the FBX carries leaf bones, so the import's dropping them keeps it.
+        var joints = Tyrant.Core.ModelReplacements.GlbModelReader.Read(Path.Combine(dir, "back.glb"))[0].JointNames;
+        Assert.Equal(["Hip", "Tail"], joints.Order());
     }
 
     [SkippableFact]

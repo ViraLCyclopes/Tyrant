@@ -100,7 +100,8 @@ public sealed class BlenderModelConverter(IBlenderProcess process, string blende
                     bpy.ops.wm.read_factory_settings(use_empty=True)
                     bpy.ops.import_scene.gltf(filepath=glb, disable_bone_shape=True, bone_heuristic="BLENDER", merge_vertices=True)
                     # Animations (glTF animations become Actions) go as FBX takes, one per Action, keyed as they are.
-                    bpy.ops.export_scene.fbx(filepath=fbx, use_selection=False, add_leaf_bones=False, primary_bone_axis="Y",
+                    # Leaf bones: FbxToGlb (and other importers) drop each chain's last bone, so they keep the real tips.
+                    bpy.ops.export_scene.fbx(filepath=fbx, use_selection=False, add_leaf_bones=True, primary_bone_axis="Y",
                                              secondary_bone_axis="X", use_mesh_modifiers=False, bake_anim=bool(bpy.data.actions),
                                              bake_anim_use_all_actions=True, bake_anim_use_nla_strips=False,
                                              bake_anim_force_startend_keying=True, bake_anim_simplify_factor=0.0, path_mode="RELATIVE")
