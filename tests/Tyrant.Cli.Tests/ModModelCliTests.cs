@@ -3,6 +3,7 @@ using Tyrant.Core.Assets;
 using Tyrant.Core.Install;
 using Tyrant.Core.Models;
 using Tyrant.Core.Tests;
+using static Tyrant.Core.Tests.RigFixture;
 
 namespace Tyrant.Cli.Tests;
 
@@ -156,6 +157,159 @@ public class ModModelCliTests
             Assert.DoesNotContain("\"rig\"", File.ReadAllText(Path.Combine(ws, "mods", "big-carch", "mod.json")));
 
             Assert.Contains("No rig edit", Run("mod", "rig", "big-carch", "Carcharodontosaurus", "-w", ws).Out);
+        }
+        finally
+        {
+            CliServices.AssetReader = new BundleAssetReader();
+        }
+    }
+
+    /// <summary>Setup, but the game's prefab is the 16-bone animal of the rig tests, so a model can carry a rig edit in its bones.</summary>
+    private static (string Ws, PrefabModel Prefab) SetupRigged(FakeGame game)
+    {
+        var (ws, _) = Setup(game);
+        var prefab = Game();
+        prefab = prefab with { Renderers = [prefab.Renderers[0] with { Materials = [new MaterialModel("Quad_LOD0", [])] }] };
+        CliServices.AssetReader = new FakeAssetReader { PrefabModelToReturn = prefab };
+        return (ws, prefab);
+    }
+
+    private static string ModJson(string ws) => File.ReadAllText(Path.Combine(ws, "mods", "big-carch", "mod.json"));
+
+    [Fact]
+    public void Replace_model_prints_the_rig_edit_it_read()
+    {
+        using var game = new FakeGame();
+        var (ws, prefab) = SetupRigged(game);
+        try
+        {
+            var glb = Export(prefab, R());
+
+            var added = Run("mod", "replace-model", "big-carch", "Carcharodontosaurus", glb, "-w", ws);
+
+            Assert.True(added.Code == ExitCodes.Ok, added.Err + added.Out);
+            Assert.Contains("Rig edit: from the model's bones (2 bones)", added.Out);
+            Assert.Matches(@"  Neck1  move 0, 0\.05\d*, 0\.02\d*  rotate 10(\.\d+)?, [-0-9.e]+, [-0-9.e]+ deg", added.Out);
+            Assert.Matches(@"  Tail1  rotate [-0-9.e]+, -15(\.\d+)?, [-0-9.e]+ deg", added.Out);
+            Assert.Contains("\"Neck1\"", ModJson(ws));
+        }
+        finally
+        {
+            CliServices.AssetReader = new BundleAssetReader();
+        }
+    }
+
+    [Fact]
+    public void Dry_run_saves_nothing()
+    {
+        using var game = new FakeGame();
+        var (ws, prefab) = SetupRigged(game);
+        try
+        {
+            var before = ModJson(ws);
+
+            var dry = Run("mod", "replace-model", "big-carch", "Carcharodontosaurus", Export(prefab, R()), "--dry-run", "-w", ws);
+
+            Assert.True(dry.Code == ExitCodes.Ok, dry.Err + dry.Out);
+            Assert.Contains("Rig edit: from the model's bones (2 bones)", dry.Out);
+            Assert.DoesNotContain("Added the model", dry.Out);
+            Assert.Equal(before, ModJson(ws));
+            Assert.False(Directory.Exists(Path.Combine(ws, "mods", "big-carch", "models")));
+        }
+        finally
+        {
+            CliServices.AssetReader = new BundleAssetReader();
+        }
+    }
+
+    [Fact]
+    public void Keep_rig_and_use_file_rig_together_are_refused()
+    {
+        using var game = new FakeGame();
+        var (ws, prefab) = SetupRigged(game);
+        try
+        {
+            var before = ModJson(ws);
+
+            var both = Run("mod", "replace-model", "big-carch", "Carcharodontosaurus", Export(prefab, R()), "--keep-rig", "--use-file-rig", "-w", ws);
+
+            Assert.NotEqual(ExitCodes.Ok, both.Code);
+            Assert.Contains("--keep-rig", both.Err + both.Out);
+            Assert.Equal(before, ModJson(ws));
+        }
+        finally
+        {
+            CliServices.AssetReader = new BundleAssetReader();
+        }
+    }
+
+    [Fact]
+    public void The_game_skeleton_keeps_the_rig_edit_and_says_how_to_remove_it()
+    {
+        using var game = new FakeGame();
+        var (ws, prefab) = SetupRigged(game);
+        try
+        {
+            Assert.Equal(ExitCodes.Ok, Run("mod", "replace-model", "big-carch", "Carcharodontosaurus", Export(prefab, R()), "-w", ws).Code);
+            var plain = Export(prefab, null);
+
+            var kept = Run("mod", "replace-model", "big-carch", "Carcharodontosaurus", plain, "-w", ws);
+            Assert.True(kept.Code == ExitCodes.Ok, kept.Err + kept.Out);
+            Assert.Contains("the model has the game's skeleton", kept.Out);
+            Assert.Contains("Kept the current rig edit (the model has the game's skeleton); --use-file-rig removes it.", kept.Out);
+            Assert.Contains("\"Neck1\"", ModJson(ws));
+
+            var removed = Run("mod", "replace-model", "big-carch", "Carcharodontosaurus", plain, "--use-file-rig", "-w", ws);
+            Assert.True(removed.Code == ExitCodes.Ok, removed.Err + removed.Out);
+            Assert.DoesNotContain("Kept the current", removed.Out);
+            Assert.DoesNotContain("\"Neck1\"", ModJson(ws));
+        }
+        finally
+        {
+            CliServices.AssetReader = new BundleAssetReader();
+        }
+    }
+
+    [Fact]
+    public void Keep_rig_keeps_the_current_edit_whatever_the_model_says()
+    {
+        using var game = new FakeGame();
+        var (ws, prefab) = SetupRigged(game);
+        try
+        {
+            Assert.Equal(ExitCodes.Ok, Run("mod", "replace-model", "big-carch", "Carcharodontosaurus", Export(prefab, R()), "-w", ws).Code);
+
+            var kept = Run("mod", "replace-model", "big-carch", "Carcharodontosaurus", Export(prefab, Rig(Turn("Head", System.Numerics.Vector3.UnitX, 30))), "--keep-rig", "-w", ws);
+
+            Assert.True(kept.Code == ExitCodes.Ok, kept.Err + kept.Out);
+            Assert.Contains("\"Neck1\"", ModJson(ws));
+            Assert.DoesNotContain("\"Head\"", ModJson(ws));
+        }
+        finally
+        {
+            CliServices.AssetReader = new BundleAssetReader();
+        }
+    }
+
+    [Fact]
+    public void Replace_model_refuses_a_rig_edit_the_rules_refuse()
+    {
+        using var game = new FakeGame();
+        var (ws, prefab) = SetupRigged(game);
+        try
+        {
+            var glb = Export(prefab, R());
+            var rigFile = R(); // matches the bones but names a bone the species does not have
+            rigFile["Wing.L"] = Tyrant.Framework.Core.RigOffset.Identity with { Move = new Tyrant.Framework.Core.RigVector3(0, 0.1f, 0) };
+            File.WriteAllText(glb + ".rig.json", Tyrant.Framework.Core.Json.Write(Tyrant.Framework.Core.RigEdit.ToJson(rigFile)));
+            var before = ModJson(ws);
+
+            var refused = Run("mod", "replace-model", "big-carch", "Carcharodontosaurus", glb, "-w", ws);
+
+            Assert.NotEqual(ExitCodes.Ok, refused.Code);
+            Assert.Contains("  ERROR  ", refused.Out);
+            Assert.Contains("Wing.L", refused.Out);
+            Assert.Equal(before, ModJson(ws));
         }
         finally
         {
