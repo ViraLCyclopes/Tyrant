@@ -96,7 +96,14 @@ public sealed partial class ModProject
                 // Checked before anything is written, as Send does.
                 if (ws is not null && effective is not null
                     && RigProblems(ws, install, index, species, reader, speciesId, skin, effective).Errors is { Count: > 0 } rigErrors)
-                    throw new TyrantException(TyrantErrorCode.ModInvalid, $"The model was not added: {string.Join(" ", rigErrors)}");
+                {
+                    if (RigEdit.Hash(effective) != RigEdit.Hash(preview.Current))
+                        throw new TyrantException(TyrantErrorCode.ModInvalid, $"The model was not added: {string.Join(" ", rigErrors)}");
+                    var clear = skin is null ? $"tyrant mod rig {Id} \"{speciesId}\" --clear" : $"tyrant mod rig {Id} \"{speciesId}\" --skin {skin.Id} --clear";
+                    throw new TyrantException(TyrantErrorCode.ModInvalid,
+                        $"The model was not added: the rig edit already on {(skin is null ? speciesId : $"skin '{skin.Id}'")} breaks a rule, not the model. {string.Join(" ", rigErrors)} "
+                        + $"Clear it (Clear rig edit on the model page, or '{clear}'), then add the model again.");
+                }
             }
         }
 
@@ -154,8 +161,9 @@ public sealed partial class ModProject
                 warnings.Add($"{rigFileName} could not be read ({ex.Message}), so the rig edit was read from the model's bones.");
             }
         }
-        // Named as the app shows the species.
-        var name = species.FirstOrDefault(s => string.Equals(s.SpeciesId, speciesId, StringComparison.Ordinal))?.Name ?? speciesId;
+        // Named as the app shows the species: this mod's own species by its name, a game species by its display name.
+        var name = Manifest.Species.FirstOrDefault(s => s.Key(Id) == speciesId && s.Name.Length > 0)?.Name
+            ?? species.FirstOrDefault(s => string.Equals(s.SpeciesId, speciesId, StringComparison.Ordinal))?.Name ?? speciesId;
         var reading = ModelRigReader.Read(file, game, current, rigFile, name, rigFileName);
         warnings.AddRange(reading.Warnings);
 

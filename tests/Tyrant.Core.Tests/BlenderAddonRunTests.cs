@@ -15,7 +15,7 @@ namespace Tyrant.Core.Tests;
 
 /// <summary>The add-on's Python tests, run by the real Blender 5.x against a project Tyrant wrote; skipped without Blender.</summary>
 [Trait("Category", "Blender")]
-public class BlenderAddonRunTests(RealGameIndex real) : IClassFixture<RealGameIndex>
+public class BlenderAddonRunTests(RealGameIndex real, RigReadWorkspace rigRead) : IClassFixture<RealGameIndex>, IClassFixture<RigReadWorkspace>
 {
     internal static MeshData SplitQuad(Matrix4x4[] bindPoses) => ModelFixture.SplitQuad(bindPoses);
 
@@ -273,57 +273,37 @@ public class BlenderAddonRunTests(RealGameIndex real) : IClassFixture<RealGameIn
 
     private static readonly string? DataDir = Environment.GetEnvironmentVariable("TYRANT_DATA_DIR");
 
-    private static readonly object RealLock = new();
-    private static Workspace? realWs;
-    private static readonly Dictionary<string, string> RealExports = new(StringComparer.Ordinal);
-
     private static void SkipWithoutTheRealGame()
     {
         Skip.If(BlenderIntegrationTests.Blender() is null, "Blender 5.x not found");
         Skip.If(RealGameIndex.GameDir is null || DataDir is null, "TYRANT_GAME_DIR and TYRANT_DATA_DIR not set");
     }
 
-    /// <summary>One workspace for these facts, with a copy of the data dump (the user's folder is only read).</summary>
-    private Workspace RealWorkspace()
-    {
-        lock (RealLock)
-        {
-            if (realWs is not null) return realWs;
-            var ws = Workspace.Create(Path.Combine(Path.GetTempPath(), "tyrant-tests", "rigread-" + Guid.NewGuid().ToString("N"), "ws"), real.Install);
-            static void Copy(string from, string to)
-            {
-                Directory.CreateDirectory(to);
-                foreach (var file in Directory.GetFiles(from)) File.Copy(file, Path.Combine(to, Path.GetFileName(file)), overwrite: true);
-                foreach (var dir in Directory.GetDirectories(from)) Copy(dir, Path.Combine(to, Path.GetFileName(dir)));
-            }
-            Copy(DataDir!, ws.DataDir);
-            return realWs = ws;
-        }
-    }
+    private Workspace RealWorkspace() => rigRead.Get(real.Install, DataDir!);
 
     /// <summary>
     /// rig_export.py's files for the species (one Blender run, kept for the other facts): plain.glb / plain.default.fbx (the
     /// game's skeleton), edited.glb / edited.default.fbx (made with Start / Apply rig edit) and unity_rig.json (what Send passes).
     /// </summary>
-    private string Exports(string species)
+    private string Exports(string species) => rigRead.Exports(species, () =>
     {
         var ws = RealWorkspace();
-        lock (RealLock)
-        {
-            if (RealExports.TryGetValue(species, out var known)) return known;
-            var project = BlenderProjectWriter.Write(new BlenderOpenRequest(species, null, null, true, false), ws, real.Install, real.Index,
-                SpeciesSkinsReader.Load(ws), new BundleAssetReader(), "tyrant.exe").ProjectFile;
-            var exportDir = Path.Combine(Path.GetDirectoryName(project)!, "rig-export");
-            var run = RunPython("rig_export.py", project, exportDir);
-            Assert.True(run.ExitCode == 0 && run.Output.Contains("RIGEXPORT"), run.Output[^Math.Min(4000, run.Output.Length)..]);
-            return RealExports[species] = exportDir;
-        }
-    }
+        var project = BlenderProjectWriter.Write(new BlenderOpenRequest(species, null, null, true, false), ws, real.Install, real.Index,
+            SpeciesSkinsReader.Load(ws), new BundleAssetReader(), "tyrant.exe").ProjectFile;
+        var exportDir = Path.Combine(Path.GetDirectoryName(project)!, "rig-export");
+        var run = RunPython("rig_export.py", project, exportDir);
+        Assert.True(run.ExitCode == 0 && run.Output.Contains("RIGEXPORT"), run.Output[^Math.Min(4000, run.Output.Length)..]);
+        // As the Assets tab exports the species: Tyrant's own glb of the game's model, never through Blender.
+        var (_, prefab) = ModProject.ResolveModelTarget(real.Index, SpeciesSkinsReader.Load(ws), species, null);
+        var game = new BundleAssetReader().ReadPrefabModel(real.Install, prefab);
+        GltfModelWriter.WriteGlb(game, ModelBuilder.GameRenderers(game)[0], Path.Combine(exportDir, "own.glb"));
+        return exportDir;
+    });
 
     private static BlenderModelConverter RealConverter() =>
         new(new BlenderProcess(), BlenderIntegrationTests.Blender()!.Exe, BlenderIntegrationTests.ThrowawayUser(out _));
 
-    /// <summary>The model file for a format: "glb" as Send exports it, "fbx" that glb turned into FBX by Tyrant's own converter.</summary>
+    /// <summary>The model file for a format: "glb" as written, "fbx" that glb turned into FBX by Tyrant's own converter.</summary>
     private static string ModelFile(string dir, string stem, string format)
     {
         var glb = Path.Combine(dir, stem + ".glb");
@@ -354,6 +334,7 @@ public class BlenderAddonRunTests(RealGameIndex real) : IClassFixture<RealGameIn
     }
 
     [SkippableTheory]
+    [Trait("Category", "Integration")]
     [InlineData("glb")]
     [InlineData("fbx")]
     public void A_rig_edited_export_reads_back_as_the_send_rig_edit(string format)
@@ -379,6 +360,7 @@ public class BlenderAddonRunTests(RealGameIndex real) : IClassFixture<RealGameIn
     }
 
     [SkippableFact]
+    [Trait("Category", "Integration")]
     public void An_fbx_exported_with_blender_defaults_reads_the_same_rig_edit()
     {
         SkipWithoutTheRealGame();
@@ -394,7 +376,12 @@ public class BlenderAddonRunTests(RealGameIndex real) : IClassFixture<RealGameIn
         }
     }
 
+    /// <summary>
+    /// Blender's exports (Send's glb, that glb as Tyrant's FBX, File → Export FBX's defaults) and Tyrant's own glb (the Assets
+    /// tab's, in the game's frame rather than Blender's), as is and as Tyrant's FBX, all have the game's skeleton.
+    /// </summary>
     [SkippableTheory]
+    [Trait("Category", "Integration")]
     [InlineData("Carcharodontosaurus")]
     [InlineData("Panthera Atrox")]
     public void An_unedited_export_reads_as_the_game_skeleton(string species)
@@ -403,7 +390,12 @@ public class BlenderAddonRunTests(RealGameIndex real) : IClassFixture<RealGameIn
         var dir = Exports(species);
         var mod = ModProject.Create(RealWorkspace(), "rigread-" + Guid.NewGuid().ToString("N")[..8], null, null);
 
-        foreach (var model in new[] { ModelFile(dir, "plain", "glb"), ModelFile(dir, "plain", "fbx"), Path.Combine(dir, "plain.default.fbx") })
+        string[] models =
+        [
+            ModelFile(dir, "plain", "glb"), ModelFile(dir, "plain", "fbx"), Path.Combine(dir, "plain.default.fbx"),
+            ModelFile(dir, "own", "glb"), ModelFile(dir, "own", "fbx"),
+        ];
+        foreach (var model in models)
         {
             var preview = PreviewRig(mod, species, model);
 
@@ -412,6 +404,59 @@ public class BlenderAddonRunTests(RealGameIndex real) : IClassFixture<RealGameIn
             Assert.Empty(preview.Reading.Rig);
             Assert.False(preview.Changes);
             Assert.Equal(ModelRigQuestion.None, preview.Question);
+        }
+    }
+}
+
+/// <summary>
+/// The rig-reading facts' workspace (a copy of the data dump, which is only read) and each species' Blender exports, made once
+/// for the class and deleted after it.
+/// </summary>
+public sealed class RigReadWorkspace : IDisposable
+{
+    private readonly object gate = new();
+    private readonly Dictionary<string, string> exports = new(StringComparer.Ordinal);
+    private readonly string root = Path.Combine(Path.GetTempPath(), "tyrant-tests", "rigread-" + Guid.NewGuid().ToString("N"));
+    private Workspace? ws;
+
+    public Workspace Get(GameInstall install, string dataDir)
+    {
+        lock (gate)
+        {
+            if (ws is not null) return ws;
+            var made = Workspace.Create(Path.Combine(root, "ws"), install);
+            static void Copy(string from, string to)
+            {
+                Directory.CreateDirectory(to);
+                foreach (var file in Directory.GetFiles(from)) File.Copy(file, Path.Combine(to, Path.GetFileName(file)), overwrite: true);
+                foreach (var dir in Directory.GetDirectories(from)) Copy(dir, Path.Combine(to, Path.GetFileName(dir)));
+            }
+            Copy(dataDir, made.DataDir);
+            return ws = made;
+        }
+    }
+
+    public string Exports(string species, Func<string> make)
+    {
+        lock (gate)
+        {
+            if (exports.TryGetValue(species, out var known)) return known;
+            return exports[species] = make();
+        }
+    }
+
+    public void Dispose()
+    {
+        try
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+        catch (IOException)
+        {
+            // a file still open (Blender ending): the temp folder is cleaned another time
+        }
+        catch (UnauthorizedAccessException)
+        {
         }
     }
 }

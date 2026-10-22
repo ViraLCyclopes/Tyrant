@@ -225,4 +225,38 @@ public class ModProjectModelRigTests
         Assert.Equal(2, inner.FbxCalls);
         Assert.Equal(File.ReadAllBytes(Path.Combine(dir, "1.glb")), File.ReadAllBytes(Path.Combine(dir, "2.glb")));
     }
+
+    /// <summary>A skeleton far from the game's: twelve bones turned 20°.</summary>
+    private static Dictionary<string, RigOffset> OtherSpecies() =>
+        Rig([.. new[] { "Hip", "Neck1", "Neck2", "Neck3", "Head", "Tail1", "Tail2", "Tail3", "Leg.L", "Shin.L", "Leg.R", "Shin.R" }.Select(b => Turn(b, Vector3.UnitZ, 20))]);
+
+    [Fact]
+    public void The_other_species_warning_names_a_mods_own_species_by_its_name_and_a_game_species_by_its_display_name()
+    {
+        using var s = Make();
+        var key = s.Mod.AddSpecies(s.Species, "mirabilis", Carch, "Mirabilis", "Tyrantus", "mirabilis").Key(s.Mod.Id);
+        var glb = Export(s.Prefab, OtherSpecies());
+
+        Assert.Contains(s.Preview(glb, key).Warnings, w => w.StartsWith("This model's skeleton is very different from Mirabilis's", StringComparison.Ordinal));
+        var game = s.Species.Single(x => x.SpeciesId == Carch).Name;
+        Assert.Contains(s.Preview(glb).Warnings, w => w.StartsWith($"This model's skeleton is very different from {game}'s", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void A_kept_rig_edit_that_breaks_a_rule_refuses_the_model_and_says_how_to_clear_it()
+    {
+        using var s = Make();
+        // A rig edit saved earlier, on a bone the species no longer has (renamed by a game update).
+        s.Mod.SetRig(s.Install, Index(), s.Species, s.Reader, Carch, null, Rig(Move("Wing.L", 0, 0.1f, 0)));
+        var glb = Export(s.Prefab, null);
+        var before = File.ReadAllText(Path.Combine(s.Mod.Dir, "mod.json"));
+
+        var ex = Assert.Throws<TyrantException>(() => s.Replace(glb));
+
+        Assert.Equal(TyrantErrorCode.ModInvalid, ex.Code);
+        Assert.Contains("the rig edit already on Carcharodontosaurus breaks a rule, not the model", ex.Message);
+        Assert.Contains("Wing.L", ex.Message);
+        Assert.Contains("Clear rig edit on the model page, or 'tyrant mod rig big-carch \"Carcharodontosaurus\" --clear'", ex.Message);
+        Assert.Equal(before, File.ReadAllText(Path.Combine(s.Mod.Dir, "mod.json")));
+    }
 }
