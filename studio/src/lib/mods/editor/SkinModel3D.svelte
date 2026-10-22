@@ -11,7 +11,7 @@
 
   /**
    * One animal of the skin in 3D: the model it wears (its own, the mod's species model, or the game's) with the skin's maps,
-   * the 2D strip's first animal's colours and its material (iridescence): `colorsJson` and `materialsJson` are the editor's drafts, null for what is saved.
+   * the 2D strip's first animal's colours and its material (iridescence): `colorsJson` and `materialsJson` are the editor's drafts. Null colours mean the saved ones, but null materials mean none (the server then reads only the starting skin's block and the species'), so a page without an editor passes the skin's saved `materialsJson`.
    * The model page passes `lod` (the level of detail to show) and `strict` (a model that cannot be shown says why instead of showing the game's).
    */
   let {

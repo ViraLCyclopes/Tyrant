@@ -217,6 +217,15 @@ describe('ModelPage skin picker', () => {
     expect(screen.getByRole('combobox', { name: 'Skin' })).toHaveValue('');
   });
 
+  it("previews the chosen skin with its own saved material settings", async () => {
+    const saved = '{"Carch":{"iridescence":{"strength":0.4}}}';
+    const { rpc, session, doc } = withSkins([skinOf('a', { materialsJson: saved })]);
+    rpc.on('mods.materialPreview', () => ({ on: false, strength: 0, scale: 0, power: 0, bias: 0, ramp: null, mask: null, maskSt: [1, 1, 0, 0], smoothness: null }));
+    renderWith(ModelPage, session, { doc, model });
+    await waitFor(() => expect(rpc.callsTo('mods.materialPreview')).not.toHaveLength(0));
+    expect(rpc.callsTo('mods.materialPreview')[0].params).toMatchObject({ skin: 'a', materials: saved });
+  });
+
   it('remembers the choice for the model while the app is open', async () => {
     const { session, doc } = withSkins([skinOf('a'), skinOf('b')]);
     const first = renderWith(ModelPage, session, { doc, model });

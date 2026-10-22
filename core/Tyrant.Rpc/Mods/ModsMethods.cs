@@ -327,7 +327,12 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
         {
             var preview = ModelPreview(new ModModelPreviewParams(mod.Id, species, skinId));
             // The game's animal-shader materials wear the skin's maps (the model page shows the game's own textures instead).
-            return preview.Lods.Count == 0 ? null : new ModSkinOwnModel(preview.Lods[Math.Clamp(lod ?? 0, 0, preview.Lods.Count - 1)].File, preview.Materials.Select(m => m with { Skinnable = m.Animal }).ToList());
+            if (preview.Lods.Count == 0)
+            {
+                if (strict) throw new TyrantException(TyrantErrorCode.ModInvalid, "The model has no built levels of detail to show: fix its problems (see Check), then click Rebuild LODs.");
+                return null;
+            }
+            return new ModSkinOwnModel(preview.Lods[Math.Clamp(lod ?? 0, 0, preview.Lods.Count - 1)].File, preview.Materials.Select(m => m with { Skinnable = m.Animal }).ToList());
         }
         catch (TyrantException) when (!strict)
         {

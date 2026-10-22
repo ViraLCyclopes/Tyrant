@@ -24,6 +24,7 @@
   const session = getSession();
   const rigAsk = createRigAsk();
   const tab = getTab();
+  const uid = $props.id();
   let lod = $state(0);
   // The skins that wear this model in game (a skin's own model page: that skin), and the one shown; '' is the template with the game's materials.
   const skins = $derived((doc.detail?.skins ?? []).filter((s) => s.species === model.target && (model.skin ? s.id === model.skin : !s.model)));
@@ -151,16 +152,16 @@
   {:else}
   {#if skins.length}
     <div class="row">
-      <label for="model-skin">Skin</label>
-      <select id="model-skin" aria-describedby="model-skin-hint" value={chosen} onchange={(e) => choose(e.currentTarget.value)}>
+      <label for="model-skin-{uid}">Skin</label>
+      <select id="model-skin-{uid}" aria-describedby="model-skin-hint-{uid}" value={chosen} onchange={(e) => choose(e.currentTarget.value)}>
         {#each skins as s (s.id)}<option value={s.id}>{s.name}</option>{/each}
         <option value="">Game's materials</option>
       </select>
     </div>
-    <p class="hint" id="model-skin-hint">In game each skin wears this model with its own maps; maps a skin does not have come from the skin it is based on. Game's materials shows the model with the template's textures only.</p>
+    <p class="hint" id="model-skin-hint-{uid}">In game each skin wears this model with its own maps; maps a skin does not have come from the skin it is based on. Game's materials shows the model with the template's textures only.</p>
   {/if}
   {#if chosenSkin}
-    <SkinModel3D {doc} skin={chosenSkin} colorsJson={null} materialsJson={null} variant="normal" {lod} strict />
+    <SkinModel3D {doc} skin={chosenSkin} colorsJson={null} materialsJson={chosenSkin.materialsJson ?? null} variant="normal" {lod} strict />
   {:else}
     {#if reason}<p class="hint">{reason}</p>{/if}
     <canvas bind:this={canvas} class="viewport" class:hidden={!!reason} aria-label="3D preview of the replacement model"></canvas>

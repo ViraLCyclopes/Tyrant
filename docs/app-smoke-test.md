@@ -546,8 +546,8 @@ Needs the game. Steps marked **(game)** start the game.
      export plain from File → Export (FBX), **Re-import**: the preview reads the bones instead and warns that the scale
      is dropped (when the current rig edit had one).
 164. **(game)** The model page wears the mod's skins. In a mod with a replacement Ultimasaurus model and the Chaos Effect skin, open
-     **Models** → Ultimasaurus: under the preview a **Skin** picker opens on the species' starting skin, or the first skin when none
+     **Models** → Ultimasaurus: above the preview a **Skin** picker opens on the species' starting skin, or the first skin when none
      is marked; pick **Chaos Effect** and the model shows Chaos Effect's maps (its patterns and colours, not the template's). Click
      **LOD 1** and **LOD 2**: the same skin on each level of detail. Pick **Game's materials**: the model shows the template's
      textures only, without Chaos Effect's maps. Open another model and come back: the pick is remembered while the app is open. A model
-     that is not built yet (before Check) says why instead of showing the game's.
+     with problems (no built levels of detail) says why instead of showing the game's.
