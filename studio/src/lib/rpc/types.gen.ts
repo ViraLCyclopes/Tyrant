@@ -1606,6 +1606,21 @@ export interface SpeciesSkinsRow {
   prefabGuid?: string | null;
 }
 
+export interface SpeciesTemplatePictureParams {
+  species: string;
+  kind: TemplatePictureKind;
+  path: string;
+}
+
+export interface SpeciesTemplatePictureResult {
+  species: string;
+  kind: TemplatePictureKind;
+  texture: string;
+  width: number;
+  height: number;
+  path: string;
+}
+
 export interface SpeciesTextureDto {
   texture: string;
   slot: string;
@@ -1620,6 +1635,8 @@ export interface SpeciesUser {
   models: number;
   sounds: number;
 }
+
+export type TemplatePictureKind = "nursery" | "paleopedia";
 
 export interface TexturesExtractParams {
   pack: string;
@@ -1785,6 +1802,7 @@ export interface RpcMethods {
   "species.list": { params: void; result: SpeciesListResult };
   "species.pack": { params: SpeciesPackParams; result: JobStarted };
   "species.rigInfo": { params: SpeciesRigInfoParams; result: SpeciesRigInfoResult };
+  "species.saveTemplatePicture": { params: SpeciesTemplatePictureParams; result: SpeciesTemplatePictureResult };
   "textures.extract": { params: TexturesExtractParams; result: JobStarted };
   "workspace.create": { params: WorkspaceOpenParams; result: WorkspaceStatus };
   "workspace.open": { params: WorkspaceOpenParams; result: WorkspaceStatus };

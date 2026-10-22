@@ -39,7 +39,7 @@ async function setup(animals: (typeof animal)[] = [animal], props: { onPrefab?: 
   await doc.load();
   renderWith(SpeciesDatabase, session, { doc, ...props }, tab);
   await screen.findByRole('spinbutton', { name: /Adult mass/ });
-  return { rpc, platform, doc };
+  return { rpc, platform, doc, session };
 }
 
 /** A record row as mods.animalDatabase lists it. */
@@ -101,6 +101,29 @@ describe('Species database', () => {
     expect(screen.getByText(/its Nursery card and the Nursery's species panel/)).toBeInTheDocument();
     await fireEvent.click(screen.getByRole('button', { name: 'Nursery picture: Choose PNG…' }));
     await waitFor(() => expect(rpc.callsTo('mods.setSpeciesIcon')[0]?.params).toMatchObject({ speciesId: 'new-animal', png: 'C:/icons/mirabilis.png' }));
+  });
+  it("saves the template's Nursery and Paleopedia pictures where the user chooses, as the game's pictures for reference", async () => {
+    const { rpc, platform, session } = await setup();
+    rpc.on('species.saveTemplatePicture', (p) => ({ species: p.species, kind: p.kind, texture: 'x', width: p.kind === 'nursery' ? 512 : 2048, height: p.kind === 'nursery' ? 256 : 1152, path: p.path }));
+    expect(screen.getAllByText(/the game's pictures, for designing yours over: don't share them or put them in the mod/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Nursery pictures have a transparent background/)).toBeInTheDocument();
+    expect(screen.getByText(/Paleopedia pictures are full 16:9 scenes/)).toBeInTheDocument();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Nursery picture: Save template picture…' }));
+    await waitFor(() => expect(platform.saveDialogs).toHaveLength(1));
+    expect(platform.saveDialogs[0]).toMatchObject({ defaultPath: 'Allosaurus Anax nursery picture.png', extension: 'png' });
+    expect(rpc.callsTo('species.saveTemplatePicture')).toHaveLength(0); // cancelled: nothing saved
+
+    platform.saves.push('D:/art/allo nursery.png');
+    await fireEvent.click(screen.getByRole('button', { name: 'Nursery picture: Save template picture…' }));
+    await waitFor(() => expect(rpc.callsTo('species.saveTemplatePicture')[0]?.params).toEqual({ species: 'Allosaurus Anax', kind: 'nursery', path: 'D:/art/allo nursery.png' }));
+    await waitFor(() => expect(session.log.records.map((r) => r.message)).toContain("Saved Allosaurus Anax's Nursery picture (512×256) to D:/art/allo nursery.png."));
+
+    platform.saves.push('D:/art/allo page.png');
+    await fireEvent.click(screen.getByRole('button', { name: 'Paleopedia picture: Save template picture…' }));
+    await waitFor(() => expect(rpc.callsTo('species.saveTemplatePicture')[1]?.params).toEqual({ species: 'Allosaurus Anax', kind: 'paleopedia', path: 'D:/art/allo page.png' }));
+    expect(platform.saveDialogs[2]).toMatchObject({ defaultPath: 'Allosaurus Anax paleopedia picture.png' });
+    await waitFor(() => expect(session.log.records.map((r) => r.message)).toContain("Saved Allosaurus Anax's Paleopedia picture (2048×1152) to D:/art/allo page.png."));
   });
   it('the Social card edits group size, space, cohesion, leader and alone time, saved with the species', async () => {
     const { rpc } = await setup([{ ...animal, dataFields: [...animal.dataFields, ...socialRows] }]);
