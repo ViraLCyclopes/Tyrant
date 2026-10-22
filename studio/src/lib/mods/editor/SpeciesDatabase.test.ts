@@ -10,7 +10,7 @@ import { modDetail } from '$lib/test/modFixtures';
 import { ModDoc } from './modDoc.svelte';
 import SpeciesDatabase from './SpeciesDatabase.svelte';
 
-const animal = { id: 'new-animal', key: 'tyrant.red-spot.new-animal', base: 'Allosaurus Anax', name: 'New animal', genus: 'Example', epithet: 'animal', cost: null, stats: { adultMassKg: 4500 }, inheritedCost: 20000, inheritedStats: { adultMassKg: 4010, maxAgeYears: 40 }, dataFields: [{ path: '/brain/needs/adult/native/hitPoints', kind: 'number', value: '660', templateValue: '660', editable: true }], localization: { description: 'pack.description' }, icon: null, paleopediaPicture: null as string | null,
+const animal = { id: 'new-animal', key: 'tyrant.red-spot.new-animal', base: 'Allosaurus Anax', name: 'New animal', genus: 'Example', epithet: 'animal', cost: null, stats: { adultMassKg: 4500 }, inheritedCost: 20000, inheritedStats: { adultMassKg: 4010, maxAgeYears: 40 }, dataFields: [{ path: '/brain/needs/adult/native/hitPoints', kind: 'number', value: '660', templateValue: '660', editable: true }], localization: { description: 'pack.description' }, icon: null as string | null, paleopediaPicture: null as string | null,
   texts: languageTexts({ 'en-US': { name: 'New animal', description: 'English description.', characterNotes: '', socialInfo: '' } }) };
 
 /** Every language's texts (all empty unless given), as mods.animalDatabase lists them. */
@@ -29,6 +29,7 @@ async function setup(animals: (typeof animal)[] = [animal], props: { onPrefab?: 
     .on('mods.setSpeciesStartingSkin', () => ({ ...detail, revision: 'r2' }))
     .on('mods.setSpeciesSwatch', () => ({ ...detail, revision: 'r3' }))
     .on('mods.animalDatabase', () => ({ animals, fields }))
+    .on('mods.thumbnail', (p) => ({ file: `D:/previews/${String(p.file).split('/').pop()}` }))
     .on('mods.speciesTemplate', (p) => (templateFound ? { template: p.template, found: true, cost: 20000, stats: { adultMassKg: 4010, maxAgeYears: 40 } } : { template: p.template, found: false, cost: null, stats: {} }))
     .on('blender.status', () => ({ found: true, exe: 'b.exe', version: '5.2.2', supported: true, missingConfigured: null, addon: 'current', addonInstalled: '0.1.0', addonBundled: '0.1.0', problem: null }));
   const platform = new FakePlatform();
@@ -181,6 +182,24 @@ describe('Species database', () => {
     expect(within(picker).getByRole('option', { name: 'German (translated)' })).toBeInTheDocument();
     expect(within(picker).getByRole('option', { name: 'French (uses English)' })).toBeInTheDocument();
     expect(within(picker).getByRole('option', { name: 'English' })).toBeInTheDocument();
+  });
+
+  it('previews the chosen Nursery and Paleopedia pictures, wide and uncropped', async () => {
+    const { rpc } = await setup([{ ...animal, icon: 'icons/new-animal.png', paleopediaPicture: 'icons/new-animal-paleopedia.png' }]);
+
+    const nursery = await screen.findByRole('img', { name: 'Nursery picture of New animal' });
+    const paleopedia = await screen.findByRole('img', { name: 'Paleopedia picture of New animal' });
+    await waitFor(() => expect(nursery).toHaveAttribute('src', expect.stringContaining('new-animal.png')));
+    expect(rpc.callsTo('mods.thumbnail').map((c) => c.params)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ file: 'icons/new-animal.png' }), expect.objectContaining({ file: 'icons/new-animal-paleopedia.png' })]));
+    expect(nursery.closest('.thumb')).toHaveStyle({ width: '256px', height: '128px' });
+    expect(paleopedia.closest('.thumb')).toHaveStyle({ width: '256px', height: '144px' });
+    expect(nursery.closest('.thumb')).toHaveClass('whole');
+  });
+
+  it('shows no preview while a species uses its template pictures', async () => {
+    await setup();
+    expect(screen.queryByRole('img', { name: /picture of New animal/ })).toBeNull();
   });
 
   it('sets the Paleopedia picture apart from the Nursery picture, and goes back to the template one', async () => {
