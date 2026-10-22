@@ -234,6 +234,11 @@ portraits with **Render from 3D…**). The species page's Skins section then sho
 **Open**. Species without one show the older controls and **Make an editable starting skin**.
 **Make default** beside another skin in that list makes it the starting skin; the old one stays as an ordinary skin.
 
+**Social**, under the species form's stats, sets how the species lives with others: group size (fewest and most males
+and females), space per animal, range overlap, how closely the group stays and acts together, its leader, how long it can
+be alone and how often it calls to the group. Each shows the template's value; **Save species** saves them. If it says
+the data dump has no group sizes, run the data dump again from the Workspace tab.
+
 **Nursery picture**, under the species page's Prefab and look, sets the picture on the species' Nursery card and in
 the Nursery's species panel (a PNG; the game's are 512×256). It is not the Paleopedia page's picture.
 **Paleopedia picture**, below it, sets the big picture on the species' own Paleopedia page (also its row in the

@@ -19,7 +19,9 @@ public class AnimalFieldEditorTests
         public Config config = new();
     }
     private sealed class Needs { public Brain? Parent; public float hunger = 250; public uint count = 10; }
-    private sealed class Config { public float damage = 20; }
+    private sealed class Config { public float damage = 20; public IntPair groupSize = new() { x = 1, y = 4 }; }
+    /// <summary>Like Unity's Vector2Int: numbers in private fields, set through x/y properties.</summary>
+    private struct IntPair { private int m_X; private int m_Y; public int x { get => m_X; set => m_X = value; } public int y { get => m_Y; set => m_Y = value; } }
     private static AnimalField Edit(string path, string value, string original, string kind = "number") =>
         new() { Path = path, Kind = kind, Value = value, TemplateValue = original, Editable = true };
 
@@ -38,6 +40,19 @@ public class AnimalFieldEditorTests
         Assert.Equal(20, source.brain.config.damage);
         Assert.Same(copy, copy.brain.animalData);
         Assert.Same(copy.brain, copy.brain.needs.Parent);
+    }
+
+    [Fact]
+    public void An_integer_pair_like_vector2int_is_set_through_its_properties_and_written_back()
+    {
+        var source = new Animal();
+        var copy = (Animal)AnimalFieldEditor.ShallowClone(source);
+        var editor = new AnimalFieldEditor(source, copy, o => o is Brain or Config, AnimalFieldEditor.ShallowClone);
+        editor.Apply(copy, [Edit("/brain/config/groupSize/x", "3", "1"), Edit("/brain/config/groupSize/y", "8", "4")]);
+        Assert.Equal(3, copy.brain.config.groupSize.x);
+        Assert.Equal(8, copy.brain.config.groupSize.y);
+        Assert.Equal(1, source.brain.config.groupSize.x);
+        Assert.Throws<ManifestException>(() => editor.Apply(copy, [Edit("/brain/config/groupSize/x", "2.5", "1")]));
     }
 
     [Fact]

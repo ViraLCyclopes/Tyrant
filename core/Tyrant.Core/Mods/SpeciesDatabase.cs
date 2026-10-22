@@ -16,6 +16,24 @@ public static class SpeciesDatabase
 {
     public static SpeciesTemplateStats? Template(Workspace ws, string id) => Find(ws, id, withFields: true);
 
+    /// <summary>
+    /// A species' stored record with each empty-object row ({}) that the template now has rows under replaced by copies of
+    /// them. Older dumps wrote some values (Vector2Int group sizes…) as {}; species saved then keep their other edits.
+    /// </summary>
+    public static List<AnimalField> FillEmptyObjects(IReadOnlyList<AnimalField> stored, IReadOnlyList<AnimalField>? template)
+    {
+        var result = new List<AnimalField>();
+        foreach (var field in stored)
+        {
+            var under = field.Kind == "object" && field.Value == "{}" && template != null
+                ? template.Where(t => t.Path.StartsWith(field.Path + "/", StringComparison.Ordinal) && stored.All(s => s.Path != t.Path)).ToList()
+                : [];
+            if (under.Count == 0) result.Add(field);
+            else result.AddRange(under.Select(t => t.Copy()));
+        }
+        return result;
+    }
+
     /// <summary>A template's cost and basic stats only (no full record): what the new-species form shows.</summary>
     public static SpeciesTemplateStats? TemplateStats(Workspace ws, string id) => Find(ws, id, withFields: false);
 

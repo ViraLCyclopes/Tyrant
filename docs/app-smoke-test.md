@@ -519,3 +519,8 @@ Needs the game. Steps marked **(game)** start the game.
      description only, save; the picker says *French (translated)*. Install: in English the species' Paleopedia page shows
      both English texts; switch the game to French: the description is the French one and the character notes are still
      the English ones. **Use English** on the French description and save: in French the page shows the English again.
+160. **(game)** Social settings: Workspace → run the data dump again. A custom species page's **Social** card now shows
+     **Males, fewest** and the rest with the template's values (not "run the data dump again"). Set **Females, most** to
+     a number bigger than the template's and **Leader** to Matriarch, **Save species**, install. In game the species'
+     Nursery/info social needs reflect the new group size, and the log has no animal field errors. Setting a fewest above
+     its most shows a warning on the card.

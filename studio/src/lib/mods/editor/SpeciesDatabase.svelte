@@ -9,6 +9,7 @@
   import OpenInBlender from '$lib/blender/OpenInBlender.svelte';
   import RecordTree from './RecordTree.svelte';
   import SizeCard from './SizeCard.svelte';
+  import SocialCard from './SocialCard.svelte';
   import SpeciesSoundsCard from './SpeciesSoundsCard.svelte';
   import Thumb from './Thumb.svelte';
   import type { AddedSound } from '$lib/sounds/audio';
@@ -252,6 +253,7 @@
           {/each}
         </div>
         {#if !creating}
+          <SocialCard fields={animal?.dataFields ?? []} bind:values={dataValues} />
           <section class="texts" aria-label="Paleopedia text">
             <h3>Paleopedia text</h3>
             <p class="hint">What the species' Paleopedia page says. Every language without its own text uses the English, so write English first and translate later.</p>
