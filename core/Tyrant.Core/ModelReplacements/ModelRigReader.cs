@@ -132,7 +132,6 @@ public static class ModelRigReader
             this.renderer = renderer;
             gameWorld = RigBinds.GameWorlds(game, renderer);
             expected = RigBinds.ExpectedFrame(game, renderer);
-            Matrix4x4.Invert(expected, out var unframe);
             // A reused name: the k-th game bone of that name is the k-th joint of it (the export keeps the renderer's order).
             var joints = new Dictionary<string, Queue<int>>(StringComparer.Ordinal);
             for (var j = 0; j < file.JointNames.Count && j < file.InverseBinds.Length; j++)
@@ -140,13 +139,20 @@ public static class ModelRigReader
                 if (!joints.TryGetValue(file.JointNames[j], out var queue)) joints[file.JointNames[j]] = queue = new Queue<int>();
                 queue.Enqueue(j);
             }
+            var raw = new Dictionary<SkeletonNode, Matrix4x4>(ReferenceEqualityComparer.Instance);
             foreach (var bone in renderer.Bones)
             {
-                if (fileWorld.ContainsKey(bone)) continue;
+                if (raw.ContainsKey(bone)) continue;
                 if (joints.TryGetValue(bone.Name, out var queue) && queue.TryDequeue(out var j) && Matrix4x4.Invert(file.InverseBinds[j], out var world))
-                    fileWorld[bone] = world * unframe;
+                    raw[bone] = world;
                 else if (!Missing.Contains(bone.Name)) Missing.Add(bone.Name);
             }
+            // A glb Tyrant wrote itself (not exported by Blender) keeps the game's bind poses: it is in no frame.
+            if (RigBinds.TopBones(renderer) is [var top, ..] && raw.TryGetValue(top, out var topWorld)
+                && SamePlace(topWorld, gameWorld[top], 1f) && !SamePlace(topWorld, gameWorld[top] * expected, 1f))
+                expected = Matrix4x4.Identity;
+            Matrix4x4.Invert(expected, out var unframe);
+            foreach (var (bone, world) in raw) fileWorld[bone] = world * unframe;
         }
 
         public bool Matches(IReadOnlyDictionary<string, RigOffset> rig)

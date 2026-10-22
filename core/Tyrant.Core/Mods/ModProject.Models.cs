@@ -4,6 +4,8 @@ using Tyrant.Core.Blender;
 using Tyrant.Core.Errors;
 using Tyrant.Core.Install;
 using Tyrant.Core.ModelReplacements;
+using Tyrant.Core.Models;
+using Tyrant.Core.Workspaces;
 using Tyrant.Framework.Core;
 
 namespace Tyrant.Core.Mods;
@@ -17,16 +19,40 @@ public sealed partial class ModProject
     /// or by the prefab <paramref name="prefabRef"/> (Assets tab). The .glb (or an .fbx, converted by Blender through
     /// <paramref name="converter"/>) is copied under a content-hashed name, so an earlier model's files stay for undo; a
     /// model with errors is refused and mod.json is left as it was. <paramref name="rig"/>: the rig edit the model is made
-    /// for (an empty one clears it); null keeps the destination's rig edit.
+    /// for (Send's; an empty one clears it). Without it the rig edit is read from the file (its .rig.json or its bones, see
+    /// <see cref="PreviewModelRig"/>) and put on as <paramref name="rigChoice"/> says.
+    /// <paramref name="ws"/>: checks that rig edit with the rig rules (errors refuse the model) and keeps converted FBX files.
     /// </summary>
     public ModelReport ReplaceModel(GameInstall install, AssetIndex index, IReadOnlyList<SpeciesSkins> species, IAssetReader reader,
         string glbPath, string? target, string? prefabRef, string? skinId, Func<IModelConverter>? converter = null,
-        IReadOnlyDictionary<string, RigOffset>? rig = null)
+        IReadOnlyDictionary<string, RigOffset>? rig = null, ModelRigChoice rigChoice = ModelRigChoice.Auto, Workspace? ws = null)
     {
         species = WithSpecies(species, Manifest);
-        if (!File.Exists(glbPath)) throw new TyrantException(TyrantErrorCode.ModInvalid, $"'{glbPath}' does not exist.");
-        if (!string.Equals(Path.GetExtension(glbPath), ".fbx", StringComparison.OrdinalIgnoreCase))
-            return ReplaceModelFrom(install, index, species, reader, glbPath, glbPath, target, prefabRef, skinId, rig);
+        return WithModelGlb(glbPath, converter, ws,
+            glb => ReplaceModelFrom(install, index, species, reader, glb, glbPath, target, prefabRef, skinId, rig, rigChoice, ws));
+    }
+
+    /// <summary>
+    /// What adding the model would do to the destination's rig edit, saving nothing: the rig edit found in the file, the
+    /// destination's current one, the question to ask (Auto's answer preselected), and whether Auto changes it.
+    /// </summary>
+    public ModelRigPreview PreviewModelRig(Workspace ws, GameInstall install, AssetIndex index, IReadOnlyList<SpeciesSkins> species, IAssetReader reader,
+        string modelPath, string? target, string? prefabRef, string? skinId, Func<IModelConverter>? converter)
+    {
+        species = WithSpecies(species, Manifest);
+        return WithModelGlb(modelPath, converter, ws, glb =>
+        {
+            var skin = skinId is null ? null : Skin(skinId);
+            var (speciesId, prefab) = ResolveModelTarget(index, species, skin?.Species ?? target, skin is null ? prefabRef : null);
+            return PreviewRig(ws, install, index, species, reader, speciesId, skin, reader.ReadPrefabModel(install, prefab), glb, modelPath);
+        });
+    }
+
+    /// <summary>The model as a glb: the file itself, or an FBX converted by Blender (kept in the workspace's cache when there is one).</summary>
+    private static T WithModelGlb<T>(string modelPath, Func<IModelConverter>? converter, Workspace? ws, Func<string, T> use)
+    {
+        if (!File.Exists(modelPath)) throw new TyrantException(TyrantErrorCode.ModInvalid, $"'{modelPath}' does not exist.");
+        if (!string.Equals(Path.GetExtension(modelPath), ".fbx", StringComparison.OrdinalIgnoreCase)) return use(modelPath);
         if (converter is null)
             throw new TyrantException(TyrantErrorCode.BlenderMissing,
                 "FBX needs Blender: choose blender.exe on the Workspace tab (Blender card), or run 'tyrant blender set-path <blender.exe>'.");
@@ -34,8 +60,10 @@ public sealed partial class ModProject
         var temp = Path.Combine(Path.GetTempPath(), $"tyrant-fbx-{Guid.NewGuid():N}.glb");
         try
         {
-            converter().FbxToGlb(glbPath, temp);
-            return ReplaceModelFrom(install, index, species, reader, temp, glbPath, target, prefabRef, skinId, rig);
+            var blender = converter();
+            if (ws is not null && blender is not CachingModelConverter) blender = new CachingModelConverter(blender, Path.Combine(ws.CacheDir, "fbx-glb"));
+            blender.FbxToGlb(modelPath, temp);
+            return use(temp);
         }
         finally
         {
@@ -44,11 +72,33 @@ public sealed partial class ModProject
     }
 
     private ModelReport ReplaceModelFrom(GameInstall install, AssetIndex index, IReadOnlyList<SpeciesSkins> species, IAssetReader reader,
-        string glbPath, string originPath, string? target, string? prefabRef, string? skinId, IReadOnlyDictionary<string, RigOffset>? rig)
+        string glbPath, string originPath, string? target, string? prefabRef, string? skinId, IReadOnlyDictionary<string, RigOffset>? rig,
+        ModelRigChoice rigChoice, Workspace? ws)
     {
         var skin = skinId is null ? null : Skin(skinId);
         var (speciesId, prefab) = ResolveModelTarget(index, species, skin?.Species ?? target, skin is null ? prefabRef : null);
+        var game = reader.ReadPrefabModel(install, prefab);
         var effective = Owned(rig ?? RigOf(speciesId, skinId));
+        if (rig is null)
+        {
+            ModelRigPreview? preview = null;
+            try
+            {
+                preview = PreviewRig(null, install, index, species, reader, speciesId, skin, game, glbPath, originPath);
+            }
+            catch (TyrantException ex) when (ex.Code == TyrantErrorCode.ModInvalid)
+            {
+                // the file cannot be read: the build below says why
+            }
+            if (preview is not null)
+            {
+                effective = Owned(Choose(preview.Reading, preview.Current, rigChoice));
+                // Checked before anything is written, as Send does.
+                if (ws is not null && effective is not null
+                    && RigProblems(ws, install, index, species, reader, speciesId, skin, effective).Errors is { Count: > 0 } rigErrors)
+                    throw new TyrantException(TyrantErrorCode.ModInvalid, $"The model was not added: {string.Join(" ", rigErrors)}");
+            }
+        }
 
         var hash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(glbPath)))[..8].ToLowerInvariant();
         var stem = TextureExporter.Sanitize(speciesId).ToLowerInvariant() + (skin is null ? "" : "-" + skin.Id);
@@ -59,7 +109,7 @@ public sealed partial class ModProject
             File.Copy(glbPath, destination, overwrite: true);
 
         var copiedFromOutside = !string.Equals(Path.GetFullPath(glbPath), Path.GetFullPath(destination), StringComparison.OrdinalIgnoreCase);
-        var report = ModelBuilder.Build(Dir, file, reader.ReadPrefabModel(install, prefab), copiedFromOutside ? Path.GetFullPath(originPath) : null, effective);
+        var report = ModelBuilder.Build(Dir, file, game, copiedFromOutside ? Path.GetFullPath(originPath) : null, effective);
         if (report.Errors.Count > 0)
             throw new TyrantException(TyrantErrorCode.ModInvalid, $"The model was not added: {string.Join(" ", report.Errors)}");
 
@@ -78,6 +128,74 @@ public sealed partial class ModProject
         }
         Save();
         return report;
+    }
+
+    /// <summary>
+    /// Reads the glb's rig edit (the glb made from <paramref name="originPath"/>, whose .rig.json counts) for the destination;
+    /// with <paramref name="ws"/>, the rig rules' errors and warnings for the rig edit Auto would save.
+    /// </summary>
+    private ModelRigPreview PreviewRig(Workspace? ws, GameInstall install, AssetIndex index, IReadOnlyList<SpeciesSkins> species, IAssetReader reader,
+        string speciesId, SkinEntry? skin, PrefabModel game, string glbPath, string originPath)
+    {
+        var current = Owned(RigOf(speciesId, skin?.Id));
+        var file = GlbModelReader.ReadSkeleton(glbPath, game);
+        var warnings = new List<string>(file.LodWarnings);
+        var rigFilePath = ModelRigReader.RigFilePathFor(originPath);
+        var rigFileName = rigFilePath is null ? null : Path.GetFileName(rigFilePath);
+        Dictionary<string, RigOffset>? rigFile = null;
+        if (rigFilePath is not null)
+        {
+            try
+            {
+                rigFile = RigEdit.Parse(Json.Parse(File.ReadAllText(rigFilePath)), rigFileName!);
+            }
+            catch (Exception ex) when (ex is ManifestException or FormatException or IOException or UnauthorizedAccessException)
+            {
+                warnings.Add($"{rigFileName} could not be read ({ex.Message}), so the rig edit was read from the model's bones.");
+            }
+        }
+        // Named as the app shows the species.
+        var name = species.FirstOrDefault(s => string.Equals(s.SpeciesId, speciesId, StringComparison.Ordinal))?.Name ?? speciesId;
+        var reading = ModelRigReader.Read(file, game, current, rigFile, name, rigFileName);
+        warnings.AddRange(reading.Warnings);
+
+        var question = reading.Source switch
+        {
+            _ when current is null => ModelRigQuestion.None,
+            RigSource.Saved => ModelRigQuestion.None,
+            RigSource.GameSkeleton => ModelRigQuestion.KeepOrRemove,
+            _ => RigEdit.Hash(reading.Rig) != RigEdit.Hash(current) ? ModelRigQuestion.UseOrKeep : ModelRigQuestion.None,
+        };
+        var auto = Owned(Choose(reading, current, ModelRigChoice.Auto));
+        var errors = new List<string>();
+        if (ws is not null && auto is not null)
+        {
+            var (rigErrors, rigWarnings) = RigProblems(ws, install, index, species, reader, speciesId, skin, auto);
+            errors.AddRange(rigErrors);
+            warnings.AddRange(rigWarnings);
+        }
+        return new ModelRigPreview(reading, current, question, RigEdit.Hash(auto) != RigEdit.Hash(current), errors, warnings);
+    }
+
+    /// <summary>
+    /// The rig edit to save. Auto: the file's when it has one (a different current one is replaced), the current one when
+    /// the file has the game's skeleton or matches the current one. UseFile: the file's, even none. KeepCurrent: the current one.
+    /// </summary>
+    private static IReadOnlyDictionary<string, RigOffset>? Choose(RigReading reading, IReadOnlyDictionary<string, RigOffset>? current, ModelRigChoice choice) =>
+        choice switch
+        {
+            ModelRigChoice.UseFile => reading.Rig,
+            ModelRigChoice.KeepCurrent => current,
+            _ => reading.Source is RigSource.GameSkeleton or RigSource.Saved ? current : reading.Rig,
+        };
+
+    /// <summary>The rig rules (Send's) for a rig edit on the destination's new model.</summary>
+    private static (List<string> Errors, List<string> Warnings) RigProblems(Workspace ws, GameInstall install, AssetIndex index, IReadOnlyList<SpeciesSkins> species,
+        IAssetReader reader, string speciesId, SkinEntry? skin, IReadOnlyDictionary<string, RigOffset> rig)
+    {
+        var info = Rigging.RigInfoService.For(ws, install, index, species, reader, speciesId);
+        var where = skin is null ? $"Rig edit of {speciesId}" : $"Skin '{skin.Id}'";
+        return Rigging.RigRules.Problems(rig, info, hasModel: true, where, perSkin: skin is not null);
     }
 
     /// <summary>Stops replacing a model (the files stay, so undo can bring it back); a rig edit stays, on the game's mesh.</summary>
@@ -251,3 +369,23 @@ public sealed partial class ModProject
             $"'{entry.SpeciesId}' has no model in the asset index: on the Workspace tab click Index assets (or run 'tyrant assets index')."));
     }
 }
+
+/// <summary>
+/// How the rig edit a model file carries goes on its destination. Auto: the file's rig edit when it has one, else the
+/// destination keeps its own. UseFile: the file's, even the game's skeleton (which removes the rig edit). KeepCurrent: the
+/// destination's own, whatever the file says.
+/// </summary>
+public enum ModelRigChoice { Auto, UseFile, KeepCurrent }
+
+/// <summary>
+/// What to ask before adding a model. KeepOrRemove: the file has the game's skeleton and the destination a rig edit (Auto
+/// keeps it). UseOrKeep: the file has another rig edit than the destination's (Auto uses the file's).
+/// </summary>
+public enum ModelRigQuestion { None, KeepOrRemove, UseOrKeep }
+
+/// <summary>
+/// What adding a model does to its destination's rig edit. Current: the destination's (null for none). Changes: Auto saves
+/// another rig edit than Current. Errors and Warnings: the reading's, the file's LODs', and the rig rules' for Auto's rig edit.
+/// </summary>
+public sealed record ModelRigPreview(RigReading Reading, IReadOnlyDictionary<string, RigOffset>? Current, ModelRigQuestion Question, bool Changes,
+    IReadOnlyList<string> Errors, IReadOnlyList<string> Warnings);

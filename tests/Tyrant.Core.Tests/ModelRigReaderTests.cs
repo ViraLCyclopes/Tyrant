@@ -30,7 +30,7 @@ public class ModelRigReaderTests
     /// The bind poses are in <paramref name="meshFrame"/> (K) against the prefab's frame, so a Blender export of it is in
     /// the frame G = K⁻¹ against the game's mesh.
     /// </summary>
-    private static PrefabModel Game(Matrix4x4? meshFrame = null, float armatureScale = 1f)
+    internal static PrefabModel Game(Matrix4x4? meshFrame = null, float armatureScale = 1f)
     {
         var root = new SkeletonNode("Fixture", new Vector3(1955, 99, 1127), Quaternion.CreateFromAxisAngle(Vector3.UnitY, 0.7f), Vector3.One);
         var carch = Node("Carch", Vector3.Zero, root, Quaternion.CreateFromAxisAngle(Vector3.UnitX, -90 * Degrees), armatureScale);
@@ -71,7 +71,7 @@ public class ModelRigReaderTests
 
     private static RendererModel Renderer(PrefabModel game) => ModelBuilder.GameRenderers(game)[0];
 
-    private static Dictionary<string, RigOffset> Rig(params (string Bone, Vector3 Move, Quaternion Rotate, float Scale)[] bones)
+    internal static Dictionary<string, RigOffset> Rig(params (string Bone, Vector3 Move, Quaternion Rotate, float Scale)[] bones)
     {
         var rig = new Dictionary<string, RigOffset>(StringComparer.Ordinal);
         foreach (var (bone, move, rotate, scale) in bones)
@@ -79,13 +79,13 @@ public class ModelRigReaderTests
         return rig;
     }
 
-    private static (string, Vector3, Quaternion, float) Move(string bone, float x, float y, float z) => (bone, new Vector3(x, y, z), Quaternion.Identity, 1f);
+    internal static (string, Vector3, Quaternion, float) Move(string bone, float x, float y, float z) => (bone, new Vector3(x, y, z), Quaternion.Identity, 1f);
 
-    private static (string, Vector3, Quaternion, float) Turn(string bone, Vector3 axis, float degrees) =>
+    internal static (string, Vector3, Quaternion, float) Turn(string bone, Vector3 axis, float degrees) =>
         (bone, Vector3.Zero, Quaternion.CreateFromAxisAngle(axis, degrees * Degrees), 1f);
 
     /// <summary>R from the brief: Neck1 moved and turned 10° about X, Tail1 turned -15° about Y.</summary>
-    private static Dictionary<string, RigOffset> R() => Rig(
+    internal static Dictionary<string, RigOffset> R() => Rig(
         ("Neck1", new Vector3(0, 0.05f, 0.02f), Quaternion.CreateFromAxisAngle(Vector3.UnitX, 10 * Degrees), 1f),
         Turn("Tail1", Vector3.UnitY, -15));
 
@@ -94,7 +94,7 @@ public class ModelRigReaderTests
     /// world · G, G = K⁻¹), each bone's own rig scale dropped (its rest pose cannot hold it), the uniform scale of the frame
     /// kept. <paramref name="leaveOut"/> bones are not in the file.
     /// </summary>
-    private static string Export(PrefabModel game, IReadOnlyDictionary<string, RigOffset>? rig, Matrix4x4? meshFrame = null, params string[] leaveOut)
+    internal static string Export(PrefabModel game, IReadOnlyDictionary<string, RigOffset>? rig, Matrix4x4? meshFrame = null, params string[] leaveOut)
     {
         var renderer = Renderer(game);
         var edited = RigBinds.Edited(game, renderer, rig);
@@ -121,7 +121,7 @@ public class ModelRigReaderTests
 
     private static float Angle(Quaternion q) => 2 * MathF.Atan2(new Vector3(q.X, q.Y, q.Z).Length(), MathF.Abs(q.W)) / Degrees;
 
-    private static void AssertRig(IReadOnlyDictionary<string, RigOffset> expected, IReadOnlyDictionary<string, RigOffset> actual)
+    internal static void AssertRig(IReadOnlyDictionary<string, RigOffset> expected, IReadOnlyDictionary<string, RigOffset> actual)
     {
         Assert.Equal(expected.Keys.Order(), actual.Keys.Order());
         foreach (var (bone, want) in expected)
@@ -182,7 +182,7 @@ public class ModelRigReaderTests
         Assert.Empty(reading.Rig);
     }
 
-    private static Dictionary<string, RigOffset> WithScaledTail()
+    internal static Dictionary<string, RigOffset> WithScaledTail()
     {
         var saved = R();
         var tail = saved["Tail1"];
@@ -355,6 +355,21 @@ public class ModelRigReaderTests
         Assert.Equal(RigSource.Bones, reading.Source);
         AssertRig(rig, reading.Rig);
         Assert.Equal(RigSource.GameSkeleton, unedited.Source);
+    }
+
+    [Fact]
+    public void A_glb_tyrant_wrote_itself_reads_as_the_game_skeleton_in_any_frame()
+    {
+        // Tyrant's own glb (Assets tab export) keeps the game's bind poses: not moved into the frame Blender writes.
+        var k = Matrix4x4.CreateRotationX(90 * Degrees) * Matrix4x4.CreateScale(0.01f);
+        var game = Game(k, armatureScale: 1.0490f);
+        var path = TempGlb();
+        GltfModelWriter.WriteGlb(game, Renderer(game), path);
+
+        var reading = ModelRigReader.Read(Skeleton(path, game), game, null, null, "Fixture");
+
+        Assert.Equal(RigSource.GameSkeleton, reading.Source);
+        Assert.Empty(reading.Warnings);
     }
 
     [Fact]

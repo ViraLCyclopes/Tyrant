@@ -2,15 +2,20 @@ using System.Numerics;
 using Tyrant.Core.Assets;
 using Tyrant.Core.Blender;
 using Tyrant.Core.Install;
+using Tyrant.Core.ModelReplacements;
 using Tyrant.Core.Models;
 using Tyrant.Core.Mods;
 using Tyrant.Core.Workspaces;
+using Json = Tyrant.Framework.Core.Json;
+using RigEdit = Tyrant.Framework.Core.RigEdit;
+using RigOffset = Tyrant.Framework.Core.RigOffset;
+using RigVector3 = Tyrant.Framework.Core.RigVector3;
 
 namespace Tyrant.Core.Tests;
 
 /// <summary>The add-on's Python tests, run by the real Blender 5.x against a project Tyrant wrote; skipped without Blender.</summary>
 [Trait("Category", "Blender")]
-public class BlenderAddonRunTests
+public class BlenderAddonRunTests(RealGameIndex real) : IClassFixture<RealGameIndex>
 {
     internal static MeshData SplitQuad(Matrix4x4[] bindPoses) => ModelFixture.SplitQuad(bindPoses);
 
@@ -262,5 +267,151 @@ public class BlenderAddonRunTests
         Assert.True(int.Parse(line.Split(' ')[1]) >= 2, line); // one take per animation
         Assert.Contains("Walk", line);
         Assert.Contains("Roar", line);
+    }
+
+    // ---- A model brings its rig edit (the real game: TYRANT_GAME_DIR and TYRANT_DATA_DIR, read only) ----------------------
+
+    private static readonly string? DataDir = Environment.GetEnvironmentVariable("TYRANT_DATA_DIR");
+
+    private static readonly object RealLock = new();
+    private static Workspace? realWs;
+    private static readonly Dictionary<string, string> RealExports = new(StringComparer.Ordinal);
+
+    private static void SkipWithoutTheRealGame()
+    {
+        Skip.If(BlenderIntegrationTests.Blender() is null, "Blender 5.x not found");
+        Skip.If(RealGameIndex.GameDir is null || DataDir is null, "TYRANT_GAME_DIR and TYRANT_DATA_DIR not set");
+    }
+
+    /// <summary>One workspace for these facts, with a copy of the data dump (the user's folder is only read).</summary>
+    private Workspace RealWorkspace()
+    {
+        lock (RealLock)
+        {
+            if (realWs is not null) return realWs;
+            var ws = Workspace.Create(Path.Combine(Path.GetTempPath(), "tyrant-tests", "rigread-" + Guid.NewGuid().ToString("N"), "ws"), real.Install);
+            static void Copy(string from, string to)
+            {
+                Directory.CreateDirectory(to);
+                foreach (var file in Directory.GetFiles(from)) File.Copy(file, Path.Combine(to, Path.GetFileName(file)), overwrite: true);
+                foreach (var dir in Directory.GetDirectories(from)) Copy(dir, Path.Combine(to, Path.GetFileName(dir)));
+            }
+            Copy(DataDir!, ws.DataDir);
+            return realWs = ws;
+        }
+    }
+
+    /// <summary>
+    /// rig_export.py's files for the species (one Blender run, kept for the other facts): plain.glb / plain.default.fbx (the
+    /// game's skeleton), edited.glb / edited.default.fbx (made with Start / Apply rig edit) and unity_rig.json (what Send passes).
+    /// </summary>
+    private string Exports(string species)
+    {
+        var ws = RealWorkspace();
+        lock (RealLock)
+        {
+            if (RealExports.TryGetValue(species, out var known)) return known;
+            var project = BlenderProjectWriter.Write(new BlenderOpenRequest(species, null, null, true, false), ws, real.Install, real.Index,
+                SpeciesSkinsReader.Load(ws), new BundleAssetReader(), "tyrant.exe").ProjectFile;
+            var exportDir = Path.Combine(Path.GetDirectoryName(project)!, "rig-export");
+            var run = RunPython("rig_export.py", project, exportDir);
+            Assert.True(run.ExitCode == 0 && run.Output.Contains("RIGEXPORT"), run.Output[^Math.Min(4000, run.Output.Length)..]);
+            return RealExports[species] = exportDir;
+        }
+    }
+
+    private static BlenderModelConverter RealConverter() =>
+        new(new BlenderProcess(), BlenderIntegrationTests.Blender()!.Exe, BlenderIntegrationTests.ThrowawayUser(out _));
+
+    /// <summary>The model file for a format: "glb" as Send exports it, "fbx" that glb turned into FBX by Tyrant's own converter.</summary>
+    private static string ModelFile(string dir, string stem, string format)
+    {
+        var glb = Path.Combine(dir, stem + ".glb");
+        if (format == "glb") return glb;
+        var fbx = Path.Combine(dir, stem + ".tyrant.fbx");
+        if (!File.Exists(fbx)) Assert.Empty(RealConverter().GlbToFbx([(glb, fbx)]));
+        return fbx;
+    }
+
+    private ModelRigPreview PreviewRig(ModProject mod, string species, string model) =>
+        mod.PreviewModelRig(RealWorkspace(), real.Install, real.Index, SpeciesSkinsReader.Load(RealWorkspace()), new BundleAssetReader(), model, species, null, null, RealConverter);
+
+    /// <summary>The rig edit read from the model is the one the add-on sends, without scale (a plain export cannot carry it).</summary>
+    private static void AssertSendRig(string unityRigJson, IReadOnlyDictionary<string, RigOffset> read)
+    {
+        var sent = RigEdit.Parse(Json.Parse(File.ReadAllText(unityRigJson)), "unity_rig.json");
+        Assert.Equal(sent.Keys.Order(), read.Keys.Order());
+        foreach (var (bone, want) in sent)
+        {
+            var got = read[bone];
+            var moved = RigVector3.Distance(want.Move, got.Move);
+            Assert.True(moved <= ModelRigReader.MoveTolerance, $"{bone}: move {got.Move} read for {want.Move} sent ({moved * 1000:0.####} mm off)");
+            var difference = got.Rotate.ToNumerics() * Quaternion.Conjugate(want.Rotate.ToNumerics());
+            var turned = 2 * MathF.Atan2(new Vector3(difference.X, difference.Y, difference.Z).Length(), MathF.Abs(difference.W)) * 180 / MathF.PI;
+            Assert.True(turned <= ModelRigReader.TurnToleranceDegrees, $"{bone}: rotate {got.Rotate} read for {want.Rotate} sent ({turned:0.####}° off)");
+            Assert.Equal(RigVector3.One, got.Scale);
+        }
+    }
+
+    [SkippableTheory]
+    [InlineData("glb")]
+    [InlineData("fbx")]
+    public void A_rig_edited_export_reads_back_as_the_send_rig_edit(string format)
+    {
+        SkipWithoutTheRealGame();
+        foreach (var species in new[] { "Carcharodontosaurus", "Panthera Atrox" })
+        {
+            var dir = Exports(species);
+            var model = ModelFile(dir, "edited", format);
+            var mod = ModProject.Create(RealWorkspace(), "rigread-" + Guid.NewGuid().ToString("N")[..8], null, null);
+
+            var preview = PreviewRig(mod, species, model);
+            Assert.Equal(RigSource.Bones, preview.Reading.Source);
+            Assert.Equal(ModelRigQuestion.None, preview.Question);
+            Assert.True(preview.Changes);
+            Assert.True(preview.Errors.Count == 0, string.Join(" | ", preview.Errors));
+            AssertSendRig(Path.Combine(dir, "unity_rig.json"), preview.Reading.Rig);
+
+            mod.ReplaceModel(real.Install, real.Index, SpeciesSkinsReader.Load(RealWorkspace()), new BundleAssetReader(), model, species, null, null,
+                RealConverter, ws: RealWorkspace());
+            AssertSendRig(Path.Combine(dir, "unity_rig.json"), ModProject.Open(RealWorkspace(), mod.Id).Manifest.Models.Single().Rig!);
+        }
+    }
+
+    [SkippableFact]
+    public void An_fbx_exported_with_blender_defaults_reads_the_same_rig_edit()
+    {
+        SkipWithoutTheRealGame();
+        foreach (var species in new[] { "Carcharodontosaurus", "Panthera Atrox" })
+        {
+            var dir = Exports(species);
+            var mod = ModProject.Create(RealWorkspace(), "rigread-" + Guid.NewGuid().ToString("N")[..8], null, null);
+
+            var preview = PreviewRig(mod, species, Path.Combine(dir, "edited.default.fbx"));
+
+            Assert.Equal(RigSource.Bones, preview.Reading.Source);
+            AssertSendRig(Path.Combine(dir, "unity_rig.json"), preview.Reading.Rig);
+        }
+    }
+
+    [SkippableTheory]
+    [InlineData("Carcharodontosaurus")]
+    [InlineData("Panthera Atrox")]
+    public void An_unedited_export_reads_as_the_game_skeleton(string species)
+    {
+        SkipWithoutTheRealGame();
+        var dir = Exports(species);
+        var mod = ModProject.Create(RealWorkspace(), "rigread-" + Guid.NewGuid().ToString("N")[..8], null, null);
+
+        foreach (var model in new[] { ModelFile(dir, "plain", "glb"), ModelFile(dir, "plain", "fbx"), Path.Combine(dir, "plain.default.fbx") })
+        {
+            var preview = PreviewRig(mod, species, model);
+
+            Assert.True(preview.Reading.Source == RigSource.GameSkeleton,
+                $"{Path.GetFileName(model)} read as {preview.Reading.Source}: {string.Join(", ", preview.Reading.Rig.Keys)}");
+            Assert.Empty(preview.Reading.Rig);
+            Assert.False(preview.Changes);
+            Assert.Equal(ModelRigQuestion.None, preview.Question);
+        }
     }
 }
