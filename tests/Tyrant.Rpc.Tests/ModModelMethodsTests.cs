@@ -107,6 +107,84 @@ public class ModModelMethodsTests
         Assert.False(materials["Eyes"]);
     }
 
+    private static async Task<(RpcHarness H, FakeAssetReader Reader)> SkinWithTwoLods(FakeGame game)
+    {
+        var (h, ws, reader, glb) = await Setup(game);
+        var r0 = reader.PrefabModelToReturn!.Renderers[0];
+        var lod1 = r0 with
+        {
+            Name = "Carch_LOD01",
+            Mesh = new MeshData
+            {
+                Name = "Carch_LOD01", Positions = r0.Mesh.Positions[..2], Normals = r0.Mesh.Normals[..2], Uv0 = r0.Mesh.Uv0[..2], Colors = [],
+                Skin = r0.Mesh.Skin[..2], Indices = [], SubMeshes = [new SubMesh(0, 0, 0)], BindPoses = r0.Mesh.BindPoses, BlendShapes = r0.Mesh.BlendShapes,
+            },
+        };
+        reader.PrefabModelToReturn = reader.PrefabModelToReturn! with { Renderers = [r0, lod1] };
+        var dir = Path.Combine(ws, "mods", "big-carch");
+        Directory.CreateDirectory(Path.Combine(dir, "skins", "spiked"));
+        File.Copy(glb, Path.Combine(dir, "skins", "spiked", "male_D.png"));
+        File.WriteAllText(Path.Combine(dir, "mod.json"),
+            "{\"format\":1,\"id\":\"big-carch\",\"name\":\"Big Carch\",\"version\":\"1.0.0\",\"replace\":[],\"skins\":[{\"id\":\"spiked\",\"species\":\"Carcharodontosaurus\",\"name\":\"Spiked\",\"base\":\"1\",\"male\":{\"diffuse\":\"skins/spiked/male_D.png\"}}]}");
+        await h.Call("mods.replaceModel", new { id = "big-carch", file = glb, skin = "spiked" });
+        return (h, reader);
+    }
+
+    [Fact]
+    public async Task SkinModel_without_new_parameters_behaves_as_before()
+    {
+        using var game = new FakeGame();
+        var (h, _) = await SkinWithTwoLods(game);
+
+        var plain = await h.Call("mods.skinModel", new { id = "big-carch", skin = "spiked", sex = "male" });
+        var lod0 = await h.Call("mods.skinModel", new { id = "big-carch", skin = "spiked", sex = "male", lod = 0, strict = false });
+
+        Assert.Equal(plain.GetRawText(), lod0.GetRawText());
+        Assert.EndsWith("lod0.glb", plain.GetProperty("ownModel").GetProperty("file").GetString());
+    }
+
+    [Fact]
+    public async Task SkinModel_lod_picks_that_lods_file()
+    {
+        using var game = new FakeGame();
+        var (h, _) = await SkinWithTwoLods(game);
+
+        var model = await h.Call("mods.skinModel", new { id = "big-carch", skin = "spiked", sex = "male", lod = 1 });
+
+        Assert.EndsWith("lod1.glb", model.GetProperty("ownModel").GetProperty("file").GetString());
+    }
+
+    [Fact]
+    public async Task SkinModel_lod_past_the_last_shows_the_last()
+    {
+        using var game = new FakeGame();
+        var (h, _) = await SkinWithTwoLods(game);
+
+        var model = await h.Call("mods.skinModel", new { id = "big-carch", skin = "spiked", sex = "male", lod = 9 });
+
+        Assert.EndsWith("lod1.glb", model.GetProperty("ownModel").GetProperty("file").GetString());
+    }
+
+    [Fact]
+    public async Task SkinModel_strict_throws_the_build_reason()
+    {
+        using var game = new FakeGame();
+        var (h, ws, _, glb) = await Setup(game);
+        var dir = Path.Combine(ws, "mods", "big-carch");
+        Directory.CreateDirectory(Path.Combine(dir, "skins", "spiked"));
+        File.Copy(glb, Path.Combine(dir, "skins", "spiked", "male_D.png"));
+        File.WriteAllText(Path.Combine(dir, "mod.json"),
+            "{\"format\":1,\"id\":\"big-carch\",\"name\":\"Big Carch\",\"version\":\"1.0.0\",\"replace\":[],\"skins\":[{\"id\":\"spiked\",\"species\":\"Carcharodontosaurus\",\"name\":\"Spiked\",\"base\":\"1\",\"male\":{\"diffuse\":\"skins/spiked/male_D.png\"}}]}");
+        await h.Call("mods.replaceModel", new { id = "big-carch", file = glb, skin = "spiked" });
+        Directory.Delete(Path.Combine(dir, "models"), true); // the build is gone: no levels of detail to show
+
+        var lenient = await h.Call("mods.skinModel", new { id = "big-carch", skin = "spiked", sex = "male" });
+        var ex = await Assert.ThrowsAsync<RpcCallException>(() => h.Call("mods.skinModel", new { id = "big-carch", skin = "spiked", sex = "male", strict = true }));
+
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, lenient.GetProperty("ownModel").ValueKind);
+        Assert.Contains("no built levels of detail", ex.Message);
+    }
+
     [Fact]
     public async Task Model_preview_writes_a_glb_per_lod_in_the_preview_cache()
     {

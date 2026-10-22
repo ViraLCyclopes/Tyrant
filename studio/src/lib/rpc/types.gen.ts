@@ -1241,6 +1241,8 @@ export interface ModSkinModelParams {
   id: string;
   skin: string;
   sex?: string;
+  lod?: number | null;
+  strict?: boolean;
 }
 
 export interface ModSkinOwnModel {
