@@ -41,6 +41,18 @@ export function createRigAsk(): RigAsk {
 }
 
 /**
+ * The card's `ask`, but only while `current()` holds (the card still shows the destination the question is about): once the user
+ * has moved on, the question is answered null without being shown, so nothing is saved.
+ */
+export function askFor(ask: RigAsk, current: () => boolean): RigAsk {
+  return {
+    pending: ask.pending,
+    ask: (preview, action) => (current() ? ask.ask(preview, action) : Promise.resolve(null)),
+    dispose: () => ask.dispose(),
+  };
+}
+
+/**
  * Reads the rig edit in the picked model and, when it is worth a look, asks first in the calling card (`ask`). Resolves with what to
  * send as `rig`, or null when the user cancelled or left the card (then nothing is added).
  */

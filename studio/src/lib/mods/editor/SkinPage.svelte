@@ -9,7 +9,7 @@
   import ColourEditor from './ColourEditor.svelte';
   import MaterialEditor from './MaterialEditor.svelte';
   import ModelRigHost from './ModelRigHost.svelte';
-  import { chooseModelRig, createRigAsk } from './modelRig';
+  import { askFor, chooseModelRig, createRigAsk } from './modelRig';
   import RigEdit from './RigEdit.svelte';
   import type { ModDoc } from './modDoc.svelte';
   import RemoveSkinDialog from './RemoveSkinDialog.svelte';
@@ -32,11 +32,19 @@
   let materialDraft = $state<{ skin: string; json: string | null } | null>(null);
   const draftJson = $derived(materialDraft?.skin === skin.id ? materialDraft.json : null);
 
+  // A question asked for one skin is not answered for another: opening another skin (the page stays) cancels it.
+  const skinId = $derived(skin.id);
+  $effect(() => {
+    void skinId;
+    return () => rigAsk.dispose();
+  });
+
   async function replaceModel() {
+    const id = skin.id; // the destination the question is about
     const file = await session.platform.openFile(`Choose a model for ${skin.name} (.glb or .fbx)`, ['glb', 'fbx']);
-    if (!file) return;
-    const rig = await tab.safely(() => chooseModelRig(session.rpc, { id: doc.id, file, skin: skin.id }, { reimport: false, action: 'Replace' }, rigAsk));
-    if (rig) await doc.edit('mods.replaceModel', { file, skin: skin.id, rig });
+    if (!file || id !== skin.id) return;
+    const rig = await tab.safely(() => chooseModelRig(session.rpc, { id: doc.id, file, skin: id }, { reimport: false, action: 'Replace' }, askFor(rigAsk, () => skin.id === id)));
+    if (rig) await doc.edit('mods.replaceModel', { file, skin: id, rig });
   }
 
   // Follows saves, undo and outside changes.

@@ -7,7 +7,7 @@ import { chooseModelRig } from './modelRig';
 
 const bone = (name: string) => ({ bone: name, move: [0, 0.5, 0], rotate: [0, 0, 0, 1], scale: [1, 1, 1] });
 const preview = (over: Partial<ModModelRigPreviewDto> = {}): ModModelRigPreviewDto => ({
-  source: 'bones', bones: [bone('Jaw'), bone('Tail1')], current: null, question: 'none', changes: true, errors: [], warnings: [], rigFile: null, ...over,
+  source: 'bones', bones: [bone('Jaw'), bone('Tail1')], current: null, question: 'none', changes: true, errors: [], warnings: [], rigFile: null, errorsIfUseFile: [], errorsIfKeep: [], ...over,
 });
 
 function show(p: ModModelRigPreviewDto, action: 'Add' | 'Replace' = 'Add') {
@@ -58,6 +58,33 @@ describe('ModelRigConfirm', () => {
     expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled();
     await fireEvent.keyDown(screen.getByRole('group', { name: 'Rig edit' }), { key: 'Escape' });
     expect(onCancel).toHaveBeenCalled();
+  });
+
+  it("keep stays open when only the model's rig edit breaks a rule", async () => {
+    const bad = "Rig edit of Carcharodontosaurus: rig edit bone(s) Wing.L is not in the species' skeleton";
+    const { onConfirm } = show(preview({ question: 'useOrKeep', current: [bone('A')], errors: [bad], errorsIfUseFile: [bad], errorsIfKeep: [] }));
+    expect(screen.getByRole('alert')).toHaveTextContent('Wing.L');
+    expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled();
+
+    await fireEvent.click(screen.getByRole('radio', { name: 'Keep the current one (1 bones)' }));
+
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Add' })).toBeEnabled();
+    await fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    expect(onConfirm).toHaveBeenCalledWith('keepCurrent');
+  });
+
+  it('keeping a current rig edit that breaks a rule says so, and removing it stays open', async () => {
+    const why = "The rig edit already on Carcharodontosaurus breaks a rule, not the model. Clear it (Clear rig edit on the model page, or 'tyrant mod rig m \"Carcharodontosaurus\" --clear'), then add the model again.";
+    const { onConfirm } = show(preview({ question: 'keepOrRemove', source: 'gameSkeleton', bones: [], current: [bone('Wing.L')], errors: [why], errorsIfKeep: [why], errorsIfUseFile: [] }), 'Replace');
+    expect(screen.getByRole('alert')).toHaveTextContent('The rig edit already on Carcharodontosaurus breaks a rule');
+    expect(screen.getByRole('button', { name: 'Replace' })).toBeDisabled();
+
+    await fireEvent.click(screen.getByRole('radio', { name: 'Remove it' }));
+
+    expect(screen.queryByRole('alert')).toBeNull();
+    await fireEvent.click(screen.getByRole('button', { name: 'Replace' }));
+    expect(onConfirm).toHaveBeenCalledWith('useFile');
   });
 
   it('folds a long bone list', () => {

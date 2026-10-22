@@ -4,7 +4,7 @@
   import { getTab } from '$lib/shell/tab.svelte';
   import { getSession } from '$lib/stores/session.svelte';
   import ModelRigHost from './ModelRigHost.svelte';
-  import { chooseModelRig, createRigAsk } from './modelRig';
+  import { askFor, chooseModelRig, createRigAsk } from './modelRig';
   import type { ModDoc } from './modDoc.svelte';
 
   /** The mod editor's Models → + Add: a species' model from your .glb, into this mod (as Replace model in a mod… does). */
@@ -27,10 +27,16 @@
     if (picked) file = picked;
   }
 
+  // A question asked for one species is not answered for another: choosing another species cancels it.
+  $effect(() => {
+    void species;
+    return () => rigAsk.dispose();
+  });
+
   async function add() {
-    const path = file.trim();
-    const rig = await tab.safely(() => chooseModelRig(session.rpc, { id: doc.id, file: path, target: species }, { reimport: false, action: 'Add' }, rigAsk));
-    if (rig && (await doc.edit('mods.replaceModel', { file: path, target: species, rig }))) onDone(species);
+    const [path, target] = [file.trim(), species]; // the destination the question is about
+    const rig = await tab.safely(() => chooseModelRig(session.rpc, { id: doc.id, file: path, target }, { reimport: false, action: 'Add' }, askFor(rigAsk, () => species === target)));
+    if (rig && (await doc.edit('mods.replaceModel', { file: path, target, rig }))) onDone(target);
   }
 </script>
 

@@ -3,7 +3,7 @@
   import { getTab } from '$lib/shell/tab.svelte';
   import { getSession } from '$lib/stores/session.svelte';
   import ModelRigHost from './editor/ModelRigHost.svelte';
-  import { chooseModelRig, createRigAsk } from './editor/modelRig';
+  import { askFor, chooseModelRig, createRigAsk } from './editor/modelRig';
 
   /** Replace model in a mod… on a prefab: the user's .glb from Blender becomes the species' model in a mod. */
   let { asset }: { asset: AssetRow } = $props();
@@ -18,6 +18,12 @@
   let newId = $state('my-mod');
   let file = $state('');
   const workspaceMods = $derived((mods?.mods ?? []).filter((m) => m.state !== 'gameOnly'));
+
+  // A question asked for one mod is not answered for another: choosing another mod cancels it.
+  $effect(() => {
+    void target;
+    return () => rigAsk.dispose();
+  });
 
   async function start() {
     open = true;
@@ -40,7 +46,7 @@
       target = id;
     }
     const path = file.trim();
-    const rig = await tab.safely(() => chooseModelRig(session.rpc, { id, file: path, prefabRef: asset.ref }, { reimport: false, action: 'Add' }, rigAsk));
+    const rig = await tab.safely(() => chooseModelRig(session.rpc, { id, file: path, prefabRef: asset.ref }, { reimport: false, action: 'Add' }, askFor(rigAsk, () => target === id)));
     if (!rig) return;
     const detail = await tab.safely(() => session.rpc.call('mods.replaceModel', { id, file: path, prefabRef: asset.ref, rig }));
     if (!detail) return;

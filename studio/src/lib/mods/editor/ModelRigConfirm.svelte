@@ -23,6 +23,8 @@
     : "The model has the game's skeleton",
   );
   const count = $derived(preview.bones.length);
+  // The errors of what Confirm would save: the chosen radio's (keeping a current rig edit that breaks a rule says how to clear it).
+  const errors = $derived(preview.question === 'none' ? preview.errors : choice === 'useFile' ? preview.errorsIfUseFile : preview.errorsIfKeep);
 
   function confirm() {
     onConfirm(preview.question === 'none' ? 'auto' : choice);
@@ -84,11 +86,11 @@
     </fieldset>
   {/if}
 
-  {#each preview.errors as e (e)}<p class="warn" role="alert">{e}</p>{/each}
+  {#each errors as e (e)}<p class="warn" role="alert">{e}</p>{/each}
   {#each preview.warnings as w (w)}<p class="hint">{w}</p>{/each}
 
   <div class="row">
-    <button class="primary" bind:this={confirmButton} disabled={preview.errors.length > 0} onclick={confirm}>{action}</button>
+    <button class="primary" bind:this={confirmButton} disabled={errors.length > 0} onclick={confirm}>{action}</button>
     <button onclick={onCancel}>Cancel</button>
   </div>
 </div>

@@ -23,8 +23,8 @@ async function setup(detail = modDetail()) {
   const doc = new ModDoc('red-spot', rpc, tab, () => {});
   await doc.load();
   await doc.runCheck();
-  renderWith(SkinPage, session, { doc, skin: doc.detail!.skins[0] }, tab);
-  return { rpc, platform, session, doc };
+  const view = renderWith(SkinPage, session, { doc, skin: doc.detail!.skins[0] }, tab);
+  return { rpc, platform, session, doc, view };
 }
 
 describe('SkinPage', () => {
@@ -39,13 +39,30 @@ describe('SkinPage', () => {
     const species = { target: 'Carcharodontosaurus', skin: null, file: 'models/carch-1a2b.glb', lods: [], errors: [], warnings: [], stale: false, origin: null, originChanged: false };
     const { rpc, platform } = await setup(modDetail({ models: [species] }));
     platform.files.push('D:\\blender\\spiked.glb');
-    rpc.on('mods.readModelRig', () => ({ source: 'gameSkeleton', bones: [], current: null, question: 'none', changes: false, errors: [], warnings: [], rigFile: null }));
+    rpc.on('mods.readModelRig', () => ({ source: 'gameSkeleton', bones: [], current: null, question: 'none', changes: false, errors: [], warnings: [], rigFile: null, errorsIfUseFile: [], errorsIfKeep: [] }));
     rpc.on('mods.replaceModel', () => modDetail({ revision: 'r2', models: [species] }));
 
     expect(screen.getByText('Model: species replacement (models/carch-1a2b.glb)')).toBeInTheDocument();
     await fireEvent.click(screen.getByRole('button', { name: 'Replace model…' }));
 
     await waitFor(() => expect(rpc.callsTo('mods.replaceModel')[0]?.params).toMatchObject({ file: 'D:\\blender\\spiked.glb', skin: 'blue', revision: 'r1', rig: 'auto' }));
+  });
+
+  it('opening another skin with the rig question open saves nothing, and the other skin shows no question', async () => {
+    const species = { target: 'Carcharodontosaurus', skin: null, file: 'models/carch-1a2b.glb', lods: [], errors: [], warnings: [], stale: false, origin: null, originChanged: false };
+    const { rpc, platform, doc, view } = await setup(modDetail({ models: [species] }));
+    platform.files.push('D:\\blender\\spiked.glb');
+    rpc.on('mods.readModelRig', () => ({
+      source: 'bones', bones: [{ bone: 'Jaw', move: [0, 1, 0], rotate: [0, 0, 0, 1], scale: [1, 1, 1] }], current: [], question: 'useOrKeep', changes: true,
+      errors: [], warnings: [], rigFile: null, errorsIfUseFile: [], errorsIfKeep: [],
+    }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Replace model…' }));
+    await screen.findByRole('group', { name: 'Rig edit' });
+
+    await view.rerender({ doc, skin: doc.detail!.skins[1] });
+
+    await waitFor(() => expect(screen.queryByRole('group', { name: 'Rig edit' })).toBeNull());
+    expect(rpc.callsTo('mods.replaceModel')).toHaveLength(0);
   });
 
   it('a skin with its own model can go back to the species model', async () => {

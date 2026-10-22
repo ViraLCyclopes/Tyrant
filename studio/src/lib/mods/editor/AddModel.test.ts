@@ -33,7 +33,7 @@ function setup(hasDump = true) {
 
 let lastPlatform: FakePlatform;
 let rigFails = false;
-let rigPreview: ModModelRigPreviewDto = { source: 'gameSkeleton', bones: [], current: null, question: 'none', changes: false, errors: [], warnings: [], rigFile: null };
+let rigPreview: ModModelRigPreviewDto = { source: 'gameSkeleton', bones: [], current: null, question: 'none', changes: false, errors: [], warnings: [], rigFile: null, errorsIfUseFile: [], errorsIfKeep: [] };
 
 describe('AddModel', () => {
   it('lets you pick a .glb or an .fbx', async () => {
@@ -102,6 +102,32 @@ describe('AddModel', () => {
     await screen.findByRole('button', { name: 'Browse…' });
     expect(screen.queryByRole('group', { name: 'Rig edit' })).toBeNull();
     expect(doc.edit).not.toHaveBeenCalled();
+  });
+
+  it('changing the species with the question open adds nothing, and the new species shows no question', async () => {
+    const { doc, onDone } = await openQuestion();
+    await fireEvent.change(screen.getByRole('combobox', { name: 'Species' }), { target: { value: 'Carcharodontosaurus' } });
+    await waitFor(() => expect(screen.queryByRole('group', { name: 'Rig edit' })).toBeNull());
+    expect(doc.edit).not.toHaveBeenCalled();
+    expect(onDone).not.toHaveBeenCalled();
+  });
+
+  it('changing the species while the model is being read asks nothing and adds nothing', async () => {
+    const asked = { ...rigPreview, source: 'bones', question: 'useOrKeep', changes: true, current: [], bones: [{ bone: 'Jaw', move: [0, 1, 0], rotate: [0, 0, 0, 1], scale: [1, 1, 1] }] } as ModModelRigPreviewDto;
+    const { doc, onDone, rpc } = setup();
+    let release = () => {};
+    rpc.on('mods.readModelRig', () => new Promise((resolve) => (release = () => resolve(asked))));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Browse…' }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Add' }));
+    await waitFor(() => expect(rpc.callsTo('mods.readModelRig')).toHaveLength(1));
+
+    await fireEvent.change(screen.getByRole('combobox', { name: 'Species' }), { target: { value: 'Carcharodontosaurus' } });
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(screen.queryByRole('group', { name: 'Rig edit' })).toBeNull();
+    expect(doc.edit).not.toHaveBeenCalled();
+    expect(onDone).not.toHaveBeenCalled();
   });
 
   it('a model that cannot be read adds nothing', async () => {

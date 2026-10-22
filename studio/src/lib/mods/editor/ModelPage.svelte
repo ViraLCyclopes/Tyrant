@@ -7,7 +7,7 @@
   import { getSession } from '$lib/stores/session.svelte';
   import type { ModDoc } from './modDoc.svelte';
   import ModelRigHost from './ModelRigHost.svelte';
-  import { chooseModelRig, createRigAsk } from './modelRig';
+  import { askFor, chooseModelRig, createRigAsk } from './modelRig';
   import RigEdit from './RigEdit.svelte';
 
   /**
@@ -79,9 +79,17 @@
     viewer?.dispose();
   });
 
+  // A question asked for one model is not answered for another: opening another model (the page stays) cancels it.
+  const destination = $derived(`${model.target}|${model.skin ?? ''}`);
+  $effect(() => {
+    void destination;
+    return () => rigAsk.dispose();
+  });
+
   async function replace() {
+    const asked = destination;
     const file = await session.platform.openFile(`Choose your model for ${model.target} (.glb or .fbx)`, ['glb', 'fbx']);
-    if (file) await addFile(file, false);
+    if (file && asked === destination) await addFile(file, false);
   }
 
   async function reimport() {
@@ -90,10 +98,13 @@
 
   /** Reads the rig edit in the model, asks about it when it matters, then puts the model in the mod. */
   async function addFile(file: string, reimporting: boolean) {
-    const target = model.skin ? null : model.target;
-    const rig = await tab.safely(() =>
-      chooseModelRig(session.rpc, { id: doc.id, file, target, skin: model.skin }, { reimport: reimporting, action: reimporting || model.file ? 'Replace' : 'Add' }, rigAsk));
-    if (rig) await doc.edit('mods.replaceModel', { file, target, skin: model.skin, rig });
+    // The destination the question is about, read once: a question cancelled by opening another model saves nothing.
+    const [asked, skin] = [destination, model.skin];
+    const target = skin ? null : model.target;
+    const action = reimporting || model.file ? 'Replace' : 'Add';
+    const ask = askFor(rigAsk, () => destination === asked);
+    const rig = await tab.safely(() => chooseModelRig(session.rpc, { id: doc.id, file, target, skin }, { reimport: reimporting, action }, ask));
+    if (rig) await doc.edit('mods.replaceModel', { file, target, skin, rig });
   }
 
   async function remove() {
