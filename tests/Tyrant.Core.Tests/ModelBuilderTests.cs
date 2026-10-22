@@ -182,6 +182,50 @@ public class ModelBuilderTests
         Assert.Contains(report.Warnings, w => w.Contains("edited skeleton"));
     }
 
+    private static Dictionary<string, RigOffset> MoveOn(string bone) => new()
+    {
+        [bone] = new RigOffset { Move = new RigVector3(0, 0.1f, 0), Rotate = RigQuaternion.Identity, Scale = RigVector3.One },
+    };
+
+    /// <summary>Rewrites the build report as a build before the top-bone bind fix wrote it: the bare rig hash, no bind version.</summary>
+    private static void AsBuiltBeforeTheTopBoneFix(string dir, string glb, IReadOnlyDictionary<string, RigOffset> rig)
+    {
+        var path = Path.Combine(dir, ModelFiles.Report(glb));
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+        json["rigHash"] = RigEdit.Hash(rig);
+        json.Remove("binds");
+        File.WriteAllText(path, json.ToJsonString());
+    }
+
+    [Theory]
+    [InlineData("Hip")] // the top skinned bone
+    [InlineData("Animal")] // its unskinned parent
+    public void A_rig_edit_on_the_top_bone_built_before_the_bind_fix_is_stale(string bone)
+    {
+        var (dir, glb, game) = Setup();
+        var rig = MoveOn(bone);
+        var report = ModelBuilder.Build(dir, glb, game, rig: rig);
+        Assert.NotEqual(RigEdit.Hash(rig), report.RigHash); // tagged with the bind version
+        Assert.False(ModelBuilder.IsStale(dir, glb, rig, () => game));
+        Assert.False(ModelBuilder.IsStale(dir, glb, rig));
+
+        AsBuiltBeforeTheTopBoneFix(dir, glb, rig);
+
+        Assert.True(ModelBuilder.IsStale(dir, glb, rig, () => game));
+    }
+
+    [Fact]
+    public void A_rig_edit_below_the_top_bone_built_before_the_bind_fix_is_not_stale()
+    {
+        var (dir, glb, game) = SetupEdited();
+        ModelBuilder.Build(dir, glb, game, rig: TailRig);
+
+        AsBuiltBeforeTheTopBoneFix(dir, glb, TailRig);
+
+        Assert.False(ModelBuilder.IsStale(dir, glb, TailRig, () => game));
+        Assert.True(ModelBuilder.IsStale(dir, glb, MoveOn("Hip"), () => game)); // another rig edit still is
+    }
+
     private static bool Near(System.Numerics.Matrix4x4 a, System.Numerics.Matrix4x4 b)
     {
         for (var r = 0; r < 4; r++)

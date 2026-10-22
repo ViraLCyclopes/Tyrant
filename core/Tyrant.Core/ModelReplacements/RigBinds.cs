@@ -95,6 +95,23 @@ public static class RigBinds
         return top;
     }
 
+    /// <summary>
+    /// True when the rig edit moves a top skinned bone (of any of the prefab's skinned renderers) or an unskinned node above
+    /// it: the bones whose bind poses 0.2.0's top-bone fix changed. Other rig edits are built as before.
+    /// </summary>
+    public static bool TouchesTopFrame(PrefabModel model, IReadOnlyDictionary<string, RigOffset>? rig)
+    {
+        if (rig is not { Count: > 0 }) return false;
+        foreach (var renderer in model.Renderers.Where(r => r.IsSkinned))
+        {
+            var skinned = new HashSet<SkeletonNode>(renderer.Bones, ReferenceEqualityComparer.Instance);
+            foreach (var top in TopBones(renderer))
+                for (var node = top; node is not null; node = node.Parent)
+                    if ((node == top || !skinned.Contains(node)) && rig.ContainsKey(node.Name)) return true;
+        }
+        return false;
+    }
+
     private static Dictionary<SkeletonNode, int> BoneIndex(RendererModel renderer)
     {
         var index = new Dictionary<SkeletonNode, int>(ReferenceEqualityComparer.Instance);

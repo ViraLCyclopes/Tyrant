@@ -283,9 +283,16 @@ public sealed partial class ModProject
         foreach (var (speciesId, file) in ModelEntries())
         {
             var rig = RigOfFile(file);
-            if (!File.Exists(Path.Combine(Dir, file)) || !ModelBuilder.IsStale(Dir, file, rig)) continue;
-            var (_, prefab) = ResolveModelTarget(index, species, speciesId, null);
-            ModelBuilder.Build(Dir, file, reader.ReadPrefabModel(install, prefab), null, rig);
+            if (!File.Exists(Path.Combine(Dir, file))) continue;
+            PrefabModel? game = null;
+            PrefabModel Game() => game ??= reader.ReadPrefabModel(install, ResolveModelTarget(index, species, speciesId, null).Prefab);
+            if (!ModelBuilder.IsStale(Dir, file, rig, Game))
+            {
+                // Built before the top-bone fix, with a rig edit it does not change: noted, so the game is not read for it again.
+                if (game is not null) ModelBuilder.MarkBindsCurrent(Dir, file);
+                continue;
+            }
+            ModelBuilder.Build(Dir, file, Game(), null, rig);
             rebuilt.Add(file);
         }
         return rebuilt;

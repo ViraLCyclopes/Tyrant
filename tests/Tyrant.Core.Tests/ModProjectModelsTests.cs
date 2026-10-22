@@ -319,6 +319,31 @@ public class ModProjectModelsTests
         Assert.StartsWith("FBX needs Blender", ex.Message);
     }
 
+    [Theory]
+    [InlineData("Hip", true)] // the top skinned bone: built with the old binds
+    [InlineData("Tail", false)] // below it: the same binds as before
+    public void Check_rebuilds_a_top_bone_rig_edit_built_before_the_bind_fix_and_only_that(string bone, bool rebuilds)
+    {
+        var (game, ws, install, mod, reader, glb) = Setup();
+        using var _ = game;
+        mod.ReplaceModel(install, Index(), SpeciesSkinsReader.Load(ws), reader, glb, "Carcharodontosaurus", null, null);
+        var rig = new Dictionary<string, RigOffset> { [bone] = new RigOffset { Move = new RigVector3(0, 0.1f, 0), Rotate = RigQuaternion.Identity, Scale = RigVector3.One } };
+        mod.SetRig(install, Index(), SpeciesSkinsReader.Load(ws), reader, "Carcharodontosaurus", null, rig);
+        var file = mod.Manifest.Models[0].File;
+        // The report as a build before the fix wrote it: the bare rig hash, no bind version.
+        var path = Path.Combine(mod.Dir, ModelFiles.Report(file));
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+        json["rigHash"] = RigEdit.Hash(mod.RigOfFile(file));
+        json.Remove("binds");
+        File.WriteAllText(path, json.ToJsonString());
+
+        var rebuilt = mod.RebuildStaleModels(install, Index(), SpeciesSkinsReader.Load(ws), reader);
+
+        Assert.Equal(rebuilds ? [file] : [], rebuilt);
+        reader.PrefabModelToReturn = null; // the game is not read again: the report now says which binds it has
+        Assert.Empty(mod.RebuildStaleModels(install, Index(), SpeciesSkinsReader.Load(ws), reader));
+    }
+
     private static Dictionary<string, RigOffset> TailRig() => new()
     {
         ["Tail"] = new RigOffset { Move = new RigVector3(0, 0, -0.5f), Rotate = RigQuaternion.Identity, Scale = RigVector3.One },

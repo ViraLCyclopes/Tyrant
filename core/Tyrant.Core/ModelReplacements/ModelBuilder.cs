@@ -13,10 +13,12 @@ public sealed record ModelLodStats(string File, int Vertices, bool Index32, int 
 /// <summary>What building a model found: errors (then no .tmesh is written), warnings, and each LOD written; saved next to the .glb.</summary>
 /// <remarks>
 /// Origin: the user's own .glb the model was added from (outside the mod), with its stamp then, to notice a re-export.
-/// RigHash: the rig edit the bind poses were built for ("" for none), to notice a changed rig.
+/// RigHash: the rig edit the bind poses were built for ("" for none), to notice a changed rig; tagged
+/// <see cref="ModelBuilder.TopBindsTag"/> when the rig edit moves the top skinned bone or the nodes above it.
+/// Binds: the version of the bind poses' maths (0: before the top-bone fix of 0.2.0), so models built wrong before are rebuilt.
 /// </remarks>
 public sealed record ModelReport(string Source, string Stamp, IReadOnlyList<string> Errors, IReadOnlyList<string> Warnings, IReadOnlyList<ModelLodStats> Lods,
-    string? Origin = null, string? OriginStamp = null, string RigHash = "");
+    string? Origin = null, string? OriginStamp = null, string RigHash = "", int Binds = 0);
 
 /// <summary>Turns the user's .glb into one .tmesh per game LOD: their own LOD meshes when present, else LOD 0 decimated.</summary>
 public static class ModelBuilder
@@ -46,13 +48,42 @@ public static class ModelBuilder
         }
     }
 
-    /// <summary>True when the model was never built, its .glb or its rig edit changed since, or a built .tmesh is gone.</summary>
-    public static bool IsStale(string modDir, string glbFile, IReadOnlyDictionary<string, RigOffset>? rig = null)
+    /// <summary>The bind poses' maths: 2 since the top skinned bone's frame was fixed (0.2.0); reports before have none (0).</summary>
+    public const int BindsVersion = 2;
+
+    /// <summary>Ends the rig hash of a model whose rig edit moves the top skinned bone or a node above it (built since the fix).</summary>
+    public const string TopBindsTag = "+binds2";
+
+    /// <summary>The rig hash a build records: the rig edit's, tagged when it moves the top skinned bone or the nodes above it.</summary>
+    public static string RigHash(PrefabModel game, IReadOnlyDictionary<string, RigOffset>? rig) =>
+        RigEdit.Hash(rig) + (RigBinds.TouchesTopFrame(game, rig) ? TopBindsTag : "");
+
+    /// <summary>
+    /// True when the model was never built, its .glb or its rig edit changed since, or a built .tmesh is gone. With
+    /// <paramref name="game"/> (read only when needed), also a model built before the top-bone fix whose rig edit moves the
+    /// top skinned bone or a node above it: its bind poses were made wrong. Without it such a model is not noticed.
+    /// </summary>
+    public static bool IsStale(string modDir, string glbFile, IReadOnlyDictionary<string, RigOffset>? rig = null, Func<PrefabModel>? game = null)
     {
         var report = ReadReport(modDir, glbFile);
         if (report is null || report.Stamp != Stamp(Path.Combine(modDir, glbFile))) return true;
-        if ((report.RigHash ?? "") != RigEdit.Hash(rig)) return true;
+        var (recorded, hash) = (report.RigHash ?? "", RigEdit.Hash(rig));
+        if (report.Binds >= BindsVersion)
+        {
+            // The tag follows from the rig edit and the species, both the same when the hash is.
+            if (recorded != hash && recorded != hash + TopBindsTag) return true;
+        }
+        else if (recorded != hash || (rig is { Count: > 0 } && game is not null && RigBinds.TouchesTopFrame(game(), rig))) return true;
         return report.Errors.Count == 0 && report.Lods.Any(l => !File.Exists(Path.Combine(modDir, l.File)));
+    }
+
+    /// <summary>
+    /// Marks a report from before the top-bone fix as current when its rig edit leaves the top bone alone (checked with
+    /// IsStale and the game first): its bind poses are what the fix makes, so later checks need not read the game again.
+    /// </summary>
+    public static void MarkBindsCurrent(string modDir, string glbFile)
+    {
+        if (ReadReport(modDir, glbFile) is { Binds: < BindsVersion } report) Save(modDir, glbFile, report with { Binds = BindsVersion });
     }
 
     /// <summary>True when the user's own .glb (where the model was added from) changed since then: a re-export to import again.</summary>
@@ -68,7 +99,7 @@ public static class ModelBuilder
         var previous = origin is null ? ReadReport(modDir, glbFile) : null;
         var (from, fromStamp) = origin is not null ? (origin, Stamp(origin)) : (previous?.Origin, previous?.OriginStamp);
         ModelReport Report(IReadOnlyList<string> errors, IReadOnlyList<string> warnings, IReadOnlyList<ModelLodStats> lods) =>
-            new(glbFile, stamp, errors, warnings, lods, from, fromStamp, RigEdit.Hash(rig));
+            new(glbFile, stamp, errors, warnings, lods, from, fromStamp, RigHash(game, rig), BindsVersion);
         var renderers = GameRenderers(game);
         IReadOnlyList<ImportedMesh> imported;
         try
