@@ -9,6 +9,9 @@ namespace Tyrant.Core.ModelReplacements;
 /// <summary>A skinned mesh of the user's .glb, back in Unity space (the inverse of the export's UnityToGltf).</summary>
 public sealed record ImportedMesh(int Lod, string Name, MeshData Mesh, string[] JointNames, Matrix4x4[] InverseBinds, string[] MaterialNames);
 
+/// <summary>The skin of a .glb's LOD 0 mesh (Unity space, file mesh space): what a rig edit is read from. LodWarnings: LODs whose bones sit elsewhere.</summary>
+public sealed record ModelSkeleton(IReadOnlyList<string> JointNames, Matrix4x4[] InverseBinds, IReadOnlyList<string> LodWarnings);
+
 /// <summary>Reads a Blender-exported .glb: every skinned mesh, its LOD number from its name, its skin and shape keys.</summary>
 public static partial class GlbModelReader
 {
@@ -58,6 +61,36 @@ public static partial class GlbModelReader
             throw new TyrantException(TyrantErrorCode.ModInvalid,
                 $"'{Path.GetFileName(glbPath)}' has no mesh skinned to an armature. Keep the game's armature (from Tyrant's export) and parent your mesh to it with Armature Deform.");
         return meshes.OrderBy(m => m.Lod).ToList(); // several per LOD: ModelBuilder.PickMeshes keeps the one on the game's skeleton
+    }
+
+    /// <summary>
+    /// LOD 0's skin: the mesh ModelBuilder.PickMeshes keeps (on <paramref name="gameBones"/> when given, else the first), its
+    /// joints and inverse binds. Other LODs whose bones in common sit elsewhere are noted; the rig edit is read from LOD 0.
+    /// </summary>
+    public static ModelSkeleton ReadSkeleton(string glbPath, IReadOnlySet<string>? gameBones = null)
+    {
+        var meshes = Read(glbPath);
+        var picked = gameBones is null
+            ? meshes.GroupBy(m => m.Lod).Select(g => g.First()).ToList()
+            : ModelBuilder.PickMeshes(meshes, gameBones, [], []);
+        var lowest = meshes[0].Lod;
+        var main = picked.FirstOrDefault(m => m.Lod == lowest)
+            ?? meshes.Where(m => m.Lod == lowest).MaxBy(m => m.JointNames.Count(j => gameBones?.Contains(j) ?? true) / (float)Math.Max(1, m.JointNames.Length))!;
+
+        var warnings = new List<string>();
+        var lod0 = new Dictionary<string, Matrix4x4>(StringComparer.Ordinal);
+        for (var j = 0; j < main.JointNames.Length; j++) lod0.TryAdd(main.JointNames[j], main.InverseBinds[j]);
+        foreach (var other in picked.Where(m => m.Lod != main.Lod))
+        {
+            var moved = new List<string>();
+            for (var j = 0; j < other.JointNames.Length; j++)
+                if (lod0.TryGetValue(other.JointNames[j], out var bind) && !moved.Contains(other.JointNames[j])
+                    && Matrix4x4.Invert(bind, out var world) && Matrix4x4.Invert(other.InverseBinds[j], out var otherWorld)
+                    && !ModelRigReader.SamePlace(world, otherWorld, 1f)) moved.Add(other.JointNames[j]);
+            if (moved.Count > 0)
+                warnings.Add($"LOD {other.Lod}'s bones differ from LOD {main.Lod}'s on {moved.Count} bone(s) ({string.Join(", ", moved.Take(6).Select(b => $"'{b}'"))}{(moved.Count > 6 ? ", …" : "")}); the rig edit is read from LOD {main.Lod}'s.");
+        }
+        return new ModelSkeleton(main.JointNames, main.InverseBinds, warnings);
     }
 
     private static ImportedMesh ReadMesh(Node node, string name, int lod)
