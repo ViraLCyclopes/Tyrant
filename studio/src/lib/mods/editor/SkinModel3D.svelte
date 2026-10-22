@@ -11,10 +11,14 @@
 
   /**
    * One animal of the skin in 3D: the model it wears (its own, the mod's species model, or the game's) with the skin's maps,
-   * the 2D strip's first animal's colours and its material (iridescence): `materialsJson` is the Material card's draft, null for what is saved.
+   * the 2D strip's first animal's colours and its material (iridescence): `colorsJson` and `materialsJson` are the editor's drafts, null for what is saved.
+   * The model page passes `lod` (the level of detail to show) and `strict` (a model that cannot be shown says why instead of showing the game's).
    */
-  let { doc, skin, colorsJson, variant, materialsJson = null }: { doc: ModDoc; skin: ModSkinDto; colorsJson: string | null; variant: Variant; materialsJson?: string | null } =
-    $props();
+  let {
+    doc, skin, colorsJson, variant, materialsJson = null, lod, strict = false,
+  }: {
+    doc: Pick<ModDoc, 'id' | 'detail'>; skin: ModSkinDto; colorsJson: string | null; variant: Variant; materialsJson?: string | null; lod?: number; strict?: boolean;
+  } = $props();
   const session = getSession();
   const tab = getTab();
   type Sex = 'male' | 'female' | 'infant';
@@ -44,7 +48,9 @@
   async function dress() {
     const mine = ++generation;
     try {
-      const model = await session.rpc.call('mods.skinModel', { id: doc.id, skin: skin.id, sex });
+      const model = await session.rpc.call('mods.skinModel', {
+        id: doc.id, skin: skin.id, sex, ...(lod === undefined ? {} : { lod }), ...(strict ? { strict } : {}),
+      });
       if (mine !== generation || disposed) return;
       const key = model.ownModel?.file ?? model.prefabRef;
       await ensureModel(key, model.ownModel ?? null);
@@ -119,10 +125,11 @@
   }
 
   // The skin, mod.json (the revision), a file it names (the files stamp: a PNG or material image re-imported under the same
-  // name) or the sex changed: dress again, which previews the material again too.
+  // name) the sex or the level of detail changed: dress again, which previews the material again too.
   $effect(() => {
     void skin.id;
     void sex;
+    void lod;
     void doc.detail?.revision;
     void doc.detail?.filesStamp;
     void dress();
