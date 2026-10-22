@@ -10,7 +10,7 @@ import { modDetail } from '$lib/test/modFixtures';
 import { ModDoc } from './modDoc.svelte';
 import SpeciesDatabase from './SpeciesDatabase.svelte';
 
-const animal = { id: 'new-animal', key: 'tyrant.red-spot.new-animal', base: 'Allosaurus Anax', name: 'New animal', genus: 'Example', epithet: 'animal', cost: null, stats: { adultMassKg: 4500 }, inheritedCost: 20000, inheritedStats: { adultMassKg: 4010, maxAgeYears: 40 }, dataFields: [{ path: '/brain/needs/adult/native/hitPoints', kind: 'number', value: '660', templateValue: '660', editable: true }], localization: { description: 'pack.description' }, icon: null, paleopediaPicture: null as string | null,
+const animal = { id: 'new-animal', key: 'tyrant.red-spot.new-animal', base: 'Allosaurus Anax', name: 'New animal', genus: 'Example', epithet: 'animal', cost: null, stats: { adultMassKg: 4500 }, inheritedCost: 20000, inheritedStats: { adultMassKg: 4010, maxAgeYears: 40 }, dataFields: [{ path: '/brain/needs/adult/native/hitPoints', kind: 'number', value: '660', templateValue: '660', editable: true }], localization: { description: 'pack.description' }, icon: null as string | null, paleopediaPicture: null as string | null,
   texts: languageTexts({ 'en-US': { name: 'New animal', description: 'English description.', characterNotes: '', socialInfo: '' } }) };
 
 /** Every language's texts (all empty unless given), as mods.animalDatabase lists them. */
