@@ -135,10 +135,11 @@ public sealed record ModReadModelRigParams(string Id, string File, string? Targe
 /// <summary>
 /// The rig edit a model file brings: Source "gameSkeleton" | "bones" | "rigFile" | "saved"; Bones the rig edit read from it; Current the
 /// destination's own; Question "none" | "keepOrRemove" | "useOrKeep" (what to ask); Changes whether adding the model (auto) changes the
-/// destination's rig edit; RigFile the .rig.json's file name when it was used.
+/// destination's rig edit; Errors the rig rules' errors for auto's choice, ErrorsIfUseFile / ErrorsIfKeep for "useFile" / "keepCurrent"
+/// (errors refuse that choice); RigFile the .rig.json's file name when it was used.
 /// </summary>
 public sealed record ModModelRigPreviewDto(string Source, IReadOnlyList<ModRigBone> Bones, IReadOnlyList<ModRigBone>? Current, string Question, bool Changes,
-    IReadOnlyList<string> Errors, IReadOnlyList<string> Warnings, string? RigFile);
+    IReadOnlyList<string> Errors, IReadOnlyList<string> Warnings, string? RigFile, IReadOnlyList<string> ErrorsIfUseFile, IReadOnlyList<string> ErrorsIfKeep);
 
 public sealed record ModRemoveModelParams(string Id, string Revision, string Target, string? Skin = null);
 

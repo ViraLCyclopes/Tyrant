@@ -756,6 +756,8 @@ export interface ModModelRigPreviewDto {
   errors: string[];
   warnings: string[];
   rigFile: string | null;
+  errorsIfUseFile: string[];
+  errorsIfKeep: string[];
 }
 
 export interface ModOriginalSizeDto {

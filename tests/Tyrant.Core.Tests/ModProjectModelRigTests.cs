@@ -259,4 +259,61 @@ public class ModProjectModelRigTests
         Assert.Contains("Clear rig edit on the model page, or 'tyrant mod rig big-carch \"Carcharodontosaurus\" --clear'", ex.Message);
         Assert.Equal(before, File.ReadAllText(Path.Combine(s.Mod.Dir, "mod.json")));
     }
+    [Fact]
+    public void Errors_are_given_for_each_choice_and_a_broken_current_rig_edit_is_explained()
+    {
+        using var s = Make();
+        // A rig edit saved earlier, on a bone the species no longer has; the file brings a good one.
+        s.Mod.SetRig(s.Install, Index(), s.Species, s.Reader, Carch, null, Rig(Move("Wing.L", 0, 0.1f, 0)));
+
+        var preview = s.Preview(Export(s.Prefab, R()));
+
+        Assert.Equal(ModelRigQuestion.UseOrKeep, preview.Question);
+        Assert.Empty(preview.ErrorsIfUseFile);
+        Assert.Empty(preview.Errors); // Auto uses the file's
+        var keep = Assert.Single(preview.ErrorsIfKeep);
+        Assert.StartsWith("The rig edit already on Carcharodontosaurus breaks a rule, not the model.", keep);
+        Assert.Contains("Wing.L", keep);
+        Assert.Contains("'tyrant mod rig big-carch \"Carcharodontosaurus\" --clear'", keep);
+    }
+
+    [Fact]
+    public void Keeping_the_current_rig_edit_is_allowed_when_only_the_files_breaks_a_rule()
+    {
+        using var s = Make();
+        s.Mod.SetRig(s.Install, Index(), s.Species, s.Reader, Carch, null, HeadTurn());
+        var current = RigEdit.Hash(s.Saved());
+        var glb = Export(s.Prefab, R());
+        var rigFile = R();
+        rigFile["Wing.L"] = RigOffset.Identity with { Move = new RigVector3(0, 0, 0.1f) };
+        File.WriteAllText(glb + ".rig.json", Json.Write(RigEdit.ToJson(rigFile)));
+
+        var preview = s.Preview(glb);
+
+        Assert.Equal(ModelRigQuestion.UseOrKeep, preview.Question);
+        Assert.Contains(preview.ErrorsIfUseFile, e => e.Contains("Wing.L", StringComparison.Ordinal));
+        Assert.Empty(preview.ErrorsIfKeep);
+        Assert.Equal(preview.ErrorsIfUseFile, preview.Errors); // Auto uses the file's
+        Assert.Throws<TyrantException>(() => s.Replace(glb, ModelRigChoice.UseFile));
+        s.Replace(glb, ModelRigChoice.KeepCurrent);
+        Assert.Equal(current, RigEdit.Hash(s.Saved()));
+    }
+
+    [Fact]
+    public void An_empty_rig_file_counts_as_the_games_skeleton()
+    {
+        using var s = Make();
+        s.Mod.SetRig(s.Install, Index(), s.Species, s.Reader, Carch, null, HeadTurn());
+        var current = RigEdit.Hash(s.Saved());
+        var glb = Export(s.Prefab, null);
+        File.WriteAllText(glb + ".rig.json", "{}");
+
+        var preview = s.Preview(glb);
+        s.Replace(glb);
+
+        Assert.Equal(RigSource.GameSkeleton, preview.Reading.Source);
+        Assert.Equal(ModelRigQuestion.KeepOrRemove, preview.Question);
+        Assert.False(preview.Changes);
+        Assert.Equal(current, RigEdit.Hash(s.Saved()));
+    }
 }

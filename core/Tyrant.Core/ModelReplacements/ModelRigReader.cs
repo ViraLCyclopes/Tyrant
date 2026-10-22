@@ -52,7 +52,8 @@ public static class ModelRigReader
 
         if (rigFile is not null)
         {
-            if (frame.Matches(rigFile)) return new RigReading(rigFile, RigSource.RigFile, warnings);
+            // An empty one ({}) says the model has the game's skeleton (asked like a plain export of it: keep or remove).
+            if (frame.Matches(rigFile)) return rigFile.Count == 0 ? new RigReading(NoRig(), RigSource.GameSkeleton, warnings) : new RigReading(rigFile, RigSource.RigFile, warnings);
             warnings.Add($"{rigFileName ?? "The .rig.json"} does not match this model's bones (it may be from an older export), so the rig edit was read from the bones and has no scale.");
         }
         if (saved is { Count: > 0 } && frame.Matches(saved)) return new RigReading(saved, RigSource.Saved, warnings);

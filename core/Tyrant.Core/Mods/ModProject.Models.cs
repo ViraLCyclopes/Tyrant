@@ -94,16 +94,9 @@ public sealed partial class ModProject
             {
                 effective = Owned(Choose(preview.Reading, preview.Current, rigChoice));
                 // Checked before anything is written, as Send does.
-                if (ws is not null && effective is not null
-                    && RigProblems(ws, install, index, species, reader, speciesId, skin, effective).Errors is { Count: > 0 } rigErrors)
-                {
-                    if (RigEdit.Hash(effective) != RigEdit.Hash(preview.Current))
-                        throw new TyrantException(TyrantErrorCode.ModInvalid, $"The model was not added: {string.Join(" ", rigErrors)}");
-                    var clear = skin is null ? $"tyrant mod rig {Id} \"{speciesId}\" --clear" : $"tyrant mod rig {Id} \"{speciesId}\" --skin {skin.Id} --clear";
+                if (ws is not null && RigErrors(ws, install, index, species, reader, speciesId, skin, effective, preview.Current).Errors is [var first, ..] rigErrors)
                     throw new TyrantException(TyrantErrorCode.ModInvalid,
-                        $"The model was not added: the rig edit already on {(skin is null ? speciesId : $"skin '{skin.Id}'")} breaks a rule, not the model. {string.Join(" ", rigErrors)} "
-                        + $"Clear it (Clear rig edit on the model page, or '{clear}'), then add the model again.");
-                }
+                        $"The model was not added: {(RigEdit.Hash(effective) == RigEdit.Hash(preview.Current) ? char.ToLowerInvariant(first[0]) + first[1..] : string.Join(" ", rigErrors))}");
             }
         }
 
@@ -175,14 +168,33 @@ public sealed partial class ModProject
             _ => RigEdit.Hash(reading.Rig) != RigEdit.Hash(current) ? ModelRigQuestion.UseOrKeep : ModelRigQuestion.None,
         };
         var auto = Owned(Choose(reading, current, ModelRigChoice.Auto));
-        var errors = new List<string>();
-        if (ws is not null && auto is not null)
+        IReadOnlyList<string> ifUseFile = [], ifKeep = [];
+        if (ws is not null)
         {
-            var (rigErrors, rigWarnings) = RigProblems(ws, install, index, species, reader, speciesId, skin, auto);
-            errors.AddRange(rigErrors);
-            warnings.AddRange(rigWarnings);
+            var useFile = RigErrors(ws, install, index, species, reader, speciesId, skin, Owned(reading.Rig), current);
+            var keep = RigErrors(ws, install, index, species, reader, speciesId, skin, current, current);
+            (ifUseFile, ifKeep) = (useFile.Errors, keep.Errors);
+            warnings.AddRange(RigEdit.Hash(auto) == RigEdit.Hash(current) ? keep.Warnings : useFile.Warnings);
         }
-        return new ModelRigPreview(reading, current, question, RigEdit.Hash(auto) != RigEdit.Hash(current), errors, warnings);
+        var errors = RigEdit.Hash(auto) == RigEdit.Hash(current) ? ifKeep : ifUseFile;
+        return new ModelRigPreview(reading, current, question, RigEdit.Hash(auto) != RigEdit.Hash(current), errors, warnings, ifUseFile, ifKeep);
+    }
+
+    /// <summary>
+    /// The rig rules' errors and warnings for saving <paramref name="rig"/> on the destination. When it is the rig edit
+    /// already there (<paramref name="current"/>), its errors come as one message: that rig edit, not the model, breaks a
+    /// rule, and how to clear it.
+    /// </summary>
+    private (IReadOnlyList<string> Errors, IReadOnlyList<string> Warnings) RigErrors(Workspace ws, GameInstall install, AssetIndex index,
+        IReadOnlyList<SpeciesSkins> species, IAssetReader reader, string speciesId, SkinEntry? skin, IReadOnlyDictionary<string, RigOffset>? rig,
+        IReadOnlyDictionary<string, RigOffset>? current)
+    {
+        if (rig is not { Count: > 0 }) return ([], []);
+        var (errors, warnings) = RigProblems(ws, install, index, species, reader, speciesId, skin, rig);
+        if (errors.Count == 0 || RigEdit.Hash(rig) != RigEdit.Hash(current)) return (errors, warnings);
+        var clear = skin is null ? $"tyrant mod rig {Id} \"{speciesId}\" --clear" : $"tyrant mod rig {Id} \"{speciesId}\" --skin {skin.Id} --clear";
+        return ([$"The rig edit already on {(skin is null ? speciesId : $"skin '{skin.Id}'")} breaks a rule, not the model. {string.Join(" ", errors)} "
+            + $"Clear it (Clear rig edit on the model page, or '{clear}'), then add the model again."], warnings);
     }
 
     /// <summary>
@@ -400,7 +412,9 @@ public enum ModelRigQuestion { None, KeepOrRemove, UseOrKeep }
 
 /// <summary>
 /// What adding a model does to its destination's rig edit. Current: the destination's (null for none). Changes: Auto saves
-/// another rig edit than Current. Errors and Warnings: the reading's, the file's LODs', and the rig rules' for Auto's rig edit.
+/// another rig edit than Current. Warnings: the reading's, the file's LODs', and the rig rules' for Auto's rig edit. Errors:
+/// the rig rules' errors for Auto's rig edit; ErrorsIfUseFile and ErrorsIfKeep: for the file's rig edit and for keeping the
+/// current one (when the current one breaks a rule, one message saying so and how to clear it). Errors refuse the model.
 /// </summary>
 public sealed record ModelRigPreview(RigReading Reading, IReadOnlyDictionary<string, RigOffset>? Current, ModelRigQuestion Question, bool Changes,
-    IReadOnlyList<string> Errors, IReadOnlyList<string> Warnings);
+    IReadOnlyList<string> Errors, IReadOnlyList<string> Warnings, IReadOnlyList<string> ErrorsIfUseFile, IReadOnlyList<string> ErrorsIfKeep);

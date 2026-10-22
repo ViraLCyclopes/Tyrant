@@ -4,6 +4,7 @@ using Spectre.Console.Cli;
 using Tyrant.Core.ModelReplacements;
 using Tyrant.Core.Mods;
 using Tyrant.Core.Rigging;
+using Tyrant.Framework.Core;
 
 namespace Tyrant.Cli.Commands;
 
@@ -49,21 +50,33 @@ public sealed class ModReplaceModelCommand : Command<ModReplaceModelCommand.Sett
         var (file, target) = (Path.GetFullPath(settings.File), settings.Skin is null ? settings.Target : null);
         Func<Tyrant.Core.Blender.IModelConverter> converter = () => new Tyrant.Core.Blender.BlenderService(CliServices.Blender).Converter(ws);
         var choice = settings.KeepRig ? ModelRigChoice.KeepCurrent : settings.UseFileRig ? ModelRigChoice.UseFile : ModelRigChoice.Auto;
+        var preview = mod.PreviewModelRig(ws, install, index, species, CliServices.AssetReader, file, target, null, settings.Skin, converter);
         if (choice == ModelRigChoice.KeepCurrent)
-        {
-            if (settings.DryRun) Console.WriteLine("Rig edit: the current one is kept (--keep-rig)");
-        }
+            Console.WriteLine(settings.DryRun ? "Rig edit: the current one would be kept (--keep-rig)" : "Rig edit: the current one is kept (--keep-rig)");
         else
         {
-            var preview = mod.PreviewModelRig(ws, install, index, species, CliServices.AssetReader, file, target, null, settings.Skin, converter);
-            PrintRig(preview, file, choice);
+            PrintRig(preview, file, choice, settings.DryRun);
             foreach (var w in preview.Warnings) Console.WriteLine($"  WARN   {w}");
-            foreach (var e in preview.Errors) Console.WriteLine($"  ERROR  {e}");
-            if (preview.Errors.Count > 0 && choice == ModelRigChoice.Auto)
+        }
+        // The errors of the rig edit that would be saved: the file's (--use-file-rig), the current one (--keep-rig), or Auto's.
+        var errors = choice switch
+        {
+            ModelRigChoice.UseFile => preview.ErrorsIfUseFile,
+            ModelRigChoice.KeepCurrent => preview.ErrorsIfKeep,
+            _ => preview.Errors,
+        };
+        foreach (var e in errors) Console.WriteLine($"  ERROR  {e}");
+        if (errors.Count > 0)
+        {
+            // The current rig edit, kept, is the one that breaks a rule: its error says how to clear it.
+            var keepsCurrent = choice switch
             {
-                Console.WriteLine("Nothing was saved: fix the rig edit (or use --keep-rig to leave the destination's as it is).");
-                return ExitCodes.Error;
-            }
+                ModelRigChoice.KeepCurrent => true,
+                ModelRigChoice.UseFile => RigEdit.Hash(preview.Reading.Rig) == RigEdit.Hash(preview.Current),
+                _ => !preview.Changes,
+            };
+            Console.WriteLine(keepsCurrent ? "Nothing was saved." : "Nothing was saved: fix the rig edit (or use --keep-rig to leave the destination's as it is).");
+            return ExitCodes.Error;
         }
         if (settings.DryRun) return ExitCodes.Ok;
         var report = mod.ReplaceModel(install, index, species, CliServices.AssetReader, file, target, null, settings.Skin, converter,
@@ -75,7 +88,7 @@ public sealed class ModReplaceModelCommand : Command<ModReplaceModelCommand.Sett
     }
 
     /// <summary>Where the rig edit comes from, its bones, and (when the model has the game's skeleton) that the current one is kept.</summary>
-    private static void PrintRig(ModelRigPreview preview, string file, ModelRigChoice choice)
+    private static void PrintRig(ModelRigPreview preview, string file, ModelRigChoice choice, bool dryRun)
     {
         var reading = preview.Reading;
         var count = $"{reading.Rig.Count} bone{(reading.Rig.Count == 1 ? "" : "s")}";
@@ -89,9 +102,9 @@ public sealed class ModReplaceModelCommand : Command<ModReplaceModelCommand.Sett
         }));
         foreach (var (bone, offset) in reading.Rig.OrderBy(p => p.Key, StringComparer.Ordinal)) Console.WriteLine("  " + RigText.Describe(bone, offset));
         if (choice == ModelRigChoice.Auto && preview.Question == ModelRigQuestion.KeepOrRemove)
-            Console.WriteLine("Kept the current rig edit (the model has the game's skeleton); --use-file-rig removes it.");
+            Console.WriteLine($"{(dryRun ? "Would keep" : "Kept")} the current rig edit (the model has the game's skeleton); --use-file-rig removes it.");
         else if (choice == ModelRigChoice.Auto && preview.Question == ModelRigQuestion.UseOrKeep)
-            Console.WriteLine("Replaced the current rig edit with the model's; --keep-rig keeps the current one.");
+            Console.WriteLine($"{(dryRun ? "Would replace" : "Replaced")} the current rig edit with the model's; --keep-rig keeps the current one.");
     }
 }
 

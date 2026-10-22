@@ -360,4 +360,23 @@ public class ModModelMethodsTests
         Assert.Contains("Wing.L", ex.Message);
         Assert.Equal(before, File.ReadAllText(path));
     }
+    [Fact]
+    public async Task ReadModelRig_gives_the_errors_of_each_choice()
+    {
+        using var game = new FakeGame();
+        var (h, _, prefab) = await SetupRigged(game);
+        await h.Call("mods.replaceModel", new { id = "big-carch", file = Export(prefab, Rig(Turn("Head", System.Numerics.Vector3.UnitX, 30))), target = "Carcharodontosaurus" });
+        var glb = Export(prefab, R());
+        var rigFile = R(); // matches the bones but names a bone the species does not have
+        rigFile["Wing.L"] = Tyrant.Framework.Core.RigOffset.Identity with { Move = new Tyrant.Framework.Core.RigVector3(0, 0.1f, 0) };
+        File.WriteAllText(glb + ".rig.json", Tyrant.Framework.Core.Json.Write(Tyrant.Framework.Core.RigEdit.ToJson(rigFile)));
+
+        var read = await h.Call("mods.readModelRig", new { id = "big-carch", file = glb, target = "Carcharodontosaurus" });
+
+        Assert.Equal("useOrKeep", read.GetProperty("question").GetString());
+        Assert.Contains(read.GetProperty("errorsIfUseFile").EnumerateArray(), e => e.GetString()!.Contains("Wing.L"));
+        Assert.Equal(0, read.GetProperty("errorsIfKeep").GetArrayLength());
+        var kept = await h.Call("mods.replaceModel", new { id = "big-carch", file = glb, target = "Carcharodontosaurus", rig = "keepCurrent" });
+        Assert.Equal(["Head"], RigBones(kept));
+    }
 }

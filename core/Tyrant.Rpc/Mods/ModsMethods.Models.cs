@@ -41,7 +41,8 @@ public sealed partial class ModsMethods
         var reading = preview.Reading;
         return new ModModelRigPreviewDto(Camel(reading.Source.ToString()), ModRigBone.Of(reading.Rig) ?? [], ModRigBone.Of(preview.Current),
             Camel(preview.Question.ToString()), preview.Changes, preview.Errors, preview.Warnings,
-            reading.Source == RigSource.RigFile && ModelRigReader.RigFilePathFor(p.File) is { } rigFile ? Path.GetFileName(rigFile) : null);
+            reading.Source == RigSource.RigFile && ModelRigReader.RigFilePathFor(p.File) is { } rigFile ? Path.GetFileName(rigFile) : null,
+            preview.ErrorsIfUseFile, preview.ErrorsIfKeep);
     }
 
     private static string Camel(string name) => char.ToLowerInvariant(name[0]) + name[1..];

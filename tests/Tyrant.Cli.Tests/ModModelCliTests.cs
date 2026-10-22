@@ -316,4 +316,108 @@ public class ModModelCliTests
             CliServices.AssetReader = new BundleAssetReader();
         }
     }
+    /// <summary>A rig edit saved earlier that moves the neck and a bone the species does not have (it breaks a rule), with no model.</summary>
+    private static void WriteBrokenRig(string ws) => File.WriteAllText(Path.Combine(ws, "mods", "big-carch", "mod.json"),
+        """{"format":1,"id":"big-carch","name":"Big Carch","version":"1.0.0","replace":[],"models":[{"target":"Carcharodontosaurus","rig":{"Neck1":{"move":[0,0.05,0]},"Wing.L":{"move":[0,0.1,0]}}}]}""");
+
+    [Fact]
+    public void Keep_rig_succeeds_when_only_the_files_rig_edit_breaks_a_rule()
+    {
+        using var game = new FakeGame();
+        var (ws, prefab) = SetupRigged(game);
+        try
+        {
+            Assert.Equal(ExitCodes.Ok, Run("mod", "replace-model", "big-carch", "Carcharodontosaurus", Export(prefab, R()), "-w", ws).Code);
+            var head = Rig(Turn("Head", System.Numerics.Vector3.UnitX, 30));
+            var glb = Export(prefab, head);
+            head["Wing.L"] = Tyrant.Framework.Core.RigOffset.Identity with { Move = new Tyrant.Framework.Core.RigVector3(0, 0.1f, 0) };
+            File.WriteAllText(glb + ".rig.json", Tyrant.Framework.Core.Json.Write(Tyrant.Framework.Core.RigEdit.ToJson(head)));
+
+            var refused = Run("mod", "replace-model", "big-carch", "Carcharodontosaurus", glb, "-w", ws);
+            var kept = Run("mod", "replace-model", "big-carch", "Carcharodontosaurus", glb, "--keep-rig", "-w", ws);
+
+            Assert.NotEqual(ExitCodes.Ok, refused.Code);
+            Assert.True(kept.Code == ExitCodes.Ok, kept.Err + kept.Out);
+            Assert.DoesNotContain("ERROR", kept.Out);
+            Assert.Contains("\"Neck1\"", ModJson(ws));
+            Assert.DoesNotContain("\"Wing.L\"", ModJson(ws));
+        }
+        finally
+        {
+            CliServices.AssetReader = new BundleAssetReader();
+        }
+    }
+
+    [Fact]
+    public void Use_file_rig_prints_and_refuses_on_the_files_rig_edit_only()
+    {
+        using var game = new FakeGame();
+        var (ws, prefab) = SetupRigged(game);
+        try
+        {
+            WriteBrokenRig(ws);
+            var plain = Export(prefab, null);
+
+            var dry = Run("mod", "replace-model", "big-carch", "Carcharodontosaurus", plain, "--use-file-rig", "--dry-run", "-w", ws);
+            var removed = Run("mod", "replace-model", "big-carch", "Carcharodontosaurus", plain, "--use-file-rig", "-w", ws);
+
+            Assert.True(dry.Code == ExitCodes.Ok, dry.Err + dry.Out);
+            Assert.DoesNotContain("ERROR", dry.Out); // the broken rig edit is the one being removed
+            Assert.True(removed.Code == ExitCodes.Ok, removed.Err + removed.Out);
+            Assert.DoesNotContain("ERROR", removed.Out);
+            Assert.DoesNotContain("Wing.L", ModJson(ws));
+        }
+        finally
+        {
+            CliServices.AssetReader = new BundleAssetReader();
+        }
+    }
+
+    [Fact]
+    public void Keep_rig_refuses_when_the_current_rig_edit_breaks_a_rule_and_says_how_to_clear_it()
+    {
+        using var game = new FakeGame();
+        var (ws, prefab) = SetupRigged(game);
+        try
+        {
+            WriteBrokenRig(ws);
+            var before = ModJson(ws);
+
+            var refused = Run("mod", "replace-model", "big-carch", "Carcharodontosaurus", Export(prefab, R()), "--keep-rig", "-w", ws);
+
+            Assert.NotEqual(ExitCodes.Ok, refused.Code);
+            Assert.Contains("  ERROR  The rig edit already on Carcharodontosaurus breaks a rule, not the model.", refused.Out);
+            Assert.Contains("--clear", refused.Out);
+            Assert.Equal(before, ModJson(ws));
+        }
+        finally
+        {
+            CliServices.AssetReader = new BundleAssetReader();
+        }
+    }
+
+    [Fact]
+    public void Dry_run_says_what_would_happen_to_the_rig_edit()
+    {
+        using var game = new FakeGame();
+        var (ws, prefab) = SetupRigged(game);
+        try
+        {
+            Assert.Equal(ExitCodes.Ok, Run("mod", "replace-model", "big-carch", "Carcharodontosaurus", Export(prefab, R()), "-w", ws).Code);
+
+            var plain = Run("mod", "replace-model", "big-carch", "Carcharodontosaurus", Export(prefab, null), "--dry-run", "-w", ws);
+            var other = Run("mod", "replace-model", "big-carch", "Carcharodontosaurus", Export(prefab, Rig(Turn("Head", System.Numerics.Vector3.UnitX, 30))), "--dry-run", "-w", ws);
+            var keep = Run("mod", "replace-model", "big-carch", "Carcharodontosaurus", Export(prefab, null), "--keep-rig", "--dry-run", "-w", ws);
+
+            Assert.Contains("Would keep the current rig edit (the model has the game's skeleton); --use-file-rig removes it.", plain.Out);
+            Assert.DoesNotContain("Kept", plain.Out);
+            Assert.Contains("Would replace the current rig edit with the model's; --keep-rig keeps the current one.", other.Out);
+            Assert.DoesNotContain("Replaced", other.Out);
+            Assert.Contains("Rig edit: the current one would be kept (--keep-rig)", keep.Out);
+        }
+        finally
+        {
+            CliServices.AssetReader = new BundleAssetReader();
+        }
+    }
 }
