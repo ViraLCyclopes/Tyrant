@@ -1,6 +1,6 @@
-import { fireEvent, screen, waitFor } from '@testing-library/svelte';
+import { fireEvent, screen, waitFor, within } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ModDetail, ModModelDto } from '$lib/rpc/types.gen';
+import type { ModDetail, ModModelDto, ModSkinDto } from '$lib/rpc/types.gen';
 import { memoryStore } from '$lib/storage';
 import { FakePlatform } from '$lib/test/fakePlatform';
 import { FakeRpc } from '$lib/test/fakeRpc';
@@ -148,5 +148,112 @@ describe('ModelPage', () => {
     expect(await screen.findByText('Jaw')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Rebuild LODs' })).toBeNull();
     expect(rpc.callsTo('mods.modelPreview')).toHaveLength(0);
+  });
+});
+
+describe('ModelPage skin picker', () => {
+  let n = 0;
+  const skinOf = (id: string, extra: Partial<ModSkinDto> = {}) =>
+    ({ id, key: `m/${id}`, species: 'Carcharodontosaurus', name: id.toUpperCase(), base: '0', ...extra }) as unknown as ModSkinDto;
+  function withSkins(skins: ModSkinDto[]) {
+    const ctx = setup();
+    ctx.rpc
+      .on('mods.skinModel', () => ({ prefabRef: 'carch#1', maps: { diffuse: 'D:/m/male_D.png' } }))
+      .on('assets.preview', () => ({ kind: 'model', files: ['D:/c/Carch.glb'], materials: [], skins: null }));
+    ctx.doc.id = `picker-mod-${++n}`; // the choice is remembered per mod
+    ctx.doc.detail = { revision: 'r1', models: [model], skins } as unknown as ModDetail;
+    return ctx;
+  }
+
+  it('defaults to the starting skin', async () => {
+    const { rpc, session, doc } = withSkins([skinOf('a'), skinOf('b', { starting: true })]);
+    renderWith(ModelPage, session, { doc, model });
+
+    expect(await screen.findByRole('combobox', { name: 'Skin' })).toHaveValue('b');
+    await waitFor(() => expect(rpc.callsTo('mods.skinModel').at(-1)?.params).toMatchObject({ skin: 'b' }));
+    expect(rpc.callsTo('mods.modelPreview')).toHaveLength(0);
+  });
+
+  it('defaults to the first skin when there is no starting skin', async () => {
+    const { rpc, session, doc } = withSkins([skinOf('a'), skinOf('b')]);
+    renderWith(ModelPage, session, { doc, model });
+
+    expect(await screen.findByRole('combobox', { name: 'Skin' })).toHaveValue('a');
+    await waitFor(() => expect(rpc.callsTo('mods.skinModel').at(-1)?.params).toMatchObject({ skin: 'a' }));
+  });
+
+  it('lists only skins that wear this model', async () => {
+    const { session, doc } = withSkins([skinOf('a'), skinOf('other', { species: 'Allosaurus' }), skinOf('own', { model: 'models/own.glb' }), skinOf('b')]);
+    renderWith(ModelPage, session, { doc, model });
+
+    const options = within(await screen.findByRole('combobox', { name: 'Skin' })).getAllByRole('option').map((o) => o.textContent);
+    expect(options).toEqual(['A', 'B', "Game's materials"]);
+    expect(screen.getByRole('combobox', { name: 'Skin' })).toHaveAccessibleDescription(/maps a skin does not have come from the skin it is based on/);
+  });
+
+  it("a skin's own model page lists that skin only", async () => {
+    const { session, doc } = withSkins([skinOf('a'), skinOf('own', { model: 'models/own.glb' })]);
+    renderWith(ModelPage, session, { doc, model: { ...model, skin: 'own' } });
+
+    expect(within(await screen.findByRole('combobox', { name: 'Skin' })).getAllByRole('option').map((o) => o.textContent)).toEqual(['OWN', "Game's materials"]);
+  });
+
+  it("no skins shows game's materials without a picker", async () => {
+    const { session, doc } = withSkins([]);
+    renderWith(ModelPage, session, { doc, model });
+
+    await waitFor(() => expect(viewer.showModels).toHaveBeenCalled());
+    expect(screen.queryByRole('combobox', { name: 'Skin' })).toBeNull();
+  });
+
+  it("choosing Game's materials shows the template view", async () => {
+    const { rpc, session, doc } = withSkins([skinOf('a')]);
+    renderWith(ModelPage, session, { doc, model });
+    await waitFor(() => expect(rpc.callsTo('mods.skinModel')).not.toHaveLength(0));
+
+    await fireEvent.change(screen.getByRole('combobox', { name: 'Skin' }), { target: { value: '' } });
+
+    await waitFor(() => expect(viewer.showModels.mock.calls.at(-1)?.[1]).toEqual([{ file: 'D:\\p\\lod0.glb', url: 'asset://D:\\p\\lod0.glb' }]));
+    expect(screen.getByRole('combobox', { name: 'Skin' })).toHaveValue('');
+  });
+
+  it("previews the chosen skin with its own saved material settings", async () => {
+    const saved = '{"Carch":{"iridescence":{"strength":0.4}}}';
+    const { rpc, session, doc } = withSkins([skinOf('a', { materialsJson: saved })]);
+    rpc.on('mods.materialPreview', () => ({ on: false, strength: 0, scale: 0, power: 0, bias: 0, ramp: null, mask: null, maskSt: [1, 1, 0, 0], smoothness: null }));
+    renderWith(ModelPage, session, { doc, model });
+    await waitFor(() => expect(rpc.callsTo('mods.materialPreview')).not.toHaveLength(0));
+    expect(rpc.callsTo('mods.materialPreview')[0].params).toMatchObject({ skin: 'a', materials: saved });
+  });
+
+  it('remembers the choice for the model while the app is open', async () => {
+    const { session, doc } = withSkins([skinOf('a'), skinOf('b')]);
+    const first = renderWith(ModelPage, session, { doc, model });
+    await fireEvent.change(await screen.findByRole('combobox', { name: 'Skin' }), { target: { value: 'b' } });
+    first.unmount();
+
+    renderWith(ModelPage, session, { doc, model });
+    expect(await screen.findByRole('combobox', { name: 'Skin' })).toHaveValue('b');
+  });
+
+  it('passes the chosen LOD and strict to skinModel', async () => {
+    const { rpc, session, doc } = withSkins([skinOf('a')]);
+    renderWith(ModelPage, session, { doc, model });
+    await waitFor(() => expect(rpc.callsTo('mods.skinModel').at(-1)?.params).toMatchObject({ skin: 'a', lod: 0, strict: true }));
+
+    await fireEvent.click(screen.getByRole('button', { name: 'LOD 1' }));
+
+    await waitFor(() => expect(rpc.callsTo('mods.skinModel').at(-1)?.params).toMatchObject({ skin: 'a', lod: 1, strict: true }));
+  });
+
+  it('shows the reason when the skin view cannot be built', async () => {
+    const { rpc, session, doc } = withSkins([skinOf('a')]);
+    rpc.on('mods.skinModel', () => {
+      throw new Error('The model is not built yet: Check builds it.');
+    });
+    renderWith(ModelPage, session, { doc, model });
+
+    expect(await screen.findByText(/not built yet/)).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Skin' })).toBeEnabled();
   });
 });

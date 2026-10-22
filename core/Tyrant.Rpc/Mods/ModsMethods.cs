@@ -291,7 +291,7 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
         var (ws, install) = session.Current();
         var mod = ModProject.Open(ws, p.Id);
         var skin = mod.Skin(p.Skin);
-        return ShownModel(ws, install, mod, skin.Species, skin.Species, () => OwnModelOf(mod, skin.Species, skin.Model is not null ? skin.Id : null),
+        return ShownModel(ws, install, mod, skin.Species, skin.Species, () => OwnModelOf(mod, skin.Species, skin.Model is not null ? skin.Id : null, p.Lod, p.Strict),
             (species, index, slot) => MapFile(ws, install, index, mod, skin, BaseSkin(species, skin), p.Sex, slot));
     }
 
@@ -316,17 +316,25 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
         return new ModSkinModel(prefab.Ref, maps, own());
     }
 
-    /// <summary>The model the skin wears in this mod (its own, else the mod's species replacement); null when it is the game's or not built.</summary>
-    private ModSkinOwnModel? OwnModelOf(ModProject mod, string species, string? skinId)
+    /// <summary>
+    /// The model the skin wears in this mod (its own, else the mod's species replacement) at <paramref name="lod"/> (default the first; past the
+    /// last, the last; below the first, the first); null when it is the game's or not built. <paramref name="strict"/> throws why it is not built instead of returning null.
+    /// </summary>
+    private ModSkinOwnModel? OwnModelOf(ModProject mod, string species, string? skinId, int? lod = null, bool strict = false)
     {
         if (skinId is null && !mod.Manifest.Models.Any(m => m.Target == species)) return null;
         try
         {
             var preview = ModelPreview(new ModModelPreviewParams(mod.Id, species, skinId));
             // The game's animal-shader materials wear the skin's maps (the model page shows the game's own textures instead).
-            return preview.Lods.Count == 0 ? null : new ModSkinOwnModel(preview.Lods[0].File, preview.Materials.Select(m => m with { Skinnable = m.Animal }).ToList());
+            if (preview.Lods.Count == 0)
+            {
+                if (strict) throw new TyrantException(TyrantErrorCode.ModInvalid, "The model has no built levels of detail to show: fix its problems (see Check), then click Rebuild LODs.");
+                return null;
+            }
+            return new ModSkinOwnModel(preview.Lods[Math.Clamp(lod ?? 0, 0, preview.Lods.Count - 1)].File, preview.Materials.Select(m => m with { Skinnable = m.Animal }).ToList());
         }
-        catch (TyrantException)
+        catch (TyrantException) when (!strict)
         {
             return null; // not built yet (its page says why): the game's model is shown meanwhile
         }

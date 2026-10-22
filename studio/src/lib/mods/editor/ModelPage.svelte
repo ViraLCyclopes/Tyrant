@@ -1,3 +1,8 @@
+<script module lang="ts">
+  /** The skin each model was last shown wearing, for as long as the app is open: `${mod}|${species}|${skin}` -> skin id ('' = the game's materials). */
+  const chosenSkins = new Map<string, string>();
+</script>
+
 <script lang="ts">
   import OpenInBlender from '$lib/blender/OpenInBlender.svelte';
   import type { ModelViewer } from '$lib/assets/viewer';
@@ -9,6 +14,7 @@
   import ModelRigHost from './ModelRigHost.svelte';
   import { askFor, chooseModelRig, createRigAsk } from './modelRig';
   import RigEdit from './RigEdit.svelte';
+  import SkinModel3D from './SkinModel3D.svelte';
 
   /**
    * A replacement model: its 3D preview per LOD, its sizes against the game's, its problems, Replace / Rebuild / Remove, and its
@@ -18,7 +24,23 @@
   const session = getSession();
   const rigAsk = createRigAsk();
   const tab = getTab();
+  const uid = $props.id();
   let lod = $state(0);
+  // The skins that wear this model in game (a skin's own model page: that skin), and the one shown; '' is the template with the game's materials.
+  const skins = $derived((doc.detail?.skins ?? []).filter((s) => s.species === model.target && (model.skin ? s.id === model.skin : !s.model)));
+  const choiceKey = $derived(`${doc.id}|${model.target}|${model.skin ?? ''}`);
+  let choices = $state(0); // bumped when a choice is stored
+  const chosen = $derived.by(() => {
+    void choices;
+    const saved = chosenSkins.get(choiceKey);
+    if (saved === '' && skins.length) return '';
+    return skins.find((s) => s.id === saved)?.id ?? (skins.find((s) => s.starting) ?? skins[0])?.id ?? '';
+  });
+  const chosenSkin = $derived(skins.find((s) => s.id === chosen));
+  function choose(id: string) {
+    chosenSkins.set(choiceKey, id);
+    choices++;
+  }
   let canvas = $state<HTMLCanvasElement>();
   let viewer = $state.raw<ModelViewer | null>(null);
   let reason = $state<string | null>(null);
@@ -68,7 +90,13 @@
   $effect(() => {
     void model.file;
     void doc.detail?.revision;
-    if (model.file) void show(lod);
+    if (chosenSkin) {
+      // the skin view has its own canvas: this one is gone
+      generation++;
+      viewer?.dispose();
+      viewer = null;
+      reason = null;
+    } else if (model.file) void show(lod);
   });
   $effect(() => {
     if (tab.active) viewer?.resume();
@@ -122,8 +150,22 @@
   </div>
   <ModelRigHost ask={rigAsk} />
   {:else}
-  {#if reason}<p class="hint">{reason}</p>{/if}
-  <canvas bind:this={canvas} class="viewport" class:hidden={!!reason} aria-label="3D preview of the replacement model"></canvas>
+  {#if skins.length}
+    <div class="row">
+      <label for="model-skin-{uid}">Skin</label>
+      <select id="model-skin-{uid}" aria-describedby="model-skin-hint-{uid}" value={chosen} onchange={(e) => choose(e.currentTarget.value)}>
+        {#each skins as s (s.id)}<option value={s.id}>{s.name}</option>{/each}
+        <option value="">Game's materials</option>
+      </select>
+    </div>
+    <p class="hint" id="model-skin-hint-{uid}">In game each skin wears this model with its own maps; maps a skin does not have come from the skin it is based on. Game's materials shows the model with the template's textures only.</p>
+  {/if}
+  {#if chosenSkin}
+    <SkinModel3D {doc} skin={chosenSkin} colorsJson={null} materialsJson={chosenSkin.materialsJson ?? null} variant="normal" {lod} strict />
+  {:else}
+    {#if reason}<p class="hint">{reason}</p>{/if}
+    <canvas bind:this={canvas} class="viewport" class:hidden={!!reason} aria-label="3D preview of the replacement model"></canvas>
+  {/if}
   <div class="row">
     {#each model.lods as _, i (i)}
       <button class:on={lod === i} onclick={() => (lod = i)}>LOD {i}</button>

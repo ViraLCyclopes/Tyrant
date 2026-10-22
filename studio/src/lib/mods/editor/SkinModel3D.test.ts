@@ -140,4 +140,25 @@ describe('SkinModel3D', () => {
 
     expect(viewer.pause).toHaveBeenCalled();
   });
+
+  it('skin pages call skinModel without lod or strict', async () => {
+    const { rpc, session } = setup();
+    renderWith(SkinModel3D, session, { doc, skin, colorsJson: null, variant: 'normal' });
+    await waitFor(() => expect(rpc.callsTo('mods.skinModel')).toHaveLength(1));
+
+    const params = rpc.callsTo('mods.skinModel')[0].params as Record<string, unknown>;
+    expect('lod' in params).toBe(false);
+    expect('strict' in params).toBe(false);
+  });
+
+  it('passes lod and strict when given, and dresses again when lod changes', async () => {
+    const { rpc, session } = setup();
+    const view = renderWith(SkinModel3D, session, { doc, skin, colorsJson: null, variant: 'normal', lod: 0, strict: true });
+    await waitFor(() => expect(rpc.callsTo('mods.skinModel')).toHaveLength(1));
+    expect(rpc.callsTo('mods.skinModel')[0].params).toMatchObject({ lod: 0, strict: true });
+
+    await view.rerender({ doc, skin, colorsJson: null, variant: 'normal', lod: 2, strict: true });
+
+    await waitFor(() => expect(rpc.callsTo('mods.skinModel').at(-1)?.params).toMatchObject({ lod: 2, strict: true }));
+  });
 });

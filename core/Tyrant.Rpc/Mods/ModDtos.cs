@@ -224,7 +224,7 @@ public sealed record ModSampleColorsParams(string Id, string Skin, string? Color
 public sealed record ModSampledColors(string? A, string? B, string? Secondary, string? Eye, float Strength, float Softness, float Hue, float Saturation, float Value);
 
 /// <summary>Sex: male, female or infant.</summary>
-public sealed record ModSkinModelParams(string Id, string Skin, string Sex = "male");
+public sealed record ModSkinModelParams(string Id, string Skin, string Sex = "male", int? Lod = null, bool Strict = false);
 
 /// <summary>
 /// The species prefab to preview and the skin's maps (diffuse, normal, extra, pattern) as PNG files. OwnModel: the model the skin
