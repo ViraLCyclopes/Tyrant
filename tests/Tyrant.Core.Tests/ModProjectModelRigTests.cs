@@ -7,7 +7,7 @@ using Tyrant.Core.Models;
 using Tyrant.Core.Mods;
 using Tyrant.Core.Workspaces;
 using Tyrant.Framework.Core;
-using static Tyrant.Core.Tests.ModelRigReaderTests;
+using static Tyrant.Core.Tests.RigFixture;
 
 namespace Tyrant.Core.Tests;
 

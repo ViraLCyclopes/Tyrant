@@ -747,6 +747,17 @@ export interface ModModelPreviewParams {
   skin?: string | null;
 }
 
+export interface ModModelRigPreviewDto {
+  source: string;
+  bones: ModRigBone[];
+  current: ModRigBone[] | null;
+  question: string;
+  changes: boolean;
+  errors: string[];
+  warnings: string[];
+  rigFile: string | null;
+}
+
 export interface ModOriginalSizeDto {
   adultLength: number | null;
   babyShare: number;
@@ -810,6 +821,14 @@ export interface ModPrefabTargetDto {
 
 export interface ModPreviewFiles {
   files: string[];
+}
+
+export interface ModReadModelRigParams {
+  id: string;
+  file: string;
+  target?: string | null;
+  prefabRef?: string | null;
+  skin?: string | null;
 }
 
 export interface ModRebuildModelsParams {
@@ -878,6 +897,7 @@ export interface ModReplaceModelParams {
   target?: string | null;
   prefabRef?: string | null;
   skin?: string | null;
+  rig?: string | null;
 }
 
 export interface ModReplaceParams {
@@ -1741,6 +1761,7 @@ export interface RpcMethods {
   "mods.modelPreview": { params: ModModelPreviewParams; result: ModModelPreview };
   "mods.portraits": { params: ModPortraitsParams; result: ModPortraitsResult };
   "mods.prefabFields": { params: ModPrefabFieldsParams; result: ModPrefabFields };
+  "mods.readModelRig": { params: ModReadModelRigParams; result: ModModelRigPreviewDto };
   "mods.rebuildModels": { params: ModRebuildModelsParams; result: ModDetail };
   "mods.remove": { params: ModIdParams; result: ModsListResult };
   "mods.removeModel": { params: ModRemoveModelParams; result: ModDetail };
