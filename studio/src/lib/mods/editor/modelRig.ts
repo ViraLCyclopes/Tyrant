@@ -1,38 +1,57 @@
-import { writable } from 'svelte/store';
+import { writable, type Readable } from 'svelte/store';
 import type { Rpc } from '$lib/rpc/client';
 import type { ModModelRigPreviewDto, ModReadModelRigParams } from '$lib/rpc/types.gen';
 
 export type RigChoice = 'auto' | 'useFile' | 'keepCurrent';
 
-/** The rig-edit question waiting for an answer; ModelRigHost shows it inside the card that asked. */
+/** The rig-edit question waiting for an answer in one card; that card's ModelRigHost shows it. */
 export interface PendingRig {
   preview: ModModelRigPreviewDto;
   action: 'Add' | 'Replace';
   resolve: (choice: RigChoice | null) => void;
 }
 
-export const pendingRig = writable<PendingRig | null>(null);
+/** One card's place for the question: only the card that asked shows it, and it is answered null when the card goes away. */
+export interface RigAsk {
+  readonly pending: Readable<PendingRig | null>;
+  ask(preview: ModModelRigPreviewDto, action: 'Add' | 'Replace'): Promise<RigChoice | null>;
+  dispose(): void;
+}
+
+export function createRigAsk(): RigAsk {
+  const store = writable<PendingRig | null>(null);
+  let answer: ((choice: RigChoice | null) => void) | null = null;
+  const settle = (choice: RigChoice | null) => {
+    const done = answer;
+    answer = null;
+    store.set(null);
+    done?.(choice);
+  };
+  return {
+    pending: { subscribe: store.subscribe },
+    ask(preview, action) {
+      settle(null);
+      return new Promise((resolve) => {
+        answer = resolve;
+        store.set({ preview, action, resolve: settle });
+      });
+    },
+    dispose: () => settle(null),
+  };
+}
 
 /**
- * Reads the rig edit in the picked model and, when it is worth a look, asks first. Resolves with what to send as `rig`, or null
- * when the user cancelled (then nothing is added).
+ * Reads the rig edit in the picked model and, when it is worth a look, asks first in the calling card (`ask`). Resolves with what to
+ * send as `rig`, or null when the user cancelled or left the card (then nothing is added).
  */
 export async function chooseModelRig(
   rpc: Pick<Rpc, 'call'>,
   params: ModReadModelRigParams,
   options: { reimport: boolean; action?: 'Add' | 'Replace' },
+  ask?: RigAsk,
 ): Promise<RigChoice | null> {
   const preview = await rpc.call('mods.readModelRig', params);
   const clean = preview.errors.length === 0;
   if (options.reimport ? !preview.changes && clean : preview.question === 'none' && preview.bones.length === 0 && clean && preview.warnings.length === 0) return 'auto';
-  return new Promise((resolve) => {
-    const done = (choice: RigChoice | null) => {
-      pendingRig.set(null);
-      resolve(choice);
-    };
-    pendingRig.update((old) => {
-      old?.resolve(null);
-      return { preview, action: options.action ?? (options.reimport ? 'Replace' : 'Add'), resolve: done };
-    });
-  });
+  return ask ? ask.ask(preview, options.action ?? (options.reimport ? 'Replace' : 'Add')) : null;
 }

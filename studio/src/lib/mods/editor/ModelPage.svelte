@@ -7,7 +7,7 @@
   import { getSession } from '$lib/stores/session.svelte';
   import type { ModDoc } from './modDoc.svelte';
   import ModelRigHost from './ModelRigHost.svelte';
-  import { chooseModelRig } from './modelRig';
+  import { chooseModelRig, createRigAsk } from './modelRig';
   import RigEdit from './RigEdit.svelte';
 
   /**
@@ -16,6 +16,7 @@
    */
   let { doc, model, onRemoved = () => {} }: { doc: Pick<ModDoc, 'id' | 'detail' | 'edit'>; model: ModModelDto; onRemoved?: () => void } = $props();
   const session = getSession();
+  const rigAsk = createRigAsk();
   const tab = getTab();
   let lod = $state(0);
   let canvas = $state<HTMLCanvasElement>();
@@ -91,7 +92,7 @@
   async function addFile(file: string, reimporting: boolean) {
     const target = model.skin ? null : model.target;
     const rig = await tab.safely(() =>
-      chooseModelRig(session.rpc, { id: doc.id, file, target, skin: model.skin }, { reimport: reimporting, action: reimporting || model.file ? 'Replace' : 'Add' }));
+      chooseModelRig(session.rpc, { id: doc.id, file, target, skin: model.skin }, { reimport: reimporting, action: reimporting || model.file ? 'Replace' : 'Add' }, rigAsk));
     if (rig) await doc.edit('mods.replaceModel', { file, target, skin: model.skin, rig });
   }
 
@@ -108,7 +109,7 @@
     <button onclick={replace}>Add a model…</button>
     <OpenInBlender species={model.target} mod={doc.id} skin={model.skin ?? undefined} />
   </div>
-  <ModelRigHost />
+  <ModelRigHost ask={rigAsk} />
   {:else}
   {#if reason}<p class="hint">{reason}</p>{/if}
   <canvas bind:this={canvas} class="viewport" class:hidden={!!reason} aria-label="3D preview of the replacement model"></canvas>
@@ -129,7 +130,7 @@
     <p class="hint">{model.origin} changed since you added it. Re-import it to use the new version.</p>
     <div class="row"><button onclick={reimport}>Re-import</button></div>
   {/if}
-  <ModelRigHost />
+  <ModelRigHost ask={rigAsk} />
   <div class="row">
     <button onclick={replace}>Replace…</button>
     <button onclick={() => doc.edit('mods.rebuildModels', {})}>Rebuild LODs</button>

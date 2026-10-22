@@ -46,6 +46,12 @@ describe('ModelRigConfirm', () => {
     expect(onConfirm).toHaveBeenCalledWith('keepCurrent');
   });
 
+  it('keepOrRemove lists the bones that keep would preserve', () => {
+    show(preview({ question: 'keepOrRemove', source: 'gameSkeleton', bones: [], current: [bone('Wing1')] }));
+    expect(screen.getByText('The current rig edit: 1 bone')).toBeInTheDocument();
+    expect(screen.getByText('Wing1')).toBeInTheDocument();
+  });
+
   it('errors disable the confirm button', async () => {
     const { onCancel } = show(preview({ errors: ['Bone Foo is not in the skeleton'] }));
     expect(screen.getByRole('alert')).toHaveTextContent('Bone Foo');

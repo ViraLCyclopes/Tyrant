@@ -4,13 +4,14 @@
   import { getTab } from '$lib/shell/tab.svelte';
   import { getSession } from '$lib/stores/session.svelte';
   import ModelRigHost from './ModelRigHost.svelte';
-  import { chooseModelRig } from './modelRig';
+  import { chooseModelRig, createRigAsk } from './modelRig';
   import type { ModDoc } from './modDoc.svelte';
 
   /** The mod editor's Models → + Add: a species' model from your .glb, into this mod (as Replace model in a mod… does). */
   let { doc, onDone }: { doc: Pick<ModDoc, 'id' | 'detail' | 'edit'>; onDone: (target: string | null) => void } = $props();
 
   const session = getSession();
+  const rigAsk = createRigAsk();
   const tab = getTab();
   let data = $state.raw<ModSpeciesResult | null>(null);
   let species = $state('');
@@ -28,7 +29,7 @@
 
   async function add() {
     const path = file.trim();
-    const rig = await tab.safely(() => chooseModelRig(session.rpc, { id: doc.id, file: path, target: species }, { reimport: false, action: 'Add' }));
+    const rig = await tab.safely(() => chooseModelRig(session.rpc, { id: doc.id, file: path, target: species }, { reimport: false, action: 'Add' }, rigAsk));
     if (rig && (await doc.edit('mods.replaceModel', { file: path, target: species, rig }))) onDone(species);
   }
 </script>
@@ -55,7 +56,7 @@
       <button class="primary" disabled={!file.trim() || !species || session.busy} onclick={add}>Add</button>
       <button onclick={() => onDone(null)}>Cancel</button>
     </div>
-    <ModelRigHost />
+    <ModelRigHost ask={rigAsk} />
     <p class="hint">
       Start from Tyrant's export of the species' prefab (Assets tab → the prefab → Export selected). In Blender keep the armature, its
       bone names, the growth shape keys and the material names. Tyrant checks the model and builds its levels of detail. To keep a rig edit's scale, export it from Blender with Export model for Tyrant… in the Tyrant panel.

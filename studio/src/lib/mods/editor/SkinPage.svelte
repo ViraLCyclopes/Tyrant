@@ -9,7 +9,7 @@
   import ColourEditor from './ColourEditor.svelte';
   import MaterialEditor from './MaterialEditor.svelte';
   import ModelRigHost from './ModelRigHost.svelte';
-  import { chooseModelRig } from './modelRig';
+  import { chooseModelRig, createRigAsk } from './modelRig';
   import RigEdit from './RigEdit.svelte';
   import type { ModDoc } from './modDoc.svelte';
   import RemoveSkinDialog from './RemoveSkinDialog.svelte';
@@ -19,6 +19,7 @@
 
   let { doc, skin, onOpenModel = () => {} }: { doc: ModDoc; skin: ModSkinDto; onOpenModel?: (target: string, skin: string | null) => void } = $props();
   const session = getSession();
+  const rigAsk = createRigAsk();
   const tab = getTab();
   let name = $state('');
   let removing = $state(false);
@@ -34,7 +35,7 @@
   async function replaceModel() {
     const file = await session.platform.openFile(`Choose a model for ${skin.name} (.glb or .fbx)`, ['glb', 'fbx']);
     if (!file) return;
-    const rig = await tab.safely(() => chooseModelRig(session.rpc, { id: doc.id, file, skin: skin.id }, { reimport: false, action: 'Replace' }));
+    const rig = await tab.safely(() => chooseModelRig(session.rpc, { id: doc.id, file, skin: skin.id }, { reimport: false, action: 'Replace' }, rigAsk));
     if (rig) await doc.edit('mods.replaceModel', { file, skin: skin.id, rig });
   }
 
@@ -118,7 +119,7 @@
     {/if}
     <OpenInBlender species={skin.species} mod={doc.id} skin={skin.id} />
   </div>
-  <ModelRigHost />
+  <ModelRigHost ask={rigAsk} />
   <RigEdit {doc} target={skin.species} skin={skin.id} />
 </section>
 

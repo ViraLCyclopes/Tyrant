@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import type { ModModelRigPreviewDto } from '$lib/rpc/types.gen';
+  import type { ModModelRigPreviewDto, ModRigBone } from '$lib/rpc/types.gen';
   import { boneParts } from './rigText';
 
   /** The rig edit found in a model about to be added: where it comes from, its bones, and (if the mod has one already) which to keep. */
@@ -35,25 +35,39 @@
 
 <div class="confirm" role="group" aria-label="Rig edit">
   <p><strong>{source}</strong></p>
+  {#snippet bones(list: ModRigBone[], label: string)}
+    {#if list.length > 8}
+      <details>
+        <summary>{label}: {list.length} bones</summary>
+        {@render items(list)}
+      </details>
+    {:else}
+      <p>{label}: {list.length} {list.length === 1 ? 'bone' : 'bones'}</p>
+      {@render items(list)}
+    {/if}
+  {/snippet}
+  {#snippet items(list: ModRigBone[])}
+    <ul>
+      {#each list as b (b.bone)}
+        <li><strong>{b.bone}</strong>{#each boneParts(b) as p (p)} <span>{p}</span>{/each}</li>
+      {/each}
+    </ul>
+  {/snippet}
   {#if count > 0}
-    {#snippet list()}
-      <ul>
-        {#each preview.bones as b (b.bone)}
-          <li><strong>{b.bone}</strong>{#each boneParts(b) as p (p)} <span>{p}</span>{/each}</li>
-        {/each}
-      </ul>
-    {/snippet}
     {#if count > 8}
       <details>
         <summary>{count} bones</summary>
-        {@render list()}
+        {@render items(preview.bones)}
       </details>
     {:else}
       <p>{count} {count === 1 ? 'bone' : 'bones'}</p>
-      {@render list()}
+      {@render items(preview.bones)}
     {/if}
   {:else}
     <p class="hint">No rig edit.</p>
+  {/if}
+  {#if preview.question === 'keepOrRemove' && preview.current?.length}
+    {@render bones(preview.current, 'The current rig edit')}
   {/if}
 
   {#if preview.question === 'useOrKeep'}

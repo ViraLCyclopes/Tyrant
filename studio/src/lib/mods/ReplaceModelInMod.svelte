@@ -3,13 +3,14 @@
   import { getTab } from '$lib/shell/tab.svelte';
   import { getSession } from '$lib/stores/session.svelte';
   import ModelRigHost from './editor/ModelRigHost.svelte';
-  import { chooseModelRig } from './editor/modelRig';
+  import { chooseModelRig, createRigAsk } from './editor/modelRig';
 
   /** Replace model in a mod… on a prefab: the user's .glb from Blender becomes the species' model in a mod. */
   let { asset }: { asset: AssetRow } = $props();
 
   const NEW = '__new__';
   const session = getSession();
+  const rigAsk = createRigAsk();
   const tab = getTab();
   let open = $state(false);
   let mods = $state<ModsListResult | null>(null);
@@ -39,7 +40,7 @@
       target = id;
     }
     const path = file.trim();
-    const rig = await tab.safely(() => chooseModelRig(session.rpc, { id, file: path, prefabRef: asset.ref }, { reimport: false, action: 'Add' }));
+    const rig = await tab.safely(() => chooseModelRig(session.rpc, { id, file: path, prefabRef: asset.ref }, { reimport: false, action: 'Add' }, rigAsk));
     if (!rig) return;
     const detail = await tab.safely(() => session.rpc.call('mods.replaceModel', { id, file: path, prefabRef: asset.ref, rig }));
     if (!detail) return;
@@ -68,7 +69,7 @@
     <button onclick={browse}>Browse…</button>
     <button class="primary" disabled={!file.trim() || session.busy} onclick={add}>Add to mod</button>
     <button onclick={() => (open = false)}>Cancel</button>
-    <ModelRigHost />
+    <ModelRigHost ask={rigAsk} />
     <p class="hint">Export the prefab from Tyrant, edit it in Blender (keep the armature, its bone names and the growth shape keys), export a .glb or .fbx (use Export model for Tyrant… in Blender's Tyrant panel to keep a rig edit's scale). Tyrant has Blender convert an .fbx.</p>
   </div>
 {/if}

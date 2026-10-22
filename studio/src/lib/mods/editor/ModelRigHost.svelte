@@ -1,11 +1,16 @@
 <script lang="ts">
+  import { onDestroy } from 'svelte';
   import ModelRigConfirm from './ModelRigConfirm.svelte';
-  import { pendingRig } from './modelRig';
+  import type { RigAsk } from './modelRig';
 
-  /** Where a card shows the rig-edit question its Add / Replace / Re-import is waiting on. */
+  /** Where a card shows the rig-edit question its Add / Replace / Re-import is waiting on; leaving the card answers it with Cancel. */
+  let { ask }: { ask: RigAsk } = $props();
+  // svelte-ignore state_referenced_locally
+  const pending = ask.pending;
+  onDestroy(() => ask.dispose());
 </script>
 
-{#if $pendingRig}
-  {@const pending = $pendingRig}
-  <ModelRigConfirm preview={pending.preview} action={pending.action} onConfirm={(rig) => pending.resolve(rig)} onCancel={() => pending.resolve(null)} />
+{#if $pending}
+  {@const p = $pending}
+  <ModelRigConfirm preview={p.preview} action={p.action} onConfirm={(rig) => p.resolve(rig)} onCancel={() => p.resolve(null)} />
 {/if}
