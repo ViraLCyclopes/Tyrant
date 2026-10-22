@@ -21,7 +21,7 @@ const model: ModModelDto = {
 };
 
 function setup() {
-  const rpc = new FakeRpc().on('mods.modelPreview', () => ({
+  const rpc = new FakeRpc().on('mods.readModelRig', () => ({ source: 'gameSkeleton', bones: [], current: null, question: 'none', changes: false, errors: [], warnings: [], rigFile: null })).on('mods.modelPreview', () => ({
     prefabRef: 'carch#1', materials: [],
     lods: [{ file: 'D:\\p\\lod0.glb', vertices: 9000 }, { file: 'D:\\p\\lod1.glb', vertices: 3000 }],
   }));
@@ -65,7 +65,7 @@ describe('ModelPage', () => {
     expect(screen.getByText(/D:\\blender\\carch.glb changed since you added it/)).toBeInTheDocument();
     await fireEvent.click(screen.getByRole('button', { name: 'Re-import' }));
 
-    expect(doc.edit).toHaveBeenCalledWith('mods.replaceModel', { file: 'D:\\blender\\carch.glb', target: 'Carcharodontosaurus', skin: null });
+    await waitFor(() => expect(doc.edit).toHaveBeenCalledWith('mods.replaceModel', { file: 'D:\\blender\\carch.glb', target: 'Carcharodontosaurus', skin: null, rig: 'auto' }));
   });
 
   it('shows each LOD against the game and the warnings', () => {
@@ -88,7 +88,7 @@ describe('ModelPage', () => {
 
     await waitFor(() => expect(onRemoved).toHaveBeenCalled());
     expect(doc.edit).toHaveBeenCalledWith('mods.rebuildModels', {});
-    expect(doc.edit).toHaveBeenCalledWith('mods.replaceModel', { file: 'D:\\blender\\carch2.glb', target: 'Carcharodontosaurus', skin: null });
+    expect(doc.edit).toHaveBeenCalledWith('mods.replaceModel', { file: 'D:\\blender\\carch2.glb', target: 'Carcharodontosaurus', skin: null, rig: 'auto' });
     expect(doc.edit).toHaveBeenCalledWith('mods.removeModel', { target: 'Carcharodontosaurus', skin: null });
   });
 

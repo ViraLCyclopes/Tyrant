@@ -2,6 +2,8 @@
   import type { AssetRow, ModsListResult } from '$lib/rpc/types.gen';
   import { getTab } from '$lib/shell/tab.svelte';
   import { getSession } from '$lib/stores/session.svelte';
+  import ModelRigHost from './editor/ModelRigHost.svelte';
+  import { chooseModelRig } from './editor/modelRig';
 
   /** Replace model in a mod… on a prefab: the user's .glb from Blender becomes the species' model in a mod. */
   let { asset }: { asset: AssetRow } = $props();
@@ -36,7 +38,10 @@
       mods = created; // the new mod is real now, even if adding the model fails below
       target = id;
     }
-    const detail = await tab.safely(() => session.rpc.call('mods.replaceModel', { id, file: file.trim(), prefabRef: asset.ref }));
+    const path = file.trim();
+    const rig = await tab.safely(() => chooseModelRig(session.rpc, { id, file: path, prefabRef: asset.ref }, { reimport: false, action: 'Add' }));
+    if (!rig) return;
+    const detail = await tab.safely(() => session.rpc.call('mods.replaceModel', { id, file: path, prefabRef: asset.ref, rig }));
     if (!detail) return;
     const model = detail.models.findLast((m) => m.skin === null); // the model just added comes last
     tab.info(`${asset.name}'s model is now in '${id}' (${model?.lods.length ?? 0} LOD(s)). Install it from the Mods tab.`);
@@ -63,7 +68,8 @@
     <button onclick={browse}>Browse…</button>
     <button class="primary" disabled={!file.trim() || session.busy} onclick={add}>Add to mod</button>
     <button onclick={() => (open = false)}>Cancel</button>
-    <p class="hint">Export the prefab from Tyrant, edit it in Blender (keep the armature, its bone names and the growth shape keys), export a .glb (or an .fbx: Tyrant has Blender convert it).</p>
+    <ModelRigHost />
+    <p class="hint">Export the prefab from Tyrant, edit it in Blender (keep the armature, its bone names and the growth shape keys), export a .glb or .fbx (use Export model for Tyrant… in Blender's Tyrant panel to keep a rig edit's scale). Tyrant has Blender convert an .fbx.</p>
   </div>
 {/if}
 

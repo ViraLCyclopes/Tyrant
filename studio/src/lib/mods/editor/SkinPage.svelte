@@ -1,12 +1,15 @@
 <script lang="ts">
   import OpenInBlender from '$lib/blender/OpenInBlender.svelte';
   import type { ModSkinDto } from '$lib/rpc/types.gen';
+  import { getTab } from '$lib/shell/tab.svelte';
   import { getSession } from '$lib/stores/session.svelte';
   import NameDialog from './NameDialog.svelte';
   import PortraitsCard from './PortraitsCard.svelte';
   import { groupNames, setGroup } from './skinGroups';
   import ColourEditor from './ColourEditor.svelte';
   import MaterialEditor from './MaterialEditor.svelte';
+  import ModelRigHost from './ModelRigHost.svelte';
+  import { chooseModelRig } from './modelRig';
   import RigEdit from './RigEdit.svelte';
   import type { ModDoc } from './modDoc.svelte';
   import RemoveSkinDialog from './RemoveSkinDialog.svelte';
@@ -16,6 +19,7 @@
 
   let { doc, skin, onOpenModel = () => {} }: { doc: ModDoc; skin: ModSkinDto; onOpenModel?: (target: string, skin: string | null) => void } = $props();
   const session = getSession();
+  const tab = getTab();
   let name = $state('');
   let removing = $state(false);
   const NEW_GROUP = '__new__';
@@ -29,7 +33,9 @@
 
   async function replaceModel() {
     const file = await session.platform.openFile(`Choose a model for ${skin.name} (.glb or .fbx)`, ['glb', 'fbx']);
-    if (file) await doc.edit('mods.replaceModel', { file, skin: skin.id });
+    if (!file) return;
+    const rig = await tab.safely(() => chooseModelRig(session.rpc, { id: doc.id, file, skin: skin.id }, { reimport: false, action: 'Replace' }));
+    if (rig) await doc.edit('mods.replaceModel', { file, skin: skin.id, rig });
   }
 
   // Follows saves, undo and outside changes.
@@ -112,6 +118,7 @@
     {/if}
     <OpenInBlender species={skin.species} mod={doc.id} skin={skin.id} />
   </div>
+  <ModelRigHost />
   <RigEdit {doc} target={skin.species} skin={skin.id} />
 </section>
 

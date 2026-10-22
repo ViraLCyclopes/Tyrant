@@ -1,6 +1,6 @@
 import { fireEvent, screen, waitFor } from '@testing-library/svelte';
 import { describe, expect, it, vi } from 'vitest';
-import type { ModDetail } from '$lib/rpc/types.gen';
+import type { ModDetail, ModModelRigPreviewDto } from '$lib/rpc/types.gen';
 import { memoryStore } from '$lib/storage';
 import { FakePlatform } from '$lib/test/fakePlatform';
 import { FakeRpc } from '$lib/test/fakeRpc';
@@ -12,7 +12,7 @@ function setup(hasDump = true) {
   lastPlatform = new FakePlatform();
   const platform = lastPlatform;
   platform.files.push('D:\\blender\\big-carch.glb');
-  const rpc = new FakeRpc().on('mods.species', () => ({
+  const rpc = new FakeRpc().on('mods.readModelRig', () => rigPreview).on('mods.species', () => ({
     hasDump,
     species: hasDump
       ? [
@@ -29,6 +29,7 @@ function setup(hasDump = true) {
 }
 
 let lastPlatform: FakePlatform;
+let rigPreview: ModModelRigPreviewDto = { source: 'gameSkeleton', bones: [], current: null, question: 'none', changes: false, errors: [], warnings: [], rigFile: null };
 
 describe('AddModel', () => {
   it('lets you pick a .glb or an .fbx', async () => {
@@ -48,8 +49,22 @@ describe('AddModel', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Browse…' }));
     await fireEvent.click(await screen.findByRole('button', { name: 'Add' }));
 
-    await waitFor(() => expect(doc.edit).toHaveBeenCalledWith('mods.replaceModel', { file: 'D:\\blender\\big-carch.glb', target: 'Carcharodontosaurus' }));
+    await waitFor(() => expect(doc.edit).toHaveBeenCalledWith('mods.replaceModel', { file: 'D:\\blender\\big-carch.glb', target: 'Carcharodontosaurus', rig: 'auto' }));
     await waitFor(() => expect(onDone).toHaveBeenCalledWith('Carcharodontosaurus'));
+  });
+
+  it('Add sends the chosen rig choice', async () => {
+    rigPreview = { ...rigPreview, source: 'bones', question: 'useOrKeep', changes: true, current: [], bones: [{ bone: 'Jaw', move: [0, 1, 0], rotate: [0, 0, 0, 1], scale: [1, 1, 1] }] };
+    const { doc, onDone } = setup();
+    await fireEvent.click(await screen.findByRole('button', { name: 'Browse…' }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Add' }));
+    await fireEvent.click(await screen.findByRole('radio', { name: 'Keep the current one (0 bones)' }));
+    expect(doc.edit).not.toHaveBeenCalled();
+    await fireEvent.click(screen.getAllByRole('button', { name: 'Add' }).at(-1)!);
+
+    await waitFor(() => expect(doc.edit).toHaveBeenCalledWith('mods.replaceModel', { file: 'D:\\blender\\big-carch.glb', target: 'Allosaurus Anax', rig: 'keepCurrent' }));
+    await waitFor(() => expect(onDone).toHaveBeenCalled());
+    rigPreview = { ...rigPreview, question: 'none', bones: [], changes: false };
   });
 
   it('waits for a file before adding', async () => {

@@ -3,6 +3,8 @@
   import type { ModSpeciesResult } from '$lib/rpc/types.gen';
   import { getTab } from '$lib/shell/tab.svelte';
   import { getSession } from '$lib/stores/session.svelte';
+  import ModelRigHost from './ModelRigHost.svelte';
+  import { chooseModelRig } from './modelRig';
   import type { ModDoc } from './modDoc.svelte';
 
   /** The mod editor's Models → + Add: a species' model from your .glb, into this mod (as Replace model in a mod… does). */
@@ -25,7 +27,9 @@
   }
 
   async function add() {
-    if (await doc.edit('mods.replaceModel', { file: file.trim(), target: species })) onDone(species);
+    const path = file.trim();
+    const rig = await tab.safely(() => chooseModelRig(session.rpc, { id: doc.id, file: path, target: species }, { reimport: false, action: 'Add' }));
+    if (rig && (await doc.edit('mods.replaceModel', { file: path, target: species, rig }))) onDone(species);
   }
 </script>
 
@@ -51,9 +55,10 @@
       <button class="primary" disabled={!file.trim() || !species || session.busy} onclick={add}>Add</button>
       <button onclick={() => onDone(null)}>Cancel</button>
     </div>
+    <ModelRigHost />
     <p class="hint">
       Start from Tyrant's export of the species' prefab (Assets tab → the prefab → Export selected). In Blender keep the armature, its
-      bone names, the growth shape keys and the material names. Tyrant checks the model and builds its levels of detail.
+      bone names, the growth shape keys and the material names. Tyrant checks the model and builds its levels of detail. To keep a rig edit's scale, export it from Blender with Export model for Tyrant… in the Tyrant panel.
     </p>
   {/if}
 </section>

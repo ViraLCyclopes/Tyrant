@@ -39,12 +39,13 @@ describe('SkinPage', () => {
     const species = { target: 'Carcharodontosaurus', skin: null, file: 'models/carch-1a2b.glb', lods: [], errors: [], warnings: [], stale: false, origin: null, originChanged: false };
     const { rpc, platform } = await setup(modDetail({ models: [species] }));
     platform.files.push('D:\\blender\\spiked.glb');
+    rpc.on('mods.readModelRig', () => ({ source: 'gameSkeleton', bones: [], current: null, question: 'none', changes: false, errors: [], warnings: [], rigFile: null }));
     rpc.on('mods.replaceModel', () => modDetail({ revision: 'r2', models: [species] }));
 
     expect(screen.getByText('Model: species replacement (models/carch-1a2b.glb)')).toBeInTheDocument();
     await fireEvent.click(screen.getByRole('button', { name: 'Replace model…' }));
 
-    await waitFor(() => expect(rpc.callsTo('mods.replaceModel')[0]?.params).toMatchObject({ file: 'D:\\blender\\spiked.glb', skin: 'blue', revision: 'r1' }));
+    await waitFor(() => expect(rpc.callsTo('mods.replaceModel')[0]?.params).toMatchObject({ file: 'D:\\blender\\spiked.glb', skin: 'blue', revision: 'r1', rig: 'auto' }));
   });
 
   it('a skin with its own model can go back to the species model', async () => {
