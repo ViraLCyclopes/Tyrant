@@ -10,6 +10,7 @@
   import RecordTree from './RecordTree.svelte';
   import SizeCard from './SizeCard.svelte';
   import SpeciesSoundsCard from './SpeciesSoundsCard.svelte';
+  import Thumb from './Thumb.svelte';
   import type { AddedSound } from '$lib/sounds/audio';
   import type { ModDoc } from './modDoc.svelte';
 
@@ -319,12 +320,14 @@
       <SpeciesSoundsCard {doc} species={animal.key} onOpen={onOpenSound} onAdd={() => onAddSound(animal.key)} />
       <h3>Nursery picture</h3>
       <p class="hint">The picture on its Nursery card and the Nursery's species panel. {animal.icon ? `Using ${animal.icon}.` : "Using the template's picture."} The game's are 512×256 PNGs.</p>
+      {#if animal.icon}<Thumb modId={doc.id} file={animal.icon} size={256} aspect={2} label="Nursery picture of {animal.name}" version="{doc.detail?.revision}|{doc.detail?.filesStamp}" />{/if}
       <div class="toolbar">
         <button type="button" aria-label="Nursery picture: Choose PNG…" onclick={pickIcon}>Choose PNG…</button>
         <button type="button" aria-label="Nursery picture: Use template picture" disabled={!animal.icon} onclick={() => doc.edit('mods.setSpeciesIcon', { speciesId: selected, png: null }, { undoable: false })}>Use template picture</button>
       </div>
       <h3>Paleopedia picture</h3>
       <p class="hint">The big picture on the species' own Paleopedia page (also its row in the Paleopedia's animal list, and its notifications). {animal.paleopediaPicture ? `Using ${animal.paleopediaPicture}.` : "Using the template's picture."} The game's are 2048×1152 (16:9) PNGs.</p>
+      {#if animal.paleopediaPicture}<Thumb modId={doc.id} file={animal.paleopediaPicture} size={256} aspect={16 / 9} label="Paleopedia picture of {animal.name}" version="{doc.detail?.revision}|{doc.detail?.filesStamp}" />{/if}
       <div class="toolbar">
         <button type="button" aria-label="Paleopedia picture: Choose PNG…" onclick={pickPaleopediaPicture}>Choose PNG…</button>
         <button type="button" aria-label="Paleopedia picture: Use template picture" disabled={!animal.paleopediaPicture} onclick={() => doc.edit('mods.setSpeciesPaleopediaPicture', { speciesId: selected, png: null }, { undoable: false })}>Use template picture</button>
