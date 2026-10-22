@@ -42,6 +42,19 @@ async function setup(animals: (typeof animal)[] = [animal], props: { onPrefab?: 
   return { rpc, platform, doc };
 }
 
+/** A record row as mods.animalDatabase lists it. */
+const row = (path: string, value: string, kind = 'number', editable = true) => ({ path, kind, value, templateValue: value, editable });
+const socialRows = [
+  row('/brain/social/adult/socialMaleCountRange/x', '1'), row('/brain/social/adult/socialMaleCountRange/y', '2'),
+  row('/brain/social/adult/socialFemaleCountRange/x', '1'), row('/brain/social/adult/socialFemaleCountRange/y', '4'),
+  row('/brain/social/shared/individualRangeMale', '4000'), row('/brain/social/shared/individualRangeFemale', '4000'),
+  row('/brain/social/shared/rangeOverlapAllowance', '0.15'),
+  row('/brain/social/adult/socialPositionalCohesion', '0.01'), row('/brain/social/adult/socialStateCohesion', '0.1'),
+  row('/brain/social/adult/socialLeaderType', 'Either', 'text'),
+  row('/brain/needs/adult/native/socialIsolationTime', '600'),
+  row('/brain/social/adult/socialCommunicationInterval/x', '20'), row('/brain/social/adult/socialCommunicationInterval/y', '72'),
+];
+
 describe('Species database', () => {
   it("a new species shows its template's cost and stats before it is created", async () => {
     const { rpc } = await setup([]);
@@ -89,6 +102,81 @@ describe('Species database', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Nursery picture: Choose PNG…' }));
     await waitFor(() => expect(rpc.callsTo('mods.setSpeciesIcon')[0]?.params).toMatchObject({ speciesId: 'new-animal', png: 'C:/icons/mirabilis.png' }));
   });
+  it('the Social card edits group size, space, cohesion, leader and alone time, saved with the species', async () => {
+    const { rpc } = await setup([{ ...animal, dataFields: [...animal.dataFields, ...socialRows] }]);
+    rpc.on('mods.setSpecies', () => modDetail({ revision: 'r2' }));
+    const card = screen.getByRole('region', { name: 'Social' });
+    expect(within(card).getByRole('spinbutton', { name: 'Males, fewest' })).toHaveValue(1);
+    expect(within(card).getByRole('spinbutton', { name: 'Females, most' })).toHaveValue(4);
+    expect(within(card).getByRole('spinbutton', { name: 'Space per male (m²)' })).toHaveValue(4000);
+    expect(within(card).getByRole('combobox', { name: 'Leader' })).toHaveValue('Either');
+
+    await fireEvent.input(within(card).getByRole('spinbutton', { name: 'Males, most' }), { target: { value: '5' } });
+    await fireEvent.input(within(card).getByRole('spinbutton', { name: 'Adults stay close together (0–1)' }), { target: { value: '0.6' } });
+    await fireEvent.change(within(card).getByRole('combobox', { name: 'Leader' }), { target: { value: 'Matriarch' } });
+    await fireEvent.input(within(card).getByRole('spinbutton', { name: 'Adults can be alone for' }), { target: { value: '900' } });
+    expect(within(card).getAllByText('Template: 2').length).toBeGreaterThan(0);
+    await fireEvent.click(screen.getByRole('button', { name: 'Save species' }));
+
+    await waitFor(() => expect(rpc.callsTo('mods.setSpecies')[0]?.params).toMatchObject({ dataFields: {
+      '/brain/social/adult/socialMaleCountRange/y': '5', '/brain/social/adult/socialPositionalCohesion': '0.6',
+      '/brain/social/adult/socialLeaderType': 'Matriarch', '/brain/needs/adult/native/socialIsolationTime': '900' } }));
+  });
+
+  it('the Social card warns when a fewest is more than its most', async () => {
+    await setup([{ ...animal, dataFields: [...animal.dataFields, ...socialRows] }]);
+    const card = screen.getByRole('region', { name: 'Social' });
+    expect(within(card).queryByRole('alert')).toBeNull();
+    await fireEvent.input(within(card).getByRole('spinbutton', { name: 'Females, fewest' }), { target: { value: '6' } });
+    expect(within(card).getByRole('alert')).toHaveTextContent(/Females: fewest \(6\) is more than most \(4\)/);
+  });
+
+  it('a group size must be a whole number before the species can be saved', async () => {
+    await setup([{ ...animal, dataFields: [...animal.dataFields, ...socialRows] }]);
+    const card = screen.getByRole('region', { name: 'Social' });
+    await fireEvent.input(within(card).getByRole('spinbutton', { name: 'Males, most' }), { target: { value: '2.5' } });
+    expect(within(card).getByRole('alert')).toHaveTextContent(/Males, most must be a whole number of 0 or more/);
+    expect(screen.getByRole('button', { name: 'Save species' })).toBeDisabled();
+    await fireEvent.input(within(card).getByRole('spinbutton', { name: 'Males, most' }), { target: { value: '3' } });
+    expect(within(card).queryByRole('alert')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Save species' })).toBeEnabled();
+  });
+
+  it('an emptied box says it needs a number, not that fewest is more than most, and the calls interval is checked too', async () => {
+    await setup([{ ...animal, dataFields: [...animal.dataFields, ...socialRows] }]);
+    const card = screen.getByRole('region', { name: 'Social' });
+    await fireEvent.input(within(card).getByRole('spinbutton', { name: 'Females, most' }), { target: { value: '' } });
+    expect(within(card).getByRole('alert')).toHaveTextContent(/Females, most must be a whole number/);
+    expect(within(card).getByRole('alert')).not.toHaveTextContent(/more than most/);
+    await fireEvent.input(within(card).getByRole('spinbutton', { name: 'Females, most' }), { target: { value: '4' } });
+    await fireEvent.input(within(card).getByRole('spinbutton', { name: 'Adults call the group, soonest' }), { target: { value: '90' } });
+    expect(within(card).getByRole('alert')).toHaveTextContent(/Calls: soonest \(90\) is later than latest \(72\)/);
+  });
+
+  it('labels the adult values, says 0 never gets lonely, and links each template hint to its box', async () => {
+    await setup([{ ...animal, dataFields: [...animal.dataFields, ...socialRows] }]);
+    const card = screen.getByRole('region', { name: 'Social' });
+    const alone = within(card).getByRole('spinbutton', { name: 'Adults can be alone for' });
+    expect(alone).toHaveAccessibleDescription(/Template: 600/);
+    expect(within(card).getByText(/0 means it never gets lonely/)).toBeInTheDocument();
+    expect(within(card).getByRole('spinbutton', { name: 'Adults stay close together (0–1)' })).toBeInTheDocument();
+  });
+
+  it('a species whose template is not in the data dump gets no re-dump hint', async () => {
+    await setup([{ ...animal, dataFields: [...animal.dataFields, ...socialRows.filter((r) => !r.path.includes('CountRange'))] }]);
+    expect(within(screen.getByRole('region', { name: 'Social' })).queryByText(/run the data dump again/)).toBeNull();
+  });
+
+  it('without group sizes in the record, the Social card says to run the data dump again', async () => {
+    const older = [...socialRows.filter((r) => !r.path.includes('CountRange')),
+      row('/brain/social/adult/socialMaleCountRange', '{}', 'object', false), row('/brain/social/adult/socialFemaleCountRange', '{}', 'object', false)];
+    await setup([{ ...animal, dataFields: [...animal.dataFields, ...older] }]);
+    const card = screen.getByRole('region', { name: 'Social' });
+    expect(within(card).queryByRole('spinbutton', { name: 'Males, fewest' })).toBeNull();
+    expect(within(card).getByText(/run the data dump again/)).toBeInTheDocument();
+    expect(within(card).getByRole('spinbutton', { name: 'Space per male (m²)' })).toBeInTheDocument();
+  });
+
   it('Paleopedia text shows the English texts and saves only the ones changed', async () => {
     const { rpc } = await setup();
     rpc.on('mods.setSpecies', () => modDetail({ revision: 'r2' }));

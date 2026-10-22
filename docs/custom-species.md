@@ -126,6 +126,28 @@ a working override. Invalid data is reported when opening or checking the mod.
 | `vocalizationRangeM`, `footstepRangeM` | meters |
 
 Minimum values must not exceed maximum values, including inherited endpoints.
+The **Social** card, below the stats, edits the species' social settings with plain names; they are the same values as
+the record's `/brain/social/...` rows (and `/brain/needs/adult/native/socialIsolationTime`), and are saved with the
+species:
+
+| Card | Record path |
+|---|---|
+| Males / Females, fewest and most (group size) | `/brain/social/adult/socialMaleCountRange/x`, `/y`; `socialFemaleCountRange/x`, `/y` |
+| Space per male / female (m²; the game's editor allows 16–32,000) | `/brain/social/shared/individualRangeMale`, `individualRangeFemale` |
+| Range overlap (0–1) | `/brain/social/shared/rangeOverlapAllowance` |
+| Adults stay close together / act together (0–1) | `/brain/social/adult/socialPositionalCohesion`, `socialStateCohesion` |
+| Leader (`Either`, `Patriarch`, `Matriarch`) | `/brain/social/adult/socialLeaderType` |
+| Adults can be alone for (0 = never lonely; the game's editor uses 0–1200) | `/brain/needs/adult/native/socialIsolationTime` |
+| Adults call the group, soonest and latest | `/brain/social/adult/socialCommunicationInterval/x`, `/y` |
+
+The game stores group sizes as Unity `Vector2Int` values. Data dumps made before Tyrant recorded them wrote them as an
+empty object (`{}`), so the card asks you to run the data dump again; a species saved before then gets the new rows
+from the template on its next save, keeping its other edits. Group sizes must be whole numbers of 0 or more (Save
+is refused otherwise: the game cannot load a species with 2.5 animals); the card warns when a fewest is more than its
+most or the soonest call is later than the latest. Babies have their own cohesion, call interval and loneliness values
+(`/brain/social/infant/...`, `/brain/needs/infant/native/socialIsolationTime`) in the Full animal record; the game blends
+them into the adult values as an animal grows.
+
 The **Full animal record** section exposes the remaining serialized fields, including
 diet, clade, popularity, dimensions, fence requirements, navigation, growth curves,
 and the brain's adult/infant needs, behaviors, social rules, mating, reproduction,

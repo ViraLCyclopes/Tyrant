@@ -67,7 +67,8 @@ public sealed partial class ModProject
         try { SpeciesStats.Validate(stats); }
         catch (ManifestException ex) { throw new TyrantException(TyrantErrorCode.ModInvalid, ex.Message); }
         var old = Manifest.Species[index];
-        var copiedFields = (old.Fields.Count > 0 ? old.Fields : template?.Fields ?? []).Select(f => f.Copy()).ToList();
+        var copiedFields = SpeciesDatabase.FillEmptyObjects(old.Fields.Count > 0 ? old.Fields : template?.Fields ?? [], template?.Fields)
+            .Select(f => f.Copy()).ToList();
         foreach (var pair in fields ?? new Dictionary<string, string>())
         {
             var field = copiedFields.FirstOrDefault(f => f.Path == pair.Key && f.Editable)
@@ -75,6 +76,9 @@ public sealed partial class ModProject
             field.Value = pair.Value;
             try { field.Validate(); }
             catch (ManifestException ex) { throw new TyrantException(TyrantErrorCode.ModInvalid, ex.Message); }
+            if (SpeciesDatabase.IsWholeNumberField(field.Path)
+                && !int.TryParse(field.Value, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out _))
+                throw new TyrantException(TyrantErrorCode.ModInvalid, $"{field.Path}: a group size must be a whole number of 0 or more.");
         }
         Manifest.Species[index] = new SpeciesEntry
         {

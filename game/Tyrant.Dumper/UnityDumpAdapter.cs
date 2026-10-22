@@ -91,6 +91,27 @@ namespace Tyrant.Dumper
                 case LayerMask mask:
                     w.Number((long)mask.value);
                     return true;
+                // The integer types keep their numbers in private fields (m_X…), so the field walk writes them as {}.
+                // Names are their properties', which the species record editor sets.
+                case Vector2Int v:
+                    w.StartObject();
+                    w.Name("x"); w.Number((long)v.x); w.Name("y"); w.Number((long)v.y);
+                    w.EndObject();
+                    return true;
+                case Vector3Int v:
+                    IntVector(w, v);
+                    return true;
+                case RectInt r:
+                    w.StartObject();
+                    w.Name("x"); w.Number((long)r.x); w.Name("y"); w.Number((long)r.y); w.Name("width"); w.Number((long)r.width); w.Name("height"); w.Number((long)r.height);
+                    w.EndObject();
+                    return true;
+                case BoundsInt b:
+                    w.StartObject();
+                    w.Name("position"); IntVector(w, b.position);
+                    w.Name("size"); IntVector(w, b.size);
+                    w.EndObject();
+                    return true;
                 default:
                     return false;
             }
@@ -100,6 +121,13 @@ namespace Tyrant.Dumper
         {
             w.StartObject();
             w.Name("x"); w.Number(v.x); w.Name("y"); w.Number(v.y); w.Name("z"); w.Number(v.z);
+            w.EndObject();
+        }
+
+        private static void IntVector(JsonWriter w, Vector3Int v)
+        {
+            w.StartObject();
+            w.Name("x"); w.Number((long)v.x); w.Name("y"); w.Number((long)v.y); w.Name("z"); w.Number((long)v.z);
             w.EndObject();
         }
     }
