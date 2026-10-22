@@ -524,3 +524,11 @@ Needs the game. Steps marked **(game)** start the game.
      a number bigger than the template's and **Leader** to Matriarch, **Save species**, install. In game the species'
      Nursery/info social needs reflect the new group size, and the log has no animal field errors. Setting a fewest above
      its most shows a warning on the card.
+161. Template pictures: on a custom species page based on Parasaurolophus Cyrtocristatus, **Nursery picture → Save template
+     picture…** offers `Parasaurolophus Cyrtocristatus nursery picture.png`; cancel: nothing is saved and nothing is logged.
+     Save it to a folder outside the workspace: the log says `Saved Parasaurolophus Cyrtocristatus's Nursery picture
+     (512×256) to …`, and the PNG is the animal on a transparent background. **Paleopedia picture → Save template
+     picture…** saves the 2048×1152 Paleopedia scene (its texture is misspelled in the game; it is still found). Saving
+     into the workspace's `mods` folder is refused ("… not to be shared or put in a mod"). The mod folder, Check and an
+     export have no trace of the pictures. From the CLI, `tyrant species save-picture "Allosaurus Anax" --paleopedia
+     --out <FILE.png>` prints the same kind of line.

@@ -242,6 +242,15 @@ another relative PNG path inside the mod. Check reports a picture PNG that is mi
 species' starting skin swatch is set under [Skins](#skins)) are separate. Language files and picture PNGs are included
 in mod exports and installs.
 
+**Save template picture…** (on each picture row) saves the template's own picture as a PNG wherever you choose, to
+design yours over: the Nursery picture with its transparent background (512×256), the Paleopedia picture as a full 16:9
+scene (2048×1152). From the CLI run `tyrant species save-picture <SPECIES> (--nursery | --paleopedia) --out <FILE.png>`
+with the template's (game) species id, for example `"Allosaurus Anax"`. It needs the data dump and the asset index.
+Tyrant follows the game's own references to find the picture (some textures are not named like their species), and it
+refuses to save into the workspace's `mods` folder or the game folder. These are the game's pictures, for your
+reference only: don't share them or ship them in a mod (see [TERMS.md](../TERMS.md)). Mod Check and exports never pick
+them up, as they are not in the mod.
+
 ### What the Paleopedia page shows
 
 A new species is listed in the Paleopedia's animal list like any animal. The Nursery panel's **Open Paleopedia** button
