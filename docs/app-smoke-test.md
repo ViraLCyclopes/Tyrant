@@ -529,3 +529,11 @@ Needs the game. Steps marked **(game)** start the game.
      on the vanilla template. Save it as **Whole species**, reload the park: hatched animals of the species keep the fur
      (the skin's own blank fur PNGs do not cover it). Iridescence tab on the same species with **Shimmer colours: Game's**:
      a note says the template has no shimmer colours of its own; **Colours** or **Thin film** shows a shimmer.
+162. Template pictures: on a custom species page based on Parasaurolophus Cyrtocristatus, **Nursery picture → Save template
+     picture…** offers `Parasaurolophus Cyrtocristatus nursery picture.png`; cancel: nothing is saved and nothing is logged.
+     Save it to a folder outside the workspace: the log says `Saved Parasaurolophus Cyrtocristatus's Nursery picture
+     (512×256) to …`, and the PNG is the animal on a transparent background. **Paleopedia picture → Save template
+     picture…** saves the 2048×1152 Paleopedia scene (its texture is misspelled in the game; it is still found). Saving
+     into the workspace's `mods` folder is refused ("… not to be shared or put in a mod"). The mod folder, Check and an
+     export have no trace of the pictures. From the CLI, `tyrant species save-picture "Allosaurus Anax" --paleopedia
+     --out <FILE.png>` prints the same kind of line.

@@ -29,7 +29,11 @@ export class FakePlatform implements Platform {
     return this.folders.shift() ?? null;
   }
 
-  async saveFile(): Promise<string | null> {
+  /** Each saveFile call's title, default path and extension, in order. */
+  readonly saveDialogs: { title: string; defaultPath: string; extension: string }[] = [];
+
+  async saveFile(title = '', defaultPath = '', extension = ''): Promise<string | null> {
+    this.saveDialogs.push({ title, defaultPath, extension });
     return this.saves.shift() ?? null;
   }
 

@@ -243,7 +243,11 @@ the data dump has no group sizes, run the data dump again from the Workspace tab
 the Nursery's species panel (a PNG; the game's are 512×256). It is not the Paleopedia page's picture.
 **Paleopedia picture**, below it, sets the big picture on the species' own Paleopedia page (also its row in the
 Paleopedia's animal list and its notifications; a 16:9 PNG, the game's are 2048×1152). Each has **Choose PNG…** and
-**Use template picture**, which goes back to the template's.
+**Use template picture**, which goes back to the template's. **Save template picture…** saves the template's own picture
+as a PNG wherever you choose, to design yours over (Nursery pictures have a transparent background; Paleopedia pictures
+are full 16:9 scenes); it needs the data dump and the asset index. These are the game's pictures, for your reference
+only: don't share them or put them in the mod (Tyrant will not save them into the mods folder). The CLI's
+`tyrant species save-picture` does the same.
 
 **Paleopedia text**, in the species form, is what its Paleopedia page says: the description, character notes and social
 info. Pick a language, type, and press **Save species**. Write English first: every other language uses the English text

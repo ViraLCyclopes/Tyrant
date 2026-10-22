@@ -127,18 +127,26 @@ public sealed class FakeAssetReader : IAssetReader
     public int Inspections => _inspections;
     public int Environments => _environments;
 
+    /// <summary>What Inspect returns for an asset's ref; assets not listed get <see cref="Inspection"/>.</summary>
+    public Dictionary<string, AssetInspection> InspectionOf { get; } = new(StringComparer.Ordinal);
+
     public AssetInspection Inspect(GameInstall install, AssetRecord asset)
     {
         Interlocked.Increment(ref _inspections);
         Fail(asset);
-        return Inspection;
+        return InspectionOf.GetValueOrDefault(asset.Ref) ?? Inspection;
     }
+
+    /// <summary>What WriteTexture reports for a texture's ref (default 64×32 DXT5), and the refs it wrote, in order.</summary>
+    public Dictionary<string, TextureFacts> TextureFactsOf { get; } = new(StringComparer.Ordinal);
+    public List<string> TexturesWritten { get; } = [];
 
     public TextureFacts WriteTexture(GameInstall install, AssetRecord texture, string pngPath)
     {
         Interlocked.Increment(ref _textures);
         Count();
         Fail(texture);
+        lock (TexturesWritten) TexturesWritten.Add(texture.Ref);
         if (RealPngs)
         {
             Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(pngPath))!);
@@ -147,7 +155,7 @@ public sealed class FakeAssetReader : IAssetReader
         }
         else
             Write(pngPath, "png");
-        return new TextureFacts(64, 32, "DXT5", 7, NormalMap.IsCandidate(texture.Name));
+        return TextureFactsOf.GetValueOrDefault(texture.Ref) ?? new TextureFacts(64, 32, "DXT5", 7, NormalMap.IsCandidate(texture.Name));
     }
 
     public ModelFacts WriteModel(GameInstall install, AssetRecord asset, string outputDir, AssetIndex? index = null)

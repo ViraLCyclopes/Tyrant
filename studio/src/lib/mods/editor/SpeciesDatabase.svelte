@@ -5,7 +5,7 @@
   import { onMount, untrack } from 'svelte';
   import { getSession } from '$lib/stores/session.svelte';
   import { getTab } from '$lib/shell/tab.svelte';
-  import type { ModAnimalDatabase, ModSpeciesTemplateDto, SpeciesRemoval, SpeciesSkinsRow } from '$lib/rpc/types.gen';
+  import type { ModAnimalDatabase, ModSpeciesTemplateDto, SpeciesRemoval, SpeciesSkinsRow, TemplatePictureKind } from '$lib/rpc/types.gen';
   import OpenInBlender from '$lib/blender/OpenInBlender.svelte';
   import RecordTree from './RecordTree.svelte';
   import SizeCard from './SizeCard.svelte';
@@ -199,6 +199,16 @@
     const png = await session.platform.openFile('Choose a Paleopedia picture PNG (16:9; the game uses 2048×1152)', ['png']);
     if (png) await doc.edit('mods.setSpeciesPaleopediaPicture', { speciesId: selected, png }, { undoable: false });
   }
+  /** Saves the template's own picture as a PNG where the user chooses (never into the mod): the game's, to design over. */
+  async function saveTemplatePicture(kind: TemplatePictureKind) {
+    const species = animal?.base;
+    if (!species) return;
+    const label = kind === 'nursery' ? 'Nursery picture' : 'Paleopedia picture';
+    const path = await session.platform.saveFile(`Save ${species}'s ${label} (the game's, for reference)`, `${species} ${kind} picture.png`, 'png');
+    if (!path) return;
+    const saved = await tab.safely(() => session.rpc.call('species.saveTemplatePicture', { species, kind, path }));
+    if (saved) tab.info(`Saved ${saved.species}'s ${label} (${saved.width}×${saved.height}) to ${saved.path}.`);
+  }
 </script>
 
 <section class="database" aria-label="Species database">
@@ -327,14 +337,18 @@
       <div class="toolbar">
         <button type="button" aria-label="Nursery picture: Choose PNG…" onclick={pickIcon}>Choose PNG…</button>
         <button type="button" aria-label="Nursery picture: Use template picture" disabled={!animal.icon} onclick={() => doc.edit('mods.setSpeciesIcon', { speciesId: selected, png: null }, { undoable: false })}>Use template picture</button>
+        <button type="button" aria-label="Nursery picture: Save template picture…" onclick={() => saveTemplatePicture('nursery')}>Save template picture…</button>
       </div>
+      <p class="hint">Save template picture… saves {animal.base}'s own as a PNG. Nursery pictures have a transparent background. These are the game's pictures, for designing yours over: don't share them or put them in the mod.</p>
       <h3>Paleopedia picture</h3>
       <p class="hint">The big picture on the species' own Paleopedia page (also its row in the Paleopedia's animal list, and its notifications). {animal.paleopediaPicture ? `Using ${animal.paleopediaPicture}.` : "Using the template's picture."} The game's are 2048×1152 (16:9) PNGs.</p>
       {#if animal.paleopediaPicture}<Thumb modId={doc.id} file={animal.paleopediaPicture} size={256} aspect={16 / 9} label="Paleopedia picture of {animal.name}" version="{doc.detail?.revision}|{doc.detail?.filesStamp}" />{/if}
       <div class="toolbar">
         <button type="button" aria-label="Paleopedia picture: Choose PNG…" onclick={pickPaleopediaPicture}>Choose PNG…</button>
         <button type="button" aria-label="Paleopedia picture: Use template picture" disabled={!animal.paleopediaPicture} onclick={() => doc.edit('mods.setSpeciesPaleopediaPicture', { speciesId: selected, png: null }, { undoable: false })}>Use template picture</button>
+        <button type="button" aria-label="Paleopedia picture: Save template picture…" onclick={() => saveTemplatePicture('paleopedia')}>Save template picture…</button>
       </div>
+      <p class="hint">Save template picture… saves {animal.base}'s own as a PNG. Paleopedia pictures are full 16:9 scenes. These are the game's pictures, for designing yours over: don't share them or put them in the mod.</p>
     {/if}
     {#if animal && !creating}
       <section class="skins" aria-label="Skins">

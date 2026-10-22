@@ -114,6 +114,21 @@ public sealed partial class AssetsMethods
         });
     }
 
+    /// <summary>
+    /// A game species' own Nursery or Paleopedia picture as a PNG where the user chose (the species page's Save template
+    /// picture…): the game's picture, for designing a custom species' picture over, never written into a mod.
+    /// </summary>
+    [RpcMethod("species.saveTemplatePicture")]
+    public SpeciesTemplatePictureResult SaveTemplatePicture(SpeciesTemplatePictureParams p)
+    {
+        var (ws, install) = _session.Current();
+        // The dump is checked first (its error says what to do); the cached index is only opened once that passed.
+        Tyrant.Core.Data.DataStore.Open(ws);
+        var (_, _, index) = Open();
+        var saved = Tyrant.Core.Mods.TemplatePictures.Save(ws, install, Reader, p.Species, p.Kind, p.Path, index);
+        return new SpeciesTemplatePictureResult(saved.Species, saved.Kind, saved.Texture, saved.Width, saved.Height, saved.Path);
+    }
+
     /// <summary>The species' IK chains in the game (FABRIK), as Open in Blender builds them into IK controls.</summary>
     [RpcMethod("species.ik")]
     public SpeciesIkResult Ik(SpeciesIkParams p)

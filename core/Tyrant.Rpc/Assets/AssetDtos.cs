@@ -104,6 +104,12 @@ public sealed record SpeciesRigInfoParams(string Species);
 public sealed record SpeciesRigInfoResult(string Species, int Bones, IReadOnlyList<string> ClipMoved, IReadOnlyList<string> GrowthMoved,
     IReadOnlyList<string> GrowthScaled, bool GrowthSupported, IReadOnlyList<string> Failures);
 
+/// <summary>species.saveTemplatePicture: a game species (a custom species' template) and the PNG to write (never inside a mod or the game folder).</summary>
+public sealed record SpeciesTemplatePictureParams(string Species, Tyrant.Core.Mods.TemplatePictureKind Kind, string Path);
+
+/// <summary>The game species' picture as saved: the species as the dump names it, the game texture and its size, the PNG written.</summary>
+public sealed record SpeciesTemplatePictureResult(string Species, Tyrant.Core.Mods.TemplatePictureKind Kind, string Texture, int Width, int Height, string Path);
+
 public sealed record SpeciesPackRunResult(string Directory, int Models, int Textures, int Failed, string TargetsPath, IReadOnlyList<string>? Notes = null);
 
 public sealed record EnvironmentOption(string Id, string Label);

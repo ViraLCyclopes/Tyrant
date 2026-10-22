@@ -67,6 +67,8 @@ public static class CliApp
                     .WithDescription("Show a species' purchase cost and basic stats from the game data (what a new species based on it inherits).");
                 species.AddCommand<SpeciesTexturesCommand>("textures")
                     .WithDescription("List a species' skin textures (to replace them in a mod with 'tyrant mod replace').");
+                species.AddCommand<SpeciesSavePictureCommand>("save-picture")
+                    .WithDescription("Save a game species' Nursery or Paleopedia picture as a PNG, to design a custom species' picture over (for reference: don't share it).");
                 species.AddCommand<SpeciesIkCommand>("ik")
                     .WithDescription("List a species' IK chains (Open in Blender builds them as IK controls).");
                 species.AddCommand<SpeciesAnimationsCommand>("animations").WithDescription("List a species' animations in the game (for Blender and exports).");
