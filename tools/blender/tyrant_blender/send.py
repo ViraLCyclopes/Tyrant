@@ -28,7 +28,8 @@ class SendError(Exception):
 
 
 def export(armature, path, fmt="glb"):
-    """Writes the .glb Tyrant builds (fmt "fbx" writes an .fbx of the same objects and state, for Export model for Tyrant) the model from: adult, rest pose, deforming bones only (Tyrant's IK bones stay out),
+    """Writes the model Tyrant builds from: the .glb Send passes on, or with fmt "fbx" (Export model for Tyrant…) an .fbx of the
+    same objects in the same state. Adult, rest pose, deforming bones only (Tyrant's IK bones stay out),
     materials as names and viewport colours only (Tyrant matches them by name; placeholder mode drops the names). Hidden
     objects go too (hidden only for the export's length), and at the object's own scale: the size Growth shows is not sent.
     Your pose and the Growth shown are as before afterwards."""
@@ -71,7 +72,8 @@ def _export(armature, path, fmt="glb"):
             obj.select_set(obj in objects)
         view_layer.objects.active = armature
         if fmt == "fbx":
-            # Blender's defaults, as measured to read back right through Tyrant's FBX reader (leaf bones kept: it ignores them).
+            # Blender's defaults (measured to read back right through Tyrant's FBX reader; leaf bones kept: it ignores them), except
+            # use_mesh_modifiers=False, which keeps the growth shape keys (as the glb's export_apply=False), and bake_anim=False.
             bpy.ops.export_scene.fbx(filepath=path, use_selection=True, object_types={"ARMATURE", "MESH"},
                                      use_armature_deform_only=False, add_leaf_bones=True, primary_bone_axis="Y",
                                      secondary_bone_axis="X", axis_forward="-Z", axis_up="Y", global_scale=1.0,
