@@ -108,6 +108,8 @@ namespace Tyrant.Framework
 
             if (changed)
                 foreach (var renderer in renderers) renderer.SetPropertyBlock(Block);
+            // The game's variation hook (looks) ran before this postfix: a look's fur masks go back over the skin's.
+            if (changed && addedSkin) MaterialsModule.AfterSkinTextures(animal);
         }
 
         /// <summary>A skin's PNGs for one sex onto Block; true when it set any.</summary>

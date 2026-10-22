@@ -524,3 +524,8 @@ Needs the game. Steps marked **(game)** start the game.
      a number bigger than the template's and **Leader** to Matriarch, **Save species**, install. In game the species'
      Nursery/info social needs reflect the new group size, and the log has no animal field errors. Setting a fewest above
      its most shows a warning on the card.
+161. **(game)** Grow fur and shimmer on a custom species with a starting skin copied from a furless template (e.g. one made
+     from Allosaurus Anax or Tyrannosaurus): the Nursery preview's **T** → Fur → **Grow fur** on, Length 0.3: fur shows, as
+     on the vanilla template. Save it as **Whole species**, reload the park: hatched animals of the species keep the fur
+     (the skin's own blank fur PNGs do not cover it). Iridescence tab on the same species with **Shimmer colours: Game's**:
+     a note says the template has no shimmer colours of its own; **Colours** or **Thin film** shows a shimmer.

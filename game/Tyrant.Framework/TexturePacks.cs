@@ -121,6 +121,7 @@ namespace Tyrant.Framework
                         done += n;
                     }
                 }
+                TextureCache.NoteFur(texture, replacement.Texture, entry.Format, entry.Width, entry.Height, data);
                 texture.Apply(false, true); // upload; no CPU copy kept
                 return texture;
             }

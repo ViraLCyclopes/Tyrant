@@ -45,6 +45,13 @@ namespace Tyrant.Framework.Core
         /// <summary>The mask choices of a scope: a species file cannot hold a mask from a skin slot ("from"), so it never offers one.</summary>
         public static IReadOnlyList<MaskKind> MaskKinds(LookScope scope) => scope == LookScope.Species ? SpeciesMasks : AllMasks;
 
+        /// <summary>
+        /// True when the shown colours are the game's but the species (a custom species': its template) has no ramp of its
+        /// own, so the shimmer shows nothing. <paramref name="ownRamp"/> is null while its material is not read yet (then
+        /// nothing is claimed).
+        /// </summary>
+        public static bool GameRampMissing(RampKind kind, bool? ownRamp) => kind == RampKind.Game && ownRamp == false;
+
         /// <summary>Game for no ramp and for the explicit "game" one.</summary>
         public static RampKind RampKindOf(RampSource? ramp) =>
             ramp == null || ramp.Game ? RampKind.Game : ramp.Species != null ? RampKind.Species : ramp.File != null ? RampKind.File

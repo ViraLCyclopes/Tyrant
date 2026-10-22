@@ -512,4 +512,13 @@ public class LookEditingTests
         Grow.SetAge(growing, null, gameLength: 0, null);
         Assert.Equal(LookEditing.StartFurLength, growing.Current.Settings["_Length"].Number); // grow still on: kept
     }
+
+    [Fact]
+    public void Game_colours_show_nothing_when_the_template_has_no_shimmer_of_its_own()
+    {
+        Assert.True(LookEditing.GameRampMissing(RampKind.Game, ownRamp: false));
+        Assert.False(LookEditing.GameRampMissing(RampKind.Game, ownRamp: true));
+        Assert.False(LookEditing.GameRampMissing(RampKind.ThinFilm, ownRamp: false));
+        Assert.False(LookEditing.GameRampMissing(RampKind.Game, ownRamp: null)); // its material is not read yet
+    }
 }

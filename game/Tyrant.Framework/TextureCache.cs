@@ -10,6 +10,17 @@ namespace Tyrant.Framework
     internal static class TextureCache
     {
         private static readonly Dictionary<string, Texture2D?> Cache = new Dictionary<string, Texture2D?>(StringComparer.OrdinalIgnoreCase);
+        private static readonly HashSet<Texture> NoFur = new HashSet<Texture>();
+
+        /// <summary>A skin fur mask Tyrant built that has no red anywhere: no fur, like the game's FurMaskEmpty (FurMaskContent).</summary>
+        public static bool HasNoFur(Texture texture) => NoFur.Contains(texture);
+
+        /// <summary>Notes a skin fur mask's content while its pixels are still in its buffer.</summary>
+        public static void NoteFur(Texture2D texture, string textureName, int format, int width, int height, Unity.Collections.NativeArray<byte> data)
+        {
+            if (FurMaskContent.IsSkinFurSlot(textureName) && FurMaskContent.HasNoFur(format, width, height, data.Length, i => data[i]))
+                NoFur.Add(texture);
+        }
 
         public static Texture2D? Get(Replacement replacement, SlotKind kind)
         {
@@ -63,6 +74,7 @@ namespace Tyrant.Framework
                     return null;
                 }
                 if (kind == SlotKind.Normal) PackNormals(texture, replacement, file);
+                NoteFur(texture, replacement.Texture, (int)texture.format, texture.width, texture.height, texture.GetRawTextureData<byte>());
                 if (texture.width % 4 == 0 && texture.height % 4 == 0) texture.Compress(true); // DXT5 (RGBA source)
                 else FrameworkMod.Log.Warning($"{replacement.ModId}: {file} is {texture.width}x{texture.height}; sizes divisible by 4 use less memory.");
                 texture.Apply(false, true); // no longer readable: frees the CPU copy

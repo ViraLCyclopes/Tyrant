@@ -108,6 +108,9 @@ namespace Tyrant.Framework
                 Option("Species", rampKind == RampKind.Species, true, () => PickSpecies(ramp?.Species, species => draft.SetRamp(new RampSource { Species = species }))),
             };
             Choices(null, ramps);
+            var template = SpeciesModule.TemplateOf(_context!.Species);
+            if (LookEditing.GameRampMissing(rampKind, SpeciesLooks.Values(template) == null ? (bool?)null : SpeciesLooks.Ramp(template) != null))
+                Note($"{SpeciesLooks.NameOf(template)} has no shimmer colours of its own, so Game's shows nothing: pick Thin film, Colours or Species.");
             if (rampKind == RampKind.ThinFilm)
             {
                 var index = ramp!.ThinFilm!.Index;
