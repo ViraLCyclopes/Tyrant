@@ -100,7 +100,7 @@ namespace Tyrant.Framework
             }
             var data = texture.GetRawTextureData<byte>();
             var pixels = texture.width * texture.height;
-            var step = Math.Max(1, pixels / 4096);
+            var step = NormalMaps.SampleStep(pixels);
             var sample = new byte[(pixels + step - 1) / step * 4];
             for (int p = 0, s = 0; p < pixels && s < sample.Length; p += step, s += 4)
             {

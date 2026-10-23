@@ -50,7 +50,7 @@ public static class TexturePackExtractor
     {
         var pixels = rgba.Length / 4;
         if (pixels == 0) return false;
-        var step = Math.Max(1, pixels / 4096);
+        var step = NormalMaps.SampleStep(pixels);
         double red = 0, gap = 0;
         var samples = 0;
         for (var p = 0; p < pixels; p += step)
