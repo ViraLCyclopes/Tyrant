@@ -7,6 +7,9 @@
     <Using Include="Xunit" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="..\Tyrant.Framework.Tests\NormalMapsFixture.cs" Link="NormalMapsFixture.cs" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\..\core\Tyrant.Core\Tyrant.Core.csproj" />
     <ProjectReference Include="..\..\game\Tyrant.Dumper.Serialization\Tyrant.Dumper.Serialization.csproj" />
   </ItemGroup>

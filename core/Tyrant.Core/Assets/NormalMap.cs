@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Tyrant.Framework.Core;
 
 namespace Tyrant.Core.Assets;
 
@@ -22,7 +23,7 @@ public static partial class NormalMap
     {
         var pixels = rgba.Length / 4;
         if (pixels == 0) return false;
-        var step = Math.Max(1, pixels / 4096);
+        var step = NormalMaps.SampleStep(pixels);
         double red = 0, greenBlueGap = 0, alpha = 0, alphaSquares = 0;
         var samples = 0;
         for (var p = 0; p < pixels; p += step)

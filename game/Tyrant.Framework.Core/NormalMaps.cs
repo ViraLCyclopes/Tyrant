@@ -16,12 +16,23 @@ namespace Tyrant.Framework.Core
 
     public static class NormalMaps
     {
+        /// <summary>
+        /// The step between pixels sampled to judge an image (about 4096 samples). Always odd: textures are power-of-two wide,
+        /// and an even step can be a whole number of rows (on 4096 x 4096 it is one row), so every sample would fall in the
+        /// same column, often an atlas's empty edge.
+        /// </summary>
+        public static int SampleStep(int pixels)
+        {
+            var step = Math.Max(1, pixels / 4096);
+            return step | 1;
+        }
+
         /// <summary>Judges up to ~4096 sampled RGBA pixels; the packed rule matches Tyrant's exporter, so exports round-trip.</summary>
         public static NormalMapKind Classify(byte[] rgba)
         {
             var pixels = rgba.Length / 4;
             if (pixels == 0) return NormalMapKind.Unknown;
-            var step = Math.Max(1, pixels / 4096);
+            var step = SampleStep(pixels);
             double r = 0, g = 0, b = 0, a = 0, aa = 0, gb = 0;
             var n = 0;
             for (var p = 0; p < pixels; p += step)

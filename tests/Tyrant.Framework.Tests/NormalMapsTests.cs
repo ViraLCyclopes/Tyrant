@@ -19,6 +19,31 @@ public class NormalMapsTests
     }
 
     [Fact]
+    public void A_packed_map_with_a_flat_left_edge_is_judged_from_all_its_columns()
+    {
+        // 64 x 4096: about 4096 samples one width apart all fall in column 0, as on a 4096 x 4096 map (Gallimimus' adult normal).
+        var map = NormalMapsFixture.PackedWithFlatLeftColumn(64, 4096);
+
+        Assert.Equal(NormalMapKind.Packed, NormalMaps.Classify(map));
+    }
+
+    [Theory]
+    [InlineData(4096 * 4096)]
+    [InlineData(2048 * 2048)]
+    [InlineData(64 * 4096)]
+    public void The_sample_step_is_odd_so_samples_cross_every_power_of_two_width(int pixels)
+    {
+        Assert.Equal(1, NormalMaps.SampleStep(pixels) % 2);
+    }
+
+    [Fact]
+    public void Small_images_are_read_pixel_by_pixel()
+    {
+        Assert.Equal(1, NormalMaps.SampleStep(3));
+        Assert.Equal(1, NormalMaps.SampleStep(8191));
+    }
+
+    [Fact]
     public void Packing_moves_x_to_alpha_keeps_y_and_fills_red()
     {
         var pixels = Pixels((200, 90, 240, 255));

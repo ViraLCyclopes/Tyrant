@@ -33,6 +33,13 @@ public class NormalMapTests
     }
 
     [Fact]
+    public void A_packed_map_with_a_flat_left_edge_is_recognised()
+    {
+        // 64 x 4096 samples like a 4096 x 4096 map: a step of one width would read only the flat left column.
+        Assert.True(NormalMap.LooksPacked(Tyrant.Framework.Tests.NormalMapsFixture.PackedWithFlatLeftColumn(64, 4096)));
+    }
+
+    [Fact]
     public void Unpack_rebuilds_x_y_z_from_alpha_and_green()
     {
         byte[] pixels = [255, 128, 128, 128, 255, 128, 0, 255];
