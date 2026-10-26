@@ -176,10 +176,8 @@ public sealed partial class ModsMethods
         mod.SetSpecies(p.SpeciesId, p.Name, p.Genus, p.Epithet, p.Cost, p.Stats, p.DataFields, template, p.Localization);
         if (p.Behaviour != null)
         {
-            var profile = template == null ? null : BehaviourCatalog.TemplateProfile(template.Fields);
-            var rules = profile == null ? null : BehaviourCatalog.Load(ws).Profiles.FirstOrDefault(x => x.Asset == profile)?.Rules;
             mod.SetSpeciesBehaviour(p.SpeciesId, new SpeciesBehaviour { StartFrom = p.Behaviour.StartFrom, Rules = p.Behaviour.Rules.ToList() },
-                rules == null ? null : new BehaviourBasis(profile!, rules));
+                BehaviourCatalog.Basis(BehaviourCatalog.Load(ws), template?.Fields));
         }
         if (p.Texts != null) mod.SetSpeciesTexts(p.SpeciesId, p.Texts);
     }, "updated species " + p.SpeciesId);

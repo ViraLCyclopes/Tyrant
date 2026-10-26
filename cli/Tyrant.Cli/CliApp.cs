@@ -149,6 +149,7 @@ public static class CliApp
                 mod.AddCommand<ModRemoveSpeciesCommand>("remove-species").WithDescription("Remove a custom species with its skins, models, sounds and (unless --keep-files) files.");
                 mod.AddCommand<ModAddStartingSkinCommand>("add-starting-skin").WithDescription("Give a custom species an editable starting skin (copied from a game skin, or your PNGs).");
                 mod.AddCommand<ModSetSpeciesSkinCommand>("set-species-skin").WithDescription("Set a custom species' starting skin, its name and its swatch PNG.");
+                mod.AddCommand<ModSetSpeciesBehaviourCommand>("set-species-behaviour").WithDescription("Set a custom species' behaviour: the profile it starts from and its aggression rules (--list shows the choices).");
                 mod.AddCommand<ModSetStartingSkinCommand>("set-starting-skin").WithDescription("Make one of a custom species' skins its starting (default) skin; the old one stays as an ordinary skin.");
                 mod.AddCommand<ModSkinPortraitCommand>("set-skin-portrait").WithDescription("Set or clear one of a skin's in-game portraits.");
                 mod.AddCommand<ModSpeciesPortraitCommand>("set-species-portrait").WithDescription("Set or clear one of a custom species' starting skin portraits.");

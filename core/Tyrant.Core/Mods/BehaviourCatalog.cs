@@ -61,6 +61,14 @@ public static class BehaviourCatalog
         catch (JsonException) { return null; }
     }
 
+    /// <summary>The template's own profile and that profile's rules, or null when either is unknown (no dump).</summary>
+    public static BehaviourBasis? Basis(BehaviourCatalogData catalog, IReadOnlyList<AnimalField>? templateFields)
+    {
+        var profile = templateFields == null ? null : TemplateProfile(templateFields);
+        var rules = profile == null ? null : catalog.Profiles.FirstOrDefault(x => x.Asset == profile)?.Rules;
+        return rules == null ? null : new BehaviourBasis(profile!, rules);
+    }
+
     static string Text(JsonElement root, string property) =>
         root.TryGetProperty(property, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString()! : "";
 
