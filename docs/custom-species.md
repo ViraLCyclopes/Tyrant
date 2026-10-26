@@ -73,7 +73,7 @@ The database has ten tables:
 | `animal_starting_skin` | `species_id`, `skin`, `name`, `swatch` | Starting skin: the template skin number, optional name and swatch PNG (see [Skins](#skins)) |
 | `animal_portraits` | `species_id`, `slot`, `file` | Starting skin portraits: slot (`adultMale` … `infantLeucistic`) to PNG path (see [Skins](#skins)) |
 | `animal_behaviour` | `species_id`, `start_from` | The behaviour profile a species starts from, when its behaviour is its own (see [Diet, behaviour and habitat](#diet-behaviour-and-habitat)) |
-| `animal_behaviour_rules` | `species_id`, `position`, `rule` | That species' behaviour rules, in order; primary key is `(species_id, rule)` |
+| `animal_behaviour_rules` | `species_id`, `position`, `rule` | That species' behaviour rules; primary key is `(species_id, rule)`. The rule order is worked out when the game loads the species (see [Behaviour](#behaviour)); `position` doesn't change it |
 
 `PRAGMA user_version` is `7`. Existing v1–v6 databases upgrade on their next save (version 6 lets `animal_assets` hold the `paleopedia` slot; version 7 adds the two behaviour tables). Species ids are unique; a stat references its species
 id. Enable foreign keys when editing. If you create the database manually, use the
@@ -461,14 +461,16 @@ tyrant mod remove-species my-animal-pack example-animal -w <workspace>
 sets a species' behaviour (see [Behaviour](#behaviour)). It needs the game data dump.
 
 - `--list` lists the profiles you can use (with the base-game species that use them) and the rules.
-- `--start-from <PROFILE>` starts from that profile and replaces the rules with that profile's rules.
+- `--start-from <PROFILE>` starts from that profile and replaces the rules with that profile's rules. Like the
+  Behaviour card, it also sets the record's Confidence, Temperament and Cannibalism to that profile's.
 - `--add-rule <RULE>` and `--remove-rule <RULE>` add or remove a rule; each can be given more than once. Without
   `--start-from` they change the species' current rules.
-- `--reset` goes back to the template's behaviour. It cannot be combined with the other options.
+- `--reset` goes back to the template's behaviour, and puts Confidence, Temperament and Cannibalism back to the
+  template profile's. It cannot be combined with the other options.
 
 Profiles and rules can be given by asset name (`CombatProfile_PredatorActive`, `Aggression_Predation`), without the
-prefix (`PredatorActive`, `Predation`) or by plain name (`"Active predator"`, `"Hunts prey"`), in any case. Confidence,
-temperament, cannibalism and the other record values are set in the app or with SQL.
+prefix (`PredatorActive`, `Predation`) or by plain name (`"Active predator"`, `"Hunts prey"`), in any case. Other
+choices for confidence, temperament, cannibalism and the other record values are set in the app or with SQL.
 
 ```powershell
 tyrant mod set-species-behaviour my-animal-pack example-animal --list -w <workspace>

@@ -106,9 +106,10 @@ public sealed partial class ModProject
     /// <summary>
     /// The species' combat behaviour: the profile it starts from and the rules it keeps. When it equals the basis (the template's
     /// own profile and rules) nothing is stored, so the species follows its template. Otherwise any edits to the template's
-    /// rule rows are dropped, because the behaviour builds the rule list itself.
+    /// rule rows are dropped, because the behaviour builds the rule list itself. <paramref name="values"/> are record rows saved with it
+    /// (path → value; rows the record lacks are skipped), such as the start profile's confidence, temperament and cannibalism.
     /// </summary>
-    public void SetSpeciesBehaviour(string id, SpeciesBehaviour behaviour, BehaviourBasis? basis)
+    public void SetSpeciesBehaviour(string id, SpeciesBehaviour behaviour, BehaviourBasis? basis, IReadOnlyDictionary<string, string>? values = null)
     {
         var entry = Manifest.Species.FirstOrDefault(s => s.Id == id)
             ?? throw new TyrantException(TyrantErrorCode.TargetNotFound, "Species not found: " + id);
@@ -120,6 +121,8 @@ public sealed partial class ModProject
         entry.Behaviour = same ? null : new SpeciesBehaviour { StartFrom = behaviour.StartFrom, Rules = behaviour.Rules.ToList() };
         if (!same)
             foreach (var field in entry.Fields.Where(f => SpeciesBehaviours.IsRuleField(f.Path))) field.Value = field.TemplateValue;
+        foreach (var pair in values ?? new Dictionary<string, string>())
+            if (entry.Fields.FirstOrDefault(f => f.Path == pair.Key && f.Editable) is { } field) field.Value = pair.Value;
         try { SaveSpecies(); }
         catch
         {

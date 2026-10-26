@@ -34,7 +34,7 @@ public class SpeciesCliTests : IDisposable
             Add(Ai + "AnimalBrain", "Allo", 2, "{\"combat\":{\"shared\":{\"combatProfile\":{\"$ref\":{\"type\":\"" + Ai + "AnimalCombatProfile\",\"name\":\"CombatProfile_PredatorApex\",\"id\":3}}}}}");
             Add(Ai + "AnimalCombatProfile", "CombatProfile_PredatorApex", 3, "{\"confidenceLevel\":\"Confident\",\"temperament\":\"Aggressive\",\"cannibalism\":\"None\",\"aggressionProfileEntries\":["
                 + Link("Aggression_Predation", 4) + "," + Link("Aggression_NestDefense", 5) + "]}");
-            Add(Ai + "AnimalCombatProfile", "CombatProfile_Deer", 6, "{\"confidenceLevel\":\"Timid\",\"temperament\":\"Passive\",\"cannibalism\":\"None\",\"aggressionProfileEntries\":[" + Link("Aggression_PreyFleeFromPredator", 7) + "]}");
+            Add(Ai + "AnimalCombatProfile", "CombatProfile_Deer", 6, "{\"confidenceLevel\":\"Timid\",\"temperament\":\"Passive\",\"cannibalism\":\"WhenStarving\",\"aggressionProfileEntries\":[" + Link("Aggression_PreyFleeFromPredator", 7) + "]}");
         }
         Add(Var, "A_M", 10, "{\"$type\":\"x\",\"$name\":\"A_M\",\"$id\":10,\"adultDiffuseMap\":{\"m_AssetGUID\":\"" + SkinDumps.MaleDiffuse
             + "\"},\"adultNormalMap\":{\"m_AssetGUID\":\"" + SkinDumps.MaleNormal + "\"}}");
@@ -49,6 +49,15 @@ public class SpeciesCliTests : IDisposable
 
     private static Tyrant.Framework.Core.SpeciesBehaviour? StoredBehaviour(string ws) =>
         Tyrant.Framework.Core.AnimalDatabaseFile.Read(Path.Combine(ws, "mods", "mod-a", Tyrant.Framework.Core.AnimalDatabaseFile.FileName)).Single().Behaviour;
+
+    const string ProfileRow = "/brain/combat/shared/combatProfile/";
+
+    /// <summary>The stored record's confidence, temperament and cannibalism.</summary>
+    private static string[] ProfileValues(string ws)
+    {
+        var fields = Tyrant.Framework.Core.AnimalDatabaseFile.Read(Path.Combine(ws, "mods", "mod-a", Tyrant.Framework.Core.AnimalDatabaseFile.FileName)).Single().Fields;
+        return new[] { "confidenceLevel", "temperament", "cannibalism" }.Select(n => fields.Single(f => f.Path == ProfileRow + n).Value).ToArray();
+    }
 
     private static string ModJson(string ws) => File.ReadAllText(Path.Combine(ws, "mods", "mod-a", "mod.json"));
 
@@ -263,10 +272,12 @@ public class SpeciesCliTests : IDisposable
         var stored = StoredBehaviour(ws)!;
         Assert.Equal("CombatProfile_Deer", stored.StartFrom);
         Assert.Equal(["Aggression_PreyFleeFromPredator", "Aggression_PreyFleeWithFamily"], stored.Rules);
+        Assert.Equal(["Timid", "Passive", "WhenStarving"], ProfileValues(ws)); // what the game starts from, as the Behaviour card shows
 
         var removed = Run("mod", "set-species-behaviour", "mod-a", "mirabilis", "--remove-rule", "PreyFleeFromPredator", "-w", ws);
         Assert.True(removed.Code == ExitCodes.Ok, removed.Err);
         Assert.Contains("behaviour from Deer, 1 rules", removed.Out);
+        Assert.Equal(["Timid", "Passive", "WhenStarving"], ProfileValues(ws));
     }
 
     [Fact]
@@ -277,12 +288,14 @@ public class SpeciesCliTests : IDisposable
         Assert.Equal(ExitCodes.Ok, AddMirabilis(ws).Code);
         Assert.Equal(ExitCodes.Ok, Run("mod", "set-species-behaviour", "mod-a", "mirabilis", "--start-from", "Deer", "-w", ws).Code);
         Assert.Equal("CombatProfile_Deer", StoredBehaviour(ws)!.StartFrom);
+        Assert.Equal(["Timid", "Passive", "WhenStarving"], ProfileValues(ws));
 
         var (code, output, err) = Run("mod", "set-species-behaviour", "mod-a", "mirabilis", "--reset", "-w", ws);
 
         Assert.True(code == ExitCodes.Ok, err);
         Assert.Contains("tyrant.mod-a.mirabilis: template behaviour", output);
         Assert.Null(StoredBehaviour(ws));
+        Assert.Equal(["Confident", "Aggressive", "None"], ProfileValues(ws));
         Assert.Equal(ExitCodes.Error, Run("mod", "set-species-behaviour", "mod-a", "mirabilis", "--reset", "--start-from", "Deer", "-w", ws).Code);
     }
 

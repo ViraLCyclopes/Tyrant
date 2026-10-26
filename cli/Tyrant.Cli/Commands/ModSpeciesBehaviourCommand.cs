@@ -50,10 +50,13 @@ public sealed class ModSetSpeciesBehaviourCommand : Command<ModSetSpeciesBehavio
         var basis = BehaviourCatalog.Basis(catalog, SpeciesDatabase.Template(ws, entry.Base)?.Fields);
 
         SpeciesBehaviour behaviour;
+        // Like the Behaviour card: a new start profile (or the template's, on reset) also brings its three choices into the record.
+        BehaviourProfileInfo? valuesFrom = null;
         if (settings.Reset)
         {
             if (basis == null) throw new TyrantException(TyrantErrorCode.ModInvalid, NeedsDump);
             behaviour = new SpeciesBehaviour { StartFrom = basis.Profile, Rules = basis.Rules.ToList() };
+            valuesFrom = catalog.Profiles.FirstOrDefault(p => p.Asset == basis.Profile);
         }
         else if (settings.StartFrom is not null)
         {
@@ -62,6 +65,7 @@ public sealed class ModSetSpeciesBehaviourCommand : Command<ModSetSpeciesBehavio
             var profile = catalog.Profiles.FirstOrDefault(p => p.Asset == asset)
                 ?? throw new TyrantException(TyrantErrorCode.ModInvalid, catalog.Profiles.Count == 0 ? NeedsDump : $"The game data dump has no profile '{asset}'. See --list.");
             behaviour = new SpeciesBehaviour { StartFrom = asset, Rules = profile.Rules.ToList() };
+            valuesFrom = profile;
         }
         else
         {
@@ -76,12 +80,17 @@ public sealed class ModSetSpeciesBehaviourCommand : Command<ModSetSpeciesBehavio
         }
         foreach (var text in settings.RemoveRule) behaviour.Rules.Remove(ResolveRule(text));
 
-        mod.SetSpeciesBehaviour(entry.Id, behaviour, basis);
+        mod.SetSpeciesBehaviour(entry.Id, behaviour, basis, valuesFrom == null ? null : ProfileValues(valuesFrom));
         var stored = mod.Manifest.Species.First(s => s.Id == entry.Id).Behaviour;
         Console.WriteLine(stored is null ? $"{entry.Key(mod.Id)}: template behaviour"
             : $"{entry.Key(mod.Id)}: behaviour from {SpeciesBehaviours.Profiles.First(p => p.Asset == stored.StartFrom).Name}, {stored.Rules.Count} rules");
         return ExitCodes.Ok;
     }
+
+    /// <summary>The profile's confidence, temperament and cannibalism by record path; a value the dump lacks is left as it is.</summary>
+    static Dictionary<string, string> ProfileValues(BehaviourProfileInfo profile) =>
+        SpeciesBehaviours.ProfileValuePaths.Zip([profile.Confidence, profile.Temperament, profile.Cannibalism])
+            .Where(pair => pair.Second != "").ToDictionary(pair => pair.First, pair => pair.Second);
 
     static string ResolveRule(string text) => SpeciesBehaviours.ResolveRule(text)
         ?? throw new TyrantException(TyrantErrorCode.ModInvalid, $"No behaviour rule '{text}'. See --list.");
