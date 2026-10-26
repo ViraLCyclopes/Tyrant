@@ -145,8 +145,8 @@ namespace Tyrant.Framework
                         return AnimalFieldEditor.ShallowClone(value);
                     });
                     // The species' own profile first: record edits then land on its copy, never on the vanilla one.
-                    if (entry.Behaviour != null) SpeciesBehaviourBuilder.Apply(data, entry.Behaviour, originals, id);
-                    fieldEditor.Apply(data, SpeciesBehaviours.FieldsToApply(entry));
+                    if (entry.Behaviour != null) SpeciesBehaviourBuilder.Apply(data, entry.Behaviour, originals, id, fieldEditor);
+                    fieldEditor.Apply(data, SpeciesBehaviours.FieldsToApply(entry), f => SpeciesBehaviours.AlwaysApply(entry, f));
                     data.name = id;
                     Set(data, "speciesID", id);
                     Set(data, "shortSpeciesID", id);

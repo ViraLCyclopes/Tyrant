@@ -115,6 +115,23 @@ public class SpeciesBehaviourTests
     }
 
     [Fact]
+    public void With_a_behaviour_the_three_profile_rows_apply_even_at_their_template_value()
+    {
+        AnimalField Row(string name, string value) =>
+            new() { Path = SpeciesBehaviours.ProfilePath + "/" + name, Kind = "text", Value = value, TemplateValue = value, Editable = true };
+        var confidence = Row("confidenceLevel", "Confident");
+        var temperament = Row("temperament", "Aggressive");
+        var cannibalism = Row("cannibalism", "None");
+        var other = Row("someOtherValue", "1");
+        var entry = new SpeciesEntry { Fields = [confidence, temperament, cannibalism, other] };
+
+        Assert.DoesNotContain(entry.Fields, f => SpeciesBehaviours.AlwaysApply(entry, f));
+
+        entry.Behaviour = new SpeciesBehaviour { StartFrom = "CombatProfile_PredatorApex", Rules = [] };
+        Assert.Equal([confidence, temperament, cannibalism], entry.Fields.Where(f => SpeciesBehaviours.AlwaysApply(entry, f)));
+    }
+
+    [Fact]
     public void IsRuleField_matches_the_rules_path_and_children()
     {
         Assert.True(SpeciesBehaviours.IsRuleField(SpeciesBehaviours.RulesPath));

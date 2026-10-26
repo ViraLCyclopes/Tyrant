@@ -43,6 +43,66 @@ public class AnimalFieldEditorTests
     }
 
     [Fact]
+    public void A_row_at_its_template_value_is_applied_only_when_forced()
+    {
+        var source = new Animal();
+        var copy = (Animal)AnimalFieldEditor.ShallowClone(source);
+        copy.diet = Diet.Herbivore; // as if something before the editor changed it
+        var editor = new AnimalFieldEditor(source, copy, _ => false, AnimalFieldEditor.ShallowClone);
+        var row = Edit("/diet", "Carnivore", "Carnivore", "text");
+
+        editor.Apply(copy, [row]);
+        Assert.Equal(Diet.Herbivore, copy.diet);
+
+        editor.Apply(copy, [row], f => f.Path == "/diet");
+        Assert.Equal(Diet.Carnivore, copy.diet);
+    }
+
+    // Like the game's brain: rows with a Parent back to the brain asset, and a shared profile asset at the end.
+    private sealed class Species { public Mind mind = new(); }
+    private sealed class Mind { public Species? animalData; public Fight combat = new(); public Senses senses = new(); }
+    private sealed class Fight { public Mind? Parent; public FightShared shared = new(); }
+    private sealed class FightShared { public Mind? Parent; public float rangeMult = 0.5f; public Profile? profile; }
+    private sealed class Senses { public Mind? Parent; public float range = 10; }
+    private sealed class Profile { public string confidence = "Confident"; }
+
+    [Fact]
+    public void Replace_puts_an_owned_value_at_a_path_and_rebinds_parents_to_the_copies()
+    {
+        var vanillaProfile = new Profile();
+        var source = new Species();
+        source.mind.animalData = source;
+        source.mind.combat.Parent = source.mind;
+        source.mind.combat.shared.Parent = source.mind;
+        source.mind.combat.shared.profile = vanillaProfile;
+        source.mind.senses.Parent = source.mind;
+        var copy = (Species)AnimalFieldEditor.ShallowClone(source);
+        var editor = new AnimalFieldEditor(source, copy, o => o is Mind or Profile, AnimalFieldEditor.ShallowClone);
+        var own = new Profile { confidence = "Fearless" };
+
+        editor.Replace(copy, "/mind/combat/shared/profile", own);
+        editor.Apply(copy, [Edit("/mind/combat/shared/profile/confidence", "Skittish", "Confident", "text"), Edit("/mind/senses/range", "20", "10")]);
+
+        var mind = copy.mind;
+        Assert.NotSame(source.mind, mind);
+        Assert.Same(own, mind.combat.shared.profile);
+        Assert.Equal("Skittish", own.confidence); // edited in place, not cloned again
+        Assert.Same(mind, mind.combat.Parent);
+        Assert.Same(mind, mind.combat.shared.Parent);
+        Assert.Same(mind, mind.senses.Parent);
+        Assert.Same(copy, mind.animalData);
+        Assert.Equal(20, mind.senses.range);
+        // The source graph is untouched.
+        Assert.Same(vanillaProfile, source.mind.combat.shared.profile);
+        Assert.Equal("Confident", vanillaProfile.confidence);
+        Assert.Same(source.mind, source.mind.combat.Parent);
+        Assert.Same(source.mind, source.mind.combat.shared.Parent);
+        Assert.Same(source, source.mind.animalData);
+        Assert.Equal(10, source.mind.senses.range);
+        Assert.Throws<ManifestException>(() => editor.Replace(copy, "/mind/combat/shared/profile", "not a profile"));
+    }
+
+    [Fact]
     public void An_integer_pair_like_vector2int_is_set_through_its_properties_and_written_back()
     {
         var source = new Animal();

@@ -17,7 +17,11 @@ namespace Tyrant.Framework
         // An entry with no rule asset (inline-only) has no rule name; it is always kept where it is.
         private const string Inline = "";
 
-        public static void Apply(ScriptableObject data, SpeciesBehaviour behaviour, IReadOnlyList<object> vanillaAnimals, string owner)
+        /// <summary>
+        /// Puts the species' own profile on <paramref name="data"/> through <paramref name="editor"/>, which copies the brain, its combat
+        /// and shared rows on the way down and points their back-references (Parent, animalData) at the copies.
+        /// </summary>
+        public static void Apply(ScriptableObject data, SpeciesBehaviour behaviour, IReadOnlyList<object> vanillaAnimals, string owner, AnimalFieldEditor editor)
         {
             var profiles = new Dictionary<string, ScriptableObject>(StringComparer.Ordinal);
             foreach (var animal in vanillaAnimals)
@@ -48,15 +52,12 @@ namespace Tyrant.Framework
             // Set by hand: the copy must not depend on Odin carrying the array over.
             entriesField.SetValue(copy, entries);
 
-            // The species' own brain, cloned the way AnimalFieldEditor clones on write: Instantiate the asset, shallow-clone the rows.
-            if (!(Get(data, "brain") is ScriptableObject brain) || brain == null) throw new InvalidOperationException($"{owner}: the template has no brain");
-            var ownBrain = UnityEngine.Object.Instantiate(brain);
-            var combat = AnimalFieldEditor.ShallowClone(Get(ownBrain, "combat") ?? throw new MissingFieldException("AnimalBrain.combat"));
-            var shared = AnimalFieldEditor.ShallowClone(Get(combat, "shared") ?? throw new MissingFieldException("AnimalBrainCombat.shared"));
-            Put(shared, "combatProfile", copy);
-            Put(combat, "shared", shared);
-            Put(ownBrain, "combat", combat);
-            Put(data, "brain", ownBrain);
+            try { editor.Replace(data, SpeciesBehaviours.ProfilePath, copy); }
+            catch
+            {
+                UnityEngine.Object.Destroy(copy);
+                throw;
+            }
             FrameworkMod.Log.Msg($"{owner}: own behaviour profile from {behaviour.StartFrom}, {slots.Count} rules.");
         }
 
@@ -81,10 +82,5 @@ namespace Tyrant.Framework
         private static string RuleOf(object entry) => Get(entry, "asset") is UnityEngine.Object asset && asset != null ? asset.name : Inline;
 
         private static object? Get(object? target, string name) => target == null ? null : Members.Get(target, name);
-
-        private static void Put(object target, string name, object value)
-        {
-            if (!Members.Set(target, name, value)) throw new MissingFieldException(target.GetType().FullName, name);
-        }
     }
 }

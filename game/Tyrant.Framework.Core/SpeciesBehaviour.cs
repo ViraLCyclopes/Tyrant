@@ -96,6 +96,19 @@ namespace Tyrant.Framework.Core
         public static IEnumerable<AnimalField> FieldsToApply(SpeciesEntry entry) =>
             entry.Behaviour == null ? entry.Fields : entry.Fields.Where(f => !IsRuleField(f.Path));
 
+        /// <summary>The start profile's choices the Behaviour card shows and writes into the record.</summary>
+        public static readonly IReadOnlyList<string> ProfileValuePaths = new[]
+        {
+            ProfilePath + "/confidenceLevel", ProfilePath + "/temperament", ProfilePath + "/cannibalism",
+        };
+
+        /// <summary>
+        /// Rows to apply even at their template value: with a behaviour the species starts from its copy of the start profile, not the
+        /// template's, so a record value equal to the template's still has to replace the start profile's.
+        /// </summary>
+        public static bool AlwaysApply(SpeciesEntry entry, AnimalField field) =>
+            entry.Behaviour != null && ProfileValuePaths.Contains(field.Path);
+
         /// <summary>The profile asset a name refers to (asset name, name without CombatProfile_, or plain name; any case), or null.</summary>
         public static string? ResolveProfile(string text) => Resolve(Profiles, ProfilePrefix, text);
 
