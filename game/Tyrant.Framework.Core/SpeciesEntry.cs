@@ -31,6 +31,9 @@ namespace Tyrant.Framework.Core
         /// <summary>The starting skin's portraits: slot (PortraitSlots.All) → PNG in the mod; a slot left out keeps the template's.</summary>
         public Dictionary<string, string> Portraits { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
 
+        /// <summary>The combat behaviour (starting profile and rules); null keeps the template's profile.</summary>
+        public SpeciesBehaviour? Behaviour { get; set; }
+
         /// <summary>Stable save identity, independent of display names and mod load order.</summary>
         public string Key(string modId) => "tyrant." + modId + "." + Id;
 
@@ -51,6 +54,7 @@ namespace Tyrant.Framework.Core
             if (StartingSkinName != null) map["startingSkinName"] = StartingSkinName;
             if (Swatch != null) map["swatch"] = Swatch;
             if (Portraits.Count > 0) map["portraits"] = PortraitSlots.All.Where(Portraits.ContainsKey).ToDictionary(k => k, k => (object?)Portraits[k]);
+            if (Behaviour != null) map["behaviour"] = Behaviour.ToMap();
             return map;
         }
     }
