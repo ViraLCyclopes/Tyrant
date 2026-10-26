@@ -41,7 +41,7 @@
   <div class="grid">
     {@render pick(heightPath, 'Fence height', FENCE_HEIGHT)}
     {@render pick(strengthPath, 'Fence strength', FENCE_STRENGTH)}
-    {@render pick(waterPath, 'Water', WATER)}
+    {@render pick(waterPath, 'Water liking', WATER)}
     {#if has(depthPath)}
       <label>Minimum water depth (m)
         <input type="number" min="0" step="any" value={valueAt(depthPath)} oninput={(e) => (values[depthPath] = e.currentTarget.value)} />

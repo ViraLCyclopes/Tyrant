@@ -106,14 +106,14 @@
     <label>Start from
       <select value={start} onchange={startFrom}>
         {#if !startProfile}<option value="" disabled selected>Pick a profile</option>{/if}
-        {#each profiles as p (p.asset)}<option value={p.asset}>{p.name} (used by {p.usedBy.join(', ')})</option>{/each}
+        {#each profiles as p (p.asset)}<option value={p.asset}>{p.name}{p.usedBy.length ? ` (used by ${p.usedBy.join(', ')})` : ''}</option>{/each}
       </select>
     </label>
-    {#if !startProfile}<span class="hint">The template's profile isn't in your game data dump.</span>{/if}
+    {#if !startProfile}<span class="hint">The template's profile isn't in your game data dump. Pick a profile to start from, then tick its rules.</span>{/if}
     <h4>Rules</h4>
     <div class="rules">
       {#each rules as r (r.asset)}
-        <label class="check"><input type="checkbox" checked={ticks.includes(r.asset)} onchange={(e) => toggle(r.asset, e.currentTarget.checked)} />{r.name}{#if r.shownInGame} <span class="hint">shown in game</span>{/if}</label>
+        <label class="check"><input type="checkbox" checked={ticks.includes(r.asset)} disabled={!startProfile} onchange={(e) => toggle(r.asset, e.currentTarget.checked)} />{r.name}{#if r.shownInGame} <span class="hint">shown in game</span>{/if}</label>
       {/each}
     </div>
   {/if}

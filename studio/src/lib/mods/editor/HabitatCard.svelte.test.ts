@@ -26,17 +26,17 @@ describe('Habitat card', () => {
 
   it('water_liking_writes_StrongLike', async () => {
     const values = setup();
-    const select = screen.getByRole('combobox', { name: 'Water' }) as HTMLSelectElement;
+    const select = screen.getByRole('combobox', { name: 'Water liking' }) as HTMLSelectElement;
     expect(select.value).toBe('MediumDislike');
     expect(screen.getByRole('option', { name: 'Dislikes water' })).toBeInTheDocument();
     await fireEvent.change(select, { target: { value: 'StrongLike' } });
     expect(values['/waterAffinity']).toBe('StrongLike');
   });
 
-  it('a_missing_waterAffinity_row_hides_Water', () => {
+  it('a_missing_waterAffinity_row_hides_Water_liking', () => {
     const { '/waterAffinity': _w, ...rest } = base;
     setup(rest);
-    expect(screen.queryByRole('combobox', { name: 'Water' })).toBeNull();
+    expect(screen.queryByRole('combobox', { name: 'Water liking' })).toBeNull();
     expect(screen.getByRole('combobox', { name: 'Fence height' })).toBeInTheDocument();
   });
 

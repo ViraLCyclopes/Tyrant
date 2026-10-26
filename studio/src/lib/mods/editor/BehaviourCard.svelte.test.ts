@@ -82,6 +82,21 @@ describe('Behaviour card', () => {
     expect(s.behaviour).toEqual({ startFrom: 'Prey', rules: ['Hunt'] });
   });
 
+  it('rule_ticks_wait_for_a_profile_when_the_templates_is_not_in_the_dump', async () => {
+    const s = setup({ template: 'Missing' });
+    expect(box('Hunts prey').disabled).toBe(true);
+    expect(box('Flees').disabled).toBe(true);
+    await fireEvent.change(screen.getByRole('combobox', { name: 'Start from' }), { target: { value: 'Prey' } });
+    await waitFor(() => expect(s.behaviour).toEqual({ startFrom: 'Prey', rules: ['Flee'] }));
+    expect(box('Hunts prey').disabled).toBe(false);
+  });
+
+  it('a_profile_no_species_uses_has_no_used_by', () => {
+    setup({ profs: [...profiles, { ...profiles[1], asset: 'Lone', name: 'Lone', usedBy: [] }] });
+    expect(screen.getByRole('option', { name: 'Lone' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Prey (used by Dryo)' })).toBeInTheDocument();
+  });
+
   it('empty_catalogue_shows_the_dump_hint_and_keeps_fighting_fields', () => {
     setup({ profs: [], template: null });
     expect(screen.getByText('Behaviour profiles need a game data dump. Run Dump in Game first.')).toBeInTheDocument();

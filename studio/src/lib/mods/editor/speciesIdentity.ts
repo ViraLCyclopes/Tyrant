@@ -34,6 +34,11 @@ export function nicheProblems(label: string, flags: string[]): string[] {
   return found;
 }
 
+/** The rules that make a species hunt live prey: always, or when starving. */
+const HUNTING_RULES = ['Aggression_Predation', 'Aggression_PredationStarving'];
+/** Whether a species with these behaviour rules hunts live prey. */
+export const huntsPrey = (rules: readonly string[]): boolean => rules.some((r) => HUNTING_RULES.includes(r));
+
 /** Warnings (not errors) from the diet (null when the template has no diet, which skips the diet warnings) with the niches of the ages the template has. */
 export function dietWarnings(diet: string[] | null, niches: string[][], hasPredation: boolean): string[] {
   const found: string[] = [];

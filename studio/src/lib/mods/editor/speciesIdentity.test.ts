@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DIET_ORDER, NICHE_ORDER, dietWarnings, formatFlags, nicheProblems, parseFlags } from './speciesIdentity';
+import { DIET_ORDER, NICHE_ORDER, dietWarnings, formatFlags, huntsPrey, nicheProblems, parseFlags } from './speciesIdentity';
 
 describe('flags text', () => {
   it('formatFlags_keeps_enum_order', () => {
@@ -35,4 +35,13 @@ describe('dietWarnings', () => {
   });
   it('skips the diet warnings when the template has no diet', () => expect(dietWarnings(null, [['Large', 'Predator']], true)).toEqual([]));
   it('is quiet when all fits', () => expect(dietWarnings(['Carnivore'], [['Large', 'Predator']], true)).toEqual([]));
+});
+
+describe('huntsPrey', () => {
+  it('counts either hunting rule', () => {
+    expect(huntsPrey(['Aggression_Predation'])).toBe(true);
+    expect(huntsPrey(['Aggression_PredationStarving', 'Aggression_NestDefense'])).toBe(true);
+    expect(huntsPrey(['Aggression_NestDefense'])).toBe(false);
+    expect(huntsPrey([])).toBe(false);
+  });
 });

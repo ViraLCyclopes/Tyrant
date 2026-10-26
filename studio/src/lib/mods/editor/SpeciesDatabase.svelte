@@ -15,6 +15,7 @@
   import SocialCard from './SocialCard.svelte';
   import SpeciesSoundsCard from './SpeciesSoundsCard.svelte';
   import Thumb from './Thumb.svelte';
+  import { huntsPrey } from './speciesIdentity';
   import type { AddedSound } from '$lib/sounds/audio';
   import type { ModDoc } from './modDoc.svelte';
 
@@ -158,7 +159,7 @@
   /** Whether the species hunts: its ticked rules, else the template's (unknown without a data dump, so no warning). */
   const hasPredation = $derived.by(() => {
     const ticked = behaviour?.rules ?? templateRules;
-    return ticked ? ticked.includes('Aggression_Predation') : true;
+    return ticked ? huntsPrey(ticked) : true;
   });
   const ruleRowsEdited = () => (animal?.dataFields ?? []).some((f) => f.editable && isRuleField(f.path) && (dataValues[f.path] ?? f.value) !== f.templateValue);
 

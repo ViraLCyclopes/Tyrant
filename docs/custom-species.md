@@ -224,7 +224,8 @@ Grazer, Browser, Omnivore, Predator or Scavenger (the game would not accept it).
 - **Eating carcasses needs Meat plus a Predator or Scavenger role** (at any age). With Meat but neither role, the
   species only eats meat from feeders.
 - A Predator without Meat hunts but can't eat what it kills.
-- **Hunting live prey needs the "Hunts prey" rule** on the Behaviour card. A Predator whose behaviour lacks it won't hunt.
+- **Hunting live prey needs the "Hunts prey" rule** (or "Hunts when starving") on the Behaviour card. A Predator whose
+  behaviour has neither won't hunt.
   For example, a meat eater made from Triceratops keeps Triceratops's Territorial tank behaviour, which has no "Hunts
   prey" rule, until you tick it or start from a predator's profile.
 
@@ -238,7 +239,8 @@ one that fits. The base-game species share 22 profiles. The card needs the game 
   Picking another sets the rule ticks, Confidence, Temperament and Cannibalism to that profile's; if you have changed
   them, Tyrant asks first.
 - **Rules** are the 23 rules the base-game profiles use; tick or untick them. Rules marked "shown in game" are the ones
-  the game's own animal panels list.
+  the game's own animal panels list. If the template's profile isn't in the data dump, the ticks wait until you pick a
+  profile to start from.
 - **Confidence**, **Temperament** and **Cannibalism** are the record's `/brain/combat/shared/combatProfile/...` values.
 - **Fighting strength**: lethality, defence and cooperation for adults and babies, attack range ×, cannibalism chance
   and whether it can fight while swimming (`/brain/combat/...`).
@@ -260,7 +262,7 @@ template's too.
 
 - **Fence height** (1 m, 2.5 m, 4 m or 6 m) and **Fence strength** (None to Extreme): the fences the species needs
   (`/MinFenceHeight`, `/MinFenceStrength`).
-- **Water**, from "Hates water" to "Loves water": how much it likes or avoids walking through water (`/waterAffinity`).
+- **Water liking**, from "Hates water" to "Loves water": how much it likes or avoids walking through water (`/waterAffinity`).
   Whether it swims depends on how deep the water is against its body, not on this.
 - **Minimum water depth** (`/minimumWaterDepth`) only shows in the Paleopedia; it doesn't change behaviour.
 
