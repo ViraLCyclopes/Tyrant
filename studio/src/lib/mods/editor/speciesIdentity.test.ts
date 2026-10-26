@@ -29,5 +29,10 @@ describe('dietWarnings', () => {
   it('warns about meat without Predator or Scavenger', () => expect(dietWarnings(['Carnivore'], [['Large', 'Grazer']], true)).toEqual([meat]));
   it('warns about Predator without meat', () => expect(dietWarnings(['Herbivore'], [['Large', 'Predator']], true)).toEqual([noMeat]));
   it('warns about Predator without a hunts-prey rule', () => expect(dietWarnings(['Carnivore'], [['Large', 'Predator']], false)).toEqual([noRule]));
+  it('does not count a Piscivore as eating meat', () => {
+    expect(dietWarnings(['Piscivore'], [['Large', 'Grazer']], true)).toEqual([]);
+    expect(dietWarnings(['Piscivore'], [['Large', 'Predator']], true)).toEqual([noMeat]);
+  });
+  it('skips the diet warnings when the template has no diet', () => expect(dietWarnings(null, [['Large', 'Predator']], true)).toEqual([]));
   it('is quiet when all fits', () => expect(dietWarnings(['Carnivore'], [['Large', 'Predator']], true)).toEqual([]));
 });

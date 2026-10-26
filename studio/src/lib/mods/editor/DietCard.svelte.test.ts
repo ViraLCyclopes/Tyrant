@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
+import { tick } from 'svelte';
 import { describe, expect, it } from 'vitest';
 import type { ModAnimalFieldDto } from '$lib/rpc/types.gen';
 import DietCard from './DietCard.svelte';
@@ -39,8 +40,16 @@ describe('Diet and niche card', () => {
   });
 
   it('no food makes valid false', async () => {
-    setup({ ...base, '/diet': '' });
+    const list = Object.entries({ ...base, '/diet': '' }).map(([p, v]) => field(p, v));
+    let valid = true;
+    const values = $state({ ...base, '/diet': 'Herbivore' });
+    render(DietCard, { fields: list, values, hasPredation: true, get valid() { return valid; }, set valid(v: boolean) { valid = v; } });
+    await tick();
+    expect(valid).toBe(true);
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Plants' }));
+    await tick();
     expect(screen.getByText('Tick at least one food.')).toBeInTheDocument();
+    expect(valid).toBe(false);
   });
 
   it('shows a warning for Predator without a hunts-prey rule', () => {

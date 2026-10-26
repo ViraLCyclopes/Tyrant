@@ -22,7 +22,7 @@
     ages.forEach(([, label], i) => found.push(...nicheProblems(label, niches[i])));
     return found;
   });
-  const warnings = $derived(dietWarnings(hasDiet ? diet : [], niches, hasPredation));
+  const warnings = $derived(dietWarnings(hasDiet ? diet : null, niches, hasPredation));
   $effect(() => {
     valid = problems.length === 0;
   });

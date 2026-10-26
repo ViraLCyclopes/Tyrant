@@ -23,8 +23,8 @@ export const NICHE_ORDER: readonly string[] = [...NICHE_SIZES, 'NicheSizeAggress
 export const NICHE_AGES: readonly (readonly [string, string])[] = [['/niches/infantNiche', 'Baby'], ['/niches/adolescentNiche', 'Juvenile'], ['/niches/adultNiche', 'Adult']];
 
 const FEEDING_ROLES = ['Grazer', 'Browser', 'Omnivore', 'Predator', 'Scavenger'];
-/** Foods that are meat (a Piscivore's fish counts: it eats what it hunts). */
-const MEAT = ['Carnivore', 'Piscivore'];
+/** Foods that count as meat: the game only lets Carnivores eat carcasses and hunted meat. */
+const MEAT = ['Carnivore'];
 
 /** Errors for one age's niche flags: it needs a size and a feeding role. */
 export function nicheProblems(label: string, flags: string[]): string[] {
@@ -34,14 +34,14 @@ export function nicheProblems(label: string, flags: string[]): string[] {
   return found;
 }
 
-/** Warnings (not errors) from the diet with the niches of the ages the template has. */
-export function dietWarnings(diet: string[], niches: string[][], hasPredation: boolean): string[] {
+/** Warnings (not errors) from the diet (null when the template has no diet, which skips the diet warnings) with the niches of the ages the template has. */
+export function dietWarnings(diet: string[] | null, niches: string[][], hasPredation: boolean): string[] {
   const found: string[] = [];
-  const eatsMeat = diet.some((d) => MEAT.includes(d));
+  const eatsMeat = diet?.some((d) => MEAT.includes(d)) ?? false;
   const predator = niches.some((n) => n.includes('Predator'));
-  if (eatsMeat && niches.length && !niches.some((n) => n.includes('Predator') || n.includes('Scavenger')))
+  if (diet && eatsMeat && niches.length && !niches.some((n) => n.includes('Predator') || n.includes('Scavenger')))
     found.push("Eats meat but has no Predator or Scavenger role, so it will only eat meat from feeders. It won't eat carcasses.");
-  if (predator && !eatsMeat) found.push("Has a Predator role but doesn't eat meat, so it will hunt but can't eat what it kills.");
+  if (diet && predator && !eatsMeat) found.push("Has a Predator role but doesn't eat meat, so it will hunt but can't eat what it kills.");
   if (predator && !hasPredation) found.push('Has a Predator role, but its behaviour has no "Hunts prey" rule, so it won\'t hunt.');
   return found;
 }
