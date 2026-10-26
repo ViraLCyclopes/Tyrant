@@ -60,7 +60,7 @@ Export and installation use SQLite snapshots, including committed edits in a WAL
 The running game uses the installed copy; install the mod again and restart the
 game to apply workspace edits.
 
-The database has eight tables:
+The database has ten tables:
 
 | Table | Columns | Purpose |
 |---|---|---|
@@ -72,8 +72,10 @@ The database has eight tables:
 | `animal_prefabs` | `species_id`, `bundle`, `asset` | Optional Unity AssetBundle and lowercase prefab asset path |
 | `animal_starting_skin` | `species_id`, `skin`, `name`, `swatch` | Starting skin: the template skin number, optional name and swatch PNG (see [Skins](#skins)) |
 | `animal_portraits` | `species_id`, `slot`, `file` | Starting skin portraits: slot (`adultMale` … `infantLeucistic`) to PNG path (see [Skins](#skins)) |
+| `animal_behaviour` | `species_id`, `start_from` | The behaviour profile a species starts from, when its behaviour is its own (see [Diet, behaviour and habitat](#diet-behaviour-and-habitat)) |
+| `animal_behaviour_rules` | `species_id`, `position`, `rule` | That species' behaviour rules; primary key is `(species_id, rule)`. The rule order is worked out when the game loads the species (see [Behaviour](#behaviour)); `position` doesn't change it |
 
-`PRAGMA user_version` is `6`. Existing v1–v5 databases upgrade on their next save (version 6 lets `animal_assets` hold the `paleopedia` slot). Species ids are unique; a stat references its species
+`PRAGMA user_version` is `7`. Existing v1–v6 databases upgrade on their next save (version 6 lets `animal_assets` hold the `paleopedia` slot; version 7 adds the two behaviour tables). Species ids are unique; a stat references its species
 id. Enable foreign keys when editing. If you create the database manually, use the
 schema in [animal-database-schema.sql](animal-database-schema.sql).
 
@@ -102,6 +104,28 @@ Add a distinct species using a template id from your data dump:
 INSERT INTO animal_species (id, template, name, genus, epithet, cost)
 VALUES ('example-animal', 'Allosaurus Anax', 'Example animal', 'Example', 'animal', 25000);
 ```
+
+Give a species its own behaviour: start from the Active predator profile and keep three rules (see
+[Behaviour](#behaviour) for the names):
+
+```sql
+PRAGMA foreign_keys = ON;
+BEGIN;
+
+INSERT OR REPLACE INTO animal_behaviour (species_id, start_from)
+VALUES ('example-animal', 'CombatProfile_PredatorActive');
+
+DELETE FROM animal_behaviour_rules WHERE species_id = 'example-animal';
+INSERT INTO animal_behaviour_rules (species_id, position, rule) VALUES
+  ('example-animal', 0, 'Aggression_Predation'),
+  ('example-animal', 1, 'Aggression_NestDefense'),
+  ('example-animal', 2, 'Aggression_FightOwnSpecies');
+
+COMMIT;
+```
+
+Delete the species' rows from both tables to give it its template's behaviour again. A species with rules needs its
+`animal_behaviour` row, each rule may be listed only once, and unknown profile or rule names are errors.
 
 Delete a stat row to inherit that stat. Set `cost = NULL` to inherit the template's
 purchase cost. Local ids use 3–64 lowercase letters, digits and hyphens, with no
@@ -172,6 +196,77 @@ reference swaps are not supported by this editor. Asset expansion follows up to 
 links (brain, module config, profile), stopping cycles and world/build databases.
 This exposes serialized species settings, not computed properties, executable behaviors,
 or every global game parameter. Editing dimensions does not physically reshape a mesh.
+
+## Diet, behaviour and habitat
+
+Three more cards follow the Social card, for a mod's new species: **Diet and niche**, **Behaviour** and **Habitat**.
+Like the Social card, they edit values of the full animal record with plain names and are saved with **Save species**.
+A value a card doesn't list is shown as it is, so nothing changes unless you pick something else.
+
+### Diet and niche
+
+**Food** ticks what the species eats: Plants, Meat, Insects, Fish and Fruit (the record's `/diet`, which uses the
+game's names Herbivore, Carnivore, Insectivore, Piscivore and Frugivore). Kibble is kept when the template has it; the
+game's own menus don't show it.
+
+**Niche** has one column per age (Baby, Juvenile and Adult; `/niches/infantNiche`, `adolescentNiche` and `adultNiche`): a
+size (Tiny to Huge) and roles. Niches decide who hunts whom and who are rivals:
+
+- A Predator hunts smaller animals (but not ones more than two sizes smaller), and same-size animals that aren't
+  predators.
+- **Hunts bigger prey** lets it take bigger prey too. **Pack hunter** lets it hunt in packs.
+- Two animals with a shared role and the same size are rivals. **Fights same-size rivals** widens that to one size
+  either way.
+
+**Save species** is refused while the card shows an error: no food ticked, or an age without a size or without one of
+Grazer, Browser, Omnivore, Predator or Scavenger (the game would not accept it). Warnings don't stop a save:
+
+- **Eating carcasses needs Meat plus a Predator or Scavenger role** (at any age). With Meat but neither role, the
+  species only eats meat from feeders.
+- A Predator without Meat hunts but can't eat what it kills.
+- **Hunting live prey needs the "Hunts prey" rule** (or "Hunts when starving") on the Behaviour card. A Predator whose
+  behaviour has neither won't hunt.
+  For example, a meat eater made from Triceratops keeps Triceratops's Territorial tank behaviour, which has no "Hunts
+  prey" rule, until you tick it or start from a predator's profile.
+
+### Behaviour
+
+The game gives each animal a behaviour profile: how brave it is, how it treats other animals, and a list of **rules**
+such as "Hunts prey", "Guards its nest" or "Flees predators". The game checks the rules in order and uses the first
+one that fits. The base-game species share 22 profiles. The card needs the game data dump (run **Dump in Game** first).
+
+- **Start from** picks the profile, by plain name with the base-game species that use it. It starts at the template's.
+  Picking another sets the rule ticks, Confidence, Temperament and Cannibalism to that profile's; if you have changed
+  them, Tyrant asks first.
+- **Rules** are the 23 rules the base-game profiles use; tick or untick them. Rules marked "shown in game" are the ones
+  the game's own animal panels list. If the template's profile isn't in the data dump, the ticks wait until you pick a
+  profile to start from.
+- **Confidence**, **Temperament** and **Cannibalism** are the record's `/brain/combat/shared/combatProfile/...` values.
+- **Fighting strength**: lethality, defence and cooperation for adults and babies, attack range ×, cannibalism chance
+  and whether it can fight while swimming (`/brain/combat/...`).
+- **Clade**: animals of the same clade count as relatives for some game checks, and it groups the species in the
+  Nursery.
+
+The game gives the species its own copy of the profile, so editing it never changes the template or any other species.
+Rules the starting profile has keep its order; an added rule goes where the base-game profiles put it (so "Hunts prey"
+comes first, as in every base-game predator).
+
+When the start profile and the ticked rules are the template's own, nothing extra is stored and the species follows its
+template. Otherwise they are stored in `animal_behaviour` and `animal_behaviour_rules`, and the Full animal record hides
+the profile's rule rows (`.../combatProfile/aggressionProfileEntries`) and says **Rules are set on the Behaviour card.**
+The species' rule list is rebuilt, so those rows no longer line up with it. If you had edited those rows, saving such a
+behaviour drops the edits; Tyrant asks before it does. **Reset stats to template** puts the behaviour back to the
+template's too.
+
+### Habitat
+
+- **Fence height** (1 m, 2.5 m, 4 m or 6 m) and **Fence strength** (None to Extreme): the fences the species needs
+  (`/MinFenceHeight`, `/MinFenceStrength`).
+- **Water liking**, from "Hates water" to "Loves water": how much it likes or avoids walking through water (`/waterAffinity`).
+  Whether it swims depends on how deep the water is against its body, not on this.
+- **Minimum water depth** (`/minimumWaterDepth`) only shows in the Paleopedia; it doesn't change behaviour.
+
+Plant coverage, water, temperature and bed are in Animal stats; space per animal is on the Social card.
 
 ## Localization
 
@@ -362,6 +457,28 @@ tyrant mod set-species-paleopedia-picture my-animal-pack example-animal --png pa
 tyrant mod set-species-text my-animal-pack example-animal description --file description.txt -w <workspace>
 tyrant mod set-species-text my-animal-pack example-animal description --lang fr --text "Un grand prédateur." -w <workspace>
 tyrant mod remove-species my-animal-pack example-animal -w <workspace>
+```
+
+`tyrant mod set-species-behaviour <ID> <SPECIES-ID> [--start-from <PROFILE>] [--add-rule <RULE>]... [--remove-rule <RULE>]... [--reset] [--list]`
+sets a species' behaviour (see [Behaviour](#behaviour)). It needs the game data dump.
+
+- `--list` lists the profiles you can use (with the base-game species that use them) and the rules.
+- `--start-from <PROFILE>` starts from that profile and replaces the rules with that profile's rules. Like the
+  Behaviour card, it also sets the record's Confidence, Temperament and Cannibalism to that profile's.
+- `--add-rule <RULE>` and `--remove-rule <RULE>` add or remove a rule; each can be given more than once. Without
+  `--start-from` they change the species' current rules.
+- `--reset` goes back to the template's behaviour, and puts Confidence, Temperament and Cannibalism back to the
+  template profile's. It cannot be combined with the other options.
+
+Profiles and rules can be given by asset name (`CombatProfile_PredatorActive`, `Aggression_Predation`), without the
+prefix (`PredatorActive`, `Predation`) or by plain name (`"Active predator"`, `"Hunts prey"`), in any case. Other
+choices for confidence, temperament, cannibalism and the other record values are set in the app or with SQL.
+
+```powershell
+tyrant mod set-species-behaviour my-animal-pack example-animal --list -w <workspace>
+tyrant mod set-species-behaviour my-animal-pack example-animal --start-from "Active predator" -w <workspace>
+tyrant mod set-species-behaviour my-animal-pack example-animal --add-rule "Hunts prey" --remove-rule FightOwnSpecies -w <workspace>
+tyrant mod set-species-behaviour my-animal-pack example-animal --reset -w <workspace>
 ```
 
 Use the app or SQL for other stats. The CLI's `mod add-skin` and `mod replace-model`

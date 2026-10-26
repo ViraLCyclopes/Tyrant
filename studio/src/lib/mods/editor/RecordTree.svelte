@@ -32,13 +32,18 @@
 <script lang="ts">
   import { SvelteSet } from 'svelte/reactivity';
 
-  let { fields, values = $bindable() }: { fields: ModAnimalFieldDto[]; values: Record<string, string> } = $props();
+  /** `hidden` leaves rows out of the outline (their values stay in `values`); `hiddenNote` says why, while any row is left out. */
+  let { fields: all, values = $bindable(), hidden, hiddenNote }: {
+    fields: ModAnimalFieldDto[]; values: Record<string, string>; hidden?: (path: string) => boolean; hiddenNote?: string;
+  } = $props();
 
   const MAX_MATCHES = 200;
   const GENERAL = ' general';
   let search = $state('');
   let onlyChanged = $state(false);
   const open = new SvelteSet<string>([GENERAL]);
+  const fields = $derived(hidden ? all.filter((f) => !hidden(f.path)) : all);
+  const hiding = $derived(fields.length < all.length);
 
   const isChanged = (f: ModAnimalFieldDto) => f.editable && (values[f.path] ?? f.value) !== f.templateValue;
   const filtering = $derived(onlyChanged || search.trim() !== '');
@@ -78,6 +83,7 @@
 
 <label>Search fields <input bind:value={search} placeholder="hitPoints, needs, diet, growth…" /></label>
 <label class="check"><input type="checkbox" bind:checked={onlyChanged} /> Only changed from the template</label>
+{#if hiding && hiddenNote}<p class="hint">{hiddenNote}</p>{/if}
 <p class="hint">
   {#if !filtering}{fields.length} fields. Open a section to see its fields.
   {:else if matches.length > MAX_MATCHES}Showing {MAX_MATCHES} of {matches.length} matches; narrow the search to see the rest.

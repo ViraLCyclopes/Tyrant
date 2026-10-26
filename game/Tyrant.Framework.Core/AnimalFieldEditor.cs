@@ -97,25 +97,42 @@ namespace Tyrant.Framework.Core
             return Convert.ChangeType(value, type, CultureInfo.InvariantCulture);
         }
 
-        public void Apply(object root, IEnumerable<AnimalField> fields)
+        /// <summary>Applies each editable row that differs from its template value, and each row <paramref name="always"/> picks even when it does not.</summary>
+        public void Apply(object root, IEnumerable<AnimalField> fields, Func<AnimalField, bool>? always = null)
         {
-            foreach (var field in fields.Where(f => f.Editable && f.Value != f.TemplateValue))
+            foreach (var field in fields.Where(f => f.Editable && (f.Value != f.TemplateValue || (always != null && always(f)))))
             {
                 field.Validate();
-                var parts = field.Path.Substring(1).Split('/').Select(p => p.Replace("~1", "/").Replace("~0", "~")).ToArray();
-                try { Set(root, parts, 0, field.Value); }
+                try { Set(root, Parts(field.Path), 0, type => ConvertValue(field.Value, type)); }
                 catch (Exception ex) { throw new ManifestException(field.Path + ": " + ex.GetBaseException().Message); }
             }
         }
 
-        private object Set(object target, string[] path, int index, string value)
+        /// <summary>
+        /// Puts <paramref name="value"/> at <paramref name="path"/>, copying everything above it on the way down exactly like an edit, so
+        /// back-references (Parent, animalData) point at the copies. The value is the caller's own: later edits under it change it in place.
+        /// </summary>
+        public void Replace(object root, string path, object value)
+        {
+            _owned.Add(value);
+            try
+            {
+                Set(root, Parts(path), 0, type => type.IsInstanceOfType(value) ? value
+                    : throw new ManifestException("Expected " + type.Name + ", not " + value.GetType().Name + "."));
+            }
+            catch (Exception ex) { throw new ManifestException(path + ": " + ex.GetBaseException().Message); }
+        }
+
+        private static string[] Parts(string path) => path.Substring(1).Split('/').Select(p => p.Replace("~1", "/").Replace("~0", "~")).ToArray();
+
+        private object Set(object target, string[] path, int index, Func<Type, object> leaf)
         {
             var name = path[index];
             if (target is IDictionary dictionary)
             {
                 if (!dictionary.Contains(name)) throw new ManifestException("Dictionary key no longer exists: " + name);
                 var child = dictionary[name] ?? throw new ManifestException("Null dictionary value.");
-                dictionary[name] = index == path.Length - 1 ? ConvertValue(value, child.GetType()) : Set(Copy(child, true), path, index + 1, value);
+                dictionary[name] = index == path.Length - 1 ? leaf(child.GetType()) : Set(Copy(child, true), path, index + 1, leaf);
                 return target;
             }
             if (target is IList list)
@@ -123,7 +140,7 @@ namespace Tyrant.Framework.Core
                 var at = int.Parse(name, CultureInfo.InvariantCulture);
                 if (at < 0 || at >= list.Count) throw new ManifestException("Array index no longer exists.");
                 var child = list[at] ?? throw new ManifestException("Null array element.");
-                list[at] = index == path.Length - 1 ? ConvertValue(value, child.GetType()) : Set(Copy(child, true), path, index + 1, value);
+                list[at] = index == path.Length - 1 ? leaf(child.GetType()) : Set(Copy(child, true), path, index + 1, leaf);
                 return target;
             }
             var field = Field(target.GetType(), name);
@@ -131,12 +148,12 @@ namespace Tyrant.Framework.Core
             if (field == null && (property == null || !property.CanRead || !property.CanWrite)) throw new MissingMemberException(target.GetType().FullName, name);
             var type = field?.FieldType ?? property!.PropertyType;
             object? next;
-            if (index == path.Length - 1) next = ConvertValue(value, type);
+            if (index == path.Length - 1) next = leaf(type);
             else
             {
                 var child = field != null ? field.GetValue(target) : property!.GetValue(target, null);
                 if (child == null) throw new ManifestException("Cannot descend into null " + name);
-                next = Set(Copy(child, true), path, index + 1, value);
+                next = Set(Copy(child, true), path, index + 1, leaf);
             }
             if (field != null) field.SetValue(target, next); else property!.SetValue(target, next, null);
             return target;

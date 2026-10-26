@@ -92,7 +92,7 @@ public class AnimalDatabaseTests
         var saved = Assert.Single(AnimalDatabaseFile.Read(path));
         Assert.Equal(source.Portraits, saved.Portraits);
         Assert.NotEqual(before, AnimalDatabaseFile.Snapshot([saved]));
-        Assert.Equal("6", Sqlite(path, "PRAGMA user_version;"));
+        Assert.Equal("7", Sqlite(path, "PRAGMA user_version;"));
 
         saved.Portraits.Clear();
         AnimalDatabaseFile.Save(path, [saved]);
@@ -114,7 +114,7 @@ public class AnimalDatabaseTests
         Assert.Equal(("icons/new-animal.png", "icons/new-animal-paleopedia.png"), (saved.Icon, saved.PaleopediaPicture));
         Assert.NotEqual(before, AnimalDatabaseFile.Snapshot([saved]));
         Assert.Equal("paleopedia", Sqlite(path, "SELECT slot FROM animal_assets WHERE file='icons/new-animal-paleopedia.png';"));
-        Assert.Equal("6", Sqlite(path, "PRAGMA user_version;"));
+        Assert.Equal("7", Sqlite(path, "PRAGMA user_version;"));
 
         saved.PaleopediaPicture = null;
         AnimalDatabaseFile.Save(path, [saved]);
@@ -134,7 +134,7 @@ public class AnimalDatabaseTests
     }
 
     [Fact]
-    public void A_version_5_file_keeps_its_icon_and_saves_as_version_6_with_a_paleopedia_picture()
+    public void A_version_5_file_keeps_its_icon_and_saves_as_the_current_version_with_a_paleopedia_picture()
     {
         var path = PathToDatabase();
         var animal = Animal();
@@ -150,7 +150,7 @@ public class AnimalDatabaseTests
 
         var upgraded = Assert.Single(AnimalDatabaseFile.Read(path));
         Assert.Equal(("icons/new-animal.png", "icons/new-animal-paleopedia.png"), (upgraded.Icon, upgraded.PaleopediaPicture));
-        Assert.Equal("6", Sqlite(path, "PRAGMA user_version;"));
+        Assert.Equal("7", Sqlite(path, "PRAGMA user_version;"));
     }
 
     [Fact]
@@ -192,7 +192,7 @@ public class AnimalDatabaseTests
 
         var upgraded = Assert.Single(AnimalDatabaseFile.Read(path));
         Assert.Equal((1, "portraits/new-animal/adultFemale.png"), (upgraded.StartingSkin, upgraded.Portraits["adultFemale"]));
-        Assert.Equal("6", Sqlite(path, "PRAGMA user_version;"));
+        Assert.Equal("7", Sqlite(path, "PRAGMA user_version;"));
     }
 
     [Fact]
@@ -219,7 +219,99 @@ public class AnimalDatabaseTests
         AnimalDatabaseFile.Save(path, [old]);
 
         Assert.Equal(1, Assert.Single(AnimalDatabaseFile.Read(path)).StartingSkin);
-        Assert.Equal("6", Sqlite(path, "PRAGMA user_version;").Trim());
+        Assert.Equal("7", Sqlite(path, "PRAGMA user_version;").Trim());
+    }
+
+    [Fact]
+    public void Behaviour_round_trips_with_rule_order()
+    {
+        var path = PathToDatabase();
+        var animal = Animal();
+        animal.Behaviour = new SpeciesBehaviour { StartFrom = "CombatProfile_PredatorApex", Rules = ["Aggression_FeedAggression", "Aggression_Predation", "Aggression_NestDefense"] };
+        var plain = Animal();
+        plain.Id = "plain-animal";
+        var empty = Animal();
+        empty.Id = "empty-animal";
+        empty.Behaviour = new SpeciesBehaviour { StartFrom = "CombatProfile_Deer", Rules = [] };
+        var before = AnimalDatabaseFile.Snapshot([animal, plain, empty]);
+        AnimalDatabaseFile.Save(path, [animal, plain, empty]);
+
+        var saved = AnimalDatabaseFile.Read(path).ToDictionary(s => s.Id);
+        Assert.Equal("CombatProfile_PredatorApex", saved["new-animal"].Behaviour!.StartFrom);
+        Assert.Equal(animal.Behaviour.Rules, saved["new-animal"].Behaviour!.Rules);
+        Assert.Null(saved["plain-animal"].Behaviour);
+        Assert.Equal("CombatProfile_Deer", saved["empty-animal"].Behaviour!.StartFrom);
+        Assert.Empty(saved["empty-animal"].Behaviour!.Rules);
+        Assert.Equal("7", Sqlite(path, "PRAGMA user_version;"));
+
+        saved["new-animal"].Behaviour!.Rules.Reverse();
+        Assert.NotEqual(before, AnimalDatabaseFile.Snapshot(saved.Values));
+        saved["plain-animal"].Behaviour = new SpeciesBehaviour { StartFrom = "CombatProfile_Bear", Rules = ["Aggression_Predation"] };
+        saved["empty-animal"].Behaviour = null;
+        AnimalDatabaseFile.Save(path, saved.Values.ToList());
+
+        var resaved = AnimalDatabaseFile.Read(path).ToDictionary(s => s.Id);
+        Assert.Equal(["Aggression_NestDefense", "Aggression_Predation", "Aggression_FeedAggression"], resaved["new-animal"].Behaviour!.Rules);
+        Assert.Equal("CombatProfile_Bear", resaved["plain-animal"].Behaviour!.StartFrom);
+        Assert.Null(resaved["empty-animal"].Behaviour);
+        Assert.Equal("0", Sqlite(path, "SELECT COUNT(*) FROM animal_behaviour WHERE species_id = 'empty-animal';"));
+    }
+
+    [Fact]
+    public void A_v6_database_opens_and_saves_as_v7_with_no_behaviour()
+    {
+        var path = PathToDatabase();
+        AnimalDatabaseFile.Save(path, [Animal()]);
+        Sqlite(path, "DROP TABLE animal_behaviour_rules; DROP TABLE animal_behaviour; PRAGMA user_version = 6;");
+
+        var old = Assert.Single(AnimalDatabaseFile.Read(path));
+        Assert.Null(old.Behaviour);
+        old.Behaviour = new SpeciesBehaviour { StartFrom = "CombatProfile_PredatorApex", Rules = ["Aggression_Predation"] };
+        AnimalDatabaseFile.Save(path, [old]);
+
+        Assert.Equal(["Aggression_Predation"], Assert.Single(AnimalDatabaseFile.Read(path)).Behaviour!.Rules);
+        Assert.Equal("7", Sqlite(path, "PRAGMA user_version;"));
+    }
+
+    [Fact]
+    public void Deleting_a_species_deletes_its_behaviour_rows()
+    {
+        var path = PathToDatabase();
+        var animal = Animal();
+        animal.Behaviour = new SpeciesBehaviour { StartFrom = "CombatProfile_PredatorApex", Rules = ["Aggression_Predation"] };
+        var other = Animal();
+        other.Id = "other-animal";
+        AnimalDatabaseFile.Save(path, [animal, other]);
+
+        AnimalDatabaseFile.Save(path, [other]);
+
+        Assert.Equal("0", Sqlite(path, "SELECT COUNT(*) FROM animal_behaviour;"));
+        Assert.Equal("0", Sqlite(path, "SELECT COUNT(*) FROM animal_behaviour_rules;"));
+    }
+
+    [Fact]
+    public void Unknown_rule_in_the_database_fails_with_the_species_id()
+    {
+        var path = PathToDatabase();
+        var animal = Animal();
+        animal.Behaviour = new SpeciesBehaviour { StartFrom = "CombatProfile_PredatorApex", Rules = ["Aggression_Predation"] };
+        AnimalDatabaseFile.Save(path, [animal]);
+        Sqlite(path, "INSERT INTO animal_behaviour_rules(species_id,position,rule) VALUES('new-animal',1,'Aggression_Nope');");
+
+        var ex = Assert.Throws<ManifestException>(() => AnimalDatabaseFile.Read(path));
+        Assert.Contains("new-animal", ex.Message);
+        Assert.Contains("Aggression_Nope", ex.Message);
+    }
+
+    [Fact]
+    public void Rules_without_a_start_from_row_fail()
+    {
+        var path = PathToDatabase();
+        AnimalDatabaseFile.Save(path, [Animal()]);
+        Sqlite(path, "INSERT INTO animal_behaviour_rules(species_id,position,rule) VALUES('new-animal',0,'Aggression_Predation');");
+
+        var ex = Assert.Throws<ManifestException>(() => AnimalDatabaseFile.Read(path));
+        Assert.Contains("animal_behaviour_rules", ex.Message);
     }
 
     private static string PathToDatabase() => Path.Combine(Path.GetTempPath(), "tyrant-tests", Guid.NewGuid().ToString("N"), AnimalDatabaseFile.FileName);

@@ -13,7 +13,7 @@ public class SpeciesCliTests : IDisposable
     /// An indexed workspace whose dump has Allosaurus Anax (skins Default, Albino) and Carcharodontosaurus (Base, Alt 1), every
     /// skin but Carch's Base wearing the SkinDumps textures, read by a fake asset reader; mod-a exists.
     /// </summary>
-    private static string TexturedAllosaurus(FakeGame game)
+    private static string TexturedAllosaurus(FakeGame game, bool behaviour = false)
     {
         var ws = IndexedWorkspace(game);
         var objects = new Tyrant.Dumper.Serialization.DumpResult();
@@ -22,10 +22,20 @@ public class SpeciesCliTests : IDisposable
         const string Var = "PrehistoricKingdom.AnimalSkinVariationAsset";
         var textured = "\"maleVariationData\":{\"$ref\":{\"type\":\"" + Var + "\",\"name\":\"A_M\",\"id\":10}},"
             + "\"femaleVariationData\":{\"$ref\":{\"type\":\"" + Var + "\",\"name\":\"A_F\",\"id\":11}}";
+        const string Ai = "PrehistoricKingdom.AnimalsV2.AI.";
+        var brain = behaviour ? "\"brain\":{\"$ref\":{\"type\":\"" + Ai + "AnimalBrain\",\"name\":\"Allo\",\"id\":2}}," : "";
         Add("PrehistoricKingdom.AnimalData", "Allosaurus", 1,
-            "{\"speciesID\":\"Allosaurus Anax\", \"skinsData\":[{\"skinName\":\"Default\"," + textured + "},{\"skinName\":\"Albino\"," + textured + "}]}");
+            "{\"speciesID\":\"Allosaurus Anax\", " + brain + "\"skinsData\":[{\"skinName\":\"Default\"," + textured + "},{\"skinName\":\"Albino\"," + textured + "}]}");
         Add("PrehistoricKingdom.AnimalData", "Carcharodontosaurus", 2,
             "{\"speciesID\":\"Carcharodontosaurus\", \"skinsData\":[{\"skinName\":\"Base\"},{\"skinName\":\"Alt 1\"," + textured + "}]}");
+        if (behaviour)
+        {
+            string Link(string rule, int id) => "{\"asset\":{\"$ref\":{\"type\":\"" + Ai + "AggressionProfileAsset\",\"name\":\"" + rule + "\",\"id\":" + id + "}},\"inlineProfile\":{}}";
+            Add(Ai + "AnimalBrain", "Allo", 2, "{\"combat\":{\"shared\":{\"combatProfile\":{\"$ref\":{\"type\":\"" + Ai + "AnimalCombatProfile\",\"name\":\"CombatProfile_PredatorApex\",\"id\":3}}}}}");
+            Add(Ai + "AnimalCombatProfile", "CombatProfile_PredatorApex", 3, "{\"confidenceLevel\":\"Confident\",\"temperament\":\"Aggressive\",\"cannibalism\":\"None\",\"aggressionProfileEntries\":["
+                + Link("Aggression_Predation", 4) + "," + Link("Aggression_NestDefense", 5) + "]}");
+            Add(Ai + "AnimalCombatProfile", "CombatProfile_Deer", 6, "{\"confidenceLevel\":\"Timid\",\"temperament\":\"Passive\",\"cannibalism\":\"WhenStarving\",\"aggressionProfileEntries\":[" + Link("Aggression_PreyFleeFromPredator", 7) + "]}");
+        }
         Add(Var, "A_M", 10, "{\"$type\":\"x\",\"$name\":\"A_M\",\"$id\":10,\"adultDiffuseMap\":{\"m_AssetGUID\":\"" + SkinDumps.MaleDiffuse
             + "\"},\"adultNormalMap\":{\"m_AssetGUID\":\"" + SkinDumps.MaleNormal + "\"}}");
         Add(Var, "A_F", 11, "{\"$type\":\"x\",\"$name\":\"A_F\",\"$id\":11,\"adultDiffuseMap\":{\"m_AssetGUID\":\"" + SkinDumps.FemaleDiffuse + "\"}}");
@@ -35,6 +45,18 @@ public class SpeciesCliTests : IDisposable
         CliServices.AssetReader = new FakeAssetReader();
         Assert.Equal(ExitCodes.Ok, Run("mod", "new", "mod-a", "-w", ws).Code);
         return ws;
+    }
+
+    private static Tyrant.Framework.Core.SpeciesBehaviour? StoredBehaviour(string ws) =>
+        Tyrant.Framework.Core.AnimalDatabaseFile.Read(Path.Combine(ws, "mods", "mod-a", Tyrant.Framework.Core.AnimalDatabaseFile.FileName)).Single().Behaviour;
+
+    const string ProfileRow = "/brain/combat/shared/combatProfile/";
+
+    /// <summary>The stored record's confidence, temperament and cannibalism.</summary>
+    private static string[] ProfileValues(string ws)
+    {
+        var fields = Tyrant.Framework.Core.AnimalDatabaseFile.Read(Path.Combine(ws, "mods", "mod-a", Tyrant.Framework.Core.AnimalDatabaseFile.FileName)).Single().Fields;
+        return new[] { "confidenceLevel", "temperament", "cannibalism" }.Select(n => fields.Single(f => f.Path == ProfileRow + n).Value).ToArray();
     }
 
     private static string ModJson(string ws) => File.ReadAllText(Path.Combine(ws, "mods", "mod-a", "mod.json"));
@@ -234,6 +256,81 @@ public class SpeciesCliTests : IDisposable
         Assert.Contains("mirabilis uses its template's Paleopedia picture.", cleared.Out);
         Assert.Equal(ExitCodes.Error, Run("mod", "set-species-paleopedia-picture", "mod-a", "mirabilis", "-w", ws).Code);
         Assert.Equal(ExitCodes.Error, Run("mod", "set-species-paleopedia-picture", "mod-a", "mirabilis", "--png", png, "--clear", "-w", ws).Code);
+    }
+
+    [Fact]
+    public void Set_species_behaviour_starts_from_a_profile_and_adds_a_rule()
+    {
+        using var game = new FakeGame();
+        var ws = TexturedAllosaurus(game, behaviour: true);
+        Assert.Equal(ExitCodes.Ok, AddMirabilis(ws).Code);
+
+        var (code, output, err) = Run("mod", "set-species-behaviour", "mod-a", "mirabilis", "--start-from", "deer", "--add-rule", "Flees with its family", "-w", ws);
+
+        Assert.True(code == ExitCodes.Ok, err);
+        Assert.Contains("tyrant.mod-a.mirabilis: behaviour from Deer, 2 rules", output);
+        var stored = StoredBehaviour(ws)!;
+        Assert.Equal("CombatProfile_Deer", stored.StartFrom);
+        Assert.Equal(["Aggression_PreyFleeFromPredator", "Aggression_PreyFleeWithFamily"], stored.Rules);
+        Assert.Equal(["Timid", "Passive", "WhenStarving"], ProfileValues(ws)); // what the game starts from, as the Behaviour card shows
+
+        var removed = Run("mod", "set-species-behaviour", "mod-a", "mirabilis", "--remove-rule", "PreyFleeFromPredator", "-w", ws);
+        Assert.True(removed.Code == ExitCodes.Ok, removed.Err);
+        Assert.Contains("behaviour from Deer, 1 rules", removed.Out);
+        Assert.Equal(["Timid", "Passive", "WhenStarving"], ProfileValues(ws));
+    }
+
+    [Fact]
+    public void Reset_returns_to_the_template()
+    {
+        using var game = new FakeGame();
+        var ws = TexturedAllosaurus(game, behaviour: true);
+        Assert.Equal(ExitCodes.Ok, AddMirabilis(ws).Code);
+        Assert.Equal(ExitCodes.Ok, Run("mod", "set-species-behaviour", "mod-a", "mirabilis", "--start-from", "Deer", "-w", ws).Code);
+        Assert.Equal("CombatProfile_Deer", StoredBehaviour(ws)!.StartFrom);
+        Assert.Equal(["Timid", "Passive", "WhenStarving"], ProfileValues(ws));
+
+        var (code, output, err) = Run("mod", "set-species-behaviour", "mod-a", "mirabilis", "--reset", "-w", ws);
+
+        Assert.True(code == ExitCodes.Ok, err);
+        Assert.Contains("tyrant.mod-a.mirabilis: template behaviour", output);
+        Assert.Null(StoredBehaviour(ws));
+        Assert.Equal(["Confident", "Aggressive", "None"], ProfileValues(ws));
+        Assert.Equal(ExitCodes.Error, Run("mod", "set-species-behaviour", "mod-a", "mirabilis", "--reset", "--start-from", "Deer", "-w", ws).Code);
+    }
+
+    [Fact]
+    public void Unknown_rule_fails_with_the_text()
+    {
+        using var game = new FakeGame();
+        var ws = TexturedAllosaurus(game, behaviour: true);
+        Assert.Equal(ExitCodes.Ok, AddMirabilis(ws).Code);
+
+        var (code, _, err) = Run("mod", "set-species-behaviour", "mod-a", "mirabilis", "--add-rule", "Dances wildly", "-w", ws);
+
+        Assert.Equal(ExitCodes.Error, code);
+        Assert.Contains("Dances wildly", err);
+        Assert.Null(StoredBehaviour(ws));
+    }
+
+    [Fact]
+    public void Species_behaviour_list_shows_profiles_and_rules_and_needs_a_dump_to_reset()
+    {
+        using var game = new FakeGame();
+        var ws = TexturedAllosaurus(game);
+        Assert.Equal(ExitCodes.Ok, AddMirabilis(ws).Code);
+
+        var empty = Run("mod", "set-species-behaviour", "mod-a", "mirabilis", "--list", "-w", ws);
+        Assert.Equal(ExitCodes.Ok, empty.Code);
+        Assert.Contains("game data dump", empty.Out);
+        var reset = Run("mod", "set-species-behaviour", "mod-a", "mirabilis", "--reset", "-w", ws);
+        Assert.Equal(ExitCodes.Error, reset.Code);
+        Assert.Contains("game data dump", reset.Err);
+
+        var withDump = TexturedAllosaurus(game, behaviour: true);
+        var listed = Run("mod", "set-species-behaviour", "mod-a", "mirabilis", "--list", "-w", withDump);
+        Assert.Contains("Apex predator", listed.Out);
+        Assert.Contains("Hunts prey", listed.Out);
     }
 
     private static (int Code, string Out, string Err) Run(params string[] args)

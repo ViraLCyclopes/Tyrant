@@ -1,17 +1,21 @@
 <script lang="ts">
+  import BehaviourCard from './BehaviourCard.svelte';
+  import DietCard from './DietCard.svelte';
+  import HabitatCard from './HabitatCard.svelte';
   import PortraitsCard from './PortraitsCard.svelte';
   import RemoveSpeciesDialog from './RemoveSpeciesDialog.svelte';
   import StartingSkinChoice, { freshChoice, startParams, startingSkinOf, type StartingChoice } from './StartingSkinChoice.svelte';
   import { onMount, untrack } from 'svelte';
   import { getSession } from '$lib/stores/session.svelte';
   import { getTab } from '$lib/shell/tab.svelte';
-  import type { ModAnimalDatabase, ModSpeciesTemplateDto, SpeciesRemoval, SpeciesSkinsRow, TemplatePictureKind } from '$lib/rpc/types.gen';
+  import type { ModAnimalDatabase, ModSpeciesBehaviourDto, ModSpeciesTemplateDto, SpeciesRemoval, SpeciesSkinsRow, TemplatePictureKind } from '$lib/rpc/types.gen';
   import OpenInBlender from '$lib/blender/OpenInBlender.svelte';
   import RecordTree from './RecordTree.svelte';
   import SizeCard from './SizeCard.svelte';
   import SocialCard from './SocialCard.svelte';
   import SpeciesSoundsCard from './SpeciesSoundsCard.svelte';
   import Thumb from './Thumb.svelte';
+  import { huntsPrey } from './speciesIdentity';
   import type { AddedSound } from '$lib/sounds/audio';
   import type { ModDoc } from './modDoc.svelte';
 
@@ -44,6 +48,10 @@
   let loadedTexts: Record<string, Record<string, string>> = {};
   let textsOf = '';
   let savedTexts = false;
+  /** The Behaviour card's choice (the profile it starts from and its rules): the stored one, or null for the template's, until changed there. */
+  let behaviour = $state<ModSpeciesBehaviourDto | null>(null);
+  /** Counts the reloads below: the identity cards start again from the reloaded values each time. */
+  let loads = $state(0);
   let busy = $state(false);
   let failed = $state(false);
   let initialized = false;
@@ -84,6 +92,7 @@
     values = { ...(source?.stats ?? {}) };
     dataValues = Object.fromEntries((source?.dataFields ?? []).filter(f => f.editable).map(f => [f.path, f.value]));
     localization = { ...(source?.localization ?? {}) };
+    behaviour = source?.behaviour ?? null;
     const server = source?.texts ?? {};
     untrack(() => {
       const fresh = !source || source.id !== textsOf || savedTexts;
@@ -94,6 +103,7 @@
       loadedTexts = server;
       textsOf = source?.id ?? '';
       savedTexts = false;
+      loads++;
     });
     if (source) template = source.base;
   });
@@ -125,9 +135,33 @@
 
   const validId = $derived(/^[a-z0-9](?:[a-z0-9-]{1,62})[a-z0-9]$/.test(speciesId));
   let socialValid = $state(true);
-  const canSave = $derived((creating || socialValid) && !!name.trim() && !!genus.trim() && !!epithet.trim() && (!creating || (validId && !!template && !(choice.kind === 'png' && !choice.male))));
+  let dietValid = $state(true);
+  const canSave = $derived((creating || (socialValid && dietValid)) && !!name.trim() && !!genus.trim() && !!epithet.trim() && (!creating || (validId && !!template && !(choice.kind === 'png' && !choice.male))));
   /** This mod's starting skin of the shown species, when it has one. */
   const startingSkin = $derived(animal?.startingSkinId ? doc.detail?.skins.find((s) => s.id === animal.startingSkinId) : undefined);
+
+  /** The record rows of the profile's rule list, which a chosen behaviour builds itself (SpeciesBehaviours.IsRuleField in the game). */
+  const RULES_PATH = '/brain/combat/shared/combatProfile/aggressionProfileEntries';
+  const isRuleField = (path: string) => path === RULES_PATH || path.startsWith(RULES_PATH + '/');
+  /** The rules of the template's own profile, when the data dump lists it. */
+  const templateRules = $derived(database?.profiles?.find((p) => p.asset === animal?.templateProfile)?.rules ?? null);
+  /** Whether `chosen` is a behaviour of its own rather than the template's profile and rules (rule order aside). */
+  function ownBehaviour(chosen: ModSpeciesBehaviourDto | null) {
+    if (!chosen) return false;
+    if (!templateRules) return true;
+    const ticked = new Set(chosen.rules);
+    const template = new Set(templateRules);
+    return chosen.startFrom !== animal?.templateProfile || ticked.size !== template.size || [...ticked].some((r) => !template.has(r));
+  }
+  /** The behaviour a save sends: the card's, once it has a profile to start from. */
+  const sending = $derived(behaviour?.startFrom ? behaviour : null);
+  const customBehaviour = $derived(ownBehaviour(sending ?? animal?.behaviour ?? null));
+  /** Whether the species hunts: its ticked rules, else the template's (unknown without a data dump, so no warning). */
+  const hasPredation = $derived.by(() => {
+    const ticked = behaviour?.rules ?? templateRules;
+    return ticked ? huntsPrey(ticked) : true;
+  });
+  const ruleRowsEdited = () => (animal?.dataFields ?? []).some((f) => f.editable && isRuleField(f.path) && (dataValues[f.path] ?? f.value) !== f.templateValue);
 
   const languages: [string, string][] = [['en-US', 'English'], ['fr', 'French'], ['es', 'Spanish'], ['pt', 'Portuguese'], ['de', 'German'], ['ru', 'Russian'], ['zh-CN', 'Chinese']];
   const textFields: [string, string][] = [['description', 'Description'], ['characterNotes', 'Character notes'], ['socialInfo', 'Social info']];
@@ -143,15 +177,26 @@
   function setText(code: string, slot: string, text: string) {
     texts[code] = { ...(texts[code] ?? {}), [slot]: text };
   }
+  /** Stats, cost and record back to the template's, and its behaviour too when the data dump lists it (the cards start again). */
+  function resetToTemplate() {
+    values = {};
+    cost = undefined;
+    dataValues = Object.fromEntries((animal?.dataFields ?? []).filter(f => f.editable).map(f => [f.path, f.templateValue]));
+    if (templateRules && animal?.templateProfile) behaviour = { startFrom: animal.templateProfile, rules: [...templateRules] };
+    loads++;
+  }
 
   async function save() {
+    const sent = creating ? null : sending;
+    if (sent && ownBehaviour(sent) && ruleRowsEdited()
+      && !(await session.platform.confirm("Saving this behaviour drops your edits to the profile's rules in the full animal record. Save anyway?", 'Save species'))) return;
     busy = true;
     try {
       const stats = Object.fromEntries(Object.entries(values).filter((entry): entry is [string, number] => entry[1] !== undefined));
       const fields = { speciesId, name, genus, epithet, cost: cost ?? null, stats, dataFields: dataValues, localization };
       const added = creating;
       const start = { startingSkin: startingSkinOf(choice, template), ...startParams(choice) };
-      if (await doc.edit(added ? 'mods.addSpecies' : 'mods.setSpecies', added ? { ...fields, template, ...start } : { ...fields, texts: changedTexts() }, { undoable: false })) {
+      if (await doc.edit(added ? 'mods.addSpecies' : 'mods.setSpecies', added ? { ...fields, template, ...start } : { ...fields, texts: changedTexts(), behaviour: sent }, { undoable: false })) {
         savedTexts = true;
         selected = speciesId;
         await reload();
@@ -265,6 +310,12 @@
         </div>
         {#if !creating}
           <SocialCard fields={animal?.dataFields ?? []} bind:values={dataValues} bind:valid={socialValid} />
+          {#key loads}
+            <DietCard fields={animal?.dataFields ?? []} bind:values={dataValues} bind:valid={dietValid} {hasPredation} />
+            <BehaviourCard fields={animal?.dataFields ?? []} bind:values={dataValues} profiles={database.profiles ?? []} rules={database.rules ?? []}
+              templateProfile={animal?.templateProfile ?? null} bind:behaviour confirm={(message) => session.platform.confirm(message, 'Start from')} />
+            <HabitatCard fields={animal?.dataFields ?? []} bind:values={dataValues} />
+          {/key}
           <section class="texts" aria-label="Paleopedia text">
             <h3>Paleopedia text</h3>
             <p class="hint">What the species' Paleopedia page says. Every language without its own text uses the English, so write English first and translate later.</p>
@@ -309,12 +360,12 @@
           <details class="advanced">
             <summary><h3>Full animal record</h3> <span class="hint">Advanced: every field the game stores for this animal. Most species never need it.</span></summary>
             <p class="hint">Stored in animal_fields. Edit numbers, booleans, enum names and text here or with SQL. Paths follow the game's fields; reference and structural rows describe inherited assets and arrays. Purchase cost is in animal_species; the basic stats above are in animal_stats.</p>
-            <RecordTree fields={animal?.dataFields ?? []} bind:values={dataValues} />
+            <RecordTree fields={animal?.dataFields ?? []} bind:values={dataValues} hidden={customBehaviour ? isRuleField : undefined} hiddenNote="Rules are set on the Behaviour card." />
           </details>
         {/if}
         <div class="actions">
           <button type="submit" class="primary" disabled={!canSave}>{busy ? 'Saving…' : creating ? 'Create species' : 'Save species'}</button>
-          <button type="button" onclick={() => { values = {}; cost = undefined; dataValues = Object.fromEntries((animal?.dataFields ?? []).filter(f => f.editable).map(f => [f.path, f.templateValue])); }}>Reset stats to template</button>
+          <button type="button" onclick={resetToTemplate}>Reset stats to template</button>
         </div>
       </fieldset>
     </form>

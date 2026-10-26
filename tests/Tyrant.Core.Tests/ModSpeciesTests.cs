@@ -83,6 +83,85 @@ public class ModSpeciesTests
         Assert.Equal(45, custom.Stats["maxAgeYears"]);
     }
 
+    static (ModProject Mod, SpeciesEntry Entry) SpeciesWithRuleRow(FakeGame game)
+    {
+        var ws = Workspace.Create(Path.Combine(game.LibraryRoot, "workspace"), new GameInstall(game.Root, null));
+        var mod = ModProject.Create(ws, "animal-pack", null, null);
+        var rows = new SpeciesTemplateStats(100, new Dictionary<string, double>())
+        {
+            Fields =
+            [
+                new AnimalField { Path = "/diet", Kind = "text", Value = "Carnivore", TemplateValue = "Carnivore", Editable = true },
+                new AnimalField { Path = SpeciesBehaviours.RulesPath + "/0/behavioralContribution", Kind = "text", Value = "0.5", TemplateValue = "0.15", Editable = true },
+            ],
+        };
+        return (mod, mod.AddSpecies([Template()], "new-animal", "Allosaurus Anax", "Animal", "Example", "animal", templateStats: rows));
+    }
+
+    static readonly BehaviourBasis TankBasis = new("CombatProfile_TankTerritorial", ["Aggression_DefendWithFamily", "Aggression_NestDefense"]);
+
+    [Fact]
+    public void SetSpeciesBehaviour_equal_to_the_template_stores_nothing()
+    {
+        using var game = new FakeGame();
+        var (mod, entry) = SpeciesWithRuleRow(game);
+        var same = new SpeciesBehaviour { StartFrom = "CombatProfile_TankTerritorial", Rules = ["Aggression_NestDefense", "Aggression_DefendWithFamily"] };
+
+        mod.SetSpeciesBehaviour(entry.Id, new SpeciesBehaviour { StartFrom = "CombatProfile_Deer", Rules = [] }, TankBasis);
+        Assert.NotNull(Assert.Single(AnimalDatabaseFile.Read(mod.DatabasePath)).Behaviour);
+        mod.SetSpeciesBehaviour(entry.Id, same, TankBasis);
+
+        Assert.Null(mod.Manifest.Species.Single().Behaviour);
+        Assert.Null(Assert.Single(AnimalDatabaseFile.Read(mod.DatabasePath)).Behaviour);
+    }
+
+    [Fact]
+    public void SetSpeciesBehaviour_resets_rule_row_edits()
+    {
+        using var game = new FakeGame();
+        var (mod, entry) = SpeciesWithRuleRow(game);
+        var row = SpeciesBehaviours.RulesPath + "/0/behavioralContribution";
+        Assert.Equal("0.5", entry.Fields.Single(f => f.Path == row).Value);
+
+        mod.SetSpeciesBehaviour(entry.Id, new SpeciesBehaviour { StartFrom = "CombatProfile_Deer", Rules = ["Aggression_PreyFleeFromPredator"] }, TankBasis);
+
+        var saved = Assert.Single(AnimalDatabaseFile.Read(mod.DatabasePath));
+        Assert.Equal("CombatProfile_Deer", saved.Behaviour!.StartFrom);
+        Assert.Equal(["Aggression_PreyFleeFromPredator"], saved.Behaviour.Rules);
+        Assert.Equal("0.15", saved.Fields.Single(f => f.Path == row).Value);
+        Assert.Equal("Carnivore", saved.Fields.Single(f => f.Path == "/diet").Value);
+    }
+
+    [Fact]
+    public void SetSpecies_keeps_the_stored_behaviour()
+    {
+        using var game = new FakeGame();
+        var (mod, entry) = SpeciesWithRuleRow(game);
+        mod.SetSpeciesBehaviour(entry.Id, new SpeciesBehaviour { StartFrom = "CombatProfile_Deer", Rules = [] }, null);
+
+        mod.SetSpecies(entry.Id, "New name", "Example", "animal", 2000, new Dictionary<string, double>());
+
+        Assert.Equal("CombatProfile_Deer", mod.Manifest.Species.Single().Behaviour!.StartFrom);
+        Assert.Equal("CombatProfile_Deer", Assert.Single(AnimalDatabaseFile.Read(mod.DatabasePath)).Behaviour!.StartFrom);
+    }
+
+    [Fact]
+    public void SetSpeciesBehaviour_rejects_unknown_names_as_ModInvalid()
+    {
+        using var game = new FakeGame();
+        var (mod, entry) = SpeciesWithRuleRow(game);
+
+        var profile = Assert.Throws<TyrantException>(() => mod.SetSpeciesBehaviour(entry.Id, new SpeciesBehaviour { StartFrom = "Nope" }, null));
+        var rule = Assert.Throws<TyrantException>(() => mod.SetSpeciesBehaviour(entry.Id,
+            new SpeciesBehaviour { StartFrom = "CombatProfile_Deer", Rules = ["Aggression_Nope"] }, null));
+        var missing = Assert.Throws<TyrantException>(() => mod.SetSpeciesBehaviour("missing", new SpeciesBehaviour { StartFrom = "CombatProfile_Deer" }, null));
+
+        Assert.Equal(TyrantErrorCode.ModInvalid, profile.Code);
+        Assert.Equal(TyrantErrorCode.ModInvalid, rule.Code);
+        Assert.Equal(TyrantErrorCode.TargetNotFound, missing.Code);
+        Assert.Null(Assert.Single(AnimalDatabaseFile.Read(mod.DatabasePath)).Behaviour);
+    }
+
     internal static SpeciesSkins Template(bool vivarium = false) => new("Allosaurus Anax", vivarium,
         [new VanillaSkin(0, "Default", new Dictionary<string, string>(), new Dictionary<string, string>()),
          new VanillaSkin(1, "Albino", new Dictionary<string, string>(), new Dictionary<string, string>())]) { PrefabGuid = "template-prefab" };

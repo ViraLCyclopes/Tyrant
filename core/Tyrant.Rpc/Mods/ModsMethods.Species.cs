@@ -12,7 +12,13 @@ public sealed record ModAnimalDto(string Id, string Key, string Base, string Nam
     IReadOnlyList<ModAnimalFieldDto> DataFields, IReadOnlyDictionary<string, string> Localization, string? Icon, SpeciesPrefab? Prefab,
     int StartingSkin = 0, string? StartingSkinName = null, string? Swatch = null,
     IReadOnlyDictionary<string, string>? Portraits = null, string? StartingSkinId = null, string? PaleopediaPicture = null,
-    IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>? Texts = null);
+    IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>? Texts = null,
+    ModSpeciesBehaviourDto? Behaviour = null, string? TemplateProfile = null);
+/// <summary>A species' stored combat behaviour: the profile it starts from and the rules it keeps (full asset names).</summary>
+public sealed record ModSpeciesBehaviourDto(string StartFrom, IReadOnlyList<string> Rules);
+public sealed record ModBehaviourProfileDto(string Asset, string Name, string Confidence, string Temperament, string Cannibalism,
+    IReadOnlyList<string> Rules, IReadOnlyList<string> UsedBy);
+public sealed record ModBehaviourRuleDto(string Asset, string Name, bool ShownInGame);
 public sealed record ModAnimalFieldDto(string Path, string Kind, string Value, string TemplateValue, bool Editable);
 /// <summary>The Nursery picture (the game's heroRender); a null Png goes back to the template's.</summary>
 public sealed record ModSetSpeciesIconParams(string Id, string Revision, string SpeciesId, string? Png = null);
@@ -21,7 +27,8 @@ public sealed record ModSetSpeciesPaleopediaPictureParams(string Id, string Revi
 public sealed record ModSetSpeciesPrefabParams(string Id, string Revision, string SpeciesId, string? Bundle = null, string? Asset = null);
 public sealed record ModUnityProjectDto(string Directory, string Readme);
 public sealed record ModStatDto(string Id, string Label, string Unit, double Min, double Max);
-public sealed record ModAnimalDatabase(IReadOnlyList<ModAnimalDto> Animals, IReadOnlyList<ModStatDto> Fields);
+public sealed record ModAnimalDatabase(IReadOnlyList<ModAnimalDto> Animals, IReadOnlyList<ModStatDto> Fields,
+    IReadOnlyList<ModBehaviourProfileDto> Profiles, IReadOnlyList<ModBehaviourRuleDto> Rules);
 public sealed record ModAddSpeciesParams(string Id, string Revision, string SpeciesId, string Template, string Name,
     string Genus, string Epithet, int? Cost = null, IReadOnlyDictionary<string, double>? Stats = null, int StartingSkin = 0,
     string? StartFrom = null, int? StartSkin = null, string? StartPng = null, string? StartPngFemale = null, string? StartName = null);
@@ -31,7 +38,8 @@ public sealed record ModAddStartingSkinParams(string Id, string Revision, string
 public sealed record ModSetSpeciesParams(string Id, string Revision, string SpeciesId, string Name, string Genus, string Epithet,
     int? Cost, IReadOnlyDictionary<string, double> Stats, IReadOnlyDictionary<string, string>? DataFields = null,
     IReadOnlyDictionary<string, string>? Localization = null,
-    IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>? Texts = null);
+    IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>? Texts = null,
+    ModSpeciesBehaviourDto? Behaviour = null);
 
 public sealed record ModSpeciesParams(string Id, string SpeciesId);
 /// <summary>DeleteFiles: its files, language files, icon and Blender projects go to the Recycle Bin too.</summary>
@@ -87,6 +95,7 @@ public sealed partial class ModsMethods
     {
         var (ws, _) = session.Current();
         var mod = ModProject.Open(ws, p.Id);
+        var catalog = BehaviourCatalog.Load(ws);
         return new ModAnimalDatabase(mod.Manifest.Species.Select(s =>
         {
             var inherited = SpeciesDatabase.Template(ws, s.Base);
@@ -94,8 +103,12 @@ public sealed partial class ModsMethods
                 inherited?.Cost, inherited?.Stats ?? new Dictionary<string, double>(),
                 SpeciesDatabase.FillEmptyObjects(s.Fields.Count > 0 ? s.Fields : inherited?.Fields ?? [], inherited?.Fields).Where(f => !SpeciesSizes.IsSizePath(f.Path)).Select(f => new ModAnimalFieldDto(f.Path, f.Kind, f.Value, f.TemplateValue, f.Editable)).ToList(),
                 s.Localization, s.Icon, s.Prefab, s.StartingSkin, s.StartingSkinName, s.Swatch, s.Portraits.Count == 0 ? null : s.Portraits,
-                mod.StartingSkinOf(s.Id)?.Id, s.PaleopediaPicture, mod.SpeciesTexts(s.Id));
-        }).ToList(), SpeciesStats.Fields.Select(f => new ModStatDto(f.Id, f.Label, f.Unit, f.Min, f.Max)).ToList());
+                mod.StartingSkinOf(s.Id)?.Id, s.PaleopediaPicture, mod.SpeciesTexts(s.Id),
+                s.Behaviour == null ? null : new ModSpeciesBehaviourDto(s.Behaviour.StartFrom, s.Behaviour.Rules.ToList()),
+                inherited?.Fields is { } templateFields ? BehaviourCatalog.TemplateProfile(templateFields) : null);
+        }).ToList(), SpeciesStats.Fields.Select(f => new ModStatDto(f.Id, f.Label, f.Unit, f.Min, f.Max)).ToList(),
+        catalog.Profiles.Select(x => new ModBehaviourProfileDto(x.Asset, x.Name, x.Confidence, x.Temperament, x.Cannibalism, x.Rules, x.UsedBy)).ToList(),
+        catalog.Rules.Select(x => new ModBehaviourRuleDto(x.Asset, x.Name, x.ShownInGame)).ToList());
     }
 
     [RpcMethod("mods.addSpecies")]
@@ -159,8 +172,16 @@ public sealed partial class ModsMethods
             ?? throw new TyrantException(TyrantErrorCode.TargetNotFound, "Species not found: " + p.SpeciesId);
         ValidateStats(p.Stats, SpeciesDatabase.Template(ws, entry.Base));
         if (p.Texts != null) ModProject.ValidateSpeciesTexts(p.Texts);
-        mod.SetSpecies(p.SpeciesId, p.Name, p.Genus, p.Epithet, p.Cost, p.Stats, p.DataFields, SpeciesDatabase.Template(ws, entry.Base),
-            p.Localization);
+        // A bad behaviour refuses the whole save, before anything is written.
+        var behaviour = p.Behaviour == null ? null : new SpeciesBehaviour { StartFrom = p.Behaviour.StartFrom, Rules = p.Behaviour.Rules.ToList() };
+        if (behaviour != null)
+        {
+            try { SpeciesBehaviours.Validate(behaviour, "Species " + p.SpeciesId); }
+            catch (ManifestException ex) { throw new TyrantException(TyrantErrorCode.ModInvalid, ex.Message); }
+        }
+        var template = SpeciesDatabase.Template(ws, entry.Base);
+        mod.SetSpecies(p.SpeciesId, p.Name, p.Genus, p.Epithet, p.Cost, p.Stats, p.DataFields, template, p.Localization);
+        if (behaviour != null) mod.SetSpeciesBehaviour(p.SpeciesId, behaviour, BehaviourCatalog.Basis(BehaviourCatalog.Load(ws), template?.Fields));
         if (p.Texts != null) mod.SetSpeciesTexts(p.SpeciesId, p.Texts);
     }, "updated species " + p.SpeciesId);
 
