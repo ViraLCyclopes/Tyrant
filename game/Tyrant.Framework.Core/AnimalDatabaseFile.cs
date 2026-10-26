@@ -11,7 +11,7 @@ namespace Tyrant.Framework.Core
     public static class AnimalDatabaseFile
     {
         public const string FileName = "animals.db";
-        public const int SchemaVersion = 6;
+        public const int SchemaVersion = 7;
 
         /// <summary>animal_assets slots: the Nursery picture (heroRender) and the Paleopedia page picture.</summary>
         public const string IconSlot = "icon", PaleopediaSlot = "paleopedia";
@@ -85,6 +85,8 @@ namespace Tyrant.Framework.Core
                     db.Execute("CREATE TABLE IF NOT EXISTS animal_prefabs (species_id TEXT PRIMARY KEY NOT NULL REFERENCES animal_species(id) ON DELETE CASCADE, bundle TEXT NOT NULL, asset TEXT NOT NULL)");
                     db.Execute("CREATE TABLE IF NOT EXISTS animal_starting_skin (species_id TEXT PRIMARY KEY NOT NULL REFERENCES animal_species(id) ON DELETE CASCADE, skin INTEGER NOT NULL CHECK(skin >= 0), name TEXT, swatch TEXT)");
                     db.Execute("CREATE TABLE IF NOT EXISTS animal_portraits (species_id TEXT NOT NULL REFERENCES animal_species(id) ON DELETE CASCADE, slot TEXT NOT NULL, file TEXT NOT NULL, PRIMARY KEY(species_id,slot))");
+                    db.Execute("CREATE TABLE IF NOT EXISTS animal_behaviour (species_id TEXT PRIMARY KEY NOT NULL REFERENCES animal_species(id) ON DELETE CASCADE, start_from TEXT NOT NULL)");
+                    db.Execute("CREATE TABLE IF NOT EXISTS animal_behaviour_rules (species_id TEXT NOT NULL REFERENCES animal_species(id) ON DELETE CASCADE, position INTEGER NOT NULL CHECK(position >= 0), rule TEXT NOT NULL, PRIMARY KEY(species_id,rule))");
                     foreach (var old in current.Where(s => !entries.Any(e => e.Id == s.Id)))
                     {
                         db.Execute("DELETE FROM animal_fields WHERE species_id = ?", old.Id);
@@ -93,6 +95,8 @@ namespace Tyrant.Framework.Core
                         db.Execute("DELETE FROM animal_prefabs WHERE species_id = ?", old.Id);
                         db.Execute("DELETE FROM animal_starting_skin WHERE species_id = ?", old.Id);
                         db.Execute("DELETE FROM animal_portraits WHERE species_id = ?", old.Id);
+                        db.Execute("DELETE FROM animal_behaviour_rules WHERE species_id = ?", old.Id);
+                        db.Execute("DELETE FROM animal_behaviour WHERE species_id = ?", old.Id);
                         db.Execute("DELETE FROM animal_stats WHERE species_id = ?", old.Id);
                         db.Execute("DELETE FROM animal_species WHERE id = ?", old.Id);
                     }
@@ -124,6 +128,14 @@ namespace Tyrant.Framework.Core
                         db.Execute("DELETE FROM animal_portraits WHERE species_id = ?", entry.Id);
                         foreach (var portrait in entry.Portraits)
                             db.Execute("INSERT INTO animal_portraits(species_id,slot,file) VALUES(?,?,?)", entry.Id, portrait.Key, portrait.Value);
+                        db.Execute("DELETE FROM animal_behaviour_rules WHERE species_id = ?", entry.Id);
+                        db.Execute("DELETE FROM animal_behaviour WHERE species_id = ?", entry.Id);
+                        if (entry.Behaviour != null)
+                        {
+                            db.Execute("INSERT INTO animal_behaviour(species_id,start_from) VALUES(?,?)", entry.Id, entry.Behaviour.StartFrom);
+                            for (var i = 0; i < entry.Behaviour.Rules.Count; i++)
+                                db.Execute("INSERT INTO animal_behaviour_rules(species_id,position,rule) VALUES(?,?,?)", entry.Id, i, entry.Behaviour.Rules[i]);
+                        }
                     }
                     db.Execute("COMMIT");
                 }
@@ -246,6 +258,23 @@ namespace Tyrant.Framework.Core
                             throw new ManifestException($"animal_portraits: unknown portrait slot '{query.Text(1)}' (use {string.Join(", ", PortraitSlots.All)}).");
                         entry.Portraits[query.Text(1)] = query.Text(2);
                     }
+            bool hasBehaviour;
+            using (var query = db.Query("SELECT 1 FROM sqlite_master WHERE type='table' AND name='animal_behaviour'")) hasBehaviour = query.Next();
+            if (hasBehaviour)
+            {
+                using (var query = db.Query("SELECT species_id,start_from FROM animal_behaviour ORDER BY species_id"))
+                    while (query.Next())
+                    {
+                        var entry = entries.FirstOrDefault(s => s.Id == query.Text(0)) ?? throw new ManifestException("animal_behaviour references a missing species.");
+                        entry.Behaviour = new SpeciesBehaviour { StartFrom = query.Text(1) };
+                    }
+                using (var query = db.Query("SELECT species_id,rule FROM animal_behaviour_rules ORDER BY species_id,position"))
+                    while (query.Next())
+                    {
+                        var entry = entries.FirstOrDefault(s => s.Id == query.Text(0)) ?? throw new ManifestException("animal_behaviour_rules references a missing species.");
+                        (entry.Behaviour ?? throw new ManifestException($"animal_behaviour_rules: species '{entry.Id}' has rules but no animal_behaviour row.")).Rules.Add(query.Text(1));
+                    }
+            }
             Validate(entries);
             return entries;
         }
@@ -278,6 +307,7 @@ namespace Tyrant.Framework.Core
                 if (entry.StartingSkin < 0) throw new ManifestException("animals.db: species '" + entry.Id + "' starting skin must be 0 or more.");
                 if (entry.StartingSkinName != null && string.IsNullOrWhiteSpace(entry.StartingSkinName))
                     throw new ManifestException("animals.db: species '" + entry.Id + "' starting skin name is empty (use NULL for the template's name).");
+                if (entry.Behaviour != null) SpeciesBehaviours.Validate(entry.Behaviour, "animals.db: species '" + entry.Id + "'");
                 foreach (var portrait in entry.Portraits)
                 {
                     if (!PortraitSlots.IsSlot(portrait.Key)) throw new ManifestException($"animals.db: species '{entry.Id}' has unknown portrait slot '{portrait.Key}'.");

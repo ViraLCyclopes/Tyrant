@@ -1,4 +1,4 @@
--- SQLite animal database v4. Save this database as animals.db alongside mod.json.
+-- SQLite animal database v7. Save this database as animals.db alongside mod.json.
 PRAGMA foreign_keys = ON;
 BEGIN;
 CREATE TABLE animal_species (
@@ -53,5 +53,15 @@ CREATE TABLE animal_portraits (
     file TEXT NOT NULL,
     PRIMARY KEY(species_id,slot)
 );
-PRAGMA user_version = 6;
+CREATE TABLE animal_behaviour (
+    species_id TEXT PRIMARY KEY NOT NULL REFERENCES animal_species(id) ON DELETE CASCADE,
+    start_from TEXT NOT NULL
+);
+CREATE TABLE animal_behaviour_rules (
+    species_id TEXT NOT NULL REFERENCES animal_species(id) ON DELETE CASCADE,
+    position INTEGER NOT NULL CHECK(position >= 0),
+    rule TEXT NOT NULL,
+    PRIMARY KEY(species_id,rule)
+);
+PRAGMA user_version = 7;
 COMMIT;
