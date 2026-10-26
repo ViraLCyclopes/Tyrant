@@ -31,11 +31,11 @@ public static class BehaviourCatalog
             {
                 JsonElement root;
                 try { root = store.Load(profileType, known.Asset); }
-                catch (TyrantException ex) when (ex.Code is TyrantErrorCode.AssetNotFound) { continue; }
+                catch (TyrantException ex) when (ex.Code is TyrantErrorCode.AssetNotFound or TyrantErrorCode.AssetAmbiguous) { continue; }
                 var rules = new List<string>();
-                if (root.TryGetProperty("aggressionProfileEntries", out var entries) && entries.ValueKind == JsonValueKind.Array)
+                if (Prop(root, "aggressionProfileEntries", out var entries) && entries.ValueKind == JsonValueKind.Array)
                     foreach (var entry in entries.EnumerateArray())
-                        if (entry.TryGetProperty("asset", out var asset) && RefName(asset) is { } rule && !rules.Contains(rule)) rules.Add(rule);
+                        if (Prop(entry, "asset", out var asset) && RefName(asset) is { } rule && !rules.Contains(rule)) rules.Add(rule);
                 profiles.Add(new BehaviourProfileInfo(known.Asset, known.Name,
                     Text(root, "confidenceLevel"), Text(root, "temperament"), Text(root, "cannibalism"),
                     rules, users.TryGetValue(known.Asset, out var list) ? list.OrderBy(s => s, StringComparer.Ordinal).ToList() : []));
@@ -56,7 +56,7 @@ public static class BehaviourCatalog
         try
         {
             using var doc = JsonDocument.Parse(row.Value);
-            return doc.RootElement.TryGetProperty("name", out var name) ? name.GetString() : null;
+            return Prop(doc.RootElement, "name", out var name) && name.ValueKind == JsonValueKind.String ? name.GetString() : null;
         }
         catch (JsonException) { return null; }
     }
@@ -69,20 +69,27 @@ public static class BehaviourCatalog
         return rules == null ? null : new BehaviourBasis(profile!, rules);
     }
 
+    /// <summary>The property of an object; false for any other kind of value, so an odd shape in the dump is skipped.</summary>
+    static bool Prop(JsonElement value, string name, out JsonElement result)
+    {
+        result = default;
+        return value.ValueKind == JsonValueKind.Object && value.TryGetProperty(name, out result);
+    }
+
     static string Text(JsonElement root, string property) =>
-        root.TryGetProperty(property, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString()! : "";
+        Prop(root, property, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString()! : "";
 
     static string? RefName(JsonElement value) =>
-        value.ValueKind == JsonValueKind.Object && value.TryGetProperty("$ref", out var r) && r.TryGetProperty("name", out var n) ? n.GetString() : null;
+        Prop(value, "$ref", out var r) && Prop(r, "name", out var n) && n.ValueKind == JsonValueKind.String ? n.GetString() : null;
 
     static bool ShownInGame(DataStore store, string asset)
     {
         try
         {
             var root = store.Load(store.FindType(RuleType), asset);
-            return root.TryGetProperty("profile", out var p) && p.TryGetProperty("showInGUI", out var s) && s.ValueKind == JsonValueKind.True;
+            return Prop(root, "profile", out var p) && Prop(p, "showInGUI", out var s) && s.ValueKind == JsonValueKind.True;
         }
-        catch (TyrantException ex) when (ex.Code is TyrantErrorCode.DataMissing or TyrantErrorCode.AssetNotFound) { return false; }
+        catch (TyrantException ex) when (ex.Code is TyrantErrorCode.DataMissing or TyrantErrorCode.AssetNotFound or TyrantErrorCode.AssetAmbiguous) { return false; }
     }
 
     /// <summary>Species ids by the combat profile their animal's brain links to.</summary>
@@ -93,12 +100,12 @@ public static class BehaviourCatalog
         {
             var brainProfile = new Dictionary<string, string>(StringComparer.Ordinal);
             foreach (var (name, root) in store.LoadAll(store.FindType(BrainType)))
-                if (root.TryGetProperty("combat", out var c) && c.TryGetProperty("shared", out var s) && s.TryGetProperty("combatProfile", out var p) && RefName(p) is { } profile)
+                if (Prop(root, "combat", out var c) && Prop(c, "shared", out var s) && Prop(s, "combatProfile", out var p) && RefName(p) is { } profile)
                     brainProfile[name] = profile;
             foreach (var (_, root) in store.LoadAll(store.FindType("PrehistoricKingdom.AnimalData")))
             {
-                if (!root.TryGetProperty("speciesID", out var id) || id.GetString() is not { } species) continue;
-                if (!root.TryGetProperty("brain", out var brain) || RefName(brain) is not { } brainName || !brainProfile.TryGetValue(brainName, out var asset)) continue;
+                if (!Prop(root, "speciesID", out var id) || id.ValueKind != JsonValueKind.String || id.GetString() is not { } species) continue;
+                if (!Prop(root, "brain", out var brain) || RefName(brain) is not { } brainName || !brainProfile.TryGetValue(brainName, out var asset)) continue;
                 if (!result.TryGetValue(asset, out var list)) result[asset] = list = [];
                 list.Add(species);
             }

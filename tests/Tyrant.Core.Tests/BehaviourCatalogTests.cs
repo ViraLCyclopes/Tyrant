@@ -12,7 +12,7 @@ public class BehaviourCatalogTests
 
     static string Link(string asset, int id) => $$$"""{"asset":{"$ref":{"type":"{{{Ai}}}AggressionProfileAsset","name":"{{{asset}}}","id":{{{id}}}}},"inlineProfile":{},"overrideFlags":"0","behavioralContribution":0.15}""";
 
-    static Workspace Setup(bool withProfiles)
+    static Workspace Setup(bool withProfiles, bool broken = false)
     {
         var game = new FakeGame();
         var ws = Workspace.Create(Path.Combine(TestTemp.Root, Guid.NewGuid().ToString("N"), "ws"), new GameInstall(game.Root, null));
@@ -24,8 +24,19 @@ public class BehaviourCatalogTests
             Add(Ai + "AnimalBrain", "TriceratopsHorridus", 2, """{"combat":{"shared":{"combatProfile":{"$ref":{"type":"PrehistoricKingdom.AnimalsV2.AI.AnimalCombatProfile","name":"CombatProfile_TankTerritorial","id":3}}}}}""");
             Add(Ai + "AnimalCombatProfile", "CombatProfile_TankTerritorial", 3,
                 $$$"""{"confidenceLevel":"Confident","temperament":"Aggressive","cannibalism":"None","aggressionProfileEntries":[{{{Link("Aggression_DefendWithFamily", 4)}}},{{{Link("Aggression_NestDefense", 5)}}},{{{Link("Aggression_DefendWithFamily", 4)}}},{"asset":null,"inlineProfile":{}}]}""");
-            Add(Ai + "AnimalCombatProfile", "CombatProfile_Deer", 6, """{"confidenceLevel":"Timid","temperament":"Passive","cannibalism":"None","aggressionProfileEntries":[]}""");
+            Add(Ai + "AnimalCombatProfile", "CombatProfile_Deer", 6, broken
+                ? $$$"""{"confidenceLevel":7,"aggressionProfileEntries":[42,"text",{"asset":"x"},{"asset":{"$ref":"oops"}},{{{Link("Aggression_PreyFleeFromPredator", 7)}}}]}"""
+                : """{"confidenceLevel":"Timid","temperament":"Passive","cannibalism":"None","aggressionProfileEntries":[]}""");
             Add(Ai + "AggressionProfileAsset", "Aggression_DefendWithFamily", 4, """{"profile":{"showInGUI":true}}""");
+        }
+        if (broken)
+        {
+            // Odd shapes a game update could leave in the dump: each is skipped, never fatal.
+            Add(Ai + "AnimalCombatProfile", "CombatProfile_Elephant", 8, "[1, 2]");
+            Add(Ai + "AnimalBrain", "Odd", 9, """{"combat":"broken"}""");
+            Add(Ai + "AnimalBrain", "Odder", 10, """{"combat":{"shared":{"combatProfile":{"$ref":7}}}}""");
+            Add("PrehistoricKingdom.AnimalData", "Weird", 11, """{"speciesID":"Weird","brain":{"$ref":"Odd"}}""");
+            Add(Ai + "AggressionProfileAsset", "Aggression_NestDefense", 5, """{"profile":"weird"}""");
         }
         DumpWriter.Write(ws.DataDir, result, [], new DumpManifest { RequestId = "r" });
         return ws;
@@ -49,6 +60,20 @@ public class BehaviourCatalogTests
     }
 
     [Fact]
+    public void Load_skips_values_of_an_unexpected_shape()
+    {
+        var data = BehaviourCatalog.Load(Setup(true, broken: true));
+
+        Assert.Equal(["CombatProfile_TankTerritorial", "CombatProfile_Elephant", "CombatProfile_Deer"], data.Profiles.Select(p => p.Asset));
+        var deer = data.Profiles[2];
+        Assert.Equal(["Aggression_PreyFleeFromPredator"], deer.Rules);
+        Assert.Equal(("", "", ""), (deer.Confidence, deer.Temperament, deer.Cannibalism));
+        Assert.Empty(data.Profiles[1].Rules);
+        Assert.Equal(["Triceratops Horridus"], data.Profiles[0].UsedBy);
+        Assert.False(data.Rules.Single(r => r.Asset == "Aggression_NestDefense").ShownInGame);
+    }
+
+    [Fact]
     public void Load_is_empty_without_combat_profiles_in_the_dump()
     {
         var data = BehaviourCatalog.Load(Setup(false));
@@ -68,5 +93,7 @@ public class BehaviourCatalogTests
 
         Assert.Equal("CombatProfile_TankTerritorial", BehaviourCatalog.TemplateProfile(fields));
         Assert.Null(BehaviourCatalog.TemplateProfile([]));
+        Assert.Null(BehaviourCatalog.TemplateProfile([new() { Path = SpeciesBehaviours.ProfilePath, Kind = "reference", Value = "5" }]));
+        Assert.Null(BehaviourCatalog.TemplateProfile([new() { Path = SpeciesBehaviours.ProfilePath, Kind = "reference", Value = """{"name":3}""" }]));
     }
 }
