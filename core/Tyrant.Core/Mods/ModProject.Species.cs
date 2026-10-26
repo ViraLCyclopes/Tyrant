@@ -5,6 +5,9 @@ using Tyrant.Framework.Core;
 
 namespace Tyrant.Core.Mods;
 
+/// <summary>What a species' behaviour is compared with: the template's own combat profile and that profile's rules.</summary>
+public sealed record BehaviourBasis(string Profile, IReadOnlyList<string> Rules);
+
 public sealed partial class ModProject
 {
     public SpeciesEntry AddSpecies(IReadOnlyList<SpeciesSkins> vanilla, string id, string template,
@@ -91,12 +94,39 @@ public sealed partial class ModProject
             StartingSkin = old.StartingSkin, StartingSkinName = old.StartingSkinName, Swatch = old.Swatch,
             Portraits = new Dictionary<string, string>(old.Portraits, StringComparer.Ordinal),
             Texts = old.Texts.ToList(),
+            Behaviour = old.Behaviour,
         };
         try { EnsureLocalizationFiles(Manifest.Species[index]); SaveSpecies(); }
         catch { Manifest.Species[index] = old; throw; }
         // The English name file is what the game shows, so it follows the Display name.
         if (Manifest.Species[index].Name != old.Name && Manifest.Species[index].Localization.TryGetValue("name", out var nameTerm))
             WriteText(AnimalLocalization.FileFor(Dir, "en-US", nameTerm), Manifest.Species[index].Name);
+    }
+
+    /// <summary>
+    /// The species' combat behaviour: the profile it starts from and the rules it keeps. When it equals the basis (the template's
+    /// own profile and rules) nothing is stored, so the species follows its template. Otherwise any edits to the template's
+    /// rule rows are dropped, because the behaviour builds the rule list itself.
+    /// </summary>
+    public void SetSpeciesBehaviour(string id, SpeciesBehaviour behaviour, BehaviourBasis? basis)
+    {
+        var entry = Manifest.Species.FirstOrDefault(s => s.Id == id)
+            ?? throw new TyrantException(TyrantErrorCode.TargetNotFound, "Species not found: " + id);
+        try { SpeciesBehaviours.Validate(behaviour, "Species " + id); }
+        catch (ManifestException ex) { throw new TyrantException(TyrantErrorCode.ModInvalid, ex.Message); }
+        var same = basis != null && basis.Profile == behaviour.StartFrom
+            && basis.Rules.ToHashSet(StringComparer.Ordinal).SetEquals(behaviour.Rules);
+        var (oldBehaviour, oldValues) = (entry.Behaviour, entry.Fields.Select(f => f.Value).ToList());
+        entry.Behaviour = same ? null : new SpeciesBehaviour { StartFrom = behaviour.StartFrom, Rules = behaviour.Rules.ToList() };
+        if (!same)
+            foreach (var field in entry.Fields.Where(f => SpeciesBehaviours.IsRuleField(f.Path))) field.Value = field.TemplateValue;
+        try { SaveSpecies(); }
+        catch
+        {
+            entry.Behaviour = oldBehaviour;
+            for (var i = 0; i < oldValues.Count; i++) entry.Fields[i].Value = oldValues[i];
+            throw;
+        }
     }
 
     private void SaveSpecies()

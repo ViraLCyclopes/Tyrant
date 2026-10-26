@@ -31,6 +31,69 @@ public class SpeciesDatabaseRpcTests
     }
 
     [Fact]
+    public async Task Behaviour_round_trips_through_setSpecies_and_animalDatabase()
+    {
+        const string ai = "PrehistoricKingdom.AnimalsV2.AI.";
+        string Link(string asset, int id) => $$$"""{"asset":{"$ref":{"type":"{{{ai}}}AggressionProfileAsset","name":"{{{asset}}}","id":{{{id}}}}},"inlineProfile":{}}""";
+        using var game = new FakeGame();
+        var (h, ws, _) = await AssetFixtures.Opened(game);
+        var objects = new DumpResult();
+        var skin = AssetFixtures.TexturedSkin(objects, "Default", 50);
+        void Add(string type, string name, long id, string json) => objects.Objects.Add(new DumpObject(typeof(object), new EngineObjectInfo(type, name, id), json));
+        Add("PrehistoricKingdom.AnimalData", "Triceratops", 1, $$$$"""
+            {"speciesID":"Triceratops Horridus", "cost":20000, "skinsData":[{{{{skin}}}}],
+             "brain":{"$ref":{"type":"{{{{ai}}}}AnimalBrain","name":"TriceratopsHorridus","id":2}}}
+            """);
+        Add(ai + "AnimalBrain", "TriceratopsHorridus", 2, """{"combat":{"shared":{"combatProfile":{"$ref":{"type":"AI.AnimalCombatProfile","name":"CombatProfile_TankTerritorial","id":3}}}}}""".Replace("AI.", ai));
+        Add(ai + "AnimalCombatProfile", "CombatProfile_TankTerritorial", 3,
+            $$$"""{"confidenceLevel":"Confident","temperament":"Aggressive","cannibalism":"None","aggressionProfileEntries":[{{{Link("Aggression_DefendWithFamily", 4)}}},{{{Link("Aggression_NestDefense", 5)}}}]}""");
+        Add(ai + "AnimalCombatProfile", "CombatProfile_Deer", 6, """{"confidenceLevel":"Timid","temperament":"Passive","cannibalism":"None","aggressionProfileEntries":[]}""");
+        Add(ai + "AggressionProfileAsset", "Aggression_DefendWithFamily", 4, """{"profile":{"showInGUI":true}}""");
+        DumpWriter.Write(Path.Combine(ws, "data"), objects, [], new DumpManifest { RequestId = "r1", BuildGuid = "b" });
+        await h.Call("mods.create", new { id = "mod-a" });
+        string Rev(System.Text.Json.JsonElement d) => d.GetProperty("revision").GetString()!;
+        var a = await h.Call("mods.get", new { id = "mod-a" });
+        a = await h.Call("mods.addSpecies", new { id = "mod-a", revision = Rev(a), speciesId = "mirabilis", template = "Triceratops Horridus", name = "Mirabilis", genus = "Example", epithet = "mirabilis" });
+
+        var before = await h.Call("mods.animalDatabase", new { id = "mod-a" });
+        var animal = Assert.Single(before.GetProperty("animals").EnumerateArray());
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, animal.GetProperty("behaviour").ValueKind);
+        Assert.Equal("CombatProfile_TankTerritorial", animal.GetProperty("templateProfile").GetString());
+        var tank = before.GetProperty("profiles").EnumerateArray().Single(p => p.GetProperty("asset").GetString() == "CombatProfile_TankTerritorial");
+        Assert.Equal("Triceratops Horridus", Assert.Single(tank.GetProperty("usedBy").EnumerateArray()).GetString());
+        Assert.True(before.GetProperty("rules").EnumerateArray().Single(r => r.GetProperty("asset").GetString() == "Aggression_DefendWithFamily").GetProperty("shownInGame").GetBoolean());
+
+        a = await h.Call("mods.setSpecies", new
+        {
+            id = "mod-a", revision = Rev(a), speciesId = "mirabilis", name = "Mirabilis", genus = "Example", epithet = "mirabilis",
+            cost = (int?)null, stats = new Dictionary<string, double>(),
+            behaviour = new { startFrom = "CombatProfile_Deer", rules = new[] { "Aggression_PreyFleeFromPredator" } },
+        });
+        animal = Assert.Single((await h.Call("mods.animalDatabase", new { id = "mod-a" })).GetProperty("animals").EnumerateArray());
+        Assert.Equal("CombatProfile_Deer", animal.GetProperty("behaviour").GetProperty("startFrom").GetString());
+        Assert.Equal(["Aggression_PreyFleeFromPredator"], animal.GetProperty("behaviour").GetProperty("rules").EnumerateArray().Select(r => r.GetString()));
+
+        // Saving without a behaviour keeps the stored one.
+        a = await h.Call("mods.setSpecies", new
+        {
+            id = "mod-a", revision = Rev(a), speciesId = "mirabilis", name = "Mirabilis 2", genus = "Example", epithet = "mirabilis",
+            cost = (int?)null, stats = new Dictionary<string, double>(),
+        });
+        animal = Assert.Single((await h.Call("mods.animalDatabase", new { id = "mod-a" })).GetProperty("animals").EnumerateArray());
+        Assert.Equal("CombatProfile_Deer", animal.GetProperty("behaviour").GetProperty("startFrom").GetString());
+
+        // The template's own profile and rules store nothing.
+        await h.Call("mods.setSpecies", new
+        {
+            id = "mod-a", revision = Rev(a), speciesId = "mirabilis", name = "Mirabilis 2", genus = "Example", epithet = "mirabilis",
+            cost = (int?)null, stats = new Dictionary<string, double>(),
+            behaviour = new { startFrom = "CombatProfile_TankTerritorial", rules = new[] { "Aggression_NestDefense", "Aggression_DefendWithFamily" } },
+        });
+        animal = Assert.Single((await h.Call("mods.animalDatabase", new { id = "mod-a" })).GetProperty("animals").EnumerateArray());
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, animal.GetProperty("behaviour").ValueKind);
+    }
+
+    [Fact]
     public async Task Nursery_and_paleopedia_pictures_are_set_and_cleared_separately()
     {
         using var game = new FakeGame();

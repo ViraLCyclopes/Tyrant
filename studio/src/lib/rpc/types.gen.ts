@@ -473,6 +473,8 @@ export interface ModAddStartingSkinParams {
 export interface ModAnimalDatabase {
   animals: ModAnimalDto[];
   fields: ModStatDto[];
+  profiles: ModBehaviourProfileDto[];
+  rules: ModBehaviourRuleDto[];
 }
 
 export interface ModAnimalDto {
@@ -497,6 +499,8 @@ export interface ModAnimalDto {
   startingSkinId?: string | null;
   paleopediaPicture?: string | null;
   texts?: Record<string, Record<string, string>> | null;
+  behaviour?: ModSpeciesBehaviourDto | null;
+  templateProfile?: string | null;
 }
 
 export interface ModAnimalFieldDto {
@@ -511,6 +515,22 @@ export interface ModArrangeSkinsParams {
   id: string;
   revision: string;
   order: ModSkinPlace[];
+}
+
+export interface ModBehaviourProfileDto {
+  asset: string;
+  name: string;
+  confidence: string;
+  temperament: string;
+  cannibalism: string;
+  rules: string[];
+  usedBy: string[];
+}
+
+export interface ModBehaviourRuleDto {
+  asset: string;
+  name: string;
+  shownInGame: boolean;
 }
 
 export interface ModBringInLooksParams {
@@ -1139,6 +1159,7 @@ export interface ModSetSpeciesParams {
   dataFields?: Record<string, string> | null;
   localization?: Record<string, string> | null;
   texts?: Record<string, Record<string, string>> | null;
+  behaviour?: ModSpeciesBehaviourDto | null;
 }
 
 export interface ModSetSpeciesPortraitsParams {
@@ -1275,6 +1296,11 @@ export interface ModSoundDto {
 export interface ModSoundFilesDto {
   event: string;
   files: string[];
+}
+
+export interface ModSpeciesBehaviourDto {
+  startFrom: string;
+  rules: string[];
 }
 
 export interface ModSpeciesMaterialsDto {
