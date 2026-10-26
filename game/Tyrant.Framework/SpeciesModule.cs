@@ -144,7 +144,9 @@ namespace Tyrant.Framework
                         if (value is AnimationCurve curve) return new AnimationCurve(curve.keys) { preWrapMode = curve.preWrapMode, postWrapMode = curve.postWrapMode };
                         return AnimalFieldEditor.ShallowClone(value);
                     });
-                    fieldEditor.Apply(data, entry.Fields);
+                    // The species' own profile first: record edits then land on its copy, never on the vanilla one.
+                    if (entry.Behaviour != null) SpeciesBehaviourBuilder.Apply(data, entry.Behaviour, originals, id);
+                    fieldEditor.Apply(data, SpeciesBehaviours.FieldsToApply(entry));
                     data.name = id;
                     Set(data, "speciesID", id);
                     Set(data, "shortSpeciesID", id);

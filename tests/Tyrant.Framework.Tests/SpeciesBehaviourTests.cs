@@ -102,6 +102,19 @@ public class SpeciesBehaviourTests
     }
 
     [Fact]
+    public void FieldsToApply_skips_rule_rows_only_when_a_behaviour_is_set()
+    {
+        var rule = new AnimalField { Path = SpeciesBehaviours.RulesPath + "/0/behavioralContribution", Kind = "number", Value = "2", TemplateValue = "1", Editable = true };
+        var diet = new AnimalField { Path = "/diet", Kind = "text", Value = "Carnivore", TemplateValue = "Herbivore", Editable = true };
+        var entry = new SpeciesEntry { Fields = [rule, diet] };
+
+        Assert.Equal([rule, diet], SpeciesBehaviours.FieldsToApply(entry));
+
+        entry.Behaviour = new SpeciesBehaviour { StartFrom = "CombatProfile_PredatorApex", Rules = ["Aggression_Predation"] };
+        Assert.Equal([diet], SpeciesBehaviours.FieldsToApply(entry));
+    }
+
+    [Fact]
     public void IsRuleField_matches_the_rules_path_and_children()
     {
         Assert.True(SpeciesBehaviours.IsRuleField(SpeciesBehaviours.RulesPath));

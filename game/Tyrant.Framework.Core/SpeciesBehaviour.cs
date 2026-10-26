@@ -92,6 +92,10 @@ namespace Tyrant.Framework.Core
         public static bool IsRuleField(string path) =>
             path == RulesPath || path.StartsWith(RulesPath + "/", StringComparison.Ordinal);
 
+        /// <summary>The record edits to apply: with a behaviour the species builds its own rule list, so its old rule rows are left out.</summary>
+        public static IEnumerable<AnimalField> FieldsToApply(SpeciesEntry entry) =>
+            entry.Behaviour == null ? entry.Fields : entry.Fields.Where(f => !IsRuleField(f.Path));
+
         /// <summary>The profile asset a name refers to (asset name, name without CombatProfile_, or plain name; any case), or null.</summary>
         public static string? ResolveProfile(string text) => Resolve(Profiles, ProfilePrefix, text);
 
