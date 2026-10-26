@@ -172,13 +172,16 @@ public sealed partial class ModsMethods
             ?? throw new TyrantException(TyrantErrorCode.TargetNotFound, "Species not found: " + p.SpeciesId);
         ValidateStats(p.Stats, SpeciesDatabase.Template(ws, entry.Base));
         if (p.Texts != null) ModProject.ValidateSpeciesTexts(p.Texts);
+        // A bad behaviour refuses the whole save, before anything is written.
+        var behaviour = p.Behaviour == null ? null : new SpeciesBehaviour { StartFrom = p.Behaviour.StartFrom, Rules = p.Behaviour.Rules.ToList() };
+        if (behaviour != null)
+        {
+            try { SpeciesBehaviours.Validate(behaviour, "Species " + p.SpeciesId); }
+            catch (ManifestException ex) { throw new TyrantException(TyrantErrorCode.ModInvalid, ex.Message); }
+        }
         var template = SpeciesDatabase.Template(ws, entry.Base);
         mod.SetSpecies(p.SpeciesId, p.Name, p.Genus, p.Epithet, p.Cost, p.Stats, p.DataFields, template, p.Localization);
-        if (p.Behaviour != null)
-        {
-            mod.SetSpeciesBehaviour(p.SpeciesId, new SpeciesBehaviour { StartFrom = p.Behaviour.StartFrom, Rules = p.Behaviour.Rules.ToList() },
-                BehaviourCatalog.Basis(BehaviourCatalog.Load(ws), template?.Fields));
-        }
+        if (behaviour != null) mod.SetSpeciesBehaviour(p.SpeciesId, behaviour, BehaviourCatalog.Basis(BehaviourCatalog.Load(ws), template?.Fields));
         if (p.Texts != null) mod.SetSpeciesTexts(p.SpeciesId, p.Texts);
     }, "updated species " + p.SpeciesId);
 

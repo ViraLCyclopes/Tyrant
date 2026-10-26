@@ -82,6 +82,16 @@ public class SpeciesDatabaseRpcTests
         animal = Assert.Single((await h.Call("mods.animalDatabase", new { id = "mod-a" })).GetProperty("animals").EnumerateArray());
         Assert.Equal("CombatProfile_Deer", animal.GetProperty("behaviour").GetProperty("startFrom").GetString());
 
+        // A bad behaviour refuses the whole save: the name is not changed either.
+        var bad = await Assert.ThrowsAsync<RpcCallException>(() => h.Call("mods.setSpecies", new
+        {
+            id = "mod-a", revision = Rev(a), speciesId = "mirabilis", name = "Renamed", genus = "Example", epithet = "mirabilis",
+            cost = (int?)null, stats = new Dictionary<string, double>(),
+            behaviour = new { startFrom = "CombatProfile_Deer", rules = new[] { "Aggression_Nope" } },
+        }));
+        Assert.Equal("MOD_INVALID", bad.DataCode);
+        Assert.Equal("Mirabilis 2", Assert.Single(AnimalDatabaseFile.Read(Path.Combine(ws, "mods", "mod-a", AnimalDatabaseFile.FileName))).Name);
+
         // The template's own profile and rules store nothing.
         await h.Call("mods.setSpecies", new
         {
