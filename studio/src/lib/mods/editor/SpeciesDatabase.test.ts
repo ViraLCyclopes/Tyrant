@@ -20,7 +20,7 @@ function languageTexts(given: Record<string, Record<string, string>>): Record<st
 }
 const fields = [{ id: 'adultMassKg', label: 'Adult mass', unit: 'kg', min: 0.001, max: 1000000 }, { id: 'maxAgeYears', label: 'Lifespan', unit: 'years', min: 0.001, max: 10000 }];
 
-async function setup(animals: (typeof animal)[] = [animal], props: { onPrefab?: (t: string) => void; onAddSkin?: (k: string) => void; onOpenSkin?: (id: string) => void; onAddSound?: (k: string) => void; onOpenSound?: (s: unknown) => void } = {}, templateFound = true, detail = modDetail()) {
+async function setup(animals: (typeof animal)[] = [animal], props: { onPrefab?: (t: string) => void; onAddSkin?: (k: string) => void; onOpenSkin?: (id: string) => void; onAddSound?: (k: string) => void; onOpenSound?: (s: unknown) => void } = {}, templateFound = true, detail = modDetail(), catalogue: { profiles?: unknown[]; rules?: unknown[] } = {}) {
   const rpc = new FakeRpc()
     .on('mods.get', () => detail)
     .on('mods.check', () => ({ errors: [], warnings: [], missingCutouts: [] }))
@@ -28,7 +28,7 @@ async function setup(animals: (typeof animal)[] = [animal], props: { onPrefab?: 
       { speciesId: 'Carcharodontosaurus', vivarium: false, skins: [{ index: 0, name: 'Base', male: true, female: true }, { index: 1, name: 'Alt 1', male: true, female: true }, { index: 2, name: 'Alt 2', male: true, female: true }], prefabGuid: null }] }))
     .on('mods.setSpeciesStartingSkin', () => ({ ...detail, revision: 'r2' }))
     .on('mods.setSpeciesSwatch', () => ({ ...detail, revision: 'r3' }))
-    .on('mods.animalDatabase', () => ({ animals, fields }))
+    .on('mods.animalDatabase', () => ({ animals, fields, ...catalogue }))
     .on('mods.thumbnail', (p) => ({ file: `D:/previews/${String(p.file).split('/').pop()}` }))
     .on('mods.speciesTemplate', (p) => (templateFound ? { template: p.template, found: true, cost: 20000, stats: { adultMassKg: 4010, maxAgeYears: 40 } } : { template: p.template, found: false, cost: null, stats: {} }))
     .on('blender.status', () => ({ found: true, exe: 'b.exe', version: '5.2.2', supported: true, missingConfigured: null, addon: 'current', addonInstalled: '0.1.0', addonBundled: '0.1.0', problem: null }));
@@ -54,6 +54,30 @@ const socialRows = [
   row('/brain/needs/adult/native/socialIsolationTime', '600'),
   row('/brain/social/adult/socialCommunicationInterval/x', '20'), row('/brain/social/adult/socialCommunicationInterval/y', '72'),
 ];
+
+/** The game's behaviour profiles and rules, as mods.animalDatabase lists them from the data dump. */
+const catalogue = {
+  profiles: [
+    { asset: 'CombatProfile_Tank', name: 'Tank', confidence: 'Confident', temperament: 'Aggressive', cannibalism: 'None', rules: ['Aggression_Predation', 'Aggression_FightOwnSpecies'], usedBy: ['Allosaurus Anax'] },
+    { asset: 'CombatProfile_Prey', name: 'Prey', confidence: 'Skittish', temperament: 'Passive', cannibalism: 'None', rules: ['Aggression_PreyFleeFromPredator'], usedBy: ['Dryosaurus'] },
+  ],
+  rules: [
+    { asset: 'Aggression_Predation', name: 'Hunts prey', shownInGame: true },
+    { asset: 'Aggression_PreyFleeFromPredator', name: 'Flees from predators', shownInGame: false },
+    { asset: 'Aggression_FightOwnSpecies', name: 'Fights its own kind', shownInGame: false },
+  ],
+};
+const combatProfile = '/brain/combat/shared/combatProfile';
+const ruleRow = `${combatProfile}/aggressionProfileEntries/0/contribution`;
+/** A species with the record rows the Diet and niche, Behaviour and Habitat cards edit, from a template using the Tank profile. */
+const identity = { ...animal, templateProfile: 'CombatProfile_Tank', behaviour: null, dataFields: [...animal.dataFields,
+  row('/diet', 'Carnivore', 'text'), row('/niches/infantNiche', 'Small, Predator', 'text'), row('/niches/adolescentNiche', 'Medium, Predator', 'text'), row('/niches/adultNiche', 'Large, Predator', 'text'),
+  row(`${combatProfile}/confidenceLevel`, 'Confident', 'text'), row(`${combatProfile}/temperament`, 'Aggressive', 'text'), row(`${combatProfile}/cannibalism`, 'None', 'text'),
+  row(`${combatProfile}/aggressionProfileEntries`, '2', 'array', false), row(ruleRow, '1'),
+  row('/MinFenceHeight', 'Height4M', 'text')] } as typeof animal;
+const startFrom = (asset: string) => fireEvent.change(within(screen.getByRole('region', { name: 'Behaviour' })).getByRole('combobox', { name: 'Start from' }), { target: { value: asset } });
+const record = () => screen.getByRole('textbox', { name: /Search fields/ });
+const dropEdits = "Saving this behaviour drops your edits to the profile's rules in the full animal record. Save anyway?";
 
 describe('Species database', () => {
   it("a new species shows its template's cost and stats before it is created", async () => {
@@ -511,5 +535,108 @@ describe('Species database', () => {
     expect(onOpenSound).toHaveBeenCalledWith({ event: call.event, species: call.species, skin: null });
     await fireEvent.click(within(sounds).getByRole('button', { name: 'Add a sound for this species' }));
     expect(onAddSound).toHaveBeenCalledWith('tyrant.red-spot.new-animal');
+  });
+
+  it('shows the Diet and niche, Behaviour and Habitat cards after the Social card, in that order', async () => {
+    await setup([{ ...identity, dataFields: [...identity.dataFields, ...socialRows] }], {}, true, modDetail(), catalogue);
+    const names = screen.getAllByRole('region').map((r) => r.getAttribute('aria-label'));
+    const at = (name: string) => names.indexOf(name);
+    expect(at('Social')).toBeGreaterThanOrEqual(0);
+    expect([at('Social') < at('Diet and niche'), at('Diet and niche') < at('Behaviour'), at('Behaviour') < at('Habitat')]).toEqual([true, true, true]);
+  });
+
+  it('saving sends behaviour with setSpecies', async () => {
+    const { rpc, session } = await setup([identity], {}, true, modDetail(), catalogue);
+    rpc.on('mods.setSpecies', () => modDetail({ revision: 'r2' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Save species' }));
+    await waitFor(() => expect(rpc.callsTo('mods.setSpecies')).toHaveLength(1));
+    expect((rpc.callsTo('mods.setSpecies')[0].params as { behaviour?: unknown }).behaviour ?? null).toBeNull();
+    await waitFor(() => expect(session.log.records.map((r) => r.message)).toContain("Saved 'New animal' and its stats."));
+
+    await startFrom('CombatProfile_Prey');
+    // Prey has no "Hunts prey" rule, so the Diet and niche card warns that the predator won't hunt.
+    await waitFor(() => expect(within(screen.getByRole('region', { name: 'Diet and niche' })).getByText(/no "Hunts prey" rule/)).toBeInTheDocument());
+    await fireEvent.click(screen.getByRole('button', { name: 'Save species' }));
+    await waitFor(() => expect(rpc.callsTo('mods.setSpecies')[1]?.params).toMatchObject({
+      speciesId: 'new-animal', behaviour: { startFrom: 'CombatProfile_Prey', rules: ['Aggression_PreyFleeFromPredator'] },
+      dataFields: { [`${combatProfile}/confidenceLevel`]: 'Skittish', [`${combatProfile}/temperament`]: 'Passive' } }));
+  });
+
+  it('Save is disabled while the diet card has an error', async () => {
+    await setup([identity], {}, true, modDetail(), catalogue);
+    const diet = screen.getByRole('region', { name: 'Diet and niche' });
+    await fireEvent.click(within(diet).getByRole('checkbox', { name: 'Meat' }));
+    expect(within(diet).getByRole('alert')).toHaveTextContent('Tick at least one food.');
+    expect(screen.getByRole('button', { name: 'Save species' })).toBeDisabled();
+    await fireEvent.click(within(diet).getByRole('checkbox', { name: 'Fish' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save species' })).toBeEnabled());
+  });
+
+  it('rule rows are hidden once Start from changes', async () => {
+    await setup([identity], {}, true, modDetail(), catalogue);
+    await fireEvent.input(record(), { target: { value: 'aggressionProfileEntries' } });
+    expect(screen.getByRole('textbox', { name: ruleRow })).toBeInTheDocument();
+    expect(screen.queryByText('Rules are set on the Behaviour card.')).toBeNull();
+
+    await startFrom('CombatProfile_Prey');
+    await waitFor(() => expect(screen.queryByRole('textbox', { name: ruleRow })).toBeNull());
+    expect(screen.getByText('Rules are set on the Behaviour card.')).toBeInTheDocument();
+
+    // Back to the template's own profile and rules: nothing differs, so the rows come back.
+    await startFrom('CombatProfile_Tank');
+    await waitFor(() => expect(screen.getByRole('textbox', { name: ruleRow })).toBeInTheDocument());
+  });
+
+  it('a stored behaviour hides the rule rows from the start', async () => {
+    await setup([{ ...identity, behaviour: { startFrom: 'CombatProfile_Prey', rules: ['Aggression_PreyFleeFromPredator'] } } as typeof animal], {}, true, modDetail(), catalogue);
+    expect((within(screen.getByRole('region', { name: 'Behaviour' })).getByRole('combobox', { name: 'Start from' }) as HTMLSelectElement).value).toBe('CombatProfile_Prey');
+    await fireEvent.input(record(), { target: { value: 'aggressionProfileEntries' } });
+    expect(screen.queryByRole('textbox', { name: ruleRow })).toBeNull();
+    expect(screen.getByText('Rules are set on the Behaviour card.')).toBeInTheDocument();
+  });
+
+  it('the drop-edits question appears only when rule rows were edited', async () => {
+    const { rpc, platform, session } = await setup([identity], {}, true, modDetail(), catalogue);
+    rpc.on('mods.setSpecies', () => modDetail({ revision: 'r2' }));
+    await startFrom('CombatProfile_Prey');
+    await fireEvent.click(screen.getByRole('button', { name: 'Save species' }));
+    await waitFor(() => expect(rpc.callsTo('mods.setSpecies')).toHaveLength(1));
+    expect(platform.confirms).not.toContain(dropEdits);
+
+    // The reload shows the stored record again (this fake stores no behaviour), so the rule rows are back to edit.
+    await waitFor(() => expect(session.log.records.map((r) => r.message)).toContain("Saved 'New animal' and its stats."));
+    await fireEvent.input(record(), { target: { value: 'aggressionProfileEntries' } });
+    await fireEvent.input(await screen.findByRole('textbox', { name: ruleRow }), { target: { value: '3' } });
+    await startFrom('CombatProfile_Prey');
+    platform.confirmAnswer = false;
+    await fireEvent.click(screen.getByRole('button', { name: 'Save species' }));
+    await waitFor(() => expect(platform.confirms).toContain(dropEdits));
+    expect(rpc.callsTo('mods.setSpecies')).toHaveLength(1);
+
+    platform.confirmAnswer = true;
+    await fireEvent.click(screen.getByRole('button', { name: 'Save species' }));
+    await waitFor(() => expect(rpc.callsTo('mods.setSpecies')).toHaveLength(2));
+    expect(rpc.callsTo('mods.setSpecies')[1].params).toMatchObject({ behaviour: { startFrom: 'CombatProfile_Prey' } });
+  });
+
+  it('another species starts the Behaviour card from its own behaviour', async () => {
+    const hunter = { ...identity, behaviour: { startFrom: 'CombatProfile_Prey', rules: ['Aggression_PreyFleeFromPredator'] } } as typeof animal;
+    const other = { ...identity, id: 'other-animal', key: 'tyrant.red-spot.other-animal', name: 'Other animal' };
+    await setup([hunter, other], {}, true, modDetail(), catalogue);
+    const start = () => (within(screen.getByRole('region', { name: 'Behaviour' })).getByRole('combobox', { name: 'Start from' }) as HTMLSelectElement).value;
+    expect(start()).toBe('CombatProfile_Prey');
+    await fireEvent.change(screen.getByRole('combobox', { name: 'Animal' }), { target: { value: 'other-animal' } });
+    await waitFor(() => expect(start()).toBe('CombatProfile_Tank'));
+    expect((within(screen.getByRole('region', { name: 'Behaviour' })).getByRole('checkbox', { name: /^Hunts prey/ }) as HTMLInputElement).checked).toBe(true);
+  });
+
+  it("Reset stats to template also goes back to the template's behaviour", async () => {
+    const { rpc } = await setup([{ ...identity, behaviour: { startFrom: 'CombatProfile_Prey', rules: ['Aggression_PreyFleeFromPredator'] } } as typeof animal], {}, true, modDetail(), catalogue);
+    rpc.on('mods.setSpecies', () => modDetail({ revision: 'r2' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Reset stats to template' }));
+    await waitFor(() => expect((within(screen.getByRole('region', { name: 'Behaviour' })).getByRole('combobox', { name: 'Start from' }) as HTMLSelectElement).value).toBe('CombatProfile_Tank'));
+    await fireEvent.click(screen.getByRole('button', { name: 'Save species' }));
+    await waitFor(() => expect(rpc.callsTo('mods.setSpecies')[0]?.params).toMatchObject({
+      behaviour: { startFrom: 'CombatProfile_Tank', rules: ['Aggression_Predation', 'Aggression_FightOwnSpecies'] } }));
   });
 });

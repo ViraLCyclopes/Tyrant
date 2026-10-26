@@ -15,9 +15,9 @@ const fields = [
   field('/a~1b', 'x', { kind: 'text' }),
 ];
 
-function setup(list = fields, edits: Record<string, string> = {}) {
+function setup(list = fields, edits: Record<string, string> = {}, more: { hidden?: (path: string) => boolean; hiddenNote?: string } = {}) {
   const values = $state({ ...Object.fromEntries(list.filter((f) => f.editable).map((f) => [f.path, f.value])), ...edits });
-  render(RecordTree, { fields: list, values });
+  render(RecordTree, { fields: list, values, ...more });
   return values;
 }
 
@@ -77,5 +77,19 @@ describe('Full animal record outline', () => {
     await fireEvent.input(screen.getByRole('textbox', { name: '/MinFenceHeight' }), { target: { value: '5' } });
     expect(values['/MinFenceHeight']).toBe('5');
     expect(screen.getByRole('button', { name: /^General 2 fields · 1 changed/ })).toBeInTheDocument();
+  });
+
+  it('RecordTree hides paths and shows the note', async () => {
+    setup(fields, {}, { hidden: (path) => path.startsWith('/brain/needs'), hiddenNote: 'Rules are set on the Behaviour card.' });
+    expect(screen.getByText('Rules are set on the Behaviour card.')).toBeInTheDocument();
+    expect(screen.getByText(/^6 fields\./)).toBeInTheDocument();
+    await fireEvent.input(screen.getByRole('textbox', { name: /Search fields/ }), { target: { value: 'hitpoints' } });
+    expect(screen.queryByRole('textbox', { name: '/brain/needs/adult/hitPoints' })).toBeNull();
+    expect(screen.getByText('0 matches')).toBeInTheDocument();
+  });
+
+  it('shows no note when nothing is hidden', () => {
+    setup(fields, {}, { hidden: (path) => path.startsWith('/nothing'), hiddenNote: 'Rules are set on the Behaviour card.' });
+    expect(screen.queryByText('Rules are set on the Behaviour card.')).toBeNull();
   });
 });
