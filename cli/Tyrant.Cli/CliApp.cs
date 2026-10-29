@@ -151,6 +151,8 @@ public static class CliApp
                 mod.AddCommand<ModSetSpeciesSkinCommand>("set-species-skin").WithDescription("Set a custom species' starting skin, its name and its swatch PNG.");
                 mod.AddCommand<ModSetSpeciesBehaviourCommand>("set-species-behaviour").WithDescription("Set a custom species' behaviour: the profile it starts from and its aggression rules (--list shows the choices).");
                 mod.AddCommand<ModSetStartingSkinCommand>("set-starting-skin").WithDescription("Make one of a custom species' skins its starting (default) skin; the old one stays as an ordinary skin.");
+                mod.AddCommand<ModSkinOrderCommand>("skin-order").WithDescription("Show the order of a custom species' skins in the Nursery picker.");
+                mod.AddCommand<ModSetSkinOrderCommand>("set-skin-order").WithDescription("Set the order of a custom species' skins in the Nursery picker (every skin of the species, starting skin included).");
                 mod.AddCommand<ModSkinPortraitCommand>("set-skin-portrait").WithDescription("Set or clear one of a skin's in-game portraits.");
                 mod.AddCommand<ModSpeciesPortraitCommand>("set-species-portrait").WithDescription("Set or clear one of a custom species' starting skin portraits.");
                 mod.AddCommand<ModSpeciesPhotoCommand>("set-species-photo").WithAlias("set-species-nursery-picture")

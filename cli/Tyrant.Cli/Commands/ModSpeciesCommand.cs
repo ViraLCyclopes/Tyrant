@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using Spectre.Console.Cli;
 using Tyrant.Core.Errors;
+using Tyrant.Core.Install;
 using Tyrant.Core.Mods;
 
 namespace Tyrant.Cli.Commands;
@@ -280,11 +281,70 @@ public sealed class ModSetStartingSkinCommand : Command<ModSetStartingSkinComman
 
     public override int Execute(CommandContext context, Settings settings)
     {
-        var (ws, _) = CliServices.OpenWorkspace(settings);
-        var (made, previous) = ModProject.Open(ws, settings.Id).MakeStartingSkin(settings.Skin);
+        var (ws, install) = CliServices.OpenWorkspace(settings);
+        var (made, previous) = ModProject.Open(ws, settings.Id).MakeStartingSkin(settings.Skin, key => SkinSlots.NumbersOf(install, key));
         Console.WriteLine($"{made.Name} is now the starting skin of {made.Species}"
             + (previous is null ? "." : $"; {previous.Name} ({previous.Id}) is an ordinary skin."));
+        if (previous is not null) Console.WriteLine($"{previous.Name} took its place in the skin picker.");
         Console.WriteLine("Skins based on 0 now take what they have no PNG for from it, and animals with skin 0 in saved parks wear it.");
         return ExitCodes.Ok;
+    }
+}
+
+public sealed class ModSkinOrderCommand : Command<ModSkinOrderCommand.Settings>
+{
+    public sealed class Settings : ModSettings
+    {
+        [CommandArgument(1, "<SPECIES-ID>")]
+        [Description("The custom species' id in the mod.")]
+        public string SpeciesId { get; set; } = "";
+    }
+
+    public override int Execute(CommandContext context, Settings settings)
+    {
+        var (ws, install) = CliServices.OpenWorkspace(settings);
+        ModSkinOrder.Print(ModProject.Open(ws, settings.Id), settings.SpeciesId, install);
+        return ExitCodes.Ok;
+    }
+}
+
+public sealed class ModSetSkinOrderCommand : Command<ModSetSkinOrderCommand.Settings>
+{
+    public sealed class Settings : ModSettings
+    {
+        [CommandArgument(1, "<SPECIES-ID>")]
+        [Description("The custom species' id in the mod.")]
+        public string SpeciesId { get; set; } = "";
+
+        [CommandArgument(2, "<SKIN>")]
+        [Description("The species' skin ids in the order to show them, the starting skin included.")]
+        public string[] Skins { get; set; } = [];
+    }
+
+    public override int Execute(CommandContext context, Settings settings)
+    {
+        var (ws, install) = CliServices.OpenWorkspace(settings);
+        var mod = ModProject.Open(ws, settings.Id);
+        mod.SetSkinOrder(ModSkinOrder.Key(mod, settings.SpeciesId), settings.Skins);
+        ModSkinOrder.Print(mod, settings.SpeciesId, install);
+        return ExitCodes.Ok;
+    }
+}
+
+internal static class ModSkinOrder
+{
+    public static string Key(ModProject mod, string speciesId) => $"tyrant.{mod.Id}.{speciesId}";
+
+    public static void Print(ModProject mod, string speciesId, GameInstall install)
+    {
+        var key = Key(mod, speciesId);
+        var order = mod.ShownSkinOrder(key, SkinSlots.NumbersOf(install, key))
+            ?? throw new TyrantException(TyrantErrorCode.ModInvalid, $"{key} needs an editable starting skin first (Make an editable starting skin on its page).");
+        var n = 0;
+        foreach (var id in order)
+        {
+            var skin = mod.Skin(id);
+            Console.WriteLine($"{++n}. {skin.Name} ({skin.Id})" + (skin.Starting ? " · starting skin" : ""));
+        }
     }
 }
