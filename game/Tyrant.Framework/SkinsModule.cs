@@ -279,7 +279,14 @@ namespace Tyrant.Framework
                 list.Add(skin); // its index is slot.Number: the layout is contiguous from the vanilla count
             }
             if (standIns.Count > 0) StandInIndices[data] = standIns;
-            foreach (var x in startingSkin) ApplyOrder(species, data, list.Count, x.Mod, x.Skin, numbers);
+            foreach (var x in startingSkin)
+            {
+                try { ApplyOrder(species, data, list.Count, x.Mod, x.Skin, numbers); }
+                catch (Exception ex)
+                {
+                    FrameworkMod.Log.Warning($"{species}: the skin picker order could not be applied ({ex.GetBaseException().Message}); the Nursery shows the game's order.");
+                }
+            }
             FrameworkMod.Log.Msg($"{species}: {added} skin(s) added{(removed > 0 ? $", {removed} kept as stand-ins for removed mods" : "")}{(reserved > 0 ? $", {reserved} reserved position(s) hidden" : "")}.");
             return changed;
         }

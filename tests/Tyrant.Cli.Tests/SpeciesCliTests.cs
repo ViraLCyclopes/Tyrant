@@ -242,6 +242,20 @@ public class SpeciesCliTests : IDisposable
     }
 
     [Fact]
+    public void Skin_order_refuses_an_unknown_species()
+    {
+        using var game = new FakeGame();
+        var ws = TexturedAllosaurus(game);
+        Assert.Equal(ExitCodes.Ok, AddMirabilis(ws).Code);
+
+        var show = Run("mod", "skin-order", "mod-a", "nosuchone", "-w", ws);
+
+        Assert.Equal(ExitCodes.Error, show.Code);
+        Assert.Contains("nosuchone", show.Err);
+        Assert.Contains("not one of this mod's species", show.Err);
+    }
+
+    [Fact]
     public void Set_species_photo_sets_and_clears_the_nursery_picture()
     {
         using var game = new FakeGame();

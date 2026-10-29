@@ -338,6 +338,8 @@ internal static class ModSkinOrder
     public static void Print(ModProject mod, string speciesId, GameInstall install)
     {
         var key = Key(mod, speciesId);
+        if (!mod.Manifest.Species.Any(s => s.Key(mod.Id) == key))
+            throw new TyrantException(TyrantErrorCode.ModInvalid, $"{key} is not one of this mod's species: only their skin order can be shown.");
         var order = mod.ShownSkinOrder(key, SkinSlots.NumbersOf(install, key))
             ?? throw new TyrantException(TyrantErrorCode.ModInvalid, $"{key} needs an editable starting skin first (Make an editable starting skin on its page).");
         var n = 0;

@@ -26,6 +26,7 @@ namespace Tyrant.Framework
             var toggles = row.Cast<object>().OfType<Component>().ToList();
             if (toggles.Count != row.Count || toggles.Any(t => t == null)) return;
             var siblings = toggles.Select(t => t.transform.GetSiblingIndex()).ToList();
+            if (siblings.Max() - siblings.Min() + 1 != siblings.Count) return; // the swatches share their parent with other objects: leave the game's row
             foreach (var move in SkinPickerOrder.Moves(siblings, order))
                 toggles[move.Skin].transform.SetSiblingIndex(move.Sibling);
         }

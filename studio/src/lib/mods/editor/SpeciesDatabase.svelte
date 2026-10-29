@@ -446,7 +446,9 @@
         {/if}
         {#if skinOrder}
           <p class="hint">Drag skins to set their order in the Nursery skin picker.</p>
-          <SkinOrderList {doc} speciesKey={animal.key} order={skinOrder} skins={speciesSkins} {onOpenSkin} onMakeDefault={makeDefault} />
+          {#key animal.key}
+            <SkinOrderList {doc} speciesKey={animal.key} order={skinOrder} skins={speciesSkins} {onOpenSkin} onMakeDefault={makeDefault} />
+          {/key}
         {:else}
           {#if !startingSkin}<p class="hint">Setting the skin picker order needs an editable starting skin.</p>{/if}
           <ul class="skin-list">
