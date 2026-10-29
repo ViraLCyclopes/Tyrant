@@ -193,6 +193,7 @@ public sealed partial class ModProject
     {
         var skin = Skin(skinId);
         Manifest.Skins.Remove(skin);
+        ForgetSkinInOrders(skin.Id);
         Save();
         if (!deleteFiles) return new RemovedFiles([], []);
         var removed = new List<string>();

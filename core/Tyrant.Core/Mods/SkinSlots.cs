@@ -40,6 +40,13 @@ public sealed class SkinSlots(Func<GameInstall, bool>? isGameRunning = null)
         return forgotten;
     }
 
+    /// <summary>The skin numbers of one species (skin-slots keys to numbers); empty when the file is missing or unreadable.</summary>
+    public static IReadOnlyDictionary<string, int> NumbersOf(GameInstall install, string species)
+    {
+        try { return Read(install).Of(species); }
+        catch (Exception ex) when (ex is TyrantException or IOException or UnauthorizedAccessException) { return new Dictionary<string, int>(); }
+    }
+
     private static SkinNumbers Read(GameInstall install)
     {
         var path = PathOf(install);
