@@ -77,6 +77,14 @@ namespace Tyrant.Framework
         {
             try
             {
+                PickerOrder.Apply(__instance, rebuild); // first: the scroll and the All skins window follow the row's screen order
+            }
+            catch (Exception ex)
+            {
+                FrameworkMod.Log.Warning("The Nursery skin order could not be applied: " + ex.Message);
+            }
+            try
+            {
                 NurseryScroll.Ensure(__instance, rebuild);
             }
             catch (Exception ex)
@@ -165,7 +173,9 @@ namespace Tyrant.Framework
         {
             if (ScrollRect == null || RectMask == null || Fitter == null || LayoutElement == null) return;
             var template = Traverse.Create(menu).Field("templateSkinToggle").GetValue() as Component;
-            var toggles = (Traverse.Create(menu).Field("skinToggles").GetValue() as IEnumerable)?.Cast<object>().OfType<Component>()
+            // In screen order, so the selected swatch's place below is where the player sees it.
+            var row = Traverse.Create(menu).Field("skinToggles").GetValue() as IList;
+            var toggles = row == null ? null : PickerOrder.ScreenOrder(menu, row.Count).Select(i => row[i]).OfType<Component>()
                 .Where(t => t != null && t.gameObject.activeSelf).ToList();
             if (template == null || toggles == null || !(template.transform.parent is RectTransform content)) return;
             var mask = content.parent as RectTransform;
