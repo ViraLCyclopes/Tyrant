@@ -21,6 +21,7 @@ export type EditMethod =
   | 'mods.renameSkin'
   | 'mods.removeSkin'
   | 'mods.arrangeSkins'
+  | 'mods.setSkinOrder'
   | 'mods.setColors'
   | 'mods.setMaterials'
   | 'mods.setMaterialFile'

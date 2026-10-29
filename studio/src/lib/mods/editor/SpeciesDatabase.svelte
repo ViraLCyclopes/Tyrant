@@ -12,6 +12,7 @@
   import OpenInBlender from '$lib/blender/OpenInBlender.svelte';
   import RecordTree from './RecordTree.svelte';
   import SizeCard from './SizeCard.svelte';
+  import SkinOrderList from './SkinOrderList.svelte';
   import SocialCard from './SocialCard.svelte';
   import SpeciesSoundsCard from './SpeciesSoundsCard.svelte';
   import Thumb from './Thumb.svelte';
@@ -139,6 +140,10 @@
   const canSave = $derived((creating || (socialValid && dietValid)) && !!name.trim() && !!genus.trim() && !!epithet.trim() && (!creating || (validId && !!template && !(choice.kind === 'png' && !choice.male))));
   /** This mod's starting skin of the shown species, when it has one. */
   const startingSkin = $derived(animal?.startingSkinId ? doc.detail?.skins.find((s) => s.id === animal.startingSkinId) : undefined);
+  /** This mod's skins of the shown species. */
+  const speciesSkins = $derived((doc.detail?.skins ?? []).filter((s) => s.species === animal?.key));
+  /** Their Nursery skin picker order, which only a species with its own starting skin can set. */
+  const skinOrder = $derived(startingSkin && animal ? (doc.detail?.skinOrders?.[animal.key] ?? null) : null);
 
   /** The record rows of the profile's rule list, which a chosen behaviour builds itself (SpeciesBehaviours.IsRuleField in the game). */
   const RULES_PATH = '/brain/combat/shared/combatProfile/aggressionProfileEntries';
@@ -231,7 +236,8 @@
   async function makeDefault(skin: string, name: string) {
     const current = startingSkin?.name;
     const message = `Make ${name} the starting skin of ${animal?.name}? It becomes the look the species starts with (skin 0).`
-      + (current ? ` ${current} stays as an ordinary skin; what ${name} took from it (PNGs, colours, portraits, swatch) is copied into ${name} first.` : '')
+      + (current ? ` ${current} stays as an ordinary skin; what ${name} took from it (PNGs, colours, portraits, swatch) is copied into ${name} first.`
+        + ` ${name} takes ${current}'s place in the skin picker, and ${current} takes ${name}'s.` : '')
       + ` Skins based on 0 take what they have no PNG for from ${name}, and animals with skin 0 in saved parks will wear it.`;
     if (!(await session.platform.confirm(message, 'Make default'))) return;
     await doc.edit('mods.makeStartingSkin', { skin });
@@ -438,12 +444,18 @@
           <div><button type="button" onclick={() => (making = freshChoice(animal.base, animal.startingSkin ?? 0))}>Make an editable starting skin</button></div>
         {/if}
         {/if}
-        <ul class="skin-list">
-          {#each (doc.detail?.skins ?? []).filter((s) => s.species === animal.key) as s (s.id)}
-            <li><button type="button" onclick={() => onOpenSkin(s.id)}>{s.name}</button>{#if s.starting}<span class="hint"> · starting skin</span>{:else}
-              <button type="button" class="small" aria-label="Make {s.name} the default" title="Make it the species' starting (default) skin" onclick={() => makeDefault(s.id, s.name)}>Make default</button>{/if}{#if s.group}<span class="hint"> · {s.group}</span>{/if}</li>
-          {/each}
-        </ul>
+        {#if skinOrder}
+          <p class="hint">Drag skins to set their order in the Nursery skin picker.</p>
+          <SkinOrderList {doc} speciesKey={animal.key} order={skinOrder} skins={speciesSkins} {onOpenSkin} onMakeDefault={makeDefault} />
+        {:else}
+          {#if !startingSkin}<p class="hint">Setting the skin picker order needs an editable starting skin.</p>{/if}
+          <ul class="skin-list">
+            {#each speciesSkins as s (s.id)}
+              <li><button type="button" onclick={() => onOpenSkin(s.id)}>{s.name}</button>{#if s.starting}<span class="hint"> · starting skin</span>{:else}
+                <button type="button" class="small" aria-label="Make {s.name} the default" title="Make it the species' starting (default) skin" onclick={() => makeDefault(s.id, s.name)}>Make default</button>{/if}{#if s.group}<span class="hint"> · {s.group}</span>{/if}</li>
+            {/each}
+          </ul>
+        {/if}
         <div><button type="button" onclick={() => onAddSkin(animal.key)}>Add skin</button></div>
       </section>
       <section class="danger" aria-label="Delete species">
