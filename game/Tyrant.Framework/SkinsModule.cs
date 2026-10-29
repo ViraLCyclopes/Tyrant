@@ -42,6 +42,8 @@ namespace Tyrant.Framework
         /// <summary>Stand-ins of a species whose skin 0 is a starting skin: they look like it (textures, model, sounds), not added.</summary>
         private static readonly Dictionary<object, Added> StandInLooks = new Dictionary<object, Added>(ReferenceComparer.Instance);
         private static readonly Dictionary<object, HashSet<int>> StandInIndices = new Dictionary<object, HashSet<int>>(ReferenceComparer.Instance);
+        /// <summary>Species data → skin numbers in Nursery picker order (mod.json "skinOrder"), for species with a starting skin.</summary>
+        private static readonly Dictionary<object, int[]> DisplayOrders = new Dictionary<object, int[]>(ReferenceComparer.Instance);
         private static List<LoadedMod> _mods = new List<LoadedMod>();
         private static SkinNumbers _numbers = new SkinNumbers();
         private static bool _canSave = true;
@@ -107,6 +109,10 @@ namespace Tyrant.Framework
 
         public static bool IsStandInIndex(object? speciesData, int index) =>
             speciesData != null && StandInIndices.TryGetValue(speciesData, out var indices) && indices.Contains(index);
+
+        /// <summary>The species' skin numbers in picker order (slot k shows skin [k]); null when it has no saved order.</summary>
+        public static int[]? DisplayOrderOf(object? speciesData) =>
+            speciesData != null && DisplayOrders.TryGetValue(speciesData, out var order) ? order : null;
 
         /// <summary>The starting skin an added skin was copied from (skin 0 of a custom species with a starting skin).</summary>
         public static bool TryGetInherited(object? skinData, out string modId, out SkinEntry entry, out string directory)
@@ -225,7 +231,8 @@ namespace Tyrant.Framework
             if (!(Traverse.Create(data).Field("skinsData").GetValue() is IList list) || list.Count == 0) return false;
             var vanilla = list.Count;
             // The starting skin (ModCatalog kept at most one, on its own mod's species) is skin 0 itself: no number.
-            foreach (var x in group.Where(x => x.Skin.Starting).Take(1)) ApplyStarting(species, list, x.Mod, x.Skin);
+            var startingSkin = group.Where(x => x.Skin.Starting).Take(1).ToList();
+            foreach (var x in startingSkin) ApplyStarting(species, list, x.Mod, x.Skin);
             group = group.Where(x => !x.Skin.Starting).ToList();
             var changed = numbers.Assign(species, vanilla, group.Select(x => x.Skin.Key(x.Mod.Manifest.Id)), messages);
             var byKey = new Dictionary<string, (LoadedMod Mod, SkinEntry Skin)>(StringComparer.Ordinal);
@@ -272,8 +279,34 @@ namespace Tyrant.Framework
                 list.Add(skin); // its index is slot.Number: the layout is contiguous from the vanilla count
             }
             if (standIns.Count > 0) StandInIndices[data] = standIns;
+            foreach (var x in startingSkin)
+            {
+                try { ApplyOrder(species, data, list.Count, x.Mod, x.Skin, numbers); }
+                catch (Exception ex)
+                {
+                    FrameworkMod.Log.Warning($"{species}: the skin picker order could not be applied ({ex.GetBaseException().Message}); the Nursery shows the game's order.");
+                }
+            }
             FrameworkMod.Log.Msg($"{species}: {added} skin(s) added{(removed > 0 ? $", {removed} kept as stand-ins for removed mods" : "")}{(reserved > 0 ? $", {reserved} reserved position(s) hidden" : "")}.");
             return changed;
+        }
+
+        /// <summary>
+        /// The species' mod.json "skinOrder" as skin numbers (its starting skin is 0, the others their numbers here); ids that
+        /// are gone are dropped and unlisted skins follow (<see cref="SkinPickerOrder.Display"/>). Display only: numbers stay.
+        /// </summary>
+        private static void ApplyOrder(string species, object data, int count, LoadedMod mod, SkinEntry startingEntry, SkinNumbers numbers)
+        {
+            if (!mod.Manifest.SkinOrders.TryGetValue(species, out var ids)) return;
+            var numbered = numbers.Of(species);
+            var wanted = new List<int>();
+            foreach (var id in ids)
+            {
+                if (id == startingEntry.Id) wanted.Add(0);
+                else if (numbered.TryGetValue(mod.Manifest.Id + "/" + id, out var number) && number < count) wanted.Add(number);
+            }
+            DisplayOrders[data] = SkinPickerOrder.Display(count, wanted);
+            FrameworkMod.Log.Msg($"{species}: skin picker order applied.");
         }
 
         /// <summary>

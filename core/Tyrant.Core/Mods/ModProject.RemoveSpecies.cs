@@ -66,6 +66,8 @@ public sealed partial class ModProject
         Manifest.Models.RemoveAll(models.Contains);
         Manifest.Sounds.RemoveAll(sounds.Contains);
         Manifest.SpeciesMaterials.Remove(key);
+        var oldOrder = Manifest.SkinOrders.GetValueOrDefault(key);
+        Manifest.SkinOrders.Remove(key);
         Save();
         var at = Manifest.Species.IndexOf(entry);
         try
@@ -80,6 +82,7 @@ public sealed partial class ModProject
             Manifest.Models.Clear(); Manifest.Models.AddRange(oldModels);
             Manifest.Sounds.Clear(); Manifest.Sounds.AddRange(oldSounds);
             if (speciesMaterials is not null) Manifest.SpeciesMaterials[key] = speciesMaterials;
+            if (oldOrder is not null) Manifest.SkinOrders[key] = oldOrder;
             Save();
             throw;
         }

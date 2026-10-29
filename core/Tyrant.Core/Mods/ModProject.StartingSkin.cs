@@ -117,11 +117,12 @@ public sealed partial class ModProject
     }
 
     /// <summary>
-    /// Makes another skin of one of this mod's species its starting skin (skin 0). What it took from the old starting skin
+    /// Makes another skin of one of this mod's species its starting skin (skin 0) and swaps its place with the old one's in the picker order (numbersOf gives the skin numbers by species key). What it took from the old starting skin
     /// (maps it has no PNG for, colours, portraits, swatch) is copied into it first, so it looks as before; the old starting
     /// skin stays as an ordinary skin based on 0. Returns the new and the old starting skin (null when there was none).
     /// </summary>
-    public (SkinEntry Made, SkinEntry? Previous) MakeStartingSkin(string skinId)
+    public (SkinEntry Made, SkinEntry? Previous) MakeStartingSkin(string skinId,
+        Func<string, IReadOnlyDictionary<string, int>?>? numbersOf = null)
     {
         var skin = Skin(skinId);
         if (skin.Starting) throw new TyrantException(TyrantErrorCode.ModInvalid, $"'{skin.Name}' is already its species' starting skin.");
@@ -133,6 +134,9 @@ public sealed partial class ModProject
         var (male, female, colors, portraits, thumbnail, baseSkin) =
             (skin.Male, skin.Female, skin.Colors, skin.Portraits is null ? null : new Dictionary<string, string>(skin.Portraits), skin.Thumbnail, skin.Base);
         var copied = new List<string>();
+        var hadOrder = Manifest.SkinOrders.TryGetValue(skin.Species, out var oldOrder);
+        oldOrder = oldOrder?.ToList();
+        var before = previous is null ? null : ShownSkinOrder(skin.Species, numbersOf?.Invoke(skin.Species));
         try
         {
             if (previous is not null && StartingSkins.InheritsFrom(Manifest, skin, out _))
@@ -150,6 +154,7 @@ public sealed partial class ModProject
             if (previous is not null) previous.Starting = false;
             skin.Starting = true;
             skin.Base = "0";
+            if (previous is not null && before is not null) Manifest.SkinOrders[skin.Species] = SkinPickerOrder.Swapped(before, skin.Id, previous.Id);
             var arranged = Arranged([skin, .. Manifest.Skins.Where(s => s != skin)]);
             Manifest.Skins.Clear();
             Manifest.Skins.AddRange(arranged);
@@ -159,6 +164,7 @@ public sealed partial class ModProject
         {
             (skin.Male, skin.Female, skin.Colors, skin.Portraits, skin.Thumbnail, skin.Base, skin.Starting) = (male, female, colors, portraits, thumbnail, baseSkin, false);
             if (previous is not null) previous.Starting = true;
+            RestoreSkinOrder(skin.Species, hadOrder ? oldOrder : null);
             Manifest.Skins.Clear();
             Manifest.Skins.AddRange(order);
             foreach (var file in copied)

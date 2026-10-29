@@ -238,6 +238,9 @@ namespace Tyrant.Framework.Core
         public Dictionary<string, Dictionary<string, MaterialOverride>> VanillaSkinMaterials { get; } =
             new Dictionary<string, Dictionary<string, MaterialOverride>>(StringComparer.OrdinalIgnoreCase);
 
+        /// <summary>mod.json "skinOrder": species key (tyrant.&lt;mod&gt;.&lt;species&gt;) → this mod's skin ids in Nursery skin picker order; see <see cref="SkinPickerOrder"/>.</summary>
+        public Dictionary<string, List<string>> SkinOrders { get; } = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+
         /// <summary>mod.json "textures"; never null (absent = auto everywhere).</summary>
         public TextureSettings Textures { get; } = new TextureSettings();
 
@@ -338,6 +341,15 @@ namespace Tyrant.Framework.Core
                 {
                     skippedSkins.Add($"\"skins\" entry {n} was skipped: {ex.Message}");
                 }
+            }
+            try
+            {
+                ParseSkinOrder(map, manifest.SkinOrders);
+            }
+            catch (ManifestException ex) when (skippedSkins != null)
+            {
+                manifest.SkinOrders.Clear();
+                skippedSkins.Add("\"skinOrder\" was ignored: " + ex.Message);
             }
             try
             {
@@ -460,6 +472,9 @@ namespace Tyrant.Framework.Core
                     if (s.Colors != null) entry["colors"] = s.Colors.ToJson();
                     return (object?)entry;
                 }).ToList();
+            if (SkinOrders.Count > 0)
+                map["skinOrder"] = SkinOrders.OrderBy(o => o.Key, StringComparer.Ordinal)
+                    .ToDictionary(o => o.Key, o => (object?)o.Value.Cast<object?>().ToList());
             if (!Textures.IsDefault)
             {
                 var block = new Dictionary<string, object?> { ["compression"] = TextureCompressions.Name(Textures.Compression) };
@@ -469,6 +484,24 @@ namespace Tyrant.Framework.Core
                 map["textures"] = block;
             }
             return Json.Write(map) + "\n";
+        }
+
+        private static void ParseSkinOrder(Dictionary<string, object?> map, Dictionary<string, List<string>> orders)
+        {
+            if (!map.TryGetValue("skinOrder", out var value) || value == null) return;
+            if (!(value is Dictionary<string, object?> block)) throw new ManifestException("\"skinOrder\" must map each species to a list of skin ids.");
+            foreach (var pair in block)
+            {
+                if (!(pair.Value is IEnumerable<object?> ids)) throw new ManifestException($"\"skinOrder\" for \"{pair.Key}\" must be a list of skin ids.");
+                var list = new List<string>();
+                foreach (var id in ids)
+                {
+                    if (!(id is string text) || text.Length == 0) throw new ManifestException($"\"skinOrder\" for \"{pair.Key}\" must hold skin ids (non-empty text).");
+                    if (list.Contains(text)) throw new ManifestException($"\"skinOrder\" for \"{pair.Key}\" lists \"{text}\" twice.");
+                    list.Add(text);
+                }
+                orders[pair.Key] = list;
+            }
         }
 
         private static void ParseTextures(Dictionary<string, object?> map, TextureSettings settings)

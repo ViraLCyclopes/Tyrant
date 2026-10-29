@@ -94,6 +94,20 @@ A mod can add new skins next to the vanilla ones; nothing vanilla changes. Make 
 - When a skin's mod is removed, its animals look like their species' first skin until the mod comes back.
 - **Clean up skin numbers…** (Mods tab) frees numbers of mods you won't use again.
 
+**Skin picker order (`skinOrder`):** an optional top-level block that sets the order of a custom species' skins in the Nursery skin picker (thumbnails, page arrows and the All skins grid):
+
+```json
+"skinOrder": {
+  "tyrant.red-spot-carcharo.carcharo-two": ["mirabilis", "chaos-effect", "blue"]
+}
+```
+
+- The key is the species (`tyrant.<mod-id>.<species-id>`) and the list holds this mod's skin ids on it, the starting skin included. It only works for this mod's own species that has an editable starting skin (`"starting": true`).
+- Each id must be a non-empty string and none may repeat in one list. A block that breaks this is an error in Check, and the game ignores it and says so in the log.
+- It changes the display only: skin numbers and saved animals are not touched. Ids that do not exist are ignored. Skins the list leaves out (skins added later, other mods' skins) come after the listed ones, in skin-number order.
+- It is separate from the order of `skins[]`, which only decides the order new skins get their numbers (the first time the game sees them).
+- **Make default** (and `tyrant mod set-starting-skin`) swaps the new and the old starting skin in this order.
+
 ## Skin colours
 
 A skin can set its own colours in a `colors` section. Every part is optional; anything left out comes from the base skin.

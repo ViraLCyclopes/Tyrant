@@ -46,6 +46,8 @@ public sealed record ModSpeciesParams(string Id, string SpeciesId);
 public sealed record ModRemoveSpeciesParams(string Id, string Revision, string SpeciesId, bool DeleteFiles = true);
 public sealed record ModMakeStartingSkinParams(string Id, string Revision, string Skin);
 
+public sealed record ModSetSkinOrderParams(string Id, string Revision, string Species, IReadOnlyList<string> Order);
+
 public sealed record ModSetSpeciesStartingSkinParams(string Id, string Revision, string SpeciesId, int StartingSkin, string? Name = null);
 public sealed record ModSetSpeciesSwatchParams(string Id, string Revision, string SpeciesId, string? Png = null);
 public sealed record ModCustomSpeciesParams(string? Id = null);
@@ -162,7 +164,15 @@ public sealed partial class ModsMethods
 
     [RpcMethod("mods.makeStartingSkin")]
     public ModDetail MakeStartingSkin(ModMakeStartingSkinParams p) =>
-        Edit(p.Id, p.Revision, mod => mod.MakeStartingSkin(p.Skin), $"made skin '{p.Skin}' its species' starting skin");
+        Edit(p.Id, p.Revision, mod =>
+        {
+            var (_, install) = session.Current();
+            mod.MakeStartingSkin(p.Skin, key => SkinSlots.NumbersOf(install, key));
+        }, $"made skin '{p.Skin}' its species' starting skin");
+
+    [RpcMethod("mods.setSkinOrder")]
+    public ModDetail SetSkinOrder(ModSetSkinOrderParams p) =>
+        Edit(p.Id, p.Revision, mod => mod.SetSkinOrder(p.Species, p.Order), $"set the skin picker order of '{p.Species}'");
 
     [RpcMethod("mods.setSpecies")]
     public ModDetail SetSpecies(ModSetSpeciesParams p) => Edit(p.Id, p.Revision, mod =>

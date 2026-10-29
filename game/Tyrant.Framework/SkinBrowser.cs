@@ -378,12 +378,12 @@ namespace Tyrant.Framework
             }
         }
 
-        /// <summary>Row indices of the skins the player can pick (unlocked; hidden stand-ins excluded).</summary>
+        /// <summary>Row indices of the skins the player can pick (unlocked; hidden stand-ins excluded), in the row's screen order.</summary>
         private static List<int> Visible(object menu)
         {
             var result = new List<int>();
             if (Traverse.Create(menu).Field("skinToggles").GetValue() is IList row)
-                for (var i = 0; i < row.Count; i++)
+                foreach (var i in PickerOrder.ScreenOrder(menu, row.Count))
                     if (row[i] is Component toggle && toggle != null && toggle.gameObject.activeSelf) result.Add(i);
             return result;
         }

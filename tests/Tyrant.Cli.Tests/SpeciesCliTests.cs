@@ -178,7 +178,81 @@ public class SpeciesCliTests : IDisposable
 
         Assert.True(code == ExitCodes.Ok, err);
         Assert.Contains("Brown is now the starting skin of tyrant.mod-a.mirabilis; Default (mirabilis-start) is an ordinary skin.", output);
+        Assert.Contains("Default took its place in the skin picker.", output);
         Assert.Equal(ExitCodes.Error, Run("mod", "set-starting-skin", "mod-a", "brown", "-w", ws).Code);
+    }
+
+    [Fact]
+    public void Skin_order_lists_the_shown_order()
+    {
+        using var game = new FakeGame();
+        var ws = TexturedAllosaurus(game);
+        Assert.Equal(ExitCodes.Ok, AddMirabilis(ws).Code);
+        var mod = Tyrant.Core.Mods.ModProject.Open(Tyrant.Core.Workspaces.Workspace.Open(ws), "mod-a");
+        var start = mod.Manifest.Skins.Single(s => s.Starting);
+        mod.Manifest.Skins.Add(new Tyrant.Framework.Core.SkinEntry { Id = "brown", Species = "tyrant.mod-a.mirabilis", Name = "Brown", Male = new() { ["diffuse"] = start.Male!["diffuse"] } });
+        mod.Save();
+
+        var (code, output, err) = Run("mod", "skin-order", "mod-a", "mirabilis", "-w", ws);
+
+        Assert.True(code == ExitCodes.Ok, err);
+        var lines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        Assert.Equal("1. Default (mirabilis-start) \u00b7 starting skin", lines[0]);
+        Assert.Equal("2. Brown (brown)", lines[1]);
+    }
+
+    [Fact]
+    public void Set_skin_order_saves_it()
+    {
+        using var game = new FakeGame();
+        var ws = TexturedAllosaurus(game);
+        Assert.Equal(ExitCodes.Ok, AddMirabilis(ws).Code);
+        var mod = Tyrant.Core.Mods.ModProject.Open(Tyrant.Core.Workspaces.Workspace.Open(ws), "mod-a");
+        var start = mod.Manifest.Skins.Single(s => s.Starting);
+        mod.Manifest.Skins.Add(new Tyrant.Framework.Core.SkinEntry { Id = "brown", Species = "tyrant.mod-a.mirabilis", Name = "Brown", Male = new() { ["diffuse"] = start.Male!["diffuse"] } });
+        mod.Save();
+
+        var (code, output, err) = Run("mod", "set-skin-order", "mod-a", "mirabilis", "brown", "mirabilis-start", "-w", ws);
+
+        Assert.True(code == ExitCodes.Ok, err);
+        Assert.Contains("1. Brown (brown)", output);
+        Assert.Contains("2. Default (mirabilis-start) \u00b7 starting skin", output);
+        var again = Run("mod", "skin-order", "mod-a", "mirabilis", "-w", ws);
+        Assert.Contains("1. Brown (brown)", again.Out);
+        Assert.Equal(ExitCodes.Error, Run("mod", "set-skin-order", "mod-a", "mirabilis", "brown", "-w", ws).Code);
+    }
+
+    [Fact]
+    public void Set_skin_order_refuses_a_species_without_a_starting_skin()
+    {
+        using var game = new FakeGame();
+        var ws = TexturedAllosaurus(game);
+        Assert.Equal(ExitCodes.Ok, AddMirabilis(ws).Code);
+        var mod = Tyrant.Core.Mods.ModProject.Open(Tyrant.Core.Workspaces.Workspace.Open(ws), "mod-a");
+        mod.Manifest.Skins.RemoveAll(s => s.Starting);
+        mod.Save();
+
+        var set = Run("mod", "set-skin-order", "mod-a", "mirabilis", "x", "-w", ws);
+        var show = Run("mod", "skin-order", "mod-a", "mirabilis", "-w", ws);
+
+        Assert.Equal(ExitCodes.Error, set.Code);
+        Assert.Equal(ExitCodes.Error, show.Code);
+        Assert.Contains("needs an editable starting skin first", set.Err);
+        Assert.Contains("needs an editable starting skin first", show.Err);
+    }
+
+    [Fact]
+    public void Skin_order_refuses_an_unknown_species()
+    {
+        using var game = new FakeGame();
+        var ws = TexturedAllosaurus(game);
+        Assert.Equal(ExitCodes.Ok, AddMirabilis(ws).Code);
+
+        var show = Run("mod", "skin-order", "mod-a", "nosuchone", "-w", ws);
+
+        Assert.Equal(ExitCodes.Error, show.Code);
+        Assert.Contains("nosuchone", show.Err);
+        Assert.Contains("not one of this mod's species", show.Err);
     }
 
     [Fact]

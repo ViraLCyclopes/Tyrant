@@ -403,6 +403,19 @@ species page's Skins list (or `tyrant mod set-starting-skin <MOD> <SKIN>`). If t
 skin, what the skin took from it (PNGs for maps it has none of, colours, portraits, swatch) is copied into the skin
 first, so it looks the same; the old starting skin stays as an ordinary skin based on `0`. From then on, skins based
 on `0` take what they lack from the new starting skin, and animals placed with skin 0 in saved parks wear it.
+The new and the old starting skin also swap places in the [skin picker order](#skin-picker-order).
+
+### Skin picker order
+
+You choose the order of a species' skins in the Nursery skin picker. On the species page, drag the skins in the Skins
+list (or use the **↑** / **↓** buttons, or Alt+↑ / Alt+↓ on a selected skin). Before you have saved an order, the list
+shows the order the game's picker has now; afterwards it shows your order. The Nursery's thumbnails, its page arrows and
+the All skins grid all follow it.
+
+The order is for display only: skins keep their numbers, so saved animals keep their skin. A skin you add later, or a
+skin from another mod, comes after the ones in your order. Setting the order needs an editable starting skin; a species
+made before starting skins existed shows "Setting the skin picker order needs an editable starting skin." until you click
+**Make an editable starting skin**. In mod.json it is the top-level `skinOrder` (see the mod format).
 
 ### Species without a starting skin
 
@@ -452,6 +465,8 @@ tyrant mod add-species my-animal-pack example-animal "Allosaurus Anax" --name "E
 tyrant mod set-species-skin my-animal-pack example-animal --starting-skin 0 --name "Mirabilis" --swatch swatch.png -w <workspace>
 tyrant mod add-skin other-pack tyrant.my-animal-pack.example-animal --name "Blue" -w <workspace>
 tyrant mod set-starting-skin my-animal-pack blue -w <workspace>
+tyrant mod skin-order my-animal-pack example-animal -w <workspace>
+tyrant mod set-skin-order my-animal-pack example-animal blue mirabilis -w <workspace>
 tyrant mod set-species-photo my-animal-pack example-animal --png nursery.png -w <workspace>
 tyrant mod set-species-paleopedia-picture my-animal-pack example-animal --png paleopedia.png -w <workspace>
 tyrant mod set-species-text my-animal-pack example-animal description --file description.txt -w <workspace>

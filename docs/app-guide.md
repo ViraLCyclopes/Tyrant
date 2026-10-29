@@ -234,7 +234,9 @@ species' textures need that species' model) or **My own PNGs** (male diffuse, op
 is listed in the side list with a *Starting skin* tag and opens a normal skin page (PNGs, colours, model, sounds,
 portraits with **Render from 3D…**). The species page's Skins section then shows **Starting skin: <name>** with
 **Open**. Species without one show the older controls and **Make an editable starting skin**.
-**Make default** beside another skin in that list makes it the starting skin; the old one stays as an ordinary skin.
+**Make default** beside another skin in that list makes it the starting skin; the old one stays as an ordinary skin, and the two swap places in the picker order.
+
+The same Skins list sets the order of the species' skins in the Nursery skin picker: drag a skin, or use its **↑** / **↓** buttons or Alt+↑ / Alt+↓. The hint "Drag skins to set their order in the Nursery skin picker." sits above it. Before an order is saved the list shows the game's current picker order, afterwards the mod's. For a species without an editable starting skin the hint reads "Setting the skin picker order needs an editable starting skin." (use **Make an editable starting skin**). The order is display only and never changes skin numbers or saved animals. CLI: `tyrant mod skin-order <MOD> <SPECIES-ID>` and `tyrant mod set-skin-order <MOD> <SPECIES-ID> <SKIN>...`.
 
 **Social**, under the species form's stats, sets how the species lives with others: group size (fewest and most males
 and females, whole numbers), space per animal, range overlap, how closely adults stay and act together, its leader, how

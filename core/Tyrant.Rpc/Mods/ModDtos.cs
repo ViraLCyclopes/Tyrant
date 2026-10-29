@@ -160,7 +160,7 @@ public sealed record ModDetail(string Id, string Name, string Version, string? A
     IReadOnlyList<ModSoundDto> Sounds, string FilesStamp = "", IReadOnlyDictionary<string, string>? PrefabFiles = null,
     IReadOnlyList<ModPrefabTargetDto>? PrefabTargets = null, IReadOnlyList<ModSpeciesUseDto>? UsesSpeciesFrom = null, IReadOnlyList<ModSpeciesMaterialsDto>? SpeciesMaterials = null,
     IReadOnlyList<ModVanillaSkinMaterialsDto>? VanillaSkinMaterials = null, IReadOnlyDictionary<string, string>? MaterialFiles = null,
-    IReadOnlyDictionary<string, string>? SizeFiles = null);
+    IReadOnlyDictionary<string, string>? SizeFiles = null, IReadOnlyDictionary<string, IReadOnlyList<string>>? SkinOrders = null);
 
 public sealed record ModSpeciesUseDto(string ModId, string? ModName, int Skins, bool InWorkspace, bool Installed, bool Enabled);
 

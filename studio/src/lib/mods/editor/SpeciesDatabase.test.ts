@@ -471,6 +471,41 @@ describe('Species database', () => {
     platform.confirmAnswer = true;
     await fireEvent.click(within(skins).getByRole('button', { name: 'Make Brown the default' }));
     await waitFor(() => expect(rpc.callsTo('mods.makeStartingSkin')[0]?.params).toMatchObject({ skin: 'brown', revision: 'r1' }));
+    expect(platform.confirms[1]).toContain("Brown takes Mine's place in the skin picker, and Mine takes Brown's.");
+  });
+
+  it('a species with its own starting skin lists its skins in picker order and saves a new order', async () => {
+    const base = modDetail();
+    const detail = modDetail({
+      skins: [
+        { ...base.skins[0], id: 'new-animal-start', name: 'Mine', species: 'tyrant.red-spot.new-animal', starting: true },
+        { ...base.skins[0], id: 'brown', name: 'Brown', species: 'tyrant.red-spot.new-animal', starting: false },
+        { ...base.skins[0], id: 'chaos', name: 'Chaos Effect', species: 'tyrant.red-spot.new-animal', starting: false },
+      ],
+      skinOrders: { 'tyrant.red-spot.new-animal': ['brown', 'new-animal-start', 'chaos'] },
+    });
+    const { rpc } = await setup([{ ...animal, startingSkinId: 'new-animal-start' } as typeof animal], {}, true, detail);
+    rpc.on('mods.setSkinOrder', () => ({ ...detail, revision: 'r2' }));
+    const skins = screen.getByRole('region', { name: 'Skins' });
+    expect(within(skins).getByText('Drag skins to set their order in the Nursery skin picker.')).toBeInTheDocument();
+    expect(within(skins).queryByText('Setting the skin picker order needs an editable starting skin.')).toBeNull();
+    const names = within(skins).getAllByRole('button', { name: /^(Mine|Brown|Chaos Effect)$/ }).map((b) => b.textContent?.trim());
+    expect(names).toEqual(['Brown', 'Mine', 'Chaos Effect']);
+    await fireEvent.click(within(skins).getByRole('button', { name: 'Move Chaos Effect up' }));
+    await waitFor(() => expect(rpc.callsTo('mods.setSkinOrder')[0]?.params).toEqual({
+      id: 'red-spot', revision: 'r1', species: 'tyrant.red-spot.new-animal', order: ['brown', 'chaos', 'new-animal-start'],
+    }));
+  });
+
+  it('a species without its own starting skin keeps the plain skin list and says why it has no order', async () => {
+    const base = modDetail();
+    const detail = modDetail({ skins: [{ ...base.skins[0], id: 'blue', name: 'Blue', species: 'tyrant.red-spot.new-animal' }] });
+    await setup([{ ...animal, startingSkin: 0, startingSkinName: null, swatch: null } as typeof animal], {}, true, detail);
+    const skins = screen.getByRole('region', { name: 'Skins' });
+    expect(within(skins).getByText('Setting the skin picker order needs an editable starting skin.')).toBeInTheDocument();
+    expect(within(skins).queryByText('Drag skins to set their order in the Nursery skin picker.')).toBeNull();
+    expect(within(skins).getByRole('button', { name: 'Blue' })).toBeInTheDocument();
+    expect(within(skins).queryByRole('button', { name: 'Move Blue up' })).toBeNull();
   });
 
   it('Delete species shows what goes, then removes it with its files', async () => {
