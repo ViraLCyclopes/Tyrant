@@ -620,6 +620,7 @@ export interface ModDetail {
   vanillaSkinMaterials?: ModVanillaSkinMaterialsDto[] | null;
   materialFiles?: Record<string, string> | null;
   sizeFiles?: Record<string, string> | null;
+  skinOrders?: Record<string, string[]> | null;
 }
 
 export interface ModEnableParams {
@@ -1116,6 +1117,13 @@ export interface ModSetSkinFileParams {
   sex: string;
   slot: string;
   png?: string | null;
+}
+
+export interface ModSetSkinOrderParams {
+  id: string;
+  revision: string;
+  species: string;
+  order: string[];
 }
 
 export interface ModSetSoundParams {
@@ -1820,6 +1828,7 @@ export interface RpcMethods {
   "mods.setPrefabField": { params: ModSetPrefabFieldParams; result: ModDetail };
   "mods.setSizes": { params: ModSetSizesParams; result: ModDetail };
   "mods.setSkinFile": { params: ModSetSkinFileParams; result: ModDetail };
+  "mods.setSkinOrder": { params: ModSetSkinOrderParams; result: ModDetail };
   "mods.setSound": { params: ModSetSoundParams; result: ModDetail };
   "mods.setSpecies": { params: ModSetSpeciesParams; result: ModDetail };
   "mods.setSpeciesIcon": { params: ModSetSpeciesIconParams; result: ModDetail };

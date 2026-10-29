@@ -424,7 +424,20 @@ public sealed partial class ModsMethods(StudioSession session, JobManager jobs)
             SpeciesMaterials: SpeciesMaterialsOf(m),
             VanillaSkinMaterials: VanillaSkinMaterialsOf(m),
             MaterialFiles: mod.MaterialFileTexts(),
-            SizeFiles: mod.SizeFiles());
+            SizeFiles: mod.SizeFiles(),
+            SkinOrders: SkinOrdersOf(mod, install));
+    }
+
+    /// <summary>The shown picker order of every own species with a starting skin; null for none.</summary>
+    private static IReadOnlyDictionary<string, IReadOnlyList<string>>? SkinOrdersOf(ModProject mod, GameInstall install)
+    {
+        var orders = new Dictionary<string, IReadOnlyList<string>>();
+        foreach (var species in mod.Manifest.Species)
+        {
+            var key = species.Key(mod.Id);
+            if (mod.ShownSkinOrder(key, SkinSlots.NumbersOf(install, key)) is { } order) orders[key] = order;
+        }
+        return orders.Count == 0 ? null : orders;
     }
 
     /// <summary>The other mods whose species the skins use, with whether each is here, installed and on; null for none.</summary>
