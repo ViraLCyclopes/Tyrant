@@ -551,3 +551,14 @@ Needs the game. Steps marked **(game)** start the game.
      **LOD 1** and **LOD 2**: the same skin on each level of detail. Pick **Game's materials**: the model shows the template's
      textures only, without Chaos Effect's maps. Open another model and come back: the pick is remembered while the app is open. A model
      with problems (no built levels of detail) says why instead of showing the game's.
+165. **(game)** Skin picker order. In a mod with the Ultimasaurus species (editable starting skin and a Chaos Effect skin), on its
+     page drag **Chaos Effect** to second place in the Skins list, install, open the Nursery: the picker shows that order.
+166. **(game)** Click every thumbnail in the picker: the preview and the name match the thumbnail you clicked.
+167. **(game)** Switch sex and move the maturity slider: the picker order stays.
+168. **(game)** Place an animal on a moved skin, save the park, reload: it keeps its skin.
+169. **(game)** **Make default** on another skin: the new and old starting skins swap places in the Skins list and in the Nursery picker.
+170. **(game)** With more than 5 skins, the page arrows step through the new order and the page of the selected skin shows.
+171. **(game)** The All skins grid follows the order.
+172. **(game)** A species with no saved order, and another mod's species, look as before.
+173. CLI: `tyrant mod skin-order <MOD> <SPECIES-ID>` lists the same order as the app, and `tyrant mod set-skin-order <MOD> <SPECIES-ID> <SKIN>...`
+     changes it; the app's Skins list shows the change after a reload.
