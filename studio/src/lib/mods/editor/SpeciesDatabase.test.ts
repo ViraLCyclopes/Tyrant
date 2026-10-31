@@ -74,7 +74,9 @@ const identity = { ...animal, templateProfile: 'CombatProfile_Tank', behaviour: 
   row('/diet', 'Carnivore', 'text'), row('/niches/infantNiche', 'Small, Predator', 'text'), row('/niches/adolescentNiche', 'Medium, Predator', 'text'), row('/niches/adultNiche', 'Large, Predator', 'text'),
   row(`${combatProfile}/confidenceLevel`, 'Confident', 'text'), row(`${combatProfile}/temperament`, 'Aggressive', 'text'), row(`${combatProfile}/cannibalism`, 'None', 'text'),
   row(`${combatProfile}/aggressionProfileEntries`, '2', 'array', false), row(ruleRow, '1'),
-  row('/MinFenceHeight', 'Height4M', 'text')] } as typeof animal;
+  row('/MinFenceHeight', 'Height4M', 'text'),
+  row('/brain/mating/shared/matingSeason', 'March', 'text'), row('/brain/reproduction/shared/idealClutchSize', '2'),
+  row('/brain/reproduction/shared/maxClutchSize', '4')] } as typeof animal;
 const startFrom = (asset: string) => fireEvent.change(within(screen.getByRole('region', { name: 'Behaviour' })).getByRole('combobox', { name: 'Start from' }), { target: { value: asset } });
 const record = () => screen.getByRole('textbox', { name: /Search fields/ });
 const dropEdits = "Saving this behaviour drops your edits to the profile's rules in the full animal record. Save anyway?";
@@ -572,12 +574,13 @@ describe('Species database', () => {
     expect(onAddSound).toHaveBeenCalledWith('tyrant.red-spot.new-animal');
   });
 
-  it('shows the Diet and niche, Behaviour and Habitat cards after the Social card, in that order', async () => {
+  it('shows the Diet and niche, Behaviour, Habitat and Breeding cards after the Social card, in that order', async () => {
     await setup([{ ...identity, dataFields: [...identity.dataFields, ...socialRows] }], {}, true, modDetail(), catalogue);
     const names = screen.getAllByRole('region').map((r) => r.getAttribute('aria-label'));
     const at = (name: string) => names.indexOf(name);
     expect(at('Social')).toBeGreaterThanOrEqual(0);
-    expect([at('Social') < at('Diet and niche'), at('Diet and niche') < at('Behaviour'), at('Behaviour') < at('Habitat')]).toEqual([true, true, true]);
+    expect([at('Social') < at('Diet and niche'), at('Diet and niche') < at('Behaviour'), at('Behaviour') < at('Habitat'), at('Habitat') < at('Breeding')])
+      .toEqual([true, true, true, true]);
   });
 
   it('saving sends behaviour with setSpecies', async () => {
@@ -604,6 +607,16 @@ describe('Species database', () => {
     expect(within(diet).getByRole('alert')).toHaveTextContent('Tick at least one food.');
     expect(screen.getByRole('button', { name: 'Save species' })).toBeDisabled();
     await fireEvent.click(within(diet).getByRole('checkbox', { name: 'Fish' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save species' })).toBeEnabled());
+  });
+
+  it('Save is disabled while the breeding card has an error', async () => {
+    await setup([identity], {}, true, modDetail(), catalogue);
+    const breeding = screen.getByRole('region', { name: 'Breeding' });
+    await fireEvent.input(within(breeding).getByRole('spinbutton', { name: 'Ideal clutch' }), { target: { value: '2.5' } });
+    expect(within(breeding).getByRole('alert')).toHaveTextContent('Ideal clutch must be a whole number of 0 or more.');
+    expect(screen.getByRole('button', { name: 'Save species' })).toBeDisabled();
+    await fireEvent.input(within(breeding).getByRole('spinbutton', { name: 'Ideal clutch' }), { target: { value: '3' } });
     await waitFor(() => expect(screen.getByRole('button', { name: 'Save species' })).toBeEnabled());
   });
 

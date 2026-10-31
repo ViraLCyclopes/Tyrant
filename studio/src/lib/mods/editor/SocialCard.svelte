@@ -1,11 +1,16 @@
 <script lang="ts">
   import type { ModAnimalFieldDto } from '$lib/rpc/types.gen';
+  import { cohesionWord, desiresHerd, exhibitSize, expectedGroups, groupKind, type SocialNumbers } from './socialPreview';
 
   /**
    * A species' social settings, with plain names, from its full animal record: `values` is the record's edits (path → text),
    * shared with the Full animal record and saved with the species.
    */
-  let { fields, values = $bindable(), valid = $bindable(true) }: { fields: ModAnimalFieldDto[]; values: Record<string, string>; valid?: boolean } = $props();
+  let { fields, values = $bindable(), valid = $bindable(true), ownSocialInfo = false }: {
+    fields: ModAnimalFieldDto[]; values: Record<string, string>; valid?: boolean;
+    /** The species (or its template) has its own social info text, which the game shows instead of its group sentence. */
+    ownSocialInfo?: boolean;
+  } = $props();
   const uid = $props.id();
 
   type Item = { path: string; label: string; min?: number; max?: number; step?: string; hint?: string };
@@ -19,7 +24,7 @@
   const others: Item[] = [
     { path: `${social}/shared/individualRangeMale`, label: 'Space per male (m²)', min: 16, max: 32000 },
     { path: `${social}/shared/individualRangeFemale`, label: 'Space per female (m²)', min: 16, max: 32000 },
-    { path: `${social}/shared/rangeOverlapAllowance`, label: 'Range overlap (0–1)', min: 0, max: 1 },
+    { path: `${social}/shared/rangeOverlapAllowance`, label: 'Crowding allowed (0–1)', min: 0, max: 1, hint: "The Paddock tab's Crowding bar. More allowed crowding makes the expected exhibit smaller." },
     { path: `${social}/adult/socialPositionalCohesion`, label: 'Adults stay close together (0–1)', min: 0, max: 1 },
     { path: `${social}/adult/socialStateCohesion`, label: 'Adults act together (0–1)', min: 0, max: 1 },
     { path: '/brain/needs/adult/native/socialIsolationTime', label: 'Adults can be alone for', min: 0, hint: "0 means it never gets lonely; the game's editor uses 0–1200." },
@@ -61,6 +66,36 @@
   $effect(() => {
     valid = !problems.some((p) => p.includes('whole number'));
   });
+  // What the game's panel will show, worked out from the values above (unsaved edits included).
+  const previewPaths: Record<keyof SocialNumbers, string> = {
+    malesMin: groupSize[0].path, malesMax: groupSize[1].path, femalesMin: groupSize[2].path, femalesMax: groupSize[3].path,
+    spaceMale: others[0].path, spaceFemale: others[1].path, overlap: others[2].path, cohesion: others[3].path,
+  };
+  /** A preview number: the edit, else the record's value; NaN when blank or not a number. */
+  const previewNumber = (path: string) => {
+    const text = (values[path] ?? byPath.get(path)?.value ?? '').trim();
+    return text === '' ? NaN : Number(text);
+  };
+  const numbers = $derived(Object.fromEntries(Object.entries(previewPaths).map(([k, p]) => [k, previewNumber(p)])) as SocialNumbers);
+  /** The preview's own counts: they start at the fewest males and females, as the game's calculator does, and never change the species. */
+  let malesText = $state<string | null>(null);
+  let femalesText = $state<string | null>(null);
+  // Another species (or a reload after Save or Reset) starts the counts at its own fewest again.
+  $effect.pre(() => {
+    void fields;
+    malesText = null;
+    femalesText = null;
+  });
+  const males = $derived(malesText === null ? numbers.malesMin : malesText.trim() === '' ? NaN : Number(malesText));
+  const females = $derived(femalesText === null ? numbers.femalesMin : femalesText.trim() === '' ? NaN : Number(femalesText));
+  /** `text` of the numbers it needs, or a dash when one of them is blank. */
+  const shownIf = (needed: number[], text: () => string) => (needed.every(Number.isFinite) ? text() : '—');
+  const counts = $derived([numbers.malesMin, numbers.malesMax, numbers.femalesMin, numbers.femalesMax]);
+  const GROUP_TEXT = {
+    none: 'It says the species forms no groups.', couples: 'It says the species lives in couples.', females: 'It says the species forms female-only groups.',
+    males: 'It says the species forms male-only groups.', mixed: 'It says the species forms mixed groups of males and females.',
+  } as const;
+
   const idOf = (path: string) => `${uid}-${path.replace(/[^a-zA-Z0-9]/g, '-')}`;
 </script>
 
@@ -101,6 +136,27 @@
       {/if}
     </div>
     {#if problems.length}<div role="alert">{#each problems as problem (problem)}<p class="warning">{problem}</p>{/each}</div>{/if}
+    {#if hasGroupSize}
+      <section class="preview" aria-label="What the game will show">
+        <h4>What the game will show</h4>
+        <p class="hint">Worked out from the values above, the way the game's Exhibit and Social tabs do. Change the counts to try other groups; they don't change the species.</p>
+        <div class="counts">
+          <label>Males <input type="number" min="0" step="1" value={malesText ?? (Number.isFinite(numbers.malesMin) ? numbers.malesMin : '')} oninput={(e) => (malesText = e.currentTarget.value)} /></label>
+          <label>Females <input type="number" min="0" step="1" value={femalesText ?? (Number.isFinite(numbers.femalesMin) ? numbers.femalesMin : '')} oninput={(e) => (femalesText = e.currentTarget.value)} /></label>
+        </div>
+        <dl>
+          <div><dt>Expected exhibit size</dt><dd>{shownIf([numbers.spaceMale, numbers.spaceFemale, numbers.overlap, males, females], () => `${Math.round(exhibitSize(numbers, males, females))} m²`)}</dd></div>
+          <div><dt>Expected social groups</dt><dd>{shownIf([...counts, males, females], () => `${expectedGroups(numbers, males, females).groups}`)}</dd></div>
+          <div><dt>Expected nomads</dt><dd>{shownIf([...counts, males, females], () => `${expectedGroups(numbers, males, females).nomads}`)}</dd></div>
+          <div><dt>Group cohesion</dt><dd>{shownIf([numbers.malesMax, numbers.femalesMax, desiresHerd(numbers) ? numbers.cohesion : 0], () => cohesionWord(numbers))}</dd></div>
+          <div><dt>Herd leader</dt><dd>{shownIf([numbers.malesMax, numbers.femalesMax], () => (desiresHerd(numbers) ? (values[leaderPath] ?? leader?.value ?? '—') : 'None'))}</dd></div>
+        </dl>
+        <p class="hint">
+          {#if ownSocialInfo}The Paleopedia shows the species' own social info text about its groups.
+          {:else}{shownIf(counts, () => GROUP_TEXT[groupKind(numbers)])}{/if}
+        </p>
+      </section>
+    {/if}
   </section>
 {/if}
 
@@ -113,4 +169,10 @@
   input, select { font: inherit; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 7px 9px; width: 100%; box-sizing: border-box; }
   .hint { font-size: 12px; }
   .warning { color: var(--warn-text); font-size: 13px; }
+  .preview { display: grid; gap: 8px; border-top: 1px solid var(--border); padding-top: 10px; }
+  .counts { display: grid; grid-template-columns: repeat(2, minmax(0, 140px)); gap: 14px; }
+  dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 6px 14px; margin: 0; }
+  dl div { display: flex; justify-content: space-between; gap: 8px; }
+  dt { color: var(--muted); }
+  dd { margin: 0; color: var(--text); }
 </style>
