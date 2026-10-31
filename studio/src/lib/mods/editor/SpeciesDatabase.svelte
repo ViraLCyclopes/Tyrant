@@ -1,5 +1,6 @@
 <script lang="ts">
   import BehaviourCard from './BehaviourCard.svelte';
+  import BreedingCard from './BreedingCard.svelte';
   import DietCard from './DietCard.svelte';
   import HabitatCard from './HabitatCard.svelte';
   import PortraitsCard from './PortraitsCard.svelte';
@@ -137,7 +138,8 @@
   const validId = $derived(/^[a-z0-9](?:[a-z0-9-]{1,62})[a-z0-9]$/.test(speciesId));
   let socialValid = $state(true);
   let dietValid = $state(true);
-  const canSave = $derived((creating || (socialValid && dietValid)) && !!name.trim() && !!genus.trim() && !!epithet.trim() && (!creating || (validId && !!template && !(choice.kind === 'png' && !choice.male))));
+  let breedingValid = $state(true);
+  const canSave = $derived((creating || (socialValid && dietValid && breedingValid)) && !!name.trim() && !!genus.trim() && !!epithet.trim() && (!creating || (validId && !!template && !(choice.kind === 'png' && !choice.male))));
   /** This mod's starting skin of the shown species, when it has one. */
   const startingSkin = $derived(animal?.startingSkinId ? doc.detail?.skins.find((s) => s.id === animal.startingSkinId) : undefined);
   /** This mod's skins of the shown species. */
@@ -321,6 +323,7 @@
             <BehaviourCard fields={animal?.dataFields ?? []} bind:values={dataValues} profiles={database.profiles ?? []} rules={database.rules ?? []}
               templateProfile={animal?.templateProfile ?? null} bind:behaviour confirm={(message) => session.platform.confirm(message, 'Start from')} />
             <HabitatCard fields={animal?.dataFields ?? []} bind:values={dataValues} />
+            <BreedingCard fields={animal?.dataFields ?? []} bind:values={dataValues} bind:valid={breedingValid} />
           {/key}
           <section class="texts" aria-label="Paleopedia text">
             <h3>Paleopedia text</h3>
