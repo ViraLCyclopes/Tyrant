@@ -11,6 +11,20 @@ export function formatFlags(names: readonly string[], order: readonly string[]):
   return [...known, ...unknown].join(', ');
 }
 
+/** The game's biomes (`ClimateDatabase.Biome`), in enum order. */
+export const BIOMES: readonly string[] = ['Boreal', 'Coastal', 'Temperate', 'Scrubland', 'Wetland', 'Tropical', 'Grassland', 'Desert'];
+
+/** The flags in a flags text where the game may write `All` (every flag in `order`) or `0` / `None` (no flag). */
+export function flagList(text: string, order: readonly string[]): string[] {
+  const t = text.trim();
+  if (t === 'All') return [...order];
+  if (t === '' || t === '0' || t === 'None') return [];
+  return parseFlags(t);
+}
+
+/** Flags text for the game: enum order, or `0` for none (an empty text doesn't load in the game). */
+export const flagText = (names: readonly string[], order: readonly string[]): string => (names.length ? formatFlags(names, order) : '0');
+
 export const DIETS: readonly (readonly [string, string])[] = [['Herbivore', 'Plants'], ['Carnivore', 'Meat'], ['Insectivore', 'Insects'], ['Piscivore', 'Fish'], ['Frugivore', 'Fruit']];
 export const DIET_ORDER: readonly string[] = [...DIETS.map(([name]) => name), 'Kibble'];
 

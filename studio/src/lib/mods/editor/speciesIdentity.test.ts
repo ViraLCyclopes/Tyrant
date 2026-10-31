@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DIET_ORDER, NICHE_ORDER, dietWarnings, formatFlags, huntsPrey, nicheProblems, parseFlags } from './speciesIdentity';
+import { BIOMES, DIET_ORDER, NICHE_ORDER, dietWarnings, flagList, flagText, formatFlags, huntsPrey, nicheProblems, parseFlags } from './speciesIdentity';
 
 describe('flags text', () => {
   it('formatFlags_keeps_enum_order', () => {
@@ -43,5 +43,19 @@ describe('huntsPrey', () => {
     expect(huntsPrey(['Aggression_PredationStarving', 'Aggression_NestDefense'])).toBe(true);
     expect(huntsPrey(['Aggression_NestDefense'])).toBe(false);
     expect(huntsPrey([])).toBe(false);
+  });
+});
+
+describe('flag lists with All and none', () => {
+  it('flagList_reads_All_0_and_names', () => {
+    expect(flagList('All', BIOMES)).toEqual(BIOMES);
+    expect(flagList('0', BIOMES)).toEqual([]);
+    expect(flagList('', BIOMES)).toEqual([]);
+    expect(flagList('Desert, Coastal', BIOMES)).toEqual(['Desert', 'Coastal']);
+  });
+
+  it('flagText_writes_0_for_none_and_enum_order', () => {
+    expect(flagText([], BIOMES)).toBe('0');
+    expect(flagText(['Desert', 'Boreal'], BIOMES)).toBe('Boreal, Desert');
   });
 });
