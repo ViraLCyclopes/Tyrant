@@ -139,6 +139,9 @@
   let socialValid = $state(true);
   let dietValid = $state(true);
   let breedingValid = $state(true);
+  /** The game shows the species' own social info text instead of its group sentence: English text here, or one the template has. */
+  const ownSocialInfo = $derived(!!texts['en-US']?.socialInfo?.trim()
+    || !['', 'null'].includes(animal?.dataFields?.find((f) => f.path === '/paleopediaSocialInfo')?.value ?? ''));
   const canSave = $derived((creating || (socialValid && dietValid && breedingValid)) && !!name.trim() && !!genus.trim() && !!epithet.trim() && (!creating || (validId && !!template && !(choice.kind === 'png' && !choice.male))));
   /** This mod's starting skin of the shown species, when it has one. */
   const startingSkin = $derived(animal?.startingSkinId ? doc.detail?.skins.find((s) => s.id === animal.startingSkinId) : undefined);
@@ -317,7 +320,7 @@
           {/each}
         </div>
         {#if !creating}
-          <SocialCard fields={animal?.dataFields ?? []} bind:values={dataValues} bind:valid={socialValid} />
+          <SocialCard fields={animal?.dataFields ?? []} bind:values={dataValues} bind:valid={socialValid} {ownSocialInfo} />
           {#key loads}
             <DietCard fields={animal?.dataFields ?? []} bind:values={dataValues} bind:valid={dietValid} {hasPredation} />
             <BehaviourCard fields={animal?.dataFields ?? []} bind:values={dataValues} profiles={database.profiles ?? []} rules={database.rules ?? []}
