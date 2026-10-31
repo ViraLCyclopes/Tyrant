@@ -66,6 +66,17 @@ describe('Social card', () => {
     expect(line(/Herd leader/)).toHaveTextContent('None');
   });
 
+  it('preview_counts_reset_when_another_species_loads', async () => {
+    const start = Object.fromEntries(Object.entries(base).map(([k, v]) => [P[k as keyof typeof P], v]));
+    const values = $state({ ...start });
+    const { rerender } = render(SocialCard, { fields: Object.entries(start).map(([p, v]) => field(p, v)), values });
+    await fireEvent.input(preview().getByRole('spinbutton', { name: 'Males' }), { target: { value: '5' } });
+    const other = { ...start, [P.malesMin]: '3', [P.malesMax]: '6' };
+    Object.assign(values, other);
+    await rerender({ fields: Object.entries(other).map(([p, v]) => field(p, v)), values });
+    expect((preview().getByRole('spinbutton', { name: 'Males' }) as HTMLInputElement).value).toBe('3');
+  });
+
   it('own_social_info_replaces_group_text', () => {
     setup({}, { ownSocialInfo: true });
     expect(preview().getByText(/own social info/i)).toBeInTheDocument();

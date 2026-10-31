@@ -307,7 +307,8 @@ The Breeding & lifecycle part of the game's Social tab.
   templates use it; Torvosaurus, for example, has clutch 1/1 but lays up to 8 or 10.
 - **Not shown in the game's panels**: egg survival difficulty and sits on eggs. The game still uses them. Sits on
   eggs only matters for species that lay eggs in a nest.
-- **Save is refused** while a clutch size or most eggs isn't a whole number of 0 or more, or most eggs is above 16.
+- **Save is refused** while a clutch size or most eggs isn't a whole number of 0 or more, most eggs is above 16, or
+  gestation or babies stay close to family is blank.
 - **Warnings** (Save still works):
   - no breeding month ticked (stored as `0`; the species never breeds)
   - ideal clutch larger than largest

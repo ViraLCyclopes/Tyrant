@@ -38,7 +38,7 @@ export const BREEDING_PATHS = {
 
 export type BreedingValues = {
   months: string[] | null; system: string | null; parenting: string | null;
-  gestation: string | null; ideal: string | null; largest: string | null; mostEggs: string | null;
+  gestation: string | null; ideal: string | null; largest: string | null; mostEggs: string | null; familyCohesion: string | null;
 };
 
 const whole = (text: string) => /^\d+$/.test(text.trim());
@@ -50,6 +50,8 @@ export function breedingIssues(v: BreedingValues): { errors: string[]; warnings:
   const warnings: string[] = [];
   const counts: [string | null, string][] = [[v.ideal, 'Ideal clutch'], [v.largest, 'Largest clutch'], [v.mostEggs, 'Most eggs laid']];
   for (const [text, label] of counts) if (text !== null && !whole(text)) errors.push(`${label} must be a whole number of 0 or more.`);
+  const decimals: [string | null, string][] = [[v.gestation, 'Gestation'], [v.familyCohesion, 'Babies stay close to family']];
+  for (const [text, label] of decimals) if (text !== null && num(text) === null) errors.push(`${label} needs a number.`);
   if (v.mostEggs !== null && whole(v.mostEggs) && Number(v.mostEggs) > 16)
     errors.push('Most eggs laid can be at most 16 (the game keeps it in a byte and its own editor stops at 16).');
 

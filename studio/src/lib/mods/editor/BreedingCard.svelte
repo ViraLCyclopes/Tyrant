@@ -26,7 +26,7 @@
 
   const issues = $derived(breedingIssues({
     months: has(B.months) ? months : null, system: orNull(B.system), parenting: orNull(B.parenting),
-    gestation: orNull(B.gestation), ideal: orNull(B.ideal), largest: orNull(B.largest), mostEggs: orNull(B.mostEggs),
+    gestation: orNull(B.gestation), ideal: orNull(B.ideal), largest: orNull(B.largest), mostEggs: orNull(B.mostEggs), familyCohesion: orNull(B.familyCohesion),
   }));
   $effect(() => {
     valid = issues.errors.length === 0;

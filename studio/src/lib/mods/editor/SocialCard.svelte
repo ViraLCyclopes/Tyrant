@@ -80,6 +80,12 @@
   /** The preview's own counts: they start at the fewest males and females, as the game's calculator does, and never change the species. */
   let malesText = $state<string | null>(null);
   let femalesText = $state<string | null>(null);
+  // Another species (or a reload after Save or Reset) starts the counts at its own fewest again.
+  $effect.pre(() => {
+    void fields;
+    malesText = null;
+    femalesText = null;
+  });
   const males = $derived(malesText === null ? numbers.malesMin : malesText.trim() === '' ? NaN : Number(malesText));
   const females = $derived(femalesText === null ? numbers.femalesMin : femalesText.trim() === '' ? NaN : Number(femalesText));
   /** `text` of the numbers it needs, or a dash when one of them is blank. */
