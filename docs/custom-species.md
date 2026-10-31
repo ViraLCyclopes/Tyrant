@@ -72,7 +72,7 @@ The database has ten tables:
 | `animal_prefabs` | `species_id`, `bundle`, `asset` | Optional Unity AssetBundle and lowercase prefab asset path |
 | `animal_starting_skin` | `species_id`, `skin`, `name`, `swatch` | Starting skin: the template skin number, optional name and swatch PNG (see [Skins](#skins)) |
 | `animal_portraits` | `species_id`, `slot`, `file` | Starting skin portraits: slot (`adultMale` … `infantLeucistic`) to PNG path (see [Skins](#skins)) |
-| `animal_behaviour` | `species_id`, `start_from` | The behaviour profile a species starts from, when its behaviour is its own (see [Diet, behaviour and habitat](#diet-behaviour-and-habitat)) |
+| `animal_behaviour` | `species_id`, `start_from` | The behaviour profile a species starts from, when its behaviour is its own (see [Diet, behaviour, habitat and breeding](#diet-behaviour-habitat-and-breeding)) |
 | `animal_behaviour_rules` | `species_id`, `position`, `rule` | That species' behaviour rules; primary key is `(species_id, rule)`. The rule order is worked out when the game loads the species (see [Behaviour](#behaviour)); `position` doesn't change it |
 
 `PRAGMA user_version` is `7`. Existing v1–v6 databases upgrade on their next save (version 6 lets `animal_assets` hold the `paleopedia` slot; version 7 adds the two behaviour tables). Species ids are unique; a stat references its species
@@ -158,7 +158,7 @@ species:
 |---|---|
 | Males / Females, fewest and most (group size) | `/brain/social/adult/socialMaleCountRange/x`, `/y`; `socialFemaleCountRange/x`, `/y` |
 | Space per male / female (m²; the game's editor allows 16–32,000) | `/brain/social/shared/individualRangeMale`, `individualRangeFemale` |
-| Range overlap (0–1) | `/brain/social/shared/rangeOverlapAllowance` |
+| Crowding allowed (0–1): the game's Paddock tab Crowding bar | `/brain/social/shared/rangeOverlapAllowance` |
 | Adults stay close together / act together (0–1) | `/brain/social/adult/socialPositionalCohesion`, `socialStateCohesion` |
 | Leader (`Either`, `Patriarch`, `Matriarch`) | `/brain/social/adult/socialLeaderType` |
 | Adults can be alone for (0 = never lonely; the game's editor uses 0–1200) | `/brain/needs/adult/native/socialIsolationTime` |
@@ -171,6 +171,18 @@ is refused otherwise: the game cannot load a species with 2.5 animals); the card
 most or the soonest call is later than the latest. Babies have their own cohesion, call interval and loneliness values
 (`/brain/social/infant/...`, `/brain/needs/infant/native/socialIsolationTime`) in the Full animal record; the game blends
 them into the adult values as an animal grows.
+
+Under the values, **What the game will show** works out what the game's Exhibit and Social tabs will say, from the
+card's current values (unsaved edits included):
+
+- Expected exhibit size, expected social groups and expected nomads
+- Group cohesion (None, or Low / Medium / High)
+- Herd leader (None when the species doesn't want a herd)
+- Which kind of group sentence the Paleopedia picks. When the species or its template has its own social info text,
+  the Paleopedia shows that instead.
+
+Its Males and Females boxes start at the fewest of each, like the game's calculator. Change them to try other groups;
+they don't change the species. A dash means a value it needs is blank.
 
 The **Full animal record** section exposes the remaining serialized fields, including
 diet, clade, popularity, dimensions, fence requirements, navigation, growth curves,
@@ -197,9 +209,9 @@ links (brain, module config, profile), stopping cycles and world/build databases
 This exposes serialized species settings, not computed properties, executable behaviors,
 or every global game parameter. Editing dimensions does not physically reshape a mesh.
 
-## Diet, behaviour and habitat
+## Diet, behaviour, habitat and breeding
 
-Three more cards follow the Social card, for a mod's new species: **Diet and niche**, **Behaviour** and **Habitat**.
+Four more cards follow the Social card, for a mod's new species: **Diet and niche**, **Behaviour**, **Habitat** and **Breeding**.
 Like the Social card, they edit values of the full animal record with plain names and are saved with **Save species**.
 A value a card doesn't list is shown as it is, so nothing changes unless you pick something else.
 
@@ -260,6 +272,12 @@ template's too.
 
 ### Habitat
 
+- **Biomes**: tick the biomes the species likes (Boreal, Coastal, Temperate, Scrubland, Wetland, Tropical, Grassland,
+  Desert; `/treeBiomes`). These are the pictures under Nature requirements in the game's Exhibit tab. They also count
+  for welfare and decide which plants herbivores browse. With none ticked (stored as `0`), the species shows no biomes,
+  the biome part of its Nature welfare is always 0, and herbivores never browse. The card warns about this but doesn't
+  stop a save.
+- **Nursery background** (`/nurseryBackgroundBiome`): the biome behind the species in the Nursery.
 - **Fence height** (1 m, 2.5 m, 4 m or 6 m) and **Fence strength** (None to Extreme): the fences the species needs
   (`/MinFenceHeight`, `/MinFenceStrength`).
 - **Water liking**, from "Hates water" to "Loves water": how much it likes or avoids walking through water (`/waterAffinity`).
@@ -267,6 +285,34 @@ template's too.
 - **Minimum water depth** (`/minimumWaterDepth`) only shows in the Paleopedia; it doesn't change behaviour.
 
 Plant coverage, water, temperature and bed are in Animal stats; space per animal is on the Social card.
+
+### Breeding
+
+The Breeding & lifecycle part of the game's Social tab.
+
+| Card | Record path |
+|---|---|
+| Breeding months (tick boxes) | `/brain/mating/shared/matingSeason` |
+| Mating system (Monogamous, Polygamous, Polyandrous, Polygynous, Promiscuous) | `/brain/mating/shared/matingSystem` |
+| Fertility (Lowest 10% to Highest 220% of average) | `/brain/mating/shared/fecundityLevel` |
+| Gestation (months) | `/brain/reproduction/shared/gestationTimeMonths` |
+| Ideal clutch, Largest clutch | `/brain/reproduction/shared/idealClutchSize`, `maxClutchSize` |
+| Most eggs laid (0 = use the largest clutch) | `/brain/reproduction/shared/maxEmbryoCountOverride` |
+| Who raises the babies (Mother only, Father only, Both parents, Neither) | `/brain/reproduction/adult/parentingMethod` |
+| Babies stay close to family (0–1): the game's Clutch cohesion | `/brain/social/infant/familyPositionalCohesion` |
+| Egg survival difficulty (Easy, Medium, Hard) | `/brain/reproduction/shared/embryoSurvivalDifficulty` |
+| Sits on eggs (Never to Always) | `/brain/reproduction/adult/sitOnEggsFrequency` |
+
+- **Most eggs laid**: when it's above 0, the game makes up to that many eggs instead of the largest clutch. Some
+  templates use it; Torvosaurus, for example, has clutch 1/1 but lays up to 8 or 10.
+- **Not shown in the game's panels**: egg survival difficulty and sits on eggs. The game still uses them. Sits on
+  eggs only matters for species that lay eggs in a nest.
+- **Save is refused** while a clutch size or most eggs isn't a whole number of 0 or more, or most eggs is above 16.
+- **Warnings** (Save still works):
+  - no breeding month ticked (stored as `0`; the species never breeds)
+  - ideal clutch larger than largest
+  - gestation of 0 or less
+  - Father only with Polygynous mating, where no parent looks after the babies
 
 ## Localization
 
