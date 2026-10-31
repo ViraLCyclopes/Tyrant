@@ -9,7 +9,7 @@ game** puts the game back to vanilla. Nothing from the game is redistributed; ev
 
 ## Community
 
-Questions, mods to share or bugs to report? Join the **[Viral's Discord](https://discord.gg/nB9JZm7uPE)**.
+Questions, mods to share or bugs to report? Join **[My Discord](https://discord.gg/nB9JZm7uPE)**.
 
 ## Download
 
