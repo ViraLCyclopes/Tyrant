@@ -27,10 +27,11 @@ public class FrameworkVersionTests
         using var game = new FakeGame();
         var install = new GameInstall(game.Root, null);
         Directory.CreateDirectory(Path.Combine(game.Root, "Mods"));
-        // Any versioned .NET assembly will do: this test assembly is 0.1.0 (Directory.Build.props).
-        File.Copy(typeof(FrameworkVersionTests).Assembly.Location, Path.Combine(game.Root, "Mods", ModLoaderInstaller.FrameworkFile));
+        // Any versioned .NET assembly will do: this test assembly carries Tyrant's version (Directory.Build.props).
+        var standIn = typeof(FrameworkVersionTests).Assembly;
+        File.Copy(standIn.Location, Path.Combine(game.Root, "Mods", ModLoaderInstaller.FrameworkFile));
 
-        Assert.Equal("0.1.0", ModLoaderInstaller.InstalledFrameworkVersion(install));
+        Assert.Equal(standIn.GetName().Version!.ToString(3), ModLoaderInstaller.InstalledFrameworkVersion(install));
     }
 
     [Fact]
