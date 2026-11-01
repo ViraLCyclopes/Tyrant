@@ -47,6 +47,15 @@ public sealed record SpeciesSkins(string SpeciesId, bool Vivarium, IReadOnlyList
     /// <summary>The species prefab's Addressables GUID (AnimalData.animalRef); null when the dump has none.</summary>
     public string? PrefabGuid { get; init; }
 
+    /// <summary>
+    /// For a mod's new species, the game species it is made from (its data, animations and model are that species'); null for
+    /// the game's own species. The data dump has only the game's species, so lookups in it go by this id.
+    /// </summary>
+    public string? Template { get; init; }
+
+    /// <summary>The id to look this species up by in the data dump: its template's for a new species, else its own.</summary>
+    public string DataId => Template ?? SpeciesId;
+
     /// <summary>Its "displayName" in the dump; null when it has none.</summary>
     public string? DisplayName { get; init; }
 

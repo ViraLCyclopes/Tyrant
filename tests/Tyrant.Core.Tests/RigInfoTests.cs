@@ -64,6 +64,22 @@ public class RigInfoTests
     }
 
     [Fact]
+    public void A_new_species_gets_its_templates_animated_and_grown_bones_without_a_new_data_dump()
+    {
+        var (game, ws, install, reader) = Setup();
+        using var _ = game;
+        var dumped = SpeciesSkinsReader.Load(ws);
+        var mod = ModProject.Create(ws, "pack", null, null);
+        var key = mod.AddSpecies(dumped, "mirabilis", "Carcharodontosaurus", "Mirabilis", "Tyrantus", "mirabilis").Key(mod.Id);
+
+        var info = RigInfoService.For(ws, install, Index(), ModProject.WithSpecies(dumped, mod.Manifest), reader, key);
+
+        Assert.Equal(["Tail"], info.ClipMoved);
+        Assert.Equal(["Hip"], info.GrowthMoved);
+        Assert.Empty(info.Failures);
+    }
+
+    [Fact]
     public void Without_an_animation_table_it_says_the_animations_were_not_read()
     {
         var (game, ws, install, reader) = Setup();

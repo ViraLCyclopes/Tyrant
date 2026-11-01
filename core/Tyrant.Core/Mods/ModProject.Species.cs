@@ -265,7 +265,7 @@ public sealed partial class ModProject
             var template = vanilla.FirstOrDefault(s => s.SpeciesId == entry.Base && !s.Vivarium);
             var start = template?.Skins.FirstOrDefault(s => s.Index == entry.StartingSkin);
             if (template is null || start is null || result.Any(s => s.SpeciesId == key)) return;
-            result.Add(template with { SpeciesId = key, Skins = [start with { Index = 0, Name = entry.StartingSkinName ?? start.Name }] });
+            result.Add(template with { SpeciesId = key, Template = template.SpeciesId, Skins = [start with { Index = 0, Name = entry.StartingSkinName ?? start.Name }] });
         }
         foreach (var entry in manifest.Species) Add(entry.Key(manifest.Id), entry);
         foreach (var other in others ?? []) Add(other.Key, other.Entry);
