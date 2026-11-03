@@ -8,7 +8,7 @@ namespace Tyrant.Framework.Core
     public static class FrameworkInfo
     {
         /// <summary>The framework version mods compare their "requires": { "tyrant": ... } against.</summary>
-        public const string Version = "0.2.0";
+        public const string Version = "0.2.1";
     }
 
     public static class ModId

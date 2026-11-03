@@ -1,6 +1,6 @@
 [package]
 name = "tyrant-app"
-version = "0.2.0"
+version = "0.2.1"
 description = "Tyrant — modding toolkit for Prehistoric Kingdom"
 edition = "2021"
 

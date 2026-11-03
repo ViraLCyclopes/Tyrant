@@ -32,7 +32,7 @@ public class StudioMethodsTests
         var info = await new RpcHarness(TestStudio.Options()).Call("app.info");
 
         Assert.Equal(StudioMethods.ProtocolVersion, info.GetProperty("protocolVersion").GetInt32());
-        Assert.Equal("0.2.0", info.GetProperty("version").GetString());
+        Assert.Equal("0.2.1", info.GetProperty("version").GetString());
     }
 
     [Fact]

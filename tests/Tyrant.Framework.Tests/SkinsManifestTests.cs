@@ -81,9 +81,9 @@ public class SkinsManifestTests
     }
 
     [Fact]
-    public void The_framework_version_is_0_2_0()
+    public void The_framework_version_is_0_2_1()
     {
-        Assert.Equal("0.2.0", FrameworkInfo.Version); // 0.2.0: reads textures from the pack when a slim install left the PNG out
+        Assert.Equal("0.2.1", FrameworkInfo.Version); // 0.2.1: the Social tab no longer freezes on new species
     }
 
     private const string OneBadSkin = """
