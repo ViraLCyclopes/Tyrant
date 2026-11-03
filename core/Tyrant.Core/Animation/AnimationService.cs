@@ -23,10 +23,10 @@ public static class AnimationService
     public static IReadOnlyList<AnimationInfo> List(Workspace ws, GameInstall install, AssetIndex index, IReadOnlyList<SpeciesSkins> species,
         IAssetReader reader, string speciesId)
     {
-        var (id, prefab, dir) = Where(ws, install, index, species, speciesId);
+        var (_, dataId, prefab, dir) = Where(ws, install, index, species, speciesId);
         var file = Path.Combine(dir, "list.json");
         if (Load<List<AnimationInfo>>(file) is { } known) return known;
-        var records = Records(ws, index, id);
+        var records = Records(ws, index, dataId);
         var model = reader.ReadPrefabModel(install, prefab);
         var (clips, _) = reader.ReadRawClips(install, records.Values.ToList());
         var byName = clips.GroupBy(c => c.Name, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
@@ -42,9 +42,9 @@ public static class AnimationService
     public static IReadOnlyList<(string Id, ClipAnimation? Clip, string? Failure)> Clips(Workspace ws, GameInstall install, AssetIndex index,
         IReadOnlyList<SpeciesSkins> species, IAssetReader reader, string speciesId, IReadOnlyList<string> ids)
     {
-        var (id, prefab, dir) = Where(ws, install, index, species, speciesId);
+        var (id, dataId, prefab, dir) = Where(ws, install, index, species, speciesId);
         Dictionary<string, AssetRecord>? table = null;
-        Dictionary<string, AssetRecord> Table() => table ??= Records(ws, index, id);
+        Dictionary<string, AssetRecord> Table() => table ??= Records(ws, index, dataId);
         var asked = ids.Select(a => File.Exists(FileOf(dir, a)) ? a : Resolve(Table(), a)).Distinct(StringComparer.Ordinal).ToList();
         var results = new Dictionary<string, (ClipAnimation? Clip, string? Failure)>(StringComparer.Ordinal);
         var missing = new List<string>();
@@ -93,12 +93,17 @@ public static class AnimationService
     /// <summary>A clip as the add-on reads it (the cache's own format).</summary>
     public static void WriteClip(string file, ClipAnimation clip) => Save(file, clip);
 
-    private static (string Id, AssetRecord Prefab, string Dir) Where(Workspace ws, GameInstall install, AssetIndex index,
+    /// <summary>
+    /// The species, the id its animations are found by in the data dump (a new species moves like its template, and the dump
+    /// has only the game's species), its prefab and its cache folder (by that id: a new species shares its template's).
+    /// </summary>
+    private static (string Id, string DataId, AssetRecord Prefab, string Dir) Where(Workspace ws, GameInstall install, AssetIndex index,
         IReadOnlyList<SpeciesSkins> species, string speciesId)
     {
         var (id, prefab) = ModProject.ResolveModelTarget(index, species, speciesId, null);
-        var dir = Path.Combine(ws.CacheDir, "animations", $"{TextureExporter.Sanitize(id)}-{WorkspaceCache.Key(ws, install, prefab, CacheVersion)}");
-        return (id, prefab, dir);
+        var dataId = species.FirstOrDefault(s => string.Equals(s.SpeciesId, id, StringComparison.OrdinalIgnoreCase))?.DataId ?? id;
+        var dir = Path.Combine(ws.CacheDir, "animations", $"{TextureExporter.Sanitize(dataId)}-{WorkspaceCache.Key(ws, install, prefab, CacheVersion)}");
+        return (id, dataId, prefab, dir);
     }
 
     /// <summary>The species' clips in its animation table's order, each matched to its index record (the first by name).</summary>

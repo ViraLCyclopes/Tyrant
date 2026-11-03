@@ -29,7 +29,9 @@ public static class RigInfoService
     /// <summary>The species' rig info, worked out once per game version and data dump (cached in the workspace).</summary>
     public static RigInfo For(Workspace ws, GameInstall install, AssetIndex index, IReadOnlyList<SpeciesSkins> species, IAssetReader reader, string speciesId)
     {
-        var (id, prefab) = ModProject.ResolveModelTarget(index, species, speciesId, null);
+        var (resolved, prefab) = ModProject.ResolveModelTarget(index, species, speciesId, null);
+        // A new species moves, grows and looks around like its template, and the data dump has only the game's species.
+        var id = species.FirstOrDefault(s => string.Equals(s.SpeciesId, resolved, StringComparison.OrdinalIgnoreCase))?.DataId ?? resolved;
         var cache = Path.Combine(ws.CacheDir, "rig-info", $"{TextureExporter.Sanitize(id)}-{WorkspaceCache.Key(ws, install, prefab, CacheVersion)}.json");
         if (File.Exists(cache))
         {

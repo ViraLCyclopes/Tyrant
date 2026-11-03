@@ -114,6 +114,41 @@ public class AnimationServiceTests
         Assert.Contains("Run data dump", ex.Message);
     }
 
+    /// <summary>The game's species plus a new species made from Carcharodontosaurus, and its id: the dump knows only the template.</summary>
+    private static (IReadOnlyList<SpeciesSkins> Species, string Key) WithNewSpecies(Workspace ws)
+    {
+        var game = SpeciesSkinsReader.Load(ws);
+        var mod = ModProject.Create(ws, "pack", null, null);
+        var key = mod.AddSpecies(game, "mirabilis", "Carcharodontosaurus", "Mirabilis", "Tyrantus", "mirabilis").Key(mod.Id);
+        return (ModProject.WithSpecies(game, mod.Manifest), key);
+    }
+
+    [Fact]
+    public void A_new_species_lists_its_templates_animations_without_a_new_data_dump()
+    {
+        var (game, ws, install, reader) = Setup();
+        using var _ = game;
+        var (species, key) = WithNewSpecies(ws);
+
+        var list = AnimationService.List(ws, install, Index(), species, reader, key);
+
+        Assert.Equal(["Walk", "Roar"], list.Select(a => a.Name));
+    }
+
+    [Fact]
+    public void A_new_species_samples_its_templates_clips_without_a_new_data_dump()
+    {
+        var (game, ws, install, reader) = Setup();
+        using var _ = game;
+        var (species, key) = WithNewSpecies(ws);
+        reader.RawClipsToReturn = [WalkClip()];
+
+        var clips = AnimationService.Clips(ws, install, Index(), species, reader, key, ["walk"]);
+
+        Assert.Equal("Carch|Walk", clips[0].Clip!.Id);
+        Assert.Null(clips[0].Failure);
+    }
+
     [Fact]
     public void An_animation_can_be_asked_for_by_its_shown_name()
     {
