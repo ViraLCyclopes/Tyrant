@@ -36,6 +36,11 @@ namespace Tyrant.Framework
         private static Type? _persistent;
         private static Type? _animal;
         private static Type? _native;
+        /// <summary>
+        /// Found once in Start: AccessTools.TypeByName walks every loaded type (about 0.1 s) and the game reads a species' name
+        /// many times over, such as for each animal in the Social tab's list at every panel refresh.
+        /// </summary>
+        private static Type? _localization;
         private static FieldInfo? _objectId;
         private static FieldInfo? _animalData;
 
@@ -48,7 +53,8 @@ namespace Tyrant.Framework
             {
                 _persistent = RequireType("PrehistoricKingdom.PKPersistentData");
                 _animal = RequireType("PrehistoricKingdom.Animal");
-                _objectId = AccessTools.Field(_animal, "ObjectID") ?? throw new MissingFieldException("Animal.ObjectID");
+                _localization = RequireType("PrehistoricKingdom.PKLocalizationManager");
+                _objectId =AccessTools.Field(_animal, "ObjectID") ?? throw new MissingFieldException("Animal.ObjectID");
                 _animalData = AccessTools.Field(_animal, "_animalData") ?? throw new MissingFieldException("Animal._animalData");
                 var database = RequireMethod("PrehistoricKingdom.AnimalDatabase", "Init");
                 var manager = RequireMethod("PrehistoricKingdom.AnimalManager", "Awake");
@@ -296,7 +302,7 @@ namespace Tyrant.Framework
         private static void LocalizedName(object __instance, ref string __result)
         {
             if (!Texts.TryGetValue(__instance, out var texts)) return;
-            var language = StaticValue(RequireType("PrehistoricKingdom.PKLocalizationManager"), "CurrentLanguage")?.ToString() ?? "English";
+            var language = StaticValue(_localization!, "CurrentLanguage")?.ToString() ?? "English";
             __result = AnimalText.Resolve(texts, "name", language) ?? __result;
         }
 
