@@ -416,12 +416,23 @@
     {#if animal && !creating}
       <section class="skins" aria-label="Skins">
         <h3>Skins</h3>
+        {#if templateSkins.length > 0 && !templateSkins.some((s) => s.index === (animal.startingSkin ?? 0))}
+          <p class="error" role="alert">{animal.base} has no skin number {animal.startingSkin}, so the game would skip this species. Pick one of its skins below. (A data dump made by an older Tyrant could list mods' skins as the game's.)</p>
+        {/if}
         {#if startingSkin}
           <p class="hint">The species starts with its own skin; edit its PNGs, name, swatch and portraits on its page. Add more skins below; other mods can add skins to it too.</p>
           <div class="toolbar">
             <span>Starting skin: {startingSkin.name}</span>
             <button type="button" aria-label="Open starting skin" onclick={() => onOpenSkin(startingSkin.id)}>Open</button>
           </div>
+          <div class="grid">
+            <label>Template skin
+              <select value={animal.startingSkin ?? 0} onchange={(e) => setStart(Number(e.currentTarget.value), animal.startingSkinName ?? null)}>
+                {#each templateSkins as s (s.index)}<option value={s.index}>{s.name}</option>{/each}
+              </select>
+            </label>
+          </div>
+          <p class="hint">The {animal.base} skin the game copies to make this species' starting skin. Maps without a PNG of their own come from it.</p>
         {:else}
         <p class="hint">The species starts with one skin copied from {animal.base}. Add more skins below; other mods can add skins to it too.</p>
         <div class="grid">

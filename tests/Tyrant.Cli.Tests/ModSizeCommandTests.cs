@@ -34,6 +34,18 @@ public class ModSizeCommandTests
     }
 
     [Fact]
+    public void Check_warns_about_a_dump_an_older_tyrant_made()
+    {
+        using var game = new FakeGame();
+        var ws = Workspace(game);
+        Assert.Equal(ExitCodes.Ok, Run("mod", "size", "size-pack", "Alpha", "--adult", "2", "-w", ws).Code);
+
+        var check = Run("mod", "check", "size-pack", "-w", ws);
+
+        Assert.Contains("older Tyrant", check.Out + check.Err); // the fixture's dump names no dumper version, like one too old to count
+    }
+
+    [Fact]
     public void Sets_prints_and_clears_sizes()
     {
         using var game = new FakeGame();

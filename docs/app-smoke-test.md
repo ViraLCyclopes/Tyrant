@@ -562,3 +562,4 @@ Needs the game. Steps marked **(game)** start the game.
 172. **(game)** A species with no saved order, and another mod's species, look as before.
 173. CLI: `tyrant mod skin-order <MOD> <SPECIES-ID>` lists the same order as the app, and `tyrant mod set-skin-order <MOD> <SPECIES-ID> <SKIN>...`
      changes it; the app's Skins list shows the change after a reload.
+174. **(game)** With a mod that adds skins and a species installed, **Run data dump**: MelonLoader's log says the framework applies no mods this time, and `<workspace>\data` has no `tyrant.*` species and no "(skin from a removed mod)" skin. Start the game normally afterwards: the mod is back.

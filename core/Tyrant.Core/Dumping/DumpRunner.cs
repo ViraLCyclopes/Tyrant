@@ -4,6 +4,7 @@ using Tyrant.Core.Errors;
 using Tyrant.Core.Install;
 using Tyrant.Core.Jobs;
 using Tyrant.Core.Workspaces;
+using Tyrant.Framework.Core;
 
 namespace Tyrant.Core.Dumping;
 
@@ -70,6 +71,7 @@ public sealed class DumpRunner(IGameLauncher launcher, int moveAttempts = 50)
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(requestPath)!);
+            var expires = DateTime.UtcNow.Add(timeout);
             File.WriteAllText(requestPath, JsonSerializer.Serialize(new
             {
                 requestId,
@@ -77,10 +79,11 @@ public sealed class DumpRunner(IGameLauncher launcher, int moveAttempts = 50)
                 buildGuid = fingerprint.BuildGuid,
                 timeoutSeconds = (float)Math.Max(60, timeout.TotalSeconds - 10),
                 // The mod ignores a request older than this, so one left behind (crash, power loss) never fires a surprise dump.
-                expiresUtc = DateTime.UtcNow.Add(timeout).ToString("o"),
+                expiresUtc = expires.ToString("o"),
                 settleSeconds = 5f,
                 quitWhenDone = true,
             }, Json));
+            DumpMarker.Write(ModLoaderInstaller.RecordDir(install), expires); // the framework applies no mods: the dump lists only the game's own
 
             progress?.Report(new JobProgress(0, "Starting the game"));
             launcher.Launch(install);
@@ -126,6 +129,7 @@ public sealed class DumpRunner(IGameLauncher launcher, int moveAttempts = 50)
         finally
         {
             TryDeleteFile(requestPath);
+            TryDeleteFile(Path.Combine(ModLoaderInstaller.RecordDir(install), DumpMarker.FileName));
             if (!success && Directory.Exists(tmp)) TryDeleteDirectory(tmp);
         }
     }

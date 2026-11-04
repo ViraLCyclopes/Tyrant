@@ -24,11 +24,20 @@ namespace Tyrant.Framework
 
         internal static string ModsDirectory => Path.Combine(TyrantDirectory, "Mods");
 
+        /// <summary>This game start is a data dump: nothing was loaded or patched, and nothing may run.</summary>
+        private bool _dumping;
+
         public override void OnInitializeMelon()
         {
             Log = LoggerInstance;
             try
             {
+                if (DumpMarker.IsActive(TyrantDirectory, DateTime.UtcNow))
+                {
+                    _dumping = true;
+                    Log.Msg("Tyrant is running a data dump: no mods are applied this time, so it lists only the game's own content.");
+                    return;
+                }
                 Load();
             }
             catch (Exception ex)
@@ -44,6 +53,7 @@ namespace Tyrant.Framework
 
         public override void OnUpdate()
         {
+            if (_dumping) return;
             SpeciesModule.Tick();
             SkinsModule.Tick(); // adds skins once the animal database exists, before a park loads
             MaterialTextureModule.Tick();
@@ -52,7 +62,10 @@ namespace Tyrant.Framework
             MaterialsModule.Tick(); // frees the textures of edits that were replaced
         }
 
-        public override void OnSceneWasLoaded(int buildIndex, string sceneName) => MaterialTextureModule.OnSceneLoaded();
+        public override void OnSceneWasLoaded(int buildIndex, string sceneName)
+        {
+            if (!_dumping) MaterialTextureModule.OnSceneLoaded();
+        }
 
         public override void OnDeinitializeMelon() => SpeciesModule.ReleaseTemplateAssets();
 

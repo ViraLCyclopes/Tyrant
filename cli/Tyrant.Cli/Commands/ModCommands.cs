@@ -109,7 +109,7 @@ internal static class ModCli
                 {
                     return null;
                 }
-            }, sizeFacts: SpeciesSizes.Facts(ws, mod));
+            }, sizeFacts: SpeciesSizes.Facts(ws, mod), dumpMayIncludeMods: Tyrant.Core.Dumping.DumpManifestFile.MayIncludeModsIn(ws));
     }
 
     /// <summary>
