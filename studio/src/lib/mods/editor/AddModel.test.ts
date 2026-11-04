@@ -1,6 +1,6 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/svelte';
-import { describe, expect, it, vi } from 'vitest';
-import type { ModDetail, ModModelRigPreviewDto } from '$lib/rpc/types.gen';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { CustomSpeciesRow, ModDetail, ModModelRigPreviewDto, SpeciesSkinsRow } from '$lib/rpc/types.gen';
 import { memoryStore } from '$lib/storage';
 import { FakePlatform } from '$lib/test/fakePlatform';
 import { FakeRpc } from '$lib/test/fakeRpc';
@@ -8,7 +8,8 @@ import { renderWith } from '$lib/test/fixtures';
 import { Session } from '$lib/stores/session.svelte';
 import AddModel from './AddModel.svelte';
 
-function setup(hasDump = true) {
+/** custom: what mods.customSpecies answers, null when it fails; dumped: rows the data dump has besides the two game species. */
+function setup(hasDump = true, custom: CustomSpeciesRow[] | null = [], dumped: SpeciesSkinsRow[] = []) {
   lastPlatform = new FakePlatform();
   const platform = lastPlatform;
   platform.files.push('D:\\blender\\big-carch.glb');
@@ -21,9 +22,14 @@ function setup(hasDump = true) {
       ? [
           { speciesId: 'Allosaurus Anax', vivarium: false, skins: [] },
           { speciesId: 'Carcharodontosaurus', vivarium: false, skins: [] },
+          ...dumped,
         ]
       : [],
-  }));
+  })).on('mods.customSpecies', () => {
+    if (!custom) throw new Error('could not read the mods');
+    return { species: custom };
+  });
+  lastRpc = rpc;
   const session = new Session(rpc, platform, memoryStore());
   const doc = { id: 'big-carch', detail: { revision: 'r1', models: [] } as unknown as ModDetail, edit: vi.fn(async () => true) };
   const onDone = vi.fn();
@@ -32,6 +38,7 @@ function setup(hasDump = true) {
 }
 
 let lastPlatform: FakePlatform;
+let lastRpc: FakeRpc;
 let rigFails = false;
 let rigPreview: ModModelRigPreviewDto = { source: 'gameSkeleton', bones: [], current: null, question: 'none', changes: false, errors: [], warnings: [], rigFile: null, errorsIfUseFile: [], errorsIfKeep: [] };
 
@@ -140,6 +147,61 @@ describe('AddModel', () => {
     expect(doc.edit).not.toHaveBeenCalled();
     expect(onDone).not.toHaveBeenCalled();
     rigFails = false;
+  });
+
+  describe("this mod's new species", () => {
+    const row = (speciesId: string, name: string, own: boolean) => ({ speciesId, name, modId: 'x', modName: 'X', own, inWorkspace: true, installed: false, enabled: false, skins: [] });
+    const mine = row('tyrant.big-carch.mirabilis', 'Mirabilis', true);
+    const theirs = row('tyrant.other.rex', 'Rex', false);
+    const options = () => within(screen.getByRole('combobox', { name: 'Species' })).getAllByRole('option').map((o) => (o as HTMLOptionElement).value);
+
+    beforeEach(() => {
+      rigPreview = { ...rigPreview, question: 'none', bones: [], changes: false }; // the rig question's tests above leave it asking
+    });
+
+    it("are asked for this mod and listed first, chosen by default; other mods' are not offered", async () => {
+      setup(true, [mine, theirs]);
+
+      const species = await screen.findByRole('combobox', { name: 'Species' });
+      expect(lastRpc.callsTo('mods.customSpecies')[0]?.params).toEqual({ id: 'big-carch' });
+      expect(options()).toEqual(['tyrant.big-carch.mirabilis', 'Allosaurus Anax', 'Carcharodontosaurus']);
+      expect(species).toHaveValue('tyrant.big-carch.mirabilis');
+      expect(within(species).getByRole('option', { name: 'Mirabilis (this mod)' })).toBeInTheDocument();
+    });
+
+    it('can be given a model', async () => {
+      const { doc, onDone } = setup(true, [mine]);
+
+      await fireEvent.click(await screen.findByRole('button', { name: 'Browse…' }));
+      await waitFor(() => expect(screen.getByRole('textbox', { name: 'Your model' })).toHaveValue('D:\\blender\\big-carch.glb'));
+      await fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+
+      await waitFor(() => expect(doc.edit).toHaveBeenCalledWith('mods.replaceModel', { file: 'D:\\blender\\big-carch.glb', target: 'tyrant.big-carch.mirabilis', rig: 'auto' }));
+      await waitFor(() => expect(onDone).toHaveBeenCalledWith('tyrant.big-carch.mirabilis'));
+    });
+
+    it('are listed once when the data dump has them too (their mod was installed when it ran)', async () => {
+      setup(true, [mine], [{ speciesId: 'tyrant.big-carch.mirabilis', vivarium: false, skins: [] }]);
+
+      await screen.findByRole('combobox', { name: 'Species' });
+      expect(options().filter((id) => id === 'tyrant.big-carch.mirabilis')).toHaveLength(1);
+    });
+
+    it("says what a species model does for the species' skins, only for these species", async () => {
+      setup(true, [mine]);
+      const species = await screen.findByRole('combobox', { name: 'Species' });
+      expect(screen.getByText(/skins with their own model keep it/i)).toBeInTheDocument();
+
+      await fireEvent.change(species, { target: { value: 'Carcharodontosaurus' } });
+      expect(screen.queryByText(/skins with their own model keep it/i)).toBeNull();
+    });
+
+    it('the game species still work when the list cannot be read', async () => {
+      setup(true, null);
+
+      const species = await screen.findByRole('combobox', { name: 'Species' });
+      expect(species).toHaveValue('Allosaurus Anax');
+    });
   });
 
   it('waits for a file before adding', async () => {
