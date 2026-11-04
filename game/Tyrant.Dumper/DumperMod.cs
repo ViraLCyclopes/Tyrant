@@ -9,7 +9,7 @@ using Tyrant.Dumper;
 using Tyrant.Dumper.Serialization;
 using UnityEngine;
 
-[assembly: MelonInfo(typeof(DumperMod), "Tyrant Dumper", "1.0.0", "Tyrant")]
+[assembly: MelonInfo(typeof(DumperMod), "Tyrant Dumper", DumperInfo.Version, "Tyrant")]
 [assembly: MelonGame("Blue Meridian", "Prehistoric Kingdom")]
 
 namespace Tyrant.Dumper

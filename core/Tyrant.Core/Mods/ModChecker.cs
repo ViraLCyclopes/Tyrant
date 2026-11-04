@@ -40,10 +40,12 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
     public ModCheckResult Check(ModProject mod, AssetIndex? index, IReadOnlyList<SpeciesSkins>? species = null, SoundCatalog? sounds = null,
         Func<string, Rigging.RigInfo?>? rigInfo = null, Func<string, SpeciesTemplateStats?>? templateStats = null,
         Func<string, IReadOnlyList<PrefabFieldInfo>?>? prefabFields = null, OtherMods? others = null,
-        Func<AssetIndex, AssetRecord, AnimalMaterial?>? animalMaterialOf = null, SizeFacts? sizeFacts = null)
+        Func<AssetIndex, AssetRecord, AnimalMaterial?>? animalMaterialOf = null, SizeFacts? sizeFacts = null, bool dumpMayIncludeMods = false)
     {
         var errors = new List<string>();
         var warnings = new List<string>();
+        if (dumpMayIncludeMods && species is not null)
+            warnings.Add("The data dump was made by an older Tyrant, so it may list the skins of mods you had installed as the game's. A skin number only your game has makes the species or skin fail for everyone else. Update Tyrant in game if the app offers it, then Workspace → Run data dump and Check again.");
         foreach (var entry in mod.Manifest.Species)
         {
             if (entry.Icon != null) Image(mod, $"Species {entry.Id} Nursery picture", entry.Icon, errors);
@@ -65,8 +67,10 @@ public sealed class ModChecker(Func<AssetRecord, (int Width, int Height)?> sizeO
                 warnings.Add($"Species {entry.Id}: custom Unity prefab loading is experimental. Validate with the Unity exporter and test the animal in PK.");
             }
             if (species is null) warnings.Add($"Species {entry.Id}: template not checked because the game data dump is missing.");
-            else if (!species.Any(s => s.SpeciesId == entry.Base && !s.Vivarium && s.Skins.Count > 0))
+            else if (species.FirstOrDefault(s => s.SpeciesId == entry.Base && !s.Vivarium && s.Skins.Count > 0) is not { } template)
                 errors.Add($"Species {entry.Id}: '{entry.Base}' is not a regular animal template with skins in the game data dump.");
+            else if (template.Skins.All(s => s.Index != entry.StartingSkin))
+                errors.Add($"Species {entry.Id}: starts from skin number {entry.StartingSkin} of {entry.Base}, but {entry.Base} only has {string.Join(", ", template.Skins.Select(s => $"{s.Index} {s.Name}"))}, so the game would skip the species. Pick one of those on the species' page.");
             try
             {
                 SpeciesDatabase.ValidateEffective(entry.Stats, templateStats?.Invoke(entry.Base)?.Stats ?? new Dictionary<string, double>());

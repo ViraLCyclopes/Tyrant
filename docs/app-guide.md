@@ -44,7 +44,10 @@ The game folder, your workspace and its outputs.
 - **Tyrant in the game** installs MelonLoader (the community's mod loader, version 0.7.3, checksum-verified) and two
   small Tyrant mods: the data dumper, which does nothing during normal play, and the modding framework, which applies
   the mods you install from the Mods tab. **Run data dump** starts the game through Steam, reads every game database at
-  the main menu and closes the game again (about a minute). **Uninstall from game** removes exactly what was installed,
+  the main menu and closes the game again (about a minute). Tyrant's framework applies no mods during a dump, so it lists
+  only the game's own skins and species and the mods you have installed are back the next time you play. Other MelonLoader
+  mods in the game's `Mods` folder still load, and could change what's listed. A dump made by an older Tyrant could list
+  installed mods as the game's; Check warns about it, and running the dump again fixes it. **Uninstall from game** removes exactly what was installed,
   including installed mods; MelonLoader stays if other mods use it.
   The card shows the framework's version in the game and in this Tyrant ("Framework: 0.1.0 in the game · 0.1.0 in this
   Tyrant") and MelonLoader's version. After a Tyrant update that brings a newer framework, Tyrant offers once to
@@ -234,7 +237,9 @@ A new species' form has a **Starting skin** section: **Copy a skin** (any base-g
 species' textures need that species' model) or **My own PNGs** (male diffuse, optional female). The skin it makes
 is listed in the side list with a *Starting skin* tag and opens a normal skin page (PNGs, colours, model, sounds,
 portraits with **Render from 3D…**). The species page's Skins section then shows **Starting skin: <name>** with
-**Open**. Species without one show the older controls and **Make an editable starting skin**.
+**Open**, and **Template skin**: the template's skin the game copies to make it, which also supplies any map without a PNG of its own.
+Species without one show the older controls and **Make an editable starting skin**.
+If the page and Check say the template has no such skin number, the game would skip the species for every player ("species skipped: starting skin 21 is not in the template"). Pick a skin the template has, then export again.
 **Make default** beside another skin in that list makes it the starting skin; the old one stays as an ordinary skin, and the two swap places in the picker order.
 
 The same Skins list sets the order of the species' skins in the Nursery skin picker: drag a skin, or use its **↑** / **↓** buttons or Alt+↑ / Alt+↓. The hint "Drag skins to set their order in the Nursery skin picker." sits above it. Before an order is saved the list shows the game's current picker order, afterwards the mod's. For a species without an editable starting skin the hint reads "Setting the skin picker order needs an editable starting skin." (use **Make an editable starting skin**). The order is display only and never changes skin numbers or saved animals. CLI: `tyrant mod skin-order <MOD> <SPECIES-ID>` and `tyrant mod set-skin-order <MOD> <SPECIES-ID> <SKIN>...`.

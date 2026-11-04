@@ -456,6 +456,28 @@ describe('Species database', () => {
     expect(onOpenSkin).toHaveBeenCalledWith('new-animal-start');
   });
 
+  it('a species with its own starting skin can change the template skin it is cloned from', async () => {
+    const base = modDetail();
+    const detail = modDetail({ skins: [{ ...base.skins[0], id: 'new-animal-start', name: 'Mine', species: 'tyrant.red-spot.new-animal', starting: true }] });
+    const { rpc } = await setup([{ ...animal, startingSkinId: 'new-animal-start', startingSkin: 1, startingSkinName: 'Kept' } as typeof animal], {}, true, detail);
+    const skins = screen.getByRole('region', { name: 'Skins' });
+    const picker = () => within(skins).getByRole('combobox', { name: 'Template skin' }) as HTMLSelectElement;
+    await waitFor(() => expect(within(picker()).getAllByRole('option')).toHaveLength(2));
+    await waitFor(() => expect(picker().value).toBe('1'));
+    expect(within(skins).queryByRole('alert')).toBeNull();
+    await fireEvent.change(picker(), { target: { value: '0' } });
+    await waitFor(() => expect(rpc.calls.some((c) => c.method === 'mods.setSpeciesStartingSkin'
+      && (c.params as { startingSkin: number; name: string }).startingSkin === 0 && (c.params as { name: string }).name === 'Kept')).toBe(true));
+  });
+
+  it('says so when the starting skin number is not one the template has, with or without an own starting skin', async () => {
+    await setup([{ ...animal, startingSkin: 21 } as typeof animal]);
+    const skins = screen.getByRole('region', { name: 'Skins' });
+    const alert = await within(skins).findByRole('alert');
+    expect(alert).toHaveTextContent(/skin number 21/);
+    expect(alert).toHaveTextContent(/skip this species/);
+  });
+
   it('Make default makes another skin the starting skin after confirming', async () => {
     const base = modDetail();
     const detail = modDetail({ skins: [

@@ -91,7 +91,7 @@ public sealed partial class ModsMethods
         };
         return ModChecker.ForGame(install).Check(mod, index, checkSpecies,
             m.Sounds.Count > 0 ? TrySounds(ws) : null, rigInfo, id => SpeciesDatabase.Template(ws, id), prefabFields,
-            others, AnimalMaterialOf(install), SpeciesSizes.Facts(ws, mod));
+            others, AnimalMaterialOf(install), SpeciesSizes.Facts(ws, mod), Tyrant.Core.Dumping.DumpManifestFile.MayIncludeModsIn(ws));
     }
 
     /// <summary>A prefab's animal material for Check; null when its bundle cannot be read (the name check is then skipped).</summary>

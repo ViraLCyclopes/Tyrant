@@ -9,6 +9,30 @@ namespace Tyrant.Rpc.Tests;
 public class SpeciesDatabaseRpcTests
 {
     [Fact]
+    public async Task Check_warns_about_a_dump_an_older_tyrant_made_until_it_is_made_again()
+    {
+        using var game = new FakeGame();
+        var (h, ws, _) = await AssetFixtures.Opened(game);
+        void Dump(string dumperVersion)
+        {
+            var objects = new DumpResult();
+            var skins = AssetFixtures.TexturedSkin(objects, "Default", 50) + "," + AssetFixtures.TexturedSkin(objects, "Albino", 51);
+            objects.Objects.Add(new DumpObject(typeof(object), new EngineObjectInfo("PrehistoricKingdom.AnimalData", "Allosaurus", 1), $$"""{"speciesID":"Allosaurus Anax", "skinsData":[{{skins}}]}"""));
+            DumpWriter.Write(Path.Combine(ws, "data"), objects, [], new DumpManifest { RequestId = "r1", BuildGuid = "b", DumperVersion = dumperVersion });
+        }
+        Dump("1.0.0");
+        await h.Call("mods.create", new { id = "mod-a" });
+        var a = await h.Call("mods.get", new { id = "mod-a" });
+        await h.Call("mods.addSpecies", new { id = "mod-a", revision = a.GetProperty("revision").GetString(), speciesId = "mirabilis", template = "Allosaurus Anax", name = "Mirabilis", genus = "Example", epithet = "mirabilis", startingSkin = 1 });
+        async Task<string> Warnings() => (await h.Call("mods.check", new { id = "mod-a" })).GetProperty("warnings").GetRawText();
+
+        Assert.Contains("older Tyrant", await Warnings());
+
+        Dump(DumperInfo.Version);
+        Assert.DoesNotContain("older Tyrant", await Warnings());
+    }
+
+    [Fact]
     public async Task A_templates_stats_and_cost_can_be_read_before_creating_a_species()
     {
         using var game = new FakeGame();
