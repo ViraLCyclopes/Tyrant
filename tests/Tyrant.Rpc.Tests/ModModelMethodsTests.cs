@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Tyrant.Core.Models;
 using Tyrant.Core.Tests;
 using static Tyrant.Core.Tests.RigFixture;
@@ -54,6 +55,30 @@ public class ModModelMethodsTests
         var model = detail.GetProperty("models")[0];
         Assert.Equal("spiked", model.GetProperty("skin").GetString());
         Assert.StartsWith("models/carcharodontosaurus-spiked-", detail.GetProperty("skins")[0].GetProperty("model").GetString());
+    }
+
+    [Fact]
+    public async Task A_new_species_of_the_mod_can_be_given_its_own_model()
+    {
+        using var game = new FakeGame();
+        var (h, _, _, glb) = await Setup(game);
+        await h.Call("mods.addSpecies", new
+        {
+            id = "big-carch", revision = (await h.Call("mods.get", new { id = "big-carch" })).GetProperty("revision").GetString(),
+            speciesId = "anax", template = "Carcharodontosaurus", name = "Anax", genus = "Example", epithet = "anax", startingSkin = 1,
+        });
+
+        var custom = await h.Call("mods.customSpecies", new { id = "big-carch" });
+        var target = Assert.Single(custom.GetProperty("species").EnumerateArray()).GetProperty("speciesId").GetString();
+        Assert.Equal("tyrant.big-carch.anax", target);
+
+        await h.Call("mods.readModelRig", new { id = "big-carch", file = glb, target });
+        var detail = await h.Call("mods.replaceModel", new { id = "big-carch", file = glb, target, rig = "auto" });
+
+        var model = Assert.Single(detail.GetProperty("models").EnumerateArray());
+        Assert.Equal(target, model.GetProperty("target").GetString());
+        Assert.Equal(JsonValueKind.Null, model.GetProperty("skin").ValueKind);
+        Assert.False(model.GetProperty("stale").GetBoolean());
     }
 
     [Fact]

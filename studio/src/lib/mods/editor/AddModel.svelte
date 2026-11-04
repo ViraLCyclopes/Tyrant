@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import type { ModSpeciesResult } from '$lib/rpc/types.gen';
+  import type { CustomSpeciesRow, ModSpeciesResult } from '$lib/rpc/types.gen';
   import { getTab } from '$lib/shell/tab.svelte';
   import { getSession } from '$lib/stores/session.svelte';
   import ModelRigHost from './ModelRigHost.svelte';
@@ -14,12 +14,22 @@
   const rigAsk = createRigAsk();
   const tab = getTab();
   let data = $state.raw<ModSpeciesResult | null>(null);
+  /** This mod's new species: first in the list, as a mod that adds one usually means it. A dump made with the mod installed lists them too. */
+  let own = $state.raw<CustomSpeciesRow[]>([]);
+  const dumped = $derived((data?.species ?? []).filter((s) => !own.some((o) => o.speciesId === s.speciesId)));
   let species = $state('');
   let file = $state('');
+  const ownChosen = $derived(own.some((o) => o.speciesId === species));
 
   onMount(async () => {
-    data = await tab.quietly(() => session.rpc.call('mods.species'));
-    species = data?.species.find((s) => !s.vivarium)?.speciesId ?? data?.species[0]?.speciesId ?? '';
+    // Fetched together so the form does not appear before the list that preselects it is in.
+    const [result, custom] = await Promise.all([
+      tab.quietly(() => session.rpc.call('mods.species')),
+      tab.quietly(() => session.rpc.call('mods.customSpecies', { id: doc.id })),
+    ]);
+    own = custom?.species.filter((s) => s.own) ?? [];
+    data = result;
+    species = own[0]?.speciesId ?? data?.species.find((s) => !s.vivarium)?.speciesId ?? data?.species[0]?.speciesId ?? '';
   });
 
   async function browse() {
@@ -52,7 +62,8 @@
       <label>
         Species
         <select aria-label="Species" bind:value={species}>
-          {#each data.species as s (s.speciesId)}<option value={s.speciesId}>{s.speciesId}{s.vivarium ? ' (vivarium)' : ''}</option>{/each}
+          {#each own as s (s.speciesId)}<option value={s.speciesId}>{s.name} (this mod)</option>{/each}
+          {#each dumped as s (s.speciesId)}<option value={s.speciesId}>{s.speciesId}{s.vivarium ? ' (vivarium)' : ''}</option>{/each}
         </select>
       </label>
       <label>Your model <input aria-label="Your model" placeholder="a .glb or .fbx" bind:value={file} /></label>
@@ -63,6 +74,11 @@
       <button onclick={() => onDone(null)}>Cancel</button>
     </div>
     <ModelRigHost ask={rigAsk} />
+    {#if ownChosen}
+      <p class="hint">
+        This is the species' own model: its rig edit also re-aims the species' head look. Skins with their own model keep it, but share that head look, so give them the same neck.
+      </p>
+    {/if}
     <p class="hint">
       Start from Tyrant's export of the species' prefab (Assets tab → the prefab → Export selected). In Blender keep the armature, its
       bone names, the growth shape keys and the material names. Tyrant checks the model and builds its levels of detail. To keep a rig edit's scale, export it from Blender with Export model for Tyrant… in the Tyrant panel.
