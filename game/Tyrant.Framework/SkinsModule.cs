@@ -367,6 +367,19 @@ namespace Tyrant.Framework
             return clone;
         }
 
+        private static byte[] Rgba(Color32[] pixels)
+        {
+            var rgba = new byte[pixels.Length * 4];
+            for (var k = 0; k < pixels.Length; k++)
+            {
+                rgba[k * 4] = pixels[k].r;
+                rgba[k * 4 + 1] = pixels[k].g;
+                rgba[k * 4 + 2] = pixels[k].b;
+                rgba[k * 4 + 3] = pixels[k].a;
+            }
+            return rgba;
+        }
+
         /// <summary>The mod's thumbnail, or a 128 px centre crop of its first diffuse; null keeps the base skin's.</summary>
         private static Sprite? Thumbnail(LoadedMod mod, SkinEntry entry)
         {
@@ -382,17 +395,15 @@ namespace Tyrant.Framework
                 try
                 {
                     if (!decoded.LoadImage(File.ReadAllBytes(path), false)) return null;
-                    var pixels = decoded.GetPixels32();
-                    var rgba = new byte[pixels.Length * 4];
-                    for (var k = 0; k < pixels.Length; k++)
-                    {
-                        rgba[k * 4] = pixels[k].r;
-                        rgba[k * 4 + 1] = pixels[k].g;
-                        rgba[k * 4 + 2] = pixels[k].b;
-                        rgba[k * 4 + 3] = pixels[k].a;
-                    }
                     const int size = 128;
-                    var thumb = Pixels.Thumbnail(rgba, decoded.width, decoded.height, size);
+                    // Read in the texture's own buffer: managed copies of a 4096 px diffuse are two 64 MB arrays per skin, and
+                    // the game's managed memory never shrinks again.
+                    var data = new NativeBytes(decoded.GetRawTextureData<byte>());
+                    byte[] thumb;
+                    if (decoded.format == TextureFormat.RGBA32) thumb = Pixels.Thumbnail(data, decoded.width, decoded.height, size, 4, 0, 1, 2, 3);
+                    else if (decoded.format == TextureFormat.ARGB32) thumb = Pixels.Thumbnail(data, decoded.width, decoded.height, size, 4, 1, 2, 3, 0);
+                    else if (decoded.format == TextureFormat.RGB24) thumb = Pixels.Thumbnail(data, decoded.width, decoded.height, size, 3, 0, 1, 2, -1);
+                    else thumb = Pixels.Thumbnail(Rgba(decoded.GetPixels32()), decoded.width, decoded.height, size); // a format LoadImage is not known to give
                     var texture = new Texture2D(size, size, TextureFormat.RGBA32, false) { name = entry.Key(mod.Manifest.Id) + " thumbnail" };
                     texture.LoadRawTextureData(thumb);
                     texture.Apply(false, true);

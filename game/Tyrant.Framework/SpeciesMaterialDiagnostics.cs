@@ -16,7 +16,11 @@ namespace Tyrant.Framework
             public string Id = "";
             public string Last = "";
             public int Changes;
+            public int Unchanged;
         }
+
+        /// <summary>Checks in a row without a change after which an animal is settled and no longer watched (one a second).</summary>
+        private const int SettledAfter = 15;
         private static readonly List<Entry> Entries = new List<Entry>();
         private static float Next;
 
@@ -31,7 +35,7 @@ namespace Tyrant.Framework
             {
                 var entry = Entries[i];
                 if (entry.Root == null || entry.Animal == null) { Entries.RemoveAt(i); continue; }
-                if (entry.Changes >= 20) continue;
+                if (entry.Changes >= 20 || entry.Unchanged >= SettledAfter) { Entries.RemoveAt(i); continue; } // settled: describing it costs a lot
                 try
                 {
                     var type = entry.Animal.GetType();
@@ -43,7 +47,8 @@ namespace Tyrant.Framework
                         + string.Join("; ", renderers.Select(r => r.name + " enabled=" + r.enabled
                             + " mesh=" + (r.sharedMesh == null ? "missing" : r.sharedMesh.name)
                             + " material=" + string.Join(" / ", r.sharedMaterials.Select(Describe))));
-                    if (state == entry.Last) continue;
+                    if (state == entry.Last) { entry.Unchanged++; continue; }
+                    entry.Unchanged = 0;
                     entry.Last = state;
                     entry.Changes++;
                     FrameworkMod.Log.Msg("Species render state " + entry.Id + ": " + state);

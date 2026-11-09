@@ -11,6 +11,16 @@ namespace Tyrant.Framework
     /// texture no animal has worn for <see cref="Grace"/> seconds is destroyed (<see cref="TextureLeases"/>) and built again
     /// when it is next needed; before, every skin ever shown stayed in memory until the game closed.
     /// </summary>
+    /// <summary>A texture's own buffer, read in place.</summary>
+    internal readonly struct NativeBytes : IByteSource
+    {
+        private readonly Unity.Collections.NativeArray<byte> _data;
+
+        public NativeBytes(Unity.Collections.NativeArray<byte> data) => _data = data;
+
+        public byte At(int index) => _data[index];
+    }
+
     internal static class TextureCache
     {
         /// <summary>Seconds a texture nobody wears is kept (clicking through skins in the Nursery does not reload them).</summary>
@@ -30,7 +40,7 @@ namespace Tyrant.Framework
         /// <summary>Notes a skin fur mask's content while its pixels are still in its buffer.</summary>
         public static void NoteFur(Texture2D texture, string textureName, int format, int width, int height, Unity.Collections.NativeArray<byte> data)
         {
-            if (FurMaskContent.IsSkinFurSlot(textureName) && FurMaskContent.HasNoFur(format, width, height, data.Length, i => data[i]))
+            if (FurMaskContent.IsSkinFurSlot(textureName) && FurMaskContent.HasNoFur(format, width, height, data.Length, new NativeBytes(data)))
                 NoFur.Add(texture);
         }
 

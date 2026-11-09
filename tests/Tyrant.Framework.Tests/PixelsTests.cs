@@ -30,4 +30,14 @@ public class PixelsTests
 
         Assert.Equal(new byte[] { 150, 150, 150, 255 }, thumb); // (100 + 200 + 100 + 200) / 4
     }
+
+    [Fact]
+    public void Thumbnail_reads_other_byte_layouts_in_place_and_gives_rgba()
+    {
+        byte[] argb = [40, 10, 20, 30, 80, 50, 60, 70, 40, 10, 20, 30, 80, 50, 60, 70]; // 2x2, alpha first
+        byte[] rgb = [10, 20, 30, 50, 60, 70, 10, 20, 30, 50, 60, 70]; // 2x2, no alpha
+
+        Assert.Equal(new byte[] { 30, 40, 50, 60 }, Pixels.Thumbnail(new ArrayBytes(argb), 2, 2, 1, 4, 1, 2, 3, 0));
+        Assert.Equal(new byte[] { 30, 40, 50, 255 }, Pixels.Thumbnail(new ArrayBytes(rgb), 2, 2, 1, 3, 0, 1, 2, -1));
+    }
 }
