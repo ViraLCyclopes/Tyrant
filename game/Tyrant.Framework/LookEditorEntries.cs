@@ -64,9 +64,20 @@ namespace Tyrant.Framework
             }
         }
 
-        /// <summary>InterfaceManager.managementGUI.NurseryGUIManagerV2 (a missing member is logged once).</summary>
-        private static Component? NurseryMenu(object gui) =>
-            Read(Read(gui, "managementGUI", "the Nursery has no Tyrant button."), "NurseryGUIManagerV2", "the Nursery has no Tyrant button.") as Component;
+        private static object? _nurseryOf; // the InterfaceManager _nurseryMenu was read from
+        private static Component? _nurseryMenu;
+
+        /// <summary>
+        /// InterfaceManager.managementGUI.NurseryGUIManagerV2 (a missing member is logged once); read again only for another
+        /// InterfaceManager or once the one read is destroyed (FollowNursery asks every frame).
+        /// </summary>
+        private static Component? NurseryMenu(object gui)
+        {
+            if (ReferenceEquals(gui, _nurseryOf) && _nurseryMenu != null) return _nurseryMenu;
+            _nurseryOf = gui;
+            _nurseryMenu = Read(Read(gui, "managementGUI", "the Nursery has no Tyrant button."), "NurseryGUIManagerV2", "the Nursery has no Tyrant button.") as Component;
+            return _nurseryMenu;
+        }
 
         private static string PanelName(string field) => field == Panels[0] ? "The animal info panel" : "The vivarium animal info panel";
 
@@ -96,6 +107,8 @@ namespace Tyrant.Framework
             PanelShown.Clear();
             Broken.Clear();
             _nextButtonTry = 0f;
+            _nurseryOf = null; // the park's menus go with it
+            _nurseryMenu = null;
         }
 
         /// <summary>Right of NurseryMenuV2.animationDropdown ("Fidget"): a clone of the gallery filter menu's close button.</summary>
@@ -407,12 +420,14 @@ namespace Tyrant.Framework
                 if (_message == ClosedKeptMessage) _message = DetachedMessage;
             }
             if (_animal == null && !_awaitPreview) return; // gone: the Nursery's button opens it again
+            // The preview is looked at a few times a second, or at once on the Nursery's news; while it loads (or a question is
+            // open), on every frame until it is ready (the next check time is only set below).
+            if (!_nurseryNews && Time.unscaledTime < _nextNurseryCheck) return;
             var component = LookEditorModule.PreviewComponent();
             var current = Read(component, "currentAnimalPreview", NoPreview);
             if (_animal != null && !ReferenceEquals(current, _animal) && _matching.Count > 0 && ReferenceEquals(_matching[0], _animal))
-                _matching.RemoveAt(0); // the Nursery disposed of it: never re-applied again
+                _matching.RemoveAt(0); // the Nursery disposed of it: never re-applied again (a destroyed one is skipped until then)
             if (_modal != null || current == null || !LookEditorModule.IsAnimal(current) || Read(component, "IsLoadingAnimal", NoPreview) is true) return; // the new one loads
-            if (!_nurseryNews && Time.unscaledTime < _nextNurseryCheck) return;
             _nurseryNews = false;
             _nextNurseryCheck = Time.unscaledTime + 0.25f; // without the Nursery's news (no skin mods: not hooked), a few times a second
             if (_awaitPreview)
