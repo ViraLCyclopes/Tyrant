@@ -25,11 +25,10 @@ namespace Tyrant.Framework
                 FrameworkMod.Log.Warning("The game's top bar text was not found (game updated?); the look editor cannot open.");
                 return;
             }
-            _inputTemplate = SearchFieldTemplate();
-
             var canvasObject = new GameObject("TyrantLookEditorCanvas", typeof(RectTransform)) { layer = board!.gameObject.layer };
             try
             {
+                _inputTemplate = InputTemplate(canvasObject.transform);
                 var canvas = canvasObject.AddComponent<Canvas>();
                 canvas.renderMode = RenderMode.ScreenSpaceOverlay;
                 canvas.sortingOrder = 120; // over the game's panels
@@ -105,6 +104,7 @@ namespace Tyrant.Framework
                 OnPointer(grip.gameObject, "Drag", Safe<object>(data => Resize(PointerDelta(data))));
                 OnPointer(grip.gameObject, "EndDrag", Safe<object>(_ => SavePrefs()));
 
+                main.gameObject.SetActive(!_minimised); // as Place sizes the window
                 window.gameObject.SetActive(false);
                 _canvas = canvasObject;
                 _window = window.gameObject;
@@ -156,15 +156,33 @@ namespace Tyrant.Framework
             }
         }
 
-        /// <summary>The Nursery's species search box, cloned for the typed-value boxes (null: they are built by reflection).</summary>
-        private static Component? SearchFieldTemplate()
+        private static Type? _nurseryMenuType;
+        private static bool _nurseryMenuTypeRead;
+
+        /// <summary>
+        /// The template of the typed-value boxes: a copy of the Nursery's species search box made once per window, kept inactive
+        /// under the window's canvas (it goes with it), so the game's own box is never touched again; null: they are built by
+        /// reflection.
+        /// </summary>
+        private static Component? InputTemplate(Transform holder)
         {
-            var type = AccessTools.TypeByName("PrehistoricKingdom.NurseryMenuV2");
-            if (type == null) return null;
-            foreach (var found in Resources.FindObjectsOfTypeAll(type))
+            if (!_nurseryMenuTypeRead)
+            {
+                _nurseryMenuTypeRead = true; // looked up once a game run: a type lookup is slow
+                _nurseryMenuType = AccessTools.TypeByName("PrehistoricKingdom.NurseryMenuV2");
+            }
+            if (_nurseryMenuType == null) return null;
+            foreach (var found in Resources.FindObjectsOfTypeAll(_nurseryMenuType))
                 if (found is Component menu && menu != null && menu.gameObject.scene.IsValid()
                     && Traverse.Create(menu).Field("gallerySearchInputField").GetValue() is Component field && field != null)
-                    return field;
+                {
+                    var copy = CloneInactive(field.gameObject, holder); // inactive, and stays so: only its clones show
+                    copy.name = "TyrantInputTemplate";
+                    var input = copy.GetComponent(field.GetType());
+                    if (input != null) return input;
+                    UnityEngine.Object.Destroy(copy);
+                    return null;
+                }
             return null;
         }
 
@@ -343,9 +361,8 @@ namespace Tyrant.Framework
             if (_status == null) return;
             var editing = _draft != null && _animal != null;
             var dirty = _draft?.IsDirty == true;
-            var why = editing ? EditorScopes.WhyNot(_entry, LookScope.Animal, _context, LookEditorModule.SaveName) : null; // "This animal" is off
-            SetText(_status.transform, _message.Length > 0 ? _message : editing ? "Saves to " + TargetName() + "." + (why == null ? "" : " " + why) + FurNote() : "");
-            SetText(_save.Label.transform, dirty ? "Save *" : "Save");
+            SetLabel(_status, _message.Length > 0 ? _message : editing ? StatusLine() : "");
+            SetLabel(_save.Label, dirty ? "Save *" : "Save");
             SetInteractable(_save.Button.GetComponent(Button!), dirty && _target != null);
             SetInteractable(_reset.Button.GetComponent(Button!), dirty);
             SetInteractable(_export.Button.GetComponent(Button!), editing && _target != null);
@@ -353,6 +370,20 @@ namespace Tyrant.Framework
             SetInteractable(_reload.Button.GetComponent(Button!), true);
             SetInteractable(_openFolder.Button.GetComponent(Button!), true);
             SetColor(_save.Button.GetComponent(Image!), dirty && _target != null ? Green : Idle);
+        }
+
+        private static (string Target, string? Why, string Note, string Line)? _statusLine;
+
+        /// <summary>"Saves to …" with why "This animal" is off and the fur note; made again only when one of them changed.</summary>
+        private static string StatusLine()
+        {
+            var target = TargetName();
+            var why = EditorScopes.WhyNot(_entry, LookScope.Animal, _context, LookEditorModule.SaveName);
+            var note = FurNote();
+            if (_statusLine is { } known && known.Target == target && known.Why == why && known.Note == note) return known.Line;
+            var line = "Saves to " + target + "." + (why == null ? "" : " " + why) + note;
+            _statusLine = (target, why, note, line);
+            return line;
         }
     }
 }

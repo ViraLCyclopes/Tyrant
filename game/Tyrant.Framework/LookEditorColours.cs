@@ -15,7 +15,7 @@ namespace Tyrant.Framework
     /// </summary>
     internal static partial class LookEditorWindow
     {
-        private const int SquareTexels = 64;
+        private const int SquareTexels = 64, GradientTexels = 32;
         private const float SquareSize = 128f, HueWidth = 18f, PickerGap = 8f;
 
         private static int _stop; // the selected colour, kept through redraws (clamped to the ones shown)
@@ -23,7 +23,8 @@ namespace Tyrant.Framework
         private static float _squareHue = -1f; // the hue the square's texture was drawn at
         private static Texture2D? _squareTexture, _hueTexture, _gradientTexture, _swatchTexture;
         private static Sprite? _ring;
-        private static Color32[]? _squarePixels;
+        private static Color32[]? _squarePixels, _swatchPixels; // kept: a drag redraws them on every move
+        private static byte[]? _gradientPixels;
         private static Picker? _picker;
         private static System.Reflection.MethodInfo? _onScroll; // ScrollRect.OnScroll, looked up once
 
@@ -63,7 +64,7 @@ namespace Tyrant.Framework
 
             // The gradient as the animal gets it.
             var gradient = Child(Row(14f), "Gradient", Vector2.zero, Vector2.one, new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
-            Picture(gradient, PickerTexture(ref _gradientTexture, 32, 32, FilterMode.Bilinear), false);
+            Picture(gradient, PickerTexture(ref _gradientTexture, GradientTexels, GradientTexels, FilterMode.Bilinear), false);
 
             // A swatch per colour (the selected one outlined), then + and −.
             var swatches = Row(24f);
@@ -248,13 +249,17 @@ namespace Tyrant.Framework
         private static void Refresh(List<Rgb> stops)
         {
             if (_picker == null || !(_hsv is Hsv hsv)) return;
-            var gradient = PickerTexture(ref _gradientTexture, 32, 32, FilterMode.Bilinear);
-            gradient.LoadRawTextureData(IridescenceRamp.Pixels(stops, 32));
+            // Every row of the gradient is the same: one row is worked out (the ramp's own pixels) and copied into a kept buffer.
+            var gradient = PickerTexture(ref _gradientTexture, GradientTexels, GradientTexels, FilterMode.Bilinear);
+            var row = IridescenceRamp.Pixels(stops, GradientTexels, 1);
+            _gradientPixels ??= new byte[GradientTexels * GradientTexels * 4];
+            for (var y = 0; y < GradientTexels; y++) System.Buffer.BlockCopy(row, 0, _gradientPixels, y * row.Length, row.Length);
+            gradient.LoadRawTextureData(_gradientPixels);
             gradient.Apply(false, false);
 
             var swatches = PickerTexture(ref _swatchTexture, ShimmerColours.MaxShown, 1, FilterMode.Point);
-            var pixels = new Color32[ShimmerColours.MaxShown];
-            for (var i = 0; i < pixels.Length && i < stops.Count; i++) pixels[i] = Bytes(stops[i]);
+            var pixels = _swatchPixels ??= new Color32[ShimmerColours.MaxShown];
+            for (var i = 0; i < pixels.Length; i++) pixels[i] = i < stops.Count ? Bytes(stops[i]) : default;
             swatches.SetPixels32(pixels);
             swatches.Apply(false, false);
 

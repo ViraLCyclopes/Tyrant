@@ -20,10 +20,42 @@ namespace Tyrant.Framework
     {
         private static readonly MaterialPropertyBlock GameBlock = new MaterialPropertyBlock();
         private static (GameObject On, GameObject Off)? _onOff;
+        private static bool _redrawAsked; // a slider row's set changed what other rows show (SliderRow)
+        private static Component? _redrawOnRelease; // the slider dragged when a redraw was asked: the tab is redrawn once it is let go
+        private static System.Reflection.MethodInfo? _isPressed; // Selectable.IsPressed(), looked up once
+        private static bool _isPressedRead;
+
+        /// <summary>Once a frame: the redraw a slider asked for, once the player lets it go.</summary>
+        private static void RedrawAfterDrag()
+        {
+            if (!(_redrawOnRelease is Component slider)) return;
+            if (slider != null && Pressed(slider)) return;
+            _redrawOnRelease = null;
+            Rebuild();
+        }
+
+        /// <summary>True while the pointer holds the slider down (Selectable.IsPressed); false when that cannot be read.</summary>
+        private static bool Pressed(Component slider)
+        {
+            if (!_isPressedRead)
+            {
+                _isPressedRead = true;
+                _isPressed = AccessTools.Method(slider.GetType(), "IsPressed", Type.EmptyTypes);
+            }
+            try
+            {
+                return _isPressed != null && _isPressed.Invoke(slider, null) is true;
+            }
+            catch (System.Reflection.TargetInvocationException)
+            {
+                return false;
+            }
+        }
 
         private static void Rebuild()
         {
             if (_content == null || _font == null) return;
+            _redrawOnRelease = null; // this is the redraw
             for (var i = _content.childCount - 1; i >= 0; i--)
             {
                 var row = _content.GetChild(i).gameObject;
@@ -82,7 +114,7 @@ namespace Tyrant.Framework
             {
                 var ramp = draft.Current.Iridescence?.Ramp;
                 LookEditing.SetBabyStrength(draft, _below, GameHasRamp(), v);
-                if (draft.Current.Iridescence?.Ramp != ramp) Changed(rebuild: true); // a thin film was started: the colour rows show it
+                if (draft.Current.Iridescence?.Ramp != ramp) _redrawAsked = true; // a thin film was started: the colour rows show it (SliderRow redraws)
             });
             Info("babyStrength");
             var variation = own?.Variation ?? below?.Variation ?? (shown != null ? IridescenceSettings.DefaultVariation : 0f);
@@ -109,7 +141,9 @@ namespace Tyrant.Framework
             };
             Choices(null, ramps);
             var template = SpeciesModule.TemplateOf(_context!.Species);
-            if (LookEditing.GameRampMissing(rampKind, SpeciesLooks.Values(template) == null ? (bool?)null : SpeciesLooks.Ramp(template) != null))
+            // What Game's shows is the ramp of the material the animal renders with (a custom species' is rebuilt from its
+            // template's): read from the animal, so opening the tab never loads a species' prefab.
+            if (LookEditing.GameRampMissing(rampKind, OwnRamp()))
                 Note($"{SpeciesLooks.NameOf(template)} has no shimmer colours of its own, so Game's shows nothing: pick Thin film, Colours or Species.");
             if (rampKind == RampKind.ThinFilm)
             {
@@ -175,7 +209,11 @@ namespace Tyrant.Framework
         private static void SetFilm(float thickness, double? index, bool rebuild)
         {
             _draft!.SetThinFilm(thickness);
-            if (index is double n && _draft.Current.Iridescence?.Ramp?.ThinFilm is ThinFilmSettings film) film.Index = n;
+            if (index is double n && _draft.Current.Iridescence?.Ramp?.ThinFilm is ThinFilmSettings film)
+            {
+                film.Index = n;
+                _draft.Touch(); // changed directly, not through the draft's methods
+            }
             if (rebuild) Changed(rebuild: true);
         }
 
@@ -259,6 +297,7 @@ namespace Tyrant.Framework
                 return;
             }
             _presetWaiting = null;
+            _draft.Touch(); // the preset sets some parts directly
             Switch.Forget(); // the preset's values are the draft's own now: a later off/on or grow off starts from them
             FurSwitch.Forget();
             _message = "Started from " + SpeciesLooks.NameOf(species) + (kind == PresetKind.Fur ? "'s fur" : "'s iridescence") + "; edit anything, Reset goes back to the saved look.";
@@ -427,13 +466,33 @@ namespace Tyrant.Framework
 
         // ---- the game's own values (what shows when no layer sets one) ----
 
-        private static Material? BaseMaterial() =>
-            _animal == null ? null : AccessTools.Property(_animal.GetType(), "BaseMaterial")?.GetValue(_animal, null) as Material;
+        private static readonly Dictionary<(Type, string), System.Reflection.PropertyInfo?> GameProperties = new Dictionary<(Type, string), System.Reflection.PropertyInfo?>();
+        private static readonly Dictionary<(Type, string), System.Reflection.FieldInfo?> GameFields = new Dictionary<(Type, string), System.Reflection.FieldInfo?>();
+
+        /// <summary>A property of a game object, looked up once per type (slider moves read some); null when it has none.</summary>
+        private static object? GameProperty(object? target, string name)
+        {
+            if (target == null) return null;
+            var key = (target.GetType(), name);
+            if (!GameProperties.TryGetValue(key, out var property)) GameProperties[key] = property = AccessTools.Property(key.Item1, name);
+            return property?.GetValue(target, null);
+        }
+
+        /// <summary>A field of a game object, looked up once per type; null when it has none.</summary>
+        private static object? GameField(object? target, string name)
+        {
+            if (target == null) return null;
+            var key = (target.GetType(), name);
+            if (!GameFields.TryGetValue(key, out var field)) GameFields[key] = field = AccessTools.Field(key.Item1, name);
+            return field?.GetValue(target);
+        }
+
+        private static Material? BaseMaterial() => GameProperty(_animal, "BaseMaterial") as Material;
 
         /// <summary>The first LOD renderer's property block (the game's per-animal values) into <see cref="GameBlock"/>.</summary>
         private static bool ReadBlock()
         {
-            if (_animal == null || !(AccessTools.Property(_animal.GetType(), "Lods")?.GetValue(_animal, null) is IEnumerable lods)) return false;
+            if (_animal == null || !(GameProperty(_animal, "Lods") is IEnumerable lods)) return false;
             foreach (var item in lods)
                 if (item is Renderer renderer && renderer != null)
                 {
@@ -457,20 +516,23 @@ namespace Tyrant.Framework
             return material != null && material.HasProperty(key) ? material.GetVector(key) : Vector4.zero;
         }
 
-        private static bool GameHasRamp()
+        private static bool GameHasRamp() => OwnRamp() == true;
+
+        /// <summary>True when the animal's own material has an iridescence ramp (what Game's shows); null while its material cannot be read.</summary>
+        private static bool? OwnRamp()
         {
             var material = BaseMaterial();
-            return material != null && material.HasProperty("_IridescenceTexture") && material.GetTexture("_IridescenceTexture") != null;
+            if (material == null) return null;
+            return material.HasProperty("_IridescenceTexture") && material.GetTexture("_IridescenceTexture") != null;
         }
 
         /// <summary>The strength the game gives the animal (SkinVariationRuntime.iridescenceOn / iridescenceStrength), before growth.</summary>
         private static float GameStrength()
         {
-            var runtime = _animal == null ? null : AccessTools.Property(_animal.GetType(), "SkinVariationRuntime")?.GetValue(_animal, null);
+            var runtime = GameProperty(_animal, "SkinVariationRuntime");
             if (runtime == null) return 0f;
-            var type = runtime.GetType();
-            if (!(AccessTools.Field(type, "iridescenceOn")?.GetValue(runtime) is true)) return 0f;
-            return AccessTools.Field(type, "iridescenceStrength")?.GetValue(runtime) is float strength ? strength : 0f;
+            if (!(GameField(runtime, "iridescenceOn") is true)) return 0f;
+            return GameField(runtime, "iridescenceStrength") is float strength ? strength : 0f;
         }
 
         // ---- rows ----
@@ -520,7 +582,8 @@ namespace Tyrant.Framework
 
         /// <summary>
         /// A label, a slider (min..max) and a box to type an exact value (boxMin..boxMax, which may reach past the slider). Both
-        /// call <paramref name="set"/> on the draft and then go live.
+        /// call <paramref name="set"/> on the draft and then go live. A <paramref name="set"/> that changes what other rows show
+        /// sets <see cref="_redrawAsked"/>: a typed value redraws at once, a slider once it is let go (a redraw would end the drag).
         /// </summary>
         private static void SliderRow(string label, float value, float min, float max, float boxMin, float boxMax, bool enabled, Action<float> set)
         {
@@ -529,14 +592,18 @@ namespace Tyrant.Framework
             Place((RectTransform)text.transform, 0f, 0.36f, 0f, -4f);
             if (!enabled) Traverse.Create(text).Property("color").SetValue(Faint);
             Component? box = null;
+            Component? slider = null;
             var shown = value;
-            var slider = NewSlider(row, min, max, LookEditing.Clamp(value, min, max), Safe<float>(v =>
+            slider = NewSlider(row, min, max, LookEditing.Clamp(value, min, max), Safe<float>(v =>
             {
                 shown = v;
+                _redrawAsked = false;
                 set(v);
                 if (!IsFocused(box)) SetInputText(box, LookEditing.Format(v));
                 Changed();
                 RefreshOnOff();
+                if (_redrawAsked) _redrawOnRelease = slider;
+                _redrawAsked = false;
             }));
             Place((RectTransform)slider.transform, 0.36f, 0.8f, 0f, -6f);
             box = NewInput(row, _inputTemplate, _font!, Safe<string>(typed =>
@@ -544,9 +611,13 @@ namespace Tyrant.Framework
                 if (LookEditing.TryParse(typed, boxMin, boxMax, out var v) && v != shown)
                 {
                     shown = v;
+                    _redrawAsked = false;
                     set(v);
-                    SetSliderQuietly(slider, LookEditing.Clamp(v, min, max));
-                    Changed();
+                    var redraw = _redrawAsked;
+                    _redrawAsked = false;
+                    SetSliderQuietly(slider!, LookEditing.Clamp(v, min, max));
+                    Changed(rebuild: redraw);
+                    if (redraw) return; // this row is drawn again
                     RefreshOnOff();
                 }
                 SetInputText(box, LookEditing.Format(shown)); // a bad entry shows the value again

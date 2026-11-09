@@ -71,15 +71,97 @@ public class MaterialSourcePoolTests
     public void A_file_whose_stamp_changed_is_a_new_source()
     {
         var stamp = "t1";
-        var pool = new MaterialSourcePool(_ => stamp);
+        var now = 0.0;
+        var pool = new MaterialSourcePool(_ => stamp, () => now, MaterialSourcePool.StampSeconds);
         var before = Block(new RampSource { File = "C:/m/r.png" }, new MaskSource { File = "C:/m/m.png" });
         pool.Intern(before);
         stamp = "t2";
+        now = 1.0; // the stamps read before are a second old: read again
         var after = Block(new RampSource { File = "C:/m/r.png" }, new MaskSource { File = "C:/m/m.png" });
         pool.Intern(after);
 
         Assert.NotSame(before.Iridescence!.Ramp, after.Iridescence!.Ramp);
         Assert.NotSame(before.Iridescence.Mask, after.Iridescence.Mask);
+    }
+
+    [Fact]
+    public void A_file_stamp_is_read_once_a_second_however_often_it_is_interned()
+    {
+        var reads = new List<string>();
+        var stamp = "t1";
+        var now = 10.0;
+        var pool = new MaterialSourcePool(file =>
+        {
+            reads.Add(file);
+            return stamp;
+        }, () => now, 1);
+        var first = Block(new RampSource { File = "C:/m/r.png" }, new MaskSource { File = "C:/m/m.png" }, new MaskSource { File = "C:/m/m.png" });
+        pool.Intern(first);
+        Assert.Equal(2, reads.Count); // each file once, though the mask is named twice
+
+        stamp = "t2"; // saved again on disk: not seen until the stamps are a second old
+        for (var tick = 0; tick < 50; tick++)
+        {
+            now += 0.016;
+            var drag = Block(new RampSource { File = "C:/m/r.png" }, new MaskSource { File = "C:/m/m.png" });
+            pool.Intern(drag);
+            Assert.Same(first.Iridescence!.Ramp, drag.Iridescence!.Ramp);
+        }
+        Assert.Equal(2, reads.Count);
+
+        now = 11.0;
+        var later = Block(new RampSource { File = "C:/m/r.png" }, new MaskSource { File = "C:/m/m.png" });
+        pool.Intern(later);
+        Assert.Equal(4, reads.Count);
+        Assert.NotSame(first.Iridescence!.Ramp, later.Iridescence!.Ramp);
+        Assert.NotSame(first.Iridescence.Mask, later.Iridescence!.Mask);
+    }
+
+    [Fact]
+    public void Forgotten_stamps_are_read_again_at_once()
+    {
+        var stamp = "t1";
+        var pool = new MaterialSourcePool(_ => stamp, () => 5.0, 1);
+        var before = Block(new RampSource { File = "C:/m/r.png" });
+        pool.Intern(before);
+        stamp = "t2";
+        pool.ForgetStamps();
+        var after = Block(new RampSource { File = "C:/m/r.png" });
+        pool.Intern(after);
+
+        Assert.NotSame(before.Iridescence!.Ramp, after.Iridescence!.Ramp);
+    }
+
+    [Fact]
+    public void A_clock_that_goes_back_reads_the_stamp_again()
+    {
+        var reads = 0;
+        var now = 5.0;
+        var pool = new MaterialSourcePool(_ => (++reads).ToString(), () => now, 1);
+        pool.Intern(Block(new RampSource { File = "C:/m/r.png" }));
+        now = 4.5;
+        pool.Intern(Block(new RampSource { File = "C:/m/r.png" }));
+
+        Assert.Equal(2, reads);
+    }
+
+    [Fact]
+    public void Retain_keeps_fresh_stamps_and_drops_old_ones()
+    {
+        var reads = 0;
+        var now = 0.0;
+        var pool = new MaterialSourcePool(_ => { reads++; return "t"; }, () => now, 1);
+        var block = Block(new RampSource { File = "C:/m/r.png" });
+        pool.Intern(block);
+        now = 0.5;
+        pool.Retain([block]);
+        pool.Intern(Block(new RampSource { File = "C:/m/r.png" }));
+        Assert.Equal(1, reads);
+
+        now = 2;
+        pool.Retain([block]);
+        pool.Intern(Block(new RampSource { File = "C:/m/r.png" }));
+        Assert.Equal(2, reads);
     }
 
     [Fact]
