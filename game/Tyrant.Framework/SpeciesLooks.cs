@@ -326,8 +326,8 @@ namespace Tyrant.Framework
                 if (material.HasProperty(key)) floats[key] = material.GetFloat(key);
             var ramp = material.HasProperty(RampProperty) ? material.GetTexture(RampProperty) : null;
             var mask = material.HasProperty(MaskProperty) ? material.GetTexture(MaskProperty) : null;
-            s.Ramp = ramp != null ? Copy(ramp, mipmaps: false, compress: false) : null;
-            s.Mask = mask != null ? Copy(mask, mipmaps: true, compress: true) : null;
+            s.Ramp = ramp != null ? Copy(s.Id, ramp, mipmaps: false, compress: false) : null;
+            s.Mask = mask != null ? Copy(s.Id, mask, mipmaps: true, compress: true) : null;
             s.Preset = SpeciesPreset.Of(s.Id, s.Name, s.Skins, floats, s.Ramp != null, s.Mask != null);
             FrameworkMod.Log.Msg($"{s.Id}: its look is ready for presets and references (ramp: {(s.Ramp != null ? "yes" : "none")}, mask: {(s.Mask != null ? "yes" : "none")}).");
             return true;
@@ -347,8 +347,11 @@ namespace Tyrant.Framework
             return renderers.Length > 0 ? renderers[0].sharedMaterial : null;
         }
 
-        /// <summary>A copy of a game texture Tyrant owns (read back through a render texture), with the source's wrap and filter.</summary>
-        private static Texture2D Copy(Texture source, bool mipmaps, bool compress)
+        /// <summary>
+        /// A copy of a game texture Tyrant owns (read back through a render texture), with the source's wrap and filter. A copy
+        /// to compress whose size is not divisible by 4 stays uncompressed (about 4 times the memory), said once per species.
+        /// </summary>
+        private static Texture2D Copy(string species, Texture source, bool mipmaps, bool compress)
         {
             var copy = MaterialsModule.ReadPixels(source, mipmaps);
             try
@@ -357,6 +360,8 @@ namespace Tyrant.Framework
                 copy.wrapMode = source.wrapMode;
                 copy.filterMode = source.filterMode;
                 if (compress && copy.width % 4 == 0 && copy.height % 4 == 0) copy.Compress(true);
+                else if (compress && Warned.Add("size|" + species))
+                    FrameworkMod.Log.Warning($"{species}: its iridescence mask is {copy.width}x{copy.height}; sizes divisible by 4 use less memory (Tyrant's copy stays uncompressed).");
                 copy.Apply(false, true); // no longer readable: frees the CPU copy
                 return copy;
             }

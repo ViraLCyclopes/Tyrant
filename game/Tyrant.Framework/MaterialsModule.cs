@@ -1116,7 +1116,7 @@ namespace Tyrant.Framework
             {
                 try
                 {
-                    result = Extract(source, mask.Channel, mask.Invert);
+                    result = Extract(source, mask.Channel, mask.Invert, skin, mask.From);
                 }
                 catch (Exception ex)
                 {
@@ -1151,7 +1151,7 @@ namespace Tyrant.Framework
             Texture? result = Texture2D.whiteTexture;
             try
             {
-                result = Extract(source, mask.Channel, mask.Invert);
+                result = Extract(source, mask.Channel, mask.Invert, found.VanillaKey ?? found.Species, mask.From!);
             }
             catch (Exception ex)
             {
@@ -1208,13 +1208,19 @@ namespace Tyrant.Framework
             return true;
         }
 
-        /// <summary>One channel of a (possibly compressed, unreadable) texture as a grey mask, compressed and no longer readable.</summary>
-        private static Texture2D Extract(Texture source, char channel, bool invert)
+        /// <summary>
+        /// One channel of a (possibly compressed, unreadable) texture as a grey mask, compressed and no longer readable. A size
+        /// not divisible by 4 cannot be compressed: it stays uncompressed (about 4 times the memory), said once per
+        /// <paramref name="owner"/> and slot.
+        /// </summary>
+        private static Texture2D Extract(Texture source, char channel, bool invert, string owner, string from)
         {
             var mask = ReadGrey(source, channel, invert, mipmaps: true);
             try
             {
                 if (mask.width % 4 == 0 && mask.height % 4 == 0) mask.Compress(true);
+                else if (Reported.Add(("size", owner, from)))
+                    FrameworkMod.Log.Warning($"{owner}: its iridescence mask from {from} is {mask.width}x{mask.height}; sizes divisible by 4 use less memory (it stays uncompressed).");
                 mask.Apply(false, true); // no longer readable: frees the CPU copy
                 return mask;
             }
@@ -1227,17 +1233,19 @@ namespace Tyrant.Framework
 
         /// <summary>
         /// One channel of a (possibly compressed, unreadable) texture as a readable grey RGBA texture, through a linear render
-        /// texture; the caller owns it (the editor's Export mask PNG encodes it).
+        /// texture; the caller owns it (the editor's Export mask PNG encodes it). The channel is taken in the texture's own pixel
+        /// buffer: no managed copy of the pixels is made.
         /// </summary>
-        public static Texture2D ReadGrey(Texture source, char channel, bool invert, bool mipmaps) =>
-            ReadPixels(source, mipmaps, pixels => MaskChannel.Extract(pixels, channel, invert));
+        public static Texture2D ReadGrey(Texture source, char channel, bool invert, bool mipmaps) => Read(source, mipmaps, channel, invert);
 
         /// <summary>
         /// A (possibly compressed, unreadable) texture as a readable RGBA texture, read back through a linear render texture into
-        /// a linear texture, so the shader samples the values it sampled from the source; <paramref name="change"/> may rework the
-        /// pixels first. The caller owns it.
+        /// a linear texture, so the shader samples the values it sampled from the source. The caller owns it.
         /// </summary>
-        public static Texture2D ReadPixels(Texture source, bool mipmaps, Func<byte[], byte[]>? change = null)
+        public static Texture2D ReadPixels(Texture source, bool mipmaps) => Read(source, mipmaps, null, false);
+
+        /// <summary><see cref="ReadPixels"/>, with one channel made grey in place first when <paramref name="channel"/> is set.</summary>
+        private static Texture2D Read(Texture source, bool mipmaps, char? channel, bool invert)
         {
             int width = source.width, height = source.height;
             var target = RenderTexture.GetTemporary(width, height, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.Linear);
@@ -1248,7 +1256,8 @@ namespace Tyrant.Framework
                 Graphics.Blit(source, target);
                 RenderTexture.active = target;
                 copy.ReadPixels(new Rect(0, 0, width, height), 0, 0, false);
-                if (change != null) copy.SetPixelData(change(copy.GetPixelData<byte>(0).ToArray()), 0);
+                // Level 0 in Unity's own buffer (a 4K map is 64 MB: a managed copy would sit on Mono's large-object heap for good).
+                if (channel is char c) MaskChannel.ExtractInPlace(new NativeBytes(copy.GetPixelData<byte>(0)), c, invert);
                 copy.Apply(mipmaps, false);
                 return copy;
             }
@@ -1261,6 +1270,26 @@ namespace Tyrant.Framework
             {
                 RenderTexture.active = previous;
                 RenderTexture.ReleaseTemporary(target);
+            }
+        }
+
+        /// <summary>A texture's pixel buffer (a view into Unity's memory, written in place) as <see cref="MaskChannel"/> reads it.</summary>
+        private readonly struct NativeBytes : IByteBuffer
+        {
+            private readonly Unity.Collections.NativeArray<byte> _data;
+
+            public NativeBytes(Unity.Collections.NativeArray<byte> data) => _data = data;
+
+            public int Length => _data.Length;
+
+            public byte this[int index]
+            {
+                get => _data[index];
+                set
+                {
+                    var data = _data; // NativeArray's setter is not readonly; the copy points at the same buffer
+                    data[index] = value;
+                }
             }
         }
 
