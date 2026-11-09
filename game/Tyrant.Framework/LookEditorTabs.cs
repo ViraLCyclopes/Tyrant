@@ -141,7 +141,9 @@ namespace Tyrant.Framework
             };
             Choices(null, ramps);
             var template = SpeciesModule.TemplateOf(_context!.Species);
-            if (LookEditing.GameRampMissing(rampKind, SpeciesLooks.Values(template) == null ? (bool?)null : SpeciesLooks.Ramp(template) != null))
+            // What Game's shows is the ramp of the material the animal renders with (a custom species' is rebuilt from its
+            // template's): read from the animal, so opening the tab never loads a species' prefab.
+            if (LookEditing.GameRampMissing(rampKind, OwnRamp()))
                 Note($"{SpeciesLooks.NameOf(template)} has no shimmer colours of its own, so Game's shows nothing: pick Thin film, Colours or Species.");
             if (rampKind == RampKind.ThinFilm)
             {
@@ -514,10 +516,14 @@ namespace Tyrant.Framework
             return material != null && material.HasProperty(key) ? material.GetVector(key) : Vector4.zero;
         }
 
-        private static bool GameHasRamp()
+        private static bool GameHasRamp() => OwnRamp() == true;
+
+        /// <summary>True when the animal's own material has an iridescence ramp (what Game's shows); null while its material cannot be read.</summary>
+        private static bool? OwnRamp()
         {
             var material = BaseMaterial();
-            return material != null && material.HasProperty("_IridescenceTexture") && material.GetTexture("_IridescenceTexture") != null;
+            if (material == null) return null;
+            return material.HasProperty("_IridescenceTexture") && material.GetTexture("_IridescenceTexture") != null;
         }
 
         /// <summary>The strength the game gives the animal (SkinVariationRuntime.iridescenceOn / iridescenceStrength), before growth.</summary>
