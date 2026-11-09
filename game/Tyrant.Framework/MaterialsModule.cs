@@ -43,7 +43,7 @@ namespace Tyrant.Framework
         private static bool _active;
 
         /// <summary>Material names each species / skin / vanilla skin block sets, with the mod that set each (later in load order wins).</summary>
-        private static readonly Dictionary<string, Dictionary<string, string>> SpeciesBlocks = new Dictionary<string, Dictionary<string, string>>(StringComparer.Ordinal);
+        private static readonly Dictionary<string, Dictionary<string, string>> SpeciesBlocks = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase); // species ids in any case, like the table
         private static readonly Dictionary<string, Dictionary<string, string>> SkinBlocks = new Dictionary<string, Dictionary<string, string>>(StringComparer.Ordinal);
         private static readonly Dictionary<string, Dictionary<string, string>> VanillaBlocks = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
         private static readonly List<(string Id, string Directory)> ModDirectories = new List<(string, string)>();
