@@ -12,7 +12,27 @@ namespace Tyrant.Framework
         internal const string ShaderPrefix = "Tyrant/Recovered/";
         internal const string MaterialPrefix = "Tyrant/RecoveredMaterial/";
 
+        /// <summary>
+        /// Authored prefabs already restored, by instance id, with the object itself: an id Unity hands to a reloaded copy of
+        /// the asset is a new object, restored again. None of a restored prefab's materials is marked any more.
+        /// </summary>
+        private static readonly Dictionary<int, GameObject> Restored = new Dictionary<int, GameObject>();
+
+        /// <summary>
+        /// Swaps the authored prefab's marked materials for rebuilt game materials; returns how many. Runs on every spawn of its
+        /// species, but does the work once per prefab: after a restore that did not throw nothing is left to restore, so later
+        /// calls return 0 at once. A restore that throws changes nothing and is tried (and reported) again on the next spawn.
+        /// </summary>
         public static int Restore(GameObject authored, GameObject template, Action<string>? log = null)
+        {
+            var id = authored.GetInstanceID();
+            if (Restored.TryGetValue(id, out var done) && ReferenceEquals(done, authored)) return 0;
+            var count = RestoreNow(authored, template, log);
+            Restored[id] = authored;
+            return count;
+        }
+
+        private static int RestoreNow(GameObject authored, GameObject template, Action<string>? log)
         {
             var originals = template.GetComponentsInChildren<Renderer>(true).SelectMany(r => r.sharedMaterials)
                 .Where(m => m != null && m.shader != null).Distinct().ToArray();
