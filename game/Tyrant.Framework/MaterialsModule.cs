@@ -74,6 +74,10 @@ namespace Tyrant.Framework
         private static string? _previewMaterial;
         private static MaterialOverride? _previewBlock;
 
+        // The hooks' merged blocks by their layer objects (Resolve), cleared whenever the table, a live edit, the saved looks or
+        // the preview change, and on each sweep. Shared between animals: nothing may change a merged block.
+        private static readonly MergedLayers Merged = new MergedLayers();
+
         private static readonly MaterialPropertyBlock Block = new MaterialPropertyBlock();
         private static readonly List<Renderer> Renderers = new List<Renderer>();
         private static readonly HashSet<string> Announced = new HashSet<string>(StringComparer.Ordinal);
@@ -146,6 +150,7 @@ namespace Tyrant.Framework
         public static void SetLive(LookScope scope, string key, string materialName, MaterialOverride? draft)
         {
             Live.Set(scope, key, materialName, draft == null || draft.IsEmpty ? null : Prepared(draft));
+            Merged.Clear();
             _sweepDue = true;
         }
 
@@ -159,6 +164,7 @@ namespace Tyrant.Framework
             _previewAnimal = clear ? null : new WeakReference(animal);
             _previewMaterial = clear ? null : materialName;
             _previewBlock = clear ? null : Prepared(draft!);
+            Merged.Clear();
             _sweepDue = true;
         }
 
@@ -169,6 +175,7 @@ namespace Tyrant.Framework
         public static void SetAnimalLooks(AnimalLooks? looks)
         {
             Saved.Use(looks);
+            Merged.Clear();
             _sweepDue = true;
         }
 
@@ -275,6 +282,7 @@ namespace Tyrant.Framework
         private static void Build()
         {
             _table = MaterialTable.Build(_mods, out var messages);
+            Merged.Clear();
             foreach (var message in messages) FrameworkMod.Log.Warning(message);
             SpeciesBlocks.Clear();
             SkinBlocks.Clear();
@@ -1077,9 +1085,10 @@ namespace Tyrant.Framework
             var baseSkin = _table.Block(MaterialOwnerKind.Skin, resolved.InheritedKey, name);
             var liveSpecies = Live.Species(species, name);
             var tableSpecies = _table.Block(MaterialOwnerKind.Species, species, name);
+            // The hooks' merge is shared by every call with the same layers (read only); the editor's Below gets its own copy.
             var found = below is LookScope scope
                 ? MaterialTable.MergeBelow(scope, liveAnimal, savedAnimal, liveSkin, tableSkin, baseSkin, liveSpecies, tableSpecies)
-                : MaterialTable.MergeLayers(liveAnimal, savedAnimal, liveSkin, tableSkin, baseSkin, liveSpecies, tableSpecies);
+                : Merged.Get(liveAnimal, savedAnimal, liveSkin, tableSkin, baseSkin, liveSpecies, tableSpecies);
             if (found == null) return null;
             resolved.Override = found;
             resolved.ModId = OwnerOf(SkinBlocks, resolved.SkinKey, name) ?? OwnerOf(VanillaBlocks, resolved.VanillaKey, name)
@@ -1414,6 +1423,7 @@ namespace Tyrant.Framework
         /// <summary>Forgets the ramps and masks no table, live or saved block uses, and destroys the textures made for them.</summary>
         private static void Sweep()
         {
+            Merged.Clear(); // lets go of layers replaced since (a saved look prepared again)
             Pool.Retain(_table.Blocks.Concat(Live.Blocks).Concat(Saved.Blocks).Concat(_previewBlock == null ? Enumerable.Empty<MaterialOverride>() : new[] { _previewBlock }));
             Drop(Ramps, ramp => Pool.Contains(ramp));
             Drop(FileMasks, mask => Pool.Contains(mask));
