@@ -20,6 +20,8 @@ namespace Tyrant.Framework
         private const string MethodName = "AssignTexturesAndSetMaterialVariation";
 
         private static readonly MaterialPropertyBlock Block = new MaterialPropertyBlock();
+        /// <summary>The cache keys of the mod textures the animal being dressed wears (TextureCache frees what nobody wears).</summary>
+        private static readonly List<string> Held = new List<string>();
         private static readonly HashSet<string> Announced = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private static readonly Dictionary<Type, PropertyInfo?> LodsProperty = new Dictionary<Type, PropertyInfo?>();
         private static readonly Dictionary<Type, PropertyInfo?> SkinDataProperty = new Dictionary<Type, PropertyInfo?>();
@@ -73,6 +75,7 @@ namespace Tyrant.Framework
 
             renderers[0].GetPropertyBlock(Block);
             var changed = false;
+            Held.Clear();
 
             // Replacements of vanilla textures, by texture name.
             if (FrameworkMod.Replacements.Count > 0)
@@ -81,7 +84,8 @@ namespace Tyrant.Framework
                 {
                     var current = Block.GetTexture(slot.Property);
                     if (current == null || !FrameworkMod.Replacements.TryGet(current.name, out var replacement)) continue;
-                    var texture = TextureCache.Get(replacement, slot.Kind);
+                    // Without a Component to follow, the texture is kept for good.
+                    var texture = TextureCache.Get(replacement, slot.Kind, Held, pin: !(animal is Component));
                     if (texture == null || ReferenceEquals(texture, current)) continue;
                     Block.SetTexture(slot.Property, texture);
                     changed = true;
@@ -96,9 +100,10 @@ namespace Tyrant.Framework
             {
                 var male = string.Equals(Read(SexProperty, animal, "Sex")?.ToString(), "Male", StringComparison.Ordinal);
                 var skinData = Read(SkinDataProperty, animal, "SkinData");
+                var pin = !(animal is Component);
                 if (SkinsModule.TryGetInherited(skinData, out var baseModId, out var baseEntry, out var baseDirectory))
-                    changed |= SetSkinTextures(baseModId, baseEntry, baseDirectory, male);
-                if (SetSkinTextures(modId, entry, directory, male))
+                    changed |= SetSkinTextures(baseModId, baseEntry, baseDirectory, male, pin);
+                if (SetSkinTextures(modId, entry, directory, male, pin))
                 {
                     changed = true;
                     if (Announced.Add(entry.Key(modId) + (male ? "|male" : "|female")))
@@ -108,12 +113,14 @@ namespace Tyrant.Framework
 
             if (changed)
                 foreach (var renderer in renderers) renderer.SetPropertyBlock(Block);
+            // What this animal wears from now on; the textures of the skin it wore before are let go.
+            if (animal is Component wearer && wearer != null) TextureCache.Hold(wearer, Held);
             // The game's variation hook (looks) ran before this postfix: a look's fur masks go back over the skin's.
             if (changed && addedSkin) MaterialsModule.AfterSkinTextures(animal);
         }
 
         /// <summary>A skin's PNGs for one sex onto Block; true when it set any.</summary>
-        private static bool SetSkinTextures(string modId, SkinEntry entry, string directory, bool male)
+        private static bool SetSkinTextures(string modId, SkinEntry entry, string directory, bool male, bool pin)
         {
             var files = male ? entry.Male : entry.Female;
             if (files == null) return false;
@@ -122,7 +129,7 @@ namespace Tyrant.Framework
             {
                 var path = Path.Combine(directory, pair.Value);
                 if (!ModPaths.IsInside(path, directory)) continue;
-                var texture = TextureCache.Get(new Replacement(modId, $"{entry.Key(modId)}:{pair.Key}", Path.GetFullPath(path)), SkinSlotNames.KindOf(pair.Key));
+                var texture = TextureCache.Get(new Replacement(modId, $"{entry.Key(modId)}:{pair.Key}", Path.GetFullPath(path)), SkinSlotNames.KindOf(pair.Key), Held, pin);
                 if (texture == null) continue;
                 Block.SetTexture(SkinSlotNames.Property(pair.Key), texture);
                 any = true;

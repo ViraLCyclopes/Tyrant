@@ -46,4 +46,13 @@ public class JsonTests
         Assert.Equal(new List<object?> { "a", true, null }, back["list"]);
         Assert.Contains("\n  \"id\": \"red-spot\"", text); // indented, readable by people
     }
+
+    [Fact]
+    public void Text_nested_too_deep_is_refused_instead_of_overflowing_the_stack()
+    {
+        var deep = new string('[', 100_000);
+
+        Assert.Contains("nested", Assert.Throws<FormatException>(() => Json.Parse(deep)).Message);
+        Assert.NotNull(Json.Parse(new string('[', 150) + new string(']', 150))); // ordinary depth still reads
+    }
 }

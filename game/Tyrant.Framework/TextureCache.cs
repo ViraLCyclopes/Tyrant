@@ -6,11 +6,23 @@ using UnityEngine;
 
 namespace Tyrant.Framework
 {
-    /// <summary>Builds each mod texture once per file and slot kind: from the mod's cooked pack when it can, else from the PNG.</summary>
+    /// <summary>
+    /// Builds each mod texture once per file and slot kind: from the mod's cooked pack when it can, else from the PNG. A
+    /// texture no animal has worn for <see cref="Grace"/> seconds is destroyed (<see cref="TextureLeases"/>) and built again
+    /// when it is next needed; before, every skin ever shown stayed in memory until the game closed.
+    /// </summary>
     internal static class TextureCache
     {
+        /// <summary>Seconds a texture nobody wears is kept (clicking through skins in the Nursery does not reload them).</summary>
+        private const double Grace = 60;
+        private const float SweepEvery = 5f;
+
         private static readonly Dictionary<string, Texture2D?> Cache = new Dictionary<string, Texture2D?>(StringComparer.OrdinalIgnoreCase);
         private static readonly HashSet<Texture> NoFur = new HashSet<Texture>();
+        private static readonly TextureLeases Leases = new TextureLeases();
+        private static readonly Dictionary<int, Component> Users = new Dictionary<int, Component>();
+        private static readonly List<int> Gone = new List<int>();
+        private static float _nextSweep;
 
         /// <summary>A skin fur mask Tyrant built that has no red anywhere: no fur, like the game's FurMaskEmpty (FurMaskContent).</summary>
         public static bool HasNoFur(Texture texture) => NoFur.Contains(texture);
@@ -22,13 +34,66 @@ namespace Tyrant.Framework
                 NoFur.Add(texture);
         }
 
-        public static Texture2D? Get(Replacement replacement, SlotKind kind)
+        /// <summary>
+        /// The texture, built on first use. <paramref name="held"/> collects its key for <see cref="Hold"/> when an animal is
+        /// going to wear it; without a holder the texture is kept for the grace time only (enough to read it once, as the
+        /// masks made from a skin's map do). <paramref name="pin"/> keeps it for good: for the game's own materials, whose
+        /// copies cannot be followed.
+        /// </summary>
+        public static Texture2D? Get(Replacement replacement, SlotKind kind, List<string>? held = null, bool pin = false)
         {
             var key = replacement.FilePath + "|" + kind;
-            if (Cache.TryGetValue(key, out var cached)) return cached;
-            var texture = Load(replacement, kind, looseFirst: false);
-            Cache[key] = texture; // a failure is remembered too, so it is reported once
+            if (!Cache.TryGetValue(key, out var texture))
+            {
+                texture = Load(replacement, kind, looseFirst: false);
+                Cache[key] = texture; // a failure is remembered too, so it is reported once
+            }
+            if (texture == null) return null;
+            if (pin) Leases.Pin(key);
+            Leases.Touch(key, Time.realtimeSinceStartup);
+            held?.Add(key);
             return texture;
+        }
+
+        /// <summary>The mod textures this animal wears now (the keys <see cref="Get"/> collected); what it wore before is let go.</summary>
+        public static void Hold(Component animal, List<string> keys)
+        {
+            var id = animal.GetInstanceID();
+            if (keys.Count == 0 && !Users.ContainsKey(id)) return;
+            Leases.Hold(id, keys, Time.realtimeSinceStartup);
+            if (keys.Count == 0) Users.Remove(id);
+            else Users[id] = animal;
+        }
+
+        /// <summary>Every frame (FrameworkMod.OnUpdate); every few seconds it lets go of animals that are gone and destroys unworn textures.</summary>
+        public static void Tick()
+        {
+            if (Cache.Count == 0 || Time.realtimeSinceStartup < _nextSweep) return;
+            var now = Time.realtimeSinceStartup;
+            _nextSweep = now + SweepEvery;
+            try
+            {
+                Gone.Clear();
+                foreach (var pair in Users)
+                    if (pair.Value == null) Gone.Add(pair.Key); // destroyed (Unity's own null)
+                foreach (var id in Gone)
+                {
+                    Users.Remove(id);
+                    Leases.Release(id, now);
+                }
+                foreach (var key in Leases.Collect(now, Grace))
+                {
+                    if (!Cache.TryGetValue(key, out var texture)) continue;
+                    Cache.Remove(key);
+                    if (texture == null) continue;
+                    NoFur.Remove(texture);
+                    UnityEngine.Object.Destroy(texture);
+                }
+            }
+            catch (Exception ex)
+            {
+                FrameworkMod.Log.Warning("Unused mod textures could not be freed this time: " + ex.Message);
+            }
         }
 
         /// <summary>
