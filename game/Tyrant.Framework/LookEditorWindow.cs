@@ -114,6 +114,7 @@ namespace Tyrant.Framework
             _content = null;
             _gui = _font = _inputTemplate = _name = _info = _status = null;
             _minimised = false; // the next park's window opens whole
+            _redrawOnRelease = null;
             ScopeButtons.Clear();
             Forget();
             _entry = EditorEntry.Park;
