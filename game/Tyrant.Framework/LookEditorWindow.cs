@@ -544,10 +544,12 @@ namespace Tyrant.Framework
             catch (Exception ex) when (ex is ManifestException || ex is IOException || ex is UnauthorizedAccessException)
             {
                 FrameworkMod.Log.Warning($"The look could not be saved: {ex.Message}");
+                FilesWritten(); // some may have been
                 _message = "Not saved: " + ex.Message;
                 Footer();
                 return;
             }
+            FilesWritten();
             ClearLive(reapply: false);
             if (_target.Kind != SaveTargetKind.AnimalLooks) MaterialsModule.Reload(MaterialsModule.Mods); // re-reads the folders, re-applies the park
             if (_animal != null && !_detached && Alive(_animal)) MaterialsModule.Reapply(_animal, keywords: true); // the Nursery preview is not in the park's lists
@@ -580,6 +582,7 @@ namespace Tyrant.Framework
         /// <summary>Re-reads every image (a PNG edited outside the game), then shows the edit on top again.</summary>
         private static void ReloadImages()
         {
+            FilesWritten(); // the player may have added or changed files: the folders are read again
             if (LookEditorModule.Looks is AnimalLooks looks)
             {
                 foreach (var id in looks.Ids.ToList()) looks.Set(id, new Dictionary<string, MaterialOverride>(looks.Get(id)!, StringComparer.Ordinal)); // prepared again
@@ -670,6 +673,7 @@ namespace Tyrant.Framework
                 var file = Path.Combine(MasksDirectory, MaskExports.Unique(name, Directory.GetFiles(MasksDirectory)));
                 var bytes = png();
                 using (var stream = new FileStream(file, FileMode.CreateNew, FileAccess.Write)) stream.Write(bytes, 0, bytes.Length);
+                FilesWritten();
                 Exports.Add(file, kind);
                 _message = "Exported " + Path.GetFileName(file) + " to UserData/Tyrant/Masks. Edit it, then Reload images.";
                 return file;
@@ -789,11 +793,35 @@ namespace Tyrant.Framework
                 case SaveTargetKind.AnimalLooks:
                     return "this save's looks";
                 case SaveTargetKind.CreateVanillaLooks:
-                    return VanillaLooks.Name + (File.Exists(Path.Combine(FrameworkMod.ModsDirectory, ModCatalog.VanillaLooksId, ModManifest.FileName)) ? "" : " (new)");
+                    return VanillaLooks.Name + (VanillaLooksThere() ? "" : " (new)");
                 default:
                     var mod = MaterialsModule.Mods.FirstOrDefault(m => m.Manifest.Id == _target.ModId)?.Manifest;
                     return mod == null || string.IsNullOrEmpty(mod.Name) ? _target.ModId ?? "?" : mod.Name;
             }
+        }
+
+        private static float _vanillaLooksReadAt = float.NegativeInfinity;
+        private static bool _vanillaLooksThere;
+
+        /// <summary>
+        /// True when the Vanilla Looks mod has its manifest on disk: looked at again at most once a second (the status line asks
+        /// on every slider move), and at once after a save (<see cref="FilesWritten"/>).
+        /// </summary>
+        private static bool VanillaLooksThere()
+        {
+            var now = Time.unscaledTime;
+            if (now < _vanillaLooksReadAt || now - _vanillaLooksReadAt >= 1f)
+            {
+                _vanillaLooksThere = File.Exists(Path.Combine(FrameworkMod.ModsDirectory, ModCatalog.VanillaLooksId, ModManifest.FileName));
+                _vanillaLooksReadAt = now;
+            }
+            return _vanillaLooksThere;
+        }
+
+        /// <summary>The editor wrote files (a save, an export): what it remembered of the folders is looked at again.</summary>
+        private static void FilesWritten()
+        {
+            _vanillaLooksReadAt = float.NegativeInfinity;
         }
 
         /// <summary>The PNGs offered for a ramp or mask: the target's folder and UserData/Tyrant/Masks, plus the one in use.</summary>
