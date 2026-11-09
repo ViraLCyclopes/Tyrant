@@ -35,6 +35,24 @@ namespace Tyrant.Framework
         private const string InfantFurProperty = "_InfantFurMask";
         private const string FuzzProperty = "_FresnelIntensity"; // AnimalShaderData.FresnelIntensityID: only a rim sheen (fur length and coverage come from the masks); the game writes 0 without fur maps
         private const string FurMaskEmpty = "FurMaskEmpty"; // AnimalShaderData.FurMaskEmptyName: the game's blank fur mask
+        private const string ScaleProperty = "_IridescenceScale";
+        private const string PowerProperty = "_IridescencePower";
+        private const string BiasProperty = "_IridescenceBias";
+        private const string MaskStProperty = "_IridescenceMask_ST";
+        private const string IntegumentProperty = "_IntegumentMaturity";
+
+        // Shader property ids, so the hooks write the block without passing a name to Unity; other names go through Id().
+        private static readonly Dictionary<string, int> PropertyIds = new Dictionary<string, int>(StringComparer.Ordinal);
+        private static readonly int RampId = Id(RampProperty);
+        private static readonly int MaskId = Id(MaskProperty);
+        private static readonly int StrengthId = Id(StrengthProperty);
+        private static readonly int DroopId = Id(DroopProperty);
+        private static readonly int FuzzId = Id(FuzzProperty);
+        private static readonly int ScaleId = Id(ScaleProperty);
+        private static readonly int PowerId = Id(PowerProperty);
+        private static readonly int BiasId = Id(BiasProperty);
+        private static readonly int MaskStId = Id(MaskStProperty);
+        private static readonly int IntegumentId = Id(IntegumentProperty);
         private static readonly string[] Variants = { "normal", "albino", "melanistic", "leucistic" };
 
         private static MaterialTable _table = MaterialTable.Build(Array.Empty<LoadedMod>(), out _);
@@ -67,8 +85,14 @@ namespace Tyrant.Framework
         private static readonly Dictionary<RampSource, Texture2D?> Ramps = new Dictionary<RampSource, Texture2D?>(ReferenceComparer.Instance);
         private static readonly Dictionary<MaskSource, Texture?> FileMasks = new Dictionary<MaskSource, Texture?>(ReferenceComparer.Instance);
         private static readonly Dictionary<(MaskSource Mask, string Skin, bool Male), Texture?> SlotMasks = new Dictionary<(MaskSource, string, bool), Texture?>();
-        private static readonly Dictionary<(MaskSource Mask, int Texture), Texture?> GameMasks = new Dictionary<(MaskSource, int), Texture?>();
+        private static readonly Dictionary<(MaskSource Mask, int Texture), GameMaskEntry> GameMasks = new Dictionary<(MaskSource, int), GameMaskEntry>();
         private static bool _sweepDue;
+
+        // Masks from a game map whose map Unity destroyed (a park or species unloaded) can never be looked up again: every few
+        // seconds of real time they are destroyed, once no renderer they were written to still shows them.
+        private const float DeadMaskCheckSeconds = 5f;
+        private static float _nextDeadMaskCheck;
+        private static readonly MaterialPropertyBlock Probe = new MaterialPropertyBlock();
 
         /// <summary>Per first LOD renderer (it outlives a pooled vivarium animal): the property names Tyrant set there.</summary>
         private static readonly ConditionalWeakTable<Renderer, Written> WrittenTo = new ConditionalWeakTable<Renderer, Written>();
@@ -151,6 +175,7 @@ namespace Tyrant.Framework
         /// <summary>
         /// Once a frame: a species whose look finished loading (<see cref="SpeciesLooks"/>) is shown on every animal at once (its
         /// references showed the game's own until now); then the textures of ramps and masks no block uses any more are destroyed.
+        /// Every few seconds, masks made from a game map that is gone are destroyed too (<see cref="DropDeadGameMasks"/>).
         /// </summary>
         public static void Tick()
         {
@@ -161,6 +186,19 @@ namespace Tyrant.Framework
             catch (Exception ex)
             {
                 Failed(ex);
+            }
+            var now = Time.unscaledTime;
+            if (now >= _nextDeadMaskCheck)
+            {
+                _nextDeadMaskCheck = now + DeadMaskCheckSeconds;
+                try
+                {
+                    DropDeadGameMasks();
+                }
+                catch (Exception ex)
+                {
+                    Failed(ex);
+                }
             }
             if (!_sweepDue) return;
             _sweepDue = false;
@@ -635,7 +673,7 @@ namespace Tyrant.Framework
                 {
                     var property = infant ? InfantFurProperty : AdultFurProperty;
                     // An age the fur age leaves bare shows Tyrant's black, over any mask PNG.
-                    if (record != null && record.Ours.TryGetValue(property, out var bare) && bare == _noFur && Block.GetTexture(property) == bare)
+                    if (record != null && record.Ours.TryGetValue(property, out var bare) && bare == _noFur && Block.GetTexture(Id(property)) == bare)
                     {
                         white = PaintSize(record, material, infant); // a full-size black image to paint fur back on, not the 4 × 4 texture
                         black = true;
@@ -643,7 +681,7 @@ namespace Tyrant.Framework
                     }
                     var source = found?.Override.Fur is FurMasks masks ? infant ? masks.InfantMask ?? masks.Mask : masks.Mask : null;
                     if (source != null && FileMask(source) is Texture own && own != null) return own;
-                    if (record != null && record.Ours.TryGetValue(property, out var ours) && ours == Texture2D.whiteTexture && Block.GetTexture(property) == ours)
+                    if (record != null && record.Ours.TryGetValue(property, out var ours) && ours == Texture2D.whiteTexture && Block.GetTexture(Id(property)) == ours)
                     {
                         white = PaintSize(record, material, infant);
                         return null;
@@ -656,7 +694,7 @@ namespace Tyrant.Framework
                     return null;
                 }
                 var shown = found?.Override.Iridescence?.Mask;
-                var texture = shown != null && !shown.Everywhere && MaskTexture(shown, found!, IsMale(members, animal), record) is Texture made && made != null
+                var texture = shown != null && !shown.Everywhere && MaskTexture(shown, found!, IsMale(members, animal), record, out _) is Texture made && made != null
                     ? made
                     : MaterialTexture(material, MaskProperty);
                 switch (MaskExports.IridescenceMode(shown, texture != null))
@@ -724,7 +762,8 @@ namespace Tyrant.Framework
             // "game" (the material's own) writes nothing: a key Tyrant wrote before goes back to the material's value. So does a
             // species' ramp or mask until its copy is made (SpeciesLooks loads it; the animal is written again then) or when it fails.
             var ramp = i?.Ramp == null || i.Ramp.Game ? null : i.Ramp.Species != null ? SpeciesLooks.Ramp(i.Ramp.Species) : RampTexture(i.Ramp);
-            var mask = i?.Mask == null || i.Mask.Game ? null : MaskTexture(i.Mask, found, male, record);
+            GameMaskEntry? fromGame = null;
+            var mask = i?.Mask == null || i.Mask.Game ? null : MaskTexture(i.Mask, found, male, record, out fromGame);
             var adultFur = o.Fur?.Mask == null || o.Fur.Mask.Game ? null : FileMask(o.Fur.Mask); // "game": the game's own per-animal mask stays
             var infantFur = o.Fur?.InfantMask == null ? adultFur : o.Fur.InfantMask.Game ? null : FileMask(o.Fur.InfantMask); // one file covers both ages
 
@@ -732,24 +771,24 @@ namespace Tyrant.Framework
             foreach (var setting in o.Settings)
             {
                 var v = setting.Value;
-                if (v.Kind == MaterialValueKind.Color) SetColor(setting.Key, new Color(v.Color.R, v.Color.G, v.Color.B, 1f)); // sRGB; Unity converts
+                if (v.Kind == MaterialValueKind.Color) SetColor(setting.Key, Id(setting.Key), new Color(v.Color.R, v.Color.G, v.Color.B, 1f)); // sRGB; Unity converts
                 else if (v.Kind == MaterialValueKind.Vector)
                 {
                     var vector = new Vector4(v.Vector[0], v.Vector[1], v.Vector[2], v.Vector[3]);
-                    if (setting.Key == DroopProperty) SetGameVector(record, DroopProperty, vector, fromHook); // the game writes its own lerp per animal
-                    else SetVector(setting.Key, vector);
+                    if (setting.Key == DroopProperty) SetGameVector(record, DroopProperty, DroopId, vector, fromHook); // the game writes its own lerp per animal
+                    else SetVector(setting.Key, Id(setting.Key), vector);
                 }
-                else SetFloat(setting.Key, v.Number);
+                else SetFloat(setting.Key, Id(setting.Key), v.Number);
             }
             if (i != null)
             {
-                if (i.Scale is float scale) SetFloat("_IridescenceScale", scale);
-                if (i.Power is float power) SetFloat("_IridescencePower", power);
-                if (i.Bias is float bias) SetFloat("_IridescenceBias", bias);
+                if (i.Scale is float scale) SetFloat(ScaleProperty, ScaleId, scale);
+                if (i.Power is float power) SetFloat(PowerProperty, PowerId, power);
+                if (i.Bias is float bias) SetFloat(BiasProperty, BiasId, bias);
                 if (i.Tiling != null || i.Offset != null)
-                    SetVector("_IridescenceMask_ST", new Vector4(i.Tiling?[0] ?? 1, i.Tiling?[1] ?? 1, i.Offset?[0] ?? 0, i.Offset?[1] ?? 0));
-                if (ramp != null) SetTexture(RampProperty, ramp);
-                if (mask != null) SetTexture(MaskProperty, mask);
+                    SetVector(MaskStProperty, MaskStId, new Vector4(i.Tiling?[0] ?? 1, i.Tiling?[1] ?? 1, i.Offset?[0] ?? 0, i.Offset?[1] ?? 0));
+                if (ramp != null) SetTexture(RampProperty, RampId, ramp);
+                if (mask != null) SetTexture(MaskProperty, MaskId, mask);
                 if (AgeLooks.WritesStrength(i))
                 {
                     // From the baby strength (0 when left out, the game's own) to the adult one (Tyrant's, else the game's), by
@@ -758,7 +797,7 @@ namespace Tyrant.Framework
                     var id = IdOf(members, animal);
                     var adult = i.Strength != null ? MaterialStrength.For(i.Strength.For(SkinTypeOf(members, animal)), variation, id) : GameStrength(members, animal);
                     var baby = MaterialStrength.For(i.BabyStrength ?? 0, variation, id);
-                    SetGameFloat(record, StrengthProperty, AgeLooks.Strength(baby, adult, Block.GetFloat("_IntegumentMaturity")), fromHook);
+                    SetGameFloat(record, StrengthProperty, StrengthId, AgeLooks.Strength(baby, adult, Block.GetFloat(IntegumentId)), fromHook);
                 }
             }
             // Fur, through the masks (the shader's fur height is lerp(infant mask R, adult mask R, integument) × _Length): an age
@@ -771,13 +810,16 @@ namespace Tyrant.Framework
             var growing = AgeLooks.NeedsFurVariant(o.Fur);
             var adultGame = o.Fur?.Mask?.Game == true;
             var infantGame = o.Fur?.InfantMask?.Game ?? adultGame;
-            if (AgeLooks.WritesFurSheen(o.Fur)) SetGameFloat(record, FuzzProperty, 1f, fromHook);
+            if (AgeLooks.WritesFurSheen(o.Fur)) SetGameFloat(record, FuzzProperty, FuzzId, 1f, fromHook);
             FurSlot(record, AdultFurProperty, AgeLooks.FurSlot(age, grow, infant: false, adultFur != null, adultGame,
                 growing && GameHasFur(members, animal, record, AdultFurProperty, "adultFurMap")), adultFur);
             FurSlot(record, InfantFurProperty, AgeLooks.FurSlot(age, grow, infant: true, infantFur != null, infantGame,
                 growing && GameHasFur(members, animal, record, InfantFurProperty, "infantFurMap")), infantFur);
 
             Restore(record, found.Material, Writing, fromHook);
+            // A mask from a game map: its renderers are noted first, so it is never destroyed while one of them shows it.
+            if (fromGame != null && mask != null && Writing.ContainsKey(MaskProperty))
+                foreach (var renderer in Renderers) fromGame.Users.Add(renderer);
             foreach (var renderer in Renderers) renderer.SetPropertyBlock(Block);
             Remember(first, before, record);
 
@@ -792,13 +834,13 @@ namespace Tyrant.Framework
             switch (fill)
             {
                 case FurFill.File:
-                    SetGameTexture(record, property, file!);
+                    SetGameTexture(record, property, Id(property), file!);
                     break;
                 case FurFill.White:
-                    SetGameTexture(record, property, Texture2D.whiteTexture);
+                    SetGameTexture(record, property, Id(property), Texture2D.whiteTexture);
                     break;
                 case FurFill.Black:
-                    SetGameTexture(record, property, NoFur);
+                    SetGameTexture(record, property, Id(property), NoFur);
                     break;
             }
         }
@@ -841,53 +883,62 @@ namespace Tyrant.Framework
             public readonly Dictionary<string, Texture?> Under = new Dictionary<string, Texture?>(StringComparer.Ordinal);
         }
 
-        private static void SetFloat(string key, float value)
+        // Each writer takes the property's name (what Writing and the record keep) and its id (what the block is written by: no
+        // string goes to Unity per call). The id is always Id(key), a cached constant for Tyrant's own properties.
+        private static void SetFloat(string key, int id, float value)
         {
-            Block.SetFloat(key, value);
+            Block.SetFloat(id, value);
             Writing[key] = Kind.Float;
         }
 
-        private static void SetColor(string key, Color value)
+        private static void SetColor(string key, int id, Color value)
         {
-            Block.SetColor(key, value);
+            Block.SetColor(id, value);
             Writing[key] = Kind.Color;
         }
 
-        private static void SetVector(string key, Vector4 value)
+        private static void SetVector(string key, int id, Vector4 value)
         {
-            Block.SetVector(key, value);
+            Block.SetVector(id, value);
             Writing[key] = Kind.Vector;
         }
 
-        private static void SetTexture(string key, Texture value)
+        private static void SetTexture(string key, int id, Texture value)
         {
-            Block.SetTexture(key, value);
+            Block.SetTexture(id, value);
             Writing[key] = Kind.Texture;
         }
 
         // A hook comes right after the game wrote its value; an editor re-apply finds the game's value only before Tyrant's first write.
-        private static void SetGameFloat(Written record, string key, float value, bool fromHook)
+        private static void SetGameFloat(Written record, string key, int id, float value, bool fromHook)
         {
-            if (fromHook || !record.Game.ContainsKey(key)) record.Game[key] = new Vector4(Block.GetFloat(key), 0, 0, 0);
-            Block.SetFloat(key, value);
+            if (fromHook || !record.Game.ContainsKey(key)) record.Game[key] = new Vector4(Block.GetFloat(id), 0, 0, 0);
+            Block.SetFloat(id, value);
             Writing[key] = Kind.GameFloat;
         }
 
-        private static void SetGameVector(Written record, string key, Vector4 value, bool fromHook)
+        private static void SetGameVector(Written record, string key, int id, Vector4 value, bool fromHook)
         {
-            if (fromHook || !record.Game.ContainsKey(key)) record.Game[key] = Block.GetVector(key);
-            Block.SetVector(key, value);
+            if (fromHook || !record.Game.ContainsKey(key)) record.Game[key] = Block.GetVector(id);
+            Block.SetVector(id, value);
             Writing[key] = Kind.GameVector;
         }
 
         // The block no longer holding Tyrant's texture means the game loaded the skin's maps since: that is the game's texture now.
-        private static void SetGameTexture(Written record, string key, Texture value)
+        private static void SetGameTexture(Written record, string key, int id, Texture value)
         {
-            var current = Block.GetTexture(key);
+            var current = Block.GetTexture(id);
             if (!record.Ours.TryGetValue(key, out var ours) || current != ours) record.Under[key] = current;
-            Block.SetTexture(key, value);
+            Block.SetTexture(id, value);
             record.Ours[key] = value;
             Writing[key] = Kind.GameTexture;
+        }
+
+        /// <summary>A shader property's id (Shader.PropertyToID), looked up once per name.</summary>
+        private static int Id(string name)
+        {
+            if (!PropertyIds.TryGetValue(name, out var id)) PropertyIds[name] = id = Shader.PropertyToID(name);
+            return id;
         }
 
         /// <summary>What this Apply wrote becomes what the next one starts from (nothing written: the renderer is forgotten).</summary>
@@ -924,42 +975,43 @@ namespace Tyrant.Framework
             foreach (var pair in before.Keys)
             {
                 if (keep != null && keep.ContainsKey(pair.Key)) continue;
+                var id = Id(pair.Key);
                 switch (pair.Value)
                 {
                     case Kind.GameFloat:
-                        if (!fromHook && before.Game.TryGetValue(pair.Key, out var number)) Block.SetFloat(pair.Key, number.x);
+                        if (!fromHook && before.Game.TryGetValue(pair.Key, out var number)) Block.SetFloat(id, number.x);
                         before.Game.Remove(pair.Key);
                         continue;
                     case Kind.GameVector:
-                        if (!fromHook && before.Game.TryGetValue(pair.Key, out var vector)) Block.SetVector(pair.Key, vector);
+                        if (!fromHook && before.Game.TryGetValue(pair.Key, out var vector)) Block.SetVector(id, vector);
                         before.Game.Remove(pair.Key);
                         continue;
                     case Kind.GameTexture:
-                        if (before.Ours.TryGetValue(pair.Key, out var ours) && Block.GetTexture(pair.Key) == ours)
+                        if (before.Ours.TryGetValue(pair.Key, out var ours) && Block.GetTexture(id) == ours)
                         {
                             var under = before.Under.TryGetValue(pair.Key, out var game) ? Present(game) : null;
-                            Block.SetTexture(pair.Key, under ?? MaterialTexture(material, pair.Key) ?? Texture2D.blackTexture); // black: no fur
+                            Block.SetTexture(id, under ?? MaterialTexture(material, pair.Key) ?? Texture2D.blackTexture); // black: no fur
                         }
                         before.Ours.Remove(pair.Key);
                         before.Under.Remove(pair.Key);
                         continue;
                 }
-                if (material == null || !material.HasProperty(pair.Key)) continue;
+                if (material == null || !material.HasProperty(id)) continue;
                 switch (pair.Value)
                 {
                     case Kind.Color:
-                        Block.SetColor(pair.Key, material.GetColor(pair.Key));
+                        Block.SetColor(id, material.GetColor(id));
                         break;
                     case Kind.Vector:
-                        Block.SetVector(pair.Key, material.GetVector(pair.Key));
+                        Block.SetVector(id, material.GetVector(id));
                         break;
                     case Kind.Texture:
                         // A block cannot hold null: no texture of its own is a ramp adding nothing, or a mask showing all.
-                        var texture = material.GetTexture(pair.Key);
-                        Block.SetTexture(pair.Key, texture != null ? texture : pair.Key == MaskProperty ? Texture2D.whiteTexture : Texture2D.blackTexture);
+                        var texture = material.GetTexture(id);
+                        Block.SetTexture(id, texture != null ? texture : pair.Key == MaskProperty ? Texture2D.whiteTexture : Texture2D.blackTexture);
                         break;
                     default:
-                        Block.SetFloat(pair.Key, material.GetFloat(pair.Key));
+                        Block.SetFloat(id, material.GetFloat(id));
                         break;
                 }
             }
@@ -1098,8 +1150,10 @@ namespace Tyrant.Framework
             return file;
         }
 
-        private static Texture? MaskTexture(MaskSource mask, Resolved found, bool male, Written? record)
+        /// <param name="fromGame">The cache entry when the mask was made from a game map (<see cref="GameMask"/>), else null.</param>
+        private static Texture? MaskTexture(MaskSource mask, Resolved found, bool male, Written? record, out GameMaskEntry? fromGame)
         {
+            fromGame = null;
             if (mask.Species != null) return SpeciesLooks.Mask(mask.Species); // Tyrant's copy, null while it loads
             if (mask.Everywhere || mask.File != null) return FileMask(mask);
             if (mask.From == null) return null;
@@ -1110,7 +1164,7 @@ namespace Tyrant.Framework
             if (SlotMasks.TryGetValue(key, out var cached)) return cached;
             var has = SlotFile(found.Entry, found.SkinModId, found.Directory, male, mask.From, out var source)
                 || SlotFile(found.BaseEntry, found.BaseModId, found.BaseDirectory, male, mask.From, out source);
-            if (!has) return GameMask(mask, found, record); // a vanilla skin, or a slot the mod skin takes from the game
+            if (!has) return GameMask(mask, found, record, out fromGame); // a vanilla skin, or a slot the mod skin takes from the game
             Texture? result = Texture2D.whiteTexture;
             if (source != null) // null: TextureCache reported the PNG
             {
@@ -1129,10 +1183,12 @@ namespace Tyrant.Framework
 
         /// <summary>
         /// A mask from the map the game put in the block for that slot (under Tyrant's own fur mask, when it set one), cached by
-        /// that texture; null while the game has not loaded it (tried again on the next write).
+        /// that texture; null while the game has not loaded it (tried again on the next write). Once Unity destroys that map
+        /// the entry is never looked up again: <see cref="DropDeadGameMasks"/> destroys its mask.
         /// </summary>
-        private static Texture? GameMask(MaskSource mask, Resolved found, Written? record)
+        private static Texture? GameMask(MaskSource mask, Resolved found, Written? record, out GameMaskEntry? entry)
         {
+            entry = null;
             string property;
             try
             {
@@ -1147,8 +1203,8 @@ namespace Tyrant.Framework
             var source = Present(GameTexture(record, property));
             if (source == null) return null;
             var key = (mask, source.GetInstanceID());
-            if (GameMasks.TryGetValue(key, out var cached)) return cached;
-            Texture? result = Texture2D.whiteTexture;
+            if (GameMasks.TryGetValue(key, out entry)) return entry.Mask;
+            Texture result = Texture2D.whiteTexture;
             try
             {
                 result = Extract(source, mask.Channel, mask.Invert, found.VanillaKey ?? found.Species, mask.From!);
@@ -1157,14 +1213,72 @@ namespace Tyrant.Framework
             {
                 FrameworkMod.Log.Warning($"{found.VanillaKey ?? found.Species}: its iridescence mask could not be made from {mask.From} ({ex.GetBaseException().Message}); the whole body shimmers.");
             }
-            GameMasks[key] = result;
+            GameMasks[key] = entry = new GameMaskEntry(source, result);
             return result;
+        }
+
+        /// <summary>A mask made from a game map: the map it came from and the renderers it was written to.</summary>
+        private sealed class GameMaskEntry
+        {
+            public GameMaskEntry(Texture source, Texture mask)
+            {
+                Source = source;
+                Mask = mask;
+            }
+
+            /// <summary>The game's map (Unity's null once destroyed: then no lookup can reach this entry again).</summary>
+            public Texture Source { get; }
+
+            /// <summary>Tyrant's mask, or Unity's white when it could not be made (never destroyed).</summary>
+            public Texture Mask { get; }
+
+            /// <summary>Every renderer the mask was written to (by reference; destroyed ones are dropped on each check).</summary>
+            public readonly HashSet<Renderer> Users = new HashSet<Renderer>(ReferenceComparer.Instance);
+        }
+
+        /// <summary>
+        /// Destroys the masks whose game map is gone (a park or species unloaded, the map released). A renderer that still shows
+        /// such a mask keeps it until its next write (which no longer finds the map, so the material's own mask goes back): only
+        /// a mask that no renderer it was written to shows any more is destroyed. Runs every few seconds; costs a null check per
+        /// renderer, and a property block read only for the entries whose map is gone.
+        /// </summary>
+        private static void DropDeadGameMasks()
+        {
+            if (GameMasks.Count == 0) return;
+            List<(MaskSource, int)>? dead = null;
+            foreach (var pair in GameMasks)
+            {
+                var entry = pair.Value;
+                entry.Users.RemoveWhere(renderer => renderer == null);
+                if (entry.Source != null) continue;
+                var mask = entry.Mask;
+                if (mask != null && mask != Texture2D.whiteTexture) // Unity's white (a failed mask) is never destroyed: just forgotten
+                {
+                    entry.Users.RemoveWhere(renderer => !Shows(renderer, mask));
+                    if (entry.Users.Count > 0) continue; // still on an animal: tried again on a later check
+                }
+                (dead ??= new List<(MaskSource, int)>()).Add(pair.Key);
+            }
+            if (dead == null) return;
+            foreach (var key in dead)
+            {
+                var mask = GameMasks[key].Mask;
+                GameMasks.Remove(key);
+                DestroyOwn(mask);
+            }
+        }
+
+        /// <summary>True when the renderer's property block holds this texture as its iridescence mask.</summary>
+        private static bool Shows(Renderer renderer, Texture mask)
+        {
+            renderer.GetPropertyBlock(Probe);
+            return Probe.GetTexture(MaskId) == mask;
         }
 
         /// <summary>The texture in <see cref="Block"/> for a key, or the game's under it when Tyrant's own is there.</summary>
         private static Texture? GameTexture(Written? record, string property)
         {
-            var current = Block.GetTexture(property);
+            var current = Block.GetTexture(Id(property));
             return record != null && record.Ours.TryGetValue(property, out var ours) && current == ours && record.Under.TryGetValue(property, out var under)
                 ? under
                 : current;
@@ -1190,8 +1304,12 @@ namespace Tyrant.Framework
             return valid == null || !(valid.Invoke(map, null) is bool ok) || ok;
         }
 
-        private static Texture? MaterialTexture(Material? material, string property) =>
-            material != null && material.HasProperty(property) ? Present(material.GetTexture(property)) : null;
+        private static Texture? MaterialTexture(Material? material, string property)
+        {
+            if (material == null) return null;
+            var id = Id(property);
+            return material.HasProperty(id) ? Present(material.GetTexture(id)) : null;
+        }
 
         /// <summary>Null for a missing or destroyed texture (Unity's own null).</summary>
         private static Texture? Present(Texture? texture) => texture != null ? texture : null;
@@ -1300,19 +1418,29 @@ namespace Tyrant.Framework
             Drop(Ramps, ramp => Pool.Contains(ramp));
             Drop(FileMasks, mask => Pool.Contains(mask));
             Drop(SlotMasks, key => Pool.Contains(key.Mask));
-            Drop(GameMasks, key => Pool.Contains(key.Mask));
+            foreach (var key in GameMasks.Keys.Where(k => !Pool.Contains(k.Mask)).ToList())
+            {
+                var mask = GameMasks[key].Mask;
+                GameMasks.Remove(key);
+                DestroyOwn(mask);
+            }
         }
 
         private static void Drop<TKey, TTexture>(Dictionary<TKey, TTexture> cache, Func<TKey, bool> used) where TTexture : Texture?
         {
             foreach (var key in cache.Keys.Where(k => !used(k)).ToList())
             {
-                UnityEngine.Object? texture = cache[key];
+                var texture = cache[key];
                 cache.Remove(key);
-                // Unity's own white and black stand in for a mask that failed; they are never destroyed.
-                if (texture != null && texture != Texture2D.whiteTexture && texture != Texture2D.blackTexture)
-                    UnityEngine.Object.Destroy(texture);
+                DestroyOwn(texture);
             }
+        }
+
+        /// <summary>Destroys a texture Tyrant made; Unity's own white and black (standing in for a mask that failed) are never destroyed.</summary>
+        private static void DestroyOwn(Texture? texture)
+        {
+            if (texture != null && texture != Texture2D.whiteTexture && texture != Texture2D.blackTexture)
+                UnityEngine.Object.Destroy(texture);
         }
 
         /// <summary>A file's time and size, so an image saved again is a new source (and a new texture) on the next reload.</summary>
