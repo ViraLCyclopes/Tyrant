@@ -894,6 +894,7 @@ namespace Tyrant.Framework
         private static void FilesWritten()
         {
             _vanillaLooksReadAt = float.NegativeInfinity;
+            PngFiles.Forget();
         }
 
         /// <summary>The PNGs offered for a ramp or mask: the target's folder and UserData/Tyrant/Masks, plus the one in use.</summary>
@@ -901,9 +902,9 @@ namespace Tyrant.Framework
         {
             var folders = new List<string> { MasksDirectory };
             if (TargetFolder(create: false) is string folder) folders.Insert(0, folder);
-            var files = LookFiles.Pngs(folders).ToList();
-            if (current != null && !files.Any(f => string.Equals(Path.GetFullPath(f), Path.GetFullPath(current), StringComparison.OrdinalIgnoreCase))) files.Insert(0, current);
-            return files;
+            return PngFiles.Offered(folders, current); // the folders are read again after a second, or after the editor wrote a file
         }
+
+        private static readonly PngListing PngFiles = new PngListing();
     }
 }
