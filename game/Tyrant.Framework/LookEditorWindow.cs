@@ -284,6 +284,7 @@ namespace Tyrant.Framework
             _declined = null;
             _awaitPreview = false;
             _matching = new List<object>();
+            _loadedIds = null;
             _presetWaiting = null;
             Switch.Forget();
             FurSwitch.Forget();
@@ -337,10 +338,12 @@ namespace Tyrant.Framework
             {
                 // The Nursery shows another look (or its animal went): nothing to read from it until the window follows it.
                 _matching = new List<object>();
+                _loadedIds = null;
                 _below = null;
                 return;
             }
-            _matching = MaterialsModule.AnimalsMatching(_scope, _animal).ToList(); // once per draft: a slider move only re-applies
+            _matching = MaterialsModule.AnimalsMatching(_scope, _animal).ToList(); // once per draft: a slider move only re-applies (and adds newcomers)
+            MatchingRead();
             _below = MaterialsModule.Below(_animal, _scope); // never a higher layer: the draft's scope and above are left out
             if (NextCreated) PushLive(keywords: true); // the look kept for the next animal is in memory only: the preview shows it from the draft
         }
@@ -430,6 +433,7 @@ namespace Tyrant.Framework
             }
             if (_draft == null || _context == null || !(_context.KeyFor(_scope) is string key)) return;
             MaterialsModule.SetLive(_scope, key, _context.MaterialName, _draft.IsDirty ? _draft.Current : null); // a clean draft is the saved look
+            if (_scope != LookScope.Animal && Time.unscaledTime - _matchingCheckedAt >= 1f) NewcomersJoin(); // at most once a second
             foreach (var animal in _matching)
                 if (Alive(animal)) MaterialsModule.Reapply(animal, keywords);
         }
@@ -446,8 +450,57 @@ namespace Tyrant.Framework
             if (_draft == null || _context == null || !(_context.KeyFor(_scope) is string key)) return;
             MaterialsModule.SetLive(_scope, key, _context.MaterialName, null);
             if (!reapply || !_draft.IsDirty) return;
+            // An animal of the look that came into the park since the draft started wore the live look from its first frame (the
+            // material hook): it shows the saved look again too, before the sweep destroys the live look's textures.
+            if (_scope != LookScope.Animal && !JoinMatching() && MaterialsModule.LoadedIds() is { } ids)
+                MaterialsModule.ReapplyIds(ids, keywords: true); // no animal left to tell the look by: every animal, to be sure
             foreach (var animal in _matching)
                 if (Alive(animal)) MaterialsModule.Reapply(animal, keywords: true);
+        }
+
+        // ---- the animals a whole skin or species draft reaches ----
+
+        private static HashSet<ulong>? _loadedIds; // the park's animals when _matching was last read whole
+        private static float _matchingCheckedAt = float.NegativeInfinity;
+
+        /// <summary>A new <see cref="_matching"/> was read whole (<see cref="MaterialsModule.AnimalsMatching"/>): the park's animals now are its baseline.</summary>
+        private static void MatchingRead()
+        {
+            _matchingCheckedAt = Time.unscaledTime;
+            _loadedIds = _scope == LookScope.Animal || !(MaterialsModule.LoadedIds() is { } ids) ? null : new HashSet<ulong>(ids);
+        }
+
+        /// <summary>
+        /// While a whole skin or species is edited: an animal that came into the park since (placed, hatched) joins the ones a
+        /// slider move re-applies. Only the park's ids are read unless one is new.
+        /// </summary>
+        private static void NewcomersJoin()
+        {
+            _matchingCheckedAt = Time.unscaledTime;
+            if (!(MaterialsModule.LoadedIds() is { } ids)) return;
+            if (_loadedIds != null && ids.All(_loadedIds.Contains))
+            {
+                if (ids.Count != _loadedIds.Count) _loadedIds = new HashSet<ulong>(ids); // only some left
+                return;
+            }
+            _loadedIds = new HashSet<ulong>(ids);
+            JoinMatching();
+        }
+
+        /// <summary>
+        /// Adds the park's animals of the draft's look that <see cref="_matching"/> does not have yet (it keeps its order: the
+        /// Nursery's preview stays first); false when no animal is left to tell the look by.
+        /// </summary>
+        private static bool JoinMatching()
+        {
+            var selector = !_detached && Alive(_animal) ? _animal : _matching.FirstOrDefault(Alive);
+            if (selector == null) return false;
+            // A kept draft (detached) never reaches the Nursery's preview: it shows another look.
+            var preview = _detached ? Read(LookEditorModule.PreviewComponent(), "currentAnimalPreview") : null;
+            var known = new HashSet<object>(_matching, ReferenceComparer.Instance);
+            foreach (var animal in MaterialsModule.AnimalsMatching(_scope, selector))
+                if (!(_detached && (ReferenceEquals(animal, _animal) || ReferenceEquals(animal, preview))) && known.Add(animal)) _matching.Add(animal);
+            return true;
         }
 
         // ---- the buttons at the bottom ----

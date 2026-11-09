@@ -469,6 +469,7 @@ namespace Tyrant.Framework
             if (_message == DetachedMessage || _message == ClosedKeptMessage) _message = "";
             ReadHeader();
             _matching = MaterialsModule.AnimalsMatching(_scope, current).ToList();
+            MatchingRead();
             _below = MaterialsModule.Below(current, _scope);
             if (NextCreated) PushLive(keywords: true); // the draft is kept by the preview object: it moves to the new one
             else MaterialsModule.Reapply(current, keywords: true); // the draft's live edit on the new animal
