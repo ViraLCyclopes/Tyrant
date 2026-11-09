@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using HarmonyLib;
 using Tyrant.Framework.Core;
 using UnityEngine;
@@ -88,14 +89,43 @@ namespace Tyrant.Framework
                 }
         }
 
-        /// <summary>The TextMeshPro component on a transform, if any.</summary>
-        public static Component? Text(Transform? transform) =>
-            transform == null ? null : transform.GetComponents<Component>().FirstOrDefault(c => c != null && c.GetType().FullName?.StartsWith("TMPro.") == true);
+        private static readonly ConditionalWeakTable<Transform, Component> Texts = new ConditionalWeakTable<Transform, Component>();
 
-        public static void SetText(Transform? transform, string text)
+        /// <summary>The TextMeshPro component on a transform, if any (remembered per transform while it lasts).</summary>
+        public static Component? Text(Transform? transform)
         {
-            var component = Text(transform);
-            if (component != null) Traverse.Create(component).Property("text").SetValue(text);
+            if (transform == null) return null;
+            if (Texts.TryGetValue(transform, out var known))
+            {
+                if (known != null) return known;
+                Texts.Remove(transform); // destroyed since: looked for again
+            }
+            foreach (var component in transform.GetComponents<Component>())
+                if (component != null && component.GetType().FullName?.StartsWith("TMPro.") == true)
+                {
+                    Texts.Add(transform, component);
+                    return component;
+                }
+            return null;
+        }
+
+        public static void SetText(Transform? transform, string text) => SetLabel(Text(transform), text);
+
+        /// <summary>Sets a TextMeshPro text's text, only when it changed (the property looked up once per type).</summary>
+        public static void SetLabel(Component? label, string text)
+        {
+            if (label == null || !(Property(label.GetType(), "text") is PropertyInfo property)) return;
+            if (property.CanRead && property.GetValue(label, null) is string now && now == text) return;
+            property.SetValue(label, text, null);
+        }
+
+        private static readonly Dictionary<(Type, string), PropertyInfo?> Properties = new Dictionary<(Type, string), PropertyInfo?>();
+
+        /// <summary>A property looked up once per type (texts, colours and interactable are written on every slider move).</summary>
+        private static PropertyInfo? Property(Type type, string name)
+        {
+            if (!Properties.TryGetValue((type, name), out var property)) Properties[(type, name)] = property = AccessTools.Property(type, name);
+            return property;
         }
 
         /// <summary>A centred, ellipsised small text (its size fitter removed, so the rect decides).</summary>
@@ -112,7 +142,10 @@ namespace Tyrant.Framework
             t.Property("fontSize").SetValue(11f);
         }
 
-        public static void SetColor(Component graphic, Color color) => Traverse.Create(graphic).Property("color").SetValue(color);
+        public static void SetColor(Component graphic, Color color)
+        {
+            if (graphic != null && Property(graphic.GetType(), "color") is PropertyInfo property) property.SetValue(graphic, color, null);
+        }
 
         /// <summary>A white-on-clear square sprite of <paramref name="size"/> pixels, drawn once by the caller (y runs up).</summary>
         public static Sprite DrawIcon(int size, Func<int, int, bool> inside, string name)
@@ -178,7 +211,7 @@ namespace Tyrant.Framework
         /// <summary>Turns a button, slider or input field on or off (its Selectable's interactable).</summary>
         public static void SetInteractable(Component? selectable, bool on)
         {
-            if (selectable != null) Traverse.Create(selectable).Property("interactable").SetValue(on);
+            if (selectable != null && Property(selectable.GetType(), "interactable") is PropertyInfo property) property.SetValue(selectable, on, null);
         }
 
         /// <summary>A horizontal slider (track, green fill, white handle) from min to max; <paramref name="changed"/> gets every move.</summary>
@@ -280,12 +313,17 @@ namespace Tyrant.Framework
         }
 
         /// <summary>True while the player types in this input box (then a slider move does not overwrite the text).</summary>
-        public static bool IsFocused(Component? input) => input != null && Traverse.Create(input).Property("isFocused").GetValue() is true;
+        public static bool IsFocused(Component? input) =>
+            input != null && Property(input.GetType(), "isFocused") is PropertyInfo property && property.GetValue(input, null) is true;
 
+        private static readonly Dictionary<Type, MethodInfo?> QuietSetters = new Dictionary<Type, MethodInfo?>();
+
+        /// <summary>Sets an input box's text without its listeners hearing it (the setter looked up once per type).</summary>
         public static void SetInputText(Component? input, string text)
         {
             if (input == null) return;
-            var method = AccessTools.Method(input.GetType(), "SetTextWithoutNotify", new[] { typeof(string) });
+            var type = input.GetType();
+            if (!QuietSetters.TryGetValue(type, out var method)) QuietSetters[type] = method = AccessTools.Method(type, "SetTextWithoutNotify", new[] { typeof(string) });
             if (method != null) method.Invoke(input, new object[] { text });
             else Traverse.Create(input).Property("text").SetValue(text);
         }

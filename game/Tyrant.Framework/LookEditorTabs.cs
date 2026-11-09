@@ -464,13 +464,33 @@ namespace Tyrant.Framework
 
         // ---- the game's own values (what shows when no layer sets one) ----
 
-        private static Material? BaseMaterial() =>
-            _animal == null ? null : AccessTools.Property(_animal.GetType(), "BaseMaterial")?.GetValue(_animal, null) as Material;
+        private static readonly Dictionary<(Type, string), System.Reflection.PropertyInfo?> GameProperties = new Dictionary<(Type, string), System.Reflection.PropertyInfo?>();
+        private static readonly Dictionary<(Type, string), System.Reflection.FieldInfo?> GameFields = new Dictionary<(Type, string), System.Reflection.FieldInfo?>();
+
+        /// <summary>A property of a game object, looked up once per type (slider moves read some); null when it has none.</summary>
+        private static object? GameProperty(object? target, string name)
+        {
+            if (target == null) return null;
+            var key = (target.GetType(), name);
+            if (!GameProperties.TryGetValue(key, out var property)) GameProperties[key] = property = AccessTools.Property(key.Item1, name);
+            return property?.GetValue(target, null);
+        }
+
+        /// <summary>A field of a game object, looked up once per type; null when it has none.</summary>
+        private static object? GameField(object? target, string name)
+        {
+            if (target == null) return null;
+            var key = (target.GetType(), name);
+            if (!GameFields.TryGetValue(key, out var field)) GameFields[key] = field = AccessTools.Field(key.Item1, name);
+            return field?.GetValue(target);
+        }
+
+        private static Material? BaseMaterial() => GameProperty(_animal, "BaseMaterial") as Material;
 
         /// <summary>The first LOD renderer's property block (the game's per-animal values) into <see cref="GameBlock"/>.</summary>
         private static bool ReadBlock()
         {
-            if (_animal == null || !(AccessTools.Property(_animal.GetType(), "Lods")?.GetValue(_animal, null) is IEnumerable lods)) return false;
+            if (_animal == null || !(GameProperty(_animal, "Lods") is IEnumerable lods)) return false;
             foreach (var item in lods)
                 if (item is Renderer renderer && renderer != null)
                 {
@@ -503,11 +523,10 @@ namespace Tyrant.Framework
         /// <summary>The strength the game gives the animal (SkinVariationRuntime.iridescenceOn / iridescenceStrength), before growth.</summary>
         private static float GameStrength()
         {
-            var runtime = _animal == null ? null : AccessTools.Property(_animal.GetType(), "SkinVariationRuntime")?.GetValue(_animal, null);
+            var runtime = GameProperty(_animal, "SkinVariationRuntime");
             if (runtime == null) return 0f;
-            var type = runtime.GetType();
-            if (!(AccessTools.Field(type, "iridescenceOn")?.GetValue(runtime) is true)) return 0f;
-            return AccessTools.Field(type, "iridescenceStrength")?.GetValue(runtime) is float strength ? strength : 0f;
+            if (!(GameField(runtime, "iridescenceOn") is true)) return 0f;
+            return GameField(runtime, "iridescenceStrength") is float strength ? strength : 0f;
         }
 
         // ---- rows ----

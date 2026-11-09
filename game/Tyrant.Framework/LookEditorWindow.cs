@@ -840,7 +840,23 @@ namespace Tyrant.Framework
             return modDir == null ? null : Path.Combine(modDir, MaterialFolders.FolderOf(_target.Owner!).Replace('/', Path.DirectorySeparatorChar));
         }
 
+        private static (SaveTarget Target, string? Next, IReadOnlyList<LoadedMod> Mods, bool Vanilla, string Name)? _targetName;
+
+        /// <summary>Where Save writes, as the status line names it; worked out again only when the target, the mods or Vanilla Looks changed.</summary>
         private static string TargetName()
+        {
+            if (_target == null) return "nowhere";
+            var next = NextCreated && _context != null ? _context.Species : null;
+            var mods = MaterialsModule.Mods;
+            var vanilla = _target.Kind == SaveTargetKind.CreateVanillaLooks && next == null && VanillaLooksThere();
+            if (_targetName is { } known && ReferenceEquals(known.Target, _target) && known.Next == next && ReferenceEquals(known.Mods, mods) && known.Vanilla == vanilla)
+                return known.Name;
+            var name = NameTarget();
+            _targetName = (_target, next, mods, vanilla, name);
+            return name;
+        }
+
+        private static string NameTarget()
         {
             if (_target == null) return "nowhere";
             if (NextCreated && _context != null) return $"the next {_context.Species} you incubate";

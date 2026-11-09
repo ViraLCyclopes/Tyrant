@@ -361,9 +361,8 @@ namespace Tyrant.Framework
             if (_status == null) return;
             var editing = _draft != null && _animal != null;
             var dirty = _draft?.IsDirty == true;
-            var why = editing ? EditorScopes.WhyNot(_entry, LookScope.Animal, _context, LookEditorModule.SaveName) : null; // "This animal" is off
-            SetText(_status.transform, _message.Length > 0 ? _message : editing ? "Saves to " + TargetName() + "." + (why == null ? "" : " " + why) + FurNote() : "");
-            SetText(_save.Label.transform, dirty ? "Save *" : "Save");
+            SetLabel(_status, _message.Length > 0 ? _message : editing ? StatusLine() : "");
+            SetLabel(_save.Label, dirty ? "Save *" : "Save");
             SetInteractable(_save.Button.GetComponent(Button!), dirty && _target != null);
             SetInteractable(_reset.Button.GetComponent(Button!), dirty);
             SetInteractable(_export.Button.GetComponent(Button!), editing && _target != null);
@@ -371,6 +370,20 @@ namespace Tyrant.Framework
             SetInteractable(_reload.Button.GetComponent(Button!), true);
             SetInteractable(_openFolder.Button.GetComponent(Button!), true);
             SetColor(_save.Button.GetComponent(Image!), dirty && _target != null ? Green : Idle);
+        }
+
+        private static (string Target, string? Why, string Note, string Line)? _statusLine;
+
+        /// <summary>"Saves to …" with why "This animal" is off and the fur note; made again only when one of them changed.</summary>
+        private static string StatusLine()
+        {
+            var target = TargetName();
+            var why = EditorScopes.WhyNot(_entry, LookScope.Animal, _context, LookEditorModule.SaveName);
+            var note = FurNote();
+            if (_statusLine is { } known && known.Target == target && known.Why == why && known.Note == note) return known.Line;
+            var line = "Saves to " + target + "." + (why == null ? "" : " " + why) + note;
+            _statusLine = (target, why, note, line);
+            return line;
         }
     }
 }
