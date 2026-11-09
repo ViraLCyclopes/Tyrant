@@ -160,12 +160,18 @@ namespace Tyrant.Framework
         private static PropertyInfo? AudioManagerProperty;
         private static FieldInfo? EventsField, ItemsField, AnimalField, DataField, PlayingField, InstField, AudioEventField, InstHandleField;
         private static PropertyInfo? CountProperty;
+        private static bool AudioManagerRead;
 
         /// <summary>The animal whose queued sound is being started now: playing, no instance yet, the same event.</summary>
         private static object? AnimalPlaying(string path)
         {
-            var game = AccessTools.TypeByName("PrehistoricKingdom.Game") ?? AccessTools.TypeByName("Game");
-            AudioManagerProperty ??= game == null ? null : AccessTools.Property(game, "AudioManager");
+            if (!AudioManagerRead)
+            {
+                // Once: AccessTools.TypeByName walks every loaded type (about 0.1 s), and this runs for each replaced sound.
+                AudioManagerRead = true;
+                var game = AccessTools.TypeByName("PrehistoricKingdom.Game") ?? AccessTools.TypeByName("Game");
+                AudioManagerProperty = game == null ? null : AccessTools.Property(game, "AudioManager");
+            }
             var manager = AudioManagerProperty?.GetValue(null, null);
             if (manager == null) return null;
             EventsField ??= AccessTools.Field(manager.GetType(), "AnimalAudioEvents");
@@ -209,16 +215,26 @@ namespace Tyrant.Framework
     /// <summary>An animal's species, skin key and age, read by reflection (as ModelModule does).</summary>
     internal static class AnimalInfo
     {
+        // Looked up once per animal type: these run for every replaced sound an animal makes.
+        private static readonly Dictionary<(Type, string), PropertyInfo?> Properties = new Dictionary<(Type, string), PropertyInfo?>();
+
+        private static object? Read(object animal, string name)
+        {
+            var key = (animal.GetType(), name);
+            if (!Properties.TryGetValue(key, out var property)) Properties[key] = property = AccessTools.Property(key.Item1, name);
+            return property?.GetValue(animal, null);
+        }
+
         public static string? Species(object animal)
         {
-            var data = AccessTools.Property(animal.GetType(), "BaseData")?.GetValue(animal, null);
+            var data = Read(animal, "BaseData");
             return data == null ? null : Traverse.Create(data).Field("speciesID").GetValue() as string;
         }
 
         /// <summary>"&lt;mod&gt;/&lt;skin&gt;" for a Tyrant skin, else "&lt;species&gt;/&lt;skinName&gt;" for a vanilla one.</summary>
         public static string? SkinKey(object animal, string? species)
         {
-            var skinData = AccessTools.Property(animal.GetType(), "SkinData")?.GetValue(animal, null);
+            var skinData = Read(animal, "SkinData");
             if (skinData == null) return null;
             if (SkinsModule.TryGet(skinData, out var modId, out var entry, out _)) return entry.Key(modId);
             var name = Traverse.Create(skinData).Field("skinName").GetValue() as string;
@@ -226,6 +242,6 @@ namespace Tyrant.Framework
         }
 
         public static float Maturity(object animal) =>
-            AccessTools.Property(animal.GetType(), "Maturity01")?.GetValue(animal, null) is float maturity ? maturity : 1f;
+            Read(animal, "Maturity01") is float maturity ? maturity : 1f;
     }
 }

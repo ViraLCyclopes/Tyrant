@@ -103,6 +103,8 @@ namespace Tyrant.Framework
 
         public void MuteInstance(IntPtr instance) => FmodNative.FMOD_Studio_EventInstance_SetVolume(instance, 0f);
 
+        public void UnmuteInstance(IntPtr instance) => FmodNative.FMOD_Studio_EventInstance_SetVolume(instance, 1f);
+
         public IntPtr InstanceBus(IntPtr instance) =>
             FmodNative.FMOD_Studio_EventInstance_GetChannelGroup(instance, out var group) == FmodNative.Ok
             && FmodNative.FMOD5_ChannelGroup_GetParentGroup(group, out var parent) == FmodNative.Ok ? parent : IntPtr.Zero;

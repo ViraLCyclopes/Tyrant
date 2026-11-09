@@ -199,7 +199,7 @@ namespace Tyrant.Framework
                 {
                     var path = NumbersPath;
                     Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-                    File.WriteAllText(path, numbers.ToJson());
+                    AtomicFile.Write(path, numbers.ToJson()); // the permanent numbers: never left half-written by a crash
                 }
                 catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
                 {
