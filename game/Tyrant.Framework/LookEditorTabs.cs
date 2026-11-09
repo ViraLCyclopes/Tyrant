@@ -175,7 +175,11 @@ namespace Tyrant.Framework
         private static void SetFilm(float thickness, double? index, bool rebuild)
         {
             _draft!.SetThinFilm(thickness);
-            if (index is double n && _draft.Current.Iridescence?.Ramp?.ThinFilm is ThinFilmSettings film) film.Index = n;
+            if (index is double n && _draft.Current.Iridescence?.Ramp?.ThinFilm is ThinFilmSettings film)
+            {
+                film.Index = n;
+                _draft.Touch(); // changed directly, not through the draft's methods
+            }
             if (rebuild) Changed(rebuild: true);
         }
 
@@ -259,6 +263,7 @@ namespace Tyrant.Framework
                 return;
             }
             _presetWaiting = null;
+            _draft.Touch(); // the preset sets some parts directly
             Switch.Forget(); // the preset's values are the draft's own now: a later off/on or grow off starts from them
             FurSwitch.Forget();
             _message = "Started from " + SpeciesLooks.NameOf(species) + (kind == PresetKind.Fur ? "'s fur" : "'s iridescence") + "; edit anything, Reset goes back to the saved look.";

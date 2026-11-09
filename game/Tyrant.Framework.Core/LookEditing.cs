@@ -94,7 +94,7 @@ namespace Tyrant.Framework.Core
         {
             if (draft.Current.Iridescence?.Strength == null && shown != null)
                 (draft.Current.Iridescence ??= new IridescenceSettings()).Strength = Copy(shown);
-            draft.SetStrength(variant, value);
+            draft.SetStrength(variant, value); // marks the draft changed, the copy above included
         }
 
         /// <summary>The baby strength shown: the draft's own, else a lower layer's, else 0 (the game's: a hatchling never shimmers).</summary>
@@ -205,6 +205,7 @@ namespace Tyrant.Framework.Core
                 iridescence.Strength = LookEditing.Copy(_strength);
                 iridescence.BabyStrength = _baby;
                 if (iridescence.IsEmpty) draft.Current.Iridescence = null;
+                draft.Touch(); // changed directly, not through the draft's methods
                 _strength = null;
                 _baby = null;
                 return;
