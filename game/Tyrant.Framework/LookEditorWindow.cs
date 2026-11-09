@@ -112,6 +112,7 @@ namespace Tyrant.Framework
             _canvas = _window = _main = _modal = null;
             _content = null;
             _gui = _font = _inputTemplate = _name = _info = _status = null;
+            _minimised = false; // the next park's window opens whole
             ScopeButtons.Clear();
             Forget();
             _entry = EditorEntry.Park;
@@ -134,7 +135,8 @@ namespace Tyrant.Framework
             {
                 if (_canvas != null) UnityEngine.Object.Destroy(_canvas);
                 DestroyButtons();
-                _canvas = _window = null;
+                _canvas = _window = _main = null;
+                _minimised = false;
                 Forget();
             }
         }

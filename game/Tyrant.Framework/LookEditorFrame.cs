@@ -105,6 +105,7 @@ namespace Tyrant.Framework
                 OnPointer(grip.gameObject, "Drag", Safe<object>(data => Resize(PointerDelta(data))));
                 OnPointer(grip.gameObject, "EndDrag", Safe<object>(_ => SavePrefs()));
 
+                main.gameObject.SetActive(!_minimised); // as Place sizes the window
                 window.gameObject.SetActive(false);
                 _canvas = canvasObject;
                 _window = window.gameObject;
