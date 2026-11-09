@@ -25,11 +25,10 @@ namespace Tyrant.Framework
                 FrameworkMod.Log.Warning("The game's top bar text was not found (game updated?); the look editor cannot open.");
                 return;
             }
-            _inputTemplate = SearchFieldTemplate();
-
             var canvasObject = new GameObject("TyrantLookEditorCanvas", typeof(RectTransform)) { layer = board!.gameObject.layer };
             try
             {
+                _inputTemplate = InputTemplate(canvasObject.transform);
                 var canvas = canvasObject.AddComponent<Canvas>();
                 canvas.renderMode = RenderMode.ScreenSpaceOverlay;
                 canvas.sortingOrder = 120; // over the game's panels
@@ -157,15 +156,33 @@ namespace Tyrant.Framework
             }
         }
 
-        /// <summary>The Nursery's species search box, cloned for the typed-value boxes (null: they are built by reflection).</summary>
-        private static Component? SearchFieldTemplate()
+        private static Type? _nurseryMenuType;
+        private static bool _nurseryMenuTypeRead;
+
+        /// <summary>
+        /// The template of the typed-value boxes: a copy of the Nursery's species search box made once per window, kept inactive
+        /// under the window's canvas (it goes with it), so the game's own box is never touched again; null: they are built by
+        /// reflection.
+        /// </summary>
+        private static Component? InputTemplate(Transform holder)
         {
-            var type = AccessTools.TypeByName("PrehistoricKingdom.NurseryMenuV2");
-            if (type == null) return null;
-            foreach (var found in Resources.FindObjectsOfTypeAll(type))
+            if (!_nurseryMenuTypeRead)
+            {
+                _nurseryMenuTypeRead = true; // looked up once a game run: a type lookup is slow
+                _nurseryMenuType = AccessTools.TypeByName("PrehistoricKingdom.NurseryMenuV2");
+            }
+            if (_nurseryMenuType == null) return null;
+            foreach (var found in Resources.FindObjectsOfTypeAll(_nurseryMenuType))
                 if (found is Component menu && menu != null && menu.gameObject.scene.IsValid()
                     && Traverse.Create(menu).Field("gallerySearchInputField").GetValue() is Component field && field != null)
-                    return field;
+                {
+                    var copy = CloneInactive(field.gameObject, holder); // inactive, and stays so: only its clones show
+                    copy.name = "TyrantInputTemplate";
+                    var input = copy.GetComponent(field.GetType());
+                    if (input != null) return input;
+                    UnityEngine.Object.Destroy(copy);
+                    return null;
+                }
             return null;
         }
 
