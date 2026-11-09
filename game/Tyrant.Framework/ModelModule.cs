@@ -92,8 +92,10 @@ namespace Tyrant.Framework
                     throw new TMeshException($"made for {t.BoneCount} bones, but the game's mesh has {original.bindposes.Length} (game updated? rebuild the model in Tyrant)");
                 mesh = Build(t, original);
             }
-            catch (Exception ex) when (ex is IOException || ex is TMeshException || ex is UnauthorizedAccessException || ex is ArgumentException)
+            catch (Exception ex) // whatever a damaged file causes: remembered below, so it is reported once and not read again
             {
+                if (mesh != null) UnityEngine.Object.Destroy(mesh);
+                mesh = null;
                 FrameworkMod.Log.Warning($"{modId}: model {Path.GetFileName(path)} could not be loaded ({ex.Message}); the animal keeps its own model.");
             }
             Built[key] = mesh;

@@ -101,7 +101,7 @@ namespace Tyrant.Framework
             if (_disabled || !_started) return;
             try
             {
-                var gui = InPark() ? Property(Game, "GUI") : null;
+                var gui = InPark() ? Read(ref _guiGetter, "GUI") : null;
                 if (gui is UnityEngine.Object unity && unity == null) gui = null; // destroyed with its scene
                 if (!ReferenceEquals(gui, _gui))
                 {
@@ -120,39 +120,35 @@ namespace Tyrant.Framework
                     return;
                 }
                 bool loaded;
-                List<ulong> removed;
-                List<string> saved;
-                List<(object Animal, ulong VirtualId, int Tries)> placed;
-                List<object> incubated;
-                List<ulong> mismatched;
+                List<ulong>? removed = null;
+                List<string>? saved = null;
+                List<(object Animal, ulong VirtualId, int Tries)>? placed = null;
+                List<object>? incubated = null;
+                List<ulong>? mismatched = null;
                 lock (Gate)
                 {
+                    // Taken only when something is queued: most frames have no news, and allocate nothing.
                     loaded = _loadedNews;
                     _loadedNews = false;
-                    removed = Removed.ToList();
-                    Removed.Clear();
-                    saved = Saved.ToList();
-                    Saved.Clear();
-                    placed = PlacedNew.ToList();
-                    PlacedNew.Clear();
-                    incubated = Incubated.ToList();
-                    Incubated.Clear();
-                    mismatched = Mismatched.ToList();
-                    Mismatched.Clear();
+                    if (Removed.Count > 0) removed = Take(Removed);
+                    if (Saved.Count > 0) saved = Take(Saved);
+                    if (PlacedNew.Count > 0) placed = Take(PlacedNew);
+                    if (Incubated.Count > 0) incubated = Take(Incubated);
+                    if (Mismatched.Count > 0) mismatched = Take(Mismatched);
                     if (WriteWaits.Count > 0 && UnityEngine.Time.realtimeSinceStartup >= _retryAt)
                     {
-                        placed.AddRange(WriteWaits);
+                        (placed ??= new List<(object, ulong, int)>()).AddRange(WriteWaits);
                         WriteWaits.Clear();
                     }
                 }
                 // The game's event (once per park), or should it be missed the game saying it is fully loaded.
                 if (!_parkRead && (loaded || Property(Core, "IsFullyLoaded") is true)) ParkLoaded();
-                if (removed.Count > 0 && _parkRead) AnimalsRemoved(removed); // removals queued while loading belong to the old park
+                if (removed != null && _parkRead) AnimalsRemoved(removed); // removals queued while loading belong to the old park
                 // Placements and incubations first: a save right after must keep (or prune) what they changed.
-                if (_parkRead) foreach (var virtualId in mismatched) BindingMismatched(virtualId);
-                if (_parkRead) foreach (var (animal, virtualId, tries) in placed) AnimalPlaced(animal, virtualId, tries);
-                if (_parkRead) foreach (var virtualAnimal in incubated) IncubationStarted(virtualAnimal);
-                if (_parkRead) foreach (var path in saved) ParkSaved(path);
+                if (_parkRead && mismatched != null) foreach (var virtualId in mismatched) BindingMismatched(virtualId);
+                if (_parkRead && placed != null) foreach (var (animal, virtualId, tries) in placed) AnimalPlaced(animal, virtualId, tries);
+                if (_parkRead && incubated != null) foreach (var virtualAnimal in incubated) IncubationStarted(virtualAnimal);
+                if (_parkRead && saved != null) foreach (var path in saved) ParkSaved(path);
                 SavesDeleted(); // after the saves: a save converted to a new one copies its images before the old one goes
                 LookEditorWindow.Tick(gui, _parkRead);
             }
@@ -160,6 +156,14 @@ namespace Tyrant.Framework
             {
                 Fail(ex);
             }
+        }
+
+        /// <summary>The queued items, the queue emptied (call it under <see cref="Gate"/>).</summary>
+        private static List<T> Take<T>(List<T> queue)
+        {
+            var taken = new List<T>(queue);
+            queue.Clear();
+            return taken;
         }
 
         /// <summary>The name of the save in use (its looks file); null outside a park and for a park never saved.</summary>
@@ -183,9 +187,10 @@ namespace Tyrant.Framework
         /// <summary>Game.AnimalPreviewComponent: the Nursery's preview (its currentAnimalPreview); null between parks.</summary>
         public static object? PreviewComponent()
         {
-            if (Game != null && Getter(Game, "AnimalPreviewComponent") == null && Warned.Add("AnimalPreviewComponent"))
+            if (Game == null) return null;
+            if (!_previewGetter.Made && Getter(Game, "AnimalPreviewComponent") == null && Warned.Add("AnimalPreviewComponent"))
                 FrameworkMod.Log.Warning("Game.AnimalPreviewComponent was not found (game updated?); the look editor cannot open on the Nursery's animal.");
-            return Property(Game, "AnimalPreviewComponent");
+            return Read(ref _previewGetter, "AnimalPreviewComponent");
         }
 
         public static bool IsAnimal(object? value) =>
@@ -227,7 +232,20 @@ namespace Tyrant.Framework
 
         // ---- park ----
 
-        private static bool InPark() => Game != null && Property(Game, "HasInstance") is true;
+        private static bool InPark()
+        {
+            if (Game == null) return false;
+            if (!_hasInstanceGetter.Made) _hasInstanceGetter = (true, StaticGetter<bool>(Game, "HasInstance"));
+            if (_hasInstanceGetter.Get == null) return Property(Game, "HasInstance") is true;
+            try
+            {
+                return _hasInstanceGetter.Get();
+            }
+            catch (Exception)
+            {
+                return false; // as a read that fails by reflection
+            }
+        }
 
         private static void ParkLoaded()
         {
@@ -669,6 +687,41 @@ namespace Tyrant.Framework
         {
             if (!Getters.TryGetValue((type, name), out var property)) Getters[(type, name)] = property = AccessTools.Property(type, name);
             return property;
+        }
+
+        // Game's static properties Tick reads every frame, through delegates made once (no lookup or boxing per read).
+        private static (bool Made, Func<bool>? Get) _hasInstanceGetter;
+        private static (bool Made, Func<object?>? Get) _guiGetter, _previewGetter;
+
+        /// <summary>A static getter as a delegate; null when it is missing or cannot be bound (then it is read by reflection).</summary>
+        private static Func<T>? StaticGetter<T>(Type type, string name)
+        {
+            var method = Getter(type, name)?.GetGetMethod(true);
+            if (method == null || !method.IsStatic) return null;
+            try
+            {
+                return Delegate.CreateDelegate(typeof(Func<T>), method, false) as Func<T>;
+            }
+            catch (ArgumentException)
+            {
+                return null;
+            }
+        }
+
+        /// <summary>A static property of Game (of a reference type) through its delegate; null while it cannot be read.</summary>
+        private static object? Read(ref (bool Made, Func<object?>? Get) slot, string name)
+        {
+            if (Game == null) return null;
+            if (!slot.Made) slot = (true, StaticGetter<object?>(Game, name));
+            if (slot.Get == null) return Property(Game, name);
+            try
+            {
+                return slot.Get();
+            }
+            catch (Exception)
+            {
+                return null; // e.g. its instance is between parks, as a read that fails by reflection
+            }
         }
 
         /// <summary>A static property of the game; null while it cannot be read (e.g. its instance is between parks).</summary>

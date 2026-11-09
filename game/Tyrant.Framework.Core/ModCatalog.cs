@@ -113,6 +113,12 @@ namespace Tyrant.Framework.Core
                     plan.Skipped.Add(new SkippedMod(source.Folder, "mod.json is missing."));
                     continue;
                 }
+                // A mod turned off is not read at all: its files cost no start-up time and cannot cause warnings or errors.
+                if (listed.Any(e => e.Id == source.Folder && !e.Enabled))
+                {
+                    plan.Skipped.Add(new SkippedMod(source.Folder, "turned off"));
+                    continue;
+                }
                 try
                 {
                     var skippedSkins = new List<string>();
@@ -136,6 +142,12 @@ namespace Tyrant.Framework.Core
                 catch (ManifestException ex)
                 {
                     plan.Skipped.Add(new SkippedMod(source.Folder, ex.Message));
+                }
+                catch (Exception ex)
+                {
+                    // Anything else one mod's files can cause (a locked or unreadable file, a damaged animals.db, a missing
+                    // system library) costs only that mod, never the others.
+                    plan.Skipped.Add(new SkippedMod(source.Folder, "its files could not be read: " + ex.GetBaseException().Message));
                 }
             }
 

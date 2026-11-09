@@ -15,22 +15,45 @@ namespace Tyrant.Framework.Core
 
         private readonly LookScope _scope;
         private string _saved;
+        private MaterialOverride _current;
+        private bool? _dirty; // IsDirty as last worked out; null after any change (worked out again when asked)
 
         public LookDraft(LookScope scope, MaterialOverride? saved)
         {
             _scope = scope;
-            Current = Clone(saved);
-            _saved = Text(Current);
+            _current = Clone(saved);
+            _saved = Text(_current);
+            _dirty = false;
         }
 
-        public MaterialOverride Current { get; private set; }
+        /// <summary>
+        /// The look being edited. Change it through this class's methods; code that changes its parts directly must call
+        /// <see cref="Touch"/> afterwards, or <see cref="IsDirty"/> may keep its earlier answer.
+        /// </summary>
+        public MaterialOverride Current
+        {
+            get => _current;
+            private set
+            {
+                _current = value;
+                _dirty = null;
+            }
+        }
 
-        public bool IsDirty => Text(Current) != _saved;
+        /// <summary>
+        /// True when what would be saved differs from the last saved look. Worked out once after each change (the editor asks
+        /// several times a frame), not on every call.
+        /// </summary>
+        public bool IsDirty => _dirty ??= Text(_current) != _saved;
+
+        /// <summary>The draft's parts were changed directly (not through this class): <see cref="IsDirty"/> is worked out again.</summary>
+        public void Touch() => _dirty = null;
 
         /// <summary>A single number stays a single number; per-variant values edit only the given variant (a missing one is added).</summary>
         public void SetStrength(string variant, float value)
         {
             if (Array.IndexOf(Variants, variant) < 0) throw new ArgumentException($"Unknown variant \"{variant}\".", nameof(variant));
+            Touch();
             var strength = Iridescence().Strength ??= new VariantNumbers();
             var single = strength.Albino == null && strength.Melanistic == null && strength.Leucistic == null;
             if (single || variant == "normal") strength.Normal = value;
@@ -42,6 +65,7 @@ namespace Tyrant.Framework.Core
         /// <summary>A hatchling's strength (one number for every variant); null leaves it to the layers below.</summary>
         public void SetBabyStrength(float? value)
         {
+            Touch();
             Iridescence().BabyStrength = value;
             Tidy();
         }
@@ -50,26 +74,33 @@ namespace Tyrant.Framework.Core
         public void SetVariation(float value)
         {
             if (_scope == LookScope.Animal) throw new InvalidOperationException("Variation applies to a whole skin or species, not to one animal.");
+            Touch();
             Iridescence().Variation = value;
         }
 
-        public void SetThinFilm(float thicknessNm) =>
+        public void SetThinFilm(float thicknessNm)
+        {
+            Touch();
             Iridescence().Ramp = new RampSource { ThinFilm = new ThinFilmSettings { Thickness = thicknessNm } };
+        }
 
         public void SetRamp(RampSource? ramp)
         {
+            Touch();
             Iridescence().Ramp = ramp;
             Tidy();
         }
 
         public void SetMask(MaskSource? mask)
         {
+            Touch();
             Iridescence().Mask = mask;
             Tidy();
         }
 
         public void SetShaping(float? scale, float? power, float? bias)
         {
+            Touch();
             var iridescence = Iridescence();
             iridescence.Scale = scale;
             iridescence.Power = power;
@@ -79,6 +110,7 @@ namespace Tyrant.Framework.Core
 
         public void SetSetting(string key, MaterialValue? value)
         {
+            Touch();
             if (value is { } v) Current.Settings[key] = v;
             else Current.Settings.Remove(key);
         }
@@ -89,6 +121,7 @@ namespace Tyrant.Framework.Core
         /// </summary>
         public void SetIridescenceOn(bool on)
         {
+            Touch();
             var iridescence = Iridescence();
             var strength = iridescence.Strength ??= new VariantNumbers();
             if (on)
@@ -110,6 +143,7 @@ namespace Tyrant.Framework.Core
 
         public void SetFurMask(MaskSource? mask, bool infant)
         {
+            Touch();
             var fur = Current.Fur ??= new FurMasks();
             if (infant) fur.InfantMask = mask;
             else fur.Mask = mask;
@@ -119,6 +153,7 @@ namespace Tyrant.Framework.Core
         /// <summary>Whether Tyrant grows fur at this scope: true, false (do not force it over a lower layer), or null (left out).</summary>
         public void SetFurGrow(bool? grow)
         {
+            Touch();
             var fur = Current.Fur ??= new FurMasks();
             fur.Grow = grow;
             if (fur.IsEmpty) Current.Fur = null;
@@ -127,6 +162,7 @@ namespace Tyrant.Framework.Core
         /// <summary>Which ages wear fur at this scope; null leaves it to the layers below (or the game).</summary>
         public void SetFurAge(FurAge? age)
         {
+            Touch();
             var fur = Current.Fur ??= new FurMasks();
             fur.Age = age;
             if (fur.IsEmpty) Current.Fur = null;
@@ -135,13 +171,17 @@ namespace Tyrant.Framework.Core
         /// <summary>Back to the last saved look.</summary>
         public void Reset() => Current = Parse(_saved);
 
-        public void MarkSaved() => _saved = Text(Current);
+        public void MarkSaved()
+        {
+            _saved = Text(_current);
+            _dirty = false;
+        }
 
-        private IridescenceSettings Iridescence() => Current.Iridescence ??= new IridescenceSettings();
+        private IridescenceSettings Iridescence() => _current.Iridescence ??= new IridescenceSettings();
 
         private void Tidy()
         {
-            if (Current.Iridescence != null && Current.Iridescence.IsEmpty) Current.Iridescence = null;
+            if (_current.Iridescence != null && _current.Iridescence.IsEmpty) _current.Iridescence = null;
         }
 
         // The JSON form is the comparison and the copy: what would be saved is what counts as a change.

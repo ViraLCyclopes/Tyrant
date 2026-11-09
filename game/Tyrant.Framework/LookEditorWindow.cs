@@ -86,6 +86,7 @@ namespace Tyrant.Framework
             EnsureButtons(gui);
             if (!IsOpen) return;
             Place(); // keeps it on screen when the resolution changes
+            RedrawAfterDrag();
             if (_entry == EditorEntry.Nursery) FollowNursery(gui);
             else if (!Alive(_animal)) AnimalGone("The animal is gone; open the editor from another one.");
             // The graphics setting can change while the window is open: the status line's fur note follows (a cached bool read).
@@ -112,6 +113,8 @@ namespace Tyrant.Framework
             _canvas = _window = _main = _modal = null;
             _content = null;
             _gui = _font = _inputTemplate = _name = _info = _status = null;
+            _minimised = false; // the next park's window opens whole
+            _redrawOnRelease = null;
             ScopeButtons.Clear();
             Forget();
             _entry = EditorEntry.Park;
@@ -134,7 +137,8 @@ namespace Tyrant.Framework
             {
                 if (_canvas != null) UnityEngine.Object.Destroy(_canvas);
                 DestroyButtons();
-                _canvas = _window = null;
+                _canvas = _window = _main = null;
+                _minimised = false;
                 Forget();
             }
         }
@@ -284,6 +288,7 @@ namespace Tyrant.Framework
             _declined = null;
             _awaitPreview = false;
             _matching = new List<object>();
+            _loadedIds = null;
             _presetWaiting = null;
             Switch.Forget();
             FurSwitch.Forget();
@@ -337,10 +342,12 @@ namespace Tyrant.Framework
             {
                 // The Nursery shows another look (or its animal went): nothing to read from it until the window follows it.
                 _matching = new List<object>();
+                _loadedIds = null;
                 _below = null;
                 return;
             }
-            _matching = MaterialsModule.AnimalsMatching(_scope, _animal).ToList(); // once per draft: a slider move only re-applies
+            _matching = MaterialsModule.AnimalsMatching(_scope, _animal).ToList(); // once per draft: a slider move only re-applies (and adds newcomers)
+            MatchingRead();
             _below = MaterialsModule.Below(_animal, _scope); // never a higher layer: the draft's scope and above are left out
             if (NextCreated) PushLive(keywords: true); // the look kept for the next animal is in memory only: the preview shows it from the draft
         }
@@ -430,6 +437,7 @@ namespace Tyrant.Framework
             }
             if (_draft == null || _context == null || !(_context.KeyFor(_scope) is string key)) return;
             MaterialsModule.SetLive(_scope, key, _context.MaterialName, _draft.IsDirty ? _draft.Current : null); // a clean draft is the saved look
+            if (_scope != LookScope.Animal && Time.unscaledTime - _matchingCheckedAt >= 1f) NewcomersJoin(); // at most once a second
             foreach (var animal in _matching)
                 if (Alive(animal)) MaterialsModule.Reapply(animal, keywords);
         }
@@ -446,8 +454,57 @@ namespace Tyrant.Framework
             if (_draft == null || _context == null || !(_context.KeyFor(_scope) is string key)) return;
             MaterialsModule.SetLive(_scope, key, _context.MaterialName, null);
             if (!reapply || !_draft.IsDirty) return;
+            // An animal of the look that came into the park since the draft started wore the live look from its first frame (the
+            // material hook): it shows the saved look again too, before the sweep destroys the live look's textures.
+            if (_scope != LookScope.Animal && !JoinMatching() && MaterialsModule.LoadedIds() is { } ids)
+                MaterialsModule.ReapplyIds(ids, keywords: true); // no animal left to tell the look by: every animal, to be sure
             foreach (var animal in _matching)
                 if (Alive(animal)) MaterialsModule.Reapply(animal, keywords: true);
+        }
+
+        // ---- the animals a whole skin or species draft reaches ----
+
+        private static HashSet<ulong>? _loadedIds; // the park's animals when _matching was last read whole
+        private static float _matchingCheckedAt = float.NegativeInfinity;
+
+        /// <summary>A new <see cref="_matching"/> was read whole (<see cref="MaterialsModule.AnimalsMatching"/>): the park's animals now are its baseline.</summary>
+        private static void MatchingRead()
+        {
+            _matchingCheckedAt = Time.unscaledTime;
+            _loadedIds = _scope == LookScope.Animal || !(MaterialsModule.LoadedIds() is { } ids) ? null : new HashSet<ulong>(ids);
+        }
+
+        /// <summary>
+        /// While a whole skin or species is edited: an animal that came into the park since (placed, hatched) joins the ones a
+        /// slider move re-applies. Only the park's ids are read unless one is new.
+        /// </summary>
+        private static void NewcomersJoin()
+        {
+            _matchingCheckedAt = Time.unscaledTime;
+            if (!(MaterialsModule.LoadedIds() is { } ids)) return;
+            if (_loadedIds != null && ids.All(_loadedIds.Contains))
+            {
+                if (ids.Count != _loadedIds.Count) _loadedIds = new HashSet<ulong>(ids); // only some left
+                return;
+            }
+            _loadedIds = new HashSet<ulong>(ids);
+            JoinMatching();
+        }
+
+        /// <summary>
+        /// Adds the park's animals of the draft's look that <see cref="_matching"/> does not have yet (it keeps its order: the
+        /// Nursery's preview stays first); false when no animal is left to tell the look by.
+        /// </summary>
+        private static bool JoinMatching()
+        {
+            var selector = !_detached && Alive(_animal) ? _animal : _matching.FirstOrDefault(Alive);
+            if (selector == null) return false;
+            // A kept draft (detached) never reaches the Nursery's preview: it shows another look.
+            var preview = _detached ? Read(LookEditorModule.PreviewComponent(), "currentAnimalPreview") : null;
+            var known = new HashSet<object>(_matching, ReferenceComparer.Instance);
+            foreach (var animal in MaterialsModule.AnimalsMatching(_scope, selector))
+                if (!(_detached && (ReferenceEquals(animal, _animal) || ReferenceEquals(animal, preview))) && known.Add(animal)) _matching.Add(animal);
+            return true;
         }
 
         // ---- the buttons at the bottom ----
@@ -544,10 +601,12 @@ namespace Tyrant.Framework
             catch (Exception ex) when (ex is ManifestException || ex is IOException || ex is UnauthorizedAccessException)
             {
                 FrameworkMod.Log.Warning($"The look could not be saved: {ex.Message}");
+                FilesWritten(); // some may have been
                 _message = "Not saved: " + ex.Message;
                 Footer();
                 return;
             }
+            FilesWritten();
             ClearLive(reapply: false);
             if (_target.Kind != SaveTargetKind.AnimalLooks) MaterialsModule.Reload(MaterialsModule.Mods); // re-reads the folders, re-applies the park
             if (_animal != null && !_detached && Alive(_animal)) MaterialsModule.Reapply(_animal, keywords: true); // the Nursery preview is not in the park's lists
@@ -580,6 +639,7 @@ namespace Tyrant.Framework
         /// <summary>Re-reads every image (a PNG edited outside the game), then shows the edit on top again.</summary>
         private static void ReloadImages()
         {
+            FilesWritten(); // the player may have added or changed files: the folders are read again
             if (LookEditorModule.Looks is AnimalLooks looks)
             {
                 foreach (var id in looks.Ids.ToList()) looks.Set(id, new Dictionary<string, MaterialOverride>(looks.Get(id)!, StringComparer.Ordinal)); // prepared again
@@ -670,6 +730,7 @@ namespace Tyrant.Framework
                 var file = Path.Combine(MasksDirectory, MaskExports.Unique(name, Directory.GetFiles(MasksDirectory)));
                 var bytes = png();
                 using (var stream = new FileStream(file, FileMode.CreateNew, FileAccess.Write)) stream.Write(bytes, 0, bytes.Length);
+                FilesWritten();
                 Exports.Add(file, kind);
                 _message = "Exported " + Path.GetFileName(file) + " to UserData/Tyrant/Masks. Edit it, then Reload images.";
                 return file;
@@ -780,7 +841,23 @@ namespace Tyrant.Framework
             return modDir == null ? null : Path.Combine(modDir, MaterialFolders.FolderOf(_target.Owner!).Replace('/', Path.DirectorySeparatorChar));
         }
 
+        private static (SaveTarget Target, string? Next, IReadOnlyList<LoadedMod> Mods, bool Vanilla, string Name)? _targetName;
+
+        /// <summary>Where Save writes, as the status line names it; worked out again only when the target, the mods or Vanilla Looks changed.</summary>
         private static string TargetName()
+        {
+            if (_target == null) return "nowhere";
+            var next = NextCreated && _context != null ? _context.Species : null;
+            var mods = MaterialsModule.Mods;
+            var vanilla = _target.Kind == SaveTargetKind.CreateVanillaLooks && next == null && VanillaLooksThere();
+            if (_targetName is { } known && ReferenceEquals(known.Target, _target) && known.Next == next && ReferenceEquals(known.Mods, mods) && known.Vanilla == vanilla)
+                return known.Name;
+            var name = NameTarget();
+            _targetName = (_target, next, mods, vanilla, name);
+            return name;
+        }
+
+        private static string NameTarget()
         {
             if (_target == null) return "nowhere";
             if (NextCreated && _context != null) return $"the next {_context.Species} you incubate";
@@ -789,11 +866,36 @@ namespace Tyrant.Framework
                 case SaveTargetKind.AnimalLooks:
                     return "this save's looks";
                 case SaveTargetKind.CreateVanillaLooks:
-                    return VanillaLooks.Name + (File.Exists(Path.Combine(FrameworkMod.ModsDirectory, ModCatalog.VanillaLooksId, ModManifest.FileName)) ? "" : " (new)");
+                    return VanillaLooks.Name + (VanillaLooksThere() ? "" : " (new)");
                 default:
                     var mod = MaterialsModule.Mods.FirstOrDefault(m => m.Manifest.Id == _target.ModId)?.Manifest;
                     return mod == null || string.IsNullOrEmpty(mod.Name) ? _target.ModId ?? "?" : mod.Name;
             }
+        }
+
+        private static float _vanillaLooksReadAt = float.NegativeInfinity;
+        private static bool _vanillaLooksThere;
+
+        /// <summary>
+        /// True when the Vanilla Looks mod has its manifest on disk: looked at again at most once a second (the status line asks
+        /// on every slider move), and at once after a save (<see cref="FilesWritten"/>).
+        /// </summary>
+        private static bool VanillaLooksThere()
+        {
+            var now = Time.unscaledTime;
+            if (now < _vanillaLooksReadAt || now - _vanillaLooksReadAt >= 1f)
+            {
+                _vanillaLooksThere = File.Exists(Path.Combine(FrameworkMod.ModsDirectory, ModCatalog.VanillaLooksId, ModManifest.FileName));
+                _vanillaLooksReadAt = now;
+            }
+            return _vanillaLooksThere;
+        }
+
+        /// <summary>The editor wrote files (a save, an export): what it remembered of the folders is looked at again.</summary>
+        private static void FilesWritten()
+        {
+            _vanillaLooksReadAt = float.NegativeInfinity;
+            PngFiles.Forget();
         }
 
         /// <summary>The PNGs offered for a ramp or mask: the target's folder and UserData/Tyrant/Masks, plus the one in use.</summary>
@@ -801,9 +903,9 @@ namespace Tyrant.Framework
         {
             var folders = new List<string> { MasksDirectory };
             if (TargetFolder(create: false) is string folder) folders.Insert(0, folder);
-            var files = LookFiles.Pngs(folders).ToList();
-            if (current != null && !files.Any(f => string.Equals(Path.GetFullPath(f), Path.GetFullPath(current), StringComparison.OrdinalIgnoreCase))) files.Insert(0, current);
-            return files;
+            return PngFiles.Offered(folders, current); // the folders are read again after a second, or after the editor wrote a file
         }
+
+        private static readonly PngListing PngFiles = new PngListing();
     }
 }

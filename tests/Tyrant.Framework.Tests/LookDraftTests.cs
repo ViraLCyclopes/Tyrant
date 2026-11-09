@@ -157,4 +157,91 @@ public class LookDraftTests
         Assert.Equal(0f, draft.Current.Iridescence!.BabyStrength);
         Assert.Equal(0f, draft.Current.Iridescence.Strength!.Normal);
     }
+
+    // IsDirty is remembered between changes: every change must make it look again, also right after it was read.
+    public static TheoryData<string> Edits => new()
+    {
+        "strength", "baby", "variation", "film", "ramp", "mask", "shaping", "setting", "off", "furMask", "infantMask", "grow", "age",
+    };
+
+    private static void Edit(LookDraft draft, string edit)
+    {
+        switch (edit)
+        {
+            case "strength": draft.SetStrength("normal", 0.9f); break;
+            case "baby": draft.SetBabyStrength(0.5f); break;
+            case "variation": draft.SetVariation(0.7f); break;
+            case "film": draft.SetThinFilm(500); break;
+            case "ramp": draft.SetRamp(new RampSource { Game = true }); break;
+            case "mask": draft.SetMask(new MaskSource { Everywhere = true }); break;
+            case "shaping": draft.SetShaping(1, 2, 3); break;
+            case "setting": draft.SetSetting("_Length", MaterialValue.OfNumber(0.5f)); break;
+            case "off": draft.SetIridescenceOn(false); break;
+            case "furMask": draft.SetFurMask(new MaskSource { Game = true }, infant: false); break;
+            case "infantMask": draft.SetFurMask(new MaskSource { Game = true }, infant: true); break;
+            case "grow": draft.SetFurGrow(true); break;
+            case "age": draft.SetFurAge(FurAge.Babies); break;
+            default: throw new ArgumentException(edit);
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(Edits))]
+    public void Every_edit_after_a_read_counts_as_a_change(string edit)
+    {
+        var draft = new LookDraft(LookScope.Skin, Strength(0.4f));
+        Assert.False(draft.IsDirty); // read (and remembered) before the edit
+
+        Edit(draft, edit);
+        Assert.True(draft.IsDirty);
+
+        draft.Reset();
+        Assert.False(draft.IsDirty);
+        Edit(draft, edit);
+        Assert.True(draft.IsDirty);
+        draft.MarkSaved();
+        Assert.False(draft.IsDirty);
+    }
+
+    [Fact]
+    public void An_edit_back_to_the_saved_value_is_clean_again()
+    {
+        var draft = new LookDraft(LookScope.Skin, Strength(0.4f));
+        draft.SetStrength("normal", 0.8f);
+        Assert.True(draft.IsDirty);
+        draft.SetStrength("normal", 0.4f);
+        Assert.False(draft.IsDirty);
+    }
+
+    [Fact]
+    public void A_direct_change_counts_once_touched()
+    {
+        var draft = new LookDraft(LookScope.Skin, Strength(0.4f));
+        Assert.False(draft.IsDirty);
+        draft.Current.Iridescence!.Strength!.Normal = 0.7f;
+        draft.Touch();
+        Assert.True(draft.IsDirty);
+    }
+
+    [Fact]
+    public void Switching_off_and_on_again_is_clean_after_each_read()
+    {
+        var draft = new LookDraft(LookScope.Skin, Strength(0.4f, 0.2f));
+        var toggle = new IridescenceSwitch();
+        toggle.Off(draft);
+        Assert.True(draft.IsDirty);
+
+        toggle.On(draft, null, gameHasRamp: true); // puts the remembered strengths back by hand
+        Assert.False(draft.IsDirty);
+    }
+
+    [Fact]
+    public void A_preset_after_a_read_counts_as_a_change()
+    {
+        var draft = new LookDraft(LookScope.Species, null);
+        Assert.False(draft.IsDirty);
+        var preset = SpeciesPreset.Of("Microraptor", "Microraptor", [new PresetSkin { Shimmers = true, Strength = new VariantNumbers { Normal = 0.6f } }], null, hasRamp: true, hasMask: true);
+        LookEditing.ApplyPreset(draft, PresetKind.Iridescence, preset, "Microraptor");
+        Assert.True(draft.IsDirty);
+    }
 }

@@ -52,6 +52,13 @@ namespace Tyrant.Framework
         private static Type? _float3;
         private static object? _rootBone;
 
+        // The same members as compiled calls (CompiledAccess): they run for every edited bone of every animal, every frame.
+        private static ReadVector? _readPosition, _readScale;
+        private static Action<object, float, float, float>? _writePosition, _writeScale;
+        private static Func<object, bool>? _created;
+        private static Func<object, int>? _id;
+        private static bool _compiled, _readChecked, _writeChecked;
+
         /// <summary>True once rig edits are hooked into the game (false: they are off, e.g. after a game update).</summary>
         public static bool Active { get; private set; }
 
@@ -107,8 +114,47 @@ namespace Tyrant.Framework
             _x = _float3 == null ? null : AccessTools.Field(_float3, "x");
             _y = _float3 == null ? null : AccessTools.Field(_float3, "y");
             _z = _float3 == null ? null : AccessTools.Field(_float3, "z");
-            return _tryGet != null && _localPosition != null && _localScale != null && _isCreated != null && _transformId != null
+            var found = _tryGet != null && _localPosition != null && _localScale != null && _isCreated != null && _transformId != null
                 && _float3 != null && _x != null && _y != null && _z != null && _localScale.PropertyType == _float3;
+            if (found) Compile();
+            return found;
+        }
+
+        /// <summary>Compiled calls for the bone tree's members; when they cannot be made, plain reflection does the same work, slower.</summary>
+        private static void Compile()
+        {
+            try
+            {
+                _readPosition = CompiledAccess.VectorReader(_localPosition!, _x!, _y!, _z!);
+                _readScale = CompiledAccess.VectorReader(_localScale!, _x!, _y!, _z!);
+                _writePosition = CompiledAccess.VectorWriter(_localPosition!);
+                _writeScale = CompiledAccess.VectorWriter(_localScale!);
+                _created = CompiledAccess.Getter<bool>(_isCreated!);
+                _id = CompiledAccess.Getter<int>(_transformId!);
+                _compiled = true;
+            }
+            catch (Exception ex)
+            {
+                UseReflection("they could not be compiled (" + ex.GetBaseException().Message + ")");
+            }
+        }
+
+        private static void UseReflection(string why)
+        {
+            _compiled = false;
+            _readPosition = (object v, out float x, out float y, out float z) => ReadSlow(_localPosition!, v, out x, out y, out z);
+            _readScale = (object v, out float x, out float y, out float z) => ReadSlow(_localScale!, v, out x, out y, out z);
+            _writePosition = (v, x, y, z) => _localPosition!.SetValue(v, Make(x, y, z), null);
+            _writeScale = (v, x, y, z) => _localScale!.SetValue(v, Make(x, y, z), null);
+            _created = v => (bool)_isCreated!.GetValue(v, null);
+            _id = v => (int)_transformId!.GetValue(v, null);
+            FrameworkMod.Log.Msg("Rig edits use the slower way to reach the game's bone tree: " + why + ".");
+        }
+
+        private static void ReadSlow(PropertyInfo property, object v, out float x, out float y, out float z)
+        {
+            var value = Read(property.GetValue(v, null));
+            (x, y, z) = (value.x, value.y, value.z);
         }
 
         /// <summary>The animal's rig edit (null: none); called whenever its model is chosen (spawn, skin change).</summary>
@@ -190,22 +236,48 @@ namespace Tyrant.Framework
             {
                 var v = VirtualOf(animal, bone);
                 if (v == null) continue;
-                var p = Read(_localPosition!.GetValue(v, null));
-                var s = Read(_localScale!.GetValue(v, null));
+                _readPosition!(v, out var px, out var py, out var pz);
+                _readScale!(v, out var sx, out var sy, out var sz);
+                if (_compiled && !_readChecked)
+                {
+                    // Once: the compiled reads must give what reflection gives, or reflection is used from here on.
+                    _readChecked = true;
+                    ReadSlow(_localPosition!, v, out var cx, out var cy, out var cz);
+                    ReadSlow(_localScale!, v, out var dx, out var dy, out var dz);
+                    if (!(px == cx && py == cy && pz == cz && sx == dx && sy == dy && sz == dz))
+                    {
+                        UseReflection("a compiled read differed");
+                        (px, py, pz, sx, sy, sz) = (cx, cy, cz, dx, dy, dz);
+                    }
+                }
+                var p = new Vector3(px, py, pz);
+                var s = new Vector3(sx, sy, sz);
                 var o = bone.Offset;
                 // Only where the growth job wrote over what step 1 left (never the grounder's root, never a bone it left alone).
                 if (!Near(p, bone.CopiedPosition, Same))
                 {
                     var g = new RigVector3(p.x, p.y, p.z);
                     var composed = o.Move + o.Rotate.Rotate(o.Scale * g);
-                    _localPosition.SetValue(v, Make(composed.X, composed.Y, composed.Z), null);
+                    Write(_writePosition!, _localPosition!, v, composed);
                 }
                 if (!Near(s, bone.CopiedScale, 1e-4f))
                 {
                     var composed = o.Scale * new RigVector3(s.x, s.y, s.z);
-                    _localScale!.SetValue(v, Make(composed.X, composed.Y, composed.Z), null);
+                    Write(_writeScale!, _localScale!, v, composed);
                 }
             }
+        }
+
+        private static void Write(Action<object, float, float, float> write, PropertyInfo property, object v, RigVector3 value)
+        {
+            write(v, value.X, value.Y, value.Z);
+            if (!_compiled || _writeChecked) return;
+            // Once: the compiled write must be what reflection reads back, or reflection is used from here on.
+            _writeChecked = true;
+            ReadSlow(property, v, out var x, out var y, out var z);
+            if (x == value.X && y == value.Y && z == value.Z) return;
+            UseReflection("a compiled write did not land");
+            property.SetValue(v, Make(value.X, value.Y, value.Z), null);
         }
 
         /// <summary>The bone's handle in the game's tree; checked every time (a respawned skeleton gets a new tree).</summary>
@@ -213,7 +285,7 @@ namespace Tyrant.Framework
         {
             var t = bone.Transform;
             if (t == null) return null;
-            if (bone.Virtual != null && (bool)_isCreated!.GetValue(bone.Virtual, null) && (int)_transformId!.GetValue(bone.Virtual, null) == t.GetInstanceID())
+            if (bone.Virtual != null && _created!(bone.Virtual) && _id!(bone.Virtual) == t.GetInstanceID())
                 return bone.RootIdIsThis(animal) ? null : bone.Virtual;
             bone.Virtual = null;
             var native = _native!.GetValue(animal.Owner, null);

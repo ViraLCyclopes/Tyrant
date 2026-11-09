@@ -107,19 +107,31 @@ namespace Tyrant.Framework.Core
                 while (!AtEnd && char.IsWhiteSpace(_text[_pos])) _pos++;
             }
 
+            /// <summary>Objects and arrays inside one another; deeper text is refused (it would overflow the stack, which nothing can catch).</summary>
+            private const int MaxDepth = 200;
+            private int _depth;
+
             public object? ReadValue()
             {
                 if (AtEnd) throw Error("the text ended where a value was expected");
                 switch (_text[_pos])
                 {
-                    case '{': return ReadObject();
-                    case '[': return ReadArray();
+                    case '{': return Nested(true);
+                    case '[': return Nested(false);
                     case '"': return ReadString();
                     case 't': Expect("true"); return true;
                     case 'f': Expect("false"); return false;
                     case 'n': Expect("null"); return null;
                     default: return ReadNumber();
                 }
+            }
+
+            private object Nested(bool isObject)
+            {
+                if (++_depth > MaxDepth) throw Error("it is nested more than " + MaxDepth + " levels deep");
+                var value = isObject ? (object)ReadObject() : ReadArray();
+                _depth--;
+                return value;
             }
 
             private Dictionary<string, object?> ReadObject()

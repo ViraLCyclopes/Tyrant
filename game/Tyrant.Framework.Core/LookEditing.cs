@@ -94,7 +94,7 @@ namespace Tyrant.Framework.Core
         {
             if (draft.Current.Iridescence?.Strength == null && shown != null)
                 (draft.Current.Iridescence ??= new IridescenceSettings()).Strength = Copy(shown);
-            draft.SetStrength(variant, value);
+            draft.SetStrength(variant, value); // marks the draft changed, the copy above included
         }
 
         /// <summary>The baby strength shown: the draft's own, else a lower layer's, else 0 (the game's: a hatchling never shimmers).</summary>
@@ -205,6 +205,7 @@ namespace Tyrant.Framework.Core
                 iridescence.Strength = LookEditing.Copy(_strength);
                 iridescence.BabyStrength = _baby;
                 if (iridescence.IsEmpty) draft.Current.Iridescence = null;
+                draft.Touch(); // changed directly, not through the draft's methods
                 _strength = null;
                 _baby = null;
                 return;
@@ -363,6 +364,56 @@ namespace Tyrant.Framework.Core
         {
             var root = Path.GetFullPath(baseDir).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
             return Path.GetFullPath(file).Substring(root.Length).Replace('\\', '/');
+        }
+    }
+
+    /// <summary>
+    /// The PNGs the editor offers for a ramp or mask (<see cref="LookFiles.Pngs"/>), listed again at most once every
+    /// <see cref="Seconds"/> for the same folders (the tab is redrawn on every choice), or at once after <see cref="Forget"/>
+    /// (the editor wrote a file there, or the player asked to read the images again).
+    /// </summary>
+    public sealed class PngListing
+    {
+        /// <summary>How long a listing is used before the folders are read again.</summary>
+        public const double Seconds = 1;
+
+        private readonly Func<IReadOnlyList<string>, IReadOnlyList<string>> _list;
+        private readonly Func<double> _clock;
+        private string? _key; // the folders listed, or null for none yet
+        private double _at;
+        private IReadOnlyList<string> _files = Array.Empty<string>();
+        private HashSet<string> _full = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        public PngListing() : this(LookFiles.Pngs, () => System.Diagnostics.Stopwatch.GetTimestamp() / (double)System.Diagnostics.Stopwatch.Frequency)
+        {
+        }
+
+        /// <param name="list">Lists the PNGs of folders (<see cref="LookFiles.Pngs"/>).</param>
+        /// <param name="clock">The time in seconds (from any start).</param>
+        public PngListing(Func<IReadOnlyList<string>, IReadOnlyList<string>> list, Func<double> clock)
+        {
+            _list = list;
+            _clock = clock;
+        }
+
+        /// <summary>The next ask reads the folders again.</summary>
+        public void Forget() => _key = null;
+
+        /// <summary>The PNGs in these folders (<see cref="LookFiles.Pngs"/>), with <paramref name="current"/> first when it is not among them.</summary>
+        public List<string> Offered(IReadOnlyList<string> folders, string? current)
+        {
+            var key = string.Join("\n", folders);
+            var now = _clock();
+            if (_key != key || now < _at || now - _at >= Seconds)
+            {
+                _files = _list(folders);
+                _full = new HashSet<string>(_files.Select(LookFiles.Full), StringComparer.OrdinalIgnoreCase);
+                _key = key;
+                _at = now;
+            }
+            var files = _files.ToList();
+            if (current != null && !_full.Contains(LookFiles.Full(current))) files.Insert(0, current);
+            return files;
         }
     }
 }

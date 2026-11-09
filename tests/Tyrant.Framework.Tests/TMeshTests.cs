@@ -95,4 +95,38 @@ public class TMeshTests
 
         Assert.Contains("bind poses", Assert.Throws<TMeshException>(() => RoundTrip(m)).Message);
     }
+
+    [Fact]
+    public void A_weight_on_a_bone_the_model_does_not_have_is_damaged()
+    {
+        var m = Sample();
+        m.BoneIndices[4] = 2; // the model has bones 0 and 1
+
+        Assert.Contains("bone", Assert.Throws<TMeshException>(() => RoundTrip(m)).Message);
+    }
+
+    [Fact]
+    public void An_array_longer_than_the_file_is_refused_before_it_is_allocated()
+    {
+        using var stream = new MemoryStream();
+        Sample().Write(stream);
+        var bytes = stream.ToArray();
+        // After the magic and version: the name and stamp (each a length byte and its text), the vertex count, then the
+        // positions' length.
+        var at = 8 + 1 + "Carch_LOD00".Length + 1 + "1234|5678".Length + 4;
+        BitConverter.GetBytes(150_000_000).CopyTo(bytes, at);
+
+        Assert.Contains("cut short", Assert.Throws<TMeshException>(() => TMesh.Read(new MemoryStream(bytes))).Message);
+    }
+
+    [Fact]
+    public void A_broken_text_length_is_damaged_not_a_crash()
+    {
+        using var stream = new MemoryStream();
+        Sample().Write(stream);
+        var bytes = stream.ToArray();
+        for (var i = 8; i < 13; i++) bytes[i] = 0xFF; // the name's length prefix: five bytes that never end
+
+        Assert.IsType<TMeshException>(Record.Exception(() => TMesh.Read(new MemoryStream(bytes))));
+    }
 }

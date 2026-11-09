@@ -40,6 +40,9 @@ namespace Tyrant.Framework.Core
         bool InstancePosition(IntPtr instance, out Vec3 position, out Vec3 velocity);
         void MuteInstance(IntPtr instance);
 
+        /// <summary>Makes a muted instance audible again (its replacement can no longer play).</summary>
+        void UnmuteInstance(IntPtr instance);
+
         /// <summary>The bus the instance plays into (the parent of its channel group); zero until the instance has one.</summary>
         IntPtr InstanceBus(IntPtr instance);
 
@@ -156,6 +159,9 @@ namespace Tyrant.Framework.Core
                 var running = valid && !_engine.InstanceStopped(e.Instance);
                 if (!Advance(e, valid, running))
                 {
+                    // Dropped while the game still holds the instance: its replacement could not be played (a file that
+                    // cannot be opened, no free channel), so the game's own sound is heard again from its next run.
+                    if (valid) _engine.UnmuteInstance(e.Instance);
                     if (e.Following) _engine.Unfollow(e.Instance);
                     _entries.RemoveAt(i);
                 }

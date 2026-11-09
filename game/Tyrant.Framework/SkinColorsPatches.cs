@@ -82,11 +82,11 @@ namespace Tyrant.Framework
             try
             {
                 // VirtualAnimal's SkinType, Sex, OwnAD and skinIdx are public fields (Animal's are properties).
-                if (animal == null || !IsBase(Traverse.Create(animal).Field("SkinType").GetValue())) return;
-                var asset = AssetOf(Traverse.Create(animal).Field("OwnAD").GetValue(),
-                    Traverse.Create(animal).Field("skinIdx").GetValue<int>(), Traverse.Create(animal).Field("Sex").GetValue());
+                if (animal == null || !IsBase(FieldValue(animal, "SkinType"))) return;
+                var index = FieldValue(animal, "skinIdx");
+                var asset = AssetOf(FieldValue(animal, "OwnAD"), index == null ? 0 : (int)index, FieldValue(animal, "Sex"));
                 if (!TryGetPattern(asset, out var pattern)) return;
-                var field = AccessTools.Field(animal.GetType(), "variationRuntimeData");
+                var field = CachedField(animal.GetType(), "variationRuntimeData");
                 if (field == null) return;
                 var box = field.GetValue(animal);
                 Fill(box, pattern, asset!, keepStored);
@@ -160,35 +160,84 @@ namespace Tyrant.Framework
                 var (b, alphaB) = Read(box, "patternColorB");
                 var (secondary, alphaSecondary) = Read(box, "patternColorSecondary");
                 var (eye, alphaEye) = Read(box, "patternColorEye");
-                var strength = AccessTools.Field(type, "baseOverride")?.GetValue(box) is float s ? s : 0f;
-                var softness = AccessTools.Field(type, "patternsFeathers")?.GetValue(box) is Vector3 f ? f.x : 0f;
+                var strength = CachedField(type, "baseOverride")?.GetValue(box) is float s ? s : 0f;
+                var softness = CachedField(type, "patternsFeathers")?.GetValue(box) is Vector3 f ? f.x : 0f;
                 v = PatternFill.Keep(new StoredPattern(a, alphaA, b, alphaB, secondary, alphaSecondary, eye, alphaEye, strength, softness), pattern, Random);
             }
             else
             {
                 v = PatternFill.Create(pattern, Random);
             }
-            var (eyeFeather, secondaryFeather) = Feathers(asset);
-            AccessTools.Field(type, "patternColorA")?.SetValue(box, ToColor(v.A));
-            AccessTools.Field(type, "patternColorB")?.SetValue(box, ToColor(v.B));
-            AccessTools.Field(type, "patternColorSecondary")?.SetValue(box, ToColor(v.Secondary));
-            AccessTools.Field(type, "patternColorEye")?.SetValue(box, ToColor(v.Eye));
-            AccessTools.Field(type, "baseOverride")?.SetValue(box, v.Strength);
-            AccessTools.Field(type, "patternsFeathers")?.SetValue(box, new Vector3(v.Softness, eyeFeather, secondaryFeather));
-            AccessTools.Field(type, "geneticsOn")?.SetValue(box, true);
+            var (eyeFeather, secondaryFeather) = CachedFeathers(asset);
+            CachedField(type, "patternColorA")?.SetValue(box, ToColor(v.A));
+            CachedField(type, "patternColorB")?.SetValue(box, ToColor(v.B));
+            CachedField(type, "patternColorSecondary")?.SetValue(box, ToColor(v.Secondary));
+            CachedField(type, "patternColorEye")?.SetValue(box, ToColor(v.Eye));
+            CachedField(type, "baseOverride")?.SetValue(box, v.Strength);
+            CachedField(type, "patternsFeathers")?.SetValue(box, new Vector3(v.Softness, eyeFeather, secondaryFeather));
+            CachedField(type, "geneticsOn")?.SetValue(box, true);
         }
 
         private static (Rgb Colour, float Alpha) Read(object box, string field) =>
-            AccessTools.Field(box.GetType(), field)?.GetValue(box) is Color c ? (new Rgb(c.r, c.g, c.b), c.a) : (default, 0f);
+            CachedField(box.GetType(), field)?.GetValue(box) is Color c ? (new Rgb(c.r, c.g, c.b), c.a) : (default, 0f);
+
+        /// <summary>
+        /// <see cref="Feathers"/> through the field cache: the eye and secondary edge softness the base skin's mutations use
+        /// (the game's defaults when unreadable).
+        /// </summary>
+        private static (float Eye, float Secondary) CachedFeathers(object variationAsset)
+        {
+            var data = FieldValue(variationAsset, "albinoVariationData");
+            var eye = FieldValue(data, "eyeFeather") is float e ? e : 0.25f;
+            var secondary = FieldValue(data, "secondaryFeather") is float s ? s : 1f;
+            return (eye, secondary);
+        }
 
         private static object? AssetOf(object? speciesData, int skinIndex, object? sex)
         {
-            if (speciesData == null || !(Traverse.Create(speciesData).Field("skinsData").GetValue() is System.Collections.IList skins) || skinIndex < 0 || skinIndex >= skins.Count) return null;
-            var male = string.Equals(sex?.ToString(), "Male", StringComparison.Ordinal);
-            return Traverse.Create(skins[skinIndex]).Field(male ? "maleVariationData" : "femaleVariationData").GetValue();
+            if (speciesData == null || !(FieldValue(speciesData, "skinsData") is System.Collections.IList skins) || skinIndex < 0 || skinIndex >= skins.Count) return null;
+            var male = IsNamed(sex, "Male");
+            return FieldValue(skins[skinIndex], male ? "maleVariationData" : "femaleVariationData");
         }
 
-        private static bool IsBase(object? skinType) => string.Equals(skinType?.ToString(), "Base", StringComparison.Ordinal);
+        private static bool IsBase(object? skinType) => IsNamed(skinType, "Base");
+
+        // Field lookups and enum names, found once per type: these run for every animal the game loads or the Nursery shows.
+        // Locked, as the game may load animals off the main thread.
+        private static readonly object CacheLock = new object();
+        private static readonly Dictionary<(Type, string), FieldInfo?> FieldCache = new Dictionary<(Type, string), FieldInfo?>();
+        private static readonly Dictionary<(Type, string), object?> EnumValues = new Dictionary<(Type, string), object?>();
+
+        /// <summary>AccessTools.Field (instance or static, any visibility, base types too), looked up once per type and name.</summary>
+        private static FieldInfo? CachedField(Type type, string name)
+        {
+            lock (CacheLock)
+            {
+                if (!FieldCache.TryGetValue((type, name), out var field)) FieldCache[(type, name)] = field = AccessTools.Field(type, name);
+                return field;
+            }
+        }
+
+        /// <summary>A field's value as Traverse.Create(target).Field(name).GetValue() reads it: null for a null target or a missing field.</summary>
+        private static object? FieldValue(object? target, string name) => target == null ? null : CachedField(target.GetType(), name)?.GetValue(target);
+
+        /// <summary>
+        /// True when <paramref name="value"/> is the enum constant called <paramref name="name"/> (what value.ToString() == name
+        /// tells), compared with that constant boxed once per enum type instead of a string per call; other values by ToString.
+        /// </summary>
+        private static bool IsNamed(object? value, string name)
+        {
+            if (value == null) return false;
+            if (!(value is Enum)) return string.Equals(value.ToString(), name, StringComparison.Ordinal);
+            var type = value.GetType();
+            object? constant;
+            lock (CacheLock)
+            {
+                if (!EnumValues.TryGetValue((type, name), out constant))
+                    EnumValues[(type, name)] = constant = Enum.IsDefined(type, name) ? Enum.Parse(type, name) : null;
+            }
+            return constant != null && constant.Equals(value);
+        }
 
         private static Color ToColor(Rgb c) => new Color(c.R, c.G, c.B, 1f);
     }

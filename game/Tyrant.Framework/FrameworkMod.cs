@@ -60,6 +60,7 @@ namespace Tyrant.Framework
             SoundsModule.Tick();
             LookEditorModule.Tick(); // the in-game look editor: its button, window and the park's per-animal looks
             MaterialsModule.Tick(); // frees the textures of edits that were replaced
+            TextureCache.Tick(); // frees mod textures no animal wears any more
         }
 
         public override void OnSceneWasLoaded(int buildIndex, string sceneName)

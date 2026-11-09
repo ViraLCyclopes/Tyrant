@@ -167,4 +167,40 @@ public class ModCatalogTests
         Assert.Equal(["good"], Assert.Single(plan.Mods).Manifest.Skins.Select(s => s.Id));
         Assert.Contains(plan.Warnings, w => w.Contains("mod-id") && w.Contains("bad"));
     }
+
+    [Fact]
+    public void A_mod_whose_file_cannot_be_read_is_skipped_and_the_others_still_load()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "tyrant-catalog-" + Guid.NewGuid().ToString("N"));
+        var locked = Path.Combine(root, "locked");
+        Directory.CreateDirectory(Path.Combine(locked, "localization"));
+        var file = Path.Combine(locked, "localization", "en-US.txt");
+        File.WriteAllText(file, "[a]\nb\n");
+        try
+        {
+            using var hold = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.None); // another program has it open
+            var broken = new ModSource("locked", locked, """{ "format": 1, "id": "locked" }""");
+
+            var plan = ModCatalog.Plan([Mod("alpha"), broken], null, "0.1.0");
+
+            Assert.Equal(new[] { "alpha" }, Ids(plan));
+            Assert.Contains(plan.Skipped, s => s.Id == "locked" && s.Reason.StartsWith("its files could not be read"));
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public void A_mod_turned_off_is_not_read_at_all()
+    {
+        var list = """{ "format": 1, "mods": [ { "id": "alpha", "enabled": false } ] }""";
+        var broken = new ModSource("alpha", @"C:\game\UserData\Tyrant\Mods\alpha", "{ not json");
+
+        var plan = ModCatalog.Plan([broken, Mod("beta")], list, "0.1.0");
+
+        Assert.Equal(new[] { "beta" }, Ids(plan));
+        Assert.Contains(plan.Skipped, s => s.Id == "alpha" && s.Reason == "turned off");
+    }
 }

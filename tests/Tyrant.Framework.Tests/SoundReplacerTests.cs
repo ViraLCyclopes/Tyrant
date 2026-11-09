@@ -59,6 +59,9 @@ public class SoundReplacerTests
             return Positions.TryGetValue(instance, out position);
         }
         public void MuteInstance(IntPtr instance) => Muted.Add(instance);
+        public void UnmuteInstance(IntPtr instance) => Muted.Remove(instance);
+        /// <summary>True: Play fails (no free channel).</summary>
+        public bool PlayFails;
         public IntPtr InstanceBus(IntPtr instance) => Buses.TryGetValue(instance, out var bus) ? bus : IntPtr.Zero;
         public IntPtr FallbackBus(bool music) => music ? new IntPtr(2) : new IntPtr(1);
         public IntPtr LoadSound(string file, bool threeD)
@@ -68,6 +71,7 @@ public class SoundReplacerTests
         }
         public IntPtr Play(IntPtr sound, bool loop)
         {
+            if (PlayFails) return IntPtr.Zero;
             var channel = new IntPtr(_next++);
             PlayedLooping[channel] = loop;
             return channel;
@@ -518,5 +522,25 @@ public class SoundReplacerTests
         engine.Sound(I1);
         replacer.Tick();
         Assert.Contains(second, engine.Unpaused);
+    }
+
+    [Fact]
+    public void A_replacement_that_cannot_play_on_a_later_run_gives_the_games_sound_back()
+    {
+        var (engine, replacer, channel) = Following();
+        engine.Run(I1);
+        engine.Sound(I1);
+        replacer.Tick();
+        engine.Finished.Add(channel); // the first run's replacement played to its end
+        engine.Stopped.Add(I1);
+        replacer.Tick();
+        Assert.Contains(I1, engine.Muted);
+
+        engine.PlayFails = true;
+        engine.Run(I1); // the game starts the same instance again, and no channel can be made
+        replacer.Tick();
+
+        Assert.Equal(0, replacer.Active);
+        Assert.DoesNotContain(I1, engine.Muted); // not silent for good: the game's own sound is heard
     }
 }

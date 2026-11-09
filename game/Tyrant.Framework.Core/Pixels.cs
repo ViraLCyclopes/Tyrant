@@ -20,7 +20,14 @@ namespace Tyrant.Framework.Core
         }
 
         /// <summary>A target×target RGBA image averaged from the centre square of an RGBA image (box filter).</summary>
-        public static byte[] Thumbnail(byte[] rgba, int width, int height, int target)
+        public static byte[] Thumbnail(byte[] rgba, int width, int height, int target) =>
+            Thumbnail(new ArrayBytes(rgba), width, height, target, 4, 0, 1, 2, 3);
+
+        /// <summary>
+        /// <see cref="Thumbnail(byte[], int, int, int)"/> over pixels read in place, in any byte layout: <paramref name="stride"/>
+        /// bytes per pixel with red, green, blue and alpha at the given offsets (alpha below 0: none, the image is opaque).
+        /// </summary>
+        public static byte[] Thumbnail<T>(T pixels, int width, int height, int target, int stride, int red, int green, int blue, int alpha) where T : struct, IByteSource
         {
             CenterSquare(width, height, out var x0, out var y0, out var size);
             var result = new byte[target * target * 4];
@@ -33,8 +40,8 @@ namespace Tyrant.Framework.Core
                 for (var sy = sy0; sy < sy1; sy++)
                 for (var sx = sx0; sx < sx1; sx++)
                 {
-                    var i = (sy * width + sx) * 4;
-                    r += rgba[i]; g += rgba[i + 1]; b += rgba[i + 2]; a += rgba[i + 3]; n++;
+                    var i = (sy * width + sx) * stride;
+                    r += pixels.At(i + red); g += pixels.At(i + green); b += pixels.At(i + blue); a += alpha < 0 ? 255 : pixels.At(i + alpha); n++;
                 }
                 var o = (ty * target + tx) * 4;
                 result[o] = (byte)(r / n);

@@ -22,10 +22,10 @@ namespace Tyrant.Framework.Core
         /// two end colours (every colour in a block lies between them); RGB24, RGBA32 and ARGB32 pixel by pixel. Other formats,
         /// and data shorter than the level, count as fur: Tyrant then keeps the mask, as before.
         /// </summary>
-        public static bool HasNoFur(int format, int width, int height, IList<byte> data) => HasNoFur(format, width, height, data.Count, i => data[i]);
+        public static bool HasNoFur(int format, int width, int height, IList<byte> data) => HasNoFur(format, width, height, data.Count, new ListBytes(data));
 
         /// <summary><see cref="HasNoFur(int, int, int, IList{byte})"/> over <paramref name="length"/> bytes read in place (a texture's own buffer).</summary>
-        public static bool HasNoFur(int format, int width, int height, long length, Func<int, byte> at)
+        public static bool HasNoFur<T>(int format, int width, int height, long length, T bytes) where T : struct, IByteSource
         {
             if (format == Rgb24 || format == Rgba32 || format == Argb32)
             {
@@ -34,7 +34,7 @@ namespace Tyrant.Framework.Core
                 var pixels = (long)width * height;
                 if (length < pixels * stride) return false;
                 for (var i = 0L; i < pixels; i++)
-                    if (at((int)(i * stride) + red) != 0) return false;
+                    if (bytes.At((int)(i * stride) + red) != 0) return false;
                 return true;
             }
             if (format != UnityTextureFormats.Dxt1 && format != UnityTextureFormats.Dxt5) return false;
@@ -46,7 +46,7 @@ namespace Tyrant.Framework.Core
             {
                 var block = (int)(b * blockBytes) + colourAt;
                 // RGB565, little-endian: red is the top 5 bits of each end colour.
-                if ((at(block + 1) & 0xF8) != 0 || (at(block + 3) & 0xF8) != 0) return false;
+                if ((bytes.At(block + 1) & 0xF8) != 0 || (bytes.At(block + 3) & 0xF8) != 0) return false;
             }
             return true;
         }

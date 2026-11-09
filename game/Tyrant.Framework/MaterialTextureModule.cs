@@ -51,7 +51,7 @@ namespace Tyrant.Framework
                     foreach (var (property, textureName) in _swap.Plan(slots))
                     {
                         if (!FrameworkMod.Replacements.TryGet(textureName, out var replacement)) continue;
-                        var replaced = TextureCache.Get(replacement, MaterialSwap.KindOf(property));
+                        var replaced = TextureCache.Get(replacement, MaterialSwap.KindOf(property), pin: true); // on a game material: kept for good
                         if (replaced == null) continue;
                         material.SetTexture(property, replaced);
                         if (Announced.Add(textureName)) FrameworkMod.Log.Msg($"Replaced {textureName} on game materials ({replacement.ModId}).");

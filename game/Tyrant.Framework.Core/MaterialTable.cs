@@ -33,7 +33,9 @@ namespace Tyrant.Framework.Core
     /// </summary>
     public sealed class MaterialTable
     {
-        private readonly Dictionary<string, Dictionary<string, MaterialOverride>> _species = new Dictionary<string, Dictionary<string, MaterialOverride>>(StringComparer.Ordinal);
+        // Species ids match in any case, like the manifest's SpeciesMaterials and the size and prefab tables: a block for
+        // "velociraptor" reaches the game's Velociraptor.
+        private readonly Dictionary<string, Dictionary<string, MaterialOverride>> _species = new Dictionary<string, Dictionary<string, MaterialOverride>>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, Dictionary<string, MaterialOverride>> _skins = new Dictionary<string, Dictionary<string, MaterialOverride>>(StringComparer.Ordinal);
         private readonly Dictionary<string, Dictionary<string, MaterialOverride>> _vanilla = new Dictionary<string, Dictionary<string, MaterialOverride>>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, MaterialBlockOwner> _owners = new Dictionary<string, MaterialBlockOwner>(StringComparer.Ordinal);
@@ -61,7 +63,7 @@ namespace Tyrant.Framework.Core
             _owners.TryGetValue(OwnerKey(kind, key, materialName), out var owner) ? owner : null;
 
         private static string OwnerKey(MaterialOwnerKind kind, string key, string material) =>
-            (int)kind + "\n" + (kind == MaterialOwnerKind.VanillaSkin ? key.ToUpperInvariant() : key) + "\n" + material; // vanilla keys match in any case, like _vanilla
+            (int)kind + "\n" + (kind == MaterialOwnerKind.Skin ? key : key.ToUpperInvariant()) + "\n" + material; // species and vanilla keys match in any case, like _species and _vanilla
 
         /// <summary>True when a mod sets materials for this species (any material); cheap, for animals no mod covers.</summary>
         public bool CoversSpecies(string? speciesId) => speciesId != null && _species.ContainsKey(speciesId);

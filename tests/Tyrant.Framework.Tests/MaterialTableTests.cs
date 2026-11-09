@@ -171,6 +171,34 @@ public class MaterialTableTests
     }
 
     [Fact]
+    public void Species_ids_match_in_any_case_for_lookup_owner_and_clashes()
+    {
+        var a = Species("mod-a", "Velociraptor", "0.1", "velociraptor");
+        var b = Species("mod-b", "Velociraptor", "0.9", "VELOCIRAPTOR");
+        var table = MaterialTable.Build([a, b], out var messages);
+
+        Assert.True(table.CoversSpecies("Velociraptor"));
+        Assert.False(table.CoversSpecies("Titanoboa"));
+        Assert.Equal(0.9f, table.For("Velociraptor", null, null, null, "Velociraptor")!.Settings["_Smoothness"].Number);
+        Assert.Equal(0.9f, table.Block(MaterialOwnerKind.Species, "Velociraptor", "Velociraptor")!.Settings["_Smoothness"].Number);
+        Assert.Equal("mod-b", table.OwnerOf(MaterialOwnerKind.Species, "Velociraptor", "Velociraptor")!.ModId);
+        Assert.Equal("mod-b", table.OwnerOf(MaterialOwnerKind.Species, "velociraptor", "Velociraptor")!.ModId);
+        Assert.Single(messages); // the two spellings are one species: the later mod overrides the earlier
+        Assert.Single(MaterialTable.Clashes([("mod-a", a.Manifest), ("mod-b", b.Manifest)]));
+    }
+
+    [Fact]
+    public void Skin_keys_still_match_exactly()
+    {
+        var a = Mod("mod-a", "{\"format\":1,\"id\":\"mod-a\",\"skins\":[" + Skin("mine") + "]}", SkinFile("mine", """{"Titanoboa":{"settings":{"_Smoothness":0.5}}}"""));
+        var table = MaterialTable.Build([a], out _);
+
+        Assert.NotNull(table.OwnerOf(MaterialOwnerKind.Skin, "mod-a/mine", "Titanoboa"));
+        Assert.Null(table.OwnerOf(MaterialOwnerKind.Skin, "MOD-A/MINE", "Titanoboa"));
+        Assert.Null(table.Block(MaterialOwnerKind.Skin, "MOD-A/MINE", "Titanoboa"));
+    }
+
+    [Fact]
     public void Fur_masks_merge_per_field_and_resolve_against_their_mod()
     {
         var a = Mod("mod-a", """{"format":1,"id":"mod-a"}""", SpeciesFile("Titanoboa", """{"Fur":{"fur":{"mask":"low.png","infantMask":"infant.png"}}}"""));

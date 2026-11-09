@@ -124,6 +124,10 @@ namespace Tyrant.Framework.Core
             {
                 throw new TMeshException("cut short (the file is incomplete)");
             }
+            catch (Exception ex) when (ex is FormatException || ex is ArgumentException || ex is OverflowException || ex is OutOfMemoryException)
+            {
+                throw new TMeshException("damaged (" + ex.Message + ")"); // e.g. a text whose length prefix is broken
+            }
         }
 
         private static void Validate(TMesh m)
@@ -135,9 +139,12 @@ namespace Tyrant.Framework.Core
                 throw new TMeshException("damaged (array sizes do not match the vertex count)");
             foreach (var index in m.Indices)
                 if (index < 0 || index >= n) throw new TMeshException("damaged (an index points past the vertices)");
+            if (!m.Index32 && n > ushort.MaxValue + 1) throw new TMeshException("damaged (too many vertices for its index size)");
             for (var s = 0; s < m.SubMeshStarts.Length; s++)
-                if (m.SubMeshStarts[s] < 0 || m.SubMeshCounts[s] < 0 || m.SubMeshStarts[s] + m.SubMeshCounts[s] > m.Indices.Length)
+                if (m.SubMeshStarts[s] < 0 || m.SubMeshCounts[s] < 0 || (long)m.SubMeshStarts[s] + m.SubMeshCounts[s] > m.Indices.Length)
                     throw new TMeshException("damaged (a part points past the indices)");
+            foreach (var bone in m.BoneIndices)
+                if (bone < 0 || (m.BoneCount > 0 && bone >= m.BoneCount)) throw new TMeshException("damaged (a vertex is weighted to a bone the model does not have)");
             if (m.BindPoses.Length != 0 && m.BindPoses.Length != m.BoneCount * 16)
                 throw new TMeshException("damaged (bind poses do not match the bone count)");
             foreach (var shape in m.Shapes)
@@ -161,7 +168,7 @@ namespace Tyrant.Framework.Core
             var count = r.ReadInt32();
             if (count < 0 || count > MaxArray) throw new TMeshException("damaged (array length)");
             var values = new float[count];
-            for (var i = 0; i < count; i++) values[i] = r.ReadSingle();
+            ReadBlock(r, values, count);
             return values;
         }
 
@@ -170,8 +177,34 @@ namespace Tyrant.Framework.Core
             var count = r.ReadInt32();
             if (count < 0 || count > MaxArray) throw new TMeshException("damaged (array length)");
             var values = new int[count];
-            for (var i = 0; i < count; i++) values[i] = r.ReadInt32();
+            ReadBlock(r, values, count);
             return values;
+        }
+
+        /// <summary>
+        /// Fills an array of 4-byte numbers (little-endian, as BinaryWriter wrote them) in large pieces: one call per number
+        /// made a big model stall the game when its animal first appeared. A count the file cannot hold is refused before
+        /// anything that size is allocated.
+        /// </summary>
+        private static void ReadBlock(BinaryReader r, Array values, int count)
+        {
+            var bytes = (long)count * 4;
+            var stream = r.BaseStream;
+            if (stream.CanSeek && bytes > stream.Length - stream.Position) throw new EndOfStreamException();
+            var buffer = new byte[(int)Math.Min(bytes, 1 << 20)];
+            for (long done = 0; done < bytes;)
+            {
+                var want = (int)Math.Min(buffer.Length, bytes - done);
+                var got = 0;
+                while (got < want)
+                {
+                    var read = r.Read(buffer, got, want - got);
+                    if (read <= 0) throw new EndOfStreamException();
+                    got += read;
+                }
+                Buffer.BlockCopy(buffer, 0, values, (int)done, want);
+                done += want;
+            }
         }
     }
 
