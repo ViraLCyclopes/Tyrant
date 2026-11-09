@@ -20,10 +20,42 @@ namespace Tyrant.Framework
     {
         private static readonly MaterialPropertyBlock GameBlock = new MaterialPropertyBlock();
         private static (GameObject On, GameObject Off)? _onOff;
+        private static bool _redrawAsked; // a slider row's set changed what other rows show (SliderRow)
+        private static Component? _redrawOnRelease; // the slider dragged when a redraw was asked: the tab is redrawn once it is let go
+        private static System.Reflection.MethodInfo? _isPressed; // Selectable.IsPressed(), looked up once
+        private static bool _isPressedRead;
+
+        /// <summary>Once a frame: the redraw a slider asked for, once the player lets it go.</summary>
+        private static void RedrawAfterDrag()
+        {
+            if (!(_redrawOnRelease is Component slider)) return;
+            if (slider != null && Pressed(slider)) return;
+            _redrawOnRelease = null;
+            Rebuild();
+        }
+
+        /// <summary>True while the pointer holds the slider down (Selectable.IsPressed); false when that cannot be read.</summary>
+        private static bool Pressed(Component slider)
+        {
+            if (!_isPressedRead)
+            {
+                _isPressedRead = true;
+                _isPressed = AccessTools.Method(slider.GetType(), "IsPressed", Type.EmptyTypes);
+            }
+            try
+            {
+                return _isPressed != null && _isPressed.Invoke(slider, null) is true;
+            }
+            catch (System.Reflection.TargetInvocationException)
+            {
+                return false;
+            }
+        }
 
         private static void Rebuild()
         {
             if (_content == null || _font == null) return;
+            _redrawOnRelease = null; // this is the redraw
             for (var i = _content.childCount - 1; i >= 0; i--)
             {
                 var row = _content.GetChild(i).gameObject;
@@ -82,7 +114,7 @@ namespace Tyrant.Framework
             {
                 var ramp = draft.Current.Iridescence?.Ramp;
                 LookEditing.SetBabyStrength(draft, _below, GameHasRamp(), v);
-                if (draft.Current.Iridescence?.Ramp != ramp) Changed(rebuild: true); // a thin film was started: the colour rows show it
+                if (draft.Current.Iridescence?.Ramp != ramp) _redrawAsked = true; // a thin film was started: the colour rows show it (SliderRow redraws)
             });
             Info("babyStrength");
             var variation = own?.Variation ?? below?.Variation ?? (shown != null ? IridescenceSettings.DefaultVariation : 0f);
@@ -525,7 +557,8 @@ namespace Tyrant.Framework
 
         /// <summary>
         /// A label, a slider (min..max) and a box to type an exact value (boxMin..boxMax, which may reach past the slider). Both
-        /// call <paramref name="set"/> on the draft and then go live.
+        /// call <paramref name="set"/> on the draft and then go live. A <paramref name="set"/> that changes what other rows show
+        /// sets <see cref="_redrawAsked"/>: a typed value redraws at once, a slider once it is let go (a redraw would end the drag).
         /// </summary>
         private static void SliderRow(string label, float value, float min, float max, float boxMin, float boxMax, bool enabled, Action<float> set)
         {
@@ -534,14 +567,18 @@ namespace Tyrant.Framework
             Place((RectTransform)text.transform, 0f, 0.36f, 0f, -4f);
             if (!enabled) Traverse.Create(text).Property("color").SetValue(Faint);
             Component? box = null;
+            Component? slider = null;
             var shown = value;
-            var slider = NewSlider(row, min, max, LookEditing.Clamp(value, min, max), Safe<float>(v =>
+            slider = NewSlider(row, min, max, LookEditing.Clamp(value, min, max), Safe<float>(v =>
             {
                 shown = v;
+                _redrawAsked = false;
                 set(v);
                 if (!IsFocused(box)) SetInputText(box, LookEditing.Format(v));
                 Changed();
                 RefreshOnOff();
+                if (_redrawAsked) _redrawOnRelease = slider;
+                _redrawAsked = false;
             }));
             Place((RectTransform)slider.transform, 0.36f, 0.8f, 0f, -6f);
             box = NewInput(row, _inputTemplate, _font!, Safe<string>(typed =>
@@ -549,9 +586,13 @@ namespace Tyrant.Framework
                 if (LookEditing.TryParse(typed, boxMin, boxMax, out var v) && v != shown)
                 {
                     shown = v;
+                    _redrawAsked = false;
                     set(v);
-                    SetSliderQuietly(slider, LookEditing.Clamp(v, min, max));
-                    Changed();
+                    var redraw = _redrawAsked;
+                    _redrawAsked = false;
+                    SetSliderQuietly(slider!, LookEditing.Clamp(v, min, max));
+                    Changed(rebuild: redraw);
+                    if (redraw) return; // this row is drawn again
                     RefreshOnOff();
                 }
                 SetInputText(box, LookEditing.Format(shown)); // a bad entry shows the value again

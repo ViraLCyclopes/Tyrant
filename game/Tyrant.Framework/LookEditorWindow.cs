@@ -86,6 +86,7 @@ namespace Tyrant.Framework
             EnsureButtons(gui);
             if (!IsOpen) return;
             Place(); // keeps it on screen when the resolution changes
+            RedrawAfterDrag();
             if (_entry == EditorEntry.Nursery) FollowNursery(gui);
             else if (!Alive(_animal)) AnimalGone("The animal is gone; open the editor from another one.");
             // The graphics setting can change while the window is open: the status line's fur note follows (a cached bool read).
