@@ -132,6 +132,7 @@ namespace Tyrant.Framework
         /// </summary>
         public static void Reload(IReadOnlyList<LoadedMod> mods)
         {
+            Pool.ForgetStamps(); // an image saved again under the same name within the last second is read anew
             var list = mods.ToList();
             foreach (var mod in list)
             {
